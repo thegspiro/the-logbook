@@ -85,7 +85,7 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
                 placeholder="e.g., Website Integration Key"
                 required
                 aria-required="true"
-                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
               />
               <p className="text-xs text-theme-text-muted mt-1">
                 A descriptive name to identify this API key
@@ -108,7 +108,7 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
                   rate_limit: e.target.value ? parseInt(e.target.value) : undefined
                 })}
                 placeholder="Leave blank for default (1000)"
-                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
               />
               <p className="text-xs text-theme-text-muted mt-1">
                 Optional: Override the default rate limit for this key
@@ -129,7 +129,7 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
                   ...formData,
                   expires_at: e.target.value || undefined
                 })}
-                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
               />
               <p className="text-xs text-theme-text-muted mt-1">
                 Optional: Set when this key should expire

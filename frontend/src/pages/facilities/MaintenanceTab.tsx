@@ -157,7 +157,7 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
     return facilities.find(f => f.id === facilityId)?.name || 'Unknown';
   };
 
-  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500';
+  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring';
   const labelCls = 'block text-xs font-medium text-theme-text-muted mb-1';
 
   return (
@@ -167,7 +167,7 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
           <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search records..." aria-label="Search maintenance records" className="w-full pl-10 pr-4 py-2.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+            placeholder="Search records..." aria-label="Search maintenance records" className="w-full pl-10 pr-4 py-2.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
           />
         </div>
         {filterFacilityId && (

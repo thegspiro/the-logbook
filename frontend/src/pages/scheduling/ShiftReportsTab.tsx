@@ -928,7 +928,7 @@ export const ShiftReportsTab: React.FC = () => {
                       type="checkbox"
                       checked={redactFields.includes(field)}
                       onChange={() => toggleRedactField(field)}
-                      className="w-4 h-4 rounded bg-theme-input-bg border-theme-input-border text-red-600 focus:ring-red-500"
+                      className="w-4 h-4 rounded bg-theme-input-bg border-theme-input-border text-blue-600 focus:ring-theme-focus-ring"
                     />
                     <span className="text-sm text-theme-text-primary flex items-center gap-1">
                       {redactFields.includes(field) ? <EyeOff className="w-3.5 h-3.5 text-red-500" /> : <Eye className="w-3.5 h-3.5 text-theme-text-muted" />}

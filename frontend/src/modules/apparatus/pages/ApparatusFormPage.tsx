@@ -300,7 +300,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="unitNumber"
                   value={formData.unitNumber}
                   onChange={handleChange}
-                  className={`w-full px-4 py-2 bg-theme-input-bg border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                  className={`w-full px-4 py-2 bg-theme-input-bg border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring ${
                     errors.unitNumber ? 'border-red-500' : 'border-theme-input-border'
                   }`}
                   placeholder="E-1"
@@ -316,7 +316,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                   placeholder="Old Reliable"
                 />
               </div>
@@ -328,7 +328,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="apparatusTypeId"
                   value={formData.apparatusTypeId}
                   onChange={handleChange}
-                  className={`w-full px-4 py-2 bg-theme-input-bg border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                  className={`w-full px-4 py-2 bg-theme-input-bg border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring ${
                     errors.apparatusTypeId ? 'border-red-500' : 'border-theme-input-border'
                   }`}
                 >
@@ -351,7 +351,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="statusId"
                   value={formData.statusId}
                   onChange={handleChange}
-                  className={`w-full px-4 py-2 bg-theme-input-bg border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                  className={`w-full px-4 py-2 bg-theme-input-bg border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring ${
                     errors.statusId ? 'border-red-500' : 'border-theme-input-border'
                   }`}
                 >
@@ -373,7 +373,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="vin"
                   value={formData.vin}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 font-mono"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring font-mono"
                   placeholder="1HGCM82633A123456"
                 />
               </div>
@@ -384,7 +384,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="radioId"
                   value={formData.radioId}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                   placeholder="E1"
                 />
               </div>
@@ -402,7 +402,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="year"
                   value={formData.year ?? ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                   placeholder="2024"
                   min="1900"
                   max="2100"
@@ -415,7 +415,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="make"
                   value={formData.make}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                   placeholder="Pierce"
                 />
               </div>
@@ -426,7 +426,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="model"
                   value={formData.model}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                   placeholder="Enforcer"
                 />
               </div>
@@ -437,7 +437,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="bodyManufacturer"
                   value={formData.bodyManufacturer}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                   placeholder="Pierce"
                 />
               </div>
@@ -448,7 +448,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="licensePlate"
                   value={formData.licensePlate}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div>
@@ -458,7 +458,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="licenseState"
                   value={formData.licenseState}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                   placeholder="NY"
                   maxLength={2}
                 />
@@ -470,7 +470,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="color"
                   value={formData.color}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                   placeholder="Red"
                 />
               </div>
@@ -481,7 +481,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="assetTag"
                   value={formData.assetTag}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
             </div>
@@ -497,7 +497,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="fuelType"
                   value={formData.fuelType ?? ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 >
                   <option value="">Select Fuel Type</option>
                   {fuelTypes.map((ft) => (
@@ -514,7 +514,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="fuelCapacityGallons"
                   value={formData.fuelCapacityGallons ?? ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div>
@@ -524,7 +524,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="seatingCapacity"
                   value={formData.seatingCapacity ?? ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div>
@@ -534,7 +534,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="gvwr"
                   value={formData.gvwr ?? ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div>
@@ -544,7 +544,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="pumpCapacityGpm"
                   value={formData.pumpCapacityGpm ?? ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div>
@@ -554,7 +554,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="tankCapacityGallons"
                   value={formData.tankCapacityGallons ?? ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div>
@@ -564,7 +564,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="foamCapacityGallons"
                   value={formData.foamCapacityGallons ?? ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div>
@@ -574,7 +574,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="ladderLengthFeet"
                   value={formData.ladderLengthFeet ?? ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
             </div>
@@ -591,7 +591,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="currentMileage"
                   value={formData.currentMileage ?? ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div>
@@ -601,7 +601,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="currentHours"
                   value={formData.currentHours ?? ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
             </div>
@@ -618,7 +618,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="purchaseDate"
                   value={formData.purchaseDate}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div>
@@ -628,7 +628,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="purchasePrice"
                   value={formData.purchasePrice ?? ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                   step="0.01"
                 />
               </div>
@@ -639,7 +639,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="purchaseVendor"
                   value={formData.purchaseVendor}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div>
@@ -649,7 +649,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="inServiceDate"
                   value={formData.inServiceDate}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
             </div>
@@ -663,7 +663,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="isFinanced"
                   checked={formData.isFinanced}
                   onChange={handleChange}
-                  className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-red-600 focus:ring-red-500"
+                  className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring"
                 />
                 <label htmlFor="isFinanced" className="ml-2 text-theme-text-secondary">
                   This vehicle is financed
@@ -678,7 +678,7 @@ export const ApparatusFormPage: React.FC = () => {
                       name="financingCompany"
                       value={formData.financingCompany}
                       onChange={handleChange}
-                      className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                     />
                   </div>
                   <div>
@@ -688,7 +688,7 @@ export const ApparatusFormPage: React.FC = () => {
                       name="monthlyPayment"
                       value={formData.monthlyPayment ?? ''}
                       onChange={handleChange}
-                      className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                       step="0.01"
                     />
                   </div>
@@ -699,7 +699,7 @@ export const ApparatusFormPage: React.FC = () => {
                       name="financingEndDate"
                       value={formData.financingEndDate}
                       onChange={handleChange}
-                      className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                     />
                   </div>
                 </div>
@@ -718,7 +718,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="registrationExpiration"
                   value={formData.registrationExpiration}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div>
@@ -728,7 +728,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="inspectionExpiration"
                   value={formData.inspectionExpiration}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div>
@@ -738,7 +738,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="insuranceExpiration"
                   value={formData.insuranceExpiration}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div>
@@ -748,7 +748,7 @@ export const ApparatusFormPage: React.FC = () => {
                   name="warrantyExpiration"
                   value={formData.warrantyExpiration}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
             </div>
@@ -764,7 +764,7 @@ export const ApparatusFormPage: React.FC = () => {
                 name="nfpaTrackingEnabled"
                 checked={formData.nfpaTrackingEnabled}
                 onChange={handleChange}
-                className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-red-600 focus:ring-red-500"
+                className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring"
               />
               <label htmlFor="nfpaTrackingEnabled" className="ml-2 text-theme-text-secondary">
                 Enable NFPA compliance tracking
@@ -783,7 +783,7 @@ export const ApparatusFormPage: React.FC = () => {
                   value={formData.description}
                   onChange={handleChange}
                   rows={3}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                   placeholder="Brief description of this apparatus..."
                 />
               </div>
@@ -794,7 +794,7 @@ export const ApparatusFormPage: React.FC = () => {
                   value={formData.notes}
                   onChange={handleChange}
                   rows={3}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                   placeholder="Any additional notes..."
                 />
               </div>

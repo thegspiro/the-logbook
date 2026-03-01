@@ -69,7 +69,7 @@ export const ForgotPasswordPage: React.FC = () => {
             </p>
             <Link
               to="/login"
-              className="inline-flex items-center space-x-2 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 rounded px-3 py-2"
+              className="inline-flex items-center space-x-2 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring rounded px-3 py-2"
             >
               <ArrowLeft className="w-4 h-4" aria-hidden="true" />
               <span>Back to Login</span>
@@ -123,7 +123,7 @@ export const ForgotPasswordPage: React.FC = () => {
                   type="email"
                   autoComplete="email"
                   required
-                  className="block w-full pl-10 pr-3 py-2 border border-theme-surface-border rounded-md bg-theme-surface-secondary text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                  className="block w-full pl-10 pr-3 py-2 border border-theme-surface-border rounded-md bg-theme-surface-secondary text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent sm:text-sm"
                   placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -136,7 +136,7 @@ export const ForgotPasswordPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading || cooldown > 0}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isLoading ? (
                   <>
@@ -158,7 +158,7 @@ export const ForgotPasswordPage: React.FC = () => {
           <div className="mt-6 text-center">
             <Link
               to="/login"
-              className="inline-flex items-center space-x-2 text-sm text-theme-text-secondary hover:text-theme-text-primary transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 rounded px-3 py-2"
+              className="inline-flex items-center space-x-2 text-sm text-theme-text-secondary hover:text-theme-text-primary transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring rounded px-3 py-2"
             >
               <ArrowLeft className="w-4 h-4" aria-hidden="true" />
               <span>Back to Login</span>

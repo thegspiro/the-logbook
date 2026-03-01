@@ -200,7 +200,7 @@ export default function ApparatusBasicPage() {
   };
 
   const getTypeInfo = (type: string) => APPARATUS_TYPES.find(t => t.value === type) || APPARATUS_TYPES[APPARATUS_TYPES.length - 1];
-  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500';
+  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring';
   const labelCls = 'block text-sm font-medium text-theme-text-secondary mb-1';
 
   return (
@@ -233,7 +233,7 @@ export default function ApparatusBasicPage() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
         <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
           placeholder="Search apparatus..."
-          className="w-full pl-10 pr-4 py-2.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+          className="w-full pl-10 pr-4 py-2.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
         />
       </div>
 
@@ -374,7 +374,7 @@ export default function ApparatusBasicPage() {
                     <div key={i} className="flex items-center gap-2">
                       <span className="text-xs text-theme-text-muted w-6 text-right">{i + 1}.</span>
                       <select value={pos} onChange={e => updatePosition(i, e.target.value)}
-                        className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                       >
                         {POSITION_OPTIONS.map(o => (
                           <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>

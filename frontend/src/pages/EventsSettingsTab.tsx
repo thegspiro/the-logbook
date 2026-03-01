@@ -601,7 +601,7 @@ const EventsSettingsTab: React.FC = () => {
                   setNewTypeValue(auto);
                 }}
                 placeholder="e.g., School Visit"
-                className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
               />
             </div>
             <div className="w-40">
@@ -614,7 +614,7 @@ const EventsSettingsTab: React.FC = () => {
                 value={newTypeValue}
                 onChange={(e) => setNewTypeValue(e.target.value.replace(/[^a-z0-9_]/g, ''))}
                 placeholder="school_visit"
-                className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 font-mono"
+                className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring font-mono"
               />
             </div>
             <button
@@ -659,7 +659,7 @@ const EventsSettingsTab: React.FC = () => {
               value={settings.request_pipeline.default_assignee_id || ''}
               onChange={(e) => void updateDefaultAssignee(e.target.value || null)}
               disabled={saving}
-              className="w-full max-w-md px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full max-w-md px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
             >
               <option value="">No default (manually assign)</option>
               {members.map((m) => (
@@ -724,7 +724,7 @@ const EventsSettingsTab: React.FC = () => {
                     void updateLeadTime(val);
                   }
                 }}
-                className="w-20 px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-20 px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
               />
               <span className="text-sm text-theme-text-muted">
                 days ({Math.floor(settings.request_pipeline.min_lead_time_days / 7)} weeks)
@@ -802,7 +802,7 @@ const EventsSettingsTab: React.FC = () => {
                   value={newTaskLabel}
                   onChange={(e) => setNewTaskLabel(e.target.value)}
                   placeholder="e.g., Chief Approval"
-                  className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div className="flex-1">
@@ -815,7 +815,7 @@ const EventsSettingsTab: React.FC = () => {
                   value={newTaskDesc}
                   onChange={(e) => setNewTaskDesc(e.target.value)}
                   placeholder="Brief description of this step"
-                  className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <button
@@ -906,27 +906,27 @@ const EventsSettingsTab: React.FC = () => {
                 value={newTemplateName}
                 onChange={(e) => setNewTemplateName(e.target.value)}
                 placeholder="Template name (e.g., How to Find Our Building)"
-                className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
               />
               <input
                 type="text"
                 value={newTemplateSubject}
                 onChange={(e) => setNewTemplateSubject(e.target.value)}
                 placeholder="Email subject"
-                className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
               />
               <textarea
                 rows={4}
                 value={newTemplateBody}
                 onChange={(e) => setNewTemplateBody(e.target.value)}
                 placeholder="Email body (HTML supported)"
-                className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
               />
               <div className="flex items-center gap-3">
                 <select
                   value={newTemplateTrigger}
                   onChange={(e) => setNewTemplateTrigger(e.target.value)}
-                  className="px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 >
                   <option value="">Manual send only</option>
                   {Object.entries(TRIGGER_LABELS).map(([key, label]) => (

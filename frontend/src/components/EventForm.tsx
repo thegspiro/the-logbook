@@ -67,15 +67,15 @@ const DEFAULT_FORM_DATA: EventCreate = {
 
 /* Shared Tailwind classes for consistency */
 const inputClass =
-  'w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500';
+  'w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring';
 
 const selectClass =
-  'w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500';
+  'w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring';
 
 const labelClass = 'block text-sm font-semibold text-theme-text-primary mb-2';
 
 const checkboxClass =
-  'w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-red-600 focus:ring-red-500';
+  'w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring';
 
 export const EventForm: React.FC<EventFormProps> = ({
   initialData,
@@ -392,7 +392,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                 key={h}
                 type="button"
                 onClick={() => setDuration(h)}
-                className="px-4 py-2 text-sm font-medium text-theme-text-secondary border border-theme-surface-border rounded-lg hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
+                className="px-4 py-2 text-sm font-medium text-theme-text-secondary border border-theme-surface-border rounded-lg hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring transition-colors"
               >
                 {h} {h === 1 ? 'hour' : 'hours'}
               </button>
@@ -766,7 +766,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                   update({ reminder_schedule: [...(formData.reminder_schedule || []), val] });
                 }
               }}
-              className="w-full max-w-xs px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full max-w-xs px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
             >
               <option value="">+ Add a reminder...</option>
               {[
@@ -795,14 +795,14 @@ export const EventForm: React.FC<EventFormProps> = ({
         <button
           type="button"
           onClick={onCancel}
-          className="px-6 py-3 border border-theme-surface-border rounded-lg text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+          className="px-6 py-3 border border-theme-surface-border rounded-lg text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring transition-colors"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={isSubmitting}
-          className="px-8 py-3 border border-transparent rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="px-8 py-3 border border-transparent rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {isSubmitting ? 'Saving...' : submitLabel}
         </button>

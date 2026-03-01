@@ -144,7 +144,7 @@ const ReviewPanel: React.FC<{
             ? 'Optional notes for the member...'
             : 'Explain why (required for rejection or revision request)...'
         }
-        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500 mb-3"
+        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring mb-3"
         required={action !== 'approve'}
       />
 
@@ -598,7 +598,7 @@ const ConfigEditor: React.FC<{
               type="checkbox"
               checked={requireApproval}
               onChange={(e) => setRequireApproval(e.target.checked)}
-              className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-blue-500"
+              className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring"
             />
             <span className="text-theme-text-secondary text-sm">Require officer approval for submissions</span>
           </label>
@@ -643,7 +643,7 @@ const ConfigEditor: React.FC<{
               type="checkbox"
               checked={notifyOfficer}
               onChange={(e) => setNotifyOfficer(e.target.checked)}
-              className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-blue-500"
+              className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring"
             />
             <span className="text-theme-text-secondary text-sm">Notify officer when a submission is created</span>
           </label>
@@ -652,7 +652,7 @@ const ConfigEditor: React.FC<{
               type="checkbox"
               checked={notifyMember}
               onChange={(e) => setNotifyMember(e.target.checked)}
-              className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-blue-500"
+              className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring"
             />
             <span className="text-theme-text-secondary text-sm">Notify member when their submission is reviewed</span>
           </label>
@@ -684,7 +684,7 @@ const ConfigEditor: React.FC<{
           onChange={(e) => setInstructions(e.target.value)}
           rows={3}
           placeholder="Optional instructions displayed to members when submitting training..."
-          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
         />
       </div>
 
@@ -700,7 +700,7 @@ const ConfigEditor: React.FC<{
                   type="checkbox"
                   checked={fc.visible}
                   onChange={(e) => updateField(name, 'visible', e.target.checked)}
-                  className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-blue-500"
+                  className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring"
                   disabled={['course_name', 'training_type', 'completion_date', 'hours_completed'].includes(name)}
                 />
                 <input
@@ -715,7 +715,7 @@ const ConfigEditor: React.FC<{
                   type="checkbox"
                   checked={fc.required}
                   onChange={(e) => updateField(name, 'required', e.target.checked)}
-                  className="w-3.5 h-3.5 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-blue-500"
+                  className="w-3.5 h-3.5 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring"
                   disabled={!fc.visible}
                 />
                 <span className="text-xs text-theme-text-muted">Required</span>
@@ -885,7 +885,7 @@ const ReviewSubmissionsPage: React.FC = () => {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
             >
               <option value="">All statuses</option>
               <option value={SubmissionStatus.PENDING_REVIEW}>Pending Review</option>

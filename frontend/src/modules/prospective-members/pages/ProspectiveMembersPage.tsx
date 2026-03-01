@@ -399,7 +399,7 @@ export const ProspectiveMembersPage: React.FC = () => {
               const pipeline = pipelines.find((p) => p.id === e.target.value);
               if (pipeline) void fetchPipeline(pipeline.id);
             }}
-            className="bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
           >
             {pipelines.map((p) => (
               <option key={p.id} value={p.id}>
@@ -417,7 +417,7 @@ export const ProspectiveMembersPage: React.FC = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search applicants..."
-            className="w-full bg-theme-surface border border-theme-surface-border rounded-lg pl-10 pr-4 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full bg-theme-surface border border-theme-surface-border rounded-lg pl-10 pr-4 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
           />
         </div>
 
@@ -654,7 +654,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                             setSelectedInactive(new Set());
                           }
                         }}
-                        className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
+                        className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                       />
                     </th>
                     <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Name</th>
@@ -684,7 +684,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                             }
                             setSelectedInactive(next);
                           }}
-                          className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
+                          className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                         />
                       </td>
                       <td className="p-3">
@@ -999,7 +999,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                     onChange={(e) =>
                       setNewApplicant({ ...newApplicant, first_name: e.target.value })
                     }
-                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                   />
                 </div>
                 <div>
@@ -1010,7 +1010,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                     onChange={(e) =>
                       setNewApplicant({ ...newApplicant, last_name: e.target.value })
                     }
-                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                   />
                 </div>
               </div>
@@ -1022,7 +1022,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                   onChange={(e) =>
                     setNewApplicant({ ...newApplicant, email: e.target.value })
                   }
-                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div>
@@ -1033,7 +1033,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                   onChange={(e) =>
                     setNewApplicant({ ...newApplicant, phone: e.target.value })
                   }
-                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div>
@@ -1046,7 +1046,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                       target_membership_type: e.target.value as 'probationary' | 'administrative',
                     })
                   }
-                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 >
                   <option value="probationary">Probationary</option>
                   <option value="administrative">Administrative</option>

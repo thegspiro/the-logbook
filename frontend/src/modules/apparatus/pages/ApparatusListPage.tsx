@@ -190,7 +190,7 @@ export const ApparatusListPage: React.FC = () => {
                 placeholder="Search by unit number, name, or VIN..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
               />
             </div>
 
@@ -227,7 +227,7 @@ export const ApparatusListPage: React.FC = () => {
                   value={filterType}
                   onChange={(e) => setFilterType(e.target.value)}
                   disabled={isLoadingTypes}
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 >
                   <option value="">All Types</option>
                   {types.map((type) => (
@@ -245,7 +245,7 @@ export const ApparatusListPage: React.FC = () => {
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value)}
                   disabled={isLoadingStatuses}
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                 >
                   <option value="">All Statuses</option>
                   {statuses.map((status) => (
@@ -263,7 +263,7 @@ export const ApparatusListPage: React.FC = () => {
                     type="checkbox"
                     checked={showArchived}
                     onChange={(e) => setShowArchived(e.target.checked)}
-                    className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-red-600 focus:ring-red-500"
+                    className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring"
                   />
                   <span className="text-theme-text-secondary">Show Archived</span>
                 </label>

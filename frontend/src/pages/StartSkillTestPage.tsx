@@ -163,7 +163,7 @@ export const StartSkillTestPage: React.FC = () => {
                   placeholder="Search templates..."
                   value={templateSearch}
                   onChange={(e) => setTemplateSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                  className="w-full pl-10 pr-4 py-3 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50"
                 />
               </div>
               {templatesLoading ? (
@@ -269,7 +269,7 @@ export const StartSkillTestPage: React.FC = () => {
                   placeholder="Type a name to search..."
                   value={memberSearch}
                   onChange={(e) => setMemberSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                  className="w-full pl-10 pr-4 py-3 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50"
                 />
               </div>
               {membersLoading ? (
@@ -319,7 +319,7 @@ export const StartSkillTestPage: React.FC = () => {
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
             placeholder="Any notes for this test session..."
-            className="w-full px-3 py-3 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500/50 resize-none"
+            className="w-full px-3 py-3 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50 resize-none"
           />
         </div>
 

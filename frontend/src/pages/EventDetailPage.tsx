@@ -864,7 +864,7 @@ export const EventDetailPage: React.FC = () => {
                               value={status}
                               checked={rsvpStatus === status}
                               onChange={(e) => setRsvpStatus(e.target.value as RSVPStatus)}
-                              className="h-4 w-4 text-red-600 focus:ring-red-500 border-theme-surface-border"
+                              className="h-4 w-4 text-blue-600 focus:ring-theme-focus-ring border-theme-surface-border"
                             />
                             <span className="ml-2 text-sm text-theme-text-secondary">
                               {getRSVPStatusLabel(status)}
@@ -886,7 +886,7 @@ export const EventDetailPage: React.FC = () => {
                           max="10"
                           value={guestCount}
                           onChange={(e) => setGuestCount(parseInt(e.target.value))}
-                          className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                          className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
                         />
                       </div>
                     )}
@@ -900,7 +900,7 @@ export const EventDetailPage: React.FC = () => {
                         rows={3}
                         value={rsvpNotes}
                         onChange={(e) => setRsvpNotes(e.target.value)}
-                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
                         placeholder="Dietary restrictions, special accommodations, etc."
                       />
                     </div>
@@ -911,7 +911,7 @@ export const EventDetailPage: React.FC = () => {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
                   >
                     {submitting ? 'Submitting...' : 'Submit RSVP'}
                   </button>
@@ -921,7 +921,7 @@ export const EventDetailPage: React.FC = () => {
                       setShowRSVPModal(false);
                       setSubmitError(null);
                     }}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                   >
                     Cancel
                   </button>
@@ -976,7 +976,7 @@ export const EventDetailPage: React.FC = () => {
                       maxLength={500}
                       value={cancelReason}
                       onChange={(e) => setCancelReason(e.target.value)}
-                      className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                      className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
                       placeholder="Please provide a reason for cancelling this event..."
                     />
                     <p className="mt-1 text-xs text-theme-text-muted">
@@ -990,7 +990,7 @@ export const EventDetailPage: React.FC = () => {
                         type="checkbox"
                         checked={sendCancelNotifications}
                         onChange={(e) => setSendCancelNotifications(e.target.checked)}
-                        className="h-4 w-4 text-red-600 focus:ring-red-500 border-theme-surface-border rounded"
+                        className="h-4 w-4 text-blue-600 focus:ring-theme-focus-ring border-theme-surface-border rounded"
                       />
                       <span className="ml-2 text-sm text-theme-text-secondary">
                         Send cancellation notifications to all RSVPs
@@ -1003,7 +1003,7 @@ export const EventDetailPage: React.FC = () => {
                   <button
                     type="submit"
                     disabled={submitting || cancelReason.length < 10}
-                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
                   >
                     {submitting ? 'Cancelling...' : 'Cancel Event'}
                   </button>
@@ -1015,7 +1015,7 @@ export const EventDetailPage: React.FC = () => {
                       setCancelReason('');
                       setSendCancelNotifications(false);
                     }}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                   >
                     Go Back
                   </button>
@@ -1071,7 +1071,7 @@ export const EventDetailPage: React.FC = () => {
                     value={memberSearch}
                     onChange={(e) => setMemberSearch(e.target.value)}
                     placeholder="Search by name or email..."
-                    className="block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                    className="block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
                   />
                 </div>
 
@@ -1158,7 +1158,7 @@ export const EventDetailPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowCheckInModal(false)}
-                  className="w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm"
+                  className="w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:ml-3 sm:w-auto sm:text-sm"
                 >
                   Done
                 </button>
@@ -1208,7 +1208,7 @@ export const EventDetailPage: React.FC = () => {
                         id="actual_start_time"
                         value={actualStartTime}
                         onChange={(e) => setActualStartTime(e.target.value)}
-                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
                       />
                       {event?.actual_start_time && (
                         <p className="mt-1 text-xs text-theme-text-muted">
@@ -1227,7 +1227,7 @@ export const EventDetailPage: React.FC = () => {
                         id="actual_end_time"
                         value={actualEndTime}
                         onChange={(e) => setActualEndTime(e.target.value)}
-                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
                       />
                       {event?.actual_end_time && (
                         <p className="mt-1 text-xs text-theme-text-muted">
@@ -1251,7 +1251,7 @@ export const EventDetailPage: React.FC = () => {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
                   >
                     {submitting ? 'Saving...' : 'Save Times'}
                   </button>
@@ -1261,7 +1261,7 @@ export const EventDetailPage: React.FC = () => {
                       setShowRecordTimesModal(false);
                       setSubmitError(null);
                     }}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                   >
                     Cancel
                   </button>
@@ -1311,7 +1311,7 @@ export const EventDetailPage: React.FC = () => {
                         id="override_check_in"
                         value={overrideCheckIn}
                         onChange={(e) => setOverrideCheckIn(e.target.value)}
-                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
                       />
                     </div>
 
@@ -1325,7 +1325,7 @@ export const EventDetailPage: React.FC = () => {
                         id="override_check_out"
                         value={overrideCheckOut}
                         onChange={(e) => setOverrideCheckOut(e.target.value)}
-                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
                       />
                     </div>
 
@@ -1344,7 +1344,7 @@ export const EventDetailPage: React.FC = () => {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
                   >
                     {submitting ? 'Saving...' : 'Save Times'}
                   </button>
@@ -1355,7 +1355,7 @@ export const EventDetailPage: React.FC = () => {
                       setEditingRsvp(null);
                       setSubmitError(null);
                     }}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                   >
                     Cancel
                   </button>
@@ -1406,14 +1406,14 @@ export const EventDetailPage: React.FC = () => {
                   type="button"
                   disabled={submitting}
                   onClick={() => { void handleDeleteEvent(); }}
-                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
                 >
                   {submitting ? 'Deleting...' : 'Delete Permanently'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowDeleteConfirm(false)}
-                  className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                  className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                 >
                   Go Back
                 </button>

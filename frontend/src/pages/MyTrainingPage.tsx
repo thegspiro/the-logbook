@@ -180,7 +180,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
                   type="checkbox"
                   checked={getCurrentValue(field.key)}
                   onChange={(e) => setDraft({ ...draft, [field.key]: e.target.checked })}
-                  className="w-5 h-5 rounded bg-theme-input-bg border-theme-input-border text-red-600 focus:ring-red-500"
+                  className="w-5 h-5 rounded bg-theme-input-bg border-theme-input-border text-blue-600 focus:ring-theme-focus-ring"
                 />
               </label>
             ))}
@@ -201,7 +201,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
               type="checkbox"
               checked={getCurrentValue('report_review_required')}
               onChange={(e) => setDraft({ ...draft, report_review_required: e.target.checked })}
-              className="w-5 h-5 rounded bg-theme-input-bg border-theme-input-border text-red-600 focus:ring-red-500"
+              className="w-5 h-5 rounded bg-theme-input-bg border-theme-input-border text-blue-600 focus:ring-theme-focus-ring"
             />
           </label>
 
@@ -212,7 +212,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
               <select
                 value={getStringValue('report_review_role') || 'training_officer'}
                 onChange={(e) => setDraft({ ...draft, report_review_role: e.target.value })}
-                className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
               >
                 {REVIEW_ROLE_OPTIONS.map(opt => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -235,7 +235,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
               value={getStringValue('rating_label') || 'Performance Rating'}
               onChange={(e) => setDraft({ ...draft, rating_label: e.target.value })}
               placeholder="Performance Rating"
-              className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
             />
           </div>
 
@@ -252,7 +252,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
                 }
                 setDraft(newDraft);
               }}
-              className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
             >
               {RATING_SCALE_OPTIONS.map(opt => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -278,7 +278,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
                           setDraft({ ...draft, rating_scale_labels: updated });
                         }}
                         placeholder={DEFAULT_COMPETENCY_LABELS[String(level)]}
-                        className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-1.5 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-1.5 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
                       />
                     </div>
                   );
