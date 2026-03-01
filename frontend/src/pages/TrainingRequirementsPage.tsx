@@ -398,6 +398,14 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
               } text-theme-text-primary`}>
                 {getDueDateTypeLabel(requirement.due_date_type)}
               </span>
+              {requirement.source && requirement.source !== 'department' && (
+                <span className={`text-xs font-semibold px-2 py-1 rounded ${
+                  requirement.source === 'national' ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400' :
+                  'bg-green-500/20 text-green-700 dark:text-green-400'
+                }`}>
+                  {requirement.registry_name || (requirement.source === 'national' ? 'National' : 'State')}
+                </span>
+              )}
               {!requirement.active && (
                 <span className="text-xs font-semibold px-2 py-1 rounded bg-theme-surface-hover text-theme-text-primary">
                   Inactive
@@ -504,6 +512,11 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
           <div className="mt-6 pt-6 border-t border-theme-surface-border space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <DetailSection title="Requirement Details">
+                <DetailRow label="Source" value={
+                  requirement.source === 'national' ? (requirement.registry_name || 'National') :
+                  requirement.source === 'state' ? (requirement.registry_name || 'State') :
+                  'Department'
+                } />
                 <DetailRow label="Training Type" value={requirement.training_type || 'Any'} />
                 <DetailRow label="Due Date Type" value={getDueDateTypeLabel(requirement.due_date_type)} />
                 <DetailRow label="Frequency" value={requirement.frequency.replace('_', ' ')} />

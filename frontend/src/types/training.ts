@@ -736,6 +736,15 @@ export interface RegistryImportResult {
   imported_count: number;
   skipped_count: number;
   errors: string[];
+  last_updated?: string;
+}
+
+export interface RegistryInfo {
+  key: string;
+  name: string;
+  description: string;
+  last_updated?: string;
+  requirement_count: number;
 }
 
 // Bulk Enrollment

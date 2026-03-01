@@ -39,6 +39,7 @@ CSV Format:
 
 import argparse
 import csv
+from datetime import date
 import json
 import os
 import re
@@ -551,6 +552,7 @@ def main():
     registry = {
         "registry_name": display_name,
         "registry_description": description,
+        "last_updated": date.today().isoformat(),
         "source": source,
         "requirements": requirements,
     }

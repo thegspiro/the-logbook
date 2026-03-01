@@ -70,6 +70,7 @@ import type {
   ProgramWithDetails,
   MemberProgramProgress,
   RegistryImportResult,
+  RegistryInfo,
   BulkEnrollmentRequest,
   BulkEnrollmentResponse,
   // External Training Integration types
@@ -1501,6 +1502,14 @@ export const trainingProgramService = {
   },
 
   // ==================== Registry Import ====================
+
+  /**
+   * List available registries with metadata
+   */
+  async getRegistries(): Promise<RegistryInfo[]> {
+    const response = await api.get<RegistryInfo[]>('/training/programs/requirements/registries');
+    return response.data;
+  },
 
   /**
    * Import requirements from a registry

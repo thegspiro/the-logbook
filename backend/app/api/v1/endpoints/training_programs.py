@@ -807,6 +807,58 @@ async def bulk_enroll_members(
 # ==================== Registry Import Endpoints ====================
 
 
+class RegistryInfo(BaseModel):
+    """Metadata about an available registry"""
+
+    key: str
+    name: str
+    description: str
+    last_updated: Optional[str] = None
+    requirement_count: int
+
+
+@router.get("/requirements/registries", response_model=List[RegistryInfo])
+async def list_available_registries(
+    _current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    List available registries and their metadata
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    import json
+    from pathlib import Path
+
+    registry_files = {
+        "nfpa": "backend/app/data/registries/nfpa_requirements.json",
+        "nremt": "backend/app/data/registries/nremt_requirements.json",
+        "proboard": "backend/app/data/registries/proboard_requirements.json",
+    }
+
+    registries = []
+    for key, file_path in registry_files.items():
+        path = Path(file_path)
+        if not path.exists():
+            continue
+        try:
+            with open(path, "r") as f:
+                data = json.load(f)
+            registries.append(
+                RegistryInfo(
+                    key=key,
+                    name=data.get("registry_name", key),
+                    description=data.get("registry_description", ""),
+                    last_updated=data.get("last_updated"),
+                    requirement_count=len(data.get("requirements", [])),
+                )
+            )
+        except (json.JSONDecodeError, OSError):
+            continue
+
+    return registries
+
+
 @router.post(
     "/requirements/import/{registry_name}", response_model=RegistryImportResult
 )
@@ -842,7 +894,7 @@ async def import_registry_requirements(
 
     service = TrainingProgramService(db)
 
-    imported_count, errors = await service.import_registry_requirements(
+    imported_count, errors, last_updated = await service.import_registry_requirements(
         registry_file_path=registry_file,
         organization_id=current_user.organization_id,
         created_by=current_user.id,
@@ -854,4 +906,5 @@ async def import_registry_requirements(
         imported_count=imported_count,
         skipped_count=0,  # Could be calculated if needed
         errors=errors,
+        last_updated=last_updated,
     )

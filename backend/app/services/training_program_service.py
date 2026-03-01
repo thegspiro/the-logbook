@@ -1304,23 +1304,24 @@ class TrainingProgramService:
         organization_id: UUID,
         created_by: UUID,
         skip_existing: bool = True,
-    ) -> Tuple[int, List[str]]:
+    ) -> Tuple[int, List[str], Optional[str]]:
         """
         Import requirements from a registry JSON file
 
-        Returns: (imported_count, errors)
+        Returns: (imported_count, errors, last_updated)
         """
         file_path = Path(registry_file_path)
         if not file_path.exists():
-            return 0, [f"Registry file not found: {registry_file_path}"]
+            return 0, [f"Registry file not found: {registry_file_path}"], None
 
         try:
             with open(file_path, "r") as f:
                 registry_data = json.load(f)
         except json.JSONDecodeError as e:
-            return 0, [f"Invalid JSON in registry file: {str(e)}"]
+            return 0, [f"Invalid JSON in registry file: {str(e)}"], None
 
         registry_name = registry_data.get("registry_name")
+        last_updated = registry_data.get("last_updated")
         requirements_data = registry_data.get("requirements", [])
 
         imported_count = 0
@@ -1377,4 +1378,4 @@ class TrainingProgramService:
                 )
 
         await self.db.commit()
-        return imported_count, errors
+        return imported_count, errors, last_updated
