@@ -180,7 +180,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
                 type="text"
                 value={formData.delegating_user_id}
                 onChange={(e) => setFormData((prev) => ({ ...prev, delegating_user_id: e.target.value }))}
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm"
                 placeholder="User ID of the absent member"
               />
             </div>
@@ -192,7 +192,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
                 type="text"
                 value={formData.proxy_user_id}
                 onChange={(e) => setFormData((prev) => ({ ...prev, proxy_user_id: e.target.value }))}
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm"
                 placeholder="User ID of the proxy voter"
               />
             </div>
@@ -206,7 +206,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
                     proxy_type: e.target.value as 'single_election' | 'regular',
                   }))
                 }
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm"
               >
                 <option value="single_election">Single Election</option>
                 <option value="regular">Regular (Ongoing)</option>
@@ -218,7 +218,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
                 value={formData.reason}
                 onChange={(e) => setFormData((prev) => ({ ...prev, reason: e.target.value }))}
                 rows={2}
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm"
                 placeholder="Reason for proxy authorization (e.g., medical leave, out of town)"
               />
             </div>

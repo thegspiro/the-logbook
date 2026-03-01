@@ -156,7 +156,7 @@ export const RoleManagementPage: React.FC = () => {
           </div>
           <button
             onClick={handleCreate}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
           >
             Create Custom Role
           </button>
@@ -260,7 +260,7 @@ export const RoleManagementPage: React.FC = () => {
                     disabled={editingRole?.is_system}
                     required
                     aria-required="true"
-                    className="mt-1 block w-full rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm disabled:bg-slate-700"
+                    className="mt-1 block w-full rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm disabled:bg-slate-700"
                   />
                 </div>
 
@@ -272,7 +272,7 @@ export const RoleManagementPage: React.FC = () => {
                       type="text"
                       value={formData.slug}
                       onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
-                      className="mt-1 block w-full rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      className="mt-1 block w-full rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm"
                       placeholder="custom_role"
                     />
                   </div>
@@ -285,7 +285,7 @@ export const RoleManagementPage: React.FC = () => {
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     rows={2}
-                    className="mt-1 block w-full rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    className="mt-1 block w-full rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm"
                   />
                 </div>
 
@@ -299,7 +299,7 @@ export const RoleManagementPage: React.FC = () => {
                       max="100"
                       value={formData.priority}
                       onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value) || 0 })}
-                      className="mt-1 block w-32 rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      className="mt-1 block w-32 rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm"
                     />
                     <p className="mt-1 text-xs text-theme-text-muted">Higher priority roles have more authority</p>
                   </div>
@@ -323,7 +323,7 @@ export const RoleManagementPage: React.FC = () => {
                                 if (input) input.indeterminate = someSelected && !allSelected;
                               }}
                               onChange={() => handleToggleCategory(category)}
-                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
+                              className="h-4 w-4 text-red-600 focus:ring-red-500 border-theme-surface-border rounded"
                             />
                             <span className="ml-2 text-sm font-medium text-theme-text-primary uppercase">
                               {category.category.replace(/_/g, ' ')}
@@ -336,7 +336,7 @@ export const RoleManagementPage: React.FC = () => {
                                   type="checkbox"
                                   checked={formData.permissions.includes(perm.name)}
                                   onChange={() => handleTogglePermission(perm.name)}
-                                  className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
+                                  className="mt-0.5 h-4 w-4 text-red-600 focus:ring-red-500 border-theme-surface-border rounded"
                                 />
                                 <div className="ml-2">
                                   <div className="text-sm text-theme-text-primary">{perm.name}</div>

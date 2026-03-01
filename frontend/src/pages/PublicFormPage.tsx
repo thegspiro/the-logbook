@@ -113,7 +113,7 @@ const PublicFormPage = () => {
   const renderField = (field: PublicFormField) => {
     const value = formData[field.id] || '';
     const baseInputClass =
-      'w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-theme-text-primary placeholder-theme-text-muted';
+      'w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-theme-text-primary placeholder-theme-text-muted';
 
     switch (field.field_type) {
       case 'text':
@@ -368,7 +368,7 @@ const PublicFormPage = () => {
                 <label className="block text-sm font-medium text-theme-text-secondary mb-1">Name</label>
                 <input
                   type="text"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-theme-text-primary placeholder-theme-text-muted"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-theme-text-primary placeholder-theme-text-muted"
                   placeholder="Your name"
                   value={submitterName}
                   onChange={(e) => setSubmitterName(e.target.value)}
@@ -378,7 +378,7 @@ const PublicFormPage = () => {
                 <label className="block text-sm font-medium text-theme-text-secondary mb-1">Email</label>
                 <input
                   type="email"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-theme-text-primary placeholder-theme-text-muted"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-theme-text-primary placeholder-theme-text-muted"
                   placeholder="your@email.com"
                   value={submitterEmail}
                   onChange={(e) => setSubmitterEmail(e.target.value)}

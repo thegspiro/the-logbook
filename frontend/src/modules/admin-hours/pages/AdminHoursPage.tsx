@@ -285,7 +285,7 @@ const AdminHoursPage: React.FC = () => {
                   value={manualData.category_id}
                   onChange={(e) => setManualData({ ...manualData, category_id: e.target.value })}
                   required
-                  className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-red-500"
                 >
                   <option value="">Select category...</option>
                   {categories.map((cat) => (
@@ -303,7 +303,7 @@ const AdminHoursPage: React.FC = () => {
                   onChange={(e) => setManualData({ ...manualData, clock_in_at: e.target.value })}
                   max={maxDatetime}
                   required
-                  className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-red-500"
                 />
               </div>
               <div>
@@ -315,7 +315,7 @@ const AdminHoursPage: React.FC = () => {
                   max={maxDatetime}
                   min={manualData.clock_in_at || undefined}
                   required
-                  className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-red-500"
                 />
               </div>
             </div>
@@ -336,7 +336,7 @@ const AdminHoursPage: React.FC = () => {
                 type="text"
                 value={manualData.description ?? ''}
                 onChange={(e) => setManualData({ ...manualData, description: e.target.value })}
-                className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-red-500"
                 placeholder="What did you work on?"
               />
             </div>

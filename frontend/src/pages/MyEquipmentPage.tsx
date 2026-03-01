@@ -550,7 +550,7 @@ const MyEquipmentPage: React.FC = () => {
                   <div className="space-y-4">
                     <div>
                       <label htmlFor="my-return-condition" className="block text-sm font-medium text-theme-text-secondary mb-1">Return Condition *</label>
-                      <select id="my-return-condition" value={returnCondition} onChange={(e) => setReturnCondition(e.target.value)} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <select id="my-return-condition" value={returnCondition} onChange={(e) => setReturnCondition(e.target.value)} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500">
                         <option value="excellent">Excellent</option>
                         <option value="good">Good</option>
                         <option value="fair">Fair</option>
@@ -560,7 +560,7 @@ const MyEquipmentPage: React.FC = () => {
                     </div>
                     <div>
                       <label htmlFor="my-damage-notes" className="block text-sm font-medium text-theme-text-secondary mb-1">Notes (optional)</label>
-                      <textarea id="my-damage-notes" rows={3} value={damageNotes} onChange={(e) => setDamageNotes(e.target.value)} placeholder="Describe any damage or issues..." className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      <textarea id="my-damage-notes" rows={3} value={damageNotes} onChange={(e) => setDamageNotes(e.target.value)} placeholder="Describe any damage or issues..." className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500" />
                     </div>
                   </div>
                 </div>

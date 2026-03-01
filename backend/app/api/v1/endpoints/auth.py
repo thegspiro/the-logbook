@@ -341,7 +341,9 @@ async def refresh_token(
     auth_service = AuthService(db)
 
     try:
-        new_access_token, new_refresh_token = await auth_service.refresh_access_token(rt)
+        new_access_token, new_refresh_token = await auth_service.refresh_access_token(
+            rt
+        )
     except OperationalError as exc:
         logger.error(f"Database connection error during token refresh: {exc}")
         raise HTTPException(

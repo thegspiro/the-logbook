@@ -196,20 +196,20 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
 
       {/* Template Selection */}
       {showTemplates && !selectedTemplate && (
-        <div className="mb-6 p-4 bg-indigo-500/10 rounded-lg border border-indigo-500/30">
-          <h4 className="text-sm font-semibold text-indigo-700 dark:text-indigo-300 mb-3">Select a Template</h4>
+        <div className="mb-6 p-4 bg-red-500/10 rounded-lg border border-red-500/30">
+          <h4 className="text-sm font-semibold text-red-700 dark:text-red-300 mb-3">Select a Template</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {templates.map((template) => (
               <button
                 key={template.id}
                 type="button"
                 onClick={() => handleSelectTemplate(template)}
-                className="text-left p-3 bg-theme-surface-secondary rounded-lg border border-indigo-500/30 hover:border-indigo-400 hover:bg-theme-surface-hover transition-all"
+                className="text-left p-3 bg-theme-surface-secondary rounded-lg border border-red-500/30 hover:border-red-400 hover:bg-theme-surface-hover transition-all"
               >
                 <div className="font-medium text-theme-text-primary text-sm">{template.name}</div>
                 <p className="text-xs text-theme-text-muted mt-1">{template.description}</p>
                 <div className="flex gap-2 mt-2">
-                  <span className="px-2 py-0.5 text-xs bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 rounded">
+                  <span className="px-2 py-0.5 text-xs bg-red-500/20 text-red-700 dark:text-red-300 rounded">
                     {template.vote_type === VoteType.APPROVAL ? 'Yes/No' : 'Candidates'}
                   </span>
                   <span className="px-2 py-0.5 text-xs bg-theme-surface text-theme-text-secondary rounded">
@@ -229,8 +229,8 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
 
       {/* Template Name Input */}
       {selectedTemplate && (
-        <div className="mb-6 p-4 bg-indigo-500/10 rounded-lg border border-indigo-500/30">
-          <h4 className="text-sm font-semibold text-indigo-700 dark:text-indigo-300 mb-2">
+        <div className="mb-6 p-4 bg-red-500/10 rounded-lg border border-red-500/30">
+          <h4 className="text-sm font-semibold text-red-700 dark:text-red-300 mb-2">
             {selectedTemplate.name}
           </h4>
           <p className="text-xs text-theme-text-muted mb-3">{selectedTemplate.description}</p>
@@ -261,7 +261,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
               Preview: <span className="font-medium">{selectedTemplate.title_template.replace('{name}', templateNameInput || '...')}</span>
             </div>
             <div className="flex gap-2 mt-2">
-              <span className="px-2 py-0.5 text-xs bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 rounded">
+              <span className="px-2 py-0.5 text-xs bg-red-500/20 text-red-700 dark:text-red-300 rounded">
                 Voters: {getVoterTypeLabel(selectedTemplate.eligible_voter_types)}
               </span>
               {selectedTemplate.require_attendance && (
@@ -302,7 +302,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 type="text"
                 value={customForm.title || ''}
                 onChange={(e) => setCustomForm((prev) => ({ ...prev, title: e.target.value }))}
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm"
                 placeholder="Ballot item title"
               />
             </div>
@@ -313,7 +313,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 value={customForm.description || ''}
                 onChange={(e) => setCustomForm((prev) => ({ ...prev, description: e.target.value }))}
                 rows={2}
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm"
                 placeholder="Optional description..."
               />
             </div>
@@ -324,7 +324,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 <select
                   value={customForm.type}
                   onChange={(e) => setCustomForm((prev) => ({ ...prev, type: e.target.value }))}
-                  className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm"
                 >
                   <option value="general_vote">General Vote</option>
                   <option value="membership_approval">Membership Approval</option>
@@ -337,7 +337,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 <select
                   value={customForm.vote_type}
                   onChange={(e) => setCustomForm((prev) => ({ ...prev, vote_type: e.target.value }))}
-                  className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm"
                 >
                   <option value="approval">Approval (Yes/No)</option>
                   <option value="candidate_selection">Candidate Selection</option>
@@ -355,7 +355,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                     eligible_voter_types: e.target.value.split(','),
                   }))
                 }
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm"
               >
                 {VOTER_TYPE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>

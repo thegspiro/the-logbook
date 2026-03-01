@@ -345,7 +345,7 @@ const EventSelfCheckInPage: React.FC = () => {
             <button
               onClick={() => { void handleCheckIn(); }}
               disabled={checkingIn}
-              className="w-full px-8 py-4 bg-green-600 text-white text-lg font-semibold rounded-lg hover:bg-green-700 transition focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:text-gray-200 disabled:cursor-not-allowed"
+              className="w-full px-8 py-4 bg-green-600 text-white text-lg font-semibold rounded-lg hover:bg-green-700 transition focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:text-gray-200 disabled:cursor-not-allowed"
             >
               {checkingIn ? 'Checking In...' : 'Check In to This Event'}
             </button>

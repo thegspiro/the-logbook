@@ -167,9 +167,9 @@ async def clear_errors(
     """Clear all error logs for the organization"""
     # Count how many will be deleted for audit trail
     count_result = await db.execute(
-        select(func.count()).select_from(ErrorLog).where(
-            ErrorLog.organization_id == str(current_user.organization_id)
-        )
+        select(func.count())
+        .select_from(ErrorLog)
+        .where(ErrorLog.organization_id == str(current_user.organization_id))
     )
     deleted_count = count_result.scalar() or 0
 
