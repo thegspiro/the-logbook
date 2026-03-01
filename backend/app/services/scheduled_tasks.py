@@ -1021,9 +1021,7 @@ async def run_audit_log_archival(db: AsyncSession) -> Dict[str, Any]:
             .limit(1)
         )
         latest_checkpoint = latest_cp.scalar_one_or_none()
-        last_checkpointed_id = (
-            latest_checkpoint.last_log_id if latest_checkpoint else 0
-        )
+        last_checkpointed_id = latest_checkpoint.last_log_id if latest_checkpoint else 0
 
         # Find audit log entries older than 90 days that haven't been checkpointed
         old_logs_query = (
@@ -1035,7 +1033,7 @@ async def run_audit_log_archival(db: AsyncSession) -> Dict[str, Any]:
         row = old_result.one_or_none()
 
         if row and row[2] and row[2] > 0:
-            min_id, max_id, count = row[0], row[1], row[2]
+            min_id, max_id = row[0], row[1]
 
             # Create checkpoint for the range (in batches of 10000)
             batch_start = min_id
