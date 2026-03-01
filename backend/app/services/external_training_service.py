@@ -1061,6 +1061,10 @@ class ExternalTrainingSyncService:
 
         self.db.add(training_record)
         await self.db.flush()
+        # Refresh server-computed timestamps to prevent MissingGreenlet
+        await self.db.refresh(
+            training_record, attribute_names=["created_at", "updated_at"]
+        )
 
         # Update import record
         import_record.training_record_id = training_record.id
