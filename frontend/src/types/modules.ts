@@ -406,9 +406,9 @@ export const AVAILABLE_MODULES: Module[] = [
   {
     id: 'mobile',
     name: 'Mobile App Access',
-    description: 'Mobile-optimized access and push notifications',
+    description: 'Mobile-optimized access with pull-to-refresh and responsive UI',
     longDescription:
-      'Enable mobile-optimized access and push notification support for members on the go.',
+      'Enable mobile-optimized access for members on the go. Includes pull-to-refresh, responsive layouts, and installable PWA support.',
     category: 'optional',
     enabled: false,
     canDisable: true,
@@ -416,8 +416,8 @@ export const AVAILABLE_MODULES: Module[] = [
     route: '/mobile',
     features: [
       'Mobile-optimized interface',
-      'Push notifications',
-      'Offline access',
+      'Pull-to-refresh on key pages',
+      'Installable PWA (add to home screen)',
     ],
   },
 ];
