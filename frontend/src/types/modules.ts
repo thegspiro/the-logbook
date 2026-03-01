@@ -320,7 +320,7 @@ export const AVAILABLE_MODULES: Module[] = [
       'Group discussions',
       'Emergency notifications',
       'Email integration',
-      'Mobile push notifications',
+      'In-app notifications',
     ],
   },
   {
