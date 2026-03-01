@@ -23,6 +23,14 @@ class DueDateType(str, Enum):
     FIXED_DATE = "fixed_date"  # Due by a specific fixed date
 
 
+class RequirementSource(str, Enum):
+    """Source of the requirement"""
+
+    DEPARTMENT = "department"
+    STATE = "state"
+    NATIONAL = "national"
+
+
 class RequirementType(str, Enum):
     """Type of training requirement"""
 
@@ -218,6 +226,8 @@ class TrainingRequirementBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     requirement_type: RequirementType
+    source: RequirementSource = RequirementSource.DEPARTMENT
+    registry_name: Optional[str] = None
     training_type: Optional[str] = None
     required_hours: Optional[float] = Field(None, ge=0)
     required_courses: Optional[List[str]] = None

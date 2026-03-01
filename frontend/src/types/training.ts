@@ -358,6 +358,8 @@ export interface TrainingRequirement {
   name: string;
   description?: string;
   requirement_type: RequirementType;
+  source: RequirementSource;
+  registry_name?: string;
   training_type?: TrainingType;
   required_hours?: number;
   required_courses?: string[];
@@ -734,6 +736,17 @@ export interface RegistryImportResult {
   imported_count: number;
   skipped_count: number;
   errors: string[];
+  last_updated?: string;
+  source_url?: string;
+}
+
+export interface RegistryInfo {
+  key: string;
+  name: string;
+  description: string;
+  last_updated?: string;
+  source_url?: string;
+  requirement_count: number;
 }
 
 // Bulk Enrollment

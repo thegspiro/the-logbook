@@ -1,6 +1,9 @@
 {
   "registry_name": "NREMT",
   "registry_description": "National Registry of Emergency Medical Technicians",
+  "last_updated": "2026-03-01",
+  "source_url": "https://www.nremt.org/recertification",
+  "source": "national",
   "requirements": [
     {
       "name": "EMR Continuing Education",

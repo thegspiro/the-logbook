@@ -17,8 +17,9 @@ import {
   X,
   Tag,
   Clock,
+  ExternalLink,
 } from 'lucide-react';
-import { trainingService } from '../services/api';
+import { trainingService, trainingProgramService } from '../services/api';
 import type {
   TrainingRequirement,
   TrainingRequirementCreate,
@@ -28,6 +29,7 @@ import type {
   RequirementFrequency,
   RequirementType,
   TrainingType,
+  RegistryInfo,
 } from '../types/training';
 import toast from 'react-hot-toast';
 
@@ -51,6 +53,7 @@ const MEMBERSHIP_TYPES = [
 const TrainingRequirementsPage: React.FC = () => {
   const [requirements, setRequirements] = useState<TrainingRequirement[]>([]);
   const [categories, setCategories] = useState<TrainingCategory[]>([]);
+  const [registries, setRegistries] = useState<RegistryInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
@@ -59,6 +62,17 @@ const TrainingRequirementsPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSource, setFilterSource] = useState<FilterSource>('all');
 
+  // Build a lookup from registry name to source_url
+  const registryUrlMap = React.useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const reg of registries) {
+      if (reg.source_url) {
+        map[reg.name] = reg.source_url;
+      }
+    }
+    return map;
+  }, [registries]);
+
   useEffect(() => {
     void fetchData();
   }, []);
@@ -66,12 +80,14 @@ const TrainingRequirementsPage: React.FC = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [reqs, cats] = await Promise.all([
+      const [reqs, cats, regs] = await Promise.all([
         trainingService.getRequirements({ active_only: false }),
         trainingService.getCategories(false),
+        trainingProgramService.getRegistries().catch(() => [] as RegistryInfo[]),
       ]);
       setRequirements(reqs);
       setCategories(cats);
+      setRegistries(regs);
     } catch (_error) {
       toast.error('Failed to load training requirements');
     } finally {
@@ -158,8 +174,7 @@ const TrainingRequirementsPage: React.FC = () => {
   const filteredRequirements = requirements.filter(req => {
     const matchesSearch = req.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       req.description?.toLowerCase().includes(searchTerm.toLowerCase());
-    // For now, filter by source is placeholder since we don't have source field in model
-    const matchesSource = filterSource === 'all';
+    const matchesSource = filterSource === 'all' || req.source === filterSource;
     return matchesSearch && matchesSource;
   });
 
@@ -275,6 +290,7 @@ const TrainingRequirementsPage: React.FC = () => {
                 key={requirement.id}
                 requirement={requirement}
                 categories={categories}
+                registryUrlMap={registryUrlMap}
                 isExpanded={expandedId === requirement.id}
                 onToggleExpand={() => setExpandedId(expandedId === requirement.id ? null : requirement.id)}
                 onEdit={() => {
@@ -329,6 +345,7 @@ const TrainingRequirementsPage: React.FC = () => {
 interface RequirementCardProps {
   requirement: TrainingRequirement;
   categories: TrainingCategory[];
+  registryUrlMap: Record<string, string>;
   isExpanded: boolean;
   onToggleExpand: () => void;
   onEdit: () => void;
@@ -340,6 +357,7 @@ interface RequirementCardProps {
 const RequirementCard: React.FC<RequirementCardProps> = ({
   requirement,
   categories,
+  registryUrlMap,
   isExpanded,
   onToggleExpand,
   onEdit,
@@ -399,6 +417,14 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
               } text-theme-text-primary`}>
                 {getDueDateTypeLabel(requirement.due_date_type)}
               </span>
+              {requirement.source && requirement.source !== 'department' && (
+                <span className={`text-xs font-semibold px-2 py-1 rounded ${
+                  requirement.source === 'national' ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400' :
+                  'bg-green-500/20 text-green-700 dark:text-green-400'
+                }`}>
+                  {requirement.registry_name || (requirement.source === 'national' ? 'National' : 'State')}
+                </span>
+              )}
               {!requirement.active && (
                 <span className="text-xs font-semibold px-2 py-1 rounded bg-theme-surface-hover text-theme-text-primary">
                   Inactive
@@ -505,6 +531,25 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
           <div className="mt-6 pt-6 border-t border-theme-surface-border space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <DetailSection title="Requirement Details">
+                <DetailRow label="Source" value={
+                  requirement.source === 'national' ? (requirement.registry_name || 'National') :
+                  requirement.source === 'state' ? (requirement.registry_name || 'State') :
+                  'Department'
+                } />
+                {requirement.registry_name && registryUrlMap[requirement.registry_name] && (
+                  <div className="flex justify-between">
+                    <span className="text-theme-text-muted text-sm">Citation:</span>
+                    <a
+                      href={registryUrlMap[requirement.registry_name]}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center space-x-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      <ExternalLink className="w-3 h-3" aria-hidden="true" />
+                      <span>View source</span>
+                    </a>
+                  </div>
+                )}
                 <DetailRow label="Training Type" value={requirement.training_type || 'Any'} />
                 <DetailRow label="Due Date Type" value={getDueDateTypeLabel(requirement.due_date_type)} />
                 <DetailRow label="Frequency" value={requirement.frequency.replace('_', ' ')} />

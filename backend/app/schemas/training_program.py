@@ -475,3 +475,5 @@ class RegistryImportResult(BaseModel):
     imported_count: int
     skipped_count: int
     errors: List[str] = []
+    last_updated: Optional[str] = None
+    source_url: Optional[str] = None

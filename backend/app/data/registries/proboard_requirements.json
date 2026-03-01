@@ -1,6 +1,9 @@
 {
   "registry_name": "Pro Board",
   "registry_description": "International Fire Service Accreditation Congress - Pro Board",
+  "last_updated": "2026-03-01",
+  "source_url": "https://www.theproboard.org/accreditation",
+  "source": "national",
   "requirements": [
     {
       "name": "Firefighter I Certification Maintenance",

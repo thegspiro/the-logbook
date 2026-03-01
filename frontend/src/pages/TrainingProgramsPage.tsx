@@ -13,12 +13,14 @@ import {
   Award,
   Calendar,
   AlertCircle,
+  ExternalLink,
 } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
 import { getErrorMessage } from '@/utils/errorHandling';
 import type {
   TrainingProgram,
   TrainingRequirementEnhanced,
+  RegistryInfo,
 } from '../types/training';
 
 type TabView = 'programs' | 'requirements' | 'templates';
@@ -28,6 +30,7 @@ const TrainingProgramsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabView>('programs');
   const [programs, setPrograms] = useState<TrainingProgram[]>([]);
   const [requirements, setRequirements] = useState<TrainingRequirementEnhanced[]>([]);
+  const [registries, setRegistries] = useState<RegistryInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [importingRegistry, setImportingRegistry] = useState<string | null>(null);
@@ -41,8 +44,12 @@ const TrainingProgramsPage: React.FC = () => {
         });
         setPrograms(data);
       } else if (activeTab === 'requirements') {
-        const data = await trainingProgramService.getRequirementsEnhanced();
-        setRequirements(data);
+        const [reqs, regs] = await Promise.all([
+          trainingProgramService.getRequirementsEnhanced(),
+          trainingProgramService.getRegistries(),
+        ]);
+        setRequirements(reqs);
+        setRegistries(regs);
       }
     } catch (_error) {
       // Error silently handled - empty state shown
@@ -243,17 +250,45 @@ const TrainingProgramsPage: React.FC = () => {
                 <div className="bg-theme-surface-secondary rounded-lg p-6 mb-6">
                   <h3 className="text-lg font-semibold text-theme-text-primary mb-4">Import from Registry</h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {['nfpa', 'nremt', 'proboard'].map((registry) => (
+                    {(registries.length > 0 ? registries : [
+                      { key: 'nfpa', name: 'NFPA', description: '', requirement_count: 0 },
+                      { key: 'nremt', name: 'NREMT', description: '', requirement_count: 0 },
+                      { key: 'proboard', name: 'Pro Board', description: '', requirement_count: 0 },
+                    ]).map((registry) => (
                       <button
-                        key={registry}
-                        onClick={() => { void handleImportRegistry(registry); }}
+                        key={registry.key}
+                        onClick={() => { void handleImportRegistry(registry.key); }}
                         disabled={importingRegistry !== null}
-                        className="flex items-center justify-center space-x-2 px-4 py-3 bg-theme-surface text-theme-text-primary rounded-lg hover:bg-theme-surface-hover disabled:opacity-50"
+                        className="flex flex-col items-center px-4 py-3 bg-theme-surface text-theme-text-primary rounded-lg hover:bg-theme-surface-hover disabled:opacity-50"
                       >
-                        <Download className="w-5 h-5" aria-hidden="true" />
-                        <span>
-                          {importingRegistry === registry ? 'Importing...' : `Import ${registry.toUpperCase()}`}
-                        </span>
+                        <div className="flex items-center space-x-2">
+                          <Download className="w-5 h-5" aria-hidden="true" />
+                          <span>
+                            {importingRegistry === registry.key ? 'Importing...' : `Import ${registry.name}`}
+                          </span>
+                        </div>
+                        {registry.last_updated && (
+                          <span className="text-xs text-theme-text-muted mt-1">
+                            Updated {registry.last_updated}
+                          </span>
+                        )}
+                        {registry.requirement_count > 0 && (
+                          <span className="text-xs text-theme-text-muted">
+                            {registry.requirement_count} requirements
+                          </span>
+                        )}
+                        {registry.source_url && (
+                          <a
+                            href={registry.source_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex items-center space-x-1 text-xs text-blue-600 dark:text-blue-400 hover:underline mt-1"
+                          >
+                            <ExternalLink className="w-3 h-3" aria-hidden="true" />
+                            <span>Source</span>
+                          </a>
+                        )}
                       </button>
                     ))}
                   </div>
