@@ -238,8 +238,8 @@ export const SchedulingReportsPage: React.FC = () => {
     setHasSearched(true);
     try {
       const data = await schedulingService.getCoverageReport({ start_date: startDate, end_date: endDate });
-      // Data might be an array or an object with records
-      const records = Array.isArray(data) ? data : (data).records || [];
+      // Data might be an array or an object with entries
+      const records = Array.isArray(data) ? data : (data).entries || [];
       setCoverageData(records as unknown as CoverageRecord[]);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to load coverage report'));
@@ -254,7 +254,7 @@ export const SchedulingReportsPage: React.FC = () => {
     setHasSearched(true);
     try {
       const data = await schedulingService.getCallVolumeReport({ start_date: startDate, end_date: endDate, group_by: groupBy });
-      const records = Array.isArray(data) ? data : (data).records || [];
+      const records = Array.isArray(data) ? data : (data).entries || [];
       setCallVolumeData(records as unknown as CallVolumeRecord[]);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to load call volume report'));

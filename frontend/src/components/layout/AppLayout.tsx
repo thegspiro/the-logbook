@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useLocation, Outlet } from 'react-router-dom';
+import { useNavigate, Outlet } from 'react-router-dom';
 import axios from 'axios';
 import { TopNavigation } from './TopNavigation';
 import { SideNavigation } from './SideNavigation';
@@ -25,9 +25,7 @@ interface AppLayoutProps {
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
-  const _location = useLocation();
   const logout = useAuthStore((s) => s.logout);
-  const _user = useAuthStore((s) => s.user);
   const [departmentName, setDepartmentName] = useState('Fire Department');
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [navigationLayout, _setNavigationLayout] = useState<'top' | 'left'>(

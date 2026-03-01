@@ -237,6 +237,7 @@ export interface ReportFilters {
   start_date?: string;
   end_date?: string;
   user_id?: string;
+  group_by?: string;
 }
 
 export interface AvailabilityFilters {

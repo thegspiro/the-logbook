@@ -191,7 +191,7 @@ function mapStageUpdateToBackend(stage: PipelineStageUpdate): BackendStepUpdateP
 /** Extract a plain string status from a backend status value that may be a string or object. */
 function extractStatus(status: string | { value: string }): string {
   if (typeof status === 'object' && status !== null) {
-    return status.value ?? String(status);
+    return status.value ?? JSON.stringify(status);
   }
   return status;
 }

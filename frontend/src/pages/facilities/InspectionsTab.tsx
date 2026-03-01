@@ -2,7 +2,7 @@
  * Inspections Tab - Full CRUD for facility inspections.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   ClipboardCheck, Plus, Search, Loader2, X, CheckCircle2, XCircle,
   Calendar, Filter, AlertTriangle, MinusCircle, Pencil,

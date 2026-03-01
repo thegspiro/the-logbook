@@ -440,7 +440,7 @@ export const EventDetailPage: React.FC = () => {
                       void (async () => {
                         if (!eventId) return;
                         try {
-                          const _meeting = await meetingsService.createFromEvent(eventId);
+                          await meetingsService.createFromEvent(eventId);
                           toast.success('Meeting created from event');
                           navigate(`/minutes`);
                         } catch (err) {

@@ -12,14 +12,6 @@ import type { ComplianceMatrix, ComplianceMatrixMember } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime } from '../utils/dateFormatting';
 
-const _STATUS_COLORS: Record<string, string> = {
-  completed: 'bg-green-500',
-  verified: 'bg-green-600',
-  in_progress: 'bg-blue-500',
-  expired: 'bg-red-500',
-  not_started: 'bg-theme-surface-secondary',
-};
-
 const STATUS_ICONS: Record<string, React.ReactNode> = {
   completed: <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />,
   verified: <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />,

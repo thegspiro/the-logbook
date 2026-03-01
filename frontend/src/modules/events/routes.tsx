@@ -127,12 +127,22 @@ export const getEventsRoutes = () => {
   );
 };
 
-/**
- * Public routes for the events module.
- *
- * Currently empty — EventRequestStatusPage is already defined outside
- * the AppLayout in App.tsx.
- */
+const EventRequestStatusPage = lazyWithRetry(
+  () => import('../../pages/EventRequestStatusPage'),
+);
+
+/** Public routes for the events module (no auth required). */
 export const getEventsPublicRoutes = () => {
-  return <React.Fragment />;
+  return (
+    <React.Fragment>
+      <Route
+        path="/event-request/status/:token"
+        element={
+          <Suspense fallback={null}>
+            <EventRequestStatusPage />
+          </Suspense>
+        }
+      />
+    </React.Fragment>
+  );
 };

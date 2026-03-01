@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   BookOpen,
@@ -380,7 +379,6 @@ const TypeBadge: React.FC<{ type: TrainingType }> = ({ type }) => {
 // ==================== Main Page ====================
 
 const CourseLibraryPage: React.FC = () => {
-  const _navigate = useNavigate();
   const [courses, setCourses] = useState<TrainingCourse[]>([]);
   const [categories, setCategories] = useState<TrainingCategory[]>([]);
   const [loading, setLoading] = useState(true);
