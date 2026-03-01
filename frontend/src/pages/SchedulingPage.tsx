@@ -228,6 +228,8 @@ const SchedulingPage: React.FC = () => {
     notes: "",
     apparatus_id: "",
     shift_officer_id: "",
+    customStartTime: "",
+    customEndTime: "",
   });
 
   // Load shared reference data once via the Zustand store
@@ -381,8 +383,8 @@ const SchedulingPage: React.FC = () => {
         setCreating(false);
         return;
       }
-      const startTime = template.start_time_of_day;
-      const endTime = template.end_time_of_day;
+      const startTime = shiftForm.customStartTime || template.start_time_of_day;
+      const endTime = shiftForm.customEndTime || template.end_time_of_day;
       const startDateTime = `${shiftForm.startDate}T${startTime}:00`;
 
       // Use the form's end date (auto-computed or user-overridden)
@@ -413,6 +415,8 @@ const SchedulingPage: React.FC = () => {
         notes: "",
         apparatus_id: "",
         shift_officer_id: "",
+        customStartTime: "",
+        customEndTime: "",
       });
       setShowCreateShift(false);
     } catch (err: unknown) {
@@ -1294,6 +1298,49 @@ const SchedulingPage: React.FC = () => {
                           </button>{" "}
                           in the Templates tab.
                         </p>
+                      )}
+                    </div>
+
+                    {/* Custom Time Override */}
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                        <span className="flex items-center gap-1.5">
+                          <Clock className="w-4 h-4" /> Custom Times (optional)
+                        </span>
+                      </label>
+                      <p className="text-xs text-theme-text-muted mb-2">Override the template times for this shift</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs text-theme-text-muted mb-1">Start Time</label>
+                          <input
+                            type="time"
+                            value={shiftForm.customStartTime}
+                            onChange={(e) => setShiftForm({ ...shiftForm, customStartTime: e.target.value })}
+                            placeholder={(() => {
+                              const tmpl = effectiveTemplates.find((t) => t.id === shiftForm.shiftTemplate) || defaultTemplate;
+                              return tmpl?.start_time_of_day || '';
+                            })()}
+                            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-theme-text-muted mb-1">End Time</label>
+                          <input
+                            type="time"
+                            value={shiftForm.customEndTime}
+                            onChange={(e) => setShiftForm({ ...shiftForm, customEndTime: e.target.value })}
+                            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+                          />
+                        </div>
+                      </div>
+                      {(shiftForm.customStartTime || shiftForm.customEndTime) && (
+                        <button
+                          type="button"
+                          onClick={() => setShiftForm({ ...shiftForm, customStartTime: "", customEndTime: "" })}
+                          className="mt-1 text-xs text-theme-text-muted hover:text-violet-500"
+                        >
+                          Reset to template times
+                        </button>
                       )}
                     </div>
 
