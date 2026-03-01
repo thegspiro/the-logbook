@@ -84,6 +84,39 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         },
         {"name": "performed_by_title", "description": "Title/rank of the officer"},
     ],
+    "event_reminder": [
+        {"name": "recipient_name", "description": "Recipient's display name"},
+        {"name": "event_title", "description": "Title of the event"},
+        {"name": "event_type", "description": "Type of event (e.g. Business Meeting)"},
+        {"name": "event_start", "description": "Event start date and time"},
+        {"name": "event_end", "description": "Event end time"},
+        {"name": "location_name", "description": "Event location name"},
+        {"name": "location_details", "description": "Additional location details"},
+        {"name": "event_url", "description": "Link to view the event"},
+    ],
+    "event_cancellation": [
+        {"name": "recipient_name", "description": "Recipient's display name"},
+        {"name": "event_title", "description": "Title of the cancelled event"},
+        {"name": "event_date", "description": "Original event date"},
+        {"name": "organization_name", "description": "Organization name"},
+        {"name": "reason", "description": "Reason for cancellation"},
+    ],
+    "training_approval": [
+        {"name": "course_name", "description": "Name of the training course"},
+        {"name": "event_title", "description": "Title of the training event"},
+        {"name": "event_date", "description": "Date/time of the training event"},
+        {"name": "attendee_count", "description": "Number of attendees to approve"},
+        {"name": "approval_deadline", "description": "Deadline for approval"},
+        {"name": "submitter_name", "description": "Name of the person who submitted"},
+        {"name": "approval_url", "description": "Link to the approval page"},
+    ],
+    "ballot_notification": [
+        {"name": "recipient_name", "description": "Recipient's display name"},
+        {"name": "election_title", "description": "Title of the election/ballot"},
+        {"name": "meeting_date", "description": "Date of the meeting"},
+        {"name": "custom_message", "description": "Custom message from secretary"},
+        {"name": "ballot_url", "description": "Link to the voting page"},
+    ],
 }
 
 # Default welcome email HTML body

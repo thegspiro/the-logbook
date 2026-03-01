@@ -3789,17 +3789,24 @@ export const dashboardService = {
 // Email Templates Service
 // ============================================
 
+export interface TemplateVariable {
+  name: string;
+  description: string;
+}
+
 export interface EmailTemplate {
   id: string;
   organization_id: string;
   template_type: string;
   name: string;
+  description?: string;
   subject: string;
   html_body: string;
   text_body?: string;
   css_styles?: string;
   allow_attachments: boolean;
   is_active: boolean;
+  available_variables: TemplateVariable[];
   created_at: string;
   updated_at: string;
   attachments: EmailAttachment[];
@@ -3815,11 +3822,14 @@ export interface EmailAttachment {
 }
 
 export interface EmailTemplateUpdate {
+  name?: string;
   subject?: string;
   html_body?: string;
   text_body?: string;
   css_styles?: string;
+  description?: string;
   is_active?: boolean;
+  allow_attachments?: boolean;
 }
 
 export interface EmailTemplatePreview {

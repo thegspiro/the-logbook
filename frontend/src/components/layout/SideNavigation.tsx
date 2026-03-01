@@ -28,6 +28,7 @@ import {
   BarChart3,
   Bell,
   FormInput,
+  Mail,
   Plug,
   MapPin,
   Rocket,
@@ -377,30 +378,31 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
             icon: ClipboardCheck,
             permission: "admin_hours.manage",
           } as NavItem,
-          ...(isModuleOn("forms") || isModuleOn("integrations")
-            ? [
-                {
-                  label: "Forms & Comms",
-                  path: "#",
-                  icon: FormInput,
-                  permission: "settings.manage",
-                  subItems: [
-                    ...(isModuleOn("forms")
-                      ? [{ label: "Forms", path: "/forms", icon: FormInput }]
-                      : []),
-                    ...(isModuleOn("integrations")
-                      ? [
-                          {
-                            label: "Integrations",
-                            path: "/integrations",
-                            icon: Plug,
-                          },
-                        ]
-                      : []),
-                  ],
-                } as NavItem,
-              ]
-            : []),
+          {
+            label: "Forms & Comms",
+            path: "#",
+            icon: FormInput,
+            permission: "settings.manage",
+            subItems: [
+              {
+                label: "Email Templates",
+                path: "/communications/email-templates",
+                icon: Mail,
+              },
+              ...(isModuleOn("forms")
+                ? [{ label: "Forms", path: "/forms", icon: FormInput }]
+                : []),
+              ...(isModuleOn("integrations")
+                ? [
+                    {
+                      label: "Integrations",
+                      path: "/integrations",
+                      icon: Plug,
+                    },
+                  ]
+                : []),
+            ],
+          } as NavItem,
           ...(isModuleOn("reports")
             ? [
                 {
