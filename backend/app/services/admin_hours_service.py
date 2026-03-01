@@ -231,6 +231,7 @@ class AdminHoursService:
         )
 
         await self.db.flush()
+        await self.db.refresh(entry, ["created_at", "updated_at"])
         logger.info("User %s clocked out: %d minutes", user_id, entry.duration_minutes)
         return entry
 
@@ -385,6 +386,7 @@ class AdminHoursService:
         )
         entry.status = AdminHoursEntryStatus.PENDING
         await self.db.flush()
+        await self.db.refresh(entry, ["created_at", "updated_at"])
 
         logger.info(
             "Admin %s force-clocked-out session %s for user %s (%d min)",
@@ -647,6 +649,7 @@ class AdminHoursService:
             raise ValueError("Action must be 'approve' or 'reject'")
 
         await self.db.flush()
+        await self.db.refresh(entry, ["created_at", "updated_at"])
         logger.info("Entry %s %sd by %s", entry_id, action, approver_id)
         return entry
 
