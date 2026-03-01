@@ -36,6 +36,15 @@ import { getSchedulingRoutes } from "./modules/scheduling";
 import { getEventsRoutes } from "./modules/events";
 import { getTrainingRoutes } from "./modules/training";
 import { getInventoryRoutes } from "./modules/inventory";
+import {
+  getElectionsRoutes,
+  getElectionsPublicRoutes,
+} from "./modules/elections";
+import { getMinutesRoutes } from "./modules/minutes";
+import {
+  getFacilitiesRoutes,
+  getFacilitiesPublicRoutes,
+} from "./modules/facilities";
 
 // Loading fallback component
 const PageLoadingFallback = () => (
@@ -86,40 +95,11 @@ const DocumentsPage = lazyWithRetry(() => import("./pages/DocumentsPage"));
 
 // SchedulingPage moved to modules/scheduling/routes.tsx
 
-// Facilities Module
-const FacilitiesPage = lazyWithRetry(() => import("./pages/FacilitiesPage"));
+// Facilities, Locations, Kiosk moved to modules/facilities/routes.tsx
 
-// Locations (lightweight alternative when Facilities module is off)
-const LocationsPage = lazyWithRetry(() => import("./pages/LocationsPage"));
+// Elections, BallotVoting moved to modules/elections/routes.tsx
 
-// Public Location Kiosk Display (no auth required — for tablets in rooms)
-const LocationKioskPage = lazyWithRetry(
-  () => import("./pages/LocationKioskPage"),
-);
-
-// Apparatus Basic (lightweight alternative when Apparatus module is off)
-const ApparatusBasicPage = lazyWithRetry(
-  () => import("./pages/ApparatusBasicPage"),
-);
-
-// Elections Module
-const ElectionsPage = lazyWithRetry(() =>
-  import("./pages/ElectionsPage").then((m) => ({ default: m.ElectionsPage })),
-);
-const ElectionDetailPage = lazyWithRetry(() =>
-  import("./pages/ElectionDetailPage").then((m) => ({
-    default: m.ElectionDetailPage,
-  })),
-);
-const BallotVotingPage = lazyWithRetry(
-  () => import("./pages/BallotVotingPage"),
-);
-
-// Minutes Module
-const MinutesPage = lazyWithRetry(() => import("./pages/MinutesPage"));
-const MinutesDetailPage = lazyWithRetry(
-  () => import("./pages/MinutesDetailPage"),
-);
+// Minutes moved to modules/minutes/routes.tsx
 
 // Action Items (unified cross-module)
 const ActionItemsPage = lazyWithRetry(() => import("./pages/ActionItemsPage"));
@@ -236,29 +216,14 @@ function App() {
                   {/* Scheduling Module */}
                   {getSchedulingRoutes()}
 
-                  {/* Facilities Module (full) / Locations (lightweight) */}
-                  <Route path="/facilities" element={<FacilitiesPage />} />
-                  <Route path="/locations" element={<LocationsPage />} />
-
-                  {/* Apparatus Basic (lightweight alternative when Apparatus module is off) */}
-                  <Route
-                    path="/apparatus-basic"
-                    element={<ApparatusBasicPage />}
-                  />
+                  {/* Facilities Module (full) / Locations (lightweight) / Apparatus Basic */}
+                  {getFacilitiesRoutes()}
 
                   {/* Elections Module */}
-                  <Route path="/elections" element={<ElectionsPage />} />
-                  <Route
-                    path="/elections/:electionId"
-                    element={<ElectionDetailPage />}
-                  />
+                  {getElectionsRoutes()}
 
                   {/* Minutes Module */}
-                  <Route path="/minutes" element={<MinutesPage />} />
-                  <Route
-                    path="/minutes/:minutesId"
-                    element={<MinutesDetailPage />}
-                  />
+                  {getMinutesRoutes()}
 
                   {/* Action Items (unified) */}
                   <Route path="/action-items" element={<ActionItemsPage />} />
@@ -367,10 +332,10 @@ function App() {
                 />
 
                 {/* Public Ballot Voting Page (token-based, no auth required) */}
-                <Route path="/ballot" element={<BallotVotingPage />} />
+                {getElectionsPublicRoutes()}
 
                 {/* Public Location Kiosk Display (no auth required — for tablets in rooms) */}
-                <Route path="/display/:code" element={<LocationKioskPage />} />
+                {getFacilitiesPublicRoutes()}
 
                 {/* Login Page */}
                 <Route path="/login" element={<LoginPage />} />
