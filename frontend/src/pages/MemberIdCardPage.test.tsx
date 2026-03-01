@@ -258,6 +258,14 @@ describe("MemberIdCardPage", () => {
       });
     });
 
+    it("should display generated date in footer", async () => {
+      renderWithRouter(<MemberIdCardPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Generated /)).toBeInTheDocument();
+      });
+    });
+
     it("should show initials when no photo is available", async () => {
       renderWithRouter(<MemberIdCardPage />);
 
