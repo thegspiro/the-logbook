@@ -126,7 +126,7 @@ function mapStepToStage(step: BackendStepResponse): PipelineStage {
 /** Map a backend pipeline response to a frontend Pipeline */
 function mapPipelineResponse(data: BackendPipelineResponse): Pipeline {
   const inactivityConfig = data.inactivity_config && Object.keys(data.inactivity_config).length > 0
-    ? data.inactivity_config as InactivityConfig
+    ? (data.inactivity_config as unknown as InactivityConfig)
     : DEFAULT_INACTIVITY_CONFIG;
   return {
     id: data.id,
@@ -744,7 +744,8 @@ export const applicantService = {
     const response = await api.get<BackendDocumentResponse[]>(
       `/prospective-members/prospects/${applicantId}/documents`
     );
-    return (response.data || []).map((d) => mapDocumentResponse(d, applicantId));
+    const docs: BackendDocumentResponse[] = response.data || [];
+    return docs.map((d) => mapDocumentResponse(d, applicantId));
   },
 
   async uploadDocument(

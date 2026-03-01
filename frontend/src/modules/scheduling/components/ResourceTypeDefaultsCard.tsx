@@ -7,7 +7,11 @@
 
 import React, { useState } from "react";
 import { PositionListEditor } from "./PositionListEditor";
-import type { PositionOption, ShiftSettings } from "../types/shiftSettings";
+import type {
+  PositionOption,
+  ResourceTypeDefaults,
+  ShiftSettings,
+} from "../types/shiftSettings";
 
 interface ResourceTypeDefaultsCardProps {
   settings: ShiftSettings;

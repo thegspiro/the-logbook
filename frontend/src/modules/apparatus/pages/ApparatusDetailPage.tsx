@@ -1,34 +1,30 @@
 /**
  * Apparatus Detail Page
  *
- * Displays detailed information about a single piece of apparatus.
+ * Thin orchestrator that manages tab state, tab-specific data loading,
+ * and renders the header, tab bar, and active tab component.
  */
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Truck,
-  Edit,
-  Archive,
-  ArrowLeft,
   Wrench,
   Fuel,
   Users,
   Package,
-  Camera,
   FileText,
   AlertTriangle,
-  Calendar,
-  Gauge,
-  Clock,
-  DollarSign,
-  Shield,
-  MapPin,
   Info,
 } from 'lucide-react';
 import { useApparatusStore } from '../store/apparatusStore';
-import { StatusBadge } from '../components/StatusBadge';
-import { ApparatusTypeBadge } from '../components/ApparatusTypeBadge';
+import { ApparatusDetailHeader } from '../components/ApparatusDetailHeader';
+import { ApparatusOverviewTab } from '../components/ApparatusOverviewTab';
+import { MaintenanceTab } from '../components/MaintenanceTab';
+import { FuelLogsTab } from '../components/FuelLogsTab';
+import { OperatorsTab } from '../components/OperatorsTab';
+import { EquipmentTab } from '../components/EquipmentTab';
+import { DocumentsTab } from '../components/DocumentsTab';
 import type {
   ApparatusMaintenance,
   ApparatusFuelLog,
@@ -42,7 +38,6 @@ import {
   apparatusEquipmentService,
 } from '../services/api';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { formatDate } from '../../../utils/dateFormatting';
 
 type TabType = 'overview' | 'maintenance' | 'fuel' | 'operators' | 'equipment' | 'documents';
 
@@ -122,17 +117,9 @@ export const ApparatusDetailPage: React.FC = () => {
   const getTypeById = (typeId: string) => types.find((t) => t.id === typeId);
   const getStatusById = (statusId: string) => statuses.find((s) => s.id === statusId);
 
-  const formatCurrency = (amount: number | null) => {
-    if (amount === null) return '-';
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount);
-  };
-
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-theme-bg flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-text-primary mx-auto mb-4"></div>
           <p className="text-theme-text-secondary">Loading apparatus...</p>
@@ -143,11 +130,11 @@ export const ApparatusDetailPage: React.FC = () => {
 
   if (!currentApparatus) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-theme-bg flex items-center justify-center">
         <div className="text-center">
           <Truck className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
           <h2 className="text-theme-text-primary text-xl font-bold mb-2">Apparatus Not Found</h2>
-          <p className="text-theme-text-muted mb-6">The apparatus you're looking for doesn't exist.</p>
+          <p className="text-theme-text-muted mb-6">The apparatus you&#39;re looking for doesn&#39;t exist.</p>
           <button
             onClick={() => navigate('/apparatus')}
             className="btn-primary px-6 py-3"
@@ -172,58 +159,14 @@ export const ApparatusDetailPage: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
+    <div className="min-h-screen bg-theme-bg">
       {/* Header */}
-      <header className="bg-theme-surface-secondary backdrop-blur-sm border-b border-theme-surface-border px-6 py-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => navigate('/apparatus')}
-                className="p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface-hover transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">
-                {currentApparatus.unitNumber.substring(0, 2)}
-              </div>
-              <div>
-                <div className="flex items-center gap-3">
-                  <h1 className="text-theme-text-primary text-xl font-bold">{currentApparatus.unitNumber}</h1>
-                  {status && <StatusBadge status={status} />}
-                  {currentApparatus.isArchived && (
-                    <span className="px-2 py-1 bg-slate-500/20 text-theme-text-muted text-xs rounded border border-theme-surface-border">
-                      ARCHIVED
-                    </span>
-                  )}
-                </div>
-                <p className="text-theme-text-muted text-sm">
-                  {currentApparatus.name && `${currentApparatus.name} • `}
-                  {currentApparatus.year} {currentApparatus.make} {currentApparatus.model}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => navigate(`/apparatus/${id}/edit`)}
-                className="flex items-center space-x-2 px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors"
-              >
-                <Edit className="w-4 h-4" />
-                <span>Edit</span>
-              </button>
-              {!currentApparatus.isArchived && (
-                <button
-                  onClick={() => navigate(`/apparatus/${id}/archive`)}
-                  className="flex items-center space-x-2 px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-secondary rounded-lg transition-colors"
-                >
-                  <Archive className="w-4 h-4" />
-                  <span>Archive</span>
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
+      <ApparatusDetailHeader
+        currentApparatus={currentApparatus}
+        status={status}
+        id={id || ''}
+        isArchived={currentApparatus.isArchived}
+      />
 
       {/* Error Display */}
       {error && (
@@ -263,483 +206,50 @@ export const ApparatusDetailPage: React.FC = () => {
       {/* Tab Content */}
       <main className="max-w-7xl mx-auto px-6 py-6">
         {activeTab === 'overview' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Main Info Card */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Vehicle Details */}
-              <div className="card p-6">
-                <h2 className="text-theme-text-primary font-bold mb-4 flex items-center gap-2">
-                  <Truck className="w-5 h-5" />
-                  Vehicle Details
-                </h2>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <div>
-                    <p className="text-theme-text-muted text-xs uppercase">Type</p>
-                    {apparatusType && <ApparatusTypeBadge type={apparatusType} />}
-                  </div>
-                  <div>
-                    <p className="text-theme-text-muted text-xs uppercase">Year</p>
-                    <p className="text-theme-text-primary">{currentApparatus.year || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-theme-text-muted text-xs uppercase">Make</p>
-                    <p className="text-theme-text-primary">{currentApparatus.make || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-theme-text-muted text-xs uppercase">Model</p>
-                    <p className="text-theme-text-primary">{currentApparatus.model || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-theme-text-muted text-xs uppercase">Body Manufacturer</p>
-                    <p className="text-theme-text-primary">{currentApparatus.bodyManufacturer || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-theme-text-muted text-xs uppercase">VIN</p>
-                    <p className="text-theme-text-primary font-mono text-sm">{currentApparatus.vin || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-theme-text-muted text-xs uppercase">License Plate</p>
-                    <p className="text-theme-text-primary">{currentApparatus.licensePlate || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-theme-text-muted text-xs uppercase">Radio ID</p>
-                    <p className="text-theme-text-primary">{currentApparatus.radioId || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-theme-text-muted text-xs uppercase">Asset Tag</p>
-                    <p className="text-theme-text-primary">{currentApparatus.assetTag || '-'}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Specifications */}
-              <div className="card p-6">
-                <h2 className="text-theme-text-primary font-bold mb-4 flex items-center gap-2">
-                  <Gauge className="w-5 h-5" />
-                  Specifications
-                </h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <p className="text-theme-text-muted text-xs uppercase">Fuel Type</p>
-                    <p className="text-theme-text-primary capitalize">{currentApparatus.fuelType?.replace('_', ' ') || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-theme-text-muted text-xs uppercase">Fuel Capacity</p>
-                    <p className="text-theme-text-primary">{currentApparatus.fuelCapacityGallons ? `${currentApparatus.fuelCapacityGallons} gal` : '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-theme-text-muted text-xs uppercase">Seating Capacity</p>
-                    <p className="text-theme-text-primary">{currentApparatus.seatingCapacity || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-theme-text-muted text-xs uppercase">GVWR</p>
-                    <p className="text-theme-text-primary">{currentApparatus.gvwr ? `${currentApparatus.gvwr.toLocaleString()} lbs` : '-'}</p>
-                  </div>
-                  {currentApparatus.pumpCapacityGpm && (
-                    <div>
-                      <p className="text-theme-text-muted text-xs uppercase">Pump Capacity</p>
-                      <p className="text-theme-text-primary">{currentApparatus.pumpCapacityGpm} GPM</p>
-                    </div>
-                  )}
-                  {currentApparatus.tankCapacityGallons && (
-                    <div>
-                      <p className="text-theme-text-muted text-xs uppercase">Tank Capacity</p>
-                      <p className="text-theme-text-primary">{currentApparatus.tankCapacityGallons} gal</p>
-                    </div>
-                  )}
-                  {currentApparatus.foamCapacityGallons && (
-                    <div>
-                      <p className="text-theme-text-muted text-xs uppercase">Foam Capacity</p>
-                      <p className="text-theme-text-primary">{currentApparatus.foamCapacityGallons} gal</p>
-                    </div>
-                  )}
-                  {currentApparatus.ladderLengthFeet && (
-                    <div>
-                      <p className="text-theme-text-muted text-xs uppercase">Ladder Length</p>
-                      <p className="text-theme-text-primary">{currentApparatus.ladderLengthFeet} ft</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Financial Info */}
-              <div className="card p-6">
-                <h2 className="text-theme-text-primary font-bold mb-4 flex items-center gap-2">
-                  <DollarSign className="w-5 h-5" />
-                  Financial Information
-                </h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <p className="text-theme-text-muted text-xs uppercase">Purchase Date</p>
-                    <p className="text-theme-text-primary">{formatDate(currentApparatus.purchaseDate, tz)}</p>
-                  </div>
-                  <div>
-                    <p className="text-theme-text-muted text-xs uppercase">Purchase Price</p>
-                    <p className="text-theme-text-primary">{formatCurrency(currentApparatus.purchasePrice)}</p>
-                  </div>
-                  <div>
-                    <p className="text-theme-text-muted text-xs uppercase">Current Value</p>
-                    <p className="text-theme-text-primary">{formatCurrency(currentApparatus.currentValue)}</p>
-                  </div>
-                  <div>
-                    <p className="text-theme-text-muted text-xs uppercase">In Service Date</p>
-                    <p className="text-theme-text-primary">{formatDate(currentApparatus.inServiceDate, tz)}</p>
-                  </div>
-                  {currentApparatus.isFinanced && (
-                    <>
-                      <div>
-                        <p className="text-theme-text-muted text-xs uppercase">Financing Company</p>
-                        <p className="text-theme-text-primary">{currentApparatus.financingCompany || '-'}</p>
-                      </div>
-                      <div>
-                        <p className="text-theme-text-muted text-xs uppercase">Monthly Payment</p>
-                        <p className="text-theme-text-primary">{formatCurrency(currentApparatus.monthlyPayment)}</p>
-                      </div>
-                      <div>
-                        <p className="text-theme-text-muted text-xs uppercase">Financing Ends</p>
-                        <p className="text-theme-text-primary">{formatDate(currentApparatus.financingEndDate, tz)}</p>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Sidebar */}
-            <div className="space-y-6">
-              {/* Quick Stats */}
-              <div className="card p-6">
-                <h2 className="text-theme-text-primary font-bold mb-4">Quick Stats</h2>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-theme-text-muted">
-                      <Gauge className="w-4 h-4" />
-                      <span>Mileage</span>
-                    </div>
-                    <span className="text-theme-text-primary font-semibold">
-                      {currentApparatus.currentMileage?.toLocaleString() || '-'}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-theme-text-muted">
-                      <Clock className="w-4 h-4" />
-                      <span>Hours</span>
-                    </div>
-                    <span className="text-theme-text-primary font-semibold">
-                      {currentApparatus.currentHours?.toLocaleString() || '-'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Important Dates */}
-              <div className="card p-6">
-                <h2 className="text-theme-text-primary font-bold mb-4 flex items-center gap-2">
-                  <Calendar className="w-5 h-5" />
-                  Important Dates
-                </h2>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-theme-text-muted text-sm">Registration</span>
-                    <span className="text-theme-text-primary text-sm">
-                      {formatDate(currentApparatus.registrationExpiration, tz)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-theme-text-muted text-sm">Inspection</span>
-                    <span className="text-theme-text-primary text-sm">
-                      {formatDate(currentApparatus.inspectionExpiration, tz)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-theme-text-muted text-sm">Insurance</span>
-                    <span className="text-theme-text-primary text-sm">
-                      {formatDate(currentApparatus.insuranceExpiration, tz)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-theme-text-muted text-sm">Warranty</span>
-                    <span className="text-theme-text-primary text-sm">
-                      {formatDate(currentApparatus.warrantyExpiration, tz)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* NFPA Compliance */}
-              {currentApparatus.nfpaTrackingEnabled && (
-                <div className="card p-6">
-                  <h2 className="text-theme-text-primary font-bold mb-4 flex items-center gap-2">
-                    <Shield className="w-5 h-5" />
-                    NFPA Compliance
-                  </h2>
-                  <p className="text-green-400 text-sm">Tracking Enabled</p>
-                </div>
-              )}
-
-              {/* Notes */}
-              {currentApparatus.notes && (
-                <div className="card p-6">
-                  <h2 className="text-theme-text-primary font-bold mb-4">Notes</h2>
-                  <p className="text-theme-text-secondary text-sm whitespace-pre-wrap">
-                    {currentApparatus.notes}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
+          <ApparatusOverviewTab
+            currentApparatus={currentApparatus}
+            apparatusType={apparatusType}
+            timezone={tz}
+          />
         )}
 
-        {/* Maintenance Tab */}
         {activeTab === 'maintenance' && (
-          <div className="card p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-theme-text-primary font-bold flex items-center gap-2">
-                <Wrench className="w-5 h-5" />
-                Maintenance Records
-              </h2>
-              <button
-                onClick={() => navigate(`/apparatus/${id}/maintenance/new`)}
-                className="btn-primary text-sm"
-              >
-                Add Record
-              </button>
-            </div>
-            {loadingTab ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-text-primary mx-auto"></div>
-              </div>
-            ) : maintenanceRecords.length === 0 ? (
-              <p className="text-theme-text-muted text-center py-8">No maintenance records found.</p>
-            ) : (
-              <div className="space-y-3">
-                {maintenanceRecords.map((record) => (
-                  <div
-                    key={record.id}
-                    className="card-secondary p-4"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-theme-text-primary font-medium">
-                          {record.maintenanceType?.name || 'Maintenance'}
-                        </p>
-                        <p className="text-theme-text-muted text-sm">
-                          {record.isCompleted
-                            ? `Completed ${formatDate(record.completedDate, tz)}`
-                            : `Due ${formatDate(record.dueDate, tz)}`}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        {record.cost && (
-                          <p className="text-theme-text-primary">{formatCurrency(record.cost)}</p>
-                        )}
-                        <span
-                          className={`px-2 py-1 text-xs rounded ${
-                            record.isCompleted
-                              ? 'bg-green-500/10 text-green-700 dark:text-green-400'
-                              : record.isOverdue
-                              ? 'bg-red-500/10 text-red-700 dark:text-red-400'
-                              : 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
-                          }`}
-                        >
-                          {record.isCompleted ? 'Completed' : record.isOverdue ? 'Overdue' : 'Pending'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <MaintenanceTab
+            id={id || ''}
+            maintenanceRecords={maintenanceRecords}
+            loadingTab={loadingTab}
+            timezone={tz}
+          />
         )}
 
-        {/* Fuel Logs Tab */}
         {activeTab === 'fuel' && (
-          <div className="card p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-theme-text-primary font-bold flex items-center gap-2">
-                <Fuel className="w-5 h-5" />
-                Fuel Logs
-              </h2>
-              <button
-                onClick={() => navigate(`/apparatus/${id}/fuel/new`)}
-                className="btn-primary text-sm"
-              >
-                Add Fuel Log
-              </button>
-            </div>
-            {loadingTab ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-text-primary mx-auto"></div>
-              </div>
-            ) : fuelLogs.length === 0 ? (
-              <p className="text-theme-text-muted text-center py-8">No fuel logs found.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="border-b border-theme-surface-border">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-xs text-theme-text-muted uppercase">Date</th>
-                      <th className="px-4 py-2 text-left text-xs text-theme-text-muted uppercase">Fuel Type</th>
-                      <th className="px-4 py-2 text-right text-xs text-theme-text-muted uppercase">Gallons</th>
-                      <th className="px-4 py-2 text-right text-xs text-theme-text-muted uppercase">Cost</th>
-                      <th className="px-4 py-2 text-right text-xs text-theme-text-muted uppercase">Mileage</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-theme-surface-border">
-                    {fuelLogs.map((log) => (
-                      <tr key={log.id}>
-                        <td className="px-4 py-3 text-theme-text-primary">{formatDate(log.fuelDate, tz)}</td>
-                        <td className="px-4 py-3 text-theme-text-secondary capitalize">{log.fuelType}</td>
-                        <td className="px-4 py-3 text-right text-theme-text-primary">{log.gallons.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right text-theme-text-primary">{formatCurrency(log.totalCost)}</td>
-                        <td className="px-4 py-3 text-right text-theme-text-secondary">
-                          {log.mileageAtFill?.toLocaleString() || '-'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+          <FuelLogsTab
+            id={id || ''}
+            fuelLogs={fuelLogs}
+            loadingTab={loadingTab}
+            timezone={tz}
+          />
         )}
 
-        {/* Operators Tab */}
         {activeTab === 'operators' && (
-          <div className="card p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-theme-text-primary font-bold flex items-center gap-2">
-                <Users className="w-5 h-5" />
-                Certified Operators
-              </h2>
-              <button
-                onClick={() => navigate(`/apparatus/${id}/operators/new`)}
-                className="btn-primary text-sm"
-              >
-                Add Operator
-              </button>
-            </div>
-            {loadingTab ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-text-primary mx-auto"></div>
-              </div>
-            ) : operators.length === 0 ? (
-              <p className="text-theme-text-muted text-center py-8">No operators assigned.</p>
-            ) : (
-              <div className="space-y-3">
-                {operators.map((op) => (
-                  <div
-                    key={op.id}
-                    className="card-secondary flex items-center justify-between p-4"
-                  >
-                    <div>
-                      <p className="text-theme-text-primary font-medium">Operator ID: {op.userId}</p>
-                      <p className="text-theme-text-muted text-sm">
-                        {op.isCertified ? 'Certified' : 'Not Certified'}
-                        {op.certificationExpiration && ` • Expires ${formatDate(op.certificationExpiration, tz)}`}
-                      </p>
-                      {op.hasRestrictions && (
-                        <p className="text-yellow-400 text-sm mt-1">Has Restrictions</p>
-                      )}
-                    </div>
-                    <span
-                      className={`px-2 py-1 text-xs rounded ${
-                        op.isActive ? 'bg-green-500/10 text-green-400' : 'bg-slate-500/10 text-theme-text-muted'
-                      }`}
-                    >
-                      {op.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <OperatorsTab
+            id={id || ''}
+            operators={operators}
+            loadingTab={loadingTab}
+            timezone={tz}
+          />
         )}
 
-        {/* Equipment Tab */}
         {activeTab === 'equipment' && (
-          <div className="card p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-theme-text-primary font-bold flex items-center gap-2">
-                <Package className="w-5 h-5" />
-                Equipment
-              </h2>
-              <button
-                onClick={() => navigate(`/apparatus/${id}/equipment/new`)}
-                className="btn-primary text-sm"
-              >
-                Add Equipment
-              </button>
-            </div>
-            {loadingTab ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-text-primary mx-auto"></div>
-              </div>
-            ) : equipment.length === 0 ? (
-              <p className="text-theme-text-muted text-center py-8">No equipment assigned.</p>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {equipment.map((item) => (
-                  <div
-                    key={item.id}
-                    className="card-secondary p-4"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-theme-text-primary font-medium">{item.name}</p>
-                      <span className="text-theme-text-muted text-sm">Qty: {item.quantity}</span>
-                    </div>
-                    {item.locationOnApparatus && (
-                      <p className="text-theme-text-muted text-sm flex items-center gap-1">
-                        <MapPin className="w-3 h-3" />
-                        {item.locationOnApparatus}
-                      </p>
-                    )}
-                    <div className="flex gap-2 mt-2">
-                      {item.isRequired && (
-                        <span className="px-2 py-0.5 bg-red-500/10 text-red-400 text-xs rounded">Required</span>
-                      )}
-                      {item.isMounted && (
-                        <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 text-xs rounded">Mounted</span>
-                      )}
-                      <span
-                        className={`px-2 py-0.5 text-xs rounded ${
-                          item.isPresent ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400'
-                        }`}
-                      >
-                        {item.isPresent ? 'Present' : 'Missing'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <EquipmentTab
+            id={id || ''}
+            equipment={equipment}
+            loadingTab={loadingTab}
+          />
         )}
 
-        {/* Documents Tab */}
         {activeTab === 'documents' && (
-          <div className="card p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-theme-text-primary font-bold flex items-center gap-2">
-                <FileText className="w-5 h-5" />
-                Documents & Photos
-              </h2>
-              <div className="flex gap-2">
-                <button className="px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors text-sm flex items-center gap-2">
-                  <Camera className="w-4 h-4" />
-                  Add Photo
-                </button>
-                <button className="btn-primary flex gap-2 items-center text-sm">
-                  <FileText className="w-4 h-4" />
-                  Add Document
-                </button>
-              </div>
-            </div>
-            <p className="text-theme-text-muted text-center py-8">
-              Document management will be available in the full implementation.
-            </p>
-          </div>
+          <DocumentsTab id={id || ''} />
         )}
       </main>
     </div>
