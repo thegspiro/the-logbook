@@ -85,7 +85,7 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
 
       {/* Subject line */}
       {preview && (
-        <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg px-4 py-2">
+        <div className="card-secondary px-4 py-2">
           <span className="text-theme-text-muted text-xs font-medium uppercase">Subject:</span>
           <p className="text-theme-text-primary text-sm mt-0.5">{preview.subject}</p>
         </div>

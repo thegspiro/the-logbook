@@ -600,7 +600,7 @@ export const MemberAdminEditPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handleAddEmergencyContact}
-                className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-md hover:bg-blue-700 disabled:opacity-50"
+                className="btn-info font-medium px-3 py-1.5 rounded-md text-xs"
                 disabled={saving}
               >
                 Add Contact
@@ -617,7 +617,7 @@ export const MemberAdminEditPage: React.FC = () => {
               {form.emergency_contacts.map((contact, index) => (
                 <div
                   key={index}
-                  className="border border-theme-surface-border rounded-lg p-4 bg-theme-surface-secondary"
+                  className="card-secondary p-4"
                 >
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-sm font-medium text-theme-text-primary">
@@ -688,7 +688,7 @@ export const MemberAdminEditPage: React.FC = () => {
                         type="checkbox"
                         checked={contact.is_primary}
                         onChange={(e) => handleEmergencyContactChange(index, 'is_primary', e.target.checked)}
-                        className="h-4 w-4 text-blue-600 focus:ring-theme-focus-ring border-theme-surface-border rounded"
+                        className="form-checkbox border-theme-surface-border"
                         disabled={saving}
                       />
                       <span className="text-sm text-theme-text-secondary">Primary contact</span>
@@ -722,7 +722,7 @@ export const MemberAdminEditPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => { void handleSave(); }}
-                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  className="btn-info font-medium rounded-md text-sm"
                   disabled={saving}
                 >
                   {saving ? 'Saving...' : 'Save Changes'}

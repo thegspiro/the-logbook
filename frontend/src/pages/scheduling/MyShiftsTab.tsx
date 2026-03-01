@@ -278,7 +278,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs text-red-500">Decline?</span>
                         <button onClick={() => { void handleDecline(assignment.id); }}
-                          className="px-2 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700" aria-label="Confirm decline"
+                          className="btn-primary px-2 py-1 rounded-md text-xs" aria-label="Confirm decline"
                         >Yes</button>
                         <button onClick={() => setConfirmingDecline(null)}
                           className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Cancel decline"

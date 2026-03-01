@@ -318,7 +318,7 @@ const AdminHoursManagePage: React.FC = () => {
               </button>
               <button
                 onClick={() => { resetForm(); setShowCreateForm(true); }}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                className="btn-info flex gap-2 items-center transition"
               >
                 <Plus className="w-4 h-4" />
                 Add Category
@@ -340,7 +340,7 @@ const AdminHoursManagePage: React.FC = () => {
                       type="text"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent"
+                      className="card-secondary focus:border-transparent focus:ring-2 focus:ring-theme-focus-ring px-3 py-2 text-theme-text-primary w-full"
                       required
                       placeholder="e.g., Building Maintenance"
                     />
@@ -367,7 +367,7 @@ const AdminHoursManagePage: React.FC = () => {
                     value={formData.description ?? ''}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     rows={2}
-                    className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent"
+                    className="card-secondary focus:border-transparent focus:ring-2 focus:ring-theme-focus-ring px-3 py-2 text-theme-text-primary w-full"
                     placeholder="Brief description of this type of admin work"
                   />
                 </div>
@@ -391,7 +391,7 @@ const AdminHoursManagePage: React.FC = () => {
                       min="0"
                       value={formData.auto_approve_under_hours ?? ''}
                       onChange={(e) => setFormData({ ...formData, auto_approve_under_hours: e.target.value ? parseFloat(e.target.value) : null })}
-                      className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent"
+                      className="card-secondary focus:border-transparent focus:ring-2 focus:ring-theme-focus-ring px-3 py-2 text-theme-text-primary w-full"
                       placeholder="e.g., 4"
                     />
                   </div>
@@ -404,14 +404,14 @@ const AdminHoursManagePage: React.FC = () => {
                       min="0.5"
                       value={formData.max_hours_per_session ?? ''}
                       onChange={(e) => setFormData({ ...formData, max_hours_per_session: e.target.value ? parseFloat(e.target.value) : null })}
-                      className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent"
+                      className="card-secondary focus:border-transparent focus:ring-2 focus:ring-theme-focus-ring px-3 py-2 text-theme-text-primary w-full"
                       placeholder="e.g., 12"
                     />
                   </div>
                 </div>
 
                 <div className="flex gap-3">
-                  <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                  <button type="submit" className="btn-info transition">
                     {editingCategory ? 'Update' : 'Create'}
                   </button>
                   <button type="button" onClick={resetForm} className="px-4 py-2 bg-theme-surface-secondary text-theme-text-secondary rounded-lg hover:bg-theme-surface-hover transition">
@@ -509,7 +509,7 @@ const AdminHoursManagePage: React.FC = () => {
                 {selectedEntryIds.size > 0 && (
                   <button
                     onClick={() => { void handleBulkApprove(); }}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition"
+                    className="btn-success flex gap-1 items-center px-3 py-1.5 text-sm transition"
                   >
                     <Check className="w-4 h-4" /> Approve {selectedEntryIds.size} Selected
                   </button>
@@ -571,7 +571,7 @@ const AdminHoursManagePage: React.FC = () => {
                             />
                             <button
                               onClick={() => { void handleReject(entry.id); }}
-                              className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+                              className="btn-primary rounded px-3 py-1 text-sm"
                             >
                               Confirm
                             </button>
@@ -586,13 +586,13 @@ const AdminHoursManagePage: React.FC = () => {
                           <>
                             <button
                               onClick={() => { void handleApprove(entry.id); }}
-                              className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition"
+                              className="btn-success flex gap-1 items-center px-3 py-1.5 text-sm transition"
                             >
                               <Check className="w-4 h-4" /> Approve
                             </button>
                             <button
                               onClick={() => setRejectingEntryId(entry.id)}
-                              className="flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition"
+                              className="btn-primary flex gap-1 items-center px-3 py-1.5 text-sm transition"
                             >
                               <X className="w-4 h-4" /> Reject
                             </button>

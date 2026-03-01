@@ -659,7 +659,7 @@ const ShiftReportPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex items-center space-x-2 px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium disabled:opacity-50"
+                className="btn-primary flex font-medium items-center px-5 space-x-2 text-sm"
               >
                 <Send className="w-4 h-4" />
                 <span>{submitting ? 'Filing...' : 'File Report'}</span>
@@ -708,7 +708,7 @@ const ShiftReportPage: React.FC = () => {
                     <div className="mt-1 flex justify-end">
                       <button
                         onClick={() => { void handleAcknowledge(r.id); }}
-                        className="text-xs px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700"
+                        className="btn-success rounded px-3 py-1 text-xs"
                       >
                         Acknowledge
                       </button>

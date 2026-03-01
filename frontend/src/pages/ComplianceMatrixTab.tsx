@@ -91,7 +91,7 @@ const ComplianceMatrixTab: React.FC = () => {
         <p className="text-xs text-theme-text-muted">Generated {formatShortDateTime(matrix.generated_at, tz)}</p>
       </div>
 
-      <div className="overflow-x-auto bg-theme-surface-secondary border border-theme-surface-border rounded-lg">
+      <div className="card-secondary overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="border-b border-theme-surface-border">

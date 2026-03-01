@@ -233,7 +233,7 @@ export const ElectionsPage: React.FC = () => {
         {canManage && (
           <button
             onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            className="btn-info inline-flex items-center rounded-md"
           >
             <svg className="-ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -620,7 +620,7 @@ export const ElectionsPage: React.FC = () => {
                       id="election-enable-runoffs"
                       checked={formData.enable_runoffs}
                       onChange={(e) => setFormData({ ...formData, enable_runoffs: e.target.checked })}
-                      className="h-4 w-4 text-blue-600 focus:ring-theme-focus-ring border-theme-input-border rounded"
+                      className="form-checkbox"
                     />
                     <span className="ml-2 text-sm font-medium text-theme-text-primary">Enable Automatic Runoffs</span>
                   </label>
@@ -673,7 +673,7 @@ export const ElectionsPage: React.FC = () => {
                       onChange={(e) =>
                         setFormData({ ...formData, anonymous_voting: e.target.checked })
                       }
-                      className="h-4 w-4 text-blue-600 focus:ring-theme-focus-ring border-theme-input-border rounded"
+                      className="form-checkbox"
                     />
                     <span className="ml-2 text-sm text-theme-text-primary">Anonymous Voting</span>
                   </label>
@@ -686,7 +686,7 @@ export const ElectionsPage: React.FC = () => {
                       onChange={(e) =>
                         setFormData({ ...formData, allow_write_ins: e.target.checked })
                       }
-                      className="h-4 w-4 text-blue-600 focus:ring-theme-focus-ring border-theme-input-border rounded"
+                      className="form-checkbox"
                     />
                     <span className="ml-2 text-sm text-theme-text-primary">Allow Write-in Candidates</span>
                   </label>
@@ -699,7 +699,7 @@ export const ElectionsPage: React.FC = () => {
                       onChange={(e) =>
                         setFormData({ ...formData, results_visible_immediately: e.target.checked })
                       }
-                      className="h-4 w-4 text-blue-600 focus:ring-theme-focus-ring border-theme-input-border rounded"
+                      className="form-checkbox"
                     />
                     <span className="ml-2 text-sm text-theme-text-primary">Show Results Immediately</span>
                   </label>
@@ -716,7 +716,7 @@ export const ElectionsPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  className="btn-info rounded-md"
                 >
                   Create Election
                 </button>

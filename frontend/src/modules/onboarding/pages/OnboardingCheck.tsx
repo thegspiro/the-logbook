@@ -459,7 +459,7 @@ const OnboardingCheck: React.FC = () => {
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-theme-surface backdrop-blur-sm rounded-lg p-8 text-center border border-theme-surface-border">
+        <div className="card max-w-md p-8 text-center w-full">
           <div className="text-theme-accent-red text-6xl mb-4">{schemaError ? '🔧' : '⚠️'}</div>
           <h2 className="text-2xl font-bold text-theme-text-primary mb-4">
             {schemaError ? 'Database Reset Required' : 'Connection Error'}
@@ -540,7 +540,7 @@ const OnboardingCheck: React.FC = () => {
         </div>
 
         {/* Service Status Cards */}
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
+        <div className="card p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-theme-text-primary font-semibold">Service Status</h3>
             <span className="text-sm text-theme-text-muted">{connectedCount}/{services.length} ready</span>
@@ -631,7 +631,7 @@ const OnboardingCheck: React.FC = () => {
 
                     {/* Migration progress bar */}
                     {startupInfo.migrations && startupInfo.migrations.total > 0 && (
-                      <div className="mt-3 p-3 bg-theme-surface-secondary rounded-lg border border-theme-surface-border">
+                      <div className="card-secondary mt-3 p-3">
                         <div className="flex items-center justify-between text-xs text-theme-text-muted mb-2">
                           <span className="font-medium">Database Migrations</span>
                           <span className="text-theme-alert-warning-icon font-semibold">
@@ -732,7 +732,7 @@ const OnboardingCheck: React.FC = () => {
         <div className="mt-4">
           <button
             onClick={() => setShowWhatsHappening(!showWhatsHappening)}
-            className="w-full flex items-center justify-between px-4 py-3 bg-theme-surface-secondary hover:bg-theme-surface-hover border border-theme-surface-border rounded-lg transition-all duration-300"
+            className="card-secondary duration-300 flex hover:bg-theme-surface-hover items-center justify-between px-4 py-3 transition-all w-full"
           >
             <span className="text-theme-text-secondary text-sm font-medium">What's happening?</span>
             <span className={`text-theme-text-muted transition-transform duration-300 ${showWhatsHappening ? 'rotate-180' : ''}`}>
@@ -741,7 +741,7 @@ const OnboardingCheck: React.FC = () => {
           </button>
 
           {showWhatsHappening && (
-            <div className="mt-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-4 space-y-3 text-sm">
+            <div className="card-secondary mt-2 p-4 space-y-3 text-sm">
               <div>
                 <h4 className="text-theme-text-secondary font-semibold mb-1">🔍 Preflight Checks</h4>
                 <p className="text-theme-text-muted text-xs">

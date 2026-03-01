@@ -200,7 +200,7 @@ const SubmissionViewer = ({
 
   if (submissions.length === 0) {
     return (
-      <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-8 text-center">
+      <div className="card-secondary p-8 text-center">
         <p className="text-sm text-theme-text-muted">No submissions yet.</p>
       </div>
     );
@@ -242,7 +242,7 @@ const SubmissionViewer = ({
         {submissions.map((sub) => {
           const isExpanded = expandedId === sub.id;
           return (
-            <div key={sub.id} className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg overflow-hidden">
+            <div key={sub.id} className="card-secondary overflow-hidden">
               {/* Summary row */}
               <button
                 type="button"

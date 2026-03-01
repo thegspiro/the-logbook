@@ -435,7 +435,7 @@ export const EmptyTrainingState: React.FC<EmptyTrainingStateProps> = ({
         <button
           type="button"
           onClick={onAction}
-          className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2"
+          className="btn-info font-medium gap-1.5 inline-flex items-center mt-4 px-3 rounded-md text-sm"
         >
           <Plus className="h-4 w-4" />
           {actionLabel}

@@ -243,7 +243,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
             </button>
             <button
               onClick={() => setShowBulkRejectConfirm(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+              className="btn-primary flex gap-1.5 items-center px-3 py-1.5 text-sm"
             >
               <XCircle className="w-3.5 h-3.5" />
               Reject
@@ -270,7 +270,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                 void handleBulkAction('reject');
                 setShowBulkRejectConfirm(false);
               }}
-              className="flex items-center gap-1 px-4 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+              className="btn-primary flex gap-1 items-center py-1.5 text-sm"
             >
               Confirm Reject All
             </button>

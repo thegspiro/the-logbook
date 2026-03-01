@@ -156,7 +156,7 @@ export const RoleManagementPage: React.FC = () => {
           </div>
           <button
             onClick={handleCreate}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring"
+            className="btn-info font-medium inline-flex items-center rounded-md text-sm"
           >
             Create Custom Role
           </button>
@@ -323,7 +323,7 @@ export const RoleManagementPage: React.FC = () => {
                                 if (input) input.indeterminate = someSelected && !allSelected;
                               }}
                               onChange={() => handleToggleCategory(category)}
-                              className="h-4 w-4 text-blue-600 focus:ring-theme-focus-ring border-theme-surface-border rounded"
+                              className="form-checkbox border-theme-surface-border"
                             />
                             <span className="ml-2 text-sm font-medium text-theme-text-primary uppercase">
                               {category.category.replace(/_/g, ' ')}
@@ -336,7 +336,7 @@ export const RoleManagementPage: React.FC = () => {
                                   type="checkbox"
                                   checked={formData.permissions.includes(perm.name)}
                                   onChange={() => handleTogglePermission(perm.name)}
-                                  className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-theme-focus-ring border-theme-surface-border rounded"
+                                  className="form-checkbox border-theme-surface-border mt-0.5"
                                 />
                                 <div className="ml-2">
                                   <div className="text-sm text-theme-text-primary">{perm.name}</div>
@@ -361,7 +361,7 @@ export const RoleManagementPage: React.FC = () => {
                 </button>
                 <button
                   onClick={() => { void handleSubmit(); }}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700"
+                  className="btn-info font-medium rounded-md text-sm"
                 >
                   {editingRole ? 'Save Changes' : 'Create Role'}
                 </button>

@@ -149,7 +149,7 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
           </select>
           <button
             onClick={() => navigate('/training/skills-testing/test/new')}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium"
+            className="btn-primary flex font-medium gap-2 items-center"
           >
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">Start Test</span>
@@ -169,7 +169,7 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
           {templates.length > 0 && (
             <button
               onClick={() => navigate('/training/skills-testing/test/new')}
-              className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm"
+              className="btn-primary mt-4 text-sm"
             >
               Start a New Test
             </button>

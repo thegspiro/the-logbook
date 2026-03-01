@@ -144,7 +144,7 @@ const ReviewPanel: React.FC<{
             ? 'Optional notes for the member...'
             : 'Explain why (required for rejection or revision request)...'
         }
-        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring mb-3"
+        className="form-input mb-3 text-sm"
         required={action !== 'approve'}
       />
 
@@ -195,7 +195,7 @@ const ReviewPanel: React.FC<{
       <button
         onClick={() => { void handleSubmit(); }}
         disabled={submitting || (action !== 'approve' && !notes.trim())}
-        className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+        className="btn-primary disabled:cursor-not-allowed font-medium text-sm w-full"
       >
         {submitting ? 'Processing...' : `Confirm ${action === 'approve' ? 'Approval' : action === 'reject' ? 'Rejection' : 'Revision Request'}`}
       </button>
@@ -368,7 +368,7 @@ const EditRecordPanel: React.FC<{
         <button
           onClick={() => { void handleSave(); }}
           disabled={saving}
-          className="flex items-center space-x-1 px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50"
+          className="btn-success flex font-medium items-center px-3 py-1.5 space-x-1 text-sm"
         >
           <Save className="w-4 h-4" />
           <span>{saving ? 'Saving...' : 'Save Changes'}</span>
@@ -598,7 +598,7 @@ const ConfigEditor: React.FC<{
               type="checkbox"
               checked={requireApproval}
               onChange={(e) => setRequireApproval(e.target.checked)}
-              className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring"
+              className="form-checkbox"
             />
             <span className="text-theme-text-secondary text-sm">Require officer approval for submissions</span>
           </label>
@@ -643,7 +643,7 @@ const ConfigEditor: React.FC<{
               type="checkbox"
               checked={notifyOfficer}
               onChange={(e) => setNotifyOfficer(e.target.checked)}
-              className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring"
+              className="form-checkbox"
             />
             <span className="text-theme-text-secondary text-sm">Notify officer when a submission is created</span>
           </label>
@@ -652,7 +652,7 @@ const ConfigEditor: React.FC<{
               type="checkbox"
               checked={notifyMember}
               onChange={(e) => setNotifyMember(e.target.checked)}
-              className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring"
+              className="form-checkbox"
             />
             <span className="text-theme-text-secondary text-sm">Notify member when their submission is reviewed</span>
           </label>
@@ -684,7 +684,7 @@ const ConfigEditor: React.FC<{
           onChange={(e) => setInstructions(e.target.value)}
           rows={3}
           placeholder="Optional instructions displayed to members when submitting training..."
-          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+          className="form-input text-sm"
         />
       </div>
 
@@ -700,7 +700,7 @@ const ConfigEditor: React.FC<{
                   type="checkbox"
                   checked={fc.visible}
                   onChange={(e) => updateField(name, 'visible', e.target.checked)}
-                  className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring"
+                  className="form-checkbox"
                   disabled={['course_name', 'training_type', 'completion_date', 'hours_completed'].includes(name)}
                 />
                 <input
@@ -730,7 +730,7 @@ const ConfigEditor: React.FC<{
         <button
           onClick={() => { void handleSave(); }}
           disabled={saving}
-          className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium disabled:opacity-50"
+          className="btn-primary flex font-medium items-center space-x-2 text-sm"
         >
           <Save className="w-4 h-4" />
           <span>{saving ? 'Saving...' : 'Save Configuration'}</span>

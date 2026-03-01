@@ -194,7 +194,7 @@ const SubmissionForm: React.FC<{
   const parentCategories = categories.filter((c) => !c.parent_category_id);
 
   return (
-    <form onSubmit={(e) => { void handleSubmit(e); }} className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border p-6 space-y-4">
+    <form onSubmit={(e) => { void handleSubmit(e); }} className="card-secondary p-6 space-y-4">
       <h2 className="text-lg font-semibold text-theme-text-primary mb-2">
         {isEdit ? 'Edit Submission' : 'Report External Training'}
       </h2>
@@ -221,7 +221,7 @@ const SubmissionForm: React.FC<{
           type="text"
           value={formData.course_name}
           onChange={(e) => setFormData({ ...formData, course_name: e.target.value })}
-          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+          className="form-input text-sm"
           placeholder="e.g., Wildland Firefighting - S130/S190"
           required
         />
@@ -236,7 +236,7 @@ const SubmissionForm: React.FC<{
           <select
             value={formData.training_type}
             onChange={(e) => setFormData({ ...formData, training_type: e.target.value as TrainingType })}
-            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+            className="form-input text-sm"
             required={isFieldRequired('training_type')}
           >
             {allowedTypes.map((t) => (
@@ -271,7 +271,7 @@ const SubmissionForm: React.FC<{
                 }
               }
             }}
-            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+            className="form-input text-sm"
             required
           />
         </div>
@@ -285,7 +285,7 @@ const SubmissionForm: React.FC<{
             value={endDatetime}
             onChange={(e) => setEndDatetime(e.target.value)}
             min={startDatetime || undefined}
-            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+            className="form-input text-sm"
             required
           />
         </div>
@@ -321,7 +321,7 @@ const SubmissionForm: React.FC<{
               type="text"
               value={formData.instructor || ''}
               onChange={(e) => setFormData({ ...formData, instructor: e.target.value || undefined })}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="form-input text-sm"
               required={isFieldRequired('instructor')}
             />
           </div>
@@ -337,7 +337,7 @@ const SubmissionForm: React.FC<{
               type="text"
               value={formData.location || ''}
               onChange={(e) => setFormData({ ...formData, location: e.target.value || undefined })}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="form-input text-sm"
               required={isFieldRequired('location')}
             />
           </div>
@@ -353,7 +353,7 @@ const SubmissionForm: React.FC<{
           <select
             value={formData.category_id || ''}
             onChange={(e) => setFormData({ ...formData, category_id: e.target.value || undefined })}
-            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+            className="form-input text-sm"
             required={isFieldRequired('category_id')}
           >
             <option value="">Select a category...</option>
@@ -374,7 +374,7 @@ const SubmissionForm: React.FC<{
             value={formData.description || ''}
             onChange={(e) => setFormData({ ...formData, description: e.target.value || undefined })}
             rows={3}
-            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+            className="form-input text-sm"
             required={isFieldRequired('description')}
             placeholder="Describe what the training covered..."
           />
@@ -392,7 +392,7 @@ const SubmissionForm: React.FC<{
               type="text"
               value={formData.certification_number || ''}
               onChange={(e) => setFormData({ ...formData, certification_number: e.target.value || undefined })}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="form-input text-sm"
               required={isFieldRequired('certification_number')}
             />
           </div>
@@ -408,7 +408,7 @@ const SubmissionForm: React.FC<{
               type="text"
               value={formData.issuing_agency || ''}
               onChange={(e) => setFormData({ ...formData, issuing_agency: e.target.value || undefined })}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="form-input text-sm"
               required={isFieldRequired('issuing_agency')}
             />
           </div>
@@ -424,7 +424,7 @@ const SubmissionForm: React.FC<{
               type="date"
               value={formData.expiration_date || ''}
               onChange={(e) => setFormData({ ...formData, expiration_date: e.target.value || undefined })}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="form-input text-sm"
               required={isFieldRequired('expiration_date')}
             />
           </div>
@@ -451,7 +451,7 @@ const SubmissionForm: React.FC<{
           <button
             type="submit"
             disabled={isSubmitting}
-            className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm disabled:opacity-50"
+            className="btn-primary flex items-center space-x-2 text-sm"
           >
             <Send className="w-4 h-4" />
             <span>{isSubmitting ? 'Submitting...' : isEdit ? 'Update' : 'Submit Training'}</span>
@@ -522,7 +522,7 @@ const SubmitTrainingPage: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-500 mb-4">{loadError || 'Unable to load configuration.'}</p>
-          <button onClick={() => { void loadData(); }} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+          <button onClick={() => { void loadData(); }} className="btn-primary">
             Try Again
           </button>
         </div>
@@ -569,7 +569,7 @@ const SubmitTrainingPage: React.FC = () => {
               {submissions.map((sub) => {
                 const canEdit = ['draft', 'pending_review', 'revision_requested'].includes(sub.status);
                 return (
-                  <div key={sub.id} className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border p-4">
+                  <div key={sub.id} className="card-secondary p-4">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center space-x-2 mb-1">

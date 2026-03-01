@@ -356,7 +356,7 @@ const ModuleSelection: React.FC = () => {
           </div>
 
           {/* Summary */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border mb-8">
+          <div className="card mb-8 p-6">
             <h3 className="text-xl font-bold text-theme-text-primary mb-2">Selection Summary</h3>
             <p className="text-theme-text-secondary text-sm mb-4">
               You have selected <strong>{selectedModules.length}</strong> modules (

@@ -141,37 +141,37 @@ export const ApparatusListPage: React.FC = () => {
 
         {/* Fleet Summary Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-8">
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+          <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Total Fleet</p>
             <p className="text-theme-text-primary text-2xl font-bold mt-1">
               {isLoadingSummary ? '...' : fleetSummary?.totalApparatus ?? 0}
             </p>
           </div>
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+          <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">In Service</p>
             <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">
               {isLoadingSummary ? '...' : fleetSummary?.inServiceCount ?? 0}
             </p>
           </div>
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+          <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Out of Service</p>
             <p className="text-red-700 dark:text-red-400 text-2xl font-bold mt-1">
               {isLoadingSummary ? '...' : fleetSummary?.outOfServiceCount ?? 0}
             </p>
           </div>
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+          <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">In Maintenance</p>
             <p className="text-yellow-700 dark:text-yellow-400 text-2xl font-bold mt-1">
               {isLoadingSummary ? '...' : fleetSummary?.inMaintenanceCount ?? 0}
             </p>
           </div>
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+          <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Reserve</p>
             <p className="text-blue-700 dark:text-blue-400 text-2xl font-bold mt-1">
               {isLoadingSummary ? '...' : fleetSummary?.reserveCount ?? 0}
             </p>
           </div>
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+          <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Maint. Due</p>
             <p className="text-orange-700 dark:text-orange-400 text-2xl font-bold mt-1">
               {isLoadingSummary ? '...' : (fleetSummary?.maintenanceDueSoon ?? 0) + (fleetSummary?.maintenanceOverdue ?? 0)}
@@ -180,7 +180,7 @@ export const ApparatusListPage: React.FC = () => {
         </div>
 
         {/* Actions Bar */}
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border mb-6">
+        <div className="card mb-6 p-4">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             {/* Search */}
             <div className="relative flex-1 w-full md:max-w-md">
@@ -190,7 +190,7 @@ export const ApparatusListPage: React.FC = () => {
                 placeholder="Search by unit number, name, or VIN..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                className="form-input pl-10 placeholder-theme-text-muted pr-4"
               />
             </div>
 
@@ -210,7 +210,7 @@ export const ApparatusListPage: React.FC = () => {
             {/* Add Button */}
             <button
               onClick={() => navigate('/apparatus/new')}
-              className="flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+              className="btn-primary flex items-center space-x-2"
             >
               <Plus className="w-4 h-4" />
               <span>Add Apparatus</span>
@@ -227,7 +227,7 @@ export const ApparatusListPage: React.FC = () => {
                   value={filterType}
                   onChange={(e) => setFilterType(e.target.value)}
                   disabled={isLoadingTypes}
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 >
                   <option value="">All Types</option>
                   {types.map((type) => (
@@ -245,7 +245,7 @@ export const ApparatusListPage: React.FC = () => {
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value)}
                   disabled={isLoadingStatuses}
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 >
                   <option value="">All Statuses</option>
                   {statuses.map((status) => (
@@ -263,7 +263,7 @@ export const ApparatusListPage: React.FC = () => {
                     type="checkbox"
                     checked={showArchived}
                     onChange={(e) => setShowArchived(e.target.checked)}
-                    className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring"
+                    className="form-checkbox"
                   />
                   <span className="text-theme-text-secondary">Show Archived</span>
                 </label>
@@ -289,12 +289,12 @@ export const ApparatusListPage: React.FC = () => {
 
         {/* Apparatus Table */}
         {isLoading ? (
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
+          <div className="card p-12 text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
             <p className="text-theme-text-secondary">Loading apparatus...</p>
           </div>
         ) : apparatusList.length === 0 ? (
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
+          <div className="card p-12 text-center">
             <Truck className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
             <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Apparatus Found</h3>
             <p className="text-theme-text-secondary mb-6">
@@ -305,7 +305,7 @@ export const ApparatusListPage: React.FC = () => {
             {!searchQuery && !filterType && !filterStatus && (
               <button
                 onClick={() => navigate('/apparatus/new')}
-                className="flex items-center space-x-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors mx-auto"
+                className="btn-primary flex items-center mx-auto px-6 py-3 space-x-2"
               >
                 <Plus className="w-5 h-5" />
                 <span>Add Apparatus</span>
@@ -314,7 +314,7 @@ export const ApparatusListPage: React.FC = () => {
           </div>
         ) : (
           <>
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden">
+            <div className="card overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-theme-input-bg border-b border-theme-surface-border">

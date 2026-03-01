@@ -98,7 +98,7 @@ export const LogoutConfirmModal: React.FC<LogoutConfirmModalProps> = ({
             </button>
             <button
               onClick={onConfirm}
-              className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 focus:ring-offset-[var(--ring-offset-bg)] transition-colors"
+              className="btn-primary flex-1 focus:ring-offset-[var(--ring-offset-bg)] font-medium rounded-md text-sm"
               autoFocus
             >
               Logout

@@ -162,7 +162,7 @@ const EnrollModal: React.FC<{
               value={userIds}
               onChange={(e) => setUserIds(e.target.value)}
               rows={5}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="form-input text-sm"
               placeholder="Enter member user IDs, one per line..."
               required
             />
@@ -173,7 +173,7 @@ const EnrollModal: React.FC<{
               type="date"
               value={targetDate}
               onChange={(e) => setTargetDate(e.target.value)}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="form-input text-sm"
             />
           </div>
           <div className="flex justify-end space-x-3 pt-4">
@@ -186,7 +186,7 @@ const EnrollModal: React.FC<{
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm disabled:opacity-50"
+              className="btn-primary text-sm"
               disabled={isSubmitting}
             >
               {isSubmitting ? 'Enrolling...' : 'Enroll Members'}
@@ -340,7 +340,7 @@ const PipelineDetailPage: React.FC = () => {
           <div className="flex items-center space-x-2">
             <button
               onClick={() => setShowEnrollModal(true)}
-              className="flex items-center space-x-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+              className="btn-success flex items-center px-3 space-x-1 text-sm"
             >
               <UserPlus className="w-4 h-4" />
               <span>Enroll</span>
@@ -542,7 +542,7 @@ const PipelineDetailPage: React.FC = () => {
                 </p>
                 <button
                   onClick={() => setShowEnrollModal(true)}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
+                  className="btn-primary text-sm"
                 >
                   Enroll Members
                 </button>

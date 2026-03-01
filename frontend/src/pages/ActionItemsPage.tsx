@@ -96,15 +96,15 @@ const ActionItemsPage: React.FC = () => {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-4">
+        <div className="card-secondary p-4">
           <p className="text-sm text-theme-text-muted">Total Items</p>
           <p className="text-2xl font-bold text-theme-text-primary">{items.length}</p>
         </div>
-        <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-4">
+        <div className="card-secondary p-4">
           <p className="text-sm text-theme-text-muted">Open</p>
           <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{open}</p>
         </div>
-        <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-4">
+        <div className="card-secondary p-4">
           <p className="text-sm text-theme-text-muted">Overdue</p>
           <p className="text-2xl font-bold text-red-700 dark:text-red-400">{overdue}</p>
         </div>
@@ -156,7 +156,7 @@ const ActionItemsPage: React.FC = () => {
           {items.map(item => (
             <div
               key={`${item.source}-${item.id}`}
-              className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-4 hover:bg-theme-surface-hover transition-colors cursor-pointer"
+              className="card-secondary cursor-pointer hover:bg-theme-surface-hover p-4 transition-colors"
               onClick={() => {
                 if (item.source === 'meeting') {
                   navigate(`/minutes`);

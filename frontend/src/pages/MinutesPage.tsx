@@ -213,26 +213,26 @@ const MinutesPage: React.FC = () => {
 
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+        <div className="card p-4">
           <p className="text-theme-text-muted text-xs font-medium uppercase">Total Minutes</p>
           <p className="text-theme-text-primary text-2xl font-bold mt-1">{summary?.total_meetings ?? 0}</p>
         </div>
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+        <div className="card p-4">
           <p className="text-theme-text-muted text-xs font-medium uppercase">This Month</p>
           <p className="text-cyan-700 text-2xl font-bold mt-1">{summary?.meetings_this_month ?? 0}</p>
         </div>
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+        <div className="card p-4">
           <p className="text-theme-text-muted text-xs font-medium uppercase">Open Action Items</p>
           <p className="text-yellow-700 text-2xl font-bold mt-1">{summary?.open_action_items ?? 0}</p>
         </div>
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+        <div className="card p-4">
           <p className="text-theme-text-muted text-xs font-medium uppercase">Pending Approval</p>
           <p className="text-orange-700 text-2xl font-bold mt-1">{summary?.pending_approval ?? 0}</p>
         </div>
       </div>
 
       {/* Search & Filter */}
-      <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border mb-6">
+      <div className="card mb-6 p-4">
         <div className="flex flex-col md:flex-row items-center gap-4">
           <div className="relative flex-1 w-full md:max-w-md">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" aria-hidden="true" />
@@ -243,7 +243,7 @@ const MinutesPage: React.FC = () => {
               placeholder="Search meeting minutes..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="form-input pl-10 placeholder-theme-text-muted pr-4"
             />
           </div>
           <div>
@@ -278,7 +278,7 @@ const MinutesPage: React.FC = () => {
 
       {/* Loading State */}
       {loading && (
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
+        <div className="card p-12 text-center">
           <Loader2 className="w-10 h-10 text-cyan-700 mx-auto mb-4 animate-spin" />
           <p className="text-theme-text-secondary">Loading meetings...</p>
         </div>
@@ -292,7 +292,7 @@ const MinutesPage: React.FC = () => {
             return (
               <div
                 key={meeting.id}
-                className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border hover:border-white/30 transition-colors"
+                className="stat-card hover:border-white/30 transition-colors"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
@@ -447,7 +447,7 @@ const MinutesPage: React.FC = () => {
       {!loading && meetings.length === 0 && !error && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
+            <div className="card p-6">
               <ClipboardList className="w-8 h-8 text-cyan-700 mb-4" />
               <h3 className="text-theme-text-primary font-semibold text-lg mb-2">Record Minutes</h3>
               <p className="text-theme-text-secondary text-sm mb-3">
@@ -459,7 +459,7 @@ const MinutesPage: React.FC = () => {
                 <span className="px-2 py-0.5 text-xs bg-cyan-500/10 text-cyan-700 rounded">Votes</span>
               </div>
             </div>
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
+            <div className="card p-6">
               <CheckSquare className="w-8 h-8 text-green-700 mb-4" />
               <h3 className="text-theme-text-primary font-semibold text-lg mb-2">Action Items</h3>
               <p className="text-theme-text-secondary text-sm mb-3">
@@ -471,7 +471,7 @@ const MinutesPage: React.FC = () => {
                 <span className="px-2 py-0.5 text-xs bg-green-500/10 text-green-700 rounded">Follow-up</span>
               </div>
             </div>
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
+            <div className="card p-6">
               <Archive className="w-8 h-8 text-amber-700 mb-4" />
               <h3 className="text-theme-text-primary font-semibold text-lg mb-2">Archives & Search</h3>
               <p className="text-theme-text-secondary text-sm mb-3">
@@ -484,7 +484,7 @@ const MinutesPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
+          <div className="card p-12 text-center">
             <FileSearch className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
             <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Meeting Minutes</h3>
             <p className="text-theme-text-secondary mb-6">
@@ -535,7 +535,7 @@ const MinutesPage: React.FC = () => {
                       required
                       value={minutesForm.title}
                       onChange={(e) => setMinutesForm({ ...minutesForm, title: e.target.value })}
-                      className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                      className="form-input"
                       placeholder="e.g., Regular Business Meeting - February 2026"
                     />
                   </div>
@@ -547,7 +547,7 @@ const MinutesPage: React.FC = () => {
                         id="meeting-type"
                         value={minutesForm.meetingType}
                         onChange={(e) => setMinutesForm({ ...minutesForm, meetingType: e.target.value as MeetingType })}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="form-input"
                       >
                         {MEETING_TYPES.map(t => (
                           <option key={t.value} value={t.value}>{t.label}</option>
@@ -561,7 +561,7 @@ const MinutesPage: React.FC = () => {
                         type="text"
                         value={minutesForm.calledBy}
                         onChange={(e) => setMinutesForm({ ...minutesForm, calledBy: e.target.value })}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="form-input"
                         placeholder="e.g., Chief Johnson"
                       />
                     </div>
@@ -575,7 +575,7 @@ const MinutesPage: React.FC = () => {
                         type="date"
                         value={minutesForm.meetingDate}
                         onChange={(e) => setMinutesForm({ ...minutesForm, meetingDate: e.target.value })}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="form-input"
                       />
                     </div>
                     <div>
@@ -586,7 +586,7 @@ const MinutesPage: React.FC = () => {
                         step="900"
                         value={minutesForm.meetingTime}
                         onChange={(e) => setMinutesForm({ ...minutesForm, meetingTime: e.target.value })}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="form-input"
                       />
                     </div>
                   </div>
@@ -598,7 +598,7 @@ const MinutesPage: React.FC = () => {
                       type="text"
                       value={minutesForm.location}
                       onChange={(e) => setMinutesForm({ ...minutesForm, location: e.target.value })}
-                      className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                      className="form-input"
                       placeholder="e.g., Station 1 Meeting Room"
                     />
                   </div>
@@ -610,7 +610,7 @@ const MinutesPage: React.FC = () => {
                       rows={4}
                       value={minutesForm.notes}
                       onChange={(e) => setMinutesForm({ ...minutesForm, notes: e.target.value })}
-                      className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                      className="form-input"
                       placeholder="Meeting opened at... Roll call taken... Old business..."
                     />
                   </div>

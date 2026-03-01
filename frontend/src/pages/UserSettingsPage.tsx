@@ -316,7 +316,7 @@ export const UserSettingsPage: React.FC = () => {
       </div>
 
       {/* Tab Content */}
-      <div className="bg-theme-surface backdrop-blur-sm border border-theme-surface-border rounded-lg p-4 sm:p-6">
+      <div className="card p-4 sm:p-6">
         {/* Account Tab */}
         {activeTab === 'account' && (
           <div className="space-y-6">
@@ -503,7 +503,7 @@ export const UserSettingsPage: React.FC = () => {
                   <button
                     onClick={() => { void handleSaveProfile(); }}
                     disabled={savingProfile}
-                    className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="btn-primary disabled:cursor-not-allowed flex font-medium justify-center rounded-md text-sm w-full"
                   >
                     {savingProfile ? 'Saving...' : 'Save Profile'}
                   </button>
@@ -679,7 +679,7 @@ export const UserSettingsPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={changingPassword || !passwordValidation.isValid || newPassword !== confirmPassword}
-                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="btn-primary disabled:cursor-not-allowed flex font-medium justify-center rounded-md text-sm w-full"
                 >
                   {changingPassword ? 'Changing Password...' : 'Change Password'}
                 </button>
@@ -710,7 +710,7 @@ export const UserSettingsPage: React.FC = () => {
                     <p className="text-sm text-theme-text-muted mb-4">No emergency contacts on file.</p>
                     <button
                       onClick={handleAddContact}
-                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors"
+                      className="btn-primary font-medium gap-2 inline-flex items-center rounded-md text-sm"
                     >
                       <Plus className="w-4 h-4" aria-hidden="true" />
                       Add Emergency Contact
@@ -735,7 +735,7 @@ export const UserSettingsPage: React.FC = () => {
                                 onChange={(e) =>
                                   handleContactChange(i, 'is_primary', e.target.checked)
                                 }
-                                className="h-4 w-4 text-blue-600 focus:ring-theme-focus-ring border-theme-surface-border rounded"
+                                className="form-checkbox border-theme-surface-border"
                               />
                               Primary
                             </label>
@@ -830,7 +830,7 @@ export const UserSettingsPage: React.FC = () => {
                       <button
                         onClick={() => { void handleSaveEmergencyContacts(); }}
                         disabled={savingContacts}
-                        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="btn-primary disabled:cursor-not-allowed flex font-medium justify-center rounded-md text-sm w-full"
                       >
                         {savingContacts ? 'Saving...' : 'Save Emergency Contacts'}
                       </button>
@@ -1023,7 +1023,7 @@ export const UserSettingsPage: React.FC = () => {
               <button
                 onClick={() => { void handleSavePreferences(); }}
                 disabled={savingPreferences}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="btn-primary disabled:cursor-not-allowed flex font-medium justify-center rounded-md text-sm w-full"
               >
                 {savingPreferences ? 'Saving...' : 'Save Preferences'}
               </button>

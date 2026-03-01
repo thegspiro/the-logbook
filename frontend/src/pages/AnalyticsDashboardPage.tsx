@@ -76,7 +76,7 @@ const AnalyticsDashboardPage: React.FC = () => {
           <p className="text-red-400 mb-4">{error || 'No analytics data available'}</p>
           <button
             onClick={() => { setLoading(true); setError(null); }}
-            className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
+            className="btn-primary font-medium rounded-md text-sm"
           >
             Retry
           </button>

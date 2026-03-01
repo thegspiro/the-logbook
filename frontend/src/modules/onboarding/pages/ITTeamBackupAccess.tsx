@@ -237,7 +237,7 @@ const ITTeamBackupAccess: React.FC = () => {
 
           <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-6">
             {/* IT Team Section */}
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+            <div className="card p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-3">
                   <Users aria-hidden="true" className="w-6 h-6 text-theme-accent-cyan" />
@@ -260,7 +260,7 @@ const ITTeamBackupAccess: React.FC = () => {
               {itTeam.map((member, index) => (
                 <div
                   key={member.id}
-                  className="bg-theme-surface-secondary rounded-lg p-4 mb-4 border border-theme-surface-border"
+                  className="card-secondary mb-4 p-4"
                 >
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="text-theme-text-primary font-semibold flex items-center">
@@ -313,7 +313,7 @@ const ITTeamBackupAccess: React.FC = () => {
                         type="text"
                         value={member.role}
                         onChange={(e) => updateITMember(member.id, 'role', e.target.value)}
-                        className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring transition-all"
+                        className="form-input placeholder-theme-text-muted py-3 transition-all"
                         placeholder="IT Manager"
                       />
                     </div>
@@ -369,7 +369,7 @@ const ITTeamBackupAccess: React.FC = () => {
             </div>
 
             {/* Backup Access Section */}
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+            <div className="card p-6">
               <div className="flex items-center space-x-3 mb-4">
                 <Shield aria-hidden="true" className="w-6 h-6 text-theme-alert-warning-icon" />
                 <h3 className="text-xl font-bold text-theme-text-primary">Backup Access Methods</h3>
@@ -402,11 +402,11 @@ const ITTeamBackupAccess: React.FC = () => {
                       type="email"
                       value={backupEmail}
                       onChange={(e) => setBackupEmail(e.target.value)}
-                      className={`w-full pl-12 pr-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
-                        errors.backupEmail
-                          ? 'border-theme-accent-red focus:ring-theme-focus-ring'
-                          : 'border-theme-input-border focus:ring-theme-focus-ring'
-                      }`}
+                      className={`form-input pl-12 placeholder-theme-text-muted pr-4 py-3 transition-all ${
+ errors.backupEmail
+ ? 'border-theme-accent-red focus:ring-theme-focus-ring'
+ : 'border-theme-input-border focus:ring-theme-focus-ring'
+ }`}
                       placeholder="backup-admin@example.com"
                     />
                   </div>
@@ -429,11 +429,11 @@ const ITTeamBackupAccess: React.FC = () => {
                       type="tel"
                       value={backupPhone}
                       onChange={(e) => setBackupPhone(e.target.value)}
-                      className={`w-full pl-12 pr-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
-                        errors.backupPhone
-                          ? 'border-theme-accent-red focus:ring-theme-focus-ring'
-                          : 'border-theme-input-border focus:ring-theme-focus-ring'
-                      }`}
+                      className={`form-input pl-12 placeholder-theme-text-muted pr-4 py-3 transition-all ${
+ errors.backupPhone
+ ? 'border-theme-accent-red focus:ring-theme-focus-ring'
+ : 'border-theme-input-border focus:ring-theme-focus-ring'
+ }`}
                       placeholder="(555) 987-6543"
                     />
                   </div>
@@ -456,11 +456,11 @@ const ITTeamBackupAccess: React.FC = () => {
                       type="email"
                       value={secondaryAdminEmail}
                       onChange={(e) => setSecondaryAdminEmail(e.target.value)}
-                      className={`w-full pl-12 pr-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
-                        errors.secondaryAdminEmail
-                          ? 'border-theme-accent-red focus:ring-theme-focus-ring'
-                          : 'border-theme-input-border focus:ring-theme-focus-ring'
-                      }`}
+                      className={`form-input pl-12 placeholder-theme-text-muted pr-4 py-3 transition-all ${
+ errors.secondaryAdminEmail
+ ? 'border-theme-accent-red focus:ring-theme-focus-ring'
+ : 'border-theme-input-border focus:ring-theme-focus-ring'
+ }`}
                       placeholder="secondary-admin@example.com"
                     />
                   </div>

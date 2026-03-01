@@ -191,7 +191,7 @@ export const MemberScanPage: React.FC = () => {
               void startScanner();
             }}
             disabled={lookingUp}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium disabled:opacity-50"
+            className="btn-info font-medium gap-2 inline-flex items-center px-5 py-2.5 text-sm transition"
           >
             <Camera className="h-4 w-4" />
             Start Scanning
@@ -201,7 +201,7 @@ export const MemberScanPage: React.FC = () => {
             onClick={() => {
               void stopScanner();
             }}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm font-medium"
+            className="btn-primary font-medium gap-2 inline-flex items-center px-5 py-2.5 text-sm transition"
           >
             <CameraOff className="h-4 w-4" />
             Stop Scanning

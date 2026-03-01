@@ -720,7 +720,7 @@ const OrganizationSetup: React.FC = () => {
         </div>
 
         {/* Form Card */}
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border space-y-4">
+        <div className="card p-6 space-y-4">
           {/* Basic Information */}
           <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader

@@ -177,7 +177,7 @@ const UploadStep: React.FC<UploadStepProps> = ({ onParsed, matchBy, onMatchByCha
             <p className="text-sm text-theme-text-muted mb-4">
               Accepts .csv files with member training history
             </p>
-            <label className="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg cursor-pointer transition-colors">
+            <label className="btn-primary cursor-pointer inline-flex items-center">
               <Upload className="w-4 h-4 mr-2" />
               Choose File
               <input
@@ -333,7 +333,7 @@ const MapCoursesStep: React.FC<MapCoursesStepProps> = ({
           <button onClick={onBack} className="px-4 py-2 text-theme-text-muted hover:text-theme-text-primary transition-colors">
             <ArrowLeft className="w-4 h-4 inline mr-1" /> Back
           </button>
-          <button onClick={onNext} className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors">
+          <button onClick={onNext} className="btn-primary px-6">
             Continue to Preview <ArrowRight className="w-4 h-4 inline ml-1" />
           </button>
         </div>
@@ -418,7 +418,7 @@ const MapCoursesStep: React.FC<MapCoursesStepProps> = ({
                       placeholder="Search existing courses..."
                       value={searchVal}
                       onChange={(e) => setCourseSearch(prev => ({ ...prev, [uc.csv_course_name]: e.target.value }))}
-                      className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                      className="form-input pl-10 placeholder-theme-text-muted pr-4 text-sm"
                     />
                   </div>
                   <div className="max-h-40 overflow-y-auto space-y-1">
@@ -458,7 +458,7 @@ const MapCoursesStep: React.FC<MapCoursesStepProps> = ({
                     id={`training-type-${uc.csv_course_name}`}
                     value={mapping.new_training_type || 'continuing_education'}
                     onChange={(e) => updateMapping(uc.csv_course_name, { new_training_type: e.target.value })}
-                    className="w-full max-w-xs px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="form-input max-w-xs text-sm"
                   >
                     {TRAINING_TYPE_OPTIONS.map(opt => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -475,7 +475,7 @@ const MapCoursesStep: React.FC<MapCoursesStepProps> = ({
         <button onClick={onBack} className="px-4 py-2 text-theme-text-muted hover:text-theme-text-primary transition-colors">
           <ArrowLeft className="w-4 h-4 inline mr-1" /> Back
         </button>
-        <button onClick={onNext} className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors">
+        <button onClick={onNext} className="btn-primary px-6">
           Continue to Preview <ArrowRight className="w-4 h-4 inline ml-1" />
         </button>
       </div>
@@ -688,7 +688,7 @@ const PreviewStep: React.FC<PreviewStepProps> = ({
           <button
             onClick={onConfirm}
             disabled={confirming || importableRows.length === 0}
-            className="px-6 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+            className="btn-primary disabled:cursor-not-allowed px-6"
           >
             {confirming ? (
               <>
@@ -771,7 +771,7 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ result, onReset }) => (
     <div className="pt-4">
       <button
         onClick={onReset}
-        className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+        className="btn-primary px-6"
       >
         Import Another File
       </button>

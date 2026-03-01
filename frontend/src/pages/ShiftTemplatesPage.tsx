@@ -927,7 +927,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50"
+              className="btn-primary px-6"
             >
               {isSubmitting ? 'Saving...' : 'Save Template'}
             </button>
@@ -1159,7 +1159,7 @@ const PatternFormModal: React.FC<PatternModalProps> = ({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50"
+              className="btn-primary px-6"
             >
               {isSubmitting ? 'Saving...' : 'Save Pattern'}
             </button>
@@ -1278,7 +1278,7 @@ const GenerateShiftsModal: React.FC<GenerateModalProps> = ({ isOpen, onClose, pa
             <button
               type="submit"
               disabled={isGenerating}
-              className="flex items-center gap-2 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50"
+              className="btn-primary flex gap-2 items-center px-6"
             >
               {isGenerating ? (
                 <RefreshCw className="w-4 h-4 animate-spin" aria-hidden="true" />
@@ -1474,7 +1474,7 @@ export const ShiftTemplatesPage: React.FC = () => {
         </div>
         <button
           onClick={() => activeTab === 'templates' ? setShowTemplateModal(true) : setShowPatternModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg"
+          className="btn-primary flex gap-2 items-center"
         >
           <Plus className="w-5 h-5" aria-hidden="true" />
           {activeTab === 'templates' ? 'New Template' : 'New Pattern'}
@@ -1555,13 +1555,13 @@ export const ShiftTemplatesPage: React.FC = () => {
             </div>
           )}
           {templates.length === 0 ? (
-            <div className="text-center py-12 bg-theme-surface-secondary rounded-lg border border-theme-surface-border">
+            <div className="card-secondary py-12 text-center">
               <LayoutTemplate className="w-12 h-12 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
               <h3 className="text-lg font-semibold text-theme-text-primary mb-2">No Templates Yet</h3>
               <p className="text-theme-text-muted mb-4">Create a shift template to define reusable shift configurations</p>
               <button
                 onClick={() => setShowTemplateModal(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg"
+                className="btn-primary gap-2 inline-flex items-center"
               >
                 <Plus className="w-5 h-5" aria-hidden="true" />
                 Create Template
@@ -1572,7 +1572,7 @@ export const ShiftTemplatesPage: React.FC = () => {
               {templates.filter(t => categoryFilter === 'all' || (t.category || 'standard') === categoryFilter).map(template => (
                 <div
                   key={template.id}
-                  className="bg-theme-surface-secondary rounded-lg p-5 border border-theme-surface-border"
+                  className="card-secondary p-5"
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-2">
@@ -1745,13 +1745,13 @@ export const ShiftTemplatesPage: React.FC = () => {
       ) : (
         <div role="tabpanel">
           {patterns.length === 0 ? (
-            <div className="text-center py-12 bg-theme-surface-secondary rounded-lg border border-theme-surface-border">
+            <div className="card-secondary py-12 text-center">
               <Repeat className="w-12 h-12 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
               <h3 className="text-lg font-semibold text-theme-text-primary mb-2">No Patterns Yet</h3>
               <p className="text-theme-text-muted mb-4">Create a shift pattern to define recurring schedules</p>
               <button
                 onClick={() => setShowPatternModal(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg"
+                className="btn-primary gap-2 inline-flex items-center"
               >
                 <Plus className="w-5 h-5" aria-hidden="true" />
                 Create Pattern
@@ -1762,7 +1762,7 @@ export const ShiftTemplatesPage: React.FC = () => {
               {patterns.map(pattern => (
                 <div
                   key={pattern.id}
-                  className="bg-theme-surface-secondary rounded-lg p-5 border border-theme-surface-border"
+                  className="card-secondary p-5"
                 >
                   <div className="flex items-start justify-between mb-3">
                     <h3 className="text-lg font-semibold text-theme-text-primary">{pattern.name}</h3>
@@ -1808,7 +1808,7 @@ export const ShiftTemplatesPage: React.FC = () => {
                   <div className="flex items-center gap-2 pt-3 border-t border-theme-surface-border">
                     <button
                       onClick={() => setGeneratingPattern(pattern)}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg"
+                      className="btn-primary flex gap-1 items-center px-3 py-1.5 text-sm"
                       aria-label={`Generate shifts from ${pattern.name}`}
                     >
                       <Play className="w-3.5 h-3.5" aria-hidden="true" />

@@ -273,7 +273,7 @@ const AddMember: React.FC = () => {
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-6">
           {/* Personal Information */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
+          <div className="card p-6">
             <div className="flex items-center space-x-2 mb-4">
               <User className="w-5 h-5 text-blue-700 dark:text-blue-400" />
               <h2 className="text-xl font-bold text-theme-text-primary">Personal Information</h2>
@@ -306,7 +306,7 @@ const AddMember: React.FC = () => {
                   type="text"
                   value={formData.middleName}
                   onChange={(e) => handleInputChange('middleName', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input placeholder-theme-text-muted"
                   placeholder="Michael"
                 />
               </div>
@@ -357,7 +357,7 @@ const AddMember: React.FC = () => {
                   type="date"
                   value={formData.dateOfBirth}
                   onChange={(e) => handleInputChange('dateOfBirth', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 />
               </div>
             </div>
@@ -391,7 +391,7 @@ const AddMember: React.FC = () => {
           </div>
 
           {/* Home Address */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
+          <div className="card p-6">
             <div className="flex items-center space-x-2 mb-4">
               <MapPin className="w-5 h-5 text-green-700 dark:text-green-400" />
               <h2 className="text-xl font-bold text-theme-text-primary">Home Address</h2>
@@ -476,7 +476,7 @@ const AddMember: React.FC = () => {
           </div>
 
           {/* Contact Information */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
+          <div className="card p-6">
             <div className="flex items-center space-x-2 mb-4">
               <Phone className="w-5 h-5 text-purple-700 dark:text-purple-400" />
               <h2 className="text-xl font-bold text-theme-text-primary">Contact Information</h2>
@@ -509,7 +509,7 @@ const AddMember: React.FC = () => {
                   type="tel"
                   value={formData.secondaryPhone}
                   onChange={(e) => handleInputChange('secondaryPhone', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input placeholder-theme-text-muted"
                   placeholder="(555) 987-6543"
                 />
               </div>
@@ -541,7 +541,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) =>
                     handleInputChange('preferredContact', e.target.value as 'phone' | 'email' | 'text')
                   }
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 >
                   <option value="phone">Phone</option>
                   <option value="email">Email</option>
@@ -552,7 +552,7 @@ const AddMember: React.FC = () => {
           </div>
 
           {/* Account Password */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
+          <div className="card p-6">
             <div className="flex items-center space-x-2 mb-4">
               <Lock className="w-5 h-5 text-yellow-700 dark:text-yellow-400" />
               <h2 className="text-xl font-bold text-theme-text-primary">Account Password</h2>
@@ -576,7 +576,7 @@ const AddMember: React.FC = () => {
                       });
                     }
                   }}
-                  className="h-4 w-4 text-blue-600 focus:ring-theme-focus-ring border-gray-300 rounded"
+                  className="form-checkbox"
                 />
                 <div>
                   <span className="text-sm font-medium text-theme-text-primary">Set initial password</span>
@@ -654,7 +654,7 @@ const AddMember: React.FC = () => {
           </div>
 
           {/* Department Information */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
+          <div className="card p-6">
             <div className="flex items-center space-x-2 mb-4">
               <Calendar className="w-5 h-5 text-orange-700 dark:text-orange-400" />
               <h2 className="text-xl font-bold text-theme-text-primary">Department Information</h2>
@@ -669,7 +669,7 @@ const AddMember: React.FC = () => {
                   type="date"
                   value={formData.joinDate}
                   onChange={(e) => handleInputChange('joinDate', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 />
               </div>
 
@@ -680,7 +680,7 @@ const AddMember: React.FC = () => {
                 <select
                   value={formData.status}
                   onChange={(e) => handleInputChange('status', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 >
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
@@ -696,7 +696,7 @@ const AddMember: React.FC = () => {
                 <select
                   value={formData.membershipType}
                   onChange={(e) => handleInputChange('membershipType', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 >
                   <option value="probationary">Probationary</option>
                   <option value="regular">Regular</option>
@@ -712,7 +712,7 @@ const AddMember: React.FC = () => {
                 <select
                   value={formData.rank}
                   onChange={(e) => handleInputChange('rank', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 >
                   <option value="">Select Rank</option>
                   {rankOptions.map((r) => (
@@ -728,7 +728,7 @@ const AddMember: React.FC = () => {
                 <select
                   value={formData.role}
                   onChange={(e) => handleInputChange('role', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 >
                   <option value="">Select Position</option>
                   {availablePositions.map((p) => (
@@ -744,7 +744,7 @@ const AddMember: React.FC = () => {
                 <select
                   value={formData.station}
                   onChange={(e) => handleInputChange('station', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input"
                 >
                   <option value="">Select Station</option>
                   {availableStations.map((s) => (
@@ -756,7 +756,7 @@ const AddMember: React.FC = () => {
           </div>
 
           {/* Emergency Contact 1 */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
+          <div className="card p-6">
             <div className="flex items-center space-x-2 mb-4">
               <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400" />
               <h2 className="text-xl font-bold text-theme-text-primary">Emergency Contact (Primary)</h2>
@@ -825,7 +825,7 @@ const AddMember: React.FC = () => {
                   type="email"
                   value={formData.emergencyEmail1}
                   onChange={(e) => handleInputChange('emergencyEmail1', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input placeholder-theme-text-muted"
                   placeholder="jane.doe@example.com"
                 />
               </div>
@@ -833,7 +833,7 @@ const AddMember: React.FC = () => {
           </div>
 
           {/* Emergency Contact 2 (Optional) */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
+          <div className="card p-6">
             <div className="flex items-center space-x-2 mb-4">
               <AlertCircle className="w-5 h-5 text-yellow-700 dark:text-yellow-400" />
               <h2 className="text-xl font-bold text-theme-text-primary">Emergency Contact (Secondary)</h2>
@@ -849,7 +849,7 @@ const AddMember: React.FC = () => {
                   type="text"
                   value={formData.emergencyName2}
                   onChange={(e) => handleInputChange('emergencyName2', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input placeholder-theme-text-muted"
                   placeholder="Bob Doe"
                 />
               </div>
@@ -862,7 +862,7 @@ const AddMember: React.FC = () => {
                   type="text"
                   value={formData.emergencyRelationship2}
                   onChange={(e) => handleInputChange('emergencyRelationship2', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input placeholder-theme-text-muted"
                   placeholder="Parent"
                 />
               </div>
@@ -875,7 +875,7 @@ const AddMember: React.FC = () => {
                   type="tel"
                   value={formData.emergencyPhone2}
                   onChange={(e) => handleInputChange('emergencyPhone2', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input placeholder-theme-text-muted"
                   placeholder="(555) 987-6543"
                 />
               </div>
@@ -888,7 +888,7 @@ const AddMember: React.FC = () => {
                   type="email"
                   value={formData.emergencyEmail2}
                   onChange={(e) => handleInputChange('emergencyEmail2', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input placeholder-theme-text-muted"
                   placeholder="bob.doe@example.com"
                 />
               </div>

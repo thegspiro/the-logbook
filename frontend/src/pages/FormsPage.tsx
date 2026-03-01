@@ -483,23 +483,23 @@ const FormsPage: React.FC = () => {
         {/* Stats */}
         {summary && (
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8" role="region" aria-label="Forms statistics">
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+            <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Total Forms</p>
               <p className="text-theme-text-primary text-2xl font-bold mt-1">{summary.total_forms}</p>
             </div>
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+            <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Published</p>
               <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">{summary.published_forms}</p>
             </div>
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+            <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Drafts</p>
               <p className="text-yellow-700 dark:text-yellow-400 text-2xl font-bold mt-1">{summary.draft_forms}</p>
             </div>
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+            <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Public Forms</p>
               <p className="text-cyan-700 dark:text-cyan-400 text-2xl font-bold mt-1">{summary.public_forms}</p>
             </div>
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+            <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Submissions This Month</p>
               <p className="text-pink-700 dark:text-pink-400 text-2xl font-bold mt-1">{summary.submissions_this_month}</p>
             </div>
@@ -554,7 +554,7 @@ const FormsPage: React.FC = () => {
         </div>
 
         {/* Search & Filters */}
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border mb-6" role="search" aria-label="Search and filter forms">
+        <div className="card mb-6 p-4" role="search" aria-label="Search and filter forms">
           <div className="flex flex-col md:flex-row items-center gap-4">
             <div className="relative flex-1 w-full md:max-w-md">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" aria-hidden="true" />
@@ -565,7 +565,7 @@ const FormsPage: React.FC = () => {
                 placeholder="Search forms..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-pink-500"
+                className="form-input focus:ring-pink-500 pl-10 placeholder-theme-text-muted pr-4"
               />
             </div>
             <div className="flex items-center space-x-2">
@@ -591,12 +591,12 @@ const FormsPage: React.FC = () => {
         {activeTab === 'forms' && (
           <>
             {loading ? (
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
+              <div className="card p-12 text-center">
                 <RefreshCw className="w-8 h-8 text-theme-text-muted mx-auto mb-3 animate-spin" aria-hidden="true" />
                 <p className="text-theme-text-secondary" role="status" aria-live="polite">Loading forms...</p>
               </div>
             ) : forms.length === 0 ? (
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
+              <div className="card p-12 text-center">
                 <FormInput className="w-16 h-16 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
                 <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Custom Forms</h3>
                 <p className="text-theme-text-secondary mb-6">
@@ -624,7 +624,7 @@ const FormsPage: React.FC = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {forms.map((form) => (
-                  <div key={form.id} className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border hover:border-pink-500/30 transition-all">
+                  <div key={form.id} className="stat-card hover:border-pink-500/30 transition-all">
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <h3 className="text-theme-text-primary font-semibold">{form.name}</h3>
@@ -747,7 +747,7 @@ const FormsPage: React.FC = () => {
         {activeTab === 'templates' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredTemplates.map((template) => (
-              <div key={template.id} className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border hover:border-pink-500/30 transition-all">
+              <div key={template.id} className="stat-card hover:border-pink-500/30 transition-all">
                 <div className="flex items-start space-x-4">
                   <div className={`p-3 rounded-lg bg-theme-surface-secondary ${template.color}`}>
                     {template.icon}
@@ -817,7 +817,7 @@ const FormsPage: React.FC = () => {
                 />
               </div>
             ) : (
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
+              <div className="card p-12 text-center">
                 <FileCheck className="w-16 h-16 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
                 <h3 className="text-theme-text-primary text-xl font-bold mb-2">View Submissions</h3>
                 <p className="text-theme-text-secondary mb-6">
@@ -960,7 +960,7 @@ const FormsPage: React.FC = () => {
                         id="form-name"
                         type="text" required aria-required="true" value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-pink-500"
+                        className="form-input focus:ring-pink-500"
                         placeholder="e.g., Monthly Safety Report"
                       />
                     </div>
@@ -970,7 +970,7 @@ const FormsPage: React.FC = () => {
                         id="form-category"
                         value={formData.category}
                         onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-pink-500"
+                        className="form-input focus:ring-pink-500"
                       >
                         <option value="Safety">Safety</option>
                         <option value="Operations">Operations</option>
@@ -984,7 +984,7 @@ const FormsPage: React.FC = () => {
                         id="form-description"
                         rows={3} value={formData.description}
                         onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-pink-500"
+                        className="form-input focus:ring-pink-500"
                         placeholder="Describe the purpose of this form..."
                       />
                     </div>
@@ -1052,7 +1052,7 @@ const FormsPage: React.FC = () => {
                     if (!form) return null;
                     return (
                       <div className="space-y-4">
-                        <div className="flex items-center justify-between p-4 bg-theme-surface-secondary rounded-lg border border-theme-surface-border">
+                        <div className="card-secondary flex items-center justify-between p-4">
                           <div>
                             <p className="text-theme-text-primary font-medium">Public Access</p>
                             <p className="text-theme-text-muted text-xs mt-0.5">
@@ -1178,7 +1178,7 @@ const FormsPage: React.FC = () => {
                           </>
                         )}
 
-                        <div className="p-3 bg-theme-surface-secondary border border-theme-surface-border rounded-lg">
+                        <div className="card-secondary p-3">
                           <p className="text-theme-text-secondary text-sm">
                             Public forms allow anyone to submit without logging in. Submissions include the
                             submitter&apos;s name and email (optional) and are marked as &quot;Public&quot; in your submissions list.
@@ -1267,7 +1267,7 @@ const FormsPage: React.FC = () => {
                               e.target.value === 'membership' ? 'membership_interest' : 'equipment_assignment'
                             );
                           }}
-                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                          className="form-input text-sm"
                         >
                           <option value="membership">Membership</option>
                           <option value="inventory">Inventory</option>
@@ -1279,7 +1279,7 @@ const FormsPage: React.FC = () => {
                           id="integration-type"
                           value={integrationType}
                           onChange={(e) => setIntegrationType(e.target.value)}
-                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                          className="form-input text-sm"
                         >
                           {integrationTarget === 'membership' ? (
                             <option value="membership_interest">Membership Interest (captures prospective member data)</option>
@@ -1289,7 +1289,7 @@ const FormsPage: React.FC = () => {
                         </select>
                       </div>
 
-                      <div className="p-3 bg-theme-surface-secondary border border-theme-surface-border rounded-lg">
+                      <div className="card-secondary p-3">
                         <p className="text-theme-text-secondary text-xs">
                           {integrationTarget === 'membership'
                             ? 'Membership interest integration captures form submissions as prospective member records. Admins can review and process them from the submissions view.'

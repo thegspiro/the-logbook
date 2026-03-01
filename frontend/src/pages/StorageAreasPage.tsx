@@ -432,7 +432,7 @@ export const StorageAreasPage: React.FC = () => {
           placeholder="Search storage areas..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+          className="form-input focus:ring-emerald-500 pl-10 pr-4 text-sm"
         />
       </div>
 
@@ -488,24 +488,24 @@ export const StorageAreasPage: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="sa-name" className="block text-sm font-medium text-theme-text-secondary mb-1">Name *</label>
-                <input id="sa-name" type="text" required value={form.name || ''} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., Rack A, Shelf 3" />
+                <input id="sa-name" type="text" required value={form.name || ''} onChange={(e) => setForm({ ...form, name: e.target.value })} className="form-input focus:ring-emerald-500" placeholder="e.g., Rack A, Shelf 3" />
               </div>
               <div>
                 <label htmlFor="sa-label" className="block text-sm font-medium text-theme-text-secondary mb-1">Label / Number</label>
-                <input id="sa-label" type="text" value={form.label || ''} onChange={(e) => setForm({ ...form, label: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., A, 3, Box-12" />
+                <input id="sa-label" type="text" value={form.label || ''} onChange={(e) => setForm({ ...form, label: e.target.value })} className="form-input focus:ring-emerald-500" placeholder="e.g., A, 3, Box-12" />
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="sa-type" className="block text-sm font-medium text-theme-text-secondary mb-1">Type *</label>
-                <select id="sa-type" value={form.storage_type || 'rack'} onChange={(e) => setForm({ ...form, storage_type: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                <select id="sa-type" value={form.storage_type || 'rack'} onChange={(e) => setForm({ ...form, storage_type: e.target.value })} className="form-input focus:ring-emerald-500">
                   {STORAGE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </div>
               <div>
                 <label htmlFor="sa-room" className="block text-sm font-medium text-theme-text-secondary mb-1">Room</label>
-                <select id="sa-room" value={form.location_id || ''} onChange={(e) => setForm({ ...form, location_id: e.target.value || undefined })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                <select id="sa-room" value={form.location_id || ''} onChange={(e) => setForm({ ...form, location_id: e.target.value || undefined })} className="form-input focus:ring-emerald-500">
                   <option value="">No room</option>
                   {rooms.map(r => <option key={r.id} value={r.id}>{r.building ? `${r.building} — ` : ''}{r.name}{r.room_number ? ` (${r.room_number})` : ''}</option>)}
                 </select>
@@ -514,7 +514,7 @@ export const StorageAreasPage: React.FC = () => {
 
             <div>
               <label htmlFor="sa-parent" className="block text-sm font-medium text-theme-text-secondary mb-1">Parent Storage Area</label>
-              <select id="sa-parent" value={form.parent_id || ''} onChange={(e) => setForm({ ...form, parent_id: e.target.value || undefined })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              <select id="sa-parent" value={form.parent_id || ''} onChange={(e) => setForm({ ...form, parent_id: e.target.value || undefined })} className="form-input focus:ring-emerald-500">
                 <option value="">None (top-level)</option>
                 {flatAreas.filter(a => a.id !== editingArea?.id).map(a => (
                   <option key={a.id} value={a.id}>{'—'.repeat(a.depth)} {a.name}</option>
@@ -524,7 +524,7 @@ export const StorageAreasPage: React.FC = () => {
 
             <div>
               <label htmlFor="sa-description" className="block text-sm font-medium text-theme-text-secondary mb-1">Description</label>
-              <textarea id="sa-description" rows={2} value={form.description || ''} onChange={(e) => setForm({ ...form, description: e.target.value })} className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Optional description..." />
+              <textarea id="sa-description" rows={2} value={form.description || ''} onChange={(e) => setForm({ ...form, description: e.target.value })} className="form-input focus:ring-emerald-500" placeholder="Optional description..." />
             </div>
           </div>
 
@@ -554,7 +554,7 @@ export const StorageAreasPage: React.FC = () => {
         )}
         <div className="flex justify-end gap-3 mt-4">
           <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
-          <button onClick={() => { void handleDelete(); }} disabled={submitting} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50">
+          <button onClick={() => { void handleDelete(); }} disabled={submitting} className="btn-primary">
             {submitting ? 'Deleting...' : 'Delete'}
           </button>
         </div>

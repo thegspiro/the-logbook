@@ -676,7 +676,7 @@ const EventRequestsTab: React.FC = () => {
                                 }}
                                 defaultValue=""
                                 disabled={actionLoading}
-                                className="mt-2 w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                                className="form-input mt-2 text-sm"
                               >
                                 <option value="" disabled>Select a coordinator...</option>
                                 {members.map((m) => (
@@ -833,7 +833,7 @@ const EventRequestsTab: React.FC = () => {
                                   type="button"
                                   onClick={() => void handleSendTemplate(expandedDetail.id)}
                                   disabled={actionLoading || !selectedTemplateId}
-                                  className="px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50 transition-colors flex items-center gap-1"
+                                  className="btn-info flex font-medium gap-1 items-center px-3 text-sm"
                                 >
                                   <Send className="w-3 h-3" />
                                   Send
@@ -943,7 +943,7 @@ const EventRequestsTab: React.FC = () => {
                                         type="datetime-local"
                                         value={scheduleDate}
                                         onChange={(e) => setScheduleDate(e.target.value)}
-                                        className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                                        className="form-input text-sm"
                                       />
                                     </div>
                                     <div>
@@ -954,7 +954,7 @@ const EventRequestsTab: React.FC = () => {
                                         type="datetime-local"
                                         value={scheduleEndDate}
                                         onChange={(e) => setScheduleEndDate(e.target.value)}
-                                        className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                                        className="form-input text-sm"
                                       />
                                     </div>
                                   </div>
@@ -965,7 +965,7 @@ const EventRequestsTab: React.FC = () => {
                                     <select
                                       value={scheduleLocationId}
                                       onChange={(e) => setScheduleLocationId(e.target.value)}
-                                      className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                                      className="form-input text-sm"
                                     >
                                       <option value="">Off-site or none</option>
                                       {locations.map((loc) => (
@@ -980,7 +980,7 @@ const EventRequestsTab: React.FC = () => {
                                     value={scheduleNotes}
                                     onChange={(e) => setScheduleNotes(e.target.value)}
                                     placeholder="Notes (optional)"
-                                    className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                                    className="form-input placeholder-theme-text-muted text-sm"
                                   />
                                   <div className="flex gap-2">
                                     <button
@@ -1013,7 +1013,7 @@ const EventRequestsTab: React.FC = () => {
                                     value={postponeReason}
                                     onChange={(e) => setPostponeReason(e.target.value)}
                                     placeholder="Reason for postponing (optional)"
-                                    className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                                    className="form-input placeholder-theme-text-muted text-sm"
                                   />
                                   <div>
                                     <label className="block text-xs font-medium text-theme-text-muted mb-1">
@@ -1023,7 +1023,7 @@ const EventRequestsTab: React.FC = () => {
                                       type="datetime-local"
                                       value={postponeNewDate}
                                       onChange={(e) => setPostponeNewDate(e.target.value)}
-                                      className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                                      className="form-input text-sm"
                                     />
                                   </div>
                                   <div className="flex gap-2">
@@ -1136,7 +1136,7 @@ const EventRequestsTab: React.FC = () => {
                                 type="button"
                                 onClick={() => void handleAddComment(expandedDetail.id)}
                                 disabled={actionLoading || !commentText.trim()}
-                                className="px-3 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50 transition-colors"
+                                className="btn-primary font-medium px-3 text-sm"
                               >
                                 <Send className="w-4 h-4" />
                               </button>

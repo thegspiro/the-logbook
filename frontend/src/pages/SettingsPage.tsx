@@ -128,7 +128,7 @@ const Toggle: React.FC<{
   color?: 'red' | 'blue';
 }> = ({ checked, onChange, disabled, label, color = 'blue' }) => {
   const bg = checked
-    ? color === 'red' ? 'bg-red-500' : 'bg-blue-600'
+    ? color === 'red' ? 'bg-theme-accent-red' : 'bg-theme-accent-blue'
     : 'bg-slate-600';
   return (
     <button
@@ -516,7 +516,7 @@ export const SettingsPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => logoInputRef.current?.click()}
-                  className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-500"
+                  className="inline-flex items-center gap-1.5 text-sm text-theme-accent-blue hover:opacity-80"
                 >
                   <Upload className="w-3.5 h-3.5" />
                   Upload logo
@@ -649,7 +649,7 @@ export const SettingsPage: React.FC = () => {
               <button
                 onClick={() => { void handleSaveProfile(); }}
                 disabled={savingProfile || !profileDirty}
-                className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2"
+                className="btn-info disabled:bg-gray-400 disabled:cursor-not-allowed font-medium gap-2 inline-flex items-center rounded-md text-sm"
               >
                 {savingProfile && <Loader2 className="w-4 h-4 animate-spin" />}
                 {savingProfile ? 'Saving...' : 'Save Profile'}
@@ -670,13 +670,13 @@ export const SettingsPage: React.FC = () => {
               key={mod.key}
               className={`flex items-center justify-between py-3 px-3 rounded-lg border transition-colors ${
                 isEnabled
-                  ? 'border-green-500/30 bg-green-500/5'
+                  ? 'border-theme-accent-green/30 bg-theme-accent-green-muted'
                   : 'border-theme-surface-border bg-theme-surface-secondary/30'
               }`}
             >
               <div className="flex items-center gap-3 min-w-0">
                 <div className={`flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center ${
-                  isEnabled ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-theme-surface-secondary text-theme-text-muted'
+                  isEnabled ? 'bg-theme-accent-green-muted text-theme-accent-green' : 'bg-theme-surface-secondary text-theme-text-muted'
                 }`}>
                   {mod.icon}
                 </div>
@@ -687,7 +687,7 @@ export const SettingsPage: React.FC = () => {
                     </p>
                     <span className={`inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded ${
                       isEnabled
-                        ? 'bg-green-500/10 text-green-600 dark:text-green-400'
+                        ? 'bg-theme-accent-green-muted text-theme-accent-green'
                         : 'bg-theme-surface-secondary text-theme-text-muted'
                     }`}>
                       {isEnabled ? (
@@ -707,8 +707,8 @@ export const SettingsPage: React.FC = () => {
                   disabled={isToggling}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed ${
                     isEnabled
-                      ? 'bg-theme-surface-secondary text-theme-text-secondary hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 focus:ring-theme-focus-ring'
-                      : 'bg-green-600 text-white hover:bg-green-700 focus:ring-theme-focus-ring'
+                      ? 'btn-secondary hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400'
+                      : 'btn-success'
                   }`}
                   aria-label={isEnabled ? `Disable ${mod.name}` : `Enable ${mod.name}`}
                 >
@@ -734,7 +734,7 @@ export const SettingsPage: React.FC = () => {
                   Enable or disable optional modules. Core modules (Members, Events, Documents) are always active.
                 </p>
               </div>
-              <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400">
+              <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-theme-accent-green-muted text-theme-accent-green">
                 {enabledCount} / {CONFIGURABLE_MODULES.length} enabled
               </span>
             </div>
@@ -809,7 +809,7 @@ export const SettingsPage: React.FC = () => {
                 <button
                   onClick={() => { void handleSaveContact(); }}
                   disabled={savingContact}
-                  className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2"
+                  className="btn-info disabled:bg-gray-400 disabled:cursor-not-allowed font-medium gap-2 inline-flex items-center rounded-md text-sm"
                 >
                   {savingContact && <Loader2 className="w-4 h-4 animate-spin" />}
                   {savingContact ? 'Saving...' : 'Save'}
@@ -882,7 +882,7 @@ export const SettingsPage: React.FC = () => {
                 <button
                   onClick={() => { void handleSaveMembershipId(); }}
                   disabled={savingMembershipId}
-                  className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2"
+                  className="btn-info disabled:bg-gray-400 disabled:cursor-not-allowed font-medium gap-2 inline-flex items-center rounded-md text-sm"
                 >
                   {savingMembershipId && <Loader2 className="w-4 h-4 animate-spin" />}
                   {savingMembershipId ? 'Saving...' : 'Save'}
@@ -909,7 +909,7 @@ export const SettingsPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => { setAddingRank(true); setRankForm({ rank_code: '', display_name: '' }); }}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 hover:bg-blue-700 px-3 py-1.5 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2"
+                  className="btn-info font-medium gap-1.5 inline-flex items-center px-3 py-1.5 rounded-md text-sm"
                 >
                   <Plus className="w-4 h-4" />
                   Add Rank
@@ -965,7 +965,7 @@ export const SettingsPage: React.FC = () => {
                     type="button"
                     onClick={() => { void (editingRank ? handleUpdateRank : handleAddRank)(); }}
                     disabled={rankSaving || !rankForm.display_name.trim() || !rankForm.rank_code.trim()}
-                    className="inline-flex items-center gap-1 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-3 py-1.5 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2"
+                    className="btn-info disabled:bg-gray-400 disabled:cursor-not-allowed font-medium gap-1 inline-flex items-center px-3 py-1.5 rounded-md text-sm"
                   >
                     {rankSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                     {editingRank ? 'Save' : 'Add'}
@@ -1007,7 +1007,7 @@ export const SettingsPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => { setEditingRank(rank); setAddingRank(false); setRankForm({ rank_code: rank.rank_code, display_name: rank.display_name }); }}
-                        className="p-1.5 rounded text-theme-text-muted hover:text-blue-500 hover:bg-blue-500/10"
+                        className="p-1.5 rounded text-theme-text-muted hover:text-theme-accent-blue hover:bg-theme-accent-blue-muted"
                         aria-label={`Edit ${rank.display_name}`}
                       >
                         <Pencil className="w-3.5 h-3.5" />
@@ -1072,8 +1072,8 @@ export const SettingsPage: React.FC = () => {
             </div>
 
             {/* Info banner */}
-            <div className="flex items-start gap-3 rounded-lg border border-blue-500/20 bg-blue-500/5 p-4">
-              <Info className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+            <div className="flex items-start gap-3 rounded-lg border border-theme-accent-blue/20 bg-theme-accent-blue-muted p-4">
+              <Info className="w-5 h-5 text-theme-accent-blue flex-shrink-0 mt-0.5" />
               <p className="text-sm text-theme-text-secondary">
                 These settings were initially configured during onboarding. Changes here will affect how the system sends email notifications, reminders, and alerts.
               </p>
@@ -1104,7 +1104,7 @@ export const SettingsPage: React.FC = () => {
                     onClick={() => setEmailSettings(s => ({ ...s, platform: p.id }))}
                     className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${
                       emailSettings.platform === p.id
-                        ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                        ? 'border-theme-accent-blue bg-theme-accent-blue-muted text-theme-accent-blue'
                         : 'border-theme-surface-border text-theme-text-secondary hover:border-theme-surface-hover'
                     }`}
                   >
@@ -1296,7 +1296,7 @@ export const SettingsPage: React.FC = () => {
               <button
                 onClick={() => { void handleSaveEmail(); }}
                 disabled={savingEmail}
-                className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2"
+                className="btn-info disabled:bg-gray-400 disabled:cursor-not-allowed font-medium gap-2 inline-flex items-center rounded-md text-sm"
               >
                 {savingEmail && <Loader2 className="w-4 h-4 animate-spin" />}
                 {savingEmail ? 'Saving...' : 'Save Email Settings'}
@@ -1319,8 +1319,8 @@ export const SettingsPage: React.FC = () => {
             </div>
 
             {/* Info banner */}
-            <div className="flex items-start gap-3 rounded-lg border border-blue-500/20 bg-blue-500/5 p-4">
-              <Info className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+            <div className="flex items-start gap-3 rounded-lg border border-theme-accent-blue/20 bg-theme-accent-blue-muted p-4">
+              <Info className="w-5 h-5 text-theme-accent-blue flex-shrink-0 mt-0.5" />
               <p className="text-sm text-theme-text-secondary">
                 These settings were initially configured during onboarding. Changing the storage platform may require migrating existing files.
               </p>
@@ -1343,7 +1343,7 @@ export const SettingsPage: React.FC = () => {
                     onClick={() => setStorageSettings(s => ({ ...s, platform: p.id }))}
                     className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${
                       storageSettings.platform === p.id
-                        ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                        ? 'border-theme-accent-blue bg-theme-accent-blue-muted text-theme-accent-blue'
                         : 'border-theme-surface-border text-theme-text-secondary hover:border-theme-surface-hover'
                     }`}
                   >
@@ -1540,7 +1540,7 @@ export const SettingsPage: React.FC = () => {
               <button
                 onClick={() => { void handleSaveStorage(); }}
                 disabled={savingStorage}
-                className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2"
+                className="btn-info disabled:bg-gray-400 disabled:cursor-not-allowed font-medium gap-2 inline-flex items-center rounded-md text-sm"
               >
                 {savingStorage && <Loader2 className="w-4 h-4 animate-spin" />}
                 {savingStorage ? 'Saving...' : 'Save Storage Settings'}
@@ -1563,8 +1563,8 @@ export const SettingsPage: React.FC = () => {
             </div>
 
             {/* Info banner */}
-            <div className="flex items-start gap-3 rounded-lg border border-blue-500/20 bg-blue-500/5 p-4">
-              <Info className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+            <div className="flex items-start gap-3 rounded-lg border border-theme-accent-blue/20 bg-theme-accent-blue-muted p-4">
+              <Info className="w-5 h-5 text-theme-accent-blue flex-shrink-0 mt-0.5" />
               <p className="text-sm text-theme-text-secondary">
                 These settings were initially configured during onboarding. Changing the authentication provider will affect how all users sign in. Ensure the new provider is configured before switching.
               </p>
@@ -1586,7 +1586,7 @@ export const SettingsPage: React.FC = () => {
                     onClick={() => setAuthSettings(s => ({ ...s, provider: p.id }))}
                     className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${
                       authSettings.provider === p.id
-                        ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                        ? 'border-theme-accent-blue bg-theme-accent-blue-muted text-theme-accent-blue'
                         : 'border-theme-surface-border text-theme-text-secondary hover:border-theme-surface-hover'
                     }`}
                   >
@@ -1718,8 +1718,8 @@ export const SettingsPage: React.FC = () => {
             {/* Local passwords info */}
             {authSettings.provider === 'local' && (
               <div className="border-t border-theme-surface-border pt-4">
-                <div className="flex items-start gap-3 rounded-lg border border-green-500/20 bg-green-500/5 p-4">
-                  <Lock className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                <div className="flex items-start gap-3 rounded-lg border border-theme-accent-green/20 bg-theme-accent-green-muted p-4">
+                  <Lock className="w-5 h-5 text-theme-accent-green flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="text-sm font-medium text-theme-text-primary">Local Password Authentication</p>
                     <p className="text-sm text-theme-text-secondary mt-1">
@@ -1735,7 +1735,7 @@ export const SettingsPage: React.FC = () => {
               <button
                 onClick={() => { void handleSaveAuth(); }}
                 disabled={savingAuth}
-                className="inline-flex items-center gap-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2"
+                className="btn-info disabled:bg-gray-400 disabled:cursor-not-allowed font-medium gap-2 inline-flex items-center rounded-md text-sm"
               >
                 {savingAuth && <Loader2 className="w-4 h-4 animate-spin" />}
                 {savingAuth ? 'Saving...' : 'Save Authentication Settings'}
@@ -1777,7 +1777,7 @@ export const SettingsPage: React.FC = () => {
                     onClick={() => switchSection(key)}
                     className={`flex items-center gap-2 px-3 py-2 rounded-lg whitespace-nowrap text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring ${
                       isActive
-                        ? 'bg-blue-600/10 text-blue-600 dark:text-blue-400'
+                        ? 'bg-theme-accent-blue-muted text-theme-accent-blue'
                         : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
                     }`}
                     aria-current={isActive ? 'page' : undefined}
@@ -1801,7 +1801,7 @@ export const SettingsPage: React.FC = () => {
                     onClick={() => switchSection(key)}
                     className={`w-full flex items-start gap-3 px-3 py-3 rounded-lg text-left transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring ${
                       isActive
-                        ? 'bg-blue-600/10 text-blue-600 dark:text-blue-400'
+                        ? 'bg-theme-accent-blue-muted text-theme-accent-blue'
                         : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
                     }`}
                     aria-current={isActive ? 'page' : undefined}
@@ -1809,7 +1809,7 @@ export const SettingsPage: React.FC = () => {
                     <Icon className={`w-5 h-5 mt-0.5 flex-shrink-0 ${isActive ? '' : 'text-theme-text-muted'}`} />
                     <div className="min-w-0">
                       <p className="text-sm font-medium">{label}</p>
-                      <p className={`text-xs ${isActive ? 'text-blue-600/70 dark:text-blue-400/70' : 'text-theme-text-muted'}`}>
+                      <p className={`text-xs ${isActive ? 'text-theme-accent-blue/70' : 'text-theme-text-muted'}`}>
                         {description}
                       </p>
                     </div>

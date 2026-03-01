@@ -503,7 +503,7 @@ const SchedulingPage: React.FC = () => {
             {/* Summary Stats */}
             {summary && (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
-                <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-4 border border-theme-surface-border">
+                <div className="card p-3 sm:p-4">
                   <p className="text-theme-text-muted text-xs sm:text-sm">
                     Total Shifts
                   </p>
@@ -511,7 +511,7 @@ const SchedulingPage: React.FC = () => {
                     {summary.total_shifts}
                   </p>
                 </div>
-                <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-4 border border-theme-surface-border">
+                <div className="card p-3 sm:p-4">
                   <p className="text-theme-text-muted text-xs sm:text-sm">
                     This Week
                   </p>
@@ -519,7 +519,7 @@ const SchedulingPage: React.FC = () => {
                     {summary.shifts_this_week}
                   </p>
                 </div>
-                <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-4 border border-theme-surface-border">
+                <div className="card p-3 sm:p-4">
                   <p className="text-theme-text-muted text-xs sm:text-sm">
                     This Month
                   </p>
@@ -527,7 +527,7 @@ const SchedulingPage: React.FC = () => {
                     {summary.shifts_this_month}
                   </p>
                 </div>
-                <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-4 border border-theme-surface-border">
+                <div className="card p-3 sm:p-4">
                   <p className="text-theme-text-muted text-xs sm:text-sm">
                     Hours This Month
                   </p>
@@ -539,7 +539,7 @@ const SchedulingPage: React.FC = () => {
             )}
 
             {/* Calendar Navigation */}
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-3 sm:p-4 border border-theme-surface-border mb-6">
+            <div className="card mb-6 p-3 sm:p-4">
               <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
                 <div className="flex items-center space-x-2 sm:space-x-4">
                   <button
@@ -607,7 +607,7 @@ const SchedulingPage: React.FC = () => {
 
             {/* Loading State */}
             {loading && (
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-12 text-center mb-8">
+              <div className="card mb-8 p-12 text-center">
                 <Loader2 className="w-8 h-8 text-violet-700 dark:text-violet-400 mx-auto mb-3 animate-spin" />
                 <p className="text-theme-text-secondary">Loading shifts...</p>
               </div>
@@ -617,7 +617,7 @@ const SchedulingPage: React.FC = () => {
             {!loading && viewMode === "week" && (
               <>
                 {/* Desktop grid (hidden on mobile) */}
-                <div className="hidden md:block bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden mb-8">
+                <div className="card hidden mb-8 md:block overflow-hidden">
                   <div className="grid grid-cols-7 border-b border-theme-surface-border">
                     {weekDates.map((date, i) => (
                       <div
@@ -704,9 +704,9 @@ const SchedulingPage: React.FC = () => {
                     return (
                       <div
                         key={i}
-                        className={`bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden ${
-                          isToday(date) ? "ring-2 ring-violet-500/30" : ""
-                        }`}
+                        className={`card overflow-hidden ${
+ isToday(date) ? "ring-2 ring-violet-500/30" : ""
+ }`}
                       >
                         <div
                           className={`px-4 py-2 border-b border-theme-surface-border flex items-center justify-between ${
@@ -796,7 +796,7 @@ const SchedulingPage: React.FC = () => {
             {!loading && viewMode === "month" && (
               <>
                 {/* Desktop grid (hidden on mobile) */}
-                <div className="hidden md:block bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden mb-8">
+                <div className="card hidden mb-8 md:block overflow-hidden">
                   <div className="grid grid-cols-7 border-b border-theme-surface-border">
                     {DAYS_OF_WEEK.map((day) => (
                       <div
@@ -862,7 +862,7 @@ const SchedulingPage: React.FC = () => {
                 {/* Mobile: compact mini-calendar + shift list below */}
                 <div className="md:hidden mb-8 space-y-3">
                   {/* Mini month calendar with dot indicators */}
-                  <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-3">
+                  <div className="card p-3">
                     <div className="grid grid-cols-7 gap-0.5 mb-1">
                       {DAYS_OF_WEEK.map((d) => (
                         <div
@@ -924,7 +924,7 @@ const SchedulingPage: React.FC = () => {
 
                     if (daysWithShifts.length === 0) {
                       return (
-                        <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-8 text-center">
+                        <div className="card p-8 text-center">
                           <CalendarDays className="w-10 h-10 text-theme-text-muted mx-auto mb-2" />
                           <p className="text-theme-text-muted text-sm">
                             No shifts this month
@@ -941,9 +941,9 @@ const SchedulingPage: React.FC = () => {
                             <div
                               key={i}
                               id={`month-mobile-day-${formatDateISO(date)}`}
-                              className={`bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden ${
-                                isToday(date) ? "ring-2 ring-violet-500/30" : ""
-                              }`}
+                              className={`card overflow-hidden ${
+ isToday(date) ? "ring-2 ring-violet-500/30" : ""
+ }`}
                             >
                               <div
                                 className={`px-4 py-2 border-b border-theme-surface-border flex items-center justify-between ${
@@ -1032,7 +1032,7 @@ const SchedulingPage: React.FC = () => {
 
             {/* Empty State */}
             {!loading && !hasShifts && (
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
+              <div className="card p-12 text-center">
                 <CalendarDays className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
                 <h3 className="text-theme-text-primary text-xl font-bold mb-2">
                   No Shifts Scheduled
@@ -1145,7 +1145,7 @@ const SchedulingPage: React.FC = () => {
                             endDate: computeEndDate(prev.startDate, tmpl),
                           }));
                         }}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+                        className="form-input focus:ring-violet-500"
                       >
                         {/* Group templates by category */}
                         {(() => {
@@ -1313,7 +1313,7 @@ const SchedulingPage: React.FC = () => {
                               apparatus_id: e.target.value,
                             })
                           }
-                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+                          className="form-input focus:ring-violet-500"
                         >
                           <option value="">No specific apparatus</option>
                           {apparatusList.map((a) => (
@@ -1388,7 +1388,7 @@ const SchedulingPage: React.FC = () => {
                               shift_officer_id: e.target.value,
                             })
                           }
-                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+                          className="form-input focus:ring-violet-500"
                         >
                           <option value="">No shift officer</option>
                           {membersList.map((m) => (
@@ -1451,7 +1451,7 @@ const SchedulingPage: React.FC = () => {
                               endDate: computeEndDate(newStart, tmpl),
                             }));
                           }}
-                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+                          className="form-input focus:ring-violet-500"
                         />
                       </div>
                       <div>
@@ -1467,7 +1467,7 @@ const SchedulingPage: React.FC = () => {
                               endDate: e.target.value,
                             })
                           }
-                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+                          className="form-input focus:ring-violet-500"
                         />
                         {shiftForm.startDate &&
                           shiftForm.endDate &&
@@ -1499,7 +1499,7 @@ const SchedulingPage: React.FC = () => {
                           setShiftForm({ ...shiftForm, notes: e.target.value })
                         }
                         rows={3}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+                        className="form-input focus:ring-violet-500 resize-none"
                         placeholder="Optional notes for this shift..."
                       />
                     </div>

@@ -1108,7 +1108,7 @@ export const MemberProfilePage: React.FC = () => {
                           type="checkbox"
                           checked={editForm.notification_preferences?.email}
                           onChange={() => handleNotificationToggle("email")}
-                          className="h-4 w-4 text-blue-600 focus:ring-theme-focus-ring border-theme-surface-border rounded"
+                          className="form-checkbox border-theme-surface-border"
                         />
                         <span className="ml-2 text-sm text-theme-text-secondary">
                           Email notifications
@@ -1119,7 +1119,7 @@ export const MemberProfilePage: React.FC = () => {
                           type="checkbox"
                           checked={editForm.notification_preferences?.sms}
                           onChange={() => handleNotificationToggle("sms")}
-                          className="h-4 w-4 text-blue-600 focus:ring-theme-focus-ring border-theme-surface-border rounded"
+                          className="form-checkbox border-theme-surface-border"
                         />
                         <span className="ml-2 text-sm text-theme-text-secondary">
                           SMS notifications
@@ -1130,7 +1130,7 @@ export const MemberProfilePage: React.FC = () => {
                           type="checkbox"
                           checked={editForm.notification_preferences?.push}
                           onChange={() => handleNotificationToggle("push")}
-                          className="h-4 w-4 text-blue-600 focus:ring-theme-focus-ring border-theme-surface-border rounded"
+                          className="form-checkbox border-theme-surface-border"
                         />
                         <span className="ml-2 text-sm text-theme-text-secondary">
                           Push notifications
@@ -1145,7 +1145,7 @@ export const MemberProfilePage: React.FC = () => {
                         void handleSaveContact();
                       }}
                       disabled={saving}
-                      className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="btn-info disabled:cursor-not-allowed flex-1 font-medium rounded-md text-sm"
                     >
                       {saving ? "Saving..." : "Save Changes"}
                     </button>
@@ -1333,7 +1333,7 @@ export const MemberProfilePage: React.FC = () => {
                         void handleSaveAddress();
                       }}
                       disabled={savingAddress}
-                      className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50"
+                      className="btn-info flex-1 font-medium rounded-md text-sm"
                     >
                       {savingAddress ? "Saving..." : "Save"}
                     </button>
@@ -1497,7 +1497,7 @@ export const MemberProfilePage: React.FC = () => {
                         void handleSaveEmergencyContacts();
                       }}
                       disabled={savingContacts}
-                      className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50"
+                      className="btn-info flex-1 font-medium rounded-md text-sm"
                     >
                       {savingContacts ? "Saving..." : "Save"}
                     </button>

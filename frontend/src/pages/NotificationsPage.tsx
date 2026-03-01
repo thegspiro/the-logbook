@@ -283,15 +283,15 @@ const NotificationsPage: React.FC = () => {
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8" role="region" aria-label="Notification statistics">
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+          <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Notification Rules</p>
             <p className="text-theme-text-primary text-2xl font-bold mt-1">{summary?.total_rules ?? rules.length}</p>
           </div>
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+          <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Active Rules</p>
             <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">{summary?.active_rules ?? rules.filter(r => r.enabled).length}</p>
           </div>
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+          <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Emails Sent (This Month)</p>
             <p className="text-orange-700 dark:text-orange-400 text-2xl font-bold mt-1">{summary?.emails_sent_this_month ?? 0}</p>
           </div>
@@ -334,7 +334,7 @@ const NotificationsPage: React.FC = () => {
         {activeTab === 'rules' && (
           <div role="tabpanel">
             {/* Search */}
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border mb-6">
+            <div className="card mb-6 p-4">
               <div className="relative max-w-md">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" aria-hidden="true" />
                 <label htmlFor="notif-search" className="sr-only">Search notification rules</label>
@@ -344,7 +344,7 @@ const NotificationsPage: React.FC = () => {
                   placeholder="Search notification rules..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input dark:placeholder-slate-400 pl-10 placeholder-slate-500 pr-4"
                 />
               </div>
             </div>
@@ -352,7 +352,7 @@ const NotificationsPage: React.FC = () => {
             {/* Rules List */}
             <div className="space-y-3">
               {filteredRules.length === 0 && (
-                <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
+                <div className="card p-12 text-center">
                   <Bell className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
                   <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Notification Rules</h3>
                   <p className="text-theme-text-secondary mb-6">
@@ -374,7 +374,7 @@ const NotificationsPage: React.FC = () => {
               {filteredRules.map((rule) => {
                 const display = getTriggerDisplay(rule.trigger);
                 return (
-                  <div key={rule.id} className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border">
+                  <div key={rule.id} className="stat-card">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-4">
                         <div className={`p-2 rounded-lg bg-theme-surface-secondary ${display.color}`}>
@@ -428,7 +428,7 @@ const NotificationsPage: React.FC = () => {
         )}
 
         {activeTab === 'templates' && (
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center" role="tabpanel">
+          <div className="card p-12 text-center" role="tabpanel">
             <Mail className="w-16 h-16 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
             <h3 className="text-theme-text-primary text-xl font-bold mb-2">Email Templates</h3>
             <p className="text-theme-text-secondary mb-6">
@@ -459,7 +459,7 @@ const NotificationsPage: React.FC = () => {
               </div>
             )}
             {logs.length === 0 ? (
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
+              <div className="card p-12 text-center">
                 <Clock className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
                 <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Notifications Sent</h3>
                 <p className="text-theme-text-secondary mb-6">
@@ -468,7 +468,7 @@ const NotificationsPage: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden">
+                <div className="card overflow-hidden">
                   {/* Table Header */}
                   <div className="grid grid-cols-12 gap-4 px-5 py-3 border-b border-theme-surface-border text-xs font-medium text-theme-text-muted uppercase">
                     <div className="col-span-4">Subject</div>
@@ -562,7 +562,7 @@ const NotificationsPage: React.FC = () => {
                         type="text"
                         value={createName}
                         onChange={(e) => setCreateName(e.target.value)}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="form-input"
                         placeholder="e.g., Monthly Report Reminder"
                         required
                         aria-required="true"
@@ -573,7 +573,7 @@ const NotificationsPage: React.FC = () => {
                       <select
                         value={createTrigger}
                         onChange={(e) => setCreateTrigger(e.target.value)}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="form-input"
                       >
                         {TRIGGER_OPTIONS.map(opt => (
                           <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -587,10 +587,10 @@ const NotificationsPage: React.FC = () => {
                         rows={2}
                         value={createDescription}
                         onChange={(e) => setCreateDescription(e.target.value)}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="form-input"
                       />
                     </div>
-                    <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-3">
+                    <div className="card-secondary p-3">
                       <div className="flex items-start space-x-2">
                         <AlertCircle className="w-4 h-4 text-theme-text-muted mt-0.5 flex-shrink-0" />
                         <p className="text-theme-text-muted text-sm">

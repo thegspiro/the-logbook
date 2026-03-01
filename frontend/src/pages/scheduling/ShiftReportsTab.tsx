@@ -638,7 +638,7 @@ export const ShiftReportsTab: React.FC = () => {
                 placeholder="Search members..."
                 value={memberSearch}
                 onChange={e => setMemberSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+                className="form-input focus:ring-violet-500 pl-9 pr-3 text-sm"
               />
             </div>
             {loadingMembers ? (
@@ -671,21 +671,21 @@ export const ShiftReportsTab: React.FC = () => {
               <label className="block text-sm font-medium text-theme-text-secondary mb-1">Shift Date *</label>
               <input type="date" value={form.shift_date || ''}
                 onChange={e => setForm(prev => ({ ...prev, shift_date: e.target.value }))}
-                className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+                className="form-input focus:ring-violet-500 text-sm"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-theme-text-secondary mb-1">Hours on Shift *</label>
               <input type="number" min="0.5" max="48" step="0.5" value={form.hours_on_shift || ''}
                 onChange={e => setForm(prev => ({ ...prev, hours_on_shift: parseFloat(e.target.value) || 0 }))}
-                className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+                className="form-input focus:ring-violet-500 text-sm"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-theme-text-secondary mb-1">Calls Responded</label>
               <input type="number" min="0" value={form.calls_responded || 0}
                 onChange={e => setForm(prev => ({ ...prev, calls_responded: parseInt(e.target.value) || 0 }))}
-                className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+                className="form-input focus:ring-violet-500 text-sm"
               />
             </div>
           </div>
@@ -720,7 +720,7 @@ export const ShiftReportsTab: React.FC = () => {
               <textarea rows={3} value={form.areas_of_strength || ''}
                 onChange={e => setForm(prev => ({ ...prev, areas_of_strength: e.target.value }))}
                 placeholder="What did the trainee do well?"
-                className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+                className="form-input focus:ring-violet-500 resize-none text-sm"
               />
             </div>
             <div>
@@ -728,7 +728,7 @@ export const ShiftReportsTab: React.FC = () => {
               <textarea rows={3} value={form.areas_for_improvement || ''}
                 onChange={e => setForm(prev => ({ ...prev, areas_for_improvement: e.target.value }))}
                 placeholder="What should the trainee work on?"
-                className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+                className="form-input focus:ring-violet-500 resize-none text-sm"
               />
             </div>
           </div>
@@ -738,7 +738,7 @@ export const ShiftReportsTab: React.FC = () => {
             <textarea rows={4} value={form.officer_narrative || ''}
               onChange={e => setForm(prev => ({ ...prev, officer_narrative: e.target.value }))}
               placeholder="General observations, notes, and overall assessment..."
-              className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+              className="form-input focus:ring-violet-500 resize-none text-sm"
             />
           </div>
 
@@ -766,7 +766,7 @@ export const ShiftReportsTab: React.FC = () => {
                           placeholder="Add comment on this skill..."
                           value={selected.comment || ''}
                           onChange={e => handleUpdateSkillComment(skill, e.target.value)}
-                          className="w-full max-w-md bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-1.5 text-xs text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+                          className="form-input focus:ring-violet-500 max-w-md py-1.5 text-xs"
                         />
                       </div>
                     )}
@@ -793,11 +793,11 @@ export const ShiftReportsTab: React.FC = () => {
                     <div className="flex-1 form-grid-2">
                       <input type="text" placeholder="Task name" value={task.task}
                         onChange={e => handleUpdateTask(i, 'task', e.target.value)}
-                        className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+                        className="form-input focus:ring-violet-500 text-sm"
                       />
                       <input type="text" placeholder="Description (optional)" value={task.description || ''}
                         onChange={e => handleUpdateTask(i, 'description', e.target.value)}
-                        className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+                        className="form-input focus:ring-violet-500 text-sm"
                       />
                     </div>
                     <button onClick={() => handleRemoveTask(i)} className="p-2 text-theme-text-muted hover:text-red-500 transition-colors">
@@ -808,7 +808,7 @@ export const ShiftReportsTab: React.FC = () => {
                     <input type="text" placeholder="Officer comment on this task..."
                       value={task.comment || ''}
                       onChange={e => handleUpdateTask(i, 'comment', e.target.value)}
-                      className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-1.5 text-xs text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+                      className="form-input focus:ring-violet-500 py-1.5 text-xs"
                     />
                   </div>
                 </div>
@@ -878,7 +878,7 @@ export const ShiftReportsTab: React.FC = () => {
               <textarea rows={3} value={ackComments}
                 onChange={e => setAckComments(e.target.value)}
                 placeholder="Any feedback or comments..."
-                className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+                className="form-input focus:ring-violet-500 resize-none text-sm"
               />
             </div>
             <div className="flex items-center gap-2 justify-end">
@@ -928,7 +928,7 @@ export const ShiftReportsTab: React.FC = () => {
                       type="checkbox"
                       checked={redactFields.includes(field)}
                       onChange={() => toggleRedactField(field)}
-                      className="w-4 h-4 rounded bg-theme-input-bg border-theme-input-border text-blue-600 focus:ring-theme-focus-ring"
+                      className="form-checkbox"
                     />
                     <span className="text-sm text-theme-text-primary flex items-center gap-1">
                       {redactFields.includes(field) ? <EyeOff className="w-3.5 h-3.5 text-red-500" /> : <Eye className="w-3.5 h-3.5 text-theme-text-muted" />}
@@ -947,7 +947,7 @@ export const ShiftReportsTab: React.FC = () => {
               <textarea rows={3} value={reviewNotes}
                 onChange={e => setReviewNotes(e.target.value)}
                 placeholder="Notes about this review decision..."
-                className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+                className="form-input focus:ring-violet-500 resize-none text-sm"
               />
             </div>
 
@@ -958,12 +958,12 @@ export const ShiftReportsTab: React.FC = () => {
                 Cancel
               </button>
               <button onClick={() => { void handleReview('flagged'); }} disabled={reviewing}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center gap-1.5 transition-colors"
+                className="btn-primary font-medium gap-1.5 inline-flex items-center text-sm"
               >
                 <AlertCircle className="w-3.5 h-3.5" /> Flag
               </button>
               <button onClick={() => { void handleReview('approved'); }} disabled={reviewing}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center gap-1.5 transition-colors"
+                className="btn-success font-medium gap-1.5 inline-flex items-center text-sm"
               >
                 {reviewing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                 Approve

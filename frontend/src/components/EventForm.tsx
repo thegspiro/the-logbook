@@ -766,7 +766,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                   update({ reminder_schedule: [...(formData.reminder_schedule || []), val] });
                 }
               }}
-              className="w-full max-w-xs px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="form-input max-w-xs py-3"
             >
               <option value="">+ Add a reminder...</option>
               {[
@@ -802,7 +802,7 @@ export const EventForm: React.FC<EventFormProps> = ({
         <button
           type="submit"
           disabled={isSubmitting}
-          className="px-8 py-3 border border-transparent rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="btn-primary border border-transparent disabled:cursor-not-allowed font-medium px-8 py-3 text-sm"
         >
           {isSubmitting ? 'Saving...' : submitLabel}
         </button>

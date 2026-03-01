@@ -303,7 +303,7 @@ export const PipelineSettingsPage: React.FC = () => {
                     setPipelineDescription('');
                     setShowCreateModal(true);
                   }}
-                  className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                  className="btn-primary px-6"
                 >
                   Create Pipeline
                 </button>
@@ -343,7 +343,7 @@ export const PipelineSettingsPage: React.FC = () => {
                       </button>
                       <button
                         onClick={() => { void handleUpdatePipelineName(); }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                        className="btn-primary flex gap-1.5 items-center px-3 py-1.5 text-sm"
                       >
                         <Save className="w-3.5 h-3.5" aria-hidden="true" />
                         Save
@@ -608,7 +608,7 @@ export const PipelineSettingsPage: React.FC = () => {
                     <button
                       onClick={() => { void handleSaveInactivitySettings(); }}
                       disabled={isSavingInactivity}
-                      className="flex items-center gap-2 px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                      className="btn-primary flex gap-2 items-center text-sm"
                     >
                       {isSavingInactivity ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
@@ -708,7 +708,7 @@ export const PipelineSettingsPage: React.FC = () => {
               <button
                 onClick={() => { void handleCreatePipeline(); }}
                 disabled={isCreating}
-                className="flex items-center gap-2 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                className="btn-primary flex gap-2 items-center px-6"
               >
                 {isCreating && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
                 Create Pipeline

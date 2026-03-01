@@ -42,8 +42,11 @@ export default {
           'accent-yellow': 'var(--accent-yellow)',
           'accent-cyan': 'var(--accent-cyan)',
           'accent-purple': 'var(--accent-purple)',
+          'accent-red-muted': 'var(--accent-red-muted)',
           'accent-green-muted': 'var(--accent-green-muted)',
+          'accent-blue-muted': 'var(--accent-blue-muted)',
           'accent-orange-muted': 'var(--accent-orange-muted)',
+          'accent-purple-muted': 'var(--accent-purple-muted)',
           'focus-ring': 'var(--focus-ring)',
           // Toast colors
           'toast-success': 'var(--toast-success)',

@@ -156,7 +156,7 @@ export const ApparatusDetailPage: React.FC = () => {
           <p className="text-theme-text-muted mb-6">The apparatus you're looking for doesn't exist.</p>
           <button
             onClick={() => navigate('/apparatus')}
-            className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+            className="btn-primary px-6 py-3"
           >
             Back to Fleet
           </button>
@@ -248,7 +248,7 @@ export const ApparatusDetailPage: React.FC = () => {
 
       {/* Tabs */}
       <div className="max-w-7xl mx-auto px-6 pt-6">
-        <div className="flex space-x-1 bg-theme-surface-secondary rounded-lg p-1 border border-theme-surface-border">
+        <div className="card-secondary flex p-1 space-x-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -273,7 +273,7 @@ export const ApparatusDetailPage: React.FC = () => {
             {/* Main Info Card */}
             <div className="lg:col-span-2 space-y-6">
               {/* Vehicle Details */}
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+              <div className="card p-6">
                 <h2 className="text-theme-text-primary font-bold mb-4 flex items-center gap-2">
                   <Truck className="w-5 h-5" />
                   Vehicle Details
@@ -319,7 +319,7 @@ export const ApparatusDetailPage: React.FC = () => {
               </div>
 
               {/* Specifications */}
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+              <div className="card p-6">
                 <h2 className="text-theme-text-primary font-bold mb-4 flex items-center gap-2">
                   <Gauge className="w-5 h-5" />
                   Specifications
@@ -369,7 +369,7 @@ export const ApparatusDetailPage: React.FC = () => {
               </div>
 
               {/* Financial Info */}
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+              <div className="card p-6">
                 <h2 className="text-theme-text-primary font-bold mb-4 flex items-center gap-2">
                   <DollarSign className="w-5 h-5" />
                   Financial Information
@@ -414,7 +414,7 @@ export const ApparatusDetailPage: React.FC = () => {
             {/* Sidebar */}
             <div className="space-y-6">
               {/* Quick Stats */}
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+              <div className="card p-6">
                 <h2 className="text-theme-text-primary font-bold mb-4">Quick Stats</h2>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
@@ -439,7 +439,7 @@ export const ApparatusDetailPage: React.FC = () => {
               </div>
 
               {/* Important Dates */}
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+              <div className="card p-6">
                 <h2 className="text-theme-text-primary font-bold mb-4 flex items-center gap-2">
                   <Calendar className="w-5 h-5" />
                   Important Dates
@@ -474,7 +474,7 @@ export const ApparatusDetailPage: React.FC = () => {
 
               {/* NFPA Compliance */}
               {currentApparatus.nfpaTrackingEnabled && (
-                <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+                <div className="card p-6">
                   <h2 className="text-theme-text-primary font-bold mb-4 flex items-center gap-2">
                     <Shield className="w-5 h-5" />
                     NFPA Compliance
@@ -485,7 +485,7 @@ export const ApparatusDetailPage: React.FC = () => {
 
               {/* Notes */}
               {currentApparatus.notes && (
-                <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+                <div className="card p-6">
                   <h2 className="text-theme-text-primary font-bold mb-4">Notes</h2>
                   <p className="text-theme-text-secondary text-sm whitespace-pre-wrap">
                     {currentApparatus.notes}
@@ -498,7 +498,7 @@ export const ApparatusDetailPage: React.FC = () => {
 
         {/* Maintenance Tab */}
         {activeTab === 'maintenance' && (
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+          <div className="card p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-theme-text-primary font-bold flex items-center gap-2">
                 <Wrench className="w-5 h-5" />
@@ -506,7 +506,7 @@ export const ApparatusDetailPage: React.FC = () => {
               </h2>
               <button
                 onClick={() => navigate(`/apparatus/${id}/maintenance/new`)}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm"
+                className="btn-primary text-sm"
               >
                 Add Record
               </button>
@@ -522,7 +522,7 @@ export const ApparatusDetailPage: React.FC = () => {
                 {maintenanceRecords.map((record) => (
                   <div
                     key={record.id}
-                    className="bg-theme-surface-secondary rounded-lg p-4 border border-theme-surface-border"
+                    className="card-secondary p-4"
                   >
                     <div className="flex items-center justify-between">
                       <div>
@@ -561,7 +561,7 @@ export const ApparatusDetailPage: React.FC = () => {
 
         {/* Fuel Logs Tab */}
         {activeTab === 'fuel' && (
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+          <div className="card p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-theme-text-primary font-bold flex items-center gap-2">
                 <Fuel className="w-5 h-5" />
@@ -569,7 +569,7 @@ export const ApparatusDetailPage: React.FC = () => {
               </h2>
               <button
                 onClick={() => navigate(`/apparatus/${id}/fuel/new`)}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm"
+                className="btn-primary text-sm"
               >
                 Add Fuel Log
               </button>
@@ -613,7 +613,7 @@ export const ApparatusDetailPage: React.FC = () => {
 
         {/* Operators Tab */}
         {activeTab === 'operators' && (
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+          <div className="card p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-theme-text-primary font-bold flex items-center gap-2">
                 <Users className="w-5 h-5" />
@@ -621,7 +621,7 @@ export const ApparatusDetailPage: React.FC = () => {
               </h2>
               <button
                 onClick={() => navigate(`/apparatus/${id}/operators/new`)}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm"
+                className="btn-primary text-sm"
               >
                 Add Operator
               </button>
@@ -637,7 +637,7 @@ export const ApparatusDetailPage: React.FC = () => {
                 {operators.map((op) => (
                   <div
                     key={op.id}
-                    className="bg-theme-surface-secondary rounded-lg p-4 border border-theme-surface-border flex items-center justify-between"
+                    className="card-secondary flex items-center justify-between p-4"
                   >
                     <div>
                       <p className="text-theme-text-primary font-medium">Operator ID: {op.userId}</p>
@@ -665,7 +665,7 @@ export const ApparatusDetailPage: React.FC = () => {
 
         {/* Equipment Tab */}
         {activeTab === 'equipment' && (
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+          <div className="card p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-theme-text-primary font-bold flex items-center gap-2">
                 <Package className="w-5 h-5" />
@@ -673,7 +673,7 @@ export const ApparatusDetailPage: React.FC = () => {
               </h2>
               <button
                 onClick={() => navigate(`/apparatus/${id}/equipment/new`)}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm"
+                className="btn-primary text-sm"
               >
                 Add Equipment
               </button>
@@ -689,7 +689,7 @@ export const ApparatusDetailPage: React.FC = () => {
                 {equipment.map((item) => (
                   <div
                     key={item.id}
-                    className="bg-theme-surface-secondary rounded-lg p-4 border border-theme-surface-border"
+                    className="card-secondary p-4"
                   >
                     <div className="flex items-center justify-between mb-2">
                       <p className="text-theme-text-primary font-medium">{item.name}</p>
@@ -725,7 +725,7 @@ export const ApparatusDetailPage: React.FC = () => {
 
         {/* Documents Tab */}
         {activeTab === 'documents' && (
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+          <div className="card p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-theme-text-primary font-bold flex items-center gap-2">
                 <FileText className="w-5 h-5" />
@@ -736,7 +736,7 @@ export const ApparatusDetailPage: React.FC = () => {
                   <Camera className="w-4 h-4" />
                   Add Photo
                 </button>
-                <button className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm flex items-center gap-2">
+                <button className="btn-primary flex gap-2 items-center text-sm">
                   <FileText className="w-4 h-4" />
                   Add Document
                 </button>

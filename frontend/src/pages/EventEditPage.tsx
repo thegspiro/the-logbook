@@ -139,7 +139,7 @@ export const EventEditPage: React.FC = () => {
         )}
 
         {/* Form Card */}
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-8 border border-theme-surface-border">
+        <div className="card p-8">
           <EventForm
             initialData={initialData}
             onSubmit={handleSubmit}

@@ -147,7 +147,7 @@ const AdminHoursQRCodePage: React.FC = () => {
       <div className="mt-6 text-center print:hidden">
         <button
           onClick={() => window.print()}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+          className="btn-info px-6 transition"
         >
           Print QR Code
         </button>

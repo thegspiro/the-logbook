@@ -223,7 +223,7 @@ const SkillsTestingTemplatesTab: React.FC = () => {
           </select>
           <button
             onClick={() => navigate('/training/skills-testing/templates/new')}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium"
+            className="btn-primary flex font-medium gap-2 items-center"
           >
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">New Template</span>
@@ -242,7 +242,7 @@ const SkillsTestingTemplatesTab: React.FC = () => {
           <p className="text-theme-text-muted">No templates found</p>
           <button
             onClick={() => navigate('/training/skills-testing/templates/new')}
-            className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm"
+            className="btn-primary mt-4 text-sm"
           >
             Create Your First Template
           </button>

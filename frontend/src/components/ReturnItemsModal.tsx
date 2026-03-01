@@ -340,7 +340,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
             <div className="flex justify-end">
               <button
                 onClick={onClose}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                className="btn-primary"
               >
                 Done
               </button>
@@ -494,7 +494,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
                     <button
                       onClick={() => { void handleSubmit(); }}
                       disabled={submitting}
-                      className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm"
+                      className="btn-primary flex gap-2 items-center text-sm"
                     >
                       {submitting ? (
                         <Loader2 className="h-4 w-4 animate-spin" />

@@ -1052,7 +1052,7 @@ export const PatternsTab: React.FC = () => {
                               onClick={() => {
                                 void handleDelete(pattern.id);
                               }}
-                              className="px-2.5 py-1.5 text-xs bg-red-600 text-white rounded-md hover:bg-red-700"
+                              className="btn-primary px-2.5 py-1.5 rounded-md text-xs"
                               aria-label="Confirm delete"
                             >
                               Yes, delete

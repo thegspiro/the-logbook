@@ -155,7 +155,7 @@ const DepartmentInfo: React.FC = () => {
         </div>
 
         {/* Form Card */}
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-8 border border-theme-surface-border space-y-6">
+        <div className="card p-8 space-y-6">
           {/* Department Name */}
           <div>
             <label
@@ -173,7 +173,7 @@ const DepartmentInfo: React.FC = () => {
                 clearError();
               }}
               placeholder="e.g., Springfield Volunteer Fire Department"
-              className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent transition-all"
+              className="form-input focus:border-transparent placeholder-theme-text-muted py-3 transition-all"
               maxLength={100}
               autoFocus
               aria-required="true"

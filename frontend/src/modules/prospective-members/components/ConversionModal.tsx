@@ -278,7 +278,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
               </button>
               <button
                 onClick={() => setStep(2)}
-                className="flex items-center gap-2 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                className="btn-primary flex gap-2 items-center px-6"
               >
                 Continue
                 <ArrowRight className="w-4 h-4" aria-hidden="true" />
@@ -376,7 +376,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                     type="date"
                     value={hireDate}
                     onChange={(e) => setHireDate(e.target.value)}
-                    className="w-full bg-theme-surface-secondary border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="card-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring px-3 py-2 text-sm text-theme-text-primary w-full"
                   />
                 </div>
               </div>

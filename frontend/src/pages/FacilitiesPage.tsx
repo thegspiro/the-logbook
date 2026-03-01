@@ -164,7 +164,7 @@ export default function FacilitiesPage() {
         {activeTab === 'facilities' && (
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+            className="btn-primary flex gap-2 items-center py-2.5"
           >
             <Plus className="w-4 h-4" />
             Add Facility
@@ -208,7 +208,7 @@ export default function FacilitiesPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search facilities..."
-                className="w-full pl-10 pr-4 py-2.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                className="form-input pl-10 placeholder-theme-text-muted pr-4 py-2.5"
               />
             </div>
             <button
@@ -425,7 +425,7 @@ export default function FacilitiesPage() {
               <button
                 onClick={() => { void handleCreate(); }}
                 disabled={isCreating || !newFacility.name.trim()}
-                className="flex items-center gap-2 px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                className="btn-primary flex gap-2 items-center px-5"
               >
                 {isCreating && <Loader2 className="w-4 h-4 animate-spin" />}
                 Add Facility

@@ -167,7 +167,7 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
           <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search records..." aria-label="Search maintenance records" className="w-full pl-10 pr-4 py-2.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+            placeholder="Search records..." aria-label="Search maintenance records" className="form-input pl-10 placeholder-theme-text-muted pr-4 py-2.5"
           />
         </div>
         {filterFacilityId && (
@@ -189,7 +189,7 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
           ))}
         </div>
         <button onClick={openCreate}
-          className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm transition-colors ml-auto"
+          className="btn-primary flex gap-2 items-center ml-auto py-2.5 text-sm"
         >
           <Plus className="w-4 h-4" /> New Record
         </button>
@@ -310,7 +310,7 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
             <div className="flex items-center justify-end gap-3 p-6 border-t border-theme-surface-border">
               <button onClick={() => setShowModal(false)} className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors text-sm">Cancel</button>
               <button onClick={() => { void handleSave(); }} disabled={isSaving}
-                className="flex items-center gap-2 px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50 text-sm"
+                className="btn-primary flex gap-2 items-center px-5 text-sm"
               >
                 {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                 {editingRecord ? 'Update' : 'Create'}

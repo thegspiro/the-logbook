@@ -1002,7 +1002,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       <button
                         onClick={() => { void handleReject(); }}
                         disabled={isRejecting}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                        className="btn-primary flex gap-1 items-center px-3 py-1.5 text-xs"
                       >
                         {isRejecting && <Loader2 className="w-3 h-3 animate-spin" />}
                         Confirm Reject
@@ -1116,7 +1116,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       <button
                         onClick={() => { void handleReject(); }}
                         disabled={isRejecting}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                        className="btn-primary flex gap-1 items-center px-3 py-1.5 text-xs"
                       >
                         {isRejecting && <Loader2 className="w-3 h-3 animate-spin" />}
                         Confirm Reject
@@ -1232,7 +1232,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       <button
                         onClick={() => { void handleReject(); }}
                         disabled={isRejecting}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                        className="btn-primary flex gap-1 items-center px-3 py-1.5 text-xs"
                       >
                         {isRejecting && <Loader2 className="w-3 h-3 animate-spin" />}
                         Confirm Reject

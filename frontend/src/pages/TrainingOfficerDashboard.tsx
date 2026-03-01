@@ -268,7 +268,7 @@ const TrainingOfficerDashboard: React.FC = () => {
             {/* Quick Actions */}
             <button
               onClick={() => navigate('/training/sessions/new')}
-              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors flex items-center space-x-2"
+              className="btn-success flex font-medium items-center space-x-2"
             >
               <Plus className="w-5 h-5" />
               <span>New Training Session</span>
@@ -293,7 +293,7 @@ const TrainingOfficerDashboard: React.FC = () => {
 
         {/* Dashboard Settings Panel */}
         {showSettings && (
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border mb-6">
+          <div className="card mb-6 p-6">
             <h3 className="text-theme-text-primary font-semibold mb-4">Customize Dashboard</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
               {[
@@ -313,7 +313,7 @@ const TrainingOfficerDashboard: React.FC = () => {
                       type="checkbox"
                       checked={enabledWidgets[widget.id as keyof typeof enabledWidgets]}
                       onChange={() => toggleWidget(widget.id as keyof typeof enabledWidgets)}
-                      className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring"
+                      className="form-checkbox"
                     />
                     <Icon className="w-5 h-5 text-theme-text-muted" />
                     <span className="text-theme-text-secondary text-sm">{widget.title}</span>
@@ -428,12 +428,12 @@ const TrainingOfficerDashboard: React.FC = () => {
         {/* Customizable Widget Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {enabledWidgets['compliance-overview'] && (
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border">
+            <div className="card">
               <ComplianceOverviewWidget stats={stats} />
             </div>
           )}
           {enabledWidgets['upcoming-expirations'] && (
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border">
+            <div className="card">
               <UpcomingExpirationsWidget
                 expirations={expiringCertifications.slice(0, 5)}
                 onViewMember={(memberId) => navigate(`/members/${memberId}/training`)}
@@ -441,7 +441,7 @@ const TrainingOfficerDashboard: React.FC = () => {
             </div>
           )}
           {enabledWidgets['recent-completions'] && (
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border">
+            <div className="card">
               <RecentCompletionsWidget
                 completions={recentCompletions.slice(0, 5)}
                 formatDate={formatRelativeDate}
@@ -449,12 +449,12 @@ const TrainingOfficerDashboard: React.FC = () => {
             </div>
           )}
           {enabledWidgets['training-hours'] && (
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border">
+            <div className="card">
               <TrainingHoursSummaryWidget stats={stats} />
             </div>
           )}
           {enabledWidgets['requirements-status'] && (
-            <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border">
+            <div className="card">
               <RequirementsStatusWidget requirements={requirements} />
             </div>
           )}
@@ -488,9 +488,9 @@ const StatCard: React.FC<StatCardProps> = ({ icon: Icon, label, value, subtitle,
   return (
     <div
       onClick={onClick}
-      className={`bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border ${
-        onClick ? 'cursor-pointer hover:bg-theme-surface-hover transition-colors' : ''
-      }`}
+      className={`card p-6 ${
+ onClick ? 'cursor-pointer hover:bg-theme-surface-hover transition-colors' : ''
+ }`}
     >
       <div className="flex items-center justify-between">
         <div>
@@ -529,7 +529,7 @@ const NavigationCard: React.FC<NavigationCardProps> = ({ icon: Icon, title, desc
   return (
     <button
       onClick={onClick}
-      className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border hover:bg-theme-surface-hover transition-all text-left group"
+      className="card group hover:bg-theme-surface-hover p-6 text-left transition-all"
     >
       <div className={`bg-gradient-to-br ${colorClasses[color]} rounded-lg p-3 w-fit mb-4 group-hover:scale-110 transition-transform`}>
         <Icon className="w-6 h-6 text-theme-text-primary" />

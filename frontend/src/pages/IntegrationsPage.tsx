@@ -163,22 +163,22 @@ const IntegrationsPage: React.FC = () => {
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8" role="region" aria-label="Integration statistics">
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+          <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Available Integrations</p>
             <p className="text-theme-text-primary text-2xl font-bold mt-1">{integrations.length}</p>
           </div>
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+          <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Connected</p>
             <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">{connectedCount}</p>
           </div>
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+          <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Ready to Connect</p>
             <p className="text-indigo-700 dark:text-indigo-400 text-2xl font-bold mt-1">{availableCount}</p>
           </div>
         </div>
 
         {/* Search & Filters */}
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border mb-6" role="search" aria-label="Search and filter integrations">
+        <div className="card mb-6 p-4" role="search" aria-label="Search and filter integrations">
           <div className="flex flex-col md:flex-row items-center gap-4">
             <div className="relative flex-1 w-full md:max-w-md">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" aria-hidden="true" />
@@ -189,7 +189,7 @@ const IntegrationsPage: React.FC = () => {
                 placeholder="Search integrations..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                className="form-input pl-10 placeholder-theme-text-muted pr-4"
               />
             </div>
             <div className="flex space-x-2" role="group" aria-label="Filter by category">
@@ -217,7 +217,7 @@ const IntegrationsPage: React.FC = () => {
             const ui = getUI(integration.integration_type);
             const category = (integration.config as Record<string, string>)?.category || integration.category;
             return (
-              <div key={integration.id} className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border hover:border-indigo-500/30 transition-all">
+              <div key={integration.id} className="stat-card hover:border-indigo-500/30 transition-all">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center space-x-3">
                     <div className={`p-2 rounded-lg ${ui.bgColor} ${ui.color}`}>

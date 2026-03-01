@@ -522,7 +522,7 @@ const EventsSettingsTab: React.FC = () => {
                 {hiddenTypes.map((eventType) => (
                   <div
                     key={eventType}
-                    className="flex items-center justify-between p-3 bg-theme-surface-secondary rounded-lg border border-theme-surface-border"
+                    className="card-secondary flex items-center justify-between p-3"
                   >
                     <div className="flex items-center gap-3">
                       <EyeOff className="w-4 h-4 text-theme-text-muted" />
@@ -601,7 +601,7 @@ const EventsSettingsTab: React.FC = () => {
                   setNewTypeValue(auto);
                 }}
                 placeholder="e.g., School Visit"
-                className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                className="form-input placeholder-theme-text-muted text-sm"
               />
             </div>
             <div className="w-40">
@@ -614,14 +614,14 @@ const EventsSettingsTab: React.FC = () => {
                 value={newTypeValue}
                 onChange={(e) => setNewTypeValue(e.target.value.replace(/[^a-z0-9_]/g, ''))}
                 placeholder="school_visit"
-                className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring font-mono"
+                className="form-input font-mono placeholder-theme-text-muted text-sm"
               />
             </div>
             <button
               type="button"
               onClick={() => void addOutreachType()}
               disabled={saving || !newTypeLabel.trim() || !newTypeValue.trim()}
-              className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50 transition-colors flex items-center gap-1.5"
+              className="btn-primary flex font-medium gap-1.5 items-center text-sm"
             >
               <Plus className="w-4 h-4" />
               Add
@@ -659,7 +659,7 @@ const EventsSettingsTab: React.FC = () => {
               value={settings.request_pipeline.default_assignee_id || ''}
               onChange={(e) => void updateDefaultAssignee(e.target.value || null)}
               disabled={saving}
-              className="w-full max-w-md px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="form-input max-w-md text-sm"
             >
               <option value="">No default (manually assign)</option>
               {members.map((m) => (
@@ -802,7 +802,7 @@ const EventsSettingsTab: React.FC = () => {
                   value={newTaskLabel}
                   onChange={(e) => setNewTaskLabel(e.target.value)}
                   placeholder="e.g., Chief Approval"
-                  className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input placeholder-theme-text-muted text-sm"
                 />
               </div>
               <div className="flex-1">
@@ -815,14 +815,14 @@ const EventsSettingsTab: React.FC = () => {
                   value={newTaskDesc}
                   onChange={(e) => setNewTaskDesc(e.target.value)}
                   placeholder="Brief description of this step"
-                  className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="form-input placeholder-theme-text-muted text-sm"
                 />
               </div>
               <button
                 type="button"
                 onClick={() => void addPipelineTask()}
                 disabled={saving || !newTaskLabel.trim()}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                className="btn-primary flex font-medium gap-1.5 items-center text-sm"
               >
                 <Plus className="w-4 h-4" />
                 Add
@@ -888,7 +888,7 @@ const EventsSettingsTab: React.FC = () => {
             <button
               type="button"
               onClick={() => setShowTemplateForm(!showTemplateForm)}
-              className="px-3 py-1.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center gap-1.5"
+              className="btn-primary flex font-medium gap-1.5 items-center px-3 py-1.5 text-sm"
             >
               <Plus className="w-4 h-4" />
               New Template
@@ -900,27 +900,27 @@ const EventsSettingsTab: React.FC = () => {
           </p>
 
           {showTemplateForm && (
-            <div className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border p-4 mb-4 space-y-3">
+            <div className="card-secondary mb-4 p-4 space-y-3">
               <input
                 type="text"
                 value={newTemplateName}
                 onChange={(e) => setNewTemplateName(e.target.value)}
                 placeholder="Template name (e.g., How to Find Our Building)"
-                className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                className="form-input placeholder-theme-text-muted text-sm"
               />
               <input
                 type="text"
                 value={newTemplateSubject}
                 onChange={(e) => setNewTemplateSubject(e.target.value)}
                 placeholder="Email subject"
-                className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                className="form-input placeholder-theme-text-muted text-sm"
               />
               <textarea
                 rows={4}
                 value={newTemplateBody}
                 onChange={(e) => setNewTemplateBody(e.target.value)}
                 placeholder="Email body (HTML supported)"
-                className="w-full px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                className="form-input placeholder-theme-text-muted text-sm"
               />
               <div className="flex items-center gap-3">
                 <select
@@ -937,7 +937,7 @@ const EventsSettingsTab: React.FC = () => {
                   type="button"
                   onClick={() => void handleCreateTemplate()}
                   disabled={saving}
-                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50 transition-colors"
+                  className="btn-primary font-medium text-sm"
                 >
                   Save Template
                 </button>
@@ -1004,7 +1004,7 @@ const EventsSettingsTab: React.FC = () => {
             type="button"
             onClick={() => void handleGenerateForm()}
             disabled={generatingForm}
-            className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50 transition-colors flex items-center gap-2"
+            className="btn-primary flex font-medium gap-2 items-center text-sm"
           >
             {generatingForm ? (
               <>

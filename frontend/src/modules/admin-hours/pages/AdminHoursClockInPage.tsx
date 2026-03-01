@@ -123,7 +123,7 @@ const AdminHoursClockInPage: React.FC = () => {
             </div>
             <h2 className="text-2xl font-bold text-theme-text-primary mb-2">Unable to Load</h2>
             <p className="text-theme-text-secondary mb-6">{error}</p>
-            <Link to="/admin-hours" className="inline-block px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+            <Link to="/admin-hours" className="btn-info inline-block px-6 transition">
               View My Hours
             </Link>
           </div>
@@ -177,7 +177,7 @@ const AdminHoursClockInPage: React.FC = () => {
               <button
                 onClick={() => { void handleClockOut(); }}
                 disabled={processing}
-                className="w-full px-8 py-4 bg-red-600 text-white text-lg font-semibold rounded-lg hover:bg-red-700 transition focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                className="btn-primary disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold px-8 py-4 text-lg transition w-full"
               >
                 {processing ? 'Clocking Out...' : 'Clock Out'}
               </button>
@@ -226,7 +226,7 @@ const AdminHoursClockInPage: React.FC = () => {
             <div className="space-y-3">
               <Link
                 to="/admin-hours"
-                className="block w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+                className="btn-info block font-medium px-6 py-3 transition w-full"
               >
                 View My Hours
               </Link>
@@ -280,7 +280,7 @@ const AdminHoursClockInPage: React.FC = () => {
             <div className="space-y-3">
               <Link
                 to="/admin-hours"
-                className="block w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+                className="btn-info block font-medium px-6 py-3 transition w-full"
               >
                 View My Hours
               </Link>
@@ -333,7 +333,7 @@ const AdminHoursClockInPage: React.FC = () => {
         <button
           onClick={() => { void handleClockIn(); }}
           disabled={processing}
-          className="w-full px-8 py-4 bg-green-600 text-white text-lg font-semibold rounded-lg hover:bg-green-700 transition focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+          className="btn-success disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold px-8 py-4 text-lg transition w-full"
         >
           {processing ? 'Clocking In...' : 'Clock In'}
         </button>
