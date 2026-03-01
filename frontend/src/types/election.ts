@@ -122,6 +122,9 @@ export interface ElectionUpdate {
   victory_condition?: VictoryCondition;
   victory_threshold?: number;
   victory_percentage?: number;
+  enable_runoffs?: boolean;
+  runoff_type?: string;
+  max_runoff_rounds?: number;
 }
 
 export interface Candidate {

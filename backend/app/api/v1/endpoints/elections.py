@@ -8,8 +8,9 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from loguru import logger
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,6 +41,9 @@ from app.schemas.election import (
     ElectionUpdate,
     EmailBallot,
     EmailBallotResponse,
+    ProxyAuthorizationCreate,
+    ProxyAuthorizationListResponse,
+    ProxyVoteCreate,
     VoteCreate,
     VoterEligibility,
     VoteResponse,
@@ -503,6 +507,7 @@ async def update_election(
         "ballot_items",
         "position_eligibility",
         "meeting_date",
+        "meeting_id",
         "start_date",
         "end_date",
         "anonymous_voting",
@@ -533,7 +538,7 @@ async def update_election(
 @router.delete("/{election_id}", response_model=ElectionDeleteResponse)
 async def delete_election(
     election_id: UUID,
-    delete_data: ElectionDelete = None,
+    delete_data: Optional[ElectionDelete] = Body(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("elections.manage")),
 ):
@@ -1359,15 +1364,11 @@ async def remove_attendee(
 # ==================== Voter Eligibility Overrides ====================
 
 
-from pydantic import BaseModel as _PydanticBase
-from pydantic import Field as _Field
-
-
-class VoterOverrideRequest(_PydanticBase):
+class VoterOverrideRequest(BaseModel):
     """Request to grant a member voting rights despite tier/attendance restrictions."""
 
     user_id: UUID
-    reason: str = _Field(
+    reason: str = Field(
         ...,
         min_length=1,
         max_length=500,
@@ -1546,11 +1547,11 @@ async def remove_voter_override(
     return {"success": True, "message": "Voter override removed"}
 
 
-class BulkVoterOverrideRequest(_PydanticBase):
+class BulkVoterOverrideRequest(BaseModel):
     """Bulk grant voting overrides for multiple members at once."""
 
-    user_ids: list
-    reason: str = _Field(
+    user_ids: List[UUID]
+    reason: str = Field(
         ...,
         min_length=10,
         max_length=500,
@@ -1659,13 +1660,6 @@ async def bulk_add_voter_overrides(
 
 
 # ==================== Proxy Voting ====================
-
-
-from app.schemas.election import (
-    ProxyAuthorizationCreate,
-    ProxyAuthorizationListResponse,
-    ProxyVoteCreate,
-)
 
 
 @router.post("/{election_id}/proxy-authorizations", status_code=status.HTTP_201_CREATED)

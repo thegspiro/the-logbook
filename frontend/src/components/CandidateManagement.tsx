@@ -261,7 +261,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                   type="text"
                   value={memberSearch}
                   onChange={(e) => setMemberSearch(e.target.value)}
-                  className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                   placeholder="Search members by name or membership number..."
                 />
                 {filteredMembers.length > 0 && (
@@ -285,7 +285,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                 )}
               </div>
               {formData.user_id && (
-                <p className="mt-1 text-xs text-green-400">
+                <p className="mt-1 text-xs text-green-700 dark:text-green-400">
                   Selected: {formData.name}
                   <button
                     type="button"
@@ -307,7 +307,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value, user_id: '' }))}
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 placeholder={formData.user_id ? formData.name : 'Or type a name manually'}
               />
             </div>
