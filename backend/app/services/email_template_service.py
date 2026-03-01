@@ -157,6 +157,40 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "organization_name", "description": "Organization name"},
         {"name": "prospect_url", "description": "Link to prospect profile"},
     ],
+    "election_rollback": [
+        {"name": "recipient_name", "description": "Recipient's display name"},
+        {"name": "election_title", "description": "Title of the election"},
+        {"name": "performer_name", "description": "Name of the person who rolled back"},
+        {"name": "reason", "description": "Reason for the rollback"},
+        {"name": "organization_name", "description": "Organization name"},
+    ],
+    "election_deleted": [
+        {"name": "recipient_name", "description": "Recipient's display name"},
+        {"name": "election_title", "description": "Title of the deleted election"},
+        {"name": "performer_name", "description": "Name of the person who deleted it"},
+        {"name": "reason", "description": "Reason for deletion"},
+        {"name": "organization_name", "description": "Organization name"},
+    ],
+    "member_archived": [
+        {"name": "member_name", "description": "Archived member's full name"},
+        {"name": "previous_status", "description": "Member's status before archival"},
+        {"name": "organization_name", "description": "Organization name"},
+    ],
+    "event_request_status": [
+        {"name": "contact_name", "description": "Requester's name"},
+        {"name": "status_label", "description": "New request status"},
+        {"name": "event_date", "description": "Scheduled event date (if set)"},
+        {"name": "decline_reason", "description": "Reason for decline (if applicable)"},
+        {"name": "message", "description": "Additional message from coordinator"},
+        {"name": "organization_name", "description": "Organization name"},
+    ],
+    "it_password_notification": [
+        {"name": "user_name", "description": "Name of the user who requested the reset"},
+        {"name": "user_email", "description": "Email of the user"},
+        {"name": "request_time", "description": "Time the request was made"},
+        {"name": "ip_address", "description": "IP address of the request"},
+        {"name": "organization_name", "description": "Organization name"},
+    ],
 }
 
 # Sample context data for previewing each template type.
@@ -284,6 +318,40 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "pipeline_stage": "Application Review",
         "organization_name": "Sample Fire Department",
         "prospect_url": "https://example.com/prospective-members/789",
+    },
+    "election_rollback": {
+        "recipient_name": "Lt. Jane Smith",
+        "election_title": "Captain Election 2026",
+        "performer_name": "Secretary Robert Johnson",
+        "reason": "Ballots were distributed to ineligible members",
+        "organization_name": "Sample Fire Department",
+    },
+    "election_deleted": {
+        "recipient_name": "Lt. Jane Smith",
+        "election_title": "Captain Election 2026",
+        "performer_name": "Secretary Robert Johnson",
+        "reason": "Election created in error — new election will be scheduled",
+        "organization_name": "Sample Fire Department",
+    },
+    "member_archived": {
+        "member_name": "John Doe",
+        "previous_status": "Dropped",
+        "organization_name": "Sample Fire Department",
+    },
+    "event_request_status": {
+        "contact_name": "John Doe",
+        "status_label": "Scheduled",
+        "event_date": "April 15, 2026 at 06:00 PM",
+        "decline_reason": "",
+        "message": "Your event has been approved and added to the calendar.",
+        "organization_name": "Sample Fire Department",
+    },
+    "it_password_notification": {
+        "user_name": "John Doe",
+        "user_email": "jdoe@example.com",
+        "request_time": "March 1, 2026 at 02:30 PM",
+        "ip_address": "192.168.1.100",
+        "organization_name": "Sample Fire Department",
     },
 }
 
@@ -754,6 +822,209 @@ DEFAULT_INACTIVITY_WARNING_SUBJECT = (
 )
 
 
+# Default election rollback alert email
+DEFAULT_ELECTION_ROLLBACK_HTML = """<div class="container">
+    <div class="header" style="background-color: #dc2626;">
+        <h1>Election Rolled Back</h1>
+    </div>
+    <div class="content">
+        <p>Hello {{recipient_name}},</p>
+
+        <p>An election has been rolled back to a previous stage:</p>
+
+        <div class="details">
+            <p><strong>Election:</strong> {{election_title}}</p>
+            <p><strong>Rolled back by:</strong> {{performer_name}}</p>
+            <p><strong>Reason:</strong> {{reason}}</p>
+        </div>
+
+        <p>Please review the election details and coordinate with your team as needed.</p>
+    </div>
+    <div class="footer">
+        <p>This is an automated message from {{organization_name}}.</p>
+    </div>
+</div>"""
+
+DEFAULT_ELECTION_ROLLBACK_TEXT = """Election Rolled Back
+
+Hello {{recipient_name}},
+
+An election has been rolled back to a previous stage:
+
+Election: {{election_title}}
+Rolled back by: {{performer_name}}
+Reason: {{reason}}
+
+Please review the election details and coordinate with your team as needed.
+
+---
+This is an automated message from {{organization_name}}."""
+
+DEFAULT_ELECTION_ROLLBACK_SUBJECT = (
+    "ALERT: Election Rolled Back — {{election_title}}"
+)
+
+
+# Default election deleted alert email
+DEFAULT_ELECTION_DELETED_HTML = """<div class="container">
+    <div class="header" style="background-color: #dc2626;">
+        <h1>Election Deleted</h1>
+    </div>
+    <div class="content">
+        <p>Hello {{recipient_name}},</p>
+
+        <p>An election has been permanently deleted:</p>
+
+        <div class="details">
+            <p><strong>Election:</strong> {{election_title}}</p>
+            <p><strong>Deleted by:</strong> {{performer_name}}</p>
+            <p><strong>Reason:</strong> {{reason}}</p>
+        </div>
+
+        <p>All associated ballots and results have been removed. If you have questions, please contact {{performer_name}}.</p>
+    </div>
+    <div class="footer">
+        <p>This is an automated message from {{organization_name}}.</p>
+    </div>
+</div>"""
+
+DEFAULT_ELECTION_DELETED_TEXT = """Election Deleted
+
+Hello {{recipient_name}},
+
+An election has been permanently deleted:
+
+Election: {{election_title}}
+Deleted by: {{performer_name}}
+Reason: {{reason}}
+
+All associated ballots and results have been removed.
+
+---
+This is an automated message from {{organization_name}}."""
+
+DEFAULT_ELECTION_DELETED_SUBJECT = (
+    "CRITICAL: Election Deleted — {{election_title}}"
+)
+
+
+# Default member archived notification email
+DEFAULT_MEMBER_ARCHIVED_HTML = """<div class="container">
+    <div class="header">
+        <h1>Member Archived</h1>
+    </div>
+    <div class="content">
+        <p><strong>{{member_name}}</strong> has been automatically archived.</p>
+
+        <p>All department property has been returned. Previous status: <strong>{{previous_status}}</strong>.</p>
+
+        <p>The member's profile remains accessible for legal requests or future reactivation.</p>
+    </div>
+    <div class="footer">
+        <p>This is an automated message from {{organization_name}}.</p>
+    </div>
+</div>"""
+
+DEFAULT_MEMBER_ARCHIVED_TEXT = """Member Archived: {{member_name}}
+
+All department property has been returned. Previous status: {{previous_status}}.
+
+The member's profile remains accessible for legal requests or future reactivation.
+
+---
+This is an automated message from {{organization_name}}."""
+
+DEFAULT_MEMBER_ARCHIVED_SUBJECT = (
+    "Member Archived: {{member_name}} — {{organization_name}}"
+)
+
+
+# Default event request status update email
+DEFAULT_EVENT_REQUEST_STATUS_HTML = """<div class="container">
+    <div class="header">
+        <h1>Event Request Update</h1>
+    </div>
+    <div class="content">
+        <p>Hello {{contact_name}},</p>
+
+        <p>Your event request has been updated to: <strong>{{status_label}}</strong>.</p>
+
+        {{event_date}}
+
+        {{decline_reason}}
+
+        {{message}}
+
+        <p>Thank you for your request.</p>
+    </div>
+    <div class="footer">
+        <p>This is an automated message from {{organization_name}}.</p>
+    </div>
+</div>"""
+
+DEFAULT_EVENT_REQUEST_STATUS_TEXT = """Event Request Update
+
+Hello {{contact_name}},
+
+Your event request has been updated to: {{status_label}}.
+
+{{event_date}}
+
+{{decline_reason}}
+
+{{message}}
+
+Thank you for your request.
+
+---
+This is an automated message from {{organization_name}}."""
+
+DEFAULT_EVENT_REQUEST_STATUS_SUBJECT = (
+    "Event Request Update — {{status_label}}"
+)
+
+
+# Default IT password reset notification email
+DEFAULT_IT_PASSWORD_NOTIFICATION_HTML = """<div class="container">
+    <div class="header">
+        <h1>IT Notice: Password Reset Requested</h1>
+    </div>
+    <div class="content">
+        <p>A password reset has been requested for the following user:</p>
+
+        <div class="details">
+            <p><strong>User:</strong> {{user_name}}</p>
+            <p><strong>Email:</strong> {{user_email}}</p>
+            <p><strong>Requested at:</strong> {{request_time}}</p>
+            <p><strong>IP Address:</strong> {{ip_address}}</p>
+        </div>
+
+        <p>This is an informational notice. No action is required unless the request appears suspicious.</p>
+    </div>
+    <div class="footer">
+        <p>This is an automated IT security notice from {{organization_name}}.</p>
+    </div>
+</div>"""
+
+DEFAULT_IT_PASSWORD_NOTIFICATION_TEXT = """IT Notice: Password Reset Requested
+
+A password reset has been requested for the following user:
+
+User: {{user_name}}
+Email: {{user_email}}
+Requested at: {{request_time}}
+IP Address: {{ip_address}}
+
+This is an informational notice. No action is required unless the request appears suspicious.
+
+---
+This is an automated IT security notice from {{organization_name}}."""
+
+DEFAULT_IT_PASSWORD_NOTIFICATION_SUBJECT = (
+    "[IT Notice] Password Reset Requested — {{organization_name}}"
+)
+
+
 class EmailTemplateService:
     """Service for managing and rendering email templates"""
 
@@ -1160,5 +1431,121 @@ class EmailTemplateService:
             logger.info(
                 f"Created default inactivity warning email template for org {organization_id}"
             )
+
+        # Check for election rollback template
+        existing = await self.get_template(
+            organization_id,
+            EmailTemplateType.ELECTION_ROLLBACK,
+            active_only=False,
+        )
+        if not existing:
+            template = await self.create_template(
+                organization_id=organization_id,
+                template_type=EmailTemplateType.ELECTION_ROLLBACK,
+                name="Election Rollback Alert",
+                subject=DEFAULT_ELECTION_ROLLBACK_SUBJECT,
+                html_body=DEFAULT_ELECTION_ROLLBACK_HTML,
+                text_body=DEFAULT_ELECTION_ROLLBACK_TEXT,
+                description=(
+                    "Sent to department leadership when an election is rolled "
+                    "back to a previous stage. Includes the reason and who performed it."
+                ),
+                allow_attachments=False,
+                created_by=created_by,
+            )
+            created.append(template)
+
+        # Check for election deleted template
+        existing = await self.get_template(
+            organization_id,
+            EmailTemplateType.ELECTION_DELETED,
+            active_only=False,
+        )
+        if not existing:
+            template = await self.create_template(
+                organization_id=organization_id,
+                template_type=EmailTemplateType.ELECTION_DELETED,
+                name="Election Deleted Alert",
+                subject=DEFAULT_ELECTION_DELETED_SUBJECT,
+                html_body=DEFAULT_ELECTION_DELETED_HTML,
+                text_body=DEFAULT_ELECTION_DELETED_TEXT,
+                description=(
+                    "Sent to department leadership when an election is permanently "
+                    "deleted. All ballots and results are removed."
+                ),
+                allow_attachments=False,
+                created_by=created_by,
+            )
+            created.append(template)
+
+        # Check for member archived template
+        existing = await self.get_template(
+            organization_id,
+            EmailTemplateType.MEMBER_ARCHIVED,
+            active_only=False,
+        )
+        if not existing:
+            template = await self.create_template(
+                organization_id=organization_id,
+                template_type=EmailTemplateType.MEMBER_ARCHIVED,
+                name="Member Archived Notification",
+                subject=DEFAULT_MEMBER_ARCHIVED_SUBJECT,
+                html_body=DEFAULT_MEMBER_ARCHIVED_HTML,
+                text_body=DEFAULT_MEMBER_ARCHIVED_TEXT,
+                description=(
+                    "Sent to admins when a dropped member is automatically archived "
+                    "after all department property has been returned."
+                ),
+                allow_attachments=False,
+                created_by=created_by,
+            )
+            created.append(template)
+
+        # Check for event request status template
+        existing = await self.get_template(
+            organization_id,
+            EmailTemplateType.EVENT_REQUEST_STATUS,
+            active_only=False,
+        )
+        if not existing:
+            template = await self.create_template(
+                organization_id=organization_id,
+                template_type=EmailTemplateType.EVENT_REQUEST_STATUS,
+                name="Event Request Status Update",
+                subject=DEFAULT_EVENT_REQUEST_STATUS_SUBJECT,
+                html_body=DEFAULT_EVENT_REQUEST_STATUS_HTML,
+                text_body=DEFAULT_EVENT_REQUEST_STATUS_TEXT,
+                description=(
+                    "Sent to the event requester and/or assigned coordinator when "
+                    "an event request status changes (e.g. submitted, scheduled, declined)."
+                ),
+                allow_attachments=False,
+                created_by=created_by,
+            )
+            created.append(template)
+
+        # Check for IT password notification template
+        existing = await self.get_template(
+            organization_id,
+            EmailTemplateType.IT_PASSWORD_NOTIFICATION,
+            active_only=False,
+        )
+        if not existing:
+            template = await self.create_template(
+                organization_id=organization_id,
+                template_type=EmailTemplateType.IT_PASSWORD_NOTIFICATION,
+                name="IT Password Reset Notice",
+                subject=DEFAULT_IT_PASSWORD_NOTIFICATION_SUBJECT,
+                html_body=DEFAULT_IT_PASSWORD_NOTIFICATION_HTML,
+                text_body=DEFAULT_IT_PASSWORD_NOTIFICATION_TEXT,
+                description=(
+                    "Sent to the IT team contacts when a user requests a password "
+                    "reset. Informational only — includes the user's name, email, "
+                    "and request IP address."
+                ),
+                allow_attachments=False,
+                created_by=created_by,
+            )
+            created.append(template)
 
         return created

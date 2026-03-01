@@ -33,6 +33,11 @@ class EmailTemplateType(str, enum.Enum):
     POST_SHIFT_VALIDATION = "post_shift_validation"
     PROPERTY_RETURN_REMINDER = "property_return_reminder"
     INACTIVITY_WARNING = "inactivity_warning"
+    ELECTION_ROLLBACK = "election_rollback"
+    ELECTION_DELETED = "election_deleted"
+    MEMBER_ARCHIVED = "member_archived"
+    EVENT_REQUEST_STATUS = "event_request_status"
+    IT_PASSWORD_NOTIFICATION = "it_password_notification"
     CUSTOM = "custom"
 
 
