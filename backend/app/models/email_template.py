@@ -61,7 +61,7 @@ class EmailTemplate(Base):
 
     # Template identification
     template_type = Column(
-        SQLEnum(EmailTemplateType),
+        SQLEnum(EmailTemplateType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
     name = Column(String(255), nullable=False)
