@@ -36,6 +36,16 @@
 | AUTH-30 | Register new account (when REGISTRATION_ENABLED=true) | Account created in pending/approval state |
 | AUTH-31 | Register when REGISTRATION_ENABLED=false | Registration form not shown or endpoint returns 403 |
 | AUTH-32 | Verify password expiration enforcement after 90 days | User forced to change password on login |
+| AUTH-33 | LDAP login flow (if LDAP_ENABLED=true) | Credentials validated against LDAP directory, account linked |
+| AUTH-34 | SAML SSO login flow (if configured) | Redirected to IdP, assertion validates, session created |
+| AUTH-35 | MFA/TOTP setup from user settings | QR code displayed, TOTP secret stored, backup codes generated |
+| AUTH-36 | Login with valid TOTP code after password | MFA challenge shown, correct code grants access |
+| AUTH-37 | Login with invalid TOTP code | MFA rejected, access denied |
+| AUTH-38 | Login with TOTP backup code | Access granted, backup code consumed (single-use) |
+| AUTH-39 | CSRF token present on state-changing requests | X-CSRF-Token header sent on POST/PUT/PATCH/DELETE |
+| AUTH-40 | CSRF token missing on state-changing request | Request rejected with 403 |
+| AUTH-41 | Concurrent refresh token race condition | Shared refreshPromise prevents duplicate refresh calls |
+| AUTH-42 | `has_session` flag cleared on logout | Page refresh after logout does not attempt loadUser API call |
 
 ## 2. Member Management
 
@@ -62,6 +72,16 @@
 | MEM-19 | View member list with search filter | Results filter by name, rank, station |
 | MEM-20 | View member list filtered by status | Only members of selected status shown |
 | MEM-21 | Contact info visibility when org disables it | Phone/email/address hidden from non-admin members |
+| MEM-22 | View member digital ID card | Card displays photo, name, rank, station, QR code, barcode |
+| MEM-23 | Print member ID card | Print-friendly layout renders correctly |
+| MEM-24 | Scan member QR code from ID card (camera) | Camera activates, QR decoded, navigates to member profile |
+| MEM-25 | Scan member barcode (Code128 membership number) | Barcode decoded, member looked up by membership number |
+| MEM-26 | Scan invalid/unknown QR code | Error message shown, scanner remains active |
+| MEM-27 | View member audit history timeline | Chronological log of all changes with event type filtering |
+| MEM-28 | Filter member audit history by event type | Only selected event types shown (profile_update, status_change, role_change, etc.) |
+| MEM-29 | Member audit history pagination (Load More) | Additional entries loaded without resetting scroll position |
+| MEM-30 | View own ID card as regular member | Own card accessible without special permission |
+| MEM-31 | View another member's ID card without permission | 403 Forbidden (requires members.view or members.manage) |
 
 ## 3. Role & Permission Management
 
@@ -106,6 +126,28 @@
 | EVT-19 | Event check-in monitoring page (admin) | Live view of check-ins updating |
 | EVT-20 | Event with role-based eligibility | Only members with matching roles see/can RSVP |
 | EVT-21 | Record actual start/end times for event | Actual times saved alongside scheduled times |
+| EVT-22 | Event reminder emails sent at configured intervals | Reminders sent per event's reminder_schedule (scheduled task) |
+| EVT-23 | Post-event validation notification | Organizer prompted to validate attendance after event ends |
+| EVT-24 | View past events tab | Historical events listed with attendance data |
+| EVT-25 | Event settings tab (admin) | Event module settings configurable (types, outreach settings, etc.) |
+
+## 4a. Event Requests / Public Outreach Pipeline
+
+| ID | Test | Expected Outcome |
+|---|---|---|
+| EREQ-01 | Submit public outreach event request | Request created in pipeline, assigned default status |
+| EREQ-02 | View event request pipeline (admin) | All requests listed with status, assignee, dates |
+| EREQ-03 | Advance request through pipeline stages | Status transitions recorded with timestamps |
+| EREQ-04 | Assign request to a coordinator | Assignee updated, coordinator notified |
+| EREQ-05 | Complete pipeline checklist tasks | Task completion recorded, progress tracked |
+| EREQ-06 | Add comment to event request | Comment saved with author attribution |
+| EREQ-07 | Schedule event request with room booking | Event scheduled, room reserved if available |
+| EREQ-08 | Postpone event request with new date | Postponement recorded, requestor notified |
+| EREQ-09 | Cancel event request (public-facing) | Request cancelled, cancellation communicated to requestor |
+| EREQ-10 | Send template email to requestor | Email sent using configured template with variables replaced |
+| EREQ-11 | View public event request status (unauthenticated) | Requestor can check status without logging in |
+| EREQ-12 | Configure pipeline settings (task list, defaults) | Settings saved, applied to new requests |
+| EREQ-13 | Community engagement tab: view outreach metrics | Metrics displayed for event coordinators |
 
 ## 5. Training Module
 
@@ -133,6 +175,29 @@
 | TRN-20 | Certification expiration alert (90/60/30/7 day) | Tiered alerts sent to members and training officers |
 | TRN-21 | Struggling member detection | Members falling behind flagged, notifications sent |
 | TRN-22 | View member training history page | Chronological list of all training with details |
+| TRN-23 | Training module config: update visibility settings (training officer) | Config saved, member-facing views respect visibility |
+| TRN-24 | Training module config: read visibility as regular member | Config returned without modify permission |
+| TRN-25 | View My Training aggregated page | Shows requirement progress, waivers, submissions, shift reports |
+| TRN-26 | Competency matrix / heat map (training officer) | Department-wide grid: members vs. requirements, color-coded by status |
+| TRN-27 | Competency matrix filter by specific requirements | Matrix shows only selected requirements |
+| TRN-28 | Competency matrix filter by specific members | Matrix shows only selected members |
+| TRN-29 | Historical training import via CSV (multi-step wizard) | CSV uploaded, unmatched courses mapped, preview shown, import confirmed |
+| TRN-30 | Historical import with unmatched courses | Wizard offers mapping to existing courses or creating new ones |
+| TRN-31 | Historical import preview with warnings | Rows with issues highlighted, valid rows still importable |
+| TRN-32 | Shift completion report: submit for trainee | Report created, pipeline progress auto-updated for shift/call/hour requirements |
+| TRN-33 | Shift completion report: review workflow (when report_review_required=true) | Report enters pending_review status, requires officer approval |
+| TRN-34 | Shift completion report: approve/reject review | Status updated, trainee sees only approved reports |
+| TRN-35 | Shift completion report: trainee views own reports | Only approved reports shown if review workflow is enabled |
+| TRN-36 | Shift completion report: trainee acknowledges report | Acknowledgment recorded with timestamp |
+| TRN-37 | Enrollment deadline warning (scheduled task) | Members approaching enrollment deadlines receive notifications |
+| TRN-38 | Leave of absence exempts member from training requirements | Months with active leave excluded from rolling-period calculations |
+| TRN-39 | External training provider: create with credentials | Provider created, credentials encrypted at rest |
+| TRN-40 | External training provider: test connection | Connection verified, success/failure reported |
+| TRN-41 | External training sync: trigger manual sync | Records fetched from provider, mapped to internal courses |
+| TRN-42 | External training: category mapping configuration | External categories mapped to internal training categories |
+| TRN-43 | External training: user mapping configuration | External user IDs mapped to internal member IDs |
+| TRN-44 | External training: bulk import from file | Bulk records imported with summary of successes/failures |
+| TRN-45 | Compliance matrix tab: view department compliance percentages | Per-requirement compliance % displayed |
 
 ## 6. Inventory Module
 
@@ -171,6 +236,14 @@
 | INV-31 | Departure clearance: resolve line items (returned, damaged, waived) | Each line disposition updated, counts recalculated |
 | INV-32 | Departure clearance: complete with all items resolved | Status → COMPLETED, triggers auto-archive check |
 | INV-33 | Departure clearance: force-close with outstanding items | Status → CLOSED_INCOMPLETE with notes |
+| INV-34 | Create storage area (rack, shelf, box) under a location/room | Storage area created with type and parent hierarchy |
+| INV-35 | Create nested storage area (box inside a shelf inside a rack) | Hierarchy maintained, displayed in tree view |
+| INV-36 | Assign inventory item to a storage area | Item linked to storage location, visible in storage view |
+| INV-37 | View storage area tree with contained items | Hierarchical view renders, items listed under correct area |
+| INV-38 | Delete storage area containing items | Prevented or items reassigned before deletion |
+| INV-39 | Property return reminder: 30-day overdue | Reminder email sent to dropped member with outstanding items |
+| INV-40 | Property return reminder: 90-day overdue | Escalation reminder sent, leadership notified |
+| INV-41 | Property return reminder: no duplicate reminders | Same threshold reminder not sent twice for same member |
 
 ## 7. Scheduling Module
 
@@ -188,6 +261,13 @@
 | SCH-10 | View weekly/monthly schedule | Calendar view with all shifts |
 | SCH-11 | Publish schedule to members | Members notified of published schedule |
 | SCH-12 | Coverage validation | Warning if minimum staffing not met |
+| SCH-13 | View open shifts available for signup | Open shifts listed, member can volunteer |
+| SCH-14 | Sign up for open shift | Member assigned to position, notified |
+| SCH-15 | View My Shifts tab | Personal upcoming shifts displayed |
+| SCH-16 | View shift detail panel | Full shift info: positions, assigned members, notes |
+| SCH-17 | Scheduling reports page | Shift statistics and coverage reports |
+| SCH-18 | Post-shift validation notification (scheduled task) | Officer prompted to validate attendance after shift ends |
+| SCH-19 | Member on leave excluded from shift scheduling | Leave-of-absence members not assigned or shown as available |
 
 ## 8. Elections Module
 
@@ -206,6 +286,8 @@
 | ELC-11 | Rollback election (admin) | Election reopened, results cleared |
 | ELC-12 | Delete draft election | Election removed |
 | ELC-13 | Voter eligibility: only members with matching roles can vote | Non-eligible members can't access ballot |
+| ELC-14 | Proxy voting: designate proxy voter | Proxy recorded, proxy can vote on behalf of member |
+| ELC-15 | Voter override: admin manually marks voter as eligible/ineligible | Override applied, voter access updated |
 
 ## 9. Meetings & Minutes
 
@@ -221,6 +303,10 @@
 | MTG-08 | Action item reminders (3 day, 1 day, overdue) | Notifications sent to assignees |
 | MTG-09 | View unified action items page | All action items across meetings in one view |
 | MTG-10 | Archive old minutes | Minutes moved to archive, still searchable |
+| MTG-11 | Attendance dashboard: secretary/leadership view | Per-member attendance %, meetings attended/waived, voting eligibility |
+| MTG-12 | Attendance dashboard: filter by meeting type | Only selected meeting types included in calculations |
+| MTG-13 | Quorum calculation with waived members excluded | Waived members excluded from quorum denominator |
+| MTG-14 | Voting eligibility based on attendance threshold | Members below attendance threshold marked ineligible with reason |
 
 ## 10. Documents Module
 
@@ -302,6 +388,11 @@
 | NOT-14 | Welcome email sent on new member creation | Email with temp password delivered |
 | NOT-15 | Property return email on member drop | Email with outstanding items list sent |
 | NOT-16 | Inventory change email (consolidated, 1-hour delay) | Single email per member with net changes |
+| NOT-17 | Scheduled email: create email scheduled for future delivery | Email saved in pending state with scheduled timestamp |
+| NOT-18 | Scheduled email: processed at scheduled time | Scheduled task sends email when due time arrives |
+| NOT-19 | Scheduled email: cancel before delivery | Email cancelled, not sent |
+| NOT-20 | Event reminder email sent per event's reminder_schedule | Reminders sent at configured intervals before event start |
+| NOT-21 | Property return reminder: 30-day and 90-day thresholds | Tiered reminders sent to dropped members with outstanding items |
 
 ## 15. Dashboard & Reports
 
@@ -318,6 +409,9 @@
 | DSH-09 | Error monitoring page (admin) | Error logs listed with details |
 | DSH-10 | Scheduled tasks page: list all tasks | All tasks shown with schedule info |
 | DSH-11 | Scheduled tasks page: manually trigger task | Task runs, result returned |
+| DSH-12 | Platform analytics page (IT admin, settings.manage) | User adoption, module usage, system health metrics displayed |
+| DSH-13 | Platform analytics: login trend chart | Daily login counts over last 30 days |
+| DSH-14 | Platform analytics: module usage breakdown | Per-module activity counts (events, training, inventory, etc.) |
 
 ## 16. Organization & Settings
 
@@ -332,6 +426,18 @@
 | SET-07 | Department setup checklist | Shows completion status of setup steps |
 | SET-08 | Theme switching (light / dark / system) | UI theme changes appropriately |
 | SET-09 | Navigation layout preference (top / side) | Layout switches correctly |
+| SET-10 | Theme switching: high-contrast mode | High-contrast CSS class applied, enhanced contrast visible |
+| SET-11 | Theme switching: system preference auto-detect | Theme follows OS light/dark preference via media query |
+| SET-12 | Onboarding wizard: first-time organization setup | Multi-step wizard guides through org, navigation, email, modules |
+| SET-13 | Onboarding wizard: auto-save progress | Partially completed steps saved, resumable on return |
+| SET-14 | Onboarding wizard: skip optional steps | Optional steps skippable without blocking completion |
+| SET-15 | Onboarding wizard: complete all steps | Onboarding marked complete, full app accessible |
+| SET-16 | Department setup checklist: tracks completion per category | Steps show complete/incomplete across org setup, members, modules |
+| SET-17 | Configure operational ranks (CRUD) | Ranks created, edited, deactivated per organization |
+| SET-18 | Reorder operational ranks | Sort order updated, reflected in member forms |
+| SET-19 | Operational ranks auto-seeded for new organization | Default ranks (Firefighter, Lieutenant, Captain, etc.) created on first access |
+| SET-20 | Configure membership tiers | Tier definitions saved with years-of-service thresholds |
+| SET-21 | Membership tier auto-advancement (scheduled task) | Members promoted to higher tiers based on years of service |
 
 ## 17. Membership Pipeline (Prospective Members)
 
@@ -355,8 +461,148 @@
 | PUB-04 | Access `/ballot` without token | Access denied |
 | PUB-05 | Access `/display/:code` (location kiosk) | Kiosk display renders without login |
 | PUB-06 | Access any protected route without auth | Redirected to login |
+| PUB-07 | Public event request status page (no auth) | Requestor can view their request status |
 
-## 19. Security Testing
+## 19. Skills Testing Module
+
+| ID | Test | Expected Outcome |
+|---|---|---|
+| SKL-01 | Create skill template with sections and criteria | Template saved in DRAFT status with all fields |
+| SKL-02 | Edit skill template (add/remove sections, criteria) | Changes saved, version tracked |
+| SKL-03 | Publish skill template | Status → PUBLISHED, visible to evaluators |
+| SKL-04 | Archive skill template | Status → ARCHIVED, no longer usable for new tests |
+| SKL-05 | Filter templates by status (draft/published/archived) | Only matching templates shown |
+| SKL-06 | Filter templates by category | Only matching category shown |
+| SKL-07 | Template visibility: officers see all, members see all_members only | Visibility filtering applied based on user role |
+| SKL-08 | Start skill test session from published template | Test session created with all criteria from template |
+| SKL-09 | Score individual criteria during test (pass/fail) | Score recorded per criterion |
+| SKL-10 | Add notes to criteria during test | Notes saved alongside score |
+| SKL-11 | Complete skill test session | Test finalized with overall pass/fail result |
+| SKL-12 | View skill test history for a member | All past tests listed with results |
+| SKL-13 | View skill testing summary statistics | Aggregate pass rates, test counts, trends displayed |
+| SKL-14 | Access skill testing without training.manage permission | Read-only access, cannot create templates or grade tests |
+
+## 20. Admin Hours Module
+
+| ID | Test | Expected Outcome |
+|---|---|---|
+| ADH-01 | Create admin hours category (admin_hours.manage) | Category created with name, description, active status |
+| ADH-02 | Edit admin hours category | Category updated |
+| ADH-03 | Deactivate admin hours category | Category hidden from new entries, existing entries preserved |
+| ADH-04 | Clock in via QR code scan | Clock-in recorded with timestamp, active session started |
+| ADH-05 | Clock out via QR code scan | Clock-out recorded, session duration calculated |
+| ADH-06 | Clock in manually (category, date, start time) | Manual entry created |
+| ADH-07 | Clock out of active session manually | Session closed with end time |
+| ADH-08 | View active clock-in sessions (admin) | All currently clocked-in members listed |
+| ADH-09 | Auto-close stale sessions exceeding max duration | Stale sessions auto-closed after configurable hour limit |
+| ADH-10 | Submit manual hours entry for approval | Entry created in pending state |
+| ADH-11 | Approve admin hours entry (admin_hours.manage) | Entry approved, hours credited |
+| ADH-12 | Reject admin hours entry with reason | Entry rejected, submitter notified |
+| ADH-13 | Bulk approve multiple entries | All selected entries approved at once |
+| ADH-14 | View personal admin hours summary | Total hours by category, period, and status |
+| ADH-15 | Export admin hours data | CSV or report generated |
+| ADH-16 | Edit previously submitted entry | Entry updated, re-enters approval workflow if required |
+| ADH-17 | View admin hours QR code page | QR code displayed for clock-in scanning |
+
+## 21. Locations Module
+
+| ID | Test | Expected Outcome |
+|---|---|---|
+| LOC-01 | Create location with address and details | Location record created with all fields |
+| LOC-02 | Edit location (name, address, capacity, building/floor/room) | Changes saved |
+| LOC-03 | Deactivate location | Location hidden from active lists, historical data preserved |
+| LOC-04 | Filter locations by active status | Only matching locations shown |
+| LOC-05 | Associate location with a facility | Facility linkage saved |
+| LOC-06 | Location display code generated | Unique display code assigned for kiosk use |
+| LOC-07 | Location kiosk page renders without auth (`/display/:code`) | Public kiosk display shows location info, upcoming events |
+| LOC-08 | Location kiosk with invalid display code | 404 or error page shown |
+| LOC-09 | View events at a specific location | Events filtered by location |
+| LOC-10 | Location used as event venue | Location selectable when creating events |
+
+## 22. Member Leaves of Absence
+
+| ID | Test | Expected Outcome |
+|---|---|---|
+| LOA-01 | Create leave of absence for a member (officer) | Leave created with type, reason, start/end dates |
+| LOA-02 | Create open-ended leave (no end date) | Permanent leave created, member exempt until deactivated |
+| LOA-03 | Update leave dates/reason | Leave record updated |
+| LOA-04 | Deactivate (end) a leave of absence | Leave marked inactive, member returns to normal obligations |
+| LOA-05 | View own leaves of absence | Personal leave history displayed |
+| LOA-06 | View all leaves as officer | Organization-wide leaves listed |
+| LOA-07 | Leave exempts member from training requirements | Months with active leave excluded from rolling-period requirement calculations |
+| LOA-08 | Leave with exempt_from_training_waiver override | Training requirements remain active despite leave |
+| LOA-09 | Leave auto-links to training waiver | Linked waiver ID stored, training module respects exemption |
+| LOA-10 | Create leave without officer permission | 403 Forbidden (requires members.manage or equivalent) |
+
+## 23. Public Portal Module
+
+| ID | Test | Expected Outcome |
+|---|---|---|
+| PP-01 | Enable public portal for organization | Portal config created/updated, enabled=true |
+| PP-02 | Disable public portal | All public API endpoints return 503 |
+| PP-03 | Create API key for public portal | Key generated, hashed version stored, plaintext shown once |
+| PP-04 | Update API key (name, rate limit, expiry) | Key metadata updated |
+| PP-05 | Revoke API key | Key disabled, requests with that key rejected |
+| PP-06 | Authenticate public API request with valid API key | Request authenticated, data returned |
+| PP-07 | Authenticate public API request with invalid/revoked key | 401 Unauthorized |
+| PP-08 | Configure data whitelist (fields visible per category) | Only whitelisted fields returned in public API responses |
+| PP-09 | Bulk update data whitelist | Multiple field permissions updated at once |
+| PP-10 | Rate limiting per API key | Requests exceeding per-key rate limit blocked |
+| PP-11 | IP-based rate limiting on public API | Requests exceeding per-IP limit blocked |
+| PP-12 | Public API: fetch organization info | Organization name, description returned (respecting whitelist) |
+| PP-13 | Public API: fetch public events | Upcoming public events returned |
+| PP-14 | Public API: fetch organization stats | Member count, event stats returned (respecting whitelist) |
+| PP-15 | View public portal access logs | Request logs listed with IP, key, endpoint, timestamp |
+| PP-16 | View public portal usage statistics | Request counts, top endpoints, error rates displayed |
+| PP-17 | Anomaly detection on public API access | Unusual access patterns flagged in security monitoring |
+| PP-18 | Configure CORS allowed origins for public portal | Only whitelisted origins can make requests |
+
+## 24. Integrations Module
+
+| ID | Test | Expected Outcome |
+|---|---|---|
+| INT-01 | View integration catalog | All available integrations listed with status (available/coming_soon) |
+| INT-02 | Auto-seed integration catalog for new organization | Default integrations created on first access |
+| INT-03 | Enable Google Calendar integration | Integration enabled, configuration saved |
+| INT-04 | Enable Slack integration with webhook URL | Webhook configured, test notification sent |
+| INT-05 | Enable CSV Import/Export integration | Data import/export functionality activated |
+| INT-06 | Disable an active integration | Integration disabled, syncing stopped |
+| INT-07 | View integration configuration details | Current config displayed with connection status |
+| INT-08 | Integration with invalid credentials | Error shown, integration remains disabled |
+
+## 25. Scheduled Tasks & Automation
+
+| ID | Test | Expected Outcome |
+|---|---|---|
+| TASK-01 | Cert expiration alerts (daily, 6:00 AM) | Tiered alerts sent: 90/60/30/7-day + expired escalation |
+| TASK-02 | Struggling member check (weekly, Monday 7:00 AM) | Members falling behind on programs flagged, notifications sent |
+| TASK-03 | Enrollment deadline warnings (weekly, Monday 7:30 AM) | Members approaching enrollment deadlines warned |
+| TASK-04 | Membership tier auto-advancement (monthly, 1st 8:00 AM) | Members promoted based on years of service |
+| TASK-05 | Action item reminders (daily, 7:00 AM) | 3-day, 1-day, and overdue reminders sent to assignees |
+| TASK-06 | Inventory notification processing (every 15 min) | Consolidated emails sent for changes older than 1 hour |
+| TASK-07 | Event reminders (every 30 min) | Reminders sent per event's reminder_schedule setting |
+| TASK-08 | Post-event validation (every 30 min) | Organizers prompted to validate attendance after event ends |
+| TASK-09 | Post-shift validation (every 30 min) | Officers prompted to validate attendance after shift ends |
+| TASK-10 | Audit log archival (weekly, Sunday 2:00 AM) | Integrity checkpoint created, chain verified, old logs archived |
+| TASK-11 | Scheduled email processing (every 5 min) | Pending emails sent when due time arrives |
+| TASK-12 | Task runs for all organizations in system | Multi-org task execution processes each org independently |
+| TASK-13 | Task failure in one org doesn't block others | Error logged for failed org, remaining orgs still processed |
+
+## 26. Security Monitoring
+
+| ID | Test | Expected Outcome |
+|---|---|---|
+| SMON-01 | View security status dashboard (audit.view) | Overall status, log integrity, alert counts displayed |
+| SMON-02 | View security alerts with filtering | Alerts filterable by threat level and type |
+| SMON-03 | Acknowledge security alert | Alert marked as acknowledged, removed from active list |
+| SMON-04 | Log integrity verification | Hash chain verified, results reported |
+| SMON-05 | Query audit logs with date/type/user filters | Matching log entries returned |
+| SMON-06 | Export audit logs | Audit data exported for compliance review |
+| SMON-07 | Intrusion detection status | IDS metrics and alert counts displayed |
+| SMON-08 | Data exfiltration monitoring | Unusual data access patterns flagged |
+| SMON-09 | Security status view logged in audit trail | Viewing security dashboard itself is audited |
+
+## 27. Security Testing (Penetration)
 
 | ID | Test | Expected Outcome |
 |---|---|---|
@@ -395,8 +641,23 @@
 | SEC-33 | Verify HTTPS enforcement in production config | HTTP requests redirected to HTTPS |
 | SEC-34 | Verify Redis password is set in production | Connection requires authentication |
 | SEC-35 | Verify database SSL is enabled in production | Connection encrypted |
+| SEC-36 | Public portal API key brute force | Rate limiting prevents key enumeration |
+| SEC-37 | Public portal data whitelist bypass | Non-whitelisted fields never returned regardless of request crafting |
+| SEC-38 | Verify httpOnly flag on auth cookies | Access/refresh tokens not readable via JavaScript (document.cookie) |
+| SEC-39 | Verify Secure flag on auth cookies in production | Cookies only sent over HTTPS |
+| SEC-40 | Verify SameSite=Strict on auth cookies | Cookies not sent on cross-site requests |
+| SEC-41 | CSRF double-submit validation | X-CSRF-Token header must match csrf_token cookie value |
+| SEC-42 | API cache: HIPAA-sensitive endpoints not cached | Endpoints in UNCACHEABLE_PREFIXES (/auth/, /users/, /security/, etc.) bypass cache |
+| SEC-43 | PWA service worker: API responses not cached | NetworkOnly strategy for all /api/ routes |
+| SEC-44 | Source maps disabled in production build | No .map files served, no sourceMappingURL in bundles |
+| SEC-45 | Encrypted fields readable only with correct ENCRYPTION_KEY | Changing key makes stored encrypted data unreadable |
+| SEC-46 | External training provider credentials encrypted at rest | Provider API keys/passwords stored encrypted in database |
+| SEC-47 | Legacy token cleanup from localStorage | legacySensitiveData utility removes any old tokens on startup |
+| SEC-48 | XSS in event request comments | HTML escaped before display |
+| SEC-49 | XSS in training record notes | HTML escaped before display |
+| SEC-50 | Admin hours QR code data integrity | QR payload validated server-side, cannot be spoofed for wrong user/org |
 
-## 20. Accessibility Testing
+## 28. Accessibility Testing
 
 | ID | Test | Expected Outcome |
 |---|---|---|
@@ -432,8 +693,22 @@
 | A11Y-30 | Touch targets (mobile) | All interactive elements at least 44x44px |
 | A11Y-31 | Autocomplete attributes on form fields | Login fields have `autocomplete="username"` / `autocomplete="current-password"` |
 | A11Y-32 | ARIA live regions for dynamic content | Toast notifications, search results use `aria-live` |
+| A11Y-33 | Color contrast: high-contrast theme | All elements meet enhanced contrast ratios (7:1 normal, 4.5:1 large) |
+| A11Y-34 | Keyboard navigation: command palette open/navigate/select | Cmd/Ctrl+K opens, arrow keys navigate, Enter selects, Escape closes |
+| A11Y-35 | Keyboard navigation: date range picker | Dates selectable via keyboard without mouse |
+| A11Y-36 | Keyboard navigation: file dropzone | Files selectable via Enter/Space on dropzone, keyboard-accessible file dialog |
+| A11Y-37 | Keyboard navigation: inline edit fields | Enter activates edit mode, Escape cancels, Enter/Tab confirms |
+| A11Y-38 | Keyboard navigation: collapsible sections | Enter/Space toggles, state announced to screen reader |
+| A11Y-39 | Keyboard navigation: sortable table headers | Enter/Space toggles sort, current sort direction announced |
+| A11Y-40 | Keyboard navigation: pagination controls | Page numbers, next/prev reachable via Tab, activatable via Enter |
+| A11Y-41 | Screen reader: breadcrumb navigation | Current page position announced in breadcrumb trail |
+| A11Y-42 | Screen reader: confirm dialog | Dialog role, title, and action buttons properly announced |
+| A11Y-43 | Screen reader: progress steps (onboarding, wizards) | Current step number and label announced |
+| A11Y-44 | Screen reader: skeleton loading states | Loading placeholder announced as content loading |
+| A11Y-45 | Screen reader: empty state messages | Empty state description read correctly |
+| A11Y-46 | Screen reader: tooltip content | Tooltip content associated via aria-describedby |
 
-## 21. Edge Cases & Stress Testing
+## 29. Edge Cases & Stress Testing
 
 | ID | Test | Expected Outcome |
 |---|---|---|
@@ -457,8 +732,33 @@
 | EDGE-18 | API response for deleted/non-existent resource | Clean 404 with message, no stack trace |
 | EDGE-19 | Session timeout during long form fill | Form data preserved or user warned before timeout |
 | EDGE-20 | Rapid-fire button clicks (double submit) | Action only executes once |
+| EDGE-21 | API cache invalidation after mutation | POST/PUT/PATCH/DELETE to a resource invalidates cached GETs for that URL prefix |
+| EDGE-22 | API cache stale-while-revalidate behavior | Stale cache entries (30-90s old) served immediately, background revalidation fires |
+| EDGE-23 | API cache LRU eviction at 200 entries | Oldest entries evicted when cache exceeds 200 entries |
+| EDGE-24 | lazyWithRetry: chunk load failure after deployment | Module re-fetched with new build ID, user sees fresh chunk |
+| EDGE-25 | lazyWithRetry: permanent chunk failure | Error boundary catches after retries exhausted |
+| EDGE-26 | PWA update detected while user is active | Update notification shown, user can defer or apply |
+| EDGE-27 | Pull-to-refresh on mobile PWA | Page data refreshed on pull gesture |
+| EDGE-28 | WebSocket reconnection (inventory real-time updates) | Exponential backoff reconnect, max delay 30s |
+| EDGE-29 | WebSocket disconnect during inventory batch operation | Operation completes via HTTP, UI updates on reconnect |
+| EDGE-30 | Idle timer: session timeout warning before logout | Warning shown before HIPAA timeout, option to extend |
+| EDGE-31 | Unsaved changes warning on navigation away | Browser confirmation dialog shown when leaving page with unsaved form data |
+| EDGE-32 | Leave of absence spanning requirement calculation period | Leave months correctly excluded from training compliance calculations |
+| EDGE-33 | Member with active leave assigned to shift | Warning shown or assignment prevented |
+| EDGE-34 | Delete training requirement with existing progress records | Graceful handling: progress records orphaned or cleaned up |
+| EDGE-35 | Delete election while voting is in progress | Prevented or votes preserved with clear error |
+| EDGE-36 | Concurrent clock-in: member already clocked in tries again | Second clock-in rejected, active session shown |
+| EDGE-37 | Admin hours stale session: clock-in exceeds max allowed duration | Session auto-closed by scheduled task, logged for review |
+| EDGE-38 | Create training program with circular phase dependencies | Validation rejects circular dependency |
+| EDGE-39 | Inventory batch operation: camera permission denied | Graceful fallback to manual code entry |
+| EDGE-40 | Public form submission with browser back button | Re-submission prevented or gracefully handled |
+| EDGE-41 | Election with ranked-choice tie | Tiebreaker rules applied or tie reported |
+| EDGE-42 | Very large CSV import (5000+ rows member import) | Pagination of results, progress indicator, no server timeout |
+| EDGE-43 | Organization timezone change after data exists | Historical dates display correctly in old timezone, new dates use new timezone |
+| EDGE-44 | DST transition: event/shift spanning clock change | Start/end times correctly adjusted for DST |
+| EDGE-45 | Multi-tenant data isolation: verify all queries include org_id filter | No endpoint returns data from other organizations |
 
-## 22. Improvements & Future-Proofing Recommendations
+## 30. Improvements & Future-Proofing Recommendations
 
 | ID | Area | Recommendation | Priority |
 |---|---|---|---|
