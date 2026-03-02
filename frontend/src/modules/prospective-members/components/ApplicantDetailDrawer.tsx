@@ -65,6 +65,7 @@ const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
   manual_approval: CheckCircle,
   meeting: CalendarCheck,
   status_page_toggle: Globe,
+  automated_email: Mail,
 };
 
 export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({

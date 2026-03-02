@@ -19,6 +19,7 @@ import {
   Globe,
   Loader2,
   AlertCircle,
+  Mail,
 } from 'lucide-react';
 import type {
   PipelineStage,
@@ -32,6 +33,7 @@ import type {
   MeetingStageConfig,
   MeetingType,
   StatusPageToggleConfig,
+  AutomatedEmailStageConfig,
   StageConfig,
 } from '../types';
 import { DEFAULT_ELECTION_PACKAGE_FIELDS } from '../types';
@@ -83,6 +85,12 @@ const STAGE_TYPE_OPTIONS: { value: StageType; label: string; icon: React.Element
     icon: Globe,
     description: 'Activate the public status page for the prospect at this stage.',
   },
+  {
+    value: 'automated_email',
+    label: 'Automated Email',
+    icon: Mail,
+    description: 'Send an automated email to the prospect at this stage.',
+  },
 ];
 
 const MEETING_TYPE_OPTIONS: { value: MeetingType; label: string; description: string }[] = [
@@ -104,6 +112,17 @@ const DEFAULT_CONFIGS: Record<StageType, () => StageConfig> = {
   manual_approval: () => ({ approver_roles: [], require_notes: false }),
   meeting: () => ({ meeting_type: 'chief_meeting' as MeetingType, meeting_description: '' }),
   status_page_toggle: () => ({ enable_public_status: true, custom_message: '' }),
+  automated_email: () => ({
+    email_subject: 'Welcome to the Membership Process',
+    include_welcome: true,
+    welcome_message: '',
+    include_faq_link: false,
+    faq_url: '',
+    include_next_meeting: false,
+    next_meeting_details: '',
+    include_status_tracker: false,
+    custom_sections: [],
+  }),
 };
 
 export const StageConfigModal: React.FC<StageConfigModalProps> = ({
@@ -232,6 +251,11 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
       }
     }
 
+    if (stageType === 'automated_email') {
+      const c = config as AutomatedEmailStageConfig;
+      if (!c.email_subject.trim()) newErrors.email_subject = 'Email subject is required';
+    }
+
     if (hasTimeoutOverride) {
       if (!Number.isFinite(timeoutOverrideDays) || timeoutOverrideDays < 1) {
         newErrors.timeout_override = 'Timeout override must be at least 1 day';
@@ -270,6 +294,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   const approvalConfig = config as ManualApprovalConfig;
   const meetingConfig = config as MeetingStageConfig;
   const statusPageConfig = config as StatusPageToggleConfig;
+  const emailConfig = config as AutomatedEmailStageConfig;
 
   return (
     <div
@@ -748,6 +773,218 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     rows={2}
                     className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring resize-none"
                   />
+                </div>
+              </div>
+            )}
+
+            {/* Automated Email Config */}
+            {stageType === 'automated_email' && (
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="stage-email-subject" className="block text-sm text-theme-text-muted mb-2">
+                    Email Subject
+                  </label>
+                  <input
+                    id="stage-email-subject"
+                    type="text"
+                    value={emailConfig.email_subject}
+                    onChange={(e) =>
+                      setConfig({ ...emailConfig, email_subject: e.target.value })
+                    }
+                    placeholder="e.g., Welcome to the Membership Process"
+                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  />
+                  {errors.email_subject && (
+                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.email_subject}</p>
+                  )}
+                </div>
+
+                <p className="text-xs text-theme-text-muted">
+                  Configure the sections to include in the email. The prospect's name will be used as the greeting automatically.
+                </p>
+
+                {/* Welcome Section */}
+                <div className="rounded-lg border border-theme-surface-border p-4 space-y-3">
+                  <label className="flex items-center gap-2 text-sm font-medium text-theme-text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={emailConfig.include_welcome}
+                      onChange={(e) =>
+                        setConfig({ ...emailConfig, include_welcome: e.target.checked })
+                      }
+                      className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                    />
+                    Welcome Message
+                  </label>
+                  {emailConfig.include_welcome && (
+                    <textarea
+                      value={emailConfig.welcome_message ?? ''}
+                      onChange={(e) =>
+                        setConfig({ ...emailConfig, welcome_message: e.target.value })
+                      }
+                      placeholder="Thank you for your interest in joining our department! We look forward to getting to know you through this process."
+                      rows={3}
+                      aria-label="Welcome message content"
+                      className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring resize-none"
+                    />
+                  )}
+                </div>
+
+                {/* FAQ Link Section */}
+                <div className="rounded-lg border border-theme-surface-border p-4 space-y-3">
+                  <label className="flex items-center gap-2 text-sm font-medium text-theme-text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={emailConfig.include_faq_link}
+                      onChange={(e) =>
+                        setConfig({ ...emailConfig, include_faq_link: e.target.checked })
+                      }
+                      className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                    />
+                    Membership FAQ Link
+                  </label>
+                  {emailConfig.include_faq_link && (
+                    <input
+                      type="url"
+                      value={emailConfig.faq_url ?? ''}
+                      onChange={(e) =>
+                        setConfig({ ...emailConfig, faq_url: e.target.value })
+                      }
+                      placeholder="https://your-department.com/membership-faq"
+                      aria-label="FAQ URL"
+                      className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    />
+                  )}
+                </div>
+
+                {/* Next Meeting Section */}
+                <div className="rounded-lg border border-theme-surface-border p-4 space-y-3">
+                  <label className="flex items-center gap-2 text-sm font-medium text-theme-text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={emailConfig.include_next_meeting}
+                      onChange={(e) =>
+                        setConfig({ ...emailConfig, include_next_meeting: e.target.checked })
+                      }
+                      className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                    />
+                    Next Informational Meeting Details
+                  </label>
+                  {emailConfig.include_next_meeting && (
+                    <textarea
+                      value={emailConfig.next_meeting_details ?? ''}
+                      onChange={(e) =>
+                        setConfig({ ...emailConfig, next_meeting_details: e.target.value })
+                      }
+                      placeholder="Our next informational meeting is on the first Monday of the month at 7 PM at Station 1. All prospective members are encouraged to attend."
+                      rows={3}
+                      aria-label="Next meeting details"
+                      className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring resize-none"
+                    />
+                  )}
+                </div>
+
+                {/* Application Tracker Section */}
+                <div className="rounded-lg border border-theme-surface-border p-4 space-y-2">
+                  <label className="flex items-center gap-2 text-sm font-medium text-theme-text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={emailConfig.include_status_tracker}
+                      onChange={(e) =>
+                        setConfig({ ...emailConfig, include_status_tracker: e.target.checked })
+                      }
+                      className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                    />
+                    Application Tracker Link
+                  </label>
+                  <p className="text-xs text-theme-text-muted ml-6">
+                    Includes a link to the prospect's public status page so they can track their application progress.
+                    Requires the public status page to be enabled.
+                  </p>
+                </div>
+
+                {/* Custom Sections */}
+                <div className="pt-2">
+                  <h4 className="text-sm font-medium text-theme-text-secondary mb-3">Custom Sections</h4>
+                  {(emailConfig.custom_sections ?? []).map((section, idx) => (
+                    <div key={section.id} className="rounded-lg border border-theme-surface-border p-4 mb-3 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="flex items-center gap-2 text-sm font-medium text-theme-text-secondary">
+                          <input
+                            type="checkbox"
+                            checked={section.enabled}
+                            onChange={(e) => {
+                              const updated = [...(emailConfig.custom_sections ?? [])];
+                              const item = updated[idx];
+                              if (item) {
+                                updated[idx] = { ...item, enabled: e.target.checked };
+                                setConfig({ ...emailConfig, custom_sections: updated });
+                              }
+                            }}
+                            className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                          />
+                          Custom Section
+                        </label>
+                        <button
+                          onClick={() => {
+                            const updated = (emailConfig.custom_sections ?? []).filter((_, i) => i !== idx);
+                            setConfig({ ...emailConfig, custom_sections: updated });
+                          }}
+                          className="text-theme-text-muted hover:text-red-700 dark:hover:text-red-400 transition-colors"
+                          aria-label={`Remove custom section ${idx + 1}`}
+                        >
+                          <Trash2 className="w-4 h-4" aria-hidden="true" />
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        value={section.title}
+                        onChange={(e) => {
+                          const updated = [...(emailConfig.custom_sections ?? [])];
+                          const item = updated[idx];
+                          if (item) {
+                            updated[idx] = { ...item, title: e.target.value };
+                            setConfig({ ...emailConfig, custom_sections: updated });
+                          }
+                        }}
+                        placeholder="Section title"
+                        aria-label={`Custom section ${idx + 1} title`}
+                        className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                      />
+                      <textarea
+                        value={section.content}
+                        onChange={(e) => {
+                          const updated = [...(emailConfig.custom_sections ?? [])];
+                          const item = updated[idx];
+                          if (item) {
+                            updated[idx] = { ...item, content: e.target.value };
+                            setConfig({ ...emailConfig, custom_sections: updated });
+                          }
+                        }}
+                        placeholder="Section content..."
+                        rows={2}
+                        aria-label={`Custom section ${idx + 1} content`}
+                        className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring resize-none"
+                      />
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => {
+                      const newSection = {
+                        id: crypto.randomUUID(),
+                        title: '',
+                        content: '',
+                        enabled: true,
+                      };
+                      setConfig({
+                        ...emailConfig,
+                        custom_sections: [...(emailConfig.custom_sections ?? []), newSection],
+                      });
+                    }}
+                    className="flex items-center gap-1 text-sm text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
+                  >
+                    <Plus className="w-3 h-3" aria-hidden="true" /> Add custom section
+                  </button>
                 </div>
               </div>
             )}

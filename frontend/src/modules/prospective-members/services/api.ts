@@ -72,6 +72,8 @@ function mapStageTypeToBackend(stageType: StageType): { step_type: string; actio
       return { step_type: 'action', action_type: 'schedule_meeting' };
     case 'status_page_toggle':
       return { step_type: 'action', action_type: 'custom' };
+    case 'automated_email':
+      return { step_type: 'action', action_type: 'send_email' };
     case 'manual_approval':
     default:
       return { step_type: 'checkbox' };
@@ -83,6 +85,7 @@ function mapStepTypeToFrontend(stepType: string, actionType?: string | null, con
   if (stepType === 'action') {
     if (actionType === 'collect_document') return 'document_upload';
     if (actionType === 'schedule_meeting') return 'meeting';
+    if (actionType === 'send_email') return 'automated_email';
     // Distinguish between form_submission, election_vote, and status_page_toggle
     // by inspecting the config JSON
     if (config && 'enable_public_status' in config) return 'status_page_toggle';
@@ -111,6 +114,18 @@ function getDefaultStageConfig(stageType: StageType): PipelineStage['config'] {
       return { meeting_type: 'chief_meeting', meeting_description: '' };
     case 'status_page_toggle':
       return { enable_public_status: true, custom_message: '' };
+    case 'automated_email':
+      return {
+        email_subject: 'Welcome to the Membership Process',
+        include_welcome: true,
+        welcome_message: '',
+        include_faq_link: false,
+        faq_url: '',
+        include_next_meeting: false,
+        next_meeting_details: '',
+        include_status_tracker: false,
+        custom_sections: [],
+      };
     case 'manual_approval':
     default:
       return { approver_roles: [], require_notes: false };

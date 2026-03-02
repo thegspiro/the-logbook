@@ -305,10 +305,103 @@ describe('StageConfigModal', () => {
   });
 
   // =========================================================================
-  // All 6 Stage Types Present
+  // Automated Email Stage Type Tests
   // =========================================================================
 
-  it('shows all 6 stage type options', () => {
+  it('displays automated email stage type option', () => {
+    render(<StageConfigModal {...defaultProps} />);
+    expect(screen.getByText('Automated Email')).toBeInTheDocument();
+    expect(screen.getByText('Send an automated email to the prospect at this stage.')).toBeInTheDocument();
+  });
+
+  it('shows email config sections when automated email is selected', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Automated Email'));
+
+    expect(screen.getByLabelText('Email Subject')).toBeInTheDocument();
+    expect(screen.getByText('Welcome Message')).toBeInTheDocument();
+    expect(screen.getByText('Membership FAQ Link')).toBeInTheDocument();
+    expect(screen.getByText('Next Informational Meeting Details')).toBeInTheDocument();
+    expect(screen.getByText('Application Tracker Link')).toBeInTheDocument();
+  });
+
+  it('saves automated email stage with correct config', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Automated Email'));
+    await user.type(screen.getByLabelText(/stage name/i), 'Welcome Email');
+
+    // Subject should have a default value
+    const subjectInput = screen.getByLabelText('Email Subject');
+    await user.clear(subjectInput);
+    await user.type(subjectInput, 'Welcome to Our Department!');
+
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(defaultProps.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Welcome Email',
+        stage_type: 'automated_email',
+        config: expect.objectContaining({
+          email_subject: 'Welcome to Our Department!',
+          include_welcome: true,
+        }) as unknown,
+      })
+    );
+  });
+
+  it('validates that email subject is required', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Automated Email'));
+    await user.type(screen.getByLabelText(/stage name/i), 'Welcome Email');
+
+    // Clear the default subject
+    const subjectInput = screen.getByLabelText('Email Subject');
+    await user.clear(subjectInput);
+
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(screen.getByText('Email subject is required')).toBeInTheDocument();
+    expect(defaultProps.onSave).not.toHaveBeenCalled();
+  });
+
+  it('can toggle optional email sections on and off', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Automated Email'));
+
+    // FAQ link should be unchecked by default, check it
+    const faqCheckbox = screen.getByRole('checkbox', { name: 'Membership FAQ Link' });
+    expect(faqCheckbox).not.toBeChecked();
+    await user.click(faqCheckbox);
+
+    // URL input should now appear
+    expect(screen.getByLabelText('FAQ URL')).toBeInTheDocument();
+  });
+
+  it('can add custom sections', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Automated Email'));
+
+    await user.click(screen.getByText('Add custom section'));
+
+    // Custom section fields should appear
+    expect(screen.getByText('Custom Section')).toBeInTheDocument();
+  });
+
+  // =========================================================================
+  // All 7 Stage Types Present
+  // =========================================================================
+
+  it('shows all 7 stage type options', () => {
     render(<StageConfigModal {...defaultProps} />);
     expect(screen.getByText('Form Submission')).toBeInTheDocument();
     expect(screen.getByText('Document Upload')).toBeInTheDocument();
@@ -316,5 +409,6 @@ describe('StageConfigModal', () => {
     expect(screen.getByText('Election / Vote')).toBeInTheDocument();
     expect(screen.getByText('Manual Approval')).toBeInTheDocument();
     expect(screen.getByText('Enable Status Page')).toBeInTheDocument();
+    expect(screen.getByText('Automated Email')).toBeInTheDocument();
   });
 });
