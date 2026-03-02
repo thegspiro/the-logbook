@@ -256,7 +256,7 @@ export const eventRequestService = {
     const response = await api.get<import('../types/event').EventRequest>(`/event-requests/${requestId}`);
     return response.data;
   },
-  async updateRequestStatus(requestId: string, data: { status: string; notes?: string; decline_reason?: string; assigned_to?: string; event_id?: string }): Promise<{ message: string; status: string }> {
+  async updateRequestStatus(requestId: string, data: { status: string; notes?: string | undefined; decline_reason?: string | undefined; assigned_to?: string | undefined; event_id?: string | undefined }): Promise<{ message: string; status: string }> {
     const response = await api.patch<{ message: string; status: string }>(`/event-requests/${requestId}/status`, data);
     return response.data;
   },
@@ -281,15 +281,15 @@ export const eventRequestService = {
     const response = await api.post<import('../types/event').EventRequestActivity>(`/event-requests/${requestId}/comments`, data);
     return response.data;
   },
-  async scheduleRequest(requestId: string, data: { event_date: string; event_end_date?: string; location_id?: string; notes?: string; create_calendar_event?: boolean }): Promise<{ message: string; status: string; event_date: string; event_id?: string }> {
+  async scheduleRequest(requestId: string, data: { event_date: string; event_end_date?: string | undefined; location_id?: string | undefined; notes?: string | undefined; create_calendar_event?: boolean | undefined }): Promise<{ message: string; status: string; event_date: string; event_id?: string }> {
     const response = await api.patch<{ message: string; status: string; event_date: string; event_id?: string }>(`/event-requests/${requestId}/schedule`, data);
     return response.data;
   },
-  async postponeRequest(requestId: string, data: { reason?: string; new_event_date?: string; new_event_end_date?: string }): Promise<{ message: string; status: string }> {
+  async postponeRequest(requestId: string, data: { reason?: string | undefined; new_event_date?: string | undefined; new_event_end_date?: string | undefined }): Promise<{ message: string; status: string }> {
     const response = await api.patch<{ message: string; status: string }>(`/event-requests/${requestId}/postpone`, data);
     return response.data;
   },
-  async publicCancelRequest(token: string, data: { reason?: string }): Promise<{ message: string; status: string }> {
+  async publicCancelRequest(token: string, data: { reason?: string | undefined }): Promise<{ message: string; status: string }> {
     const response = await api.post<{ message: string; status: string }>(`/event-requests/status/${token}/cancel`, data);
     return response.data;
   },
@@ -301,7 +301,7 @@ export const eventRequestService = {
     const response = await api.get<import('../types/event').EmailTemplate[]>('/event-requests/email-templates');
     return response.data;
   },
-  async createEmailTemplate(data: { name: string; subject: string; body_html: string; body_text?: string; trigger?: string; trigger_days_before?: number }): Promise<import('../types/event').EmailTemplate> {
+  async createEmailTemplate(data: { name: string; subject: string; body_html: string; body_text?: string | undefined; trigger?: string | undefined; trigger_days_before?: number | undefined }): Promise<import('../types/event').EmailTemplate> {
     const response = await api.post<import('../types/event').EmailTemplate>('/event-requests/email-templates', data);
     return response.data;
   },
@@ -494,13 +494,13 @@ export interface StorageAreaResponse {
 
 export interface StorageAreaCreate {
   name: string;
-  label?: string;
-  description?: string;
+  label?: string | undefined;
+  description?: string | undefined;
   storage_type: string;
-  parent_id?: string;
-  location_id?: string;
-  barcode?: string;
-  sort_order?: number;
+  parent_id?: string | undefined;
+  location_id?: string | undefined;
+  barcode?: string | undefined;
+  sort_order?: number | undefined;
 }
 
 export interface EquipmentRequestItem {
@@ -544,37 +544,37 @@ export interface WriteOffRequestItem {
 }
 
 export interface InventoryItemCreate {
-  category_id?: string;
+  category_id?: string | undefined;
   name: string;
-  description?: string;
-  manufacturer?: string;
-  model_number?: string;
-  serial_number?: string;
-  asset_tag?: string;
-  barcode?: string;
-  purchase_date?: string;
-  purchase_price?: number;
-  purchase_order?: string;
-  vendor?: string;
-  warranty_expiration?: string;
-  expected_lifetime_years?: number;
-  current_value?: number;
-  size?: string;
-  color?: string;
-  weight?: number;
-  location_id?: string;
-  storage_location?: string;
-  storage_area_id?: string;
-  station?: string;
-  condition?: string;
-  status?: string;
-  tracking_type?: string;
-  quantity?: number;
-  unit_of_measure?: string;
-  inspection_interval_days?: number;
-  min_rank_order?: number | null;
-  restricted_to_positions?: string[] | null;
-  notes?: string;
+  description?: string | undefined;
+  manufacturer?: string | undefined;
+  model_number?: string | undefined;
+  serial_number?: string | undefined;
+  asset_tag?: string | undefined;
+  barcode?: string | undefined;
+  purchase_date?: string | undefined;
+  purchase_price?: number | undefined;
+  purchase_order?: string | undefined;
+  vendor?: string | undefined;
+  warranty_expiration?: string | undefined;
+  expected_lifetime_years?: number | undefined;
+  current_value?: number | undefined;
+  size?: string | undefined;
+  color?: string | undefined;
+  weight?: number | undefined;
+  location_id?: string | undefined;
+  storage_location?: string | undefined;
+  storage_area_id?: string | undefined;
+  station?: string | undefined;
+  condition?: string | undefined;
+  status?: string | undefined;
+  tracking_type?: string | undefined;
+  quantity?: number | undefined;
+  unit_of_measure?: string | undefined;
+  inspection_interval_days?: number | undefined;
+  min_rank_order?: number | null | undefined;
+  restricted_to_positions?: string[] | null | undefined;
+  notes?: string | undefined;
 }
 
 export interface ItemIssuance {
@@ -622,13 +622,13 @@ export interface InventorySummary {
 
 export interface InventoryCategoryCreate {
   name: string;
-  description?: string;
+  description?: string | undefined;
   item_type: string;
-  requires_assignment?: boolean;
-  requires_serial_number?: boolean;
-  requires_maintenance?: boolean;
-  low_stock_threshold?: number;
-  nfpa_tracking_enabled?: boolean;
+  requires_assignment?: boolean | undefined;
+  requires_serial_number?: boolean | undefined;
+  requires_maintenance?: boolean | undefined;
+  low_stock_threshold?: number | undefined;
+  nfpa_tracking_enabled?: boolean | undefined;
 }
 
 // Scan / Quick-Action Types
@@ -736,20 +736,20 @@ export interface NFPACompliance {
   id: string;
   item_id: string;
   organization_id: string;
-  manufacture_date?: string;
-  first_in_service_date?: string;
-  expected_retirement_date?: string;
-  retirement_reason?: string;
+  manufacture_date?: string | undefined;
+  first_in_service_date?: string | undefined;
+  expected_retirement_date?: string | undefined;
+  retirement_reason?: string | undefined;
   is_retired_by_age: boolean;
-  ensemble_id?: string;
-  ensemble_role?: string;
-  cylinder_manufacture_date?: string;
-  cylinder_expiration_date?: string;
-  hydrostatic_test_date?: string;
-  hydrostatic_test_due?: string;
-  flow_test_date?: string;
-  flow_test_due?: string;
-  contamination_level?: string;
+  ensemble_id?: string | undefined;
+  ensemble_role?: string | undefined;
+  cylinder_manufacture_date?: string | undefined;
+  cylinder_expiration_date?: string | undefined;
+  hydrostatic_test_date?: string | undefined;
+  hydrostatic_test_due?: string | undefined;
+  flow_test_date?: string | undefined;
+  flow_test_due?: string | undefined;
+  contamination_level?: string | undefined;
   created_at: string;
   updated_at: string;
 }
@@ -760,13 +760,13 @@ export interface NFPAExposureRecord {
   organization_id: string;
   exposure_type: string;
   exposure_date: string;
-  incident_number?: string;
-  description?: string;
+  incident_number?: string | undefined;
+  description?: string | undefined;
   decon_required: boolean;
   decon_completed: boolean;
-  decon_completed_date?: string;
-  decon_method?: string;
-  user_id?: string;
+  decon_completed_date?: string | undefined;
+  decon_method?: string | undefined;
+  user_id?: string | undefined;
   created_at: string;
   updated_at: string;
 }

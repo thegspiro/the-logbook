@@ -52,7 +52,7 @@ export type PipelineViewMode = 'kanban' | 'table';
 
 export interface InactivityConfig {
   timeout_preset: InactivityTimeoutPreset;
-  custom_timeout_days?: number;
+  custom_timeout_days?: number | undefined;
   warning_threshold_percent: number; // default 80 — warn at 80% of timeout
   notify_coordinator: boolean;
   notify_applicant: boolean;
@@ -90,7 +90,7 @@ export const FILE_UPLOAD_LIMITS = {
 
 export interface FormStageConfig {
   form_id: string;
-  form_name?: string;
+  form_name?: string | undefined;
 }
 
 export interface DocumentStageConfig {
@@ -105,7 +105,7 @@ export interface ElectionPackageFieldConfig {
   include_date_of_birth: boolean;
   include_documents: boolean;
   include_stage_history: boolean;
-  custom_note_prompt?: string; // prompt shown to coordinator when packaging
+  custom_note_prompt?: string | undefined; // prompt shown to coordinator when packaging
 }
 
 export const DEFAULT_ELECTION_PACKAGE_FIELDS: ElectionPackageFieldConfig = {
@@ -120,10 +120,10 @@ export const DEFAULT_ELECTION_PACKAGE_FIELDS: ElectionPackageFieldConfig = {
 export interface ElectionStageConfig {
   voting_method: 'simple_majority' | 'approval' | 'supermajority';
   victory_condition: 'most_votes' | 'majority' | 'supermajority';
-  victory_percentage?: number;
+  victory_percentage?: number | undefined;
   eligible_voter_roles: string[];
   anonymous_voting: boolean;
-  package_fields?: ElectionPackageFieldConfig;
+  package_fields?: ElectionPackageFieldConfig | undefined;
 }
 
 export interface ManualApprovalConfig {
@@ -145,12 +145,12 @@ export interface PipelineStage {
   id: string;
   pipeline_id: string;
   name: string;
-  description?: string;
+  description?: string | undefined;
   stage_type: StageType;
   config: StageConfig;
   sort_order: number;
   is_required: boolean;
-  inactivity_timeout_days?: number | null; // null = use pipeline default
+  inactivity_timeout_days?: number | null | undefined; // null = use pipeline default
   notify_prospect_on_completion: boolean;
   public_visible: boolean;
   created_at: string;
@@ -159,26 +159,26 @@ export interface PipelineStage {
 
 export interface PipelineStageCreate {
   name: string;
-  description?: string;
+  description?: string | undefined;
   stage_type: StageType;
   config: StageConfig;
   sort_order: number;
-  is_required?: boolean;
-  inactivity_timeout_days?: number | null;
-  notify_prospect_on_completion?: boolean;
-  public_visible?: boolean;
+  is_required?: boolean | undefined;
+  inactivity_timeout_days?: number | null | undefined;
+  notify_prospect_on_completion?: boolean | undefined;
+  public_visible?: boolean | undefined;
 }
 
 export interface PipelineStageUpdate {
-  name?: string;
-  description?: string;
-  stage_type?: StageType;
-  config?: StageConfig;
-  sort_order?: number;
-  is_required?: boolean;
-  inactivity_timeout_days?: number | null;
-  notify_prospect_on_completion?: boolean;
-  public_visible?: boolean;
+  name?: string | undefined;
+  description?: string | undefined;
+  stage_type?: StageType | undefined;
+  config?: StageConfig | undefined;
+  sort_order?: number | undefined;
+  is_required?: boolean | undefined;
+  inactivity_timeout_days?: number | null | undefined;
+  notify_prospect_on_completion?: boolean | undefined;
+  public_visible?: boolean | undefined;
 }
 
 // =============================================================================
@@ -189,35 +189,35 @@ export interface Pipeline {
   id: string;
   organization_id: string;
   name: string;
-  description?: string;
+  description?: string | undefined;
   is_active: boolean;
   inactivity_config: InactivityConfig;
   public_status_enabled: boolean;
   stages: PipelineStage[];
-  applicant_count?: number;
+  applicant_count?: number | undefined;
   created_at: string;
   updated_at: string;
 }
 
 export interface PipelineCreate {
   name: string;
-  description?: string;
-  is_active?: boolean;
-  inactivity_config?: InactivityConfig;
+  description?: string | undefined;
+  is_active?: boolean | undefined;
+  inactivity_config?: InactivityConfig | undefined;
 }
 
 export interface PipelineUpdate {
-  name?: string;
-  description?: string;
-  is_active?: boolean;
-  inactivity_config?: InactivityConfig;
-  public_status_enabled?: boolean;
+  name?: string | undefined;
+  description?: string | undefined;
+  is_active?: boolean | undefined;
+  inactivity_config?: InactivityConfig | undefined;
+  public_status_enabled?: boolean | undefined;
 }
 
 export interface PipelineListItem {
   id: string;
   name: string;
-  description?: string;
+  description?: string | undefined;
   is_active: boolean;
   stage_count: number;
   applicant_count: number;
@@ -232,10 +232,10 @@ export interface StageArtifact {
   id: string;
   type: 'form_submission' | 'document' | 'election_result' | 'approval_note';
   name: string;
-  url?: string;
-  data?: Record<string, unknown>;
+  url?: string | undefined;
+  data?: Record<string, unknown> | undefined;
   created_at: string;
-  created_by?: string;
+  created_by?: string | undefined;
 }
 
 // =============================================================================
@@ -248,10 +248,10 @@ export interface StageHistoryEntry {
   stage_name: string;
   stage_type: StageType;
   entered_at: string;
-  completed_at?: string;
-  completed_by?: string;
-  completed_by_name?: string;
-  notes?: string;
+  completed_at?: string | undefined;
+  completed_by?: string | undefined;
+  completed_by_name?: string | undefined;
+  notes?: string | undefined;
   artifacts: StageArtifact[];
 }
 
@@ -262,36 +262,36 @@ export interface StageHistoryEntry {
 export interface Applicant {
   id: string;
   pipeline_id: string;
-  pipeline_name?: string;
+  pipeline_name?: string | undefined;
   first_name: string;
   last_name: string;
   email: string;
-  phone?: string;
-  date_of_birth?: string;
+  phone?: string | undefined;
+  date_of_birth?: string | undefined;
   address?: {
-    street?: string;
-    city?: string;
-    state?: string;
-    zip_code?: string;
-  };
+    street?: string | undefined;
+    city?: string | undefined;
+    state?: string | undefined;
+    zip_code?: string | undefined;
+  } | undefined;
   current_stage_id: string;
-  current_stage_name?: string;
-  current_stage_type?: StageType;
+  current_stage_name?: string | undefined;
+  current_stage_type?: StageType | undefined;
   stage_entered_at: string;
   target_membership_type: TargetMembershipType;
-  target_role_id?: string;
-  target_role_name?: string;
-  form_submission_id?: string;
-  status_token?: string;
+  target_role_id?: string | undefined;
+  target_role_name?: string | undefined;
+  form_submission_id?: string | undefined;
+  status_token?: string | undefined;
   status: ApplicantStatus;
-  notes?: string;
+  notes?: string | undefined;
   stage_history: StageHistoryEntry[];
   last_activity_at: string;
-  deactivated_at?: string;
-  deactivated_reason?: string;
-  reactivated_at?: string;
-  withdrawn_at?: string;
-  withdrawal_reason?: string;
+  deactivated_at?: string | undefined;
+  deactivated_reason?: string | undefined;
+  reactivated_at?: string | undefined;
+  withdrawn_at?: string | undefined;
+  withdrawal_reason?: string | undefined;
   created_at: string;
   updated_at: string;
 }
@@ -302,23 +302,23 @@ export interface ApplicantListItem {
   first_name: string;
   last_name: string;
   email: string;
-  phone?: string;
+  phone?: string | undefined;
   current_stage_id: string;
-  current_stage_name?: string;
-  current_stage_type?: StageType;
+  current_stage_name?: string | undefined;
+  current_stage_type?: StageType | undefined;
   stage_entered_at: string;
   target_membership_type: TargetMembershipType;
-  target_role_name?: string;
+  target_role_name?: string | undefined;
   status: ApplicantStatus;
   days_in_stage: number;
   days_in_pipeline: number;
   last_activity_at: string;
   days_since_activity: number;
   inactivity_alert_level: InactivityAlertLevel;
-  inactivity_timeout_days?: number; // effective timeout for this applicant's current stage
-  deactivated_at?: string;
-  withdrawn_at?: string;
-  withdrawal_reason?: string;
+  inactivity_timeout_days?: number | undefined; // effective timeout for this applicant's current stage
+  deactivated_at?: string | undefined;
+  withdrawn_at?: string | undefined;
+  withdrawal_reason?: string | undefined;
   created_at: string;
 }
 
@@ -327,36 +327,36 @@ export interface ApplicantCreate {
   first_name: string;
   last_name: string;
   email: string;
-  phone?: string;
-  date_of_birth?: string;
+  phone?: string | undefined;
+  date_of_birth?: string | undefined;
   address?: {
-    street?: string;
-    city?: string;
-    state?: string;
-    zip_code?: string;
-  };
+    street?: string | undefined;
+    city?: string | undefined;
+    state?: string | undefined;
+    zip_code?: string | undefined;
+  } | undefined;
   target_membership_type: TargetMembershipType;
-  target_role_id?: string;
-  form_submission_id?: string;
-  notes?: string;
+  target_role_id?: string | undefined;
+  form_submission_id?: string | undefined;
+  notes?: string | undefined;
 }
 
 export interface ApplicantUpdate {
-  first_name?: string;
-  last_name?: string;
-  email?: string;
-  phone?: string;
-  date_of_birth?: string;
+  first_name?: string | undefined;
+  last_name?: string | undefined;
+  email?: string | undefined;
+  phone?: string | undefined;
+  date_of_birth?: string | undefined;
   address?: {
-    street?: string;
-    city?: string;
-    state?: string;
-    zip_code?: string;
-  };
-  target_membership_type?: TargetMembershipType;
-  target_role_id?: string;
-  status?: ApplicantStatus;
-  notes?: string;
+    street?: string | undefined;
+    city?: string | undefined;
+    state?: string | undefined;
+    zip_code?: string | undefined;
+  } | undefined;
+  target_membership_type?: TargetMembershipType | undefined;
+  target_role_id?: string | undefined;
+  status?: ApplicantStatus | undefined;
+  notes?: string | undefined;
 }
 
 // =============================================================================
@@ -364,34 +364,34 @@ export interface ApplicantUpdate {
 // =============================================================================
 
 export interface AdvanceStageRequest {
-  notes?: string;
+  notes?: string | undefined;
   artifacts?: {
     type: StageArtifact['type'];
     name: string;
-    url?: string;
-    data?: Record<string, unknown>;
-  }[];
+    url?: string | undefined;
+    data?: Record<string, unknown> | undefined;
+  }[] | undefined;
 }
 
 export interface ConvertApplicantRequest {
   target_membership_type: TargetMembershipType;
-  target_role_id?: string;
+  target_role_id?: string | undefined;
   send_welcome_email: boolean;
-  notes?: string;
+  notes?: string | undefined;
   // Two-step wizard fields
-  middle_name?: string;
-  hire_date?: string;
-  rank?: string;
-  station?: string;
-  emergency_contacts?: EmergencyContact[];
+  middle_name?: string | undefined;
+  hire_date?: string | undefined;
+  rank?: string | undefined;
+  station?: string | undefined;
+  emergency_contacts?: EmergencyContact[] | undefined;
 }
 
 export interface EmergencyContact {
   name: string;
   relationship: string;
   phone: string;
-  email?: string;
-  is_primary?: boolean;
+  email?: string | undefined;
+  is_primary?: boolean | undefined;
 }
 
 export interface ConvertApplicantResponse {
@@ -406,15 +406,15 @@ export interface ApplicationStatus {
   first_name: string;
   last_name: string;
   status: string;
-  current_stage_name?: string;
-  pipeline_name?: string;
+  current_stage_name?: string | undefined;
+  pipeline_name?: string | undefined;
   total_stages: number;
   stage_timeline: {
     stage_name: string;
     status: string;
-    completed_at?: string;
+    completed_at?: string | undefined;
   }[];
-  applied_at?: string;
+  applied_at?: string | undefined;
 }
 
 // =============================================================================
@@ -430,12 +430,12 @@ export interface PaginatedApplicantList {
 }
 
 export interface ApplicantListFilters {
-  pipeline_id?: string;
-  stage_id?: string;
-  status?: ApplicantStatus;
-  target_membership_type?: TargetMembershipType;
-  search?: string;
-  include_inactive?: boolean;
+  pipeline_id?: string | undefined;
+  stage_id?: string | undefined;
+  status?: ApplicantStatus | undefined;
+  target_membership_type?: TargetMembershipType | undefined;
+  search?: string | undefined;
+  include_inactive?: boolean | undefined;
 }
 
 // =============================================================================
@@ -489,15 +489,15 @@ export interface DocumentUploadRequest {
 // =============================================================================
 
 export interface WithdrawApplicantRequest {
-  reason?: string;
+  reason?: string | undefined;
 }
 
 export interface ReactivateApplicantRequest {
-  notes?: string;
+  notes?: string | undefined;
 }
 
 export interface PurgeInactiveRequest {
-  applicant_ids?: string[]; // specific IDs, or omit to purge all eligible
+  applicant_ids?: string[] | undefined; // specific IDs, or omit to purge all eligible
   confirm: boolean;
 }
 
@@ -520,19 +520,19 @@ export interface ElectionPackage {
 
   // Applicant snapshot (captured at package creation time)
   applicant_name: string;
-  applicant_email?: string;
-  applicant_phone?: string;
+  applicant_email?: string | undefined;
+  applicant_phone?: string | undefined;
   target_membership_type: TargetMembershipType;
-  target_role_name?: string;
+  target_role_name?: string | undefined;
 
   // Coordinator-provided context
-  coordinator_notes?: string;
-  supporting_statement?: string; // shown on ballot or to voters
+  coordinator_notes?: string | undefined;
+  supporting_statement?: string | undefined; // shown on ballot or to voters
 
   // Collected pipeline data
-  documents?: { name: string; url: string }[];
-  stage_summary?: { stage_name: string; completed_at?: string }[];
-  custom_fields?: Record<string, string>;
+  documents?: { name: string; url: string }[] | undefined;
+  stage_summary?: { stage_name: string; completed_at?: string | undefined }[] | undefined;
+  custom_fields?: Record<string, string> | undefined;
 
   // Recommended ballot item configuration (from stage config)
   recommended_ballot_item?: {
@@ -543,34 +543,34 @@ export interface ElectionPackage {
     vote_type: 'approval';
     voting_method: string;
     victory_condition: string;
-    victory_percentage?: number;
+    victory_percentage?: number | undefined;
     anonymous_voting: boolean;
-  };
+  } | undefined;
 
   // Status tracking
   status: ElectionPackageStatus;
-  election_id?: string;
-  candidate_id?: string;
+  election_id?: string | undefined;
+  candidate_id?: string | undefined;
 
   created_at: string;
   updated_at: string;
-  submitted_at?: string; // when coordinator marked as ready
-  submitted_by?: string;
+  submitted_at?: string | undefined; // when coordinator marked as ready
+  submitted_by?: string | undefined;
 }
 
 export interface ElectionPackageCreate {
   applicant_id: string;
   pipeline_id: string;
   stage_id: string;
-  coordinator_notes?: string;
-  supporting_statement?: string;
+  coordinator_notes?: string | undefined;
+  supporting_statement?: string | undefined;
 }
 
 export interface ElectionPackageUpdate {
-  coordinator_notes?: string;
-  supporting_statement?: string;
-  custom_fields?: Record<string, string>;
-  status?: ElectionPackageStatus;
+  coordinator_notes?: string | undefined;
+  supporting_statement?: string | undefined;
+  custom_fields?: Record<string, string> | undefined;
+  status?: ElectionPackageStatus | undefined;
 }
 
 // =============================================================================
@@ -761,9 +761,9 @@ export interface BackendDocumentResponse {
 /** Payload shape sent to backend when creating a step. */
 export interface BackendStepCreatePayload {
   name: string;
-  description?: string;
+  description?: string | undefined;
   step_type: string;
-  action_type?: string;
+  action_type?: string | undefined;
   sort_order: number;
   required: boolean;
   notify_prospect_on_completion: boolean;
@@ -772,12 +772,12 @@ export interface BackendStepCreatePayload {
 
 /** Payload shape sent to backend when updating a step. */
 export interface BackendStepUpdatePayload {
-  name?: string;
-  description?: string;
-  step_type?: string;
-  action_type?: string;
-  sort_order?: number;
-  required?: boolean;
-  notify_prospect_on_completion?: boolean;
-  public_visible?: boolean;
+  name?: string | undefined;
+  description?: string | undefined;
+  step_type?: string | undefined;
+  action_type?: string | undefined;
+  sort_order?: number | undefined;
+  required?: boolean | undefined;
+  notify_prospect_on_completion?: boolean | undefined;
+  public_visible?: boolean | undefined;
 }

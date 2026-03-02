@@ -83,47 +83,47 @@ export interface TrainingSession {
 export interface TrainingSessionCreate {
   // Event details
   title: string;
-  description?: string;
-  location_id?: string;
-  location?: string;
-  location_details?: string;
+  description?: string | undefined;
+  location_id?: string | undefined;
+  location?: string | undefined;
+  location_details?: string | undefined;
   start_datetime: string;
   end_datetime: string;
-  requires_rsvp?: boolean;
-  rsvp_deadline?: string;
-  max_attendees?: number;
-  is_mandatory?: boolean;
+  requires_rsvp?: boolean | undefined;
+  rsvp_deadline?: string | undefined;
+  max_attendees?: number | undefined;
+  is_mandatory?: boolean | undefined;
 
   // Use existing course or create new
-  use_existing_course?: boolean;
-  course_id?: string;  // If using existing course
+  use_existing_course?: boolean | undefined;
+  course_id?: string | undefined;  // If using existing course
 
   // Category and program linkage
-  category_id?: string;     // Training category (Fire, EMS, Hazmat, etc.)
-  program_id?: string;      // Training program (Recruit School, Driver Training, etc.)
-  phase_id?: string;        // Program phase
-  requirement_id?: string;  // Specific requirement this satisfies
+  category_id?: string | undefined;     // Training category (Fire, EMS, Hazmat, etc.)
+  program_id?: string | undefined;      // Training program (Recruit School, Driver Training, etc.)
+  phase_id?: string | undefined;        // Program phase
+  requirement_id?: string | undefined;  // Specific requirement this satisfies
 
   // Training details (for new course)
-  course_name?: string;
-  course_code?: string;
+  course_name?: string | undefined;
+  course_code?: string | undefined;
   training_type: TrainingType;
   credit_hours: number;
-  instructor?: string;
+  instructor?: string | undefined;
 
   // Certification
-  issues_certification?: boolean;
-  certification_number_prefix?: string;
-  issuing_agency?: string;
-  expiration_months?: number;
+  issues_certification?: boolean | undefined;
+  certification_number_prefix?: string | undefined;
+  issuing_agency?: string | undefined;
+  expiration_months?: number | undefined;
 
   // Requirements
-  prerequisites?: string[];
-  materials_required?: string[];
+  prerequisites?: string[] | undefined;
+  materials_required?: string[] | undefined;
 
   // Auto-completion settings
-  auto_create_records?: boolean;  // Create TrainingRecords on check-in
-  require_completion_confirmation?: boolean;  // Instructor must confirm completion
+  auto_create_records?: boolean | undefined;  // Create TrainingRecords on check-in
+  require_completion_confirmation?: boolean | undefined;  // Instructor must confirm completion
 }
 
 // Training Category Types
@@ -277,17 +277,17 @@ export interface TrainingRecordUpdate {
   training_type?: TrainingType;
   scheduled_date?: string;
   completion_date?: string;
-  expiration_date?: string;
+  expiration_date?: string | undefined;
   hours_completed?: number;
   credit_hours?: number;
-  certification_number?: string;
-  issuing_agency?: string;
+  certification_number?: string | undefined;
+  issuing_agency?: string | undefined;
   status?: TrainingStatus;
   score?: number;
   passing_score?: number;
   passed?: boolean;
-  instructor?: string;
-  location?: string;
+  instructor?: string | undefined;
+  location?: string | undefined;
   notes?: string;
   attachments?: string[];
 }
@@ -384,46 +384,46 @@ export interface TrainingRequirement {
 
 export interface TrainingRequirementCreate {
   name: string;
-  description?: string;
+  description?: string | undefined;
   requirement_type: RequirementType;
-  training_type?: TrainingType;
-  required_hours?: number;
-  required_courses?: string[];
+  training_type?: TrainingType | undefined;
+  required_hours?: number | undefined;
+  required_courses?: string[] | undefined;
   frequency: RequirementFrequency;
-  year?: number;
-  applies_to_all?: boolean;
-  required_roles?: string[];
-  required_membership_types?: string[];
-  start_date?: string;
-  due_date?: string;
+  year?: number | undefined;
+  applies_to_all?: boolean | undefined;
+  required_roles?: string[] | undefined;
+  required_membership_types?: string[] | undefined;
+  start_date?: string | undefined;
+  due_date?: string | undefined;
   // Due date calculation fields
-  due_date_type?: DueDateType;
-  rolling_period_months?: number;
-  period_start_month?: number;
-  period_start_day?: number;
-  category_ids?: string[];
+  due_date_type?: DueDateType | undefined;
+  rolling_period_months?: number | undefined;
+  period_start_month?: number | undefined;
+  period_start_day?: number | undefined;
+  category_ids?: string[] | undefined;
 }
 
 export interface TrainingRequirementUpdate {
   name?: string;
-  description?: string;
+  description?: string | undefined;
   requirement_type?: RequirementType;
-  training_type?: TrainingType;
-  required_hours?: number;
-  required_courses?: string[];
+  training_type?: TrainingType | undefined;
+  required_hours?: number | undefined;
+  required_courses?: string[] | undefined;
   frequency?: RequirementFrequency;
-  year?: number;
-  applies_to_all?: boolean;
-  required_roles?: string[];
-  required_membership_types?: string[];
-  start_date?: string;
-  due_date?: string;
+  year?: number | undefined;
+  applies_to_all?: boolean | undefined;
+  required_roles?: string[] | undefined;
+  required_membership_types?: string[] | undefined;
+  start_date?: string | undefined;
+  due_date?: string | undefined;
   // Due date calculation fields
-  due_date_type?: DueDateType;
-  rolling_period_months?: number;
-  period_start_month?: number;
-  period_start_day?: number;
-  category_ids?: string[];
+  due_date_type?: DueDateType | undefined;
+  rolling_period_months?: number | undefined;
+  period_start_month?: number | undefined;
+  period_start_day?: number | undefined;
+  category_ids?: string[] | undefined;
   active?: boolean;
 }
 
@@ -523,27 +523,27 @@ export interface TrainingRequirementEnhanced {
 
 export interface TrainingRequirementEnhancedCreate {
   name: string;
-  description?: string;
+  description?: string | undefined;
   requirement_type: RequirementType;
-  source?: RequirementSource;
-  registry_name?: string;
-  registry_code?: string;
-  is_editable?: boolean;
-  training_type?: TrainingType;
-  required_hours?: number;
-  required_courses?: string[];
-  required_shifts?: number;
-  required_calls?: number;
-  required_call_types?: string[];
-  required_skills?: string[];
-  checklist_items?: string[];
-  passing_score?: number;
-  max_attempts?: number;
+  source?: RequirementSource | undefined;
+  registry_name?: string | undefined;
+  registry_code?: string | undefined;
+  is_editable?: boolean | undefined;
+  training_type?: TrainingType | undefined;
+  required_hours?: number | undefined;
+  required_courses?: string[] | undefined;
+  required_shifts?: number | undefined;
+  required_calls?: number | undefined;
+  required_call_types?: string[] | undefined;
+  required_skills?: string[] | undefined;
+  checklist_items?: string[] | undefined;
+  passing_score?: number | undefined;
+  max_attempts?: number | undefined;
   frequency: RequirementFrequency;
-  time_limit_days?: number;
-  applies_to_all?: boolean;
-  required_positions?: string[];
-  required_roles?: string[];
+  time_limit_days?: number | undefined;
+  applies_to_all?: boolean | undefined;
+  required_positions?: string[] | undefined;
+  required_roles?: string[] | undefined;
 }
 
 // Training Program
@@ -575,21 +575,21 @@ export interface TrainingProgram {
 
 export interface TrainingProgramCreate {
   name: string;
-  description?: string;
-  code?: string;
-  target_position?: string;
-  target_roles?: string[];
-  structure_type?: ProgramStructureType;
-  prerequisite_program_ids?: string[];
-  allows_concurrent_enrollment?: boolean;
-  time_limit_days?: number;
-  warning_days_before?: number;
+  description?: string | undefined;
+  code?: string | undefined;
+  target_position?: string | undefined;
+  target_roles?: string[] | undefined;
+  structure_type?: ProgramStructureType | undefined;
+  prerequisite_program_ids?: string[] | undefined;
+  allows_concurrent_enrollment?: boolean | undefined;
+  time_limit_days?: number | undefined;
+  warning_days_before?: number | undefined;
   reminder_conditions?: {
-    milestone_threshold?: number;
-    days_before_deadline?: number;
-    send_if_below_percentage?: number;
-  };
-  is_template?: boolean;
+    milestone_threshold?: number | undefined;
+    days_before_deadline?: number | undefined;
+    send_if_below_percentage?: number | undefined;
+  } | undefined;
+  is_template?: boolean | undefined;
 }
 
 export interface ProgramPhase {
@@ -609,10 +609,10 @@ export interface ProgramPhaseCreate {
   program_id: string;
   phase_number: number;
   name: string;
-  description?: string;
-  prerequisite_phase_ids?: string[];
-  requires_manual_advancement?: boolean;
-  time_limit_days?: number;
+  description?: string | undefined;
+  prerequisite_phase_ids?: string[] | undefined;
+  requires_manual_advancement?: boolean | undefined;
+  time_limit_days?: number | undefined;
 }
 
 export interface ProgramRequirement {
@@ -655,11 +655,11 @@ export interface ProgramMilestone {
 
 export interface ProgramMilestoneCreate {
   program_id: string;
-  phase_id?: string;
+  phase_id?: string | undefined;
   name: string;
-  description?: string;
+  description?: string | undefined;
   completion_percentage_threshold: number;
-  notification_message?: string;
+  notification_message?: string | undefined;
 }
 
 export interface ProgramEnrollment {
@@ -752,7 +752,7 @@ export interface RegistryInfo {
 // Bulk Enrollment
 export interface BulkEnrollmentRequest {
   user_ids: string[];
-  target_completion_date?: string;
+  target_completion_date?: string | undefined;
 }
 
 export interface BulkEnrollmentResponse {
@@ -786,7 +786,7 @@ export type ImportStatus =
 
 export interface ExternalProviderConfig {
   // Vector Solutions / TargetSolutions specific
-  site_id?: string;              // Required for Vector Solutions - the TS site identifier
+  site_id?: string | undefined;  // Required for Vector Solutions - the TS site identifier
   page_size?: number;            // Max records per page (Vector Solutions max: 1000)
   date_filter_param?: string;    // Custom date filter parameter name
 
@@ -830,17 +830,17 @@ export interface ExternalTrainingProvider {
 export interface ExternalTrainingProviderCreate {
   name: string;
   provider_type: ExternalProviderType;
-  description?: string;
-  api_base_url?: string;
-  api_key?: string;
-  api_secret?: string;
-  client_id?: string;
-  client_secret?: string;
-  auth_type?: 'api_key' | 'oauth2' | 'basic';
-  config?: ExternalProviderConfig;
-  auto_sync_enabled?: boolean;
-  sync_interval_hours?: number;
-  default_category_id?: string;
+  description?: string | undefined;
+  api_base_url?: string | undefined;
+  api_key?: string | undefined;
+  api_secret?: string | undefined;
+  client_id?: string | undefined;
+  client_secret?: string | undefined;
+  auth_type?: 'api_key' | 'oauth2' | 'basic' | undefined;
+  config?: ExternalProviderConfig | undefined;
+  auto_sync_enabled?: boolean | undefined;
+  sync_interval_hours?: number | undefined;
+  default_category_id?: string | undefined;
 }
 
 export interface ExternalTrainingProviderUpdate {
@@ -1060,44 +1060,44 @@ export interface TrainingSubmission {
 
 export interface TrainingSubmissionCreate {
   course_name: string;
-  course_code?: string;
+  course_code?: string | undefined;
   training_type: TrainingType;
-  description?: string;
+  description?: string | undefined;
   completion_date: string;
   hours_completed: number;
-  credit_hours?: number;
-  instructor?: string;
-  location?: string;
-  certification_number?: string;
-  issuing_agency?: string;
-  expiration_date?: string;
-  category_id?: string;
-  attachments?: string[];
+  credit_hours?: number | undefined;
+  instructor?: string | undefined;
+  location?: string | undefined;
+  certification_number?: string | undefined;
+  issuing_agency?: string | undefined;
+  expiration_date?: string | undefined;
+  category_id?: string | undefined;
+  attachments?: string[] | undefined;
 }
 
 export interface TrainingSubmissionUpdate {
-  course_name?: string;
-  course_code?: string;
-  training_type?: TrainingType;
-  description?: string;
-  completion_date?: string;
-  hours_completed?: number;
-  credit_hours?: number;
-  instructor?: string;
-  location?: string;
-  certification_number?: string;
-  issuing_agency?: string;
-  expiration_date?: string;
-  category_id?: string;
-  attachments?: string[];
+  course_name?: string | undefined;
+  course_code?: string | undefined;
+  training_type?: TrainingType | undefined;
+  description?: string | undefined;
+  completion_date?: string | undefined;
+  hours_completed?: number | undefined;
+  credit_hours?: number | undefined;
+  instructor?: string | undefined;
+  location?: string | undefined;
+  certification_number?: string | undefined;
+  issuing_agency?: string | undefined;
+  expiration_date?: string | undefined;
+  category_id?: string | undefined;
+  attachments?: string[] | undefined;
 }
 
 export interface SubmissionReviewRequest {
   action: 'approve' | 'reject' | 'revision_requested';
-  reviewer_notes?: string;
-  override_hours?: number;
-  override_credit_hours?: number;
-  override_training_type?: TrainingType;
+  reviewer_notes?: string | undefined;
+  override_hours?: number | undefined;
+  override_credit_hours?: number | undefined;
+  override_training_type?: TrainingType | undefined;
 }
 
 // ==================== Shift Completion Reports ====================
@@ -1106,29 +1106,29 @@ export interface SkillObservation {
   skill_name: string;
   demonstrated: boolean;
   notes?: string;
-  comment?: string;
+  comment?: string | undefined;
 }
 
 export interface TaskPerformed {
   task: string;
-  description?: string;
+  description?: string | undefined;
   comment?: string;
 }
 
 export interface ShiftCompletionReportCreate {
-  shift_id?: string;
-  shift_date: string;
+  shift_id?: string | undefined;
+  shift_date?: string | undefined;
   trainee_id: string;
   hours_on_shift: number;
-  calls_responded?: number;
-  call_types?: string[];
-  performance_rating?: number;
-  areas_of_strength?: string;
-  areas_for_improvement?: string;
-  officer_narrative?: string;
-  skills_observed?: SkillObservation[];
-  tasks_performed?: TaskPerformed[];
-  enrollment_id?: string;
+  calls_responded?: number | undefined;
+  call_types?: string[] | undefined;
+  performance_rating?: number | undefined;
+  areas_of_strength?: string | undefined;
+  areas_for_improvement?: string | undefined;
+  officer_narrative?: string | undefined;
+  skills_observed?: SkillObservation[] | undefined;
+  tasks_performed?: TaskPerformed[] | undefined;
+  enrollment_id?: string | undefined;
 }
 
 export interface ShiftCompletionReport {

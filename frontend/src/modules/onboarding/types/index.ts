@@ -6,29 +6,29 @@ export interface OnboardingData {
   // Department Information
   departmentName: string;
   hasLogo: boolean;
-  logoData?: string;
+  logoData?: string | undefined;
 
   // Navigation Layout
   navigationLayout: 'top' | 'left' | null;
 
   // Email Configuration
   emailPlatform: 'gmail' | 'microsoft' | 'selfhosted' | 'other' | null;
-  emailConfig?: EmailConfig;
-  emailConfigMethod?: 'oauth' | 'apppassword';
+  emailConfig?: EmailConfig | undefined;
+  emailConfigMethod?: 'oauth' | 'apppassword' | undefined;
 
   // File Storage Configuration
   fileStoragePlatform: 'googledrive' | 'onedrive' | 's3' | 'local' | 'other' | null;
-  fileStorageConfig?: FileStorageConfig;
+  fileStorageConfig?: FileStorageConfig | undefined;
 
   // Authentication Configuration
   authenticationPlatform: 'google' | 'microsoft' | 'authentik' | 'local' | null;
-  authenticationConfig?: AuthenticationConfig;
+  authenticationConfig?: AuthenticationConfig | undefined;
 
   // IT Team and Backup Access
-  itTeamInfo?: ITTeamInfo;
+  itTeamInfo?: ITTeamInfo | undefined;
 
   // Admin User
-  adminUser?: AdminUser;
+  adminUser?: AdminUser | undefined;
 }
 
 export interface EmailConfig {

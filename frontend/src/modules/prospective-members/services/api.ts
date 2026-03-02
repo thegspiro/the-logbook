@@ -454,9 +454,9 @@ interface BackendPaginatedProspectList {
 
 export const applicantService = {
   async getApplicants(params?: {
-    filters?: ApplicantListFilters;
-    page?: number;
-    pageSize?: number;
+    filters?: ApplicantListFilters | undefined;
+    page?: number | undefined;
+    pageSize?: number | undefined;
   }): Promise<PaginatedApplicantList> {
     const page = params?.page ?? 1;
     const pageSize = params?.pageSize ?? 25;
@@ -661,10 +661,10 @@ export const applicantService = {
   },
 
   async getInactiveApplicants(params?: {
-    pipeline_id?: string;
-    search?: string;
-    page?: number;
-    pageSize?: number;
+    pipeline_id?: string | undefined;
+    search?: string | undefined;
+    page?: number | undefined;
+    pageSize?: number | undefined;
   }): Promise<PaginatedApplicantList> {
     return this.getApplicants({
       filters: {
@@ -678,10 +678,10 @@ export const applicantService = {
   },
 
   async getWithdrawnApplicants(params?: {
-    pipeline_id?: string;
-    search?: string;
-    page?: number;
-    pageSize?: number;
+    pipeline_id?: string | undefined;
+    search?: string | undefined;
+    page?: number | undefined;
+    pageSize?: number | undefined;
   }): Promise<PaginatedApplicantList> {
     return this.getApplicants({
       filters: {
@@ -856,21 +856,21 @@ export const publicStatusService = {
     first_name: string;
     last_name: string;
     status: string;
-    current_stage_name?: string;
-    pipeline_name?: string;
+    current_stage_name?: string | undefined;
+    pipeline_name?: string | undefined;
     total_stages: number;
-    stage_timeline: { stage_name: string; status: string; completed_at?: string }[];
-    applied_at?: string;
+    stage_timeline: { stage_name: string; status: string; completed_at?: string | undefined }[];
+    applied_at?: string | undefined;
   }> {
     const response = await axios.get<{
       first_name: string;
       last_name: string;
       status: string;
-      current_stage_name?: string;
-      pipeline_name?: string;
+      current_stage_name?: string | undefined;
+      pipeline_name?: string | undefined;
       total_stages: number;
-      stage_timeline: { stage_name: string; status: string; completed_at?: string }[];
-      applied_at?: string;
+      stage_timeline: { stage_name: string; status: string; completed_at?: string | undefined }[];
+      applied_at?: string | undefined;
     }>(`/api/public/v1/application-status/${token}`);
     return response.data;
   },
@@ -885,8 +885,8 @@ export const electionPackageService = {
   },
 
   async getAllPackages(params?: {
-    pipeline_id?: string;
-    status?: string;
+    pipeline_id?: string | undefined;
+    status?: string | undefined;
   }): Promise<ElectionPackage[]> {
     const response = await api.get<BackendElectionPackageResponse[]>('/prospective-members/election-packages', {
       params: {

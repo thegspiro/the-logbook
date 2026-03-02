@@ -72,43 +72,43 @@ export interface TrainingSessionResponse {
 
 export interface TrainingSessionCreate {
   title: string;
-  description?: string;
-  location_id?: string;
-  location?: string;
-  location_details?: string;
+  description?: string | undefined;
+  location_id?: string | undefined;
+  location?: string | undefined;
+  location_details?: string | undefined;
   start_datetime: string;
   end_datetime: string;
-  requires_rsvp?: boolean;
-  rsvp_deadline?: string;
-  max_attendees?: number;
-  is_mandatory?: boolean;
-  check_in_window_type?: string;
-  check_in_minutes_before?: number;
-  check_in_minutes_after?: number;
-  require_checkout?: boolean;
-  use_existing_course?: boolean;
-  course_id?: string;
-  category_id?: string;
-  program_id?: string;
-  phase_id?: string;
-  requirement_id?: string;
-  course_name?: string;
-  course_code?: string;
+  requires_rsvp?: boolean | undefined;
+  rsvp_deadline?: string | undefined;
+  max_attendees?: number | undefined;
+  is_mandatory?: boolean | undefined;
+  check_in_window_type?: string | undefined;
+  check_in_minutes_before?: number | undefined;
+  check_in_minutes_after?: number | undefined;
+  require_checkout?: boolean | undefined;
+  use_existing_course?: boolean | undefined;
+  course_id?: string | undefined;
+  category_id?: string | undefined;
+  program_id?: string | undefined;
+  phase_id?: string | undefined;
+  requirement_id?: string | undefined;
+  course_name?: string | undefined;
+  course_code?: string | undefined;
   training_type: string;
   credit_hours: number;
-  instructor?: string;
-  issues_certification?: boolean;
-  certification_number_prefix?: string;
-  issuing_agency?: string;
-  expiration_months?: number;
-  auto_create_records?: boolean;
-  require_completion_confirmation?: boolean;
-  approval_required?: boolean;
-  approval_deadline_days?: number;
+  instructor?: string | undefined;
+  issues_certification?: boolean | undefined;
+  certification_number_prefix?: string | undefined;
+  issuing_agency?: string | undefined;
+  expiration_months?: number | undefined;
+  auto_create_records?: boolean | undefined;
+  require_completion_confirmation?: boolean | undefined;
+  approval_required?: boolean | undefined;
+  approval_deadline_days?: number | undefined;
 }
 
 export const analyticsApiService = {
-  async trackEvent(data: { event_type: string; event_id: string; user_id?: string; metadata: Record<string, unknown> }): Promise<void> {
+  async trackEvent(data: { event_type: string; event_id: string; user_id?: string | undefined; metadata: Record<string, unknown> }): Promise<void> {
     await api.post('/analytics/track', data);
   },
 
@@ -155,7 +155,7 @@ export const errorLogsService = {
     error_message: string;
     user_message: string;
     context: Record<string, unknown>;
-    event_id?: string;
+    event_id?: string | undefined;
   }): Promise<void> {
     await api.post('/errors/log', data);
   },
@@ -211,7 +211,7 @@ export const dashboardService = {
     const response = await api.get<AdminSummary>('/dashboard/admin-summary');
     return response.data;
   },
-  async getActionItems(params?: { status_filter?: string; assigned_to_me?: boolean }): Promise<ActionItemSummary[]> {
+  async getActionItems(params?: { status_filter?: string | undefined; assigned_to_me?: boolean | undefined }): Promise<ActionItemSummary[]> {
     const response = await api.get<ActionItemSummary[]>('/dashboard/action-items', { params });
     return response.data;
   },
@@ -398,9 +398,9 @@ export const memberStatusService = {
   async createLeaveOfAbsence(data: {
     user_id: string;
     leave_type: string;
-    reason?: string;
+    reason?: string | undefined;
     start_date: string;
-    end_date?: string;
+    end_date?: string | undefined;
     exempt_from_training_waiver?: boolean;
   }): Promise<LeaveOfAbsenceResponse> {
     const response = await api.post<LeaveOfAbsenceResponse>('/users/leaves-of-absence', data);
@@ -432,9 +432,9 @@ export const memberStatusService = {
   async createTrainingWaiver(data: {
     user_id: string;
     waiver_type: string;
-    reason?: string;
+    reason?: string | undefined;
     start_date: string;
-    end_date?: string;
+    end_date?: string | undefined;
     requirement_ids?: string[];
   }): Promise<TrainingWaiverResponse> {
     const response = await api.post<TrainingWaiverResponse>('/training/waivers', data);
@@ -561,7 +561,7 @@ export const shiftCompletionService = {
     return response.data;
   },
 
-  async reviewReport(reportId: string, data: { review_status: string; reviewer_notes?: string; redact_fields?: string[] }): Promise<import('../types/training').ShiftCompletionReport> {
+  async reviewReport(reportId: string, data: { review_status: string; reviewer_notes?: string | undefined; redact_fields?: string[] | undefined }): Promise<import('../types/training').ShiftCompletionReport> {
     const response = await api.post<import('../types/training').ShiftCompletionReport>(`/training/shift-reports/${reportId}/review`, data);
     return response.data;
   },

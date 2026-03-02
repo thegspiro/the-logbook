@@ -26,7 +26,7 @@ const api = createApiClient();
 // =============================================================================
 
 export const adminHoursCategoryService = {
-  async list(params?: { includeInactive?: boolean }): Promise<AdminHoursCategory[]> {
+  async list(params?: { includeInactive?: boolean | undefined }): Promise<AdminHoursCategory[]> {
     const response = await api.get<AdminHoursCategory[]>('/admin-hours/categories', {
       params: { include_inactive: params?.includeInactive ?? false },
     });
@@ -90,12 +90,12 @@ export const adminHoursEntryService = {
   },
 
   async listMy(params?: {
-    status?: string;
-    categoryId?: string;
-    startDate?: string;
-    endDate?: string;
-    skip?: number;
-    limit?: number;
+    status?: string | undefined;
+    categoryId?: string | undefined;
+    startDate?: string | undefined;
+    endDate?: string | undefined;
+    skip?: number | undefined;
+    limit?: number | undefined;
   }): Promise<AdminHoursPaginatedEntries> {
     const response = await api.get<AdminHoursPaginatedEntries>('/admin-hours/entries/my', {
       params: {
@@ -111,13 +111,13 @@ export const adminHoursEntryService = {
   },
 
   async listAll(params?: {
-    status?: string;
-    categoryId?: string;
-    userId?: string;
-    startDate?: string;
-    endDate?: string;
-    skip?: number;
-    limit?: number;
+    status?: string | undefined;
+    categoryId?: string | undefined;
+    userId?: string | undefined;
+    startDate?: string | undefined;
+    endDate?: string | undefined;
+    skip?: number | undefined;
+    limit?: number | undefined;
   }): Promise<AdminHoursPaginatedEntries> {
     const response = await api.get<AdminHoursPaginatedEntries>('/admin-hours/entries', {
       params: {
@@ -154,9 +154,9 @@ export const adminHoursEntryService = {
   },
 
   async getSummary(params?: {
-    userId?: string;
-    startDate?: string;
-    endDate?: string;
+    userId?: string | undefined;
+    startDate?: string | undefined;
+    endDate?: string | undefined;
   }): Promise<AdminHoursSummary> {
     const response = await api.get<AdminHoursSummary>('/admin-hours/summary', {
       params: {
@@ -174,11 +174,11 @@ export const adminHoursEntryService = {
   },
 
   getExportUrl(params?: {
-    status?: string;
-    categoryId?: string;
-    userId?: string;
-    startDate?: string;
-    endDate?: string;
+    status?: string | undefined;
+    categoryId?: string | undefined;
+    userId?: string | undefined;
+    startDate?: string | undefined;
+    endDate?: string | undefined;
   }): string {
     const searchParams = new URLSearchParams();
     if (params?.status) searchParams.set('status', params.status);

@@ -42,27 +42,27 @@ export type TestResult =
 export interface SkillCriterion {
   id: string;
   label: string;
-  description?: string;
+  description?: string | undefined;
   type: CriterionType;
   required: boolean;
   sort_order: number;
   /** For 'score' type: minimum passing score */
-  passing_score?: number;
+  passing_score?: number | undefined;
   /** For 'score' type: maximum possible score */
-  max_score?: number;
+  max_score?: number | undefined;
   /** For 'time_limit' type: max seconds allowed */
-  time_limit_seconds?: number;
+  time_limit_seconds?: number | undefined;
   /** For 'checklist' type: items that must be checked */
-  checklist_items?: string[];
+  checklist_items?: string[] | undefined;
   /** For 'statement' type: text the evaluator must read/state */
-  statement_text?: string;
+  statement_text?: string | undefined;
 }
 
 /** A section grouping related criteria within a template */
 export interface SkillTemplateSection {
   id: string;
   name: string;
-  description?: string;
+  description?: string | undefined;
   sort_order: number;
   criteria: SkillCriterion[];
 }
@@ -93,47 +93,47 @@ export interface SkillTemplate {
 
 export interface SkillTemplateCreate {
   name: string;
-  description?: string;
-  category?: string;
+  description?: string | undefined;
+  category?: string | undefined;
   sections: SkillTemplateSectionCreate[];
-  time_limit_seconds?: number;
-  passing_percentage?: number;
-  require_all_critical?: boolean;
-  tags?: string[];
-  visibility?: TemplateVisibility;
+  time_limit_seconds?: number | undefined;
+  passing_percentage?: number | undefined;
+  require_all_critical?: boolean | undefined;
+  tags?: string[] | undefined;
+  visibility?: TemplateVisibility | undefined;
 }
 
 export interface SkillTemplateSectionCreate {
   name: string;
-  description?: string;
+  description?: string | undefined;
   sort_order: number;
   criteria: SkillCriterionCreate[];
 }
 
 export interface SkillCriterionCreate {
   label: string;
-  description?: string;
+  description?: string | undefined;
   type: CriterionType;
   required: boolean;
   sort_order: number;
-  passing_score?: number;
-  max_score?: number;
-  time_limit_seconds?: number;
-  checklist_items?: string[];
-  statement_text?: string;
+  passing_score?: number | undefined;
+  max_score?: number | undefined;
+  time_limit_seconds?: number | undefined;
+  checklist_items?: string[] | undefined;
+  statement_text?: string | undefined;
 }
 
 export interface SkillTemplateUpdate {
-  name?: string;
-  description?: string;
-  category?: string;
-  status?: TemplateStatus;
-  visibility?: TemplateVisibility;
-  sections?: SkillTemplateSectionCreate[];
-  time_limit_seconds?: number | null;
-  passing_percentage?: number | null;
-  require_all_critical?: boolean;
-  tags?: string[];
+  name?: string | undefined;
+  description?: string | undefined;
+  category?: string | undefined;
+  status?: TemplateStatus | undefined;
+  visibility?: TemplateVisibility | undefined;
+  sections?: SkillTemplateSectionCreate[] | undefined;
+  time_limit_seconds?: number | null | undefined;
+  passing_percentage?: number | null | undefined;
+  require_all_critical?: boolean | undefined;
+  tags?: string[] | undefined;
 }
 
 // ==================== Active Test Types ====================
@@ -142,19 +142,19 @@ export interface SkillTemplateUpdate {
 export interface CriterionResult {
   criterion_id: string;
   /** Sent to backend for name-based result matching */
-  criterion_label?: string;
+  criterion_label?: string | undefined;
   passed: boolean | null;
-  score?: number;
-  time_seconds?: number;
-  checklist_completed?: boolean[];
-  notes?: string;
+  score?: number | undefined;
+  time_seconds?: number | undefined;
+  checklist_completed?: boolean[] | undefined;
+  notes?: string | undefined;
 }
 
 /** Results for a section during a test */
 export interface SectionResult {
   section_id: string;
   /** Sent to backend for name-based result matching */
-  section_name?: string;
+  section_name?: string | undefined;
   criteria_results: CriterionResult[];
 }
 
@@ -190,8 +190,8 @@ export interface SkillTest {
 export interface SkillTestCreate {
   template_id: string;
   candidate_id: string;
-  notes?: string;
-  is_practice?: boolean;
+  notes?: string | undefined;
+  is_practice?: boolean | undefined;
 }
 
 export interface SkillTestUpdate {

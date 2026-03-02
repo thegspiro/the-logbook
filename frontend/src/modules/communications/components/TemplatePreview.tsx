@@ -12,18 +12,18 @@ import type { EmailTemplatePreview } from '../types';
 
 interface PreviewMember {
   id: string;
-  full_name?: string;
-  first_name?: string;
-  last_name?: string;
-  email?: string;
+  full_name?: string | undefined;
+  first_name?: string | undefined;
+  last_name?: string | undefined;
+  email?: string | undefined;
 }
 
 interface TemplatePreviewProps {
   preview: EmailTemplatePreview | null;
   isPreviewing: boolean;
   onRefresh: (memberId?: string) => void;
-  members?: PreviewMember[];
-  isLoadingMembers?: boolean;
+  members?: PreviewMember[] | undefined;
+  isLoadingMembers?: boolean | undefined;
 }
 
 export const TemplatePreview: React.FC<TemplatePreviewProps> = ({

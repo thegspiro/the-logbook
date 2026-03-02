@@ -146,19 +146,19 @@ export interface FieldDefinition {
   id: string;
   label: string;
   field_type: string;
-  placeholder?: string;
-  help_text?: string;
-  default_value?: string;
+  placeholder?: string | undefined;
+  help_text?: string | undefined;
+  default_value?: string | undefined;
   required: boolean;
-  min_length?: number;
-  max_length?: number;
+  min_length?: number | undefined;
+  max_length?: number | undefined;
   min_value?: number;
   max_value?: number;
   validation_pattern?: string;
-  options?: { value: string; label: string }[];
-  condition_field_id?: string;
-  condition_operator?: string;
-  condition_value?: string;
+  options?: { value: string; label: string }[] | undefined;
+  condition_field_id?: string | undefined;
+  condition_operator?: string | undefined;
+  condition_value?: string | undefined;
   sort_order: number;
   width: string;
 }
@@ -170,7 +170,7 @@ export interface FieldRendererProps {
   /** Use dark theme (internal app) or light theme (public forms). Default: dark */
   theme?: 'dark' | 'light';
   disabled?: boolean;
-  error?: string;
+  error?: string | undefined;
 }
 
 const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = false, error }: FieldRendererProps) => {

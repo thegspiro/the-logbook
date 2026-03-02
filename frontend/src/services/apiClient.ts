@@ -80,7 +80,8 @@ api.interceptors.request.use(
         // If stale, trigger a background revalidation for the next caller
         if (!cached.fresh && !isRevalidating(key)) {
           markRevalidating(key);
-          const bgConfig = { ...config, _skipCache: true, adapter: undefined };
+          const { adapter: _adapter, ...restConfig } = config;
+          const bgConfig = { ...restConfig, _skipCache: true };
           void api.request(bgConfig)
             .then((res) => setCache(key, res.data))
             .catch(() => { /* background revalidation failure is non-critical */ })

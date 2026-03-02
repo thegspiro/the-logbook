@@ -39,7 +39,7 @@ type DetailTab = 'general' | 'history' | 'nfpa' | 'inspections' | 'exposures';
 
 interface ItemDetailModalProps {
   item: InventoryItem;
-  category?: InventoryCategory;
+  category?: InventoryCategory | undefined;
   onClose: () => void;
   onEdit: (item: InventoryItem) => void;
   canManage: boolean;

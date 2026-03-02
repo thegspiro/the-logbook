@@ -18,12 +18,12 @@ export const formsService = {
   },
 
   async getForms(params?: {
-    status?: string;
-    category?: string;
-    search?: string;
-    is_template?: boolean;
-    skip?: number;
-    limit?: number;
+    status?: string | undefined;
+    category?: string | undefined;
+    search?: string | undefined;
+    is_template?: boolean | undefined;
+    skip?: number | undefined;
+    limit?: number | undefined;
   }): Promise<FormsListResponse> {
     const response = await api.get<FormsListResponse>('/forms', { params });
     return response.data;

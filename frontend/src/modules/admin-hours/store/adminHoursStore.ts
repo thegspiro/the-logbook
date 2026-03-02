@@ -59,26 +59,26 @@ interface AdminHoursState {
 
   // Entry actions
   fetchMyEntries: (params?: {
-    status?: string;
-    categoryId?: string;
-    startDate?: string;
-    endDate?: string;
-    skip?: number;
-    limit?: number;
+    status?: string | undefined;
+    categoryId?: string | undefined;
+    startDate?: string | undefined;
+    endDate?: string | undefined;
+    skip?: number | undefined;
+    limit?: number | undefined;
   }) => Promise<void>;
   fetchAllEntries: (params?: {
-    status?: string;
-    categoryId?: string;
-    userId?: string;
-    startDate?: string;
-    endDate?: string;
-    skip?: number;
-    limit?: number;
+    status?: string | undefined;
+    categoryId?: string | undefined;
+    userId?: string | undefined;
+    startDate?: string | undefined;
+    endDate?: string | undefined;
+    skip?: number | undefined;
+    limit?: number | undefined;
   }) => Promise<void>;
   editEntry: (entryId: string, data: AdminHoursEntryEdit) => Promise<void>;
   reviewEntry: (entryId: string, action: 'approve' | 'reject', reason?: string) => Promise<void>;
   bulkApprove: (entryIds: string[]) => Promise<number>;
-  fetchSummary: (params?: { userId?: string; startDate?: string; endDate?: string }) => Promise<void>;
+  fetchSummary: (params?: { userId?: string | undefined; startDate?: string | undefined; endDate?: string | undefined }) => Promise<void>;
   fetchPendingCount: () => Promise<void>;
 
   // Active sessions (admin)

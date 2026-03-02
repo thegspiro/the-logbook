@@ -336,7 +336,7 @@ interface TemplateModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: Record<string, unknown>) => Promise<void>;
-  initialData?: TemplateFormData;
+  initialData?: TemplateFormData | undefined;
   title: string;
   apparatusOptions: ApparatusOption[];
   apparatusSource: 'apparatus' | 'basic' | 'default';
@@ -947,7 +947,7 @@ interface PatternModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: Record<string, unknown>) => Promise<void>;
-  initialData?: PatternFormData;
+  initialData?: PatternFormData | undefined;
   title: string;
   templates: ShiftTemplate[];
 }

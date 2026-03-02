@@ -204,9 +204,9 @@ export interface ScheduledEmail {
 
 export interface ScheduledEmailCreate {
   template_type: string;
-  template_id?: string;
+  template_id?: string | undefined;
   to_emails: string[];
-  cc_emails?: string[];
+  cc_emails?: string[] | undefined;
   context: Record<string, unknown>;
   scheduled_at: string;
 }
@@ -266,17 +266,17 @@ export interface Location {
 
 export interface LocationCreate {
   name: string;
-  description?: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  zip?: string;
-  latitude?: string;
-  longitude?: string;
-  building?: string;
-  floor?: string;
-  room_number?: string;
-  capacity?: number;
+  description?: string | undefined;
+  address?: string | undefined;
+  city?: string | undefined;
+  state?: string | undefined;
+  zip?: string | undefined;
+  latitude?: string | undefined;
+  longitude?: string | undefined;
+  building?: string | undefined;
+  floor?: string | undefined;
+  room_number?: string | undefined;
+  capacity?: number | undefined;
 }
 
 export const messagesService = {

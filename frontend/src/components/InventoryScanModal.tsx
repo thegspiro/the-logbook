@@ -38,8 +38,8 @@ interface ScannedItem {
   trackingType: string;
   quantity: number;
   returnCondition: string;
-  size?: string;
-  color?: string;
+  size?: string | undefined;
+  color?: string | undefined;
 }
 
 type ResultItem = {

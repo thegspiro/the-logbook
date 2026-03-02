@@ -13,7 +13,7 @@ export const documentsService = {
     return response.data;
   },
 
-  async createFolder(data: { name: string; description?: string; color?: string; icon?: string; parent_id?: string }): Promise<DocumentFolder> {
+  async createFolder(data: { name: string; description?: string | undefined; color?: string | undefined; icon?: string | undefined; parent_id?: string | undefined }): Promise<DocumentFolder> {
     const response = await api.post<DocumentFolder>('/documents/folders', data);
     return response.data;
   },

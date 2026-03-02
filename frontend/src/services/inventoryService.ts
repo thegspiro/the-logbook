@@ -44,17 +44,17 @@ export const inventoryService = {
   },
 
   async getItems(params?: {
-    category_id?: string;
-    status?: string;
-    condition?: string;
-    item_type?: string;
-    storage_area_id?: string;
-    search?: string;
-    active_only?: boolean;
-    sort_by?: string;
-    sort_order?: 'asc' | 'desc';
-    skip?: number;
-    limit?: number;
+    category_id?: string | undefined;
+    status?: string | undefined;
+    condition?: string | undefined;
+    item_type?: string | undefined;
+    storage_area_id?: string | undefined;
+    search?: string | undefined;
+    active_only?: boolean | undefined;
+    sort_by?: string | undefined;
+    sort_order?: 'asc' | 'desc' | undefined;
+    skip?: number | undefined;
+    limit?: number | undefined;
   }): Promise<InventoryItemsListResponse> {
     const response = await api.get<InventoryItemsListResponse>('/inventory/items', { params });
     return response.data;
@@ -249,13 +249,13 @@ export const inventoryService = {
     return response.data;
   },
 
-  async exportItemsCsv(params?: { category_id?: string; status?: string; search?: string }): Promise<Blob> {
+  async exportItemsCsv(params?: { category_id?: string | undefined; status?: string | undefined; search?: string | undefined }): Promise<Blob> {
     const response = await api.get<Blob>('/inventory/items/export', { params, responseType: 'blob' });
     return response.data;
   },
 
   // Equipment requests
-  async createEquipmentRequest(data: { item_name: string; item_id?: string; category_id?: string; quantity?: number; request_type?: string; priority?: string; reason?: string }): Promise<{ id: string; item_name: string; status: string; message: string }> {
+  async createEquipmentRequest(data: { item_name: string; item_id?: string | undefined; category_id?: string | undefined; quantity?: number; request_type?: string; priority?: string; reason?: string | undefined }): Promise<{ id: string; item_name: string; status: string; message: string }> {
     const response = await api.post<{ id: string; item_name: string; status: string; message: string }>('/inventory/requests', data);
     return response.data;
   },
@@ -265,7 +265,7 @@ export const inventoryService = {
     return response.data;
   },
 
-  async reviewEquipmentRequest(requestId: string, data: { status: string; review_notes?: string }): Promise<{ id: string; status: string; message: string }> {
+  async reviewEquipmentRequest(requestId: string, data: { status: string; review_notes?: string | undefined }): Promise<{ id: string; status: string; message: string }> {
     const response = await api.put<{ id: string; status: string; message: string }>(`/inventory/requests/${requestId}/review`, data);
     return response.data;
   },
@@ -281,7 +281,7 @@ export const inventoryService = {
     return response.data;
   },
 
-  async reviewWriteOff(writeOffId: string, data: { status: string; review_notes?: string }): Promise<{ id: string; status: string; message: string }> {
+  async reviewWriteOff(writeOffId: string, data: { status: string; review_notes?: string | undefined }): Promise<{ id: string; status: string; message: string }> {
     const response = await api.put<{ id: string; status: string; message: string }>(`/inventory/write-offs/${writeOffId}/review`, data);
     return response.data;
   },
@@ -342,19 +342,19 @@ export interface FormField {
   form_id: string;
   label: string;
   field_type: string;
-  placeholder?: string;
-  help_text?: string;
-  default_value?: string;
+  placeholder?: string | undefined;
+  help_text?: string | undefined;
+  default_value?: string | undefined;
   required: boolean;
-  min_length?: number;
-  max_length?: number;
+  min_length?: number | undefined;
+  max_length?: number | undefined;
   min_value?: number;
   max_value?: number;
   validation_pattern?: string;
-  options?: FormFieldOption[];
-  condition_field_id?: string;
-  condition_operator?: string;
-  condition_value?: string;
+  options?: FormFieldOption[] | undefined;
+  condition_field_id?: string | undefined;
+  condition_operator?: string | undefined;
+  condition_value?: string | undefined;
   sort_order: number;
   width: string;
   created_at: string;
@@ -364,18 +364,18 @@ export interface FormField {
 export interface FormFieldCreate {
   label: string;
   field_type: string;
-  placeholder?: string;
-  help_text?: string;
-  default_value?: string;
+  placeholder?: string | undefined;
+  help_text?: string | undefined;
+  default_value?: string | undefined;
   required?: boolean;
-  min_length?: number;
-  max_length?: number;
+  min_length?: number | undefined;
+  max_length?: number | undefined;
   min_value?: number;
   max_value?: number;
-  options?: FormFieldOption[];
-  condition_field_id?: string;
-  condition_operator?: string;
-  condition_value?: string;
+  options?: FormFieldOption[] | undefined;
+  condition_field_id?: string | undefined;
+  condition_operator?: string | undefined;
+  condition_value?: string | undefined;
   sort_order?: number;
   width?: string;
 }
@@ -445,14 +445,14 @@ export interface FormDetailDef extends FormDef {
 
 export interface FormCreate {
   name: string;
-  description?: string;
-  category?: string;
-  allow_multiple_submissions?: boolean;
-  require_authentication?: boolean;
-  notify_on_submission?: boolean;
-  notification_emails?: string[];
-  is_public?: boolean;
-  fields?: FormFieldCreate[];
+  description?: string | undefined;
+  category?: string | undefined;
+  allow_multiple_submissions?: boolean | undefined;
+  require_authentication?: boolean | undefined;
+  notify_on_submission?: boolean | undefined;
+  notification_emails?: string[] | undefined;
+  is_public?: boolean | undefined;
+  fields?: FormFieldCreate[] | undefined;
 }
 
 export interface FormUpdate {

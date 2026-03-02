@@ -14,7 +14,7 @@ import { handleStoreError } from '../../../utils/storeHelpers';
 interface MembershipState {
   // Data
   members: User[];
-  currentMember: (User & { roles?: { id: string; name: string }[] }) | null;
+  currentMember: (User & { roles?: { id: string; name: string }[] | undefined }) | null;
   stats: MemberStats;
   contactInfoSettings: ContactInfoSettings | null;
 
@@ -39,7 +39,7 @@ interface MembershipState {
   fetchContactInfoSettings: () => Promise<void>;
   setSearchQuery: (query: string) => void;
   setStatusFilter: (status: string) => void;
-  setCurrentMember: (member: (User & { roles?: { id: string; name: string }[] }) | null) => void;
+  setCurrentMember: (member: (User & { roles?: { id: string; name: string }[] | undefined }) | null) => void;
   clearError: () => void;
 }
 

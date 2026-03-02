@@ -8,8 +8,8 @@ export interface BallotItem {
   id: string;
   type: string; // membership_approval, officer_election, general_vote
   title: string;
-  description?: string;
-  position?: string;
+  description?: string | undefined;
+  position?: string | undefined;
   eligible_voter_types: string[]; // ['all'], ['regular'], ['life'], ['probationary'], ['operational'], ['administrative'], or specific role slugs
   vote_type: string; // approval, candidate_selection
   required_for_approval?: number;
@@ -78,27 +78,27 @@ export interface ElectionListItem {
 
 export interface ElectionCreate {
   title: string;
-  description?: string;
+  description?: string | undefined;
   election_type: string;
-  positions?: string[];
-  ballot_items?: BallotItem[];
-  position_eligibility?: { [position: string]: PositionEligibility };
-  meeting_date?: string;
-  meeting_id?: string;
+  positions?: string[] | undefined;
+  ballot_items?: BallotItem[] | undefined;
+  position_eligibility?: { [position: string]: PositionEligibility } | undefined;
+  meeting_date?: string | undefined;
+  meeting_id?: string | undefined;
   start_date: string;
   end_date: string;
-  anonymous_voting?: boolean;
-  allow_write_ins?: boolean;
-  max_votes_per_position?: number;
-  results_visible_immediately?: boolean;
-  eligible_voters?: string[];
-  voting_method?: VotingMethod;
-  victory_condition?: VictoryCondition;
-  victory_threshold?: number;
-  victory_percentage?: number;
-  enable_runoffs?: boolean;
-  runoff_type?: string;
-  max_runoff_rounds?: number;
+  anonymous_voting?: boolean | undefined;
+  allow_write_ins?: boolean | undefined;
+  max_votes_per_position?: number | undefined;
+  results_visible_immediately?: boolean | undefined;
+  eligible_voters?: string[] | undefined;
+  voting_method?: VotingMethod | undefined;
+  victory_condition?: VictoryCondition | undefined;
+  victory_threshold?: number | undefined;
+  victory_percentage?: number | undefined;
+  enable_runoffs?: boolean | undefined;
+  runoff_type?: string | undefined;
+  max_runoff_rounds?: number | undefined;
 }
 
 export interface ElectionUpdate {
@@ -147,19 +147,19 @@ export interface Candidate {
 
 export interface CandidateCreate {
   election_id: string;
-  user_id?: string;
+  user_id?: string | undefined;
   name: string;
-  position?: string;
-  statement?: string;
+  position?: string | undefined;
+  statement?: string | undefined;
   photo_url?: string;
   display_order?: number;
   is_write_in?: boolean;
 }
 
 export interface CandidateUpdate {
-  name?: string;
-  position?: string;
-  statement?: string;
+  name?: string | undefined;
+  position?: string | undefined;
+  statement?: string | undefined;
   photo_url?: string;
   accepted?: boolean;
   display_order?: number;
@@ -178,7 +178,7 @@ export interface Vote {
 export interface VoteCreate {
   election_id: string;
   candidate_id: string;
-  position?: string;
+  position?: string | undefined;
   vote_rank?: number; // For ranked-choice voting (1 = first choice)
 }
 
@@ -245,10 +245,10 @@ export interface ElectionStats {
 }
 
 export interface EmailBallot {
-  recipient_user_ids?: string[];
-  subject?: string;
-  message?: string;
-  include_ballot_link?: boolean;
+  recipient_user_ids?: string[] | undefined;
+  subject?: string | undefined;
+  message?: string | undefined;
+  include_ballot_link?: boolean | undefined;
 }
 
 export interface EmailBallotResponse {
@@ -352,7 +352,7 @@ export interface BallotTemplate {
 export interface BallotItemVote {
   ballot_item_id: string;
   choice: string; // 'approve', 'deny', 'abstain', 'write_in', or a candidate UUID
-  write_in_name?: string;
+  write_in_name?: string | undefined;
 }
 
 export interface BallotSubmissionResponse {

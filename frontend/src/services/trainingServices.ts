@@ -762,7 +762,7 @@ export const trainingSubmissionService = {
     return response.data;
   },
 
-  async getAllSubmissions(params?: { status?: string; user_id?: string; limit?: number; offset?: number }): Promise<TrainingSubmission[]> {
+  async getAllSubmissions(params?: { status?: string | undefined; user_id?: string; limit?: number; offset?: number }): Promise<TrainingSubmission[]> {
     const response = await api.get<TrainingSubmission[]>('/training/submissions/all', { params });
     return response.data;
   },

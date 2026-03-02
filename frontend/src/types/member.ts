@@ -116,29 +116,29 @@ export interface MemberFormData {
 export interface CSVMemberRow {
   firstName: string;
   lastName: string;
-  middleName?: string;
+  middleName?: string | undefined;
   membershipNumber: string;
-  dateOfBirth?: string;
+  dateOfBirth?: string | undefined;
   street: string;
   city: string;
   state: string;
   zipCode: string;
   primaryPhone: string;
-  secondaryPhone?: string;
+  secondaryPhone?: string | undefined;
   email: string;
   joinDate: string;
-  status?: string;
-  rank?: string;
-  role?: string;
-  station?: string;
+  status?: string | undefined;
+  rank?: string | undefined;
+  role?: string | undefined;
+  station?: string | undefined;
   emergencyName1: string;
   emergencyRelationship1: string;
   emergencyPhone1: string;
-  emergencyEmail1?: string;
-  emergencyName2?: string;
-  emergencyRelationship2?: string;
-  emergencyPhone2?: string;
-  emergencyEmail2?: string;
+  emergencyEmail1?: string | undefined;
+  emergencyName2?: string | undefined;
+  emergencyRelationship2?: string | undefined;
+  emergencyPhone2?: string | undefined;
+  emergencyEmail2?: string | undefined;
 }
 
 export interface MemberStats {

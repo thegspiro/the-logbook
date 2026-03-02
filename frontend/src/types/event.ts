@@ -78,54 +78,54 @@ export interface EventListItem {
 
 export interface EventCreate {
   title: string;
-  description?: string;
+  description?: string | undefined;
   event_type: EventType;
-  location_id?: string;
-  location?: string;
-  location_details?: string;
+  location_id?: string | undefined;
+  location?: string | undefined;
+  location_details?: string | undefined;
   start_datetime: string;
   end_datetime: string;
-  requires_rsvp?: boolean;
-  rsvp_deadline?: string;
-  max_attendees?: number;
-  allowed_rsvp_statuses?: RSVPStatus[];
-  is_mandatory?: boolean;
+  requires_rsvp?: boolean | undefined;
+  rsvp_deadline?: string | undefined;
+  max_attendees?: number | undefined;
+  allowed_rsvp_statuses?: RSVPStatus[] | undefined;
+  is_mandatory?: boolean | undefined;
 
-  allow_guests?: boolean;
-  send_reminders?: boolean;
-  reminder_schedule?: number[];
-  check_in_window_type?: 'flexible' | 'strict' | 'window';
-  check_in_minutes_before?: number;
-  check_in_minutes_after?: number;
-  require_checkout?: boolean;
-  custom_fields?: Record<string, string | number | boolean | null>;
-  attachments?: EventAttachment[];
+  allow_guests?: boolean | undefined;
+  send_reminders?: boolean | undefined;
+  reminder_schedule?: number[] | undefined;
+  check_in_window_type?: 'flexible' | 'strict' | 'window' | undefined;
+  check_in_minutes_before?: number | undefined;
+  check_in_minutes_after?: number | undefined;
+  require_checkout?: boolean | undefined;
+  custom_fields?: Record<string, string | number | boolean | null> | undefined;
+  attachments?: EventAttachment[] | undefined;
 }
 
 export interface EventUpdate {
-  title?: string;
-  description?: string;
-  event_type?: EventType;
-  location_id?: string;
-  location?: string;
-  location_details?: string;
-  start_datetime?: string;
-  end_datetime?: string;
-  requires_rsvp?: boolean;
-  rsvp_deadline?: string;
-  max_attendees?: number;
-  allowed_rsvp_statuses?: RSVPStatus[];
-  is_mandatory?: boolean;
+  title?: string | undefined;
+  description?: string | undefined;
+  event_type?: EventType | undefined;
+  location_id?: string | undefined;
+  location?: string | undefined;
+  location_details?: string | undefined;
+  start_datetime?: string | undefined;
+  end_datetime?: string | undefined;
+  requires_rsvp?: boolean | undefined;
+  rsvp_deadline?: string | undefined;
+  max_attendees?: number | undefined;
+  allowed_rsvp_statuses?: RSVPStatus[] | undefined;
+  is_mandatory?: boolean | undefined;
 
-  allow_guests?: boolean;
-  send_reminders?: boolean;
-  reminder_schedule?: number[];
-  check_in_window_type?: 'flexible' | 'strict' | 'window';
-  check_in_minutes_before?: number;
-  check_in_minutes_after?: number;
-  require_checkout?: boolean;
-  custom_fields?: Record<string, string | number | boolean | null>;
-  attachments?: EventAttachment[];
+  allow_guests?: boolean | undefined;
+  send_reminders?: boolean | undefined;
+  reminder_schedule?: number[] | undefined;
+  check_in_window_type?: 'flexible' | 'strict' | 'window' | undefined;
+  check_in_minutes_before?: number | undefined;
+  check_in_minutes_after?: number | undefined;
+  require_checkout?: boolean | undefined;
+  custom_fields?: Record<string, string | number | boolean | null> | undefined;
+  attachments?: EventAttachment[] | undefined;
 }
 
 export interface EventCancel {
@@ -177,8 +177,8 @@ export interface CheckInRequest {
 }
 
 export interface RecordActualTimes {
-  actual_start_time?: string;
-  actual_end_time?: string;
+  actual_start_time?: string | undefined;
+  actual_end_time?: string | undefined;
 }
 
 export interface EventStats {

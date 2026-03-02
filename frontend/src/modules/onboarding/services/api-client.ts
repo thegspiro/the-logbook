@@ -5,20 +5,20 @@
  */
 
 interface ApiResponse<T> {
-  data?: T;
-  error?: string;
+  data?: T | undefined;
+  error?: string | undefined;
   statusCode: number;
 }
 
 interface OnboardingSession {
   session_id: string;
   expires_at: string;
-  csrf_token?: string;
+  csrf_token?: string | undefined;
 }
 
 interface RateLimitError {
   message: string;
-  retry_after?: number;
+  retry_after?: number | undefined;
 }
 
 interface HealthStatus {
@@ -29,30 +29,30 @@ interface HealthStatus {
   checks: {
     database: string;
     redis: string;
-    configuration?: string;
-    schema?: string;
+    configuration?: string | undefined;
+    schema?: string | undefined;
     security?: {
       status: string;
-      critical_issues?: number;
-      warnings?: number;
-    };
+      critical_issues?: number | undefined;
+      warnings?: number | undefined;
+    } | undefined;
   };
-  warnings?: string[];
-  schema_error?: string;
+  warnings?: string[] | undefined;
+  schema_error?: string | undefined;
   startup?: {
     phase: string;
     message: string;
     ready: boolean;
-    detailed_message?: string;
+    detailed_message?: string | undefined;
     migrations?: {
       total: number;
       completed: number;
       current: string | null;
       progress_percent: number;
-    };
+    } | undefined;
     uptime_seconds: number;
-    errors?: string[];
-  };
+    errors?: string[] | undefined;
+  } | undefined;
 }
 
 class SecureApiClient {
@@ -312,7 +312,7 @@ class SecureApiClient {
    */
   async saveDepartmentInfo(data: {
     name: string;
-    logo?: string;
+    logo?: string | undefined;
     navigation_layout: 'top' | 'left';
   }): Promise<ApiResponse<Record<string, unknown>>> {
     return this.request('POST', '/onboarding/session/department', data, true);
@@ -337,7 +337,7 @@ class SecureApiClient {
   async testEmailConnection(data: {
     platform: string;
     config: Record<string, unknown>;
-  }): Promise<ApiResponse<{ success: boolean; message?: string }>> {
+  }): Promise<ApiResponse<{ success: boolean; message?: string | undefined }>> {
     return this.request('POST', '/onboarding/test/email', data, true);
   }
 
@@ -372,7 +372,7 @@ class SecureApiClient {
     backup_access: {
       email: string;
       phone: string;
-      secondary_admin_email?: string;
+      secondary_admin_email?: string | undefined;
     };
   }): Promise<ApiResponse<Record<string, unknown>>> {
     return this.request('POST', '/onboarding/session/it-team', data, true);
@@ -394,10 +394,10 @@ class SecureApiClient {
     positions: Array<{
       id: string;
       name: string;
-      description?: string;
+      description?: string | undefined;
       priority: number;
       permissions: Record<string, { view: boolean; manage: boolean }>;
-      is_custom?: boolean;
+      is_custom?: boolean | undefined;
     }>;
   }): Promise<ApiResponse<{
     success: boolean;
@@ -414,10 +414,10 @@ class SecureApiClient {
     roles: Array<{
       id: string;
       name: string;
-      description?: string;
+      description?: string | undefined;
       priority: number;
       permissions: Record<string, { view: boolean; manage: boolean }>;
-      is_custom?: boolean;
+      is_custom?: boolean | undefined;
     }>;
   }): Promise<ApiResponse<{
     success: boolean;
@@ -436,9 +436,9 @@ class SecureApiClient {
   async createOrganization(data: {
     name: string;
     slug: string;
-    organization_type?: string;
-    description?: string;
-    timezone?: string;
+    organization_type?: string | undefined;
+    description?: string | undefined;
+    timezone?: string | undefined;
   }): Promise<ApiResponse<Record<string, unknown>>> {
     return this.request('POST', '/onboarding/organization', {
       name: data.name,
@@ -455,39 +455,39 @@ class SecureApiClient {
    */
   async saveOrganization(data: {
     name: string;
-    slug?: string;
-    description?: string;
+    slug?: string | undefined;
+    description?: string | undefined;
     organization_type: 'fire_department' | 'ems_only' | 'fire_ems_combined';
     timezone: string;
-    phone?: string;
-    fax?: string;
-    email?: string;
-    website?: string;
+    phone?: string | undefined;
+    fax?: string | undefined;
+    email?: string | undefined;
+    website?: string | undefined;
     mailing_address: {
       line1: string;
-      line2?: string;
+      line2?: string | undefined;
       city: string;
       state: string;
       zip_code: string;
-      country?: string;
+      country?: string | undefined;
     };
     physical_address_same: boolean;
     physical_address?: {
       line1: string;
-      line2?: string;
+      line2?: string | undefined;
       city: string;
       state: string;
       zip_code: string;
-      country?: string;
-    };
+      country?: string | undefined;
+    } | undefined;
     identifier_type: 'fdid' | 'state_id' | 'department_id';
-    fdid?: string;
-    state_id?: string;
-    department_id?: string;
-    county?: string;
-    founded_year?: number;
-    tax_id?: string;
-    logo?: string;
+    fdid?: string | undefined;
+    state_id?: string | undefined;
+    department_id?: string | undefined;
+    county?: string | undefined;
+    founded_year?: number | undefined;
+    tax_id?: string | undefined;
+    logo?: string | undefined;
   }): Promise<ApiResponse<{
     id: string;
     name: string;
@@ -512,9 +512,9 @@ class SecureApiClient {
     password_confirm: string;
     first_name: string;
     last_name: string;
-    membership_number?: string;
-  }): Promise<ApiResponse<{ access_token?: string; refresh_token?: string }>> {
-    const response = await this.request<{ access_token?: string; refresh_token?: string }>('POST', '/onboarding/system-owner', data, true);
+    membership_number?: string | undefined;
+  }): Promise<ApiResponse<{ access_token?: string | undefined; refresh_token?: string | undefined }>> {
+    const response = await this.request<{ access_token?: string | undefined; refresh_token?: string | undefined }>('POST', '/onboarding/system-owner', data, true);
 
     // SECURITY: Clear password from memory immediately
     data.password = '';
@@ -538,8 +538,8 @@ class SecureApiClient {
     password_confirm: string;
     first_name: string;
     last_name: string;
-    membership_number?: string;
-  }): Promise<ApiResponse<{ access_token?: string; refresh_token?: string }>> {
+    membership_number?: string | undefined;
+  }): Promise<ApiResponse<{ access_token?: string | undefined; refresh_token?: string | undefined }>> {
     return this.createSystemOwner(data);
   }
 

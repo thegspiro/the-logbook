@@ -11,39 +11,39 @@ import { getErrorMessage } from '@/utils/errorHandling';
 
 interface OrganizationData {
   name: string;
-  slug?: string;
-  description?: string;
+  slug?: string | undefined;
+  description?: string | undefined;
   organization_type: 'fire_department' | 'ems_only' | 'fire_ems_combined';
   timezone: string;
-  phone?: string;
-  fax?: string;
-  email?: string;
-  website?: string;
+  phone?: string | undefined;
+  fax?: string | undefined;
+  email?: string | undefined;
+  website?: string | undefined;
   mailing_address: {
     line1: string;
-    line2?: string;
+    line2?: string | undefined;
     city: string;
     state: string;
     zip_code: string;
-    country?: string;
+    country?: string | undefined;
   };
   physical_address_same: boolean;
   physical_address?: {
     line1: string;
-    line2?: string;
+    line2?: string | undefined;
     city: string;
     state: string;
     zip_code: string;
-    country?: string;
-  };
+    country?: string | undefined;
+  } | undefined;
   identifier_type: 'fdid' | 'state_id' | 'department_id';
-  fdid?: string;
-  state_id?: string;
-  department_id?: string;
-  county?: string;
-  founded_year?: number;
-  tax_id?: string;
-  logo?: string;
+  fdid?: string | undefined;
+  state_id?: string | undefined;
+  department_id?: string | undefined;
+  county?: string | undefined;
+  founded_year?: number | undefined;
+  tax_id?: string | undefined;
+  logo?: string | undefined;
 }
 
 interface UseOnboardingSessionReturn {

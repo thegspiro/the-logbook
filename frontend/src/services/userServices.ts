@@ -103,30 +103,30 @@ export const userService = {
     username: string;
     email: string;
     first_name: string;
-    middle_name?: string;
+    middle_name?: string | undefined;
     last_name: string;
-    membership_number?: string;
-    phone?: string;
-    mobile?: string;
-    date_of_birth?: string;
-    hire_date?: string;
-    rank?: string;
-    station?: string;
-    address_street?: string;
-    address_city?: string;
-    address_state?: string;
-    address_zip?: string;
-    address_country?: string;
+    membership_number?: string | undefined;
+    phone?: string | undefined;
+    mobile?: string | undefined;
+    date_of_birth?: string | undefined;
+    hire_date?: string | undefined;
+    rank?: string | undefined;
+    station?: string | undefined;
+    address_street?: string | undefined;
+    address_city?: string | undefined;
+    address_state?: string | undefined;
+    address_zip?: string | undefined;
+    address_country?: string | undefined;
     emergency_contacts?: Array<{
       name: string;
       relationship: string;
       phone: string;
-      email?: string;
+      email?: string | undefined;
       is_primary: boolean;
-    }>;
-    password?: string;
-    role_ids?: string[];
-    send_welcome_email?: boolean;
+    }> | undefined;
+    password?: string | undefined;
+    role_ids?: string[] | undefined;
+    send_welcome_email?: boolean | undefined;
   }): Promise<UserWithRoles> {
     const response = await api.post<UserWithRoles>('/users', memberData);
     return response.data;
@@ -455,10 +455,10 @@ export const roleService = {
   async updateRole(
     roleId: string,
     updates: {
-      name?: string;
-      description?: string;
+      name?: string | undefined;
+      description?: string | undefined;
       permissions?: string[];
-      priority?: number;
+      priority?: number | undefined;
     }
   ): Promise<Role> {
     const response = await api.patch<Role>(`/roles/${roleId}`, updates);

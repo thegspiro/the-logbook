@@ -60,7 +60,7 @@ interface UnifiedTrainingWaiver {
   granted_by_name: string;
   active: boolean;
   source: 'standalone' | 'leave_linked';
-  leave_id?: string;
+  leave_id?: string | undefined;
 }
 
 const TrainingWaiversTab: React.FC = () => {

@@ -11,7 +11,7 @@ import { ChevronRight, Home } from 'lucide-react';
 
 export interface BreadcrumbItem {
   label: string;
-  path?: string;
+  path?: string | undefined;
 }
 
 interface BreadcrumbsProps {
