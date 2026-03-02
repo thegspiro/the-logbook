@@ -351,7 +351,7 @@ const FormBuilder = ({
     if (isConnected) {
       try {
         setSaving(true);
-        await formsService.addField(formId!, fieldData);
+        await formsService.addField(formId, fieldData);
         await loadFields();
       } catch {
         setError('Failed to duplicate field.');
@@ -370,7 +370,7 @@ const FormBuilder = ({
       };
       const updated = [...reindexed, newField];
       setFields(updated);
-      onFieldsChange?.(updated as FieldDefinition[]);
+      onFieldsChange?.(updated);
     }
   };
 
@@ -502,7 +502,7 @@ const FormBuilder = ({
       try {
         setSaving(true);
         const fieldIds = sorted.map((f) => f.id);
-        await formsService.reorderFields(formId!, fieldIds);
+        await formsService.reorderFields(formId, fieldIds);
         await loadFields();
       } catch {
         setError('Failed to reorder fields.');
