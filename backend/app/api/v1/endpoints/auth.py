@@ -447,7 +447,12 @@ async def get_current_user_info(
     password_expired = False
     max_age_days = settings.HIPAA_MAXIMUM_PASSWORD_AGE_DAYS
     if max_age_days > 0 and current_user.password_changed_at:
-        age = (datetime.now(timezone.utc) - current_user.password_changed_at).days
+        pwd_changed = (
+            current_user.password_changed_at.replace(tzinfo=timezone.utc)
+            if current_user.password_changed_at.tzinfo is None
+            else current_user.password_changed_at
+        )
+        age = (datetime.now(timezone.utc) - pwd_changed).days
         password_expired = age >= max_age_days
 
     # Get organization timezone
