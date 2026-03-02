@@ -333,7 +333,7 @@ class MembershipPipelineService:
         if not pipeline:
             return None
 
-        step_map = {s.id: s for s in pipeline.steps}
+        step_map = {str(s.id): s for s in pipeline.steps}
         for i, step_id in enumerate(step_ids):
             if step_id in step_map:
                 step_map[step_id].sort_order = i

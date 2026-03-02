@@ -39,6 +39,10 @@ import type {
 import { DEFAULT_ELECTION_PACKAGE_FIELDS } from '../types';
 import { formsService } from '@/services/formsServices';
 import type { FormDef } from '@/services/inventoryService';
+import { eventService } from '@/services/eventServices';
+import type { EventListItem } from '@/types/event';
+import { getEventTypeLabel } from '@/utils/eventHelpers';
+import { formatDateTime } from '@/utils/dateFormatting';
 
 interface StageConfigModalProps {
   isOpen: boolean;
@@ -100,6 +104,16 @@ const MEETING_TYPE_OPTIONS: { value: MeetingType; label: string; description: st
   { value: 'other', label: 'Other', description: 'Custom meeting type.' },
 ];
 
+const EVENT_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'business_meeting', label: 'Business Meeting' },
+  { value: 'training', label: 'Training' },
+  { value: 'public_education', label: 'Public Education' },
+  { value: 'social', label: 'Social' },
+  { value: 'fundraiser', label: 'Fundraiser' },
+  { value: 'ceremony', label: 'Ceremony' },
+  { value: 'other', label: 'Other' },
+];
+
 const DEFAULT_CONFIGS: Record<StageType, () => StageConfig> = {
   form_submission: () => ({ form_id: '', form_name: '' }),
   document_upload: () => ({ required_document_types: [''], allow_multiple: true }),
@@ -147,6 +161,8 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   const [availableForms, setAvailableForms] = useState<FormDef[]>([]);
   const [formsLoading, setFormsLoading] = useState(false);
   const [formsError, setFormsError] = useState<string | null>(null);
+  const [upcomingEvents, setUpcomingEvents] = useState<EventListItem[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
 
   // Fetch published forms when the modal opens
   useEffect(() => {
@@ -171,6 +187,36 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
       }
     };
     void fetchForms();
+    return () => { cancelled = true; };
+  }, [isOpen]);
+
+  // Fetch upcoming events when the modal opens
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    const fetchEvents = async () => {
+      setEventsLoading(true);
+      try {
+        const events = await eventService.getEvents({
+          end_after: new Date().toISOString(),
+          include_cancelled: false,
+          limit: 100,
+        });
+        if (!cancelled) {
+          // Sort by start_datetime ascending (soonest first)
+          const sorted = [...events].sort(
+            (a, b) => new Date(a.start_datetime).getTime() - new Date(b.start_datetime).getTime()
+          );
+          setUpcomingEvents(sorted);
+        }
+      } catch {
+        // Non-critical — events dropdown will simply be empty
+        if (!cancelled) setUpcomingEvents([]);
+      } finally {
+        if (!cancelled) setEventsLoading(false);
+      }
+    };
+    void fetchEvents();
     return () => { cancelled = true; };
   }, [isOpen]);
 
@@ -203,6 +249,42 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
     }
     setErrors({});
   }, [editingStage, isOpen]);
+
+  /** Get next upcoming event for a given event type */
+  const getNextEventForType = (eventType: string): EventListItem | undefined => {
+    return upcomingEvents.find((e) => e.event_type === eventType);
+  };
+
+  /** Render a preview card for the next upcoming event of a given type */
+  const renderEventPreview = (eventType: string | undefined) => {
+    if (!eventType) return null;
+    if (eventsLoading) {
+      return (
+        <div className="flex items-center gap-2 text-sm text-theme-text-muted mt-2">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          Loading events...
+        </div>
+      );
+    }
+    const nextEvent = getNextEventForType(eventType);
+    if (!nextEvent) {
+      return (
+        <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+          No upcoming {getEventTypeLabel(eventType).toLowerCase()} events found.
+        </p>
+      );
+    }
+    return (
+      <div className="mt-2 rounded-md border border-theme-surface-border bg-theme-surface-hover p-3">
+        <p className="text-xs font-medium text-theme-text-muted mb-1">Next upcoming event:</p>
+        <p className="text-sm font-medium text-theme-text-primary">{nextEvent.title}</p>
+        <p className="text-xs text-theme-text-muted mt-0.5">
+          {formatDateTime(nextEvent.start_datetime)}
+          {nextEvent.location_name ? ` — ${nextEvent.location_name}` : nextEvent.location ? ` — ${nextEvent.location}` : ''}
+        </p>
+      </div>
+    );
+  };
 
   const handleStageTypeChange = (type: StageType) => {
     setStageType(type);
@@ -537,6 +619,36 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                   </p>
                 </div>
                 <div>
+                  <label htmlFor="stage-meeting-event-type" className="block text-sm text-theme-text-muted mb-2">
+                    Link to Upcoming Event (optional)
+                  </label>
+                  <select
+                    id="stage-meeting-event-type"
+                    value={meetingConfig.linked_event_type ?? ''}
+                    onChange={(e) => {
+                      const eventType = e.target.value || undefined;
+                      const nextEvent = eventType ? getNextEventForType(eventType) : undefined;
+                      setConfig({
+                        ...meetingConfig,
+                        linked_event_type: eventType,
+                        linked_event_id: nextEvent?.id,
+                      });
+                    }}
+                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  >
+                    <option value="">None — enter details manually</option>
+                    {EVENT_TYPE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        Next {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-theme-text-muted">
+                    Automatically pull details from the next upcoming event of this type.
+                  </p>
+                  {renderEventPreview(meetingConfig.linked_event_type)}
+                </div>
+                <div>
                   <label htmlFor="stage-meeting-description" className="block text-sm text-theme-text-muted mb-2">
                     Meeting Details (optional)
                   </label>
@@ -868,19 +980,56 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                       }
                       className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                     />
-                    Next Informational Meeting Details
+                    Next Meeting Details
                   </label>
                   {emailConfig.include_next_meeting && (
-                    <textarea
-                      value={emailConfig.next_meeting_details ?? ''}
-                      onChange={(e) =>
-                        setConfig({ ...emailConfig, next_meeting_details: e.target.value })
-                      }
-                      placeholder="Our next informational meeting is on the first Monday of the month at 7 PM at Station 1. All prospective members are encouraged to attend."
-                      rows={3}
-                      aria-label="Next meeting details"
-                      className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring resize-none"
-                    />
+                    <div className="space-y-3">
+                      <div>
+                        <label htmlFor="email-meeting-event-type" className="block text-xs text-theme-text-muted mb-1.5">
+                          Pull from upcoming event
+                        </label>
+                        <select
+                          id="email-meeting-event-type"
+                          value={emailConfig.next_meeting_event_type ?? ''}
+                          onChange={(e) => {
+                            const eventType = e.target.value || undefined;
+                            const nextEvent = eventType ? getNextEventForType(eventType) : undefined;
+                            setConfig({
+                              ...emailConfig,
+                              next_meeting_event_type: eventType,
+                              next_meeting_event_id: nextEvent?.id,
+                            });
+                          }}
+                          className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        >
+                          <option value="">None — enter details manually</option>
+                          {EVENT_TYPE_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              Next {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        {renderEventPreview(emailConfig.next_meeting_event_type)}
+                      </div>
+                      <div>
+                        <label htmlFor="email-meeting-details" className="block text-xs text-theme-text-muted mb-1.5">
+                          {emailConfig.next_meeting_event_type ? 'Additional details (optional)' : 'Meeting details'}
+                        </label>
+                        <textarea
+                          id="email-meeting-details"
+                          value={emailConfig.next_meeting_details ?? ''}
+                          onChange={(e) =>
+                            setConfig({ ...emailConfig, next_meeting_details: e.target.value })
+                          }
+                          placeholder={emailConfig.next_meeting_event_type
+                            ? 'Any extra info to include alongside the event details...'
+                            : 'Our next informational meeting is on the first Monday of the month at 7 PM at Station 1. All prospective members are encouraged to attend.'}
+                          rows={2}
+                          aria-label="Next meeting details"
+                          className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring resize-none"
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
 

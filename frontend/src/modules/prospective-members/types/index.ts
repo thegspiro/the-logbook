@@ -140,6 +140,8 @@ export interface MeetingStageConfig {
   meeting_type: MeetingType;
   meeting_description?: string | undefined;
   required_attendees?: string[] | undefined;
+  linked_event_type?: string | undefined;
+  linked_event_id?: string | undefined;
 }
 
 export interface StatusPageToggleConfig {
@@ -162,6 +164,8 @@ export interface AutomatedEmailStageConfig {
   faq_url?: string | undefined;
   include_next_meeting: boolean;
   next_meeting_details?: string | undefined;
+  next_meeting_event_type?: string | undefined;
+  next_meeting_event_id?: string | undefined;
   include_status_tracker: boolean;
   custom_sections?: AutomatedEmailSection[] | undefined;
 }

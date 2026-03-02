@@ -318,6 +318,35 @@ async def add_step(
 
 
 @router.put(
+    "/pipelines/{pipeline_id}/steps/reorder", response_model=list[PipelineStepResponse]
+)
+async def reorder_steps(
+    pipeline_id: UUID,
+    data: StepReorderRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
+):
+    """
+    Reorder steps in a pipeline by providing an ordered list of step IDs.
+
+    **Requires permission: members.manage**
+    """
+    service = MembershipPipelineService(db)
+    steps = await service.reorder_steps(
+        str(pipeline_id),
+        current_user.organization_id,
+        [str(sid) for sid in data.step_ids],
+    )
+    if steps is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found"
+        )
+    return steps
+
+
+@router.put(
     "/pipelines/{pipeline_id}/steps/{step_id}", response_model=PipelineStepResponse
 )
 async def update_step(
@@ -372,35 +401,6 @@ async def delete_step(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Step or pipeline not found"
         )
-
-
-@router.put(
-    "/pipelines/{pipeline_id}/steps/reorder", response_model=list[PipelineStepResponse]
-)
-async def reorder_steps(
-    pipeline_id: UUID,
-    data: StepReorderRequest,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("members.manage", "prospective_members.manage")
-    ),
-):
-    """
-    Reorder steps in a pipeline by providing an ordered list of step IDs.
-
-    **Requires permission: members.manage**
-    """
-    service = MembershipPipelineService(db)
-    steps = await service.reorder_steps(
-        str(pipeline_id),
-        current_user.organization_id,
-        [str(sid) for sid in data.step_ids],
-    )
-    if steps is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found"
-        )
-    return steps
 
 
 # ============================================
