@@ -159,7 +159,12 @@ class AuthService:
         # Check password age - warn but don't block (frontend handles redirect)
         max_age_days = settings.HIPAA_MAXIMUM_PASSWORD_AGE_DAYS
         if max_age_days > 0 and user.password_changed_at:
-            age = (datetime.now(timezone.utc) - user.password_changed_at).days
+            pwd_changed = (
+                user.password_changed_at.replace(tzinfo=timezone.utc)
+                if user.password_changed_at.tzinfo is None
+                else user.password_changed_at
+            )
+            age = (datetime.now(timezone.utc) - pwd_changed).days
             if age >= max_age_days:
                 logger.warning(
                     f"User {user.username} password expired ({age} days old, "
@@ -470,7 +475,12 @@ class AuthService:
         # after admin creation or admin password reset)
         min_age_days = settings.HIPAA_MINIMUM_PASSWORD_AGE_DAYS
         if min_age_days > 0 and user.password_changed_at:
-            age = (datetime.now(timezone.utc) - user.password_changed_at).days
+            pwd_changed = (
+                user.password_changed_at.replace(tzinfo=timezone.utc)
+                if user.password_changed_at.tzinfo is None
+                else user.password_changed_at
+            )
+            age = (datetime.now(timezone.utc) - pwd_changed).days
             if age < min_age_days:
                 return False, (
                     f"Password was changed recently. You must wait at least "

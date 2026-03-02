@@ -1984,10 +1984,21 @@ class MembershipPipelineService:
                 )
                 existing_warning = recent_warning.scalars().first()
                 # Only warn once per 7-day period
+                warning_created = (
+                    existing_warning.created_at.replace(tzinfo=timezone.utc)
+                    if existing_warning
+                    and existing_warning.created_at
+                    and existing_warning.created_at.tzinfo is None
+                    else (
+                        existing_warning.created_at
+                        if existing_warning and existing_warning.created_at
+                        else None
+                    )
+                )
                 if (
                     not existing_warning
-                    or (datetime.now(timezone.utc) - existing_warning.created_at).days
-                    >= 7
+                    or not warning_created
+                    or (datetime.now(timezone.utc) - warning_created).days >= 7
                 ):
                     await self._log_activity(
                         prospect_id=prospect_id,
