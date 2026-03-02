@@ -102,6 +102,8 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   const [showNotesInput, setShowNotesInput] = useState(false);
   const [showRejectConfirm, setShowRejectConfirm] = useState(false);
   const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
+  const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+  const [isSkipping, setIsSkipping] = useState(false);
   const [showPii, setShowPii] = useState(true);
   const [pkgNotes, setPkgNotes] = useState('');
   const [pkgStatement, setPkgStatement] = useState('');
@@ -230,7 +232,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
   if (!isOpen) return null;
 
-  const isActionInProgress = isAdvancing || isRejecting || isHolding || isResuming || isWithdrawing;
+  const isActionInProgress = isAdvancing || isRejecting || isHolding || isResuming || isWithdrawing || isSkipping;
 
   const handleAdvance = async () => {
     if (!applicant) return;
@@ -247,6 +249,29 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
       setShowNotesInput(false);
     } catch {
       toast.error('Failed to advance applicant');
+    }
+  };
+
+  const handleSkipStage = async () => {
+    if (!applicant) return;
+    setIsSkipping(true);
+    try {
+      // Complete current step then advance
+      if (applicant.current_stage_id) {
+        await applicantService.completeStep(
+          applicant.id,
+          applicant.current_stage_id,
+          `Stage skipped by coordinator${actionNotes ? `: ${actionNotes}` : ''}`
+        );
+      }
+      await advanceApplicant(applicant.id, 'Stage skipped');
+      toast.success('Stage skipped');
+      setShowSkipConfirm(false);
+      setActionNotes('');
+    } catch {
+      toast.error('Failed to skip stage');
+    } finally {
+      setIsSkipping(false);
     }
   };
 
@@ -791,6 +816,53 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 </div>
               )}
 
+              {/* Visual Stage Progress */}
+              {applicant.stage_history.length > 0 && (
+                <div className="p-4 border-b border-theme-surface-border">
+                  <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
+                    Progress
+                  </h3>
+                  <div className="flex items-center gap-1 overflow-x-auto pb-1">
+                    {applicant.stage_history.map((entry, idx) => {
+                      const isComplete = !!entry.completed_at;
+                      const isCurrent = idx === applicant.stage_history.length - 1 && !isComplete;
+                      const StageIcon = STAGE_TYPE_ICONS[entry.stage_type] ?? Circle;
+                      return (
+                        <React.Fragment key={entry.id}>
+                          {idx > 0 && (
+                            <div className={`flex-shrink-0 w-4 h-0.5 ${isComplete || isCurrent ? 'bg-emerald-400' : 'bg-theme-surface-border'}`} />
+                          )}
+                          <div
+                            className={`flex items-center gap-1 px-2 py-1 rounded text-xs flex-shrink-0 ${
+                              isComplete
+                                ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                                : isCurrent
+                                ? 'bg-red-500/10 text-red-700 dark:text-red-400 ring-1 ring-red-500/30'
+                                : 'bg-theme-surface-hover text-theme-text-muted'
+                            }`}
+                            title={`${entry.stage_name}${isComplete ? ' (Complete)' : isCurrent ? ' (Current)' : ''}`}
+                          >
+                            {isComplete ? (
+                              <CheckCircle2 className="w-3 h-3" />
+                            ) : (
+                              <StageIcon className="w-3 h-3" />
+                            )}
+                            <span className="max-w-[80px] truncate">{entry.stage_name}</span>
+                          </div>
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
+                  {/* Time in pipeline summary */}
+                  <p className="text-xs text-theme-text-muted mt-2">
+                    {applicant.stage_history.filter((e) => !!e.completed_at).length} of {applicant.stage_history.length} stages completed
+                    {applicant.stage_history.length > 0 && (
+                      <> &middot; In pipeline since {formatDate(applicant.created_at, tz)}</>
+                    )}
+                  </p>
+                </div>
+              )}
+
               {/* Stage History Timeline */}
               <div className="p-4 border-b border-theme-surface-border">
                 <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
@@ -991,6 +1063,31 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   </div>
                 )}
 
+                {/* Skip stage confirmation */}
+                {showSkipConfirm && (
+                  <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-3">
+                    <p className="text-sm text-purple-600 dark:text-purple-300 mb-2">
+                      Skip the current stage? This will mark it as completed and advance the applicant.
+                    </p>
+                    <div className="flex items-center gap-2 justify-end">
+                      <button
+                        onClick={() => setShowSkipConfirm(false)}
+                        className="px-3 py-1.5 text-xs text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => { void handleSkipStage(); }}
+                        disabled={isSkipping}
+                        className="px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50 flex gap-1 items-center"
+                      >
+                        {isSkipping && <Loader2 className="w-3 h-3 animate-spin" />}
+                        Confirm Skip
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Reject confirmation */}
                 {showRejectConfirm && (
                   <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
@@ -1043,6 +1140,15 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   >
                     {isHolding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Pause className="w-3.5 h-3.5" />}
                     <span className="action-label">Hold</span>
+                  </button>
+                  <button
+                    onClick={() => setShowSkipConfirm(true)}
+                    disabled={isActionInProgress}
+                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-purple-400 border border-purple-500/30 rounded-lg hover:bg-purple-500/10 transition-colors disabled:opacity-50"
+                    title="Skip this stage and advance"
+                  >
+                    {isSkipping ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRight className="w-3.5 h-3.5" />}
+                    <span className="action-label">Skip</span>
                   </button>
                   <button
                     onClick={() => setShowRejectConfirm(true)}
