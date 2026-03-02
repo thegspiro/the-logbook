@@ -37,6 +37,16 @@ GLOBAL_VARIABLES: List[Dict[str, str]] = [
         "name": "organization_logo",
         "description": "Organization logo URL (use in an <img> tag)",
     },
+    {
+        "name": "organization_mailing_address",
+        "description": "Full mailing address (multi-line)",
+    },
+    {
+        "name": "organization_physical_address",
+        "description": "Full physical/station address (multi-line)",
+    },
+    {"name": "organization_phone", "description": "Organization phone number"},
+    {"name": "organization_email", "description": "Organization email address"},
 ]
 
 
@@ -252,6 +262,10 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "temp_password": "TempPass123!",
         "organization_name": "Sample Fire Department",
         "organization_logo": "https://example.com/logo.png",
+        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_phone": "(555) 555-1234",
+        "organization_email": "info@samplefd.org",
         "login_url": "https://example.com/login",
     },
     "password_reset": {
@@ -259,6 +273,10 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "reset_url": "https://example.com/reset-password?token=sample-token",
         "organization_name": "Sample Fire Department",
         "organization_logo": "https://example.com/logo.png",
+        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_phone": "(555) 555-1234",
+        "organization_email": "info@samplefd.org",
         "expiry_minutes": "30",
     },
     "event_reminder": {
@@ -272,6 +290,10 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "event_url": "https://example.com/events/123",
         "organization_name": "Sample Fire Department",
         "organization_logo": "https://example.com/logo.png",
+        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_phone": "(555) 555-1234",
+        "organization_email": "info@samplefd.org",
     },
     "event_cancellation": {
         "recipient_name": "John Doe",
@@ -279,6 +301,10 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "event_date": "March 15, 2026",
         "organization_name": "Sample Fire Department",
         "organization_logo": "https://example.com/logo.png",
+        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_phone": "(555) 555-1234",
+        "organization_email": "info@samplefd.org",
         "reason": "Inclement weather",
     },
     "training_approval": {
@@ -291,6 +317,10 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "approval_url": "https://example.com/training/approve/123",
         "organization_name": "Sample Fire Department",
         "organization_logo": "https://example.com/logo.png",
+        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_phone": "(555) 555-1234",
+        "organization_email": "info@samplefd.org",
     },
     "ballot_notification": {
         "recipient_name": "John Doe",
@@ -303,11 +333,19 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "positions": "Captain, Lieutenant",
         "organization_name": "Sample Fire Department",
         "organization_logo": "https://example.com/logo.png",
+        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_phone": "(555) 555-1234",
+        "organization_email": "info@samplefd.org",
     },
     "member_dropped": {
         "member_name": "John Doe",
         "organization_name": "Sample Fire Department",
         "organization_logo": "https://example.com/logo.png",
+        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_phone": "(555) 555-1234",
+        "organization_email": "info@samplefd.org",
         "drop_type_display": "Voluntary Separation",
         "reason": "Relocation",
         "effective_date": "March 31, 2026",
@@ -377,6 +415,10 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "first_name": "John",
         "organization_name": "Sample Fire Department",
         "organization_logo": "https://example.com/logo.png",
+        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_phone": "(555) 555-1234",
+        "organization_email": "info@samplefd.org",
         "change_date": "March 1, 2026",
         "items_issued_html": (
             "<h3>Items Issued</h3>"
@@ -404,6 +446,10 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "days_remaining": "45",
         "organization_name": "Sample Fire Department",
         "organization_logo": "https://example.com/logo.png",
+        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_phone": "(555) 555-1234",
+        "organization_email": "info@samplefd.org",
         "renewal_url": "https://example.com/training/certifications",
     },
     "post_event_validation": {
@@ -414,6 +460,10 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "validation_url": "https://example.com/events/123/validate",
         "organization_name": "Sample Fire Department",
         "organization_logo": "https://example.com/logo.png",
+        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_phone": "(555) 555-1234",
+        "organization_email": "info@samplefd.org",
     },
     "post_shift_validation": {
         "recipient_name": "Capt. Mike Davis",
@@ -423,11 +473,19 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "validation_url": "https://example.com/scheduling/shifts/456/validate",
         "organization_name": "Sample Fire Department",
         "organization_logo": "https://example.com/logo.png",
+        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_phone": "(555) 555-1234",
+        "organization_email": "info@samplefd.org",
     },
     "property_return_reminder": {
         "member_name": "John Doe",
         "organization_name": "Sample Fire Department",
         "organization_logo": "https://example.com/logo.png",
+        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_phone": "(555) 555-1234",
+        "organization_email": "info@samplefd.org",
         "item_count": "3",
         "total_value": "1,200.00",
         "items_list_html": (
@@ -479,6 +537,10 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "pipeline_stage": "Application Review",
         "organization_name": "Sample Fire Department",
         "organization_logo": "https://example.com/logo.png",
+        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_phone": "(555) 555-1234",
+        "organization_email": "info@samplefd.org",
         "prospect_url": "https://example.com/prospective-members/789",
     },
     "election_rollback": {
@@ -488,6 +550,10 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "reason": "Ballots were distributed to ineligible members",
         "organization_name": "Sample Fire Department",
         "organization_logo": "https://example.com/logo.png",
+        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_phone": "(555) 555-1234",
+        "organization_email": "info@samplefd.org",
     },
     "election_deleted": {
         "recipient_name": "Lt. Jane Smith",
@@ -496,12 +562,20 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "reason": "Election created in error — new election will be scheduled",
         "organization_name": "Sample Fire Department",
         "organization_logo": "https://example.com/logo.png",
+        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_phone": "(555) 555-1234",
+        "organization_email": "info@samplefd.org",
     },
     "member_archived": {
         "member_name": "John Doe",
         "previous_status": "Dropped",
         "organization_name": "Sample Fire Department",
         "organization_logo": "https://example.com/logo.png",
+        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_phone": "(555) 555-1234",
+        "organization_email": "info@samplefd.org",
     },
     "event_request_status": {
         "contact_name": "John Doe",
@@ -511,6 +585,10 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "message": "Your event has been approved and added to the calendar.",
         "organization_name": "Sample Fire Department",
         "organization_logo": "https://example.com/logo.png",
+        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_phone": "(555) 555-1234",
+        "organization_email": "info@samplefd.org",
     },
     "it_password_notification": {
         "user_name": "John Doe",
@@ -519,6 +597,10 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "ip_address": "192.168.1.100",
         "organization_name": "Sample Fire Department",
         "organization_logo": "https://example.com/logo.png",
+        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_phone": "(555) 555-1234",
+        "organization_email": "info@samplefd.org",
     },
 }
 
@@ -1657,15 +1739,51 @@ class EmailTemplateService:
         CSS styles are injected into the HTML wrapper.
 
         If ``organization`` is provided, ``organization_name``,
-        ``organization_logo``, and ``organization_logo_img`` are
-        auto-injected into the context (without overwriting values
-        already supplied by the caller).
+        ``organization_logo``, ``organization_logo_img``,
+        ``organization_mailing_address``, ``organization_physical_address``,
+        ``organization_phone``, and ``organization_email`` are auto-injected
+        into the context (without overwriting values already supplied by the
+        caller).
         """
         ctx = dict(context)
         if organization:
             ctx.setdefault("organization_name", getattr(organization, "name", ""))
             logo = getattr(organization, "logo", None) or ""
             ctx.setdefault("organization_logo", logo)
+            ctx.setdefault(
+                "organization_phone", getattr(organization, "phone", None) or ""
+            )
+            ctx.setdefault(
+                "organization_email", getattr(organization, "email", None) or ""
+            )
+            # Build formatted mailing address
+            ctx.setdefault(
+                "organization_mailing_address",
+                self._format_address(
+                    getattr(organization, "mailing_address_line1", None),
+                    getattr(organization, "mailing_address_line2", None),
+                    getattr(organization, "mailing_city", None),
+                    getattr(organization, "mailing_state", None),
+                    getattr(organization, "mailing_zip", None),
+                ),
+            )
+            # Build formatted physical address (falls back to mailing if same)
+            if getattr(organization, "physical_address_same", True):
+                ctx.setdefault(
+                    "organization_physical_address",
+                    ctx.get("organization_mailing_address", ""),
+                )
+            else:
+                ctx.setdefault(
+                    "organization_physical_address",
+                    self._format_address(
+                        getattr(organization, "physical_address_line1", None),
+                        getattr(organization, "physical_address_line2", None),
+                        getattr(organization, "physical_city", None),
+                        getattr(organization, "physical_state", None),
+                        getattr(organization, "physical_zip", None),
+                    ),
+                )
         # Build a ready-to-use <img> tag so templates can just insert it
         logo_val = ctx.get("organization_logo", "")
         if logo_val:
@@ -1699,6 +1817,27 @@ class EmailTemplateService:
 </html>"""
 
         return subject, full_html, text_body
+
+    @staticmethod
+    def _format_address(
+        line1: Optional[str],
+        line2: Optional[str],
+        city: Optional[str],
+        state: Optional[str],
+        zip_code: Optional[str],
+    ) -> str:
+        """Format address fields into a multi-line string."""
+        parts: List[str] = []
+        if line1:
+            parts.append(line1)
+        if line2:
+            parts.append(line2)
+        city_state = ", ".join(filter(None, [city, state]))
+        if city_state and zip_code:
+            city_state += f" {zip_code}"
+        if city_state:
+            parts.append(city_state)
+        return "\n".join(parts)
 
     # Variable names whose values contain pre-rendered, system-generated
     # HTML (e.g. item tables, logo <img> tags).  These are built by
