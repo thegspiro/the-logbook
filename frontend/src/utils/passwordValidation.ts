@@ -28,6 +28,8 @@ const DEFAULT_REQUIREMENTS: PasswordRequirements = {
   requireSpecial: true,
 };
 
+const PASSWORD_MAX_LENGTH = 128;
+
 // Common passwords to reject (subset - backend has full list)
 const COMMON_PASSWORDS = [
   'password', '12345678', '123456789', '1234567890', 'qwerty', 'admin',
@@ -61,6 +63,15 @@ export function validatePassword(
 ): PasswordValidationResult {
   const errors: string[] = [];
   let strengthScore = 0;
+
+  // Check max length to prevent DoS
+  if (password.length > PASSWORD_MAX_LENGTH) {
+    return {
+      isValid: false,
+      errors: [`Password must be no more than ${PASSWORD_MAX_LENGTH} characters long`],
+      strength: 'weak' as const,
+    };
+  }
 
   // Check length
   if (password.length < requirements.minLength) {
@@ -220,7 +231,7 @@ export function getStrengthText(strength: PasswordValidationResult['strength']):
  */
 export function validatePasswordStrength(password: string) {
   const checks = {
-    length: password.length >= 8,
+    length: password.length >= DEFAULT_REQUIREMENTS.minLength,
     uppercase: /[A-Z]/.test(password),
     lowercase: /[a-z]/.test(password),
     number: /\d/.test(password),

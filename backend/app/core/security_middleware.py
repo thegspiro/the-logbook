@@ -765,8 +765,6 @@ class IPBlockingMiddleware(BaseHTTPMiddleware):
     ) -> None:
         """Log blocked access attempt to database."""
         try:
-            pass
-
             from app.core.geoip import get_geoip_service
 
             geoip = get_geoip_service()

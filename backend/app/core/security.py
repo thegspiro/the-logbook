@@ -114,6 +114,13 @@ def validate_password_strength(password: str) -> tuple[bool, str | None]:
     """
     errors = []
 
+    # Check maximum length first to prevent DoS via hashing very long inputs
+    if len(password) > settings.PASSWORD_MAX_LENGTH:
+        errors.append(
+            f"Password must be no more than {settings.PASSWORD_MAX_LENGTH} characters long"
+        )
+        return False, errors[0]
+
     # Check length
     if len(password) < settings.PASSWORD_MIN_LENGTH:
         errors.append(

@@ -406,11 +406,16 @@ describe('validatePasswordStrength', () => {
     expect(result.isValid).toBe(true);
   });
 
-  it('uses minLength of 8 (not 12 like validatePassword)', () => {
-    // 8 chars with all character classes
-    const result = validatePasswordStrength('K9#mPx!w');
-    expect(result.checks.length).toBe(true);
-    expect(result.isValid).toBe(true);
+  it('uses the same minLength (12) as validatePassword', () => {
+    // 8 chars — too short
+    const short = validatePasswordStrength('K9#mPx!w');
+    expect(short.checks.length).toBe(false);
+    expect(short.isValid).toBe(false);
+
+    // 12 chars — meets the requirement
+    const valid = validatePasswordStrength('K9#mPx!wQ2$v');
+    expect(valid.checks.length).toBe(true);
+    expect(valid.isValid).toBe(true);
   });
 
   it('returns length false for short passwords', () => {

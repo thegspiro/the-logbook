@@ -268,7 +268,7 @@ class AdminPasswordReset(BaseModel):
     """Schema for admin resetting a user's password"""
 
     new_password: str = Field(
-        ..., min_length=12, description="New password for the user"
+        ..., min_length=12, max_length=128, description="New password for the user"
     )
     force_change: bool = Field(
         default=True,
