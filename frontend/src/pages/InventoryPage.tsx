@@ -28,6 +28,7 @@ import {
   ArrowUp,
   ArrowDown,
   Copy,
+  Upload,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
@@ -1304,6 +1305,10 @@ const InventoryPage: React.FC = () => {
                 </div>
                 {canManage && (
                   <div className="flex items-center gap-2 ml-auto">
+                    <Link to="/inventory/import" className="flex items-center gap-1.5 px-3 py-2 text-sm text-theme-text-secondary hover:text-theme-text-primary bg-theme-input-bg border border-theme-input-border rounded-lg hover:bg-theme-surface-hover transition-colors" title="Import CSV">
+                      <Upload className="w-4 h-4" aria-hidden="true" />
+                      <span className="hidden sm:inline">Import</span>
+                    </Link>
                     <button onClick={() => { void handleExportCsv(); }} className="flex items-center gap-1.5 px-3 py-2 text-sm text-theme-text-secondary hover:text-theme-text-primary bg-theme-input-bg border border-theme-input-border rounded-lg hover:bg-theme-surface-hover transition-colors" title="Export CSV">
                       <Download className="w-4 h-4" aria-hidden="true" />
                       <span className="hidden sm:inline">Export</span>

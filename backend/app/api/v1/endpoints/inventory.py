@@ -6,14 +6,18 @@ checkouts, maintenance, and reporting.
 """
 
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from fastapi import (
     APIRouter,
     Depends,
+)
+from fastapi import File as FastAPIFile
+from fastapi import (
     HTTPException,
     Query,
+    UploadFile,
     WebSocket,
     WebSocketDisconnect,
     status,
@@ -40,15 +44,15 @@ from app.models.inventory import (
 )
 from app.models.operational_rank import OperationalRank
 from app.models.user import User
-from app.schemas.inventory import (  # Category schemas; Item schemas; Assignment schemas; Issuance schemas; Checkout schemas; Maintenance schemas; Summary schemas; Departure clearance schemas; Scan / quick-action schemas; Members summary; Equipment request schemas; Storage area schemas; Write-off schemas
+from app.schemas.inventory import (
     BatchCheckoutRequest,
     BatchCheckoutResponse,
     BatchReturnRequest,
     BatchReturnResponse,
     CheckInRequest,
     CheckOutCreate,
-    CheckOutRecordResponse,
     CheckoutExtendRequest,
+    CheckOutRecordResponse,
     ClearanceLineItemResponse,
     CompleteClearanceRequest,
     DepartureClearanceCreate,
@@ -75,6 +79,12 @@ from app.schemas.inventory import (  # Category schemas; Item schemas; Assignmen
     MaintenanceRecordResponse,
     MaintenanceRecordUpdate,
     MembersInventoryListResponse,
+    NFPAComplianceCreate,
+    NFPAComplianceResponse,
+    NFPAComplianceUpdate,
+    NFPAExposureRecordCreate,
+    NFPAExposureRecordResponse,
+    NFPASummaryResponse,
     ResolveClearanceItemRequest,
     ScanLookupListResponse,
     ScanLookupResponse,
@@ -86,12 +96,6 @@ from app.schemas.inventory import (  # Category schemas; Item schemas; Assignmen
     WriteOffRequestCreate,
     WriteOffRequestResponse,
     WriteOffReview,
-    NFPAComplianceCreate,
-    NFPAComplianceResponse,
-    NFPAComplianceUpdate,
-    NFPAExposureRecordCreate,
-    NFPAExposureRecordResponse,
-    NFPASummaryResponse,
 )
 from app.services.departure_clearance_service import DepartureClearanceService
 from app.services.inventory_service import InventoryService
@@ -491,6 +495,434 @@ async def export_items_csv(
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=inventory_export.csv"},
     )
+
+
+@router.get("/items/import-template")
+async def download_import_template(
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Download a sample CSV template for inventory import."""
+    import csv
+    import io
+
+    from starlette.responses import StreamingResponse
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "Name",
+            "Category",
+            "Item Type",
+            "Serial Number",
+            "Asset Tag",
+            "Status",
+            "Condition",
+            "Tracking Type",
+            "Quantity",
+            "Manufacturer",
+            "Model Number",
+            "Purchase Date",
+            "Purchase Price",
+            "Purchase Order",
+            "Vendor",
+            "Warranty Expiration",
+            "Storage Location",
+            "Station",
+            "Size",
+            "Color",
+            "Description",
+            "Notes",
+        ]
+    )
+    # Example rows
+    writer.writerow(
+        [
+            "Motorola APX 8000",
+            "Portable Radios",
+            "electronics",
+            "SN-88432",
+            "AT-1001",
+            "available",
+            "good",
+            "individual",
+            "1",
+            "Motorola",
+            "APX 8000",
+            "2024-06-15",
+            "5500.00",
+            "PO-2024-0042",
+            "Radio Systems Inc",
+            "2027-06-15",
+            "Apparatus Bay - Rack A",
+            "Station 1",
+            "",
+            "Black",
+            "VHF/UHF portable radio",
+            "",
+        ]
+    )
+    writer.writerow(
+        [
+            "Nitrile Gloves (Box)",
+            "Medical Supplies",
+            "consumable",
+            "",
+            "",
+            "available",
+            "good",
+            "pool",
+            "50",
+            "Kimberly-Clark",
+            "KC-200L",
+            "2025-01-10",
+            "12.99",
+            "",
+            "MedSupply Co",
+            "",
+            "EMS Room - Cabinet B",
+            "Station 1",
+            "Large",
+            "Blue",
+            "Box of 200 nitrile exam gloves",
+            "Reorder when below 10 boxes",
+        ]
+    )
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": "attachment; filename=inventory_import_template.csv"
+        },
+    )
+
+
+@router.post("/items/import")
+async def import_items_csv(
+    file: UploadFile = FastAPIFile(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Import inventory items from a CSV file.
+
+    The CSV should contain a header row with columns matching the template
+    (download via GET /items/import-template). The 'Name' column is required.
+    The 'Barcode' column is intentionally excluded — barcodes are auto-generated.
+    Categories are matched by name (case-insensitive); unmatched category names
+    are reported as warnings but the row is still imported without a category.
+    """
+    import csv
+    import io
+
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file type. Please upload a CSV file.",
+        )
+
+    # Read and decode file
+    try:
+        raw = await file.read()
+        try:
+            content = raw.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            content = raw.decode("latin-1")
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to read the uploaded file.",
+        )
+
+    reader = csv.DictReader(io.StringIO(content))
+    if not reader.fieldnames:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="CSV file is empty or has no header row.",
+        )
+
+    # Normalize headers: lowercase + strip
+    header_map: Dict[str, str] = {}
+    for raw_name in reader.fieldnames:
+        header_map[raw_name] = raw_name.strip().lower()
+
+    # Check required 'name' column exists
+    name_col = None
+    for raw_name, normalized in header_map.items():
+        if normalized == "name":
+            name_col = raw_name
+            break
+
+    if not name_col:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="CSV must contain a 'Name' column.",
+        )
+
+    # Pre-load categories for name matching
+    service = InventoryService(db)
+    categories = await service.get_categories(
+        organization_id=current_user.organization_id, active_only=True
+    )
+    cat_by_name: Dict[str, str] = {}
+    for cat in categories:
+        cat_by_name[cat.name.strip().lower()] = str(cat.id)
+
+    # Map normalized column names to item fields
+    COLUMN_TO_FIELD = {
+        "name": "name",
+        "description": "description",
+        "serial number": "serial_number",
+        "serial_number": "serial_number",
+        "serialnumber": "serial_number",
+        "asset tag": "asset_tag",
+        "asset_tag": "asset_tag",
+        "assettag": "asset_tag",
+        "status": "status",
+        "condition": "condition",
+        "tracking type": "tracking_type",
+        "tracking_type": "tracking_type",
+        "trackingtype": "tracking_type",
+        "quantity": "quantity",
+        "manufacturer": "manufacturer",
+        "model number": "model_number",
+        "model_number": "model_number",
+        "modelnumber": "model_number",
+        "purchase date": "purchase_date",
+        "purchase_date": "purchase_date",
+        "purchasedate": "purchase_date",
+        "purchase price": "purchase_price",
+        "purchase_price": "purchase_price",
+        "purchaseprice": "purchase_price",
+        "purchase order": "purchase_order",
+        "purchase_order": "purchase_order",
+        "purchaseorder": "purchase_order",
+        "vendor": "vendor",
+        "warranty expiration": "warranty_expiration",
+        "warranty_expiration": "warranty_expiration",
+        "warrantyexpiration": "warranty_expiration",
+        "storage location": "storage_location",
+        "storage_location": "storage_location",
+        "storagelocation": "storage_location",
+        "station": "station",
+        "size": "size",
+        "color": "color",
+        "notes": "notes",
+        "item type": "item_type",
+        "item_type": "item_type",
+        "itemtype": "item_type",
+        "type": "item_type",
+    }
+
+    VALID_STATUSES = {
+        "available",
+        "assigned",
+        "checked_out",
+        "in_maintenance",
+        "lost",
+        "stolen",
+        "retired",
+    }
+    VALID_CONDITIONS = {
+        "excellent",
+        "good",
+        "fair",
+        "poor",
+        "damaged",
+        "out_of_service",
+        "retired",
+    }
+    VALID_TRACKING = {"individual", "pool"}
+    VALID_ITEM_TYPES = {
+        "uniform",
+        "ppe",
+        "tool",
+        "equipment",
+        "vehicle",
+        "electronics",
+        "consumable",
+        "other",
+    }
+
+    imported = 0
+    failed = 0
+    errors: List[Dict[str, Any]] = []
+    warnings: List[str] = []
+
+    rows = list(reader)
+    if not rows:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="CSV file contains no data rows.",
+        )
+
+    for row_num, row in enumerate(rows, start=2):  # Row 1 is header
+        # Build item data from CSV columns
+        item_data: Dict[str, Any] = {}
+        category_name_raw: Optional[str] = None
+
+        for raw_col, value in row.items():
+            if not value or not value.strip():
+                continue
+            value = value.strip()
+            normalized = raw_col.strip().lower()
+
+            # Handle category column separately
+            if normalized in ("category", "category_name", "categoryname"):
+                category_name_raw = value
+                continue
+
+            field = COLUMN_TO_FIELD.get(normalized)
+            if not field:
+                continue
+
+            # Type conversions
+            if field == "quantity":
+                try:
+                    item_data[field] = int(value)
+                except ValueError:
+                    errors.append(
+                        {
+                            "row": row_num,
+                            "error": f"Invalid quantity value: '{value}'",
+                        }
+                    )
+                    continue
+            elif field == "purchase_price":
+                try:
+                    item_data[field] = float(value.replace("$", "").replace(",", ""))
+                except ValueError:
+                    errors.append(
+                        {
+                            "row": row_num,
+                            "error": f"Invalid purchase price: '{value}'",
+                        }
+                    )
+                    continue
+            elif field == "status":
+                val = value.lower().replace(" ", "_")
+                if val not in VALID_STATUSES:
+                    errors.append(
+                        {
+                            "row": row_num,
+                            "error": f"Invalid status: '{value}'. Must be one of: {', '.join(sorted(VALID_STATUSES))}",
+                        }
+                    )
+                    failed += 1
+                    break
+                item_data[field] = val
+            elif field == "condition":
+                val = value.lower().replace(" ", "_")
+                if val not in VALID_CONDITIONS:
+                    errors.append(
+                        {
+                            "row": row_num,
+                            "error": (
+                                f"Invalid condition: '{value}'. "
+                                f"Must be one of: {', '.join(sorted(VALID_CONDITIONS))}"
+                            ),
+                        }
+                    )
+                    failed += 1
+                    break
+                item_data[field] = val
+            elif field == "tracking_type":
+                val = value.lower()
+                if val not in VALID_TRACKING:
+                    errors.append(
+                        {
+                            "row": row_num,
+                            "error": f"Invalid tracking type: '{value}'. Must be 'individual' or 'pool'",
+                        }
+                    )
+                    failed += 1
+                    break
+                item_data[field] = val
+            elif field == "item_type":
+                val = value.lower().replace(" ", "_")
+                if val not in VALID_ITEM_TYPES:
+                    errors.append(
+                        {
+                            "row": row_num,
+                            "error": (
+                                f"Invalid item type: '{value}'. "
+                                f"Must be one of: {', '.join(sorted(VALID_ITEM_TYPES))}"
+                            ),
+                        }
+                    )
+                    failed += 1
+                    break
+                # item_type lives on the category, not the item — store for possible category creation
+                continue
+            else:
+                item_data[field] = value
+        else:
+            # Only reach here if loop completed without break (no fatal field error)
+            # Require name
+            if not item_data.get("name"):
+                errors.append(
+                    {"row": row_num, "error": "Missing required 'Name' column value"}
+                )
+                failed += 1
+                continue
+
+            # Match category by name
+            if category_name_raw:
+                cat_id = cat_by_name.get(category_name_raw.strip().lower())
+                if cat_id:
+                    item_data["category_id"] = cat_id
+                else:
+                    warnings.append(
+                        f"Row {row_num}: Category '{category_name_raw}' not found — item imported without category"
+                    )
+
+            # Create item (barcode auto-generated by service)
+            item_data.pop("barcode", None)
+            new_item, error = await service.create_item(
+                organization_id=current_user.organization_id,
+                item_data=item_data,
+                created_by=current_user.id,
+            )
+
+            if error:
+                errors.append({"row": row_num, "error": error})
+                failed += 1
+            else:
+                imported += 1
+            continue
+
+        # If we broke out of the inner loop (fatal field error), the row already
+        # got an error entry above — just continue to the next row.
+        continue
+
+    if imported > 0:
+        await log_audit_event(
+            db=db,
+            event_type="inventory_items_imported",
+            event_category="inventory",
+            severity="info",
+            event_data={
+                "imported": imported,
+                "failed": failed,
+                "total_rows": len(rows),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        await _publish_inventory_event(
+            str(current_user.organization_id),
+            "items_imported",
+            {"count": imported},
+        )
+
+    return {
+        "imported": imported,
+        "failed": failed,
+        "total_rows": len(rows),
+        "errors": errors[:50],  # Cap error list to prevent huge responses
+        "warnings": warnings[:50],
+    }
 
 
 @router.get("/items/{item_id}", response_model=InventoryItemResponse)
