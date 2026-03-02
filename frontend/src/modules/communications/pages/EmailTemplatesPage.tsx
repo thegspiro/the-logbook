@@ -32,10 +32,10 @@ import toast from 'react-hot-toast';
 
 interface PreviewMember {
   id: string;
-  full_name?: string;
-  first_name?: string;
-  last_name?: string;
-  email?: string;
+  full_name?: string | undefined;
+  first_name?: string | undefined;
+  last_name?: string | undefined;
+  email?: string | undefined;
 }
 
 /**

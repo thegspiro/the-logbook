@@ -64,7 +64,7 @@ def verify_api_key(api_key: str, key_hash: str) -> bool:
         return False
 
 
-def generate_api_key() -> Tuple[str, str]:
+def generate_api_key() -> tuple[str, str]:
     """
     Generate a new API key and its prefix.
 
@@ -95,7 +95,7 @@ async def get_current_minute_timestamp() -> int:
 
 async def check_rate_limit(
     api_key_id: str, rate_limit: int, db: AsyncSession
-) -> Tuple[bool, int, int]:
+) -> tuple[bool, int, int]:
     """
     Check if an API key has exceeded its rate limit.
 
@@ -142,7 +142,7 @@ async def check_rate_limit(
 
 async def check_ip_rate_limit(
     ip_address: str, limit: int = 100
-) -> Tuple[bool, int, int]:
+) -> tuple[bool, int, int]:
     """
     Check if an IP address has exceeded its rate limit.
 
@@ -172,12 +172,12 @@ async def log_access(
     request: Request,
     organization_id: str,
     config_id: str,
-    api_key_id: Optional[str],
+    api_key_id: str | None,
     status_code: int,
-    response_time_ms: Optional[int],
+    response_time_ms: int | None,
     db: AsyncSession,
     flagged_suspicious: bool = False,
-    flag_reason: Optional[str] = None,
+    flag_reason: str | None = None,
 ):
     """
     Log an access attempt to the public portal.
@@ -228,8 +228,8 @@ async def log_access(
 
 
 async def detect_anomalies(
-    ip_address: str, api_key_id: Optional[str], db: AsyncSession
-) -> Tuple[bool, Optional[str]]:
+    ip_address: str, api_key_id: str | None, db: AsyncSession
+) -> tuple[bool, str | None]:
     """
     Detect anomalous behavior patterns.
 
@@ -290,7 +290,7 @@ async def detect_anomalies(
 
 
 async def authenticate_api_key(
-    api_key: Optional[str] = Depends(api_key_header), db: AsyncSession = Depends(get_db)
+    api_key: str | None = Depends(api_key_header), db: AsyncSession = Depends(get_db)
 ) -> PublicPortalAPIKey:
     """
     Authenticate an API key for public portal access.

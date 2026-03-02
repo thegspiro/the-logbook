@@ -87,7 +87,7 @@ function hydrateTemplateSections(
 const TestTimer: React.FC<{
   seconds: number;
   running: boolean;
-  timeLimit?: number;
+  timeLimit?: number | undefined;
   onToggle: () => void;
 }> = ({ seconds, running, timeLimit, onToggle }) => {
   const isOverTime = timeLimit != null && seconds > timeLimit;

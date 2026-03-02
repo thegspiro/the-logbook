@@ -18,7 +18,7 @@ export interface OnboardingError {
   action: string;
   errorMessage: string;
   errorDetails?: unknown;
-  userContext?: string;
+  userContext?: string | undefined;
   recovered: boolean;
 }
 
@@ -61,10 +61,10 @@ export interface OnboardingState {
     id: string;
     name: string;
     description: string;
-    icon?: string;
+    icon?: string | undefined;
     priority: number;
     permissions: Record<string, { view: boolean; manage: boolean }>;
-    isCustom?: boolean;
+    isCustom?: boolean | undefined;
   }> | null;
 
   // Module Selection

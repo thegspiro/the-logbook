@@ -108,7 +108,7 @@ const CreateTrainingSessionPage: React.FC = () => {
 
     try {
       // Convert local datetime-local values to UTC before sending to backend
-      const submitData = {
+      const submitData: TrainingSessionCreate = {
         ...formData,
         start_datetime: localToUTC(formData.start_datetime, tz),
         end_datetime: localToUTC(formData.end_datetime, tz),

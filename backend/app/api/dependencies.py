@@ -43,8 +43,8 @@ def _collect_user_permissions(user: User) -> set:
 
 
 async def get_current_user(
-    authorization: Optional[str] = Header(None),
-    access_token: Optional[str] = Cookie(None),
+    authorization: str | None = Header(None),
+    access_token: str | None = Cookie(None),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     """
@@ -60,7 +60,7 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    token: Optional[str] = None
+    token: str | None = None
 
     # Prefer httpOnly cookie
     if access_token:
@@ -134,7 +134,7 @@ class PermissionChecker:
     For AND logic (require ALL), use ``AllPermissionChecker`` instead.
     """
 
-    def __init__(self, required_permissions: List[str]):
+    def __init__(self, required_permissions: list[str]):
         self.required_permissions = required_permissions
 
     async def __call__(
@@ -160,7 +160,7 @@ class AllPermissionChecker:
     Grants access only if the user has **all** of the listed permissions.
     """
 
-    def __init__(self, required_permissions: List[str]):
+    def __init__(self, required_permissions: list[str]):
         self.required_permissions = required_permissions
 
     async def __call__(

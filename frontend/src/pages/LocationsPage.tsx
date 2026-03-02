@@ -74,23 +74,6 @@ function groupLocations(locations: Location[]): { stations: Location[]; rooms: M
   return { stations, rooms };
 }
 
-const _ROOM_TYPE_LABELS: Record<string, string> = {
-  APPARATUS_BAY: 'Apparatus Bay',
-  BUNK_ROOM: 'Bunk Room',
-  KITCHEN: 'Kitchen',
-  BATHROOM: 'Bathroom',
-  OFFICE: 'Office',
-  TRAINING_ROOM: 'Training Room',
-  STORAGE: 'Storage',
-  MECHANICAL: 'Mechanical',
-  LOBBY: 'Lobby',
-  COMMON_AREA: 'Common Area',
-  LAUNDRY: 'Laundry',
-  GYM: 'Gym',
-  DISPATCH: 'Dispatch',
-  OTHER: 'Other',
-};
-
 type StationMode = 'single_station' | 'multi_station' | null;
 
 /* ──────────────────────────────────────────────────────────

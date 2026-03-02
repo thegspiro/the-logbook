@@ -12,12 +12,12 @@
 export interface ShiftCreate {
   shift_date: string; // ISO date
   start_time: string; // ISO datetime
-  end_time?: string;
-  apparatus_id?: string;
-  station_id?: string;
-  shift_officer_id?: string;
-  color?: string;
-  notes?: string;
+  end_time?: string | undefined;
+  apparatus_id?: string | undefined;
+  station_id?: string | undefined;
+  shift_officer_id?: string | undefined;
+  color?: string | undefined;
+  notes?: string | undefined;
   activities?: unknown;
 }
 
@@ -90,7 +90,7 @@ export interface AssignmentCreate {
 export interface AssignmentUpdate {
   position?: string;
   assignment_status?: string;
-  notes?: string;
+  notes?: string | undefined;
 }
 
 // ============================================================================
@@ -99,9 +99,9 @@ export interface AssignmentUpdate {
 
 export interface SwapRequestCreate {
   offering_shift_id: string;
-  requesting_shift_id?: string;
-  target_user_id?: string;
-  reason?: string;
+  requesting_shift_id?: string | undefined;
+  target_user_id?: string | undefined;
+  reason?: string | undefined;
 }
 
 export interface SwapRequestReview {
@@ -166,14 +166,14 @@ export interface ShiftPatternCreate {
   name: string;
   pattern_type: 'daily' | 'weekly' | 'platoon' | 'custom';
   start_date: string;
-  description?: string;
-  template_id?: string;
-  rotation_days?: number;
-  days_on?: number;
-  days_off?: number;
-  schedule_config?: Record<string, unknown>;
-  end_date?: string;
-  assigned_members?: Array<{ user_id: string; position: string; platoon?: string }>;
+  description?: string | undefined;
+  template_id?: string | undefined;
+  rotation_days?: number | undefined;
+  days_on?: number | undefined;
+  days_off?: number | undefined;
+  schedule_config?: Record<string, unknown> | undefined;
+  end_date?: string | undefined;
+  assigned_members?: Array<{ user_id: string; position: string; platoon?: string }> | undefined;
 }
 
 export interface ShiftPatternUpdate {
@@ -237,6 +237,7 @@ export interface ReportFilters {
   start_date?: string;
   end_date?: string;
   user_id?: string;
+  group_by?: string;
 }
 
 export interface AvailabilityFilters {

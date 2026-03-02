@@ -35,19 +35,19 @@ router = APIRouter()
 class TrainingWaiverCreate(BaseModel):
     user_id: str
     waiver_type: str = "leave_of_absence"
-    reason: Optional[str] = None
+    reason: str | None = None
     start_date: date
-    end_date: Optional[date] = None  # None = permanent waiver
-    requirement_ids: Optional[List[str]] = None
+    end_date: date | None = None  # None = permanent waiver
+    requirement_ids: list[str] | None = None
 
 
 class TrainingWaiverUpdate(BaseModel):
-    waiver_type: Optional[str] = None
-    reason: Optional[str] = None
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
-    requirement_ids: Optional[List[str]] = None
-    active: Optional[bool] = None
+    waiver_type: str | None = None
+    reason: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    requirement_ids: list[str] | None = None
+    active: bool | None = None
 
 
 class TrainingWaiverResponse(BaseModel):
@@ -55,15 +55,15 @@ class TrainingWaiverResponse(BaseModel):
     organization_id: str
     user_id: str
     waiver_type: str
-    reason: Optional[str] = None
+    reason: str | None = None
     start_date: date
-    end_date: Optional[date] = None
-    requirement_ids: Optional[List[str]] = None
-    granted_by: Optional[str] = None
-    granted_at: Optional[datetime] = None
+    end_date: date | None = None
+    requirement_ids: list[str] | None = None
+    granted_by: str | None = None
+    granted_at: datetime | None = None
     active: bool
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -109,9 +109,9 @@ async def create_training_waiver(
     return _to_response(waiver)
 
 
-@router.get("", response_model=List[TrainingWaiverResponse])
+@router.get("", response_model=list[TrainingWaiverResponse])
 async def list_training_waivers(
-    user_id: Optional[str] = Query(None),
+    user_id: str | None = Query(None),
     active_only: bool = Query(True),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
@@ -133,7 +133,7 @@ async def list_training_waivers(
     return [_to_response(w) for w in waivers]
 
 
-@router.get("/me", response_model=List[TrainingWaiverResponse])
+@router.get("/me", response_model=list[TrainingWaiverResponse])
 async def get_my_waivers(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),

@@ -9,7 +9,7 @@
  * all vehicle management instead.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Truck, Plus, Search, Pencil, Trash2, Loader2, X, Save,
   Shield, Users, Wrench,

@@ -53,7 +53,7 @@ const CategoryIcon: React.FC<{ category: PresetPatternDef['category'] }> = ({ ca
 
 interface PresetPatternsProps {
   onSelect: (preset: PresetPatternDef) => void;
-  selectedId?: string | null;
+  selectedId?: string | null | undefined;
 }
 
 const PresetPatterns: React.FC<PresetPatternsProps> = ({ onSelect, selectedId }) => {

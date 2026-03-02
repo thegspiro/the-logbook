@@ -46,10 +46,10 @@ router = APIRouter()
 
 @router.get("", response_model=FormsListResponse)
 async def list_forms(
-    status: Optional[str] = None,
-    category: Optional[str] = None,
-    search: Optional[str] = None,
-    is_template: Optional[bool] = None,
+    status: str | None = None,
+    category: str | None = None,
+    search: str | None = None,
+    is_template: bool | None = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
@@ -445,7 +445,7 @@ async def delete_field(
 @router.post("/{form_id}/fields/reorder", status_code=status.HTTP_200_OK)
 async def reorder_fields(
     form_id: UUID,
-    field_order: List[str],
+    field_order: list[str],
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("forms.manage")),
 ):

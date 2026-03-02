@@ -169,7 +169,7 @@ const AddMember: React.FC = () => {
         name: string;
         relationship: string;
         phone: string;
-        email?: string;
+        email?: string | undefined;
         is_primary: boolean;
       }> = [];
 

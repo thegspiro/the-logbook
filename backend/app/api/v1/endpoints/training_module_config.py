@@ -113,7 +113,7 @@ async def get_my_training_summary(
 
     org_id = str(current_user.organization_id)
     user_id = str(current_user.id)
-    result: Dict[str, Any] = {"visibility": visibility}
+    result: dict[str, Any] = {"visibility": visibility}
 
     # --- Training History ---
     if is_officer or visibility.get("show_training_history", True):
@@ -182,7 +182,7 @@ async def get_my_training_summary(
     all_requirements = req_result.scalars().all()
 
     # Filter to requirements applicable to this user (use eagerly-loaded roles)
-    user_role_ids: List[str] = []
+    user_role_ids: list[str] = []
     try:
         if user_with_roles and user_with_roles.roles:
             user_role_ids = [str(r.id) for r in user_with_roles.roles]
@@ -190,7 +190,7 @@ async def get_my_training_summary(
         logger.warning(f"Failed to load user role IDs for user {current_user.id}: {e}")
 
     user_membership_type = getattr(current_user, "membership_type", None) or "active"
-    applicable: List[Any] = []
+    applicable: list[Any] = []
     for req in all_requirements:
         if req.applies_to_all:
             applicable.append(req)
@@ -223,7 +223,7 @@ async def get_my_training_summary(
     today = date.today()
     met_count = 0
     total_progress_pct = 0.0
-    requirements_detail: List[Dict[str, Any]] = []
+    requirements_detail: list[dict[str, Any]] = []
 
     for req in applicable:
         detail = TrainingService.evaluate_requirement_detail(
@@ -289,9 +289,9 @@ async def get_my_training_summary(
         )
         enrollments = enrollments_result.scalars().all()
 
-        enrollment_list: List[Dict[str, Any]] = []
+        enrollment_list: list[dict[str, Any]] = []
         for e in enrollments:
-            entry: Dict[str, Any] = {
+            entry: dict[str, Any] = {
                 "id": str(e.id),
                 "program_id": str(e.program_id),
                 "status": (
@@ -316,7 +316,7 @@ async def get_my_training_summary(
 
                 # Batch-fetch requirement names
                 req_ids = [str(rp.requirement_id) for rp in rps]
-                name_map: Dict[str, str] = {}
+                name_map: dict[str, str] = {}
                 if req_ids:
                     names_result = await db.execute(
                         select(TrainingRequirement.id, TrainingRequirement.name).where(
@@ -363,7 +363,7 @@ async def get_my_training_summary(
 
         sr_list = []
         for sr in shift_reports:
-            entry: Dict[str, Any] = {
+            entry: dict[str, Any] = {
                 "id": str(sr.id),
                 "shift_date": str(sr.shift_date),
                 "hours_on_shift": float(sr.hours_on_shift),

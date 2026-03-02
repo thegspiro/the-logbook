@@ -63,7 +63,7 @@ router = APIRouter()
 # Training Courses
 
 
-@router.get("/courses", response_model=List[TrainingCourseResponse])
+@router.get("/courses", response_model=list[TrainingCourseResponse])
 async def list_courses(
     active_only: bool = True,
     db: AsyncSession = Depends(get_db),
@@ -184,12 +184,12 @@ async def update_course(
 # Training Records
 
 
-@router.get("/records", response_model=List[TrainingRecordResponse])
+@router.get("/records", response_model=list[TrainingRecordResponse])
 async def list_records(
-    user_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None,
+    user_id: UUID | None = None,
+    status: str | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -555,7 +555,7 @@ async def update_record(
 # Training Categories
 
 
-@router.get("/categories", response_model=List[TrainingCategoryResponse])
+@router.get("/categories", response_model=list[TrainingCategoryResponse])
 async def list_categories(
     active_only: bool = True,
     db: AsyncSession = Depends(get_db),
@@ -707,9 +707,9 @@ async def delete_category(
 # Training Requirements
 
 
-@router.get("/requirements", response_model=List[TrainingRequirementResponse])
+@router.get("/requirements", response_model=list[TrainingRequirementResponse])
 async def list_requirements(
-    year: Optional[int] = Query(None, description="Filter by year"),
+    year: int | None = Query(None, description="Filter by year"),
     active_only: bool = True,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -995,11 +995,11 @@ async def generate_user_report(
 
 
 @router.get(
-    "/requirements/progress/{user_id}", response_model=List[RequirementProgress]
+    "/requirements/progress/{user_id}", response_model=list[RequirementProgress]
 )
 async def get_requirements_progress(
     user_id: UUID,
-    year: Optional[int] = Query(None, description="Year for requirements"),
+    year: int | None = Query(None, description="Year for requirements"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1015,7 +1015,7 @@ async def get_requirements_progress(
     return progress
 
 
-@router.get("/certifications/expiring", response_model=List[TrainingRecordResponse])
+@router.get("/certifications/expiring", response_model=list[TrainingRecordResponse])
 async def get_expiring_certifications(
     days_ahead: int = Query(90, description="Number of days to look ahead"),
     db: AsyncSession = Depends(get_db),
@@ -1040,10 +1040,10 @@ async def get_expiring_certifications(
 
 @router.get("/competency-matrix")
 async def get_competency_matrix(
-    requirement_ids: Optional[str] = Query(
+    requirement_ids: str | None = Query(
         None, description="Comma-separated requirement IDs to filter"
     ),
-    user_ids: Optional[str] = Query(
+    user_ids: str | None = Query(
         None, description="Comma-separated user IDs to filter"
     ),
     db: AsyncSession = Depends(get_db),
@@ -1825,14 +1825,14 @@ class RequirementStatusItem(BaseModel):
     requirement_id: str
     requirement_name: str
     status: str  # "completed", "in_progress", "expired", "not_started"
-    completion_date: Optional[str] = None
-    expiry_date: Optional[str] = None
+    completion_date: str | None = None
+    expiry_date: str | None = None
 
 
 class MemberComplianceRow(BaseModel):
     user_id: str
     member_name: str
-    requirements: List[RequirementStatusItem]
+    requirements: list[RequirementStatusItem]
     completion_pct: float
 
 
@@ -1983,7 +1983,7 @@ async def get_expiring_certifications_detailed(
     records = result.scalars().all()
 
     # Enrich with member names
-    user_ids = list(set(r.user_id for r in records))
+    user_ids = list({r.user_id for r in records})
     users_map: dict = {}
     if user_ids:
         users_result = await db.execute(select(User).where(User.id.in_(user_ids)))

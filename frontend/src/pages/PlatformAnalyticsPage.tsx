@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import {
   Users,
   UserCheck,
@@ -224,7 +225,7 @@ const SectionTitle: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 );
 
 interface StatCardProps {
-  icon: React.FC<{ className?: string }>;
+  icon: LucideIcon;
   label: string;
   sublabel?: string;
   value: string | number;

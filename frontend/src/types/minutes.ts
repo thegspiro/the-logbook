@@ -207,14 +207,14 @@ export interface MinutesUpdate {
 
 export interface MotionCreate {
   motion_text: string;
-  moved_by?: string;
-  seconded_by?: string;
-  discussion_notes?: string;
-  status?: MotionStatus;
-  votes_for?: number;
-  votes_against?: number;
-  votes_abstain?: number;
-  order?: number;
+  moved_by?: string | undefined;
+  seconded_by?: string | undefined;
+  discussion_notes?: string | undefined;
+  status?: MotionStatus | undefined;
+  votes_for?: number | undefined;
+  votes_against?: number | undefined;
+  votes_abstain?: number | undefined;
+  order?: number | undefined;
 }
 
 export interface MotionUpdate {
@@ -231,10 +231,10 @@ export interface MotionUpdate {
 
 export interface ActionItemCreate {
   description: string;
-  assignee_id?: string;
-  assignee_name?: string;
-  due_date?: string;
-  priority?: ActionItemPriority;
+  assignee_id?: string | undefined;
+  assignee_name?: string | undefined;
+  due_date?: string | undefined;
+  priority?: ActionItemPriority | undefined;
 }
 
 export interface ActionItemUpdate {

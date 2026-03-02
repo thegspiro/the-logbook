@@ -21,11 +21,11 @@ interface StatusData {
   first_name: string;
   last_name: string;
   status: string;
-  current_stage_name?: string;
-  pipeline_name?: string;
+  current_stage_name?: string | undefined;
+  pipeline_name?: string | undefined;
   total_stages: number;
-  stage_timeline: { stage_name: string; status: string; completed_at?: string }[];
-  applied_at?: string;
+  stage_timeline: { stage_name: string; status: string; completed_at?: string | undefined }[];
+  applied_at?: string | undefined;
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {

@@ -7,8 +7,8 @@ import { HealthStatus, ConnectionStatus } from '../../../constants/enums';
 interface ServiceStatus {
   name: string;
   status: 'checking' | 'connected' | 'disconnected' | 'error';
-  message?: string;
-  optional?: boolean;
+  message?: string | undefined;
+  optional?: boolean | undefined;
 }
 
 interface StartupInfo {

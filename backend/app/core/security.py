@@ -12,13 +12,12 @@ import re
 import secrets
 import string
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional
+from typing import Any
 
 import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHash, VerificationError, VerifyMismatchError
 from cryptography.fernet import Fernet
-from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
@@ -386,15 +385,22 @@ def get_encryption_key() -> bytes:
         length=32,
         salt=get_encryption_salt(),
         iterations=100000,
-        backend=default_backend(),
     )
     derived_key = kdf.derive(key)
 
     return base64.urlsafe_b64encode(derived_key)
 
 
-# Initialize Fernet cipher with encryption key
-cipher = Fernet(get_encryption_key())
+# Lazy-initialized Fernet cipher. Avoids crashing at import time if
+# ENCRYPTION_KEY is not yet configured (e.g. during testing or initial setup).
+_cipher: Fernet | None = None
+
+
+def _get_cipher() -> Fernet:
+    global _cipher
+    if _cipher is None:
+        _cipher = Fernet(get_encryption_key())
+    return _cipher
 
 
 def encrypt_data(data: str) -> str:
@@ -411,9 +417,10 @@ def encrypt_data(data: str) -> str:
         Encrypted data as base64 string
     """
     if not data:
+        logger.debug("encrypt_data called with empty value — returning empty string")
         return ""
 
-    encrypted = cipher.encrypt(data.encode())
+    encrypted = _get_cipher().encrypt(data.encode())
     return encrypted.decode()
 
 
@@ -433,7 +440,7 @@ def decrypt_data(encrypted_data: str) -> str:
     if not encrypted_data:
         return ""
 
-    decrypted = cipher.decrypt(encrypted_data.encode())
+    decrypted = _get_cipher().decrypt(encrypted_data.encode())
     return decrypted.decode()
 
 
@@ -443,7 +450,7 @@ def decrypt_data(encrypted_data: str) -> str:
 
 
 def create_access_token(
-    data: Dict[str, Any], expires_delta: Optional[timedelta] = None
+    data: dict[str, Any], expires_delta: timedelta | None = None
 ) -> str:
     """
     Create a JWT access token
@@ -474,7 +481,7 @@ def create_access_token(
     return encoded_jwt
 
 
-def create_refresh_token(data: Dict[str, Any]) -> str:
+def create_refresh_token(data: dict[str, Any]) -> str:
     """
     Create a JWT refresh token with longer expiration
 
@@ -499,7 +506,7 @@ def create_refresh_token(data: Dict[str, Any]) -> str:
     return encoded_jwt
 
 
-def decode_token(token: str) -> Dict[str, Any]:
+def decode_token(token: str) -> dict[str, Any]:
     """
     Decode and validate a JWT token
 

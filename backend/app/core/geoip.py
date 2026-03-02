@@ -37,7 +37,7 @@ class GeoIPService:
 
     # Default list of high-risk countries (ISO 3166-1 alpha-2 codes)
     # These are commonly blocked in security-sensitive applications
-    DEFAULT_BLOCKED_COUNTRIES: Set[str] = {
+    DEFAULT_BLOCKED_COUNTRIES: set[str] = {
         "KP",  # North Korea
         "IR",  # Iran
         "SY",  # Syria
@@ -60,8 +60,8 @@ class GeoIPService:
 
     def __init__(
         self,
-        geoip_db_path: Optional[str] = None,
-        blocked_countries: Optional[Set[str]] = None,
+        geoip_db_path: str | None = None,
+        blocked_countries: set[str] | None = None,
         enabled: bool = True,
     ):
         """
@@ -75,7 +75,7 @@ class GeoIPService:
         self.enabled = enabled
         self.blocked_countries = blocked_countries or set()
         self.geoip_reader = None
-        self._ip_cache: Dict[str, Dict[str, Any]] = {}
+        self._ip_cache: dict[str, dict[str, Any]] = {}
         self._cache_max_size = 10000
 
         # Try to load GeoIP database
@@ -105,7 +105,7 @@ class GeoIPService:
         except ValueError:
             return False
 
-    def lookup_ip(self, ip_address: str) -> Dict[str, Any]:
+    def lookup_ip(self, ip_address: str) -> dict[str, Any]:
         """
         Look up geolocation information for an IP address.
 
@@ -160,7 +160,7 @@ class GeoIPService:
         self._cache_result(ip_address, result)
         return result
 
-    def _cache_result(self, ip_address: str, result: Dict[str, Any]) -> None:
+    def _cache_result(self, ip_address: str, result: dict[str, Any]) -> None:
         """Cache lookup result with size limit."""
         if len(self._ip_cache) >= self._cache_max_size:
             # Remove oldest entries (simple FIFO)
@@ -172,7 +172,7 @@ class GeoIPService:
     def is_ip_blocked(
         self,
         ip_address: str,
-        allowed_ips: Optional[Set[str]] = None,
+        allowed_ips: set[str] | None = None,
     ) -> tuple[bool, str]:
         """
         Check if an IP address should be blocked.
@@ -219,7 +219,7 @@ class GeoIPService:
         self.blocked_countries.discard(country_code.upper())
         logger.info(f"Removed {country_code} from blocked countries")
 
-    def get_blocked_countries(self) -> Set[str]:
+    def get_blocked_countries(self) -> set[str]:
         """Get current list of blocked countries."""
         return self.blocked_countries.copy()
 
@@ -234,17 +234,17 @@ class GeoIPService:
 
 
 # Global GeoIP service instance (initialized in main.py)
-geoip_service: Optional[GeoIPService] = None
+geoip_service: GeoIPService | None = None
 
 
-def get_geoip_service() -> Optional[GeoIPService]:
+def get_geoip_service() -> GeoIPService | None:
     """Get the global GeoIP service instance."""
     return geoip_service
 
 
 def init_geoip_service(
-    geoip_db_path: Optional[str] = None,
-    blocked_countries: Optional[Set[str]] = None,
+    geoip_db_path: str | None = None,
+    blocked_countries: set[str] | None = None,
     enabled: bool = True,
 ) -> GeoIPService:
     """

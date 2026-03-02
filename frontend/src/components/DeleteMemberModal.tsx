@@ -7,7 +7,7 @@ import type { DeletionImpact } from '../types/user';
 interface DeleteMemberModalProps {
   isOpen: boolean;
   onClose: () => void;
-  member: { id: string; full_name?: string; username: string; status: string } | null;
+  member: { id: string; full_name?: string | undefined; username: string; status: string } | null;
   onSoftDelete: (userId: string) => Promise<void>;
   onHardDelete: (userId: string) => Promise<void>;
 }

@@ -100,7 +100,20 @@ export const PatternsTab: React.FC = () => {
     Array.from({ length: 7 }, () => "off" as const),
   );
 
-  const [createForm, setCreateForm] = useState({
+  const [createForm, setCreateForm] = useState<{
+    name: string;
+    description: string;
+    pattern_type: 'daily' | 'weekly' | 'platoon' | 'custom';
+    template_id: string;
+    day_template_id: string;
+    night_template_id: string;
+    start_date: string;
+    end_date: string;
+    days_on: number;
+    days_off: number;
+    rotation_days: number;
+    weekdays: number[];
+  }>({
     name: "",
     description: "",
     pattern_type: "weekly",
@@ -112,7 +125,7 @@ export const PatternsTab: React.FC = () => {
     days_on: 1,
     days_off: 1,
     rotation_days: 3,
-    weekdays: [1, 2, 3, 4, 5] as number[],
+    weekdays: [1, 2, 3, 4, 5],
   });
   const [creating, setCreating] = useState(false);
 
@@ -306,7 +319,6 @@ export const PatternsTab: React.FC = () => {
       const result = await schedulingService.generateShiftsFromPattern(
         patternId,
         {
-          pattern_id: patternId,
           start_date: generateForm.start_date,
           end_date: generateForm.end_date,
         },
@@ -469,7 +481,7 @@ export const PatternsTab: React.FC = () => {
                     onChange={(e) =>
                       setCreateForm((p) => ({
                         ...p,
-                        pattern_type: e.target.value,
+                        pattern_type: e.target.value as 'daily' | 'weekly' | 'platoon' | 'custom',
                       }))
                     }
                     className={inputCls}

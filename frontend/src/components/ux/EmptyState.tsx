@@ -15,13 +15,13 @@ interface EmptyStateAction {
   icon?: LucideIcon;
 }
 
-interface EmptyStateProps {
-  icon?: LucideIcon;
+export interface EmptyStateProps {
+  icon?: LucideIcon | undefined;
   title: string;
-  description?: string;
-  actions?: EmptyStateAction[];
-  children?: ReactNode;
-  className?: string;
+  description?: string | undefined;
+  actions?: EmptyStateAction[] | undefined;
+  children?: ReactNode | undefined;
+  className?: string | undefined;
 }
 
 export const EmptyState: React.FC<EmptyStateProps> = ({

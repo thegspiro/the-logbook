@@ -7,7 +7,7 @@ It sets up test database, async sessions, and common test data.
 
 import pytest
 import asyncio
-from typing import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Generator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
@@ -26,7 +26,7 @@ async def initialize_database():
 
 
 @pytest.fixture(scope="function")
-async def db_session(initialize_database) -> AsyncGenerator[AsyncSession, None]:
+async def db_session(initialize_database) -> AsyncGenerator[AsyncSession]:
     """
     Create a new database session for each test.
     Uses the app's actual MySQL database.

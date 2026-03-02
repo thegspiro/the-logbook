@@ -495,7 +495,7 @@ interface RoleConfig {
   icon: React.ElementType;
   priority: number;
   permissions: Record<string, { view: boolean; manage: boolean }>;
-  isCustom?: boolean;
+  isCustom?: boolean | undefined;
 }
 
 const PositionSetup: React.FC = () => {
@@ -563,7 +563,7 @@ const PositionSetup: React.FC = () => {
       icon: string;
       priority: number;
       permissions: Record<string, { view: boolean; manage: boolean }>;
-      isCustom?: boolean;
+      isCustom?: boolean | undefined;
     }> = {};
     for (const [posId, position] of Object.entries(selectedPositions)) {
       serializable[posId] = {

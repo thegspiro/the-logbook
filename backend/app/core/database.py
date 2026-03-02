@@ -6,12 +6,12 @@ Includes retry logic and connection timeouts for robust startup.
 """
 
 import asyncio
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from loguru import logger
 from sqlalchemy import MetaData
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
 
@@ -25,9 +25,11 @@ NAMING_CONVENTION = {
     "pk": "pk_%(table_name)s",
 }
 
-# Create declarative base with naming conventions
-metadata = MetaData(naming_convention=NAMING_CONVENTION)
-Base = declarative_base(metadata=metadata)
+
+class Base(DeclarativeBase):
+    """Declarative base with naming conventions for all ORM models."""
+
+    metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 
 class DatabaseManager:
@@ -89,7 +91,7 @@ class DatabaseManager:
                 logger.info("Database connection established")
                 return  # Success - exit the retry loop
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 last_exception = TimeoutError(
                     f"Database connection timed out after {settings.DB_CONNECT_TIMEOUT}s"
                 )
@@ -127,7 +129,7 @@ class DatabaseManager:
             await self.engine.dispose()
             logger.info("Database connection closed")
 
-    async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
+    async def get_session(self) -> AsyncGenerator[AsyncSession]:
         """
         Get database session (dependency injection)
 
@@ -180,7 +182,7 @@ def async_session_factory() -> AsyncSession:
 
 
 # Dependency for FastAPI route handlers
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+async def get_db() -> AsyncGenerator[AsyncSession]:
     """
     FastAPI dependency for database sessions
     """

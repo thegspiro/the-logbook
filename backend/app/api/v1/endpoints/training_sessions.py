@@ -218,13 +218,13 @@ async def submit_training_approval(
 
 @router.get("/calendar")
 async def list_training_sessions_calendar(
-    start_after: Optional[datetime] = Query(
+    start_after: datetime | None = Query(
         None, description="Filter sessions starting after this datetime"
     ),
-    start_before: Optional[datetime] = Query(
+    start_before: datetime | None = Query(
         None, description="Filter sessions starting before this datetime"
     ),
-    training_type: Optional[str] = Query(None, description="Filter by training type"),
+    training_type: str | None = Query(None, description="Filter by training type"),
     include_finalized: bool = Query(True, description="Include finalized sessions"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),

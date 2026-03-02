@@ -128,27 +128,6 @@ export const MembersAdminPage: React.FC = () => {
     setEditingMembers(true);
   };
 
-  const _handleEditProfile = async (user: UserWithRoles) => {
-    // Fetch full profile for the user to get all fields
-    try {
-      const fullProfile = await userService.getUserWithRoles(user.id);
-      setProfileUser(fullProfile);
-      setProfileForm({
-        first_name: fullProfile.first_name || '',
-        middle_name: fullProfile.middle_name || '',
-        last_name: fullProfile.last_name || '',
-        phone: fullProfile.phone || '',
-        mobile: fullProfile.mobile || '',
-        membership_number: fullProfile.membership_number || '',
-        rank: fullProfile.rank || '',
-        station: fullProfile.station || '',
-      });
-      setEditingProfile(true);
-    } catch (_err) {
-      setError('Unable to load member profile. Please try again.');
-    }
-  };
-
   const handleSaveProfile = async () => {
     if (!profileUser) return;
 

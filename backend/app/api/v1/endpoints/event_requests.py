@@ -50,7 +50,7 @@ from app.schemas.event_request import (
 router = APIRouter(prefix="/event-requests", tags=["event-requests"])
 
 
-def _get_outreach_types_from_settings(org: Organization) -> List[Dict[str, str]]:
+def _get_outreach_types_from_settings(org: Organization) -> list[dict[str, str]]:
     """Read outreach event types from organization settings, falling back to defaults."""
     from app.api.v1.endpoints.events import EVENT_SETTINGS_DEFAULTS
 
@@ -70,7 +70,7 @@ def _get_pipeline_settings(org: Organization) -> dict:
     return {**defaults, **stored}
 
 
-async def _get_user_name(db: AsyncSession, user_id: str) -> Optional[str]:
+async def _get_user_name(db: AsyncSession, user_id: str) -> str | None:
     """Look up a user's display name."""
     result = await db.execute(
         select(User.first_name, User.last_name).where(User.id == user_id)
@@ -81,7 +81,7 @@ async def _get_user_name(db: AsyncSession, user_id: str) -> Optional[str]:
     return None
 
 
-async def _get_location_name(db: AsyncSession, location_id: str) -> Optional[str]:
+async def _get_location_name(db: AsyncSession, location_id: str) -> str | None:
     """Look up a location name."""
     from app.models.location import Location
 
@@ -95,7 +95,7 @@ async def _send_request_notification(
     event_request: EventRequest,
     trigger_key: str,
     org: Organization,
-    extra_context: Optional[dict] = None,
+    extra_context: dict | None = None,
 ) -> None:
     """
     Send email notification based on pipeline trigger settings.
@@ -521,10 +521,10 @@ async def public_cancel_request(
 # ============================================
 
 
-@router.get("", response_model=List[EventRequestListItem])
+@router.get("", response_model=list[EventRequestListItem])
 async def list_event_requests(
-    status_filter: Optional[str] = Query(None, alias="status"),
-    outreach_type: Optional[str] = Query(None),
+    status_filter: str | None = Query(None, alias="status"),
+    outreach_type: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("events.manage")),
 ):
@@ -1159,7 +1159,7 @@ async def send_template_email(
 # ============================================
 
 
-@router.get("/email-templates", response_model=List[EmailTemplateResponse])
+@router.get("/email-templates", response_model=list[EmailTemplateResponse])
 async def list_email_templates(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("events.manage")),
@@ -1257,7 +1257,7 @@ async def delete_email_template(
 
 @router.get("/types/labels")
 async def get_outreach_type_labels(
-    organization_id: Optional[str] = Query(
+    organization_id: str | None = Query(
         None, description="Organization ID to get types for"
     ),
     db: AsyncSession = Depends(get_db),

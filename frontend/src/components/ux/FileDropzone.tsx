@@ -19,7 +19,7 @@ interface FileDropzoneProps {
 
 interface FilePreview {
   file: File;
-  preview?: string;
+  preview?: string | undefined;
 }
 
 export const FileDropzone: React.FC<FileDropzoneProps> = ({

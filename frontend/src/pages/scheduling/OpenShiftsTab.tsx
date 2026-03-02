@@ -75,7 +75,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
       // Fallback: try direct assignment
       try {
         await schedulingService.createAssignment(shiftId, {
-          user_id: user?.id,
+          user_id: user?.id ?? '',
           position: signupPosition,
         });
         toast.success('Signed up for shift — a manager will confirm your assignment');

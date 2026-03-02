@@ -38,7 +38,7 @@ from app.services.email_template_service import SAMPLE_CONTEXT, EmailTemplateSer
 router = APIRouter()
 
 
-@router.get("", response_model=List[EmailTemplateResponse])
+@router.get("", response_model=list[EmailTemplateResponse])
 async def list_email_templates(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
@@ -439,7 +439,7 @@ async def schedule_email(
     return scheduled
 
 
-@router.get("/scheduled", response_model=List[ScheduledEmailResponse])
+@router.get("/scheduled", response_model=list[ScheduledEmailResponse])
 async def list_scheduled_emails(
     status_filter: str | None = None,
     db: AsyncSession = Depends(get_db),

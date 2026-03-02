@@ -2,20 +2,16 @@
  * Maintenance Tab - Full CRUD for maintenance records across all facilities.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Wrench, Plus, Search, Loader2, X, CheckCircle2, Clock,
   AlertTriangle, Calendar, DollarSign, Filter,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { facilitiesService } from '../../services/api';
-import type { MaintenanceRecord, MaintenanceType, Facility, MAINTENANCE_CATEGORIES } from './types';
+import type { MaintenanceRecord, MaintenanceType, Facility } from './types';
 import { useTimezone } from '../../hooks/useTimezone';
 import { getTodayLocalDate } from '../../utils/dateFormatting';
-
-const _CATEGORY_OPTIONS: Array<typeof MAINTENANCE_CATEGORIES[number]> = [
-  'PREVENTIVE', 'REPAIR', 'INSPECTION', 'RENOVATION', 'CLEANING', 'SAFETY', 'OTHER',
-];
 
 interface Props {
   facilities: Facility[];

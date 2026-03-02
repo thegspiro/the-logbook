@@ -19,23 +19,23 @@ export interface AdminHoursCategory {
 
 export interface AdminHoursCategoryCreate {
   name: string;
-  description?: string;
-  color?: string;
-  require_approval?: boolean;
-  auto_approve_under_hours?: number | null;
-  max_hours_per_session?: number | null;
-  sort_order?: number;
+  description?: string | undefined;
+  color?: string | undefined;
+  require_approval?: boolean | undefined;
+  auto_approve_under_hours?: number | null | undefined;
+  max_hours_per_session?: number | null | undefined;
+  sort_order?: number | undefined;
 }
 
 export interface AdminHoursCategoryUpdate {
-  name?: string;
-  description?: string | null;
-  color?: string | null;
-  require_approval?: boolean;
-  auto_approve_under_hours?: number | null;
-  max_hours_per_session?: number | null;
-  is_active?: boolean;
-  sort_order?: number;
+  name?: string | undefined;
+  description?: string | null | undefined;
+  color?: string | null | undefined;
+  require_approval?: boolean | undefined;
+  auto_approve_under_hours?: number | null | undefined;
+  max_hours_per_session?: number | null | undefined;
+  is_active?: boolean | undefined;
+  sort_order?: number | undefined;
 }
 
 export interface AdminHoursEntry {
@@ -64,14 +64,14 @@ export interface AdminHoursEntryCreate {
   category_id: string;
   clock_in_at: string;
   clock_out_at: string;
-  description?: string;
+  description?: string | undefined;
 }
 
 export interface AdminHoursEntryEdit {
-  clock_in_at?: string;
-  clock_out_at?: string;
-  description?: string;
-  category_id?: string;
+  clock_in_at?: string | undefined;
+  clock_out_at?: string | undefined;
+  description?: string | undefined;
+  category_id?: string | undefined;
 }
 
 export interface AdminHoursPaginatedEntries {

@@ -52,11 +52,11 @@ router = APIRouter()
 # ============================================
 
 
-@router.get("", response_model=List[MinutesListItem])
+@router.get("", response_model=list[MinutesListItem])
 async def list_minutes(
-    meeting_type: Optional[str] = None,
-    status_filter: Optional[str] = None,
-    search: Optional[str] = None,
+    meeting_type: str | None = None,
+    status_filter: str | None = None,
+    search: str | None = None,
     skip: int = 0,
     limit: int = 50,  # max 100 enforced below
     db: AsyncSession = Depends(get_db),
@@ -120,7 +120,7 @@ async def get_minutes_stats(
     return await service.get_stats(current_user.organization_id)
 
 
-@router.get("/search", response_model=List[MinutesSearchResult])
+@router.get("/search", response_model=list[MinutesSearchResult])
 async def search_minutes(
     q: str,
     limit: int = 20,
@@ -669,9 +669,9 @@ async def publish_minutes(
 # ============================================
 
 
-@router.get("/templates", response_model=List[TemplateListItem])
+@router.get("/templates", response_model=list[TemplateListItem])
 async def list_templates(
-    meeting_type: Optional[str] = None,
+    meeting_type: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("minutes.view")),
 ):

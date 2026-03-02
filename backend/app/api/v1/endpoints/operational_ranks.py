@@ -39,7 +39,7 @@ def _rank_to_response(rank) -> RankResponse:
     )
 
 
-@router.get("", response_model=List[RankResponse])
+@router.get("", response_model=list[RankResponse])
 async def list_ranks(
     is_active: bool | None = Query(None, description="Filter by active status"),
     db: AsyncSession = Depends(get_db),
@@ -184,7 +184,7 @@ async def delete_rank(
         )
 
 
-@router.post("/reorder", response_model=List[RankResponse])
+@router.post("/reorder", response_model=list[RankResponse])
 async def reorder_ranks(
     data: RankReorderRequest,
     db: AsyncSession = Depends(get_db),

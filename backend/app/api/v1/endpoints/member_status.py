@@ -32,14 +32,14 @@ class MemberStatusChangeRequest(BaseModel):
     new_status: str = Field(
         ..., description="New status value (e.g. 'dropped_voluntary')"
     )
-    reason: Optional[str] = Field(None, description="Reason for the status change")
+    reason: str | None = Field(None, description="Reason for the status change")
     send_property_return_email: bool = Field(
         True, description="Email the property return report to the member"
     )
     return_deadline_days: int = Field(
         14, ge=1, le=90, description="Days to return property (1-90)"
     )
-    custom_instructions: Optional[str] = Field(
+    custom_instructions: str | None = Field(
         None, description="Extra paragraph added to the letter"
     )
 
@@ -50,9 +50,9 @@ class MemberStatusChangeResponse(BaseModel):
     user_id: str
     previous_status: str
     new_status: str
-    property_return_report: Optional[Dict[str, Any]] = None
-    document_id: Optional[str] = None
-    email_sent: Optional[bool] = None
+    property_return_report: dict[str, Any] | None = None
+    document_id: str | None = None
+    email_sent: bool | None = None
 
 
 @router.patch("/{user_id}/status", response_model=MemberStatusChangeResponse)
@@ -399,13 +399,13 @@ async def get_overdue_property_returns(
 class ArchiveMemberRequest(BaseModel):
     """Request body for manually archiving a dropped member."""
 
-    reason: Optional[str] = Field(None, description="Reason for archiving")
+    reason: str | None = Field(None, description="Reason for archiving")
 
 
 class ReactivateMemberRequest(BaseModel):
     """Request body for reactivating an archived member."""
 
-    reason: Optional[str] = Field(None, description="Reason for reactivation")
+    reason: str | None = Field(None, description="Reason for reactivation")
 
 
 @router.post("/{user_id}/archive")
@@ -577,7 +577,7 @@ class MembershipTypeChangeRequest(BaseModel):
         max_length=50,
         description="New tier ID (e.g. 'senior', 'life')",
     )
-    reason: Optional[str] = Field(None, description="Reason for the tier change")
+    reason: str | None = Field(None, description="Reason for the tier change")
 
 
 @router.patch("/{user_id}/membership-type")

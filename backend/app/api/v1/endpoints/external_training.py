@@ -62,7 +62,7 @@ router = APIRouter()
 # ============================================
 
 
-@router.get("/providers", response_model=List[ExternalTrainingProviderResponse])
+@router.get("/providers", response_model=list[ExternalTrainingProviderResponse])
 async def list_providers(
     active_only: bool = True,
     db: AsyncSession = Depends(get_db),
@@ -355,9 +355,9 @@ async def test_provider_connection(
 async def perform_sync_task(
     provider_id: str,
     sync_type: str,
-    from_date: Optional[date],
-    to_date: Optional[date],
-    user_id: Optional[str],
+    from_date: date | None,
+    to_date: date | None,
+    user_id: str | None,
     organization_id: str,
 ):
     """
@@ -479,7 +479,7 @@ async def trigger_sync(
 
 @router.get(
     "/providers/{provider_id}/sync-logs",
-    response_model=List[ExternalTrainingSyncLogResponse],
+    response_model=list[ExternalTrainingSyncLogResponse],
 )
 async def list_sync_logs(
     provider_id: UUID,
@@ -512,7 +512,7 @@ async def list_sync_logs(
 
 @router.get(
     "/providers/{provider_id}/category-mappings",
-    response_model=List[ExternalCategoryMappingResponse],
+    response_model=list[ExternalCategoryMappingResponse],
 )
 async def list_category_mappings(
     provider_id: UUID,
@@ -658,7 +658,7 @@ async def update_category_mapping(
 
 @router.get(
     "/providers/{provider_id}/user-mappings",
-    response_model=List[ExternalUserMappingResponse],
+    response_model=list[ExternalUserMappingResponse],
 )
 async def list_user_mappings(
     provider_id: UUID,
@@ -810,11 +810,11 @@ async def update_user_mapping(
 
 @router.get(
     "/providers/{provider_id}/imports",
-    response_model=List[ExternalTrainingImportResponse],
+    response_model=list[ExternalTrainingImportResponse],
 )
 async def list_imported_records(
     provider_id: UUID,
-    status: Optional[str] = Query(None, description="Filter by import status"),
+    status: str | None = Query(None, description="Filter by import status"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),

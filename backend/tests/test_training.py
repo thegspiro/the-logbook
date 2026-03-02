@@ -991,7 +991,7 @@ class TestRegistryData:
         """Helper to load a registry JSON file"""
         filepath = self.REGISTRY_DIR / filename
         assert filepath.exists(), f"Registry file not found: {filepath}"
-        with open(filepath, "r") as f:
+        with open(filepath) as f:
             return json.load(f)
 
     def test_nfpa_registry_loads(self):

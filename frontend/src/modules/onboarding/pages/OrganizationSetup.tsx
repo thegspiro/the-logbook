@@ -195,13 +195,13 @@ const InputField: React.FC<{
   id: string;
   value: string;
   onChange: (value: string) => void;
-  placeholder?: string;
-  type?: string;
-  required?: boolean;
-  maxLength?: number;
-  helpText?: string;
-  error?: string;
-  onBlur?: () => void;
+  placeholder?: string | undefined;
+  type?: string | undefined;
+  required?: boolean | undefined;
+  maxLength?: number | undefined;
+  helpText?: string | undefined;
+  error?: string | undefined;
+  onBlur?: (() => void) | undefined;
 }> = ({
   label,
   id,
@@ -245,9 +245,9 @@ const SelectField: React.FC<{
   value: string;
   onChange: (value: string) => void;
   options: { value: string; label: string }[];
-  required?: boolean;
-  helpText?: string;
-  error?: string;
+  required?: boolean | undefined;
+  helpText?: string | undefined;
+  error?: string | undefined;
 }> = ({ label, id, value, onChange, options, required, helpText, error }) => (
   <div>
     <label htmlFor={id} className="block text-sm font-medium text-theme-text-secondary mb-1">

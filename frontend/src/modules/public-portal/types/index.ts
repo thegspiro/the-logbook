@@ -90,9 +90,9 @@ export interface PublicPortalDataWhitelist {
 
 export interface CreateAPIKeyRequest {
   name: string;
-  rate_limit?: number;  // Used in component
-  rate_limit_override?: number;  // Alias for compatibility
-  expires_at?: string;
+  rate_limit?: number | undefined;  // Used in component
+  rate_limit_override?: number | undefined;  // Alias for compatibility
+  expires_at?: string | undefined;
 }
 
 export interface UpdateAPIKeyRequest {

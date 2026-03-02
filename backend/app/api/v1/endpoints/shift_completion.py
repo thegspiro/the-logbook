@@ -59,8 +59,8 @@ async def create_shift_report(
 
 @router.get("/my-reports", response_model=list[ShiftCompletionReportResponse])
 async def get_my_shift_reports(
-    start_date: Optional[date] = Query(None),
-    end_date: Optional[date] = Query(None),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -101,8 +101,8 @@ async def get_my_shift_reports(
 
 @router.get("/my-stats")
 async def get_my_shift_stats(
-    start_date: Optional[date] = Query(None),
-    end_date: Optional[date] = Query(None),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -132,8 +132,8 @@ async def get_reports_by_officer(
 @router.get("/trainee/{trainee_id}", response_model=list[ShiftCompletionReportResponse])
 async def get_reports_for_trainee(
     trainee_id: str,
-    start_date: Optional[date] = Query(None),
-    end_date: Optional[date] = Query(None),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):
@@ -150,8 +150,8 @@ async def get_reports_for_trainee(
 @router.get("/trainee/{trainee_id}/stats")
 async def get_trainee_stats(
     trainee_id: str,
-    start_date: Optional[date] = Query(None),
-    end_date: Optional[date] = Query(None),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):
@@ -167,10 +167,10 @@ async def get_trainee_stats(
 
 @router.get("/all", response_model=list[ShiftCompletionReportResponse])
 async def get_all_reports(
-    trainee_id: Optional[str] = Query(None),
-    officer_id: Optional[str] = Query(None),
-    start_date: Optional[date] = Query(None),
-    end_date: Optional[date] = Query(None),
+    trainee_id: str | None = Query(None),
+    officer_id: str | None = Query(None),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),

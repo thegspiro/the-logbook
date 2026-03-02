@@ -16,6 +16,7 @@
 
 import React, { Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
+import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard,
   ClipboardList,
@@ -73,7 +74,7 @@ interface TabDef {
 interface PageDef {
   id: PageId;
   label: string;
-  icon: React.FC<{ className?: string }>;
+  icon: LucideIcon;
   description: string;
   tabs: TabDef[];
   defaultTab: string;

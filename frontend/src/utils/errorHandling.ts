@@ -9,9 +9,9 @@
  */
 export interface AppError {
   message: string;
-  code?: string;
-  status?: number;
-  details?: Record<string, unknown>;
+  code?: string | undefined;
+  status?: number | undefined;
+  details?: Record<string, unknown> | undefined;
 }
 
 /**

@@ -2,7 +2,7 @@
  * Facility Detail Panel - Shows full facility details with edit, rooms, and actions.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Building2, X, Archive, RotateCcw, MapPin, DoorOpen, Wrench,
   ClipboardCheck, ChevronDown, ChevronUp, Plus, Pencil, Save, Trash2,

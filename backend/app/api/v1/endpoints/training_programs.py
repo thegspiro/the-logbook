@@ -74,16 +74,16 @@ async def create_training_requirement(
     return requirement
 
 
-@router.get("/requirements", response_model=List[TrainingRequirementEnhancedResponse])
+@router.get("/requirements", response_model=list[TrainingRequirementEnhancedResponse])
 async def get_training_requirements(
-    source: Optional[str] = Query(
+    source: str | None = Query(
         None, description="Filter by source (department, state, national)"
     ),
-    registry_name: Optional[str] = Query(None, description="Filter by registry name"),
-    requirement_type: Optional[str] = Query(
+    registry_name: str | None = Query(None, description="Filter by registry name"),
+    requirement_type: str | None = Query(
         None, description="Filter by requirement type"
     ),
-    position: Optional[str] = Query(None, description="Filter by position"),
+    position: str | None = Query(None, description="Filter by position"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -231,12 +231,12 @@ async def create_training_program(
     return program
 
 
-@router.get("/programs", response_model=List[TrainingProgramResponse])
+@router.get("/programs", response_model=list[TrainingProgramResponse])
 async def get_training_programs(
-    target_position: Optional[str] = Query(
+    target_position: str | None = Query(
         None, description="Filter by target position"
     ),
-    is_template: Optional[bool] = Query(None, description="Filter by template status"),
+    is_template: bool | None = Query(None, description="Filter by template status"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -363,7 +363,7 @@ async def create_program_phase(
     return phase
 
 
-@router.get("/programs/{program_id}/phases", response_model=List[ProgramPhaseResponse])
+@router.get("/programs/{program_id}/phases", response_model=list[ProgramPhaseResponse])
 async def get_program_phases(
     program_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -426,11 +426,11 @@ async def add_requirement_to_program(
 
 @router.get(
     "/programs/{program_id}/requirements",
-    response_model=List[ProgramRequirementResponse],
+    response_model=list[ProgramRequirementResponse],
 )
 async def get_program_requirements(
     program_id: UUID,
-    phase_id: Optional[UUID] = Query(None, description="Filter by phase"),
+    phase_id: UUID | None = Query(None, description="Filter by phase"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -523,9 +523,9 @@ async def enroll_member_in_program(
     return enrollment
 
 
-@router.get("/enrollments/me", response_model=List[ProgramEnrollmentResponse])
+@router.get("/enrollments/me", response_model=list[ProgramEnrollmentResponse])
 async def get_my_enrollments(
-    status: Optional[str] = Query(None, description="Filter by status"),
+    status: str | None = Query(None, description="Filter by status"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -546,11 +546,11 @@ async def get_my_enrollments(
 
 
 @router.get(
-    "/enrollments/user/{user_id}", response_model=List[ProgramEnrollmentResponse]
+    "/enrollments/user/{user_id}", response_model=list[ProgramEnrollmentResponse]
 )
 async def get_user_enrollments(
     user_id: UUID,
-    status: Optional[str] = Query(None, description="Filter by status"),
+    status: str | None = Query(None, description="Filter by status"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.view_all")),
 ):
@@ -756,18 +756,18 @@ async def duplicate_program(
 class BulkEnrollmentRequest(BaseModel):
     """Request schema for bulk enrollment"""
 
-    user_ids: List[UUID] = Field(
+    user_ids: list[UUID] = Field(
         ..., min_items=1, description="List of user IDs to enroll"
     )
-    target_completion_date: Optional[date] = None
+    target_completion_date: date | None = None
 
 
 class BulkEnrollmentResponse(BaseModel):
     """Response schema for bulk enrollment"""
 
     success_count: int
-    enrolled_users: List[UUID]
-    errors: List[str]
+    enrolled_users: list[UUID]
+    errors: list[str]
 
 
 @router.post(
@@ -813,12 +813,12 @@ class RegistryInfo(BaseModel):
     key: str
     name: str
     description: str
-    last_updated: Optional[str] = None
-    source_url: Optional[str] = None
+    last_updated: str | None = None
+    source_url: str | None = None
     requirement_count: int
 
 
-@router.get("/requirements/registries", response_model=List[RegistryInfo])
+@router.get("/requirements/registries", response_model=list[RegistryInfo])
 async def list_available_registries(
     _current_user: User = Depends(require_permission("training.manage")),
 ):
@@ -843,7 +843,7 @@ async def list_available_registries(
         if not path.exists():
             continue
         try:
-            with open(path, "r") as f:
+            with open(path) as f:
                 data = json.load(f)
             registries.append(
                 RegistryInfo(

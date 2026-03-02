@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { schedulingService } from '../modules/scheduling/services/api';
 import type { ApparatusOption } from '../modules/scheduling/services/api';
+import type { ShiftTemplateCreate, ShiftPatternCreate } from '../modules/scheduling/types';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
 
@@ -335,7 +336,7 @@ interface TemplateModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: Record<string, unknown>) => Promise<void>;
-  initialData?: TemplateFormData;
+  initialData?: TemplateFormData | undefined;
   title: string;
   apparatusOptions: ApparatusOption[];
   apparatusSource: 'apparatus' | 'basic' | 'default';
@@ -946,7 +947,7 @@ interface PatternModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: Record<string, unknown>) => Promise<void>;
-  initialData?: PatternFormData;
+  initialData?: PatternFormData | undefined;
   title: string;
   templates: ShiftTemplate[];
 }
@@ -1198,7 +1199,6 @@ const GenerateShiftsModal: React.FC<GenerateModalProps> = ({ isOpen, onClose, pa
     setIsGenerating(true);
     try {
       const result = await schedulingService.generateShiftsFromPattern(pattern.id, {
-        pattern_id: pattern.id,
         start_date: startDate,
         end_date: endDate,
       });
@@ -1363,7 +1363,7 @@ export const ShiftTemplatesPage: React.FC = () => {
 
   // Template handlers
   const handleCreateTemplate = async (data: Record<string, unknown>) => {
-    await schedulingService.createTemplate(data);
+    await schedulingService.createTemplate(data as unknown as ShiftTemplateCreate);
     toast.success('Template created');
     void loadTemplates();
   };
@@ -1391,7 +1391,7 @@ export const ShiftTemplatesPage: React.FC = () => {
 
   // Pattern handlers
   const handleCreatePattern = async (data: Record<string, unknown>) => {
-    await schedulingService.createPattern(data);
+    await schedulingService.createPattern(data as unknown as ShiftPatternCreate);
     toast.success('Pattern created');
     void loadPatterns();
   };

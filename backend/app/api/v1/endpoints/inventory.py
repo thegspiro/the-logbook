@@ -119,9 +119,9 @@ async def _publish_inventory_event(org_id: str, action: str, data: dict = None):
 # ============================================
 
 
-@router.get("/categories", response_model=List[InventoryCategoryResponse])
+@router.get("/categories", response_model=list[InventoryCategoryResponse])
 async def list_categories(
-    item_type: Optional[str] = None,
+    item_type: str | None = None,
     active_only: bool = True,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
@@ -262,16 +262,16 @@ async def get_category(
 
 @router.get("/items", response_model=ItemsListResponse)
 async def list_items(
-    category_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    condition: Optional[str] = None,
-    item_type: Optional[str] = None,
-    assigned_to: Optional[UUID] = None,
-    storage_area_id: Optional[UUID] = None,
-    search: Optional[str] = None,
+    category_id: UUID | None = None,
+    status: str | None = None,
+    condition: str | None = None,
+    item_type: str | None = None,
+    assigned_to: UUID | None = None,
+    storage_area_id: UUID | None = None,
+    search: str | None = None,
     active_only: bool = True,
-    sort_by: Optional[str] = None,
-    sort_order: Optional[str] = Query(None, regex="^(asc|desc)$"),
+    sort_by: str | None = None,
+    sort_order: str | None = Query(None, regex="^(asc|desc)$"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
@@ -393,9 +393,9 @@ async def create_item(
 
 @router.get("/items/export")
 async def export_items_csv(
-    category_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    search: Optional[str] = None,
+    category_id: UUID | None = None,
+    status: str | None = None,
+    search: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
@@ -783,7 +783,7 @@ async def unassign_item(
     return {"message": "Item unassigned successfully"}
 
 
-@router.get("/users/{user_id}/assignments", response_model=List[ItemAssignmentResponse])
+@router.get("/users/{user_id}/assignments", response_model=list[ItemAssignmentResponse])
 async def get_user_assignments(
     user_id: UUID,
     active_only: bool = True,
@@ -934,7 +934,7 @@ async def return_to_pool(
     return {"message": "Items returned to pool successfully"}
 
 
-@router.get("/items/{item_id}/issuances", response_model=List[ItemIssuanceResponse])
+@router.get("/items/{item_id}/issuances", response_model=list[ItemIssuanceResponse])
 async def get_item_issuances(
     item_id: UUID,
     active_only: bool = True,
@@ -956,7 +956,7 @@ async def get_item_issuances(
     return issuances
 
 
-@router.get("/users/{user_id}/issuances", response_model=List[ItemIssuanceResponse])
+@router.get("/users/{user_id}/issuances", response_model=list[ItemIssuanceResponse])
 async def get_user_issuances(
     user_id: UUID,
     active_only: bool = True,
@@ -1174,7 +1174,7 @@ async def extend_checkout(
 
 @router.get("/checkout/active")
 async def get_active_checkouts(
-    user_id: Optional[UUID] = None,
+    user_id: UUID | None = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
@@ -1372,7 +1372,7 @@ async def update_maintenance_record(
 
 
 @router.get(
-    "/items/{item_id}/maintenance", response_model=List[MaintenanceRecordResponse]
+    "/items/{item_id}/maintenance", response_model=list[MaintenanceRecordResponse]
 )
 async def get_item_maintenance_history(
     item_id: UUID,
@@ -1397,7 +1397,7 @@ async def get_item_maintenance_history(
     return maintenance_records
 
 
-@router.get("/maintenance/due", response_model=List[InventoryItemResponse])
+@router.get("/maintenance/due", response_model=list[InventoryItemResponse])
 async def get_maintenance_due(
     days_ahead: int = Query(30, ge=1, le=365),
     db: AsyncSession = Depends(get_db),
@@ -1440,7 +1440,7 @@ async def get_inventory_summary(
     return summary
 
 
-@router.get("/low-stock", response_model=List[LowStockItem])
+@router.get("/low-stock", response_model=list[LowStockItem])
 async def get_low_stock_alerts(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
@@ -1460,7 +1460,7 @@ async def get_low_stock_alerts(
 
 @router.get("/members-summary", response_model=MembersInventoryListResponse)
 async def get_members_inventory_summary(
-    search: Optional[str] = Query(
+    search: str | None = Query(
         None, description="Search by name, username, or membership number"
     ),
     db: AsyncSession = Depends(get_db),
@@ -1793,9 +1793,9 @@ async def initiate_departure_clearance(
     return clearance
 
 
-@router.get("/clearances", response_model=Dict)
+@router.get("/clearances", response_model=dict)
 async def list_departure_clearances(
-    status_filter: Optional[str] = Query(None, alias="status"),
+    status_filter: str | None = Query(None, alias="status"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
@@ -2124,7 +2124,7 @@ async def create_equipment_request(
 
 @router.get("/requests")
 async def list_equipment_requests(
-    status_filter: Optional[str] = Query(None, alias="status"),
+    status_filter: str | None = Query(None, alias="status"),
     mine_only: bool = Query(False),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
@@ -2274,10 +2274,10 @@ async def review_equipment_request(
 # ============================================
 
 
-@router.get("/storage-areas", response_model=List[StorageAreaResponse])
+@router.get("/storage-areas", response_model=list[StorageAreaResponse])
 async def list_storage_areas(
-    location_id: Optional[str] = Query(None, description="Filter by room/location"),
-    parent_id: Optional[str] = Query(None, description="Filter by parent storage area"),
+    location_id: str | None = Query(None, description="Filter by room/location"),
+    parent_id: str | None = Query(None, description="Filter by parent storage area"),
     flat: bool = Query(False, description="Return flat list instead of tree"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
@@ -2624,9 +2624,9 @@ async def create_write_off_request(
     return result
 
 
-@router.get("/write-offs", response_model=List[WriteOffRequestResponse])
+@router.get("/write-offs", response_model=list[WriteOffRequestResponse])
 async def list_write_off_requests(
-    write_off_status: Optional[str] = Query(None, alias="status"),
+    write_off_status: str | None = Query(None, alias="status"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
@@ -2881,7 +2881,7 @@ async def delete_nfpa_compliance(
 
 
 @router.get(
-    "/items/{item_id}/exposures", response_model=List[NFPAExposureRecordResponse]
+    "/items/{item_id}/exposures", response_model=list[NFPAExposureRecordResponse]
 )
 async def list_exposure_records(
     item_id: UUID,
@@ -3106,7 +3106,7 @@ async def get_nfpa_retirement_due(
 @router.websocket("/ws")
 async def inventory_websocket(
     websocket: WebSocket,
-    token: Optional[str] = Query(None),
+    token: str | None = Query(None),
 ):
     """
     WebSocket endpoint for real-time inventory change notifications.

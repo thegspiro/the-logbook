@@ -17,8 +17,8 @@ export interface ErrorLog {
   userMessage: string;
   troubleshootingSteps: string[];
   context: Record<string, unknown>;
-  userId?: string;
-  eventId?: string;
+  userId?: string | undefined;
+  eventId?: string | undefined;
 }
 
 function mapApiError(record: ErrorLogRecord): ErrorLog {

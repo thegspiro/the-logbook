@@ -84,10 +84,10 @@ router = APIRouter()
 
 
 @router.get(
-    "/types", response_model=List[ApparatusTypeListItem], tags=["Apparatus Types"]
+    "/types", response_model=list[ApparatusTypeListItem], tags=["Apparatus Types"]
 )
 async def list_apparatus_types(
-    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    is_active: bool | None = Query(None, description="Filter by active status"),
     include_system: bool = Query(True, description="Include system-defined types"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
@@ -248,11 +248,11 @@ async def delete_apparatus_type(
 
 @router.get(
     "/statuses",
-    response_model=List[ApparatusStatusListItem],
+    response_model=list[ApparatusStatusListItem],
     tags=["Apparatus Statuses"],
 )
 async def list_apparatus_statuses(
-    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    is_active: bool | None = Query(None, description="Filter by active status"),
     include_system: bool = Query(True, description="Include system-defined statuses"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
@@ -419,20 +419,20 @@ async def delete_apparatus_status(
 
 @router.get("", response_model=PaginatedApparatusList, tags=["Apparatus"])
 async def list_apparatus(
-    apparatus_type_id: Optional[str] = Query(
+    apparatus_type_id: str | None = Query(
         None, description="Filter by apparatus type"
     ),
-    status_id: Optional[str] = Query(None, description="Filter by status"),
-    primary_station_id: Optional[str] = Query(
+    status_id: str | None = Query(None, description="Filter by status"),
+    primary_station_id: str | None = Query(
         None, description="Filter by primary station"
     ),
-    is_archived: Optional[bool] = Query(
+    is_archived: bool | None = Query(
         False, description="Include archived apparatus"
     ),
-    year_min: Optional[int] = Query(None, description="Minimum year"),
-    year_max: Optional[int] = Query(None, description="Maximum year"),
-    make: Optional[str] = Query(None, description="Filter by make"),
-    search: Optional[str] = Query(None, description="Search in unit number, name, VIN"),
+    year_min: int | None = Query(None, description="Minimum year"),
+    year_max: int | None = Query(None, description="Maximum year"),
+    make: str | None = Query(None, description="Filter by make"),
+    search: str | None = Query(None, description="Search in unit number, name, VIN"),
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -767,12 +767,12 @@ async def delete_apparatus(
 
 @router.get(
     "/custom-fields",
-    response_model=List[ApparatusCustomFieldResponse],
+    response_model=list[ApparatusCustomFieldResponse],
     tags=["Custom Fields"],
 )
 async def list_custom_fields(
-    is_active: Optional[bool] = Query(True, description="Filter by active status"),
-    apparatus_type_id: Optional[str] = Query(
+    is_active: bool | None = Query(True, description="Filter by active status"),
+    apparatus_type_id: str | None = Query(
         None, description="Filter by applicable apparatus type"
     ),
     db: AsyncSession = Depends(get_db),
@@ -902,11 +902,11 @@ async def delete_custom_field(
 
 @router.get(
     "/maintenance-types",
-    response_model=List[ApparatusMaintenanceTypeResponse],
+    response_model=list[ApparatusMaintenanceTypeResponse],
     tags=["Maintenance Types"],
 )
 async def list_maintenance_types(
-    is_active: Optional[bool] = Query(True, description="Filter by active status"),
+    is_active: bool | None = Query(True, description="Filter by active status"),
     include_system: bool = Query(True, description="Include system-defined types"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
@@ -1039,26 +1039,26 @@ async def delete_maintenance_type(
 
 @router.get(
     "/maintenance",
-    response_model=List[ApparatusMaintenanceResponse],
+    response_model=list[ApparatusMaintenanceResponse],
     tags=["Maintenance"],
 )
 async def list_maintenance_records(
-    apparatus_id: Optional[str] = Query(None, description="Filter by apparatus"),
-    maintenance_type_id: Optional[str] = Query(
+    apparatus_id: str | None = Query(None, description="Filter by apparatus"),
+    maintenance_type_id: str | None = Query(
         None, description="Filter by maintenance type"
     ),
-    is_completed: Optional[bool] = Query(
+    is_completed: bool | None = Query(
         None, description="Filter by completion status"
     ),
-    is_overdue: Optional[bool] = Query(None, description="Filter by overdue status"),
-    is_historic: Optional[bool] = Query(
+    is_overdue: bool | None = Query(None, description="Filter by overdue status"),
+    is_historic: bool | None = Query(
         None,
         description="Filter by historic entries (True=only historic, False=only current)",
     ),
-    occurred_after: Optional[date] = Query(
+    occurred_after: date | None = Query(
         None, description="Filter records that occurred on or after this date"
     ),
-    occurred_before: Optional[date] = Query(
+    occurred_before: date | None = Query(
         None, description="Filter records that occurred on or before this date"
     ),
     skip: int = Query(0, ge=0),
@@ -1095,7 +1095,7 @@ async def list_maintenance_records(
 
 @router.get(
     "/maintenance/due",
-    response_model=List[ApparatusMaintenanceDue],
+    response_model=list[ApparatusMaintenanceDue],
     tags=["Maintenance"],
 )
 async def get_maintenance_due(
@@ -1268,12 +1268,12 @@ async def delete_maintenance_record(
 
 
 @router.get(
-    "/fuel-logs", response_model=List[ApparatusFuelLogResponse], tags=["Fuel Logs"]
+    "/fuel-logs", response_model=list[ApparatusFuelLogResponse], tags=["Fuel Logs"]
 )
 async def list_fuel_logs(
-    apparatus_id: Optional[str] = Query(None, description="Filter by apparatus"),
-    start_date: Optional[datetime] = Query(None, description="Start date filter"),
-    end_date: Optional[datetime] = Query(None, description="End date filter"),
+    apparatus_id: str | None = Query(None, description="Filter by apparatus"),
+    start_date: datetime | None = Query(None, description="Start date filter"),
+    end_date: datetime | None = Query(None, description="End date filter"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
@@ -1342,12 +1342,12 @@ async def create_fuel_log(
 
 
 @router.get(
-    "/operators", response_model=List[ApparatusOperatorResponse], tags=["Operators"]
+    "/operators", response_model=list[ApparatusOperatorResponse], tags=["Operators"]
 )
 async def list_operators(
-    apparatus_id: Optional[str] = Query(None, description="Filter by apparatus"),
-    user_id: Optional[str] = Query(None, description="Filter by user"),
-    is_active: Optional[bool] = Query(True, description="Filter by active status"),
+    apparatus_id: str | None = Query(None, description="Filter by apparatus"),
+    user_id: str | None = Query(None, description="Filter by user"),
+    is_active: bool | None = Query(True, description="Filter by active status"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
@@ -1479,11 +1479,11 @@ async def delete_operator(
 
 
 @router.get(
-    "/equipment", response_model=List[ApparatusEquipmentResponse], tags=["Equipment"]
+    "/equipment", response_model=list[ApparatusEquipmentResponse], tags=["Equipment"]
 )
 async def list_equipment(
-    apparatus_id: Optional[str] = Query(None, description="Filter by apparatus"),
-    is_present: Optional[bool] = Query(
+    apparatus_id: str | None = Query(None, description="Filter by apparatus"),
+    is_present: bool | None = Query(
         None, description="Filter by presence on apparatus"
     ),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
@@ -1621,7 +1621,7 @@ async def delete_equipment(
 
 @router.get(
     "/{apparatus_id}/photos",
-    response_model=List[ApparatusPhotoResponse],
+    response_model=list[ApparatusPhotoResponse],
     tags=["Photos"],
 )
 async def list_apparatus_photos(
@@ -1719,7 +1719,7 @@ async def delete_apparatus_photo(
 
 @router.get(
     "/{apparatus_id}/documents",
-    response_model=List[ApparatusDocumentResponse],
+    response_model=list[ApparatusDocumentResponse],
     tags=["Documents"],
 )
 async def list_apparatus_documents(
@@ -1817,12 +1817,12 @@ async def delete_apparatus_document(
 
 @router.get(
     "/nfpa-compliance",
-    response_model=List[ApparatusNFPAComplianceResponse],
+    response_model=list[ApparatusNFPAComplianceResponse],
     tags=["NFPA Compliance"],
 )
 async def list_nfpa_compliance(
-    apparatus_id: Optional[str] = Query(None, description="Filter by apparatus"),
-    compliance_status: Optional[str] = Query(
+    apparatus_id: str | None = Query(None, description="Filter by apparatus"),
+    compliance_status: str | None = Query(
         None, description="Filter by status (compliant, non_compliant, pending, exempt)"
     ),
     db: AsyncSession = Depends(get_db),
@@ -1992,12 +1992,12 @@ async def delete_nfpa_compliance(
 
 @router.get(
     "/report-configs",
-    response_model=List[ApparatusReportConfigResponse],
+    response_model=list[ApparatusReportConfigResponse],
     tags=["Report Configs"],
 )
 async def list_report_configs(
-    is_active: Optional[bool] = Query(None, description="Filter by active status"),
-    report_type: Optional[str] = Query(None, description="Filter by report type"),
+    is_active: bool | None = Query(None, description="Filter by active status"),
+    report_type: str | None = Query(None, description="Filter by report type"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("apparatus.view", "apparatus.manage")
@@ -2157,18 +2157,18 @@ async def delete_report_config(
 
 @router.get(
     "/service-providers",
-    response_model=List[ApparatusServiceProviderResponse],
+    response_model=list[ApparatusServiceProviderResponse],
     tags=["Service Providers"],
 )
 async def list_service_providers(
-    is_active: Optional[bool] = Query(
+    is_active: bool | None = Query(
         True,
         description="Filter by active status. Set to false to see archived providers, or omit for all.",
     ),
-    is_preferred: Optional[bool] = Query(
+    is_preferred: bool | None = Query(
         None, description="Filter preferred providers"
     ),
-    specialty: Optional[str] = Query(None, description="Filter by component specialty"),
+    specialty: str | None = Query(None, description="Filter by component specialty"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
@@ -2350,12 +2350,12 @@ async def restore_service_provider(
 
 
 @router.get(
-    "/components", response_model=List[ApparatusComponentResponse], tags=["Components"]
+    "/components", response_model=list[ApparatusComponentResponse], tags=["Components"]
 )
 async def list_components(
-    apparatus_id: Optional[str] = Query(None, description="Filter by apparatus"),
-    component_type: Optional[str] = Query(None, description="Filter by component type"),
-    is_active: Optional[bool] = Query(True, description="Filter by active status"),
+    apparatus_id: str | None = Query(None, description="Filter by apparatus"),
+    component_type: str | None = Query(None, description="Filter by component type"),
+    is_active: bool | None = Query(True, description="Filter by active status"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
@@ -2503,18 +2503,18 @@ async def delete_component(
 
 @router.get(
     "/component-notes",
-    response_model=List[ApparatusComponentNoteResponse],
+    response_model=list[ApparatusComponentNoteResponse],
     tags=["Component Notes"],
 )
 async def list_component_notes(
-    apparatus_id: Optional[str] = Query(None, description="Filter by apparatus"),
-    component_id: Optional[str] = Query(None, description="Filter by component"),
-    note_status: Optional[str] = Query(
+    apparatus_id: str | None = Query(None, description="Filter by apparatus"),
+    component_id: str | None = Query(None, description="Filter by component"),
+    note_status: str | None = Query(
         None, description="Filter by status (open, in_progress, resolved, deferred)"
     ),
-    severity: Optional[str] = Query(None, description="Filter by severity"),
-    note_type: Optional[str] = Query(None, description="Filter by note type"),
-    service_provider_id: Optional[str] = Query(
+    severity: str | None = Query(None, description="Filter by severity"),
+    note_type: str | None = Query(None, description="Filter by note type"),
+    service_provider_id: str | None = Query(
         None, description="Filter by service provider"
     ),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
@@ -2676,7 +2676,7 @@ async def delete_component_note(
 )
 async def generate_service_report(
     apparatus_id: str,
-    component_ids: Optional[str] = Query(
+    component_ids: str | None = Query(
         None, description="Comma-separated component IDs to scope the report"
     ),
     db: AsyncSession = Depends(get_db),

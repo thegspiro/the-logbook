@@ -105,14 +105,14 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
 # ============================================
 
 
-@router.get("", response_model=List[EventListItem])
+@router.get("", response_model=list[EventListItem])
 async def list_events(
-    event_type: Optional[str] = None,
-    exclude_event_types: Optional[str] = None,
-    start_after: Optional[datetime] = None,
-    start_before: Optional[datetime] = None,
-    end_after: Optional[datetime] = None,
-    end_before: Optional[datetime] = None,
+    event_type: str | None = None,
+    exclude_event_types: str | None = None,
+    start_after: datetime | None = None,
+    start_before: datetime | None = None,
+    end_after: datetime | None = None,
+    end_before: datetime | None = None,
     include_cancelled: bool = False,
     skip: int = 0,
     limit: int = 100,
@@ -487,10 +487,10 @@ async def create_or_update_rsvp(
     )
 
 
-@router.get("/{event_id}/rsvps", response_model=List[RSVPResponse])
+@router.get("/{event_id}/rsvps", response_model=list[RSVPResponse])
 async def list_event_rsvps(
     event_id: UUID,
-    status_filter: Optional[str] = None,
+    status_filter: str | None = None,
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
@@ -863,7 +863,7 @@ async def get_qr_check_in_data(
 @router.post("/{event_id}/self-check-in", response_model=RSVPResponse)
 async def self_check_in(
     event_id: UUID,
-    check_in_data: Optional[SelfCheckInRequest] = None,
+    check_in_data: SelfCheckInRequest | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1015,7 +1015,7 @@ async def create_event_template(
     return EventTemplateResponse.model_validate(template)
 
 
-@router.get("/templates", response_model=List[EventTemplateResponse])
+@router.get("/templates", response_model=list[EventTemplateResponse])
 async def list_event_templates(
     include_inactive: bool = False,
     skip: int = 0,
@@ -1121,7 +1121,7 @@ async def delete_event_template(
 
 @router.post(
     "/recurring",
-    response_model=List[EventResponse],
+    response_model=list[EventResponse],
     status_code=status.HTTP_201_CREATED,
 )
 async def create_recurring_event(
@@ -1439,28 +1439,28 @@ from app.models.event import EventExternalAttendee
 
 class ExternalAttendeeCreate(BaseModel):
     name: str
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    organization_name: Optional[str] = None
-    notes: Optional[str] = None
+    email: str | None = None
+    phone: str | None = None
+    organization_name: str | None = None
+    notes: str | None = None
 
 
 class ExternalAttendeeResponse(BaseModel):
     id: str
     event_id: str
     name: str
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    organization_name: Optional[str] = None
+    email: str | None = None
+    phone: str | None = None
+    organization_name: str | None = None
     checked_in: bool = False
-    checked_in_at: Optional[str] = None
-    source: Optional[str] = None
-    notes: Optional[str] = None
+    checked_in_at: str | None = None
+    source: str | None = None
+    notes: str | None = None
     created_at: str
 
 
 @router.get(
-    "/{event_id}/external-attendees", response_model=List[ExternalAttendeeResponse]
+    "/{event_id}/external-attendees", response_model=list[ExternalAttendeeResponse]
 )
 async def list_external_attendees(
     event_id: UUID,
@@ -1548,11 +1548,11 @@ async def add_external_attendee(
 
 
 class ExternalAttendeeUpdate(BaseModel):
-    name: Optional[str] = None
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    organization_name: Optional[str] = None
-    notes: Optional[str] = None
+    name: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    organization_name: str | None = None
+    notes: str | None = None
 
 
 @router.patch(
@@ -1875,15 +1875,15 @@ async def get_visible_event_types(
 class PublicEventItem(BaseModel):
     id: str
     title: str
-    description: Optional[str] = None
+    description: str | None = None
     event_type: str
     start_datetime: str
     end_datetime: str
-    location: Optional[str] = None
-    location_details: Optional[str] = None
+    location: str | None = None
+    location_details: str | None = None
 
 
-@router.get("/public-calendar", response_model=List[PublicEventItem])
+@router.get("/public-calendar", response_model=list[PublicEventItem])
 async def get_public_calendar(
     organization_id: str,
     db: AsyncSession = Depends(get_db),

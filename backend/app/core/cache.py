@@ -24,11 +24,11 @@ class CacheManager:
     """
 
     def __init__(self):
-        self.redis_client: Optional[redis.Redis] = None
+        self.redis_client: redis.Redis | None = None
         self._connected: bool = False
 
     @property
-    def redis(self) -> Optional[redis.Redis]:
+    def redis(self) -> redis.Redis | None:
         """Get Redis client (alias for redis_client)"""
         return self.redis_client
 
@@ -70,7 +70,7 @@ class CacheManager:
                 logger.info("Redis connection established")
                 return  # Success - exit the retry loop
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 last_exception = TimeoutError(
                     f"Redis connection timed out after {settings.REDIS_CONNECT_TIMEOUT}s"
                 )
@@ -120,7 +120,7 @@ class CacheManager:
                 self.redis_client = None
                 self._connected = False
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         """Get value from cache"""
         if not self.redis_client:
             return None
@@ -138,7 +138,7 @@ class CacheManager:
         self,
         key: str,
         value: Any,
-        ttl: Optional[int] = None,
+        ttl: int | None = None,
     ) -> bool:
         """
         Set value in cache
@@ -219,7 +219,7 @@ cache_manager = CacheManager()
 
 import hashlib
 from functools import wraps
-from typing import Callable
+from collections.abc import Callable
 
 from fastapi import Request
 
@@ -257,7 +257,7 @@ def cache_response(
         @wraps(func)
         async def wrapper(*args, **kwargs):
             # Extract request object from kwargs
-            request: Optional[Request] = kwargs.get("request")
+            request: Request | None = kwargs.get("request")
             if not request:
                 # If no request in kwargs, check args
                 for arg in args:

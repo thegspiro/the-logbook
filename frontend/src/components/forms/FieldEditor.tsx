@@ -66,7 +66,7 @@ export interface FieldEditorProps {
   /** Other fields in the form (for conditional logic targets) */
   siblingFields?: SiblingField[];
   /** ID of the field being edited (to exclude from condition targets) */
-  editingFieldId?: string;
+  editingFieldId?: string | undefined;
 }
 
 const inputClass =

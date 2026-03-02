@@ -35,7 +35,7 @@ class AuditLogger:
         return str(ts)
 
     @staticmethod
-    def calculate_hash(log_data: Dict[str, Any], previous_hash: str) -> str:
+    def calculate_hash(log_data: dict[str, Any], previous_hash: str) -> str:
         """
         Calculate SHA-256 hash for log entry
 
@@ -64,13 +64,13 @@ class AuditLogger:
         event_type: str,
         event_category: str,
         severity: str,
-        event_data: Dict[str, Any],
-        user_id: Optional[str] = None,
-        username: Optional[str] = None,
-        session_id: Optional[str] = None,
-        ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None,
-        geo_location: Optional[Dict[str, Any]] = None,
+        event_data: dict[str, Any],
+        user_id: str | None = None,
+        username: str | None = None,
+        session_id: str | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+        geo_location: dict[str, Any] | None = None,
     ) -> AuditLog:
         """
         Create a new tamper-proof audit log entry
@@ -144,9 +144,9 @@ class AuditLogger:
     async def verify_integrity(
         self,
         db: AsyncSession,
-        start_id: Optional[int] = None,
-        end_id: Optional[int] = None,
-    ) -> Dict[str, Any]:
+        start_id: int | None = None,
+        end_id: int | None = None,
+    ) -> dict[str, Any]:
         """
         Verify the integrity of the audit log chain
 
@@ -324,7 +324,7 @@ audit_logger = AuditLogger()
 async def log_event(
     db: AsyncSession,
     event_type: str,
-    event_data: Dict[str, Any],
+    event_data: dict[str, Any],
     event_category: str = "general",
     severity: str = "info",
     **kwargs,
@@ -359,7 +359,7 @@ async def log_audit_event(
     event_type: str,
     event_category: str,
     severity: str,
-    event_data: Dict[str, Any],
+    event_data: dict[str, Any],
     **kwargs,
 ):
     """
@@ -377,9 +377,9 @@ async def log_audit_event(
 
 async def verify_audit_log_integrity(
     db: AsyncSession,
-    start_id: Optional[int] = None,
-    end_id: Optional[int] = None,
-) -> Dict[str, Any]:
+    start_id: int | None = None,
+    end_id: int | None = None,
+) -> dict[str, Any]:
     """
     Verify the integrity of the audit log chain.
 
@@ -423,7 +423,7 @@ async def verify_audit_log_integrity(
     return result
 
 
-async def get_audit_log_status(db: AsyncSession) -> Dict[str, Any]:
+async def get_audit_log_status(db: AsyncSession) -> dict[str, Any]:
     """
     Get current audit log status and statistics.
 

@@ -9,7 +9,7 @@
  * the call to getTrainingRoutes() in App.tsx.
  */
 
-import React, { Suspense } from 'react';
+import React from 'react';
 import { Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
