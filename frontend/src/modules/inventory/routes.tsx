@@ -32,6 +32,9 @@ const InventoryCheckoutsPage = lazyWithRetry(
 const StorageAreasPage = lazyWithRetry(
   () => import('../../pages/StorageAreasPage'),
 );
+const ImportInventoryPage = lazyWithRetry(
+  () => import('../../pages/ImportInventory'),
+);
 
 export const getInventoryRoutes = () => {
   return (
@@ -87,6 +90,18 @@ export const getInventoryRoutes = () => {
           <Suspense fallback={null}>
             <StorageAreasPage />
           </Suspense>
+        }
+      />
+
+      {/* Inventory - CSV Import */}
+      <Route
+        path="/inventory/import"
+        element={
+          <ProtectedRoute requiredPermission="inventory.manage">
+            <Suspense fallback={null}>
+              <ImportInventoryPage />
+            </Suspense>
+          </ProtectedRoute>
         }
       />
     </React.Fragment>

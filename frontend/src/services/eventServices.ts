@@ -602,6 +602,14 @@ export interface InventoryItemsListResponse {
   limit: number;
 }
 
+export interface InventoryImportResult {
+  imported: number;
+  failed: number;
+  total_rows: number;
+  errors: Array<{ row: number; error: string }>;
+  warnings: string[];
+}
+
 export interface ItemHistoryEvent {
   type: 'assignment' | 'return' | 'checkout' | 'checkin' | 'issuance' | 'issuance_return' | 'maintenance';
   id: string;
