@@ -41,6 +41,42 @@ import {
 import { FormBuilder, FormRenderer, SubmissionViewer, FormResultsPanel } from '../components/forms';
 import { FormStatus } from '../constants/enums';
 
+/** Target fields each integration type expects the user to map. */
+const INTEGRATION_TARGET_FIELDS: Record<string, { key: string; label: string; required: boolean }[]> = {
+  membership_interest: [
+    { key: 'first_name', label: 'First Name', required: true },
+    { key: 'last_name', label: 'Last Name', required: true },
+    { key: 'email', label: 'Email', required: true },
+    { key: 'phone', label: 'Phone', required: false },
+    { key: 'mobile', label: 'Mobile', required: false },
+    { key: 'date_of_birth', label: 'Date of Birth', required: false },
+    { key: 'address_street', label: 'Street Address', required: false },
+    { key: 'address_city', label: 'City', required: false },
+    { key: 'address_state', label: 'State', required: false },
+    { key: 'address_zip', label: 'ZIP Code', required: false },
+    { key: 'interest_reason', label: 'Interest / Reason', required: false },
+    { key: 'referral_source', label: 'Referral Source', required: false },
+  ],
+  equipment_assignment: [
+    { key: 'member_id', label: 'Member (member_lookup field)', required: true },
+    { key: 'item_id', label: 'Item ID', required: true },
+    { key: 'reason', label: 'Reason / Notes', required: false },
+  ],
+  event_registration: [
+    { key: 'event_id', label: 'Event ID', required: true },
+    { key: 'notes', label: 'Notes', required: false },
+  ],
+  event_request: [
+    { key: 'contact_name', label: 'Contact Name', required: true },
+    { key: 'contact_email', label: 'Contact Email', required: true },
+    { key: 'event_title', label: 'Event Title', required: false },
+    { key: 'event_date', label: 'Event Date', required: false },
+    { key: 'event_description', label: 'Description', required: false },
+    { key: 'event_location', label: 'Location', required: false },
+    { key: 'expected_attendees', label: 'Expected Attendees', required: false },
+  ],
+};
+
 interface StarterTemplate {
   id: string;
   name: string;
@@ -239,6 +275,7 @@ const FormsPage: React.FC = () => {
   // Integration state
   const [integrationTarget, setIntegrationTarget] = useState('membership');
   const [integrationType, setIntegrationType] = useState('membership_interest');
+  const [fieldMappings, setFieldMappings] = useState<Record<string, string>>({});
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -393,16 +430,37 @@ const FormsPage: React.FC = () => {
 
   const handleAddIntegration = async () => {
     if (!selectedFormId) return;
+
+    // Validate that required mappings are present
+    const targetFields = INTEGRATION_TARGET_FIELDS[integrationType] ?? [];
+    const missingRequired = targetFields
+      .filter((tf) => tf.required && !fieldMappings[tf.key])
+      .map((tf) => tf.label);
+    if (missingRequired.length > 0) {
+      setError(`Required field mappings missing: ${missingRequired.join(', ')}`);
+      return;
+    }
+
+    // Build mappings: { formFieldId → targetFieldName }
+    // The backend expects this direction: form field ID as key, target field name as value
+    const mappings: Record<string, string> = {};
+    for (const [targetKey, formFieldId] of Object.entries(fieldMappings)) {
+      if (formFieldId) {
+        mappings[formFieldId] = targetKey;
+      }
+    }
+
     try {
       const data: FormIntegrationCreate = {
         target_module: integrationTarget,
         integration_type: integrationType,
-        field_mappings: {},
+        field_mappings: mappings,
         is_active: true,
       };
       await formsService.addIntegration(selectedFormId, data);
       const detail = await formsService.getForm(selectedFormId);
       setSelectedFormDetail(detail);
+      setFieldMappings({});
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to add integration';
       setError(message);
@@ -833,62 +891,65 @@ const FormsPage: React.FC = () => {
         {/* Submissions Tab */}
         {activeTab === 'submissions' && (
           <>
-            {selectedFormId ? (
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-theme-text-primary text-lg font-semibold">
-                    {submissionsView === 'list' ? 'Submissions' : 'Results'}
-                  </h2>
-                  <div className="flex items-center gap-3">
-                    <div className="flex bg-theme-surface-secondary rounded-lg p-0.5">
-                      <button
-                        onClick={() => setSubmissionsView('list')}
-                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                          submissionsView === 'list' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
-                        }`}
-                      >
-                        Responses
-                      </button>
-                      <button
-                        onClick={() => setSubmissionsView('results')}
-                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1 ${
-                          submissionsView === 'results' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
-                        }`}
-                      >
-                        <BarChart3 className="w-3 h-3" />
-                        Results
-                      </button>
-                    </div>
-                    <button
-                      onClick={() => { setSelectedFormId(null); setSubmissionsView('list'); }}
-                      className="text-theme-text-muted hover:text-theme-text-primary text-sm"
-                    >
-                      Clear selection
-                    </button>
-                  </div>
+            {/* Form selector dropdown */}
+            <div className="flex items-center gap-3 mb-4">
+              <label htmlFor="submission-form-select" className="text-sm font-medium text-theme-text-secondary flex-shrink-0">
+                Form:
+              </label>
+              <select
+                id="submission-form-select"
+                value={selectedFormId ?? ''}
+                onChange={(e) => { setSelectedFormId(e.target.value || null); setSubmissionsView('list'); }}
+                className="card-secondary focus:border-pink-500 focus:ring-2 focus:ring-pink-500 px-3 py-2 text-sm text-theme-text-primary flex-1 max-w-md"
+              >
+                <option value="">Select a form...</option>
+                {forms
+                  .filter((f) => !f.is_template)
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name} ({f.submission_count ?? 0} submissions)
+                    </option>
+                  ))}
+              </select>
+              {selectedFormId && (
+                <div className="flex bg-theme-surface-secondary rounded-lg p-0.5">
+                  <button
+                    onClick={() => setSubmissionsView('list')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                      submissionsView === 'list' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+                    }`}
+                  >
+                    Responses
+                  </button>
+                  <button
+                    onClick={() => setSubmissionsView('results')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1 ${
+                      submissionsView === 'results' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+                    }`}
+                  >
+                    <BarChart3 className="w-3 h-3" />
+                    Results
+                  </button>
                 </div>
-                {submissionsView === 'list' ? (
-                  <SubmissionViewer
-                    formId={selectedFormId}
-                    allowDelete={canManage}
-                  />
-                ) : (
-                  <FormResultsPanel formId={selectedFormId} />
-                )}
-              </div>
+              )}
+            </div>
+
+            {selectedFormId ? (
+              submissionsView === 'list' ? (
+                <SubmissionViewer
+                  formId={selectedFormId}
+                  allowDelete={canManage}
+                />
+              ) : (
+                <FormResultsPanel formId={selectedFormId} />
+              )
             ) : (
-              <div className="card p-12 text-center">
-                <FileCheck className="w-16 h-16 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
-                <h3 className="text-theme-text-primary text-xl font-bold mb-2">View Submissions</h3>
-                <p className="text-theme-text-secondary mb-6">
-                  Select a form from the &quot;My Forms&quot; tab to view its submissions.
+              <div className="card-secondary p-12 text-center">
+                <FileCheck className="w-12 h-12 text-theme-text-muted mx-auto mb-3" aria-hidden="true" />
+                <p className="text-theme-text-muted text-sm">
+                  Choose a form above to view its submissions and results.
                 </p>
-                <button
-                  onClick={() => setActiveTab('forms')}
-                  className="px-4 py-2 bg-pink-600/20 text-pink-700 dark:text-pink-400 hover:bg-pink-600/30 rounded-lg transition-colors"
-                >
-                  Go to My Forms
-                </button>
               </div>
             )}
           </>
@@ -1306,25 +1367,48 @@ const FormsPage: React.FC = () => {
                     <div className="mb-4">
                       <p className="text-theme-text-secondary text-sm font-medium mb-2">Active Integrations</p>
                       <div className="space-y-2">
-                        {selectedFormDetail.integrations.map((integ) => (
-                          <div key={integ.id} className="flex items-center justify-between p-3 bg-orange-500/5 border border-orange-500/20 rounded-lg">
-                            <div>
-                              <p className="text-orange-700 dark:text-orange-300 text-sm font-medium capitalize">
-                                {integ.target_module} - {integ.integration_type.replace(/_/g, ' ')}
-                              </p>
-                              <p className="text-theme-text-muted text-xs">
-                                {integ.is_active ? 'Active' : 'Inactive'}
-                              </p>
+                        {selectedFormDetail.integrations.map((integ) => {
+                          const mappingCount = Object.keys(integ.field_mappings ?? {}).length;
+                          return (
+                            <div key={integ.id} className="p-3 bg-orange-500/5 border border-orange-500/20 rounded-lg">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-orange-700 dark:text-orange-300 text-sm font-medium capitalize">
+                                    {integ.target_module} &mdash; {integ.integration_type.replace(/_/g, ' ')}
+                                  </p>
+                                  <p className="text-theme-text-muted text-xs">
+                                    {integ.is_active ? 'Active' : 'Inactive'}
+                                    {mappingCount > 0 && <> &middot; {mappingCount} field{mappingCount !== 1 ? 's' : ''} mapped</>}
+                                    {mappingCount === 0 && <span className="text-yellow-700 dark:text-yellow-400"> &middot; No field mappings configured</span>}
+                                  </p>
+                                </div>
+                                <button
+                                  onClick={() => { void handleDeleteIntegration(integ.id); }}
+                                  className="p-1 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-500/10 rounded flex-shrink-0"
+                                  aria-label="Delete integration"
+                                >
+                                  <Trash2 className="w-4 h-4" aria-hidden="true" />
+                                </button>
+                              </div>
+                              {mappingCount > 0 && (
+                                <div className="mt-2 pt-2 border-t border-orange-500/10">
+                                  <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                                    {Object.entries(integ.field_mappings).map(([formFieldId, targetKey]) => {
+                                      const formField = selectedFormDetail.fields.find((f) => f.id === formFieldId);
+                                      return (
+                                        <div key={formFieldId} className="text-[11px] text-theme-text-muted truncate">
+                                          <span className="text-theme-text-secondary">{formField?.label ?? formFieldId.slice(0, 8)}</span>
+                                          {' → '}
+                                          <span className="text-orange-700 dark:text-orange-400">{targetKey}</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                            <button
-                              onClick={() => { void handleDeleteIntegration(integ.id); }}
-                              className="p-1 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-500/10 rounded"
-                              aria-label="Delete integration"
-                            >
-                              <Trash2 className="w-4 h-4" aria-hidden="true" />
-                            </button>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -1340,14 +1424,18 @@ const FormsPage: React.FC = () => {
                           value={integrationTarget}
                           onChange={(e) => {
                             setIntegrationTarget(e.target.value);
-                            setIntegrationType(
-                              e.target.value === 'membership' ? 'membership_interest' : 'equipment_assignment'
-                            );
+                            const defaultType = e.target.value === 'membership' ? 'membership_interest'
+                              : e.target.value === 'inventory' ? 'equipment_assignment'
+                              : e.target.value === 'events' ? 'event_registration'
+                              : 'membership_interest';
+                            setIntegrationType(defaultType);
+                            setFieldMappings({});
                           }}
                           className="form-input text-sm"
                         >
                           <option value="membership">Membership</option>
                           <option value="inventory">Inventory</option>
+                          <option value="events">Events</option>
                         </select>
                       </div>
                       <div>
@@ -1355,25 +1443,62 @@ const FormsPage: React.FC = () => {
                         <select
                           id="integration-type"
                           value={integrationType}
-                          onChange={(e) => setIntegrationType(e.target.value)}
+                          onChange={(e) => { setIntegrationType(e.target.value); setFieldMappings({}); }}
                           className="form-input text-sm"
                         >
-                          {integrationTarget === 'membership' ? (
-                            <option value="membership_interest">Membership Interest (captures prospective member data)</option>
-                          ) : (
-                            <option value="equipment_assignment">Equipment Assignment (assigns items to members)</option>
+                          {integrationTarget === 'membership' && (
+                            <option value="membership_interest">Membership Interest</option>
+                          )}
+                          {integrationTarget === 'inventory' && (
+                            <option value="equipment_assignment">Equipment Assignment</option>
+                          )}
+                          {integrationTarget === 'events' && (
+                            <>
+                              <option value="event_registration">Event Registration</option>
+                              <option value="event_request">Event Request</option>
+                            </>
                           )}
                         </select>
                       </div>
 
-                      <div className="card-secondary p-3">
-                        <p className="text-theme-text-secondary text-xs">
-                          {integrationTarget === 'membership'
-                            ? 'Membership interest integration captures form submissions as prospective member records. Admins can review and process them from the submissions view.'
-                            : 'Equipment assignment integration maps form fields to inventory assignments. Use member_lookup fields to select members and map equipment fields to create assignments automatically.'
-                          }
-                        </p>
-                      </div>
+                      {/* Field Mappings */}
+                      {selectedFormDetail && (INTEGRATION_TARGET_FIELDS[integrationType] ?? []).length > 0 && (
+                        <div>
+                          <p className="text-xs font-medium text-theme-text-muted mb-2">
+                            Map your form fields to the integration&apos;s target fields:
+                          </p>
+                          <div className="space-y-2">
+                            {(INTEGRATION_TARGET_FIELDS[integrationType] ?? []).map((tf) => (
+                              <div key={tf.key} className="flex items-center gap-2">
+                                <label
+                                  htmlFor={`mapping-${tf.key}`}
+                                  className="text-xs text-theme-text-secondary w-32 flex-shrink-0 truncate"
+                                  title={tf.label}
+                                >
+                                  {tf.label}
+                                  {tf.required && <span className="text-red-700 dark:text-red-400 ml-0.5">*</span>}
+                                </label>
+                                <select
+                                  id={`mapping-${tf.key}`}
+                                  value={fieldMappings[tf.key] ?? ''}
+                                  onChange={(e) => setFieldMappings((prev) => ({ ...prev, [tf.key]: e.target.value }))}
+                                  className="card-secondary focus:border-pink-500 focus:ring-2 focus:ring-pink-500 px-2 py-1.5 text-xs text-theme-text-primary flex-1"
+                                >
+                                  <option value="">{tf.required ? 'Select a field...' : '(none)'}</option>
+                                  {selectedFormDetail.fields
+                                    .filter((f) => f.field_type !== 'section_header')
+                                    .sort((a, b) => a.sort_order - b.sort_order)
+                                    .map((f) => (
+                                      <option key={f.id} value={f.id}>
+                                        {f.label} ({f.field_type})
+                                      </option>
+                                    ))}
+                                </select>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       <button
                         onClick={() => { void handleAddIntegration(); }}
