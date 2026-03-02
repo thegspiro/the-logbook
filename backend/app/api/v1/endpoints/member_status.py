@@ -246,33 +246,93 @@ async def change_member_status(
             async def _send_report():
                 try:
                     from app.services.email_service import EmailService
+                    from app.services.email_template_service import (
+                        build_items_list_html,
+                        build_items_list_text,
+                    )
 
                     email_svc = EmailService(organization)
                     org_name = organization.name if organization else "Department"
-                    subject = f"Notice of Department Property Return — {org_name}"
-                    reason_line = ""
-                    if report_data.get("reason"):
-                        reason_line = f"Reason: {report_data['reason']}\n\n"
+
+                    # Build item list HTML/text from the report data
+                    items = report_data.get("items", [])
+                    total_val = report_data.get("total_value", 0.0)
+                    items_html = build_items_list_html(
+                        items, total_val, include_condition=True
+                    )
+                    items_text = build_items_list_text(
+                        items, total_val, include_condition=True
+                    )
+
+                    context = {
+                        "member_name": report_data["member_name"],
+                        "organization_name": org_name,
+                        "drop_type_display": report_data["drop_type_display"],
+                        "reason": report_data.get("reason", ""),
+                        "effective_date": report_data["effective_date"],
+                        "return_deadline": report_data["return_deadline"],
+                        "item_count": str(report_data["item_count"]),
+                        "total_value": f"{total_val:,.2f}",
+                        "items_list_html": items_html,
+                        "items_list_text": items_text,
+                        "performed_by_name": report_data["performed_by_name"],
+                        "performed_by_title": report_data["performed_by_title"],
+                    }
+
+                    subject = None
+                    html_body = None
+                    text_body = None
+
+                    # Try loading the admin-configured template
+                    try:
+                        from app.core.database import async_session_factory
+                        from app.models.email_template import EmailTemplateType
+                        from app.services.email_template_service import (
+                            EmailTemplateService,
+                        )
+
+                        async with async_session_factory() as tmpl_db:
+                            tmpl_svc = EmailTemplateService(tmpl_db)
+                            template = await tmpl_svc.get_template(
+                                str(current_user.organization_id),
+                                EmailTemplateType.MEMBER_DROPPED,
+                            )
+                            if template:
+                                subject, html_body, text_body = tmpl_svc.render(
+                                    template, context, organization=organization
+                                )
+                    except Exception as tmpl_err:
+                        from loguru import logger
+
+                        logger.warning(
+                            f"Failed to load member_dropped template, using default: {tmpl_err}"
+                        )
+
+                    # Fall back to inline default
+                    if not subject:
+                        import re
+
+                        from app.services.email_template_service import (
+                            DEFAULT_CSS,
+                            DEFAULT_MEMBER_DROPPED_HTML,
+                            DEFAULT_MEMBER_DROPPED_TEXT,
+                        )
+
+                        subject = f"Notice of Department Property Return — {org_name}"
+                        rendered_html = DEFAULT_MEMBER_DROPPED_HTML
+                        rendered_text = DEFAULT_MEMBER_DROPPED_TEXT
+                        for key, val in context.items():
+                            pattern = r"\{\{\s*" + re.escape(key) + r"\s*\}\}"
+                            rendered_html = re.sub(pattern, str(val), rendered_html)
+                            rendered_text = re.sub(pattern, str(val), rendered_text)
+                        html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{rendered_html}</body></html>"
+                        text_body = rendered_text
+
                     await email_svc.send_email(
                         to_emails=to_emails,
                         subject=subject,
-                        html_body=html_content,
-                        text_body=(
-                            f"Property Return Notice\n\n"
-                            f"Dear {member.full_name},\n\n"
-                            f"Your membership status with {org_name} has been changed to "
-                            f"{report_data['drop_type_display']} effective {report_data['effective_date']}.\n\n"
-                            f"{reason_line}"
-                            f"You have {report_data['item_count']} department item(s) "
-                            f"valued at ${report_data['total_value']:,.2f} that must be returned "
-                            f"by {report_data['return_deadline']}.\n\n"
-                            f"Please see the attached HTML version of this letter for the full "
-                            f"item listing and return instructions.\n\n"
-                            f"Respectfully,\n"
-                            f"{report_data['performed_by_name']}\n"
-                            f"{report_data['performed_by_title']}\n"
-                            f"{org_name}"
-                        ),
+                        html_body=html_body,
+                        text_body=text_body,
                         cc_emails=cc_emails if cc_emails else None,
                     )
                 except Exception as e:

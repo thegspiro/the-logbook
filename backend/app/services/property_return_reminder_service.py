@@ -276,135 +276,82 @@ class PropertyReturnReminderService:
         items_info: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Generate a reminder email and record it."""
+        from app.services.email_template_service import (
+            build_items_list_html,
+            build_items_list_text,
+        )
+
         reminder_label = threshold["label"]
         reminder_type = threshold["type"]
 
-        # Build item table rows for the email
-        item_rows = ""
-        for idx, item in enumerate(items_info["items"], 1):
-            item_rows += (
-                f"<tr>"
-                f"<td style='padding:6px 10px;border-bottom:1px solid #e5e7eb;'>{idx}</td>"
-                f"<td style='padding:6px 10px;border-bottom:1px solid #e5e7eb;'>{escape(item['name'])}</td>"
-                f"<td style='padding:6px 10px;border-bottom:1px solid #e5e7eb;'>{escape(item['serial_number'])}</td>"
-                f"<td style='padding:6px 10px;border-bottom:1px solid #e5e7eb;'>{escape(item['asset_tag'])}</td>"
-                f"<td style='padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;'>${item['value']:,.2f}</td>"
-                f"</tr>"
-            )
-
         local_drop_date = self._to_local(member.status_changed_at, org_tz)
         drop_date_display = local_drop_date.strftime("%B %d, %Y")
-        drop_type_display = (
-            "Voluntary Separation"
-            if member.status == UserStatus.DROPPED_VOLUNTARY
-            else "Involuntary Separation"
-        )
 
-        escalation_notice = ""
-        if threshold["type"] == "90_day":
-            escalation_notice = """
-            <p style="margin:16px 0;padding:12px;background-color:#fef2f2;border-left:4px solid #dc2626;color:#991b1b;">
-                <strong>FINAL NOTICE:</strong> This is your 90-day reminder. Department property that
-                is not returned may be referred for recovery action, which could include billing for
-                the replacement value of all outstanding items.
-            </p>"""
+        items = items_info.get("items", [])
+        total_val = items_info.get("total_value", 0.0)
+        items_html = build_items_list_html(items, total_val)
+        items_text = build_items_list_text(items, total_val)
 
-        html_body = f"""<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background-color: {'#dc2626' if threshold['type'] == '90_day' else '#f59e0b'}; color: white; padding: 20px; text-align: center; }}
-        .content {{ padding: 20px; background-color: #f9fafb; }}
-        table {{ border-collapse: collapse; width: 100%; margin: 16px 0; }}
-        th {{ background-color: #374151; color: white; padding: 8px 10px; text-align: left; font-size: 12px; }}
-        th:last-child {{ text-align: right; }}
-        .footer {{ padding: 20px; text-align: center; font-size: 12px; color: #6b7280; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1 style="margin:0;">{reminder_label} Property Return Reminder</h1>
-            <p style="margin:4px 0 0;opacity:0.9;">{escape(org_name)}</p>
-        </div>
-        <div class="content">
-            <p>Dear {escape(member.full_name)},</p>
+        # Compute a rough return deadline (30 days from drop date by default)
+        from datetime import timedelta
 
-            <p>
-                This is a reminder that <strong>{days_since_drop} days</strong> have passed since your
-                separation from <strong>{escape(org_name)}</strong> on <strong>{escape(drop_date_display)}</strong>
-                ({escape(drop_type_display)}).
-            </p>
+        return_deadline = local_drop_date + timedelta(days=30)
+        return_deadline_display = return_deadline.strftime("%B %d, %Y")
 
-            <p>
-                Our records indicate that the following department property has
-                <strong>not yet been returned</strong>:
-            </p>
+        context = {
+            "member_name": member.full_name,
+            "organization_name": org_name,
+            "item_count": str(items_info["count"]),
+            "total_value": f"{total_val:,.2f}",
+            "items_list_html": items_html,
+            "items_list_text": items_text,
+            "days_since_drop": str(days_since_drop),
+            "return_deadline": return_deadline_display,
+        }
 
-            <table>
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Item</th>
-                        <th>Serial #</th>
-                        <th>Asset Tag</th>
-                        <th style="text-align:right;">Value</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {item_rows}
-                </tbody>
-                <tfoot>
-                    <tr style="font-weight:bold;background-color:#f3f4f6;">
-                        <td colspan="4" style="padding:8px 10px;text-align:right;">Total Outstanding Value:</td>
-                        <td style="padding:8px 10px;text-align:right;">${items_info['total_value']:,.2f}</td>
-                    </tr>
-                </tfoot>
-            </table>
+        subject = None
+        html_body = None
+        text_body = None
 
-            {escalation_notice}
+        # Try loading the admin-configured template
+        try:
+            from app.models.email_template import EmailTemplateType
+            from app.services.email_template_service import EmailTemplateService
 
-            <p>
-                Please arrange for the return of these items at your earliest convenience.
-                You may return items in person during business hours, schedule an appointment
-                with the quartermaster, or ship them via insured carrier to the department address.
-            </p>
+            tmpl_svc = EmailTemplateService(self.db)
+            template = await tmpl_svc.get_template(
+                organization_id, EmailTemplateType.PROPERTY_RETURN_REMINDER
+            )
+            if template:
+                subject, html_body, text_body = tmpl_svc.render(
+                    template, context, organization=org
+                )
+        except Exception as tmpl_err:
+            logger.warning(
+                f"Failed to load property_return_reminder template, using default: {tmpl_err}"
+            )
 
-            <p>
-                If you have already returned these items, or if you believe this notice was
-                sent in error, please contact the department administration immediately so
-                that our records can be updated.
-            </p>
+        # Fall back to inline default
+        if not subject:
+            import re
 
-            <p>Thank you for your prompt attention to this matter.</p>
+            from app.services.email_template_service import (
+                DEFAULT_CSS,
+                DEFAULT_PROPERTY_RETURN_REMINDER_HTML,
+                DEFAULT_PROPERTY_RETURN_REMINDER_SUBJECT,
+                DEFAULT_PROPERTY_RETURN_REMINDER_TEXT,
+            )
 
-            <p style="margin-top:24px;">
-                Respectfully,<br/>
-                {escape(org_name)} Administration
-            </p>
-        </div>
-        <div class="footer">
-            <p>This is an automated reminder from {escape(org_name)}.</p>
-            <p>Separation Date: {escape(drop_date_display)} | Items Outstanding: {items_info['count']}</p>
-        </div>
-    </div>
-</body>
-</html>"""
-
-        text_body = (
-            f"{reminder_label} Property Return Reminder — {org_name}\n\n"
-            f"Dear {member.full_name},\n\n"
-            f"{days_since_drop} days have passed since your separation from "
-            f"{org_name} on {drop_date_display} ({drop_type_display}).\n\n"
-            f"Our records show {items_info['count']} item(s) valued at "
-            f"${items_info['total_value']:,.2f} have not been returned.\n\n"
-            f"Please arrange for the return of these items at your earliest convenience.\n\n"
-            f"Respectfully,\n{org_name} Administration"
-        )
-
-        subject = f"{reminder_label} Reminder: Department Property Return — {org_name}"
+            subject = DEFAULT_PROPERTY_RETURN_REMINDER_SUBJECT
+            rendered_html = DEFAULT_PROPERTY_RETURN_REMINDER_HTML
+            rendered_text = DEFAULT_PROPERTY_RETURN_REMINDER_TEXT
+            for key, val in context.items():
+                pattern = r"\{\{\s*" + re.escape(key) + r"\s*\}\}"
+                subject = re.sub(pattern, str(val), subject)
+                rendered_html = re.sub(pattern, str(val), rendered_html)
+                rendered_text = re.sub(pattern, str(val), rendered_text)
+            html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{rendered_html}</body></html>"
+            text_body = rendered_text
 
         # Send email to member
         member_sent = False

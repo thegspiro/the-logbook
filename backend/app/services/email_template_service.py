@@ -104,6 +104,14 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             "description": "Total dollar value of outstanding items",
         },
         {
+            "name": "items_list_html",
+            "description": "HTML table of outstanding items with name, serial #, asset tag, condition, and value",
+        },
+        {
+            "name": "items_list_text",
+            "description": "Plain-text list of outstanding items with details",
+        },
+        {
             "name": "performed_by_name",
             "description": "Name of the officer who performed the drop",
         },
@@ -174,6 +182,14 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "organization_name", "description": "Organization name"},
         {"name": "item_count", "description": "Number of outstanding items"},
         {"name": "total_value", "description": "Total value of outstanding items"},
+        {
+            "name": "items_list_html",
+            "description": "HTML table of outstanding items with name, serial #, asset tag, and value",
+        },
+        {
+            "name": "items_list_text",
+            "description": "Plain-text list of outstanding items with details",
+        },
         {"name": "days_since_drop", "description": "Days since membership was dropped"},
         {"name": "return_deadline", "description": "Deadline for returning property"},
     ],
@@ -181,6 +197,10 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "coordinator_name", "description": "Pipeline coordinator's name"},
         {"name": "prospect_name", "description": "Prospective member's name"},
         {"name": "days_inactive", "description": "Number of days inactive"},
+        {
+            "name": "timeout_days",
+            "description": "Configured inactivity timeout threshold in days",
+        },
         {"name": "pipeline_stage", "description": "Current pipeline stage"},
         {"name": "organization_name", "description": "Organization name"},
         {"name": "prospect_url", "description": "Link to prospect profile"},
@@ -294,6 +314,62 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "return_deadline": "April 14, 2026",
         "item_count": "5",
         "total_value": "2,450.00",
+        "items_list_html": (
+            '<table style="border-collapse:collapse;width:100%;margin:16px 0;">'
+            '<thead><tr style="background-color:#374151;color:white;">'
+            '<th style="padding:8px 10px;text-align:left;font-size:12px;">#</th>'
+            '<th style="padding:8px 10px;text-align:left;font-size:12px;">Item</th>'
+            '<th style="padding:8px 10px;text-align:left;font-size:12px;">Serial #</th>'
+            '<th style="padding:8px 10px;text-align:left;font-size:12px;">Asset Tag</th>'
+            '<th style="padding:8px 10px;text-align:left;font-size:12px;">Condition</th>'
+            '<th style="padding:8px 10px;text-align:right;font-size:12px;">Value</th>'
+            "</tr></thead><tbody>"
+            '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">1</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Turnout Coat (Size L)</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">TC-2024-0456</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">TCOAT-012</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Good</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$850.00</td></tr>'
+            '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">2</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Turnout Pants (Size L)</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">TP-2024-0789</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">TPANT-012</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Good</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$650.00</td></tr>'
+            '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">3</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Helmet (Black)</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">HLM-2024-0089</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">HLM-089</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Excellent</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$450.00</td></tr>'
+            '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">4</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">SCBA Mask</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">SCBA-2023-0234</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">SCBA-234</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Fair</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$350.00</td></tr>'
+            '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">5</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Radio (Portable)</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">RAD-2024-0567</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">RAD-567</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Good</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$150.00</td></tr>'
+            "</tbody>"
+            '<tfoot><tr style="font-weight:bold;background-color:#f3f4f6;">'
+            '<td colspan="5" style="padding:8px 10px;text-align:right;">Total Outstanding Value:</td>'
+            '<td style="padding:8px 10px;text-align:right;">$2,450.00</td>'
+            "</tr></tfoot></table>"
+        ),
+        "items_list_text": (
+            "Outstanding Items:\n"
+            "  1. Turnout Coat (Size L) — Serial: TC-2024-0456 — Asset Tag: TCOAT-012 — Condition: Good — $850.00\n"
+            "  2. Turnout Pants (Size L) — Serial: TP-2024-0789 — Asset Tag: TPANT-012 — Condition: Good — $650.00\n"
+            "  3. Helmet (Black) — Serial: HLM-2024-0089 — Asset Tag: HLM-089 — Condition: Excellent — $450.00\n"
+            "  4. SCBA Mask — Serial: SCBA-2023-0234 — Asset Tag: SCBA-234 — Condition: Fair — $350.00\n"
+            "  5. Radio (Portable) — Serial: RAD-2024-0567 — Asset Tag: RAD-567 — Condition: Good — $150.00\n"
+            "\n"
+            "Total Outstanding Value: $2,450.00"
+        ),
         "performed_by_name": "Chief Robert Johnson",
         "performed_by_title": "Fire Chief",
     },
@@ -354,6 +430,44 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "organization_logo": "https://example.com/logo.png",
         "item_count": "3",
         "total_value": "1,200.00",
+        "items_list_html": (
+            '<table style="border-collapse:collapse;width:100%;margin:16px 0;">'
+            '<thead><tr style="background-color:#374151;color:white;">'
+            '<th style="padding:8px 10px;text-align:left;font-size:12px;">#</th>'
+            '<th style="padding:8px 10px;text-align:left;font-size:12px;">Item</th>'
+            '<th style="padding:8px 10px;text-align:left;font-size:12px;">Serial #</th>'
+            '<th style="padding:8px 10px;text-align:left;font-size:12px;">Asset Tag</th>'
+            '<th style="padding:8px 10px;text-align:right;font-size:12px;">Value</th>'
+            "</tr></thead><tbody>"
+            '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">1</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Turnout Coat (Size L)</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">TC-2024-0456</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">TCOAT-012</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$500.00</td></tr>'
+            '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">2</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Helmet (Black)</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">HLM-2024-0089</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">HLM-089</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$450.00</td></tr>'
+            '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">3</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Radio (Portable)</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">RAD-2024-0567</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">RAD-567</td>'
+            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$250.00</td></tr>'
+            "</tbody>"
+            '<tfoot><tr style="font-weight:bold;background-color:#f3f4f6;">'
+            '<td colspan="4" style="padding:8px 10px;text-align:right;">Total Outstanding Value:</td>'
+            '<td style="padding:8px 10px;text-align:right;">$1,200.00</td>'
+            "</tr></tfoot></table>"
+        ),
+        "items_list_text": (
+            "Outstanding Items:\n"
+            "  1. Turnout Coat (Size L) — Serial: TC-2024-0456 — Asset Tag: TCOAT-012 — $500.00\n"
+            "  2. Helmet (Black) — Serial: HLM-2024-0089 — Asset Tag: HLM-089 — $450.00\n"
+            "  3. Radio (Portable) — Serial: RAD-2024-0567 — Asset Tag: RAD-567 — $250.00\n"
+            "\n"
+            "Total Outstanding Value: $1,200.00"
+        ),
         "days_since_drop": "30",
         "return_deadline": "April 30, 2026",
     },
@@ -361,6 +475,7 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "coordinator_name": "Jane Smith",
         "prospect_name": "Alex Johnson",
         "days_inactive": "21",
+        "timeout_days": "30",
         "pipeline_stage": "Application Review",
         "organization_name": "Sample Fire Department",
         "organization_logo": "https://example.com/logo.png",
@@ -518,6 +633,9 @@ DEFAULT_MEMBER_DROPPED_HTML = """<div class="container">
             <p><strong>Total Assessed Value:</strong> ${{total_value}}</p>
             <p><strong>Return Deadline:</strong> {{return_deadline}}</p>
         </div>
+
+        {{items_list_html}}
+
         <p>
             In accordance with department policy, all department-issued property must be
             returned in its current condition by the deadline above. Please contact the
@@ -546,6 +664,8 @@ Reason: {{reason}}
 Outstanding Items: {{item_count}} item(s)
 Total Assessed Value: ${{total_value}}
 Return Deadline: {{return_deadline}}
+
+{{items_list_text}}
 
 In accordance with department policy, all department-issued property must be returned in its current condition by the deadline above.
 
@@ -795,6 +915,8 @@ DEFAULT_PROPERTY_RETURN_REMINDER_HTML = """<div class="container">
             <p><strong>Return Deadline:</strong> {{return_deadline}}</p>
         </div>
 
+        {{items_list_html}}
+
         <p>Please contact the department administration to arrange return of these items as soon as possible.</p>
     </div>
     <div class="footer">
@@ -812,6 +934,8 @@ Outstanding Items: {{item_count}} item(s)
 Total Assessed Value: ${{total_value}}
 Days Since Separation: {{days_since_drop}}
 Return Deadline: {{return_deadline}}
+
+{{items_list_text}}
 
 Please contact the department administration to arrange return of these items.
 
@@ -836,7 +960,8 @@ DEFAULT_INACTIVITY_WARNING_HTML = """<div class="container">
         <div class="details">
             <p><strong>Prospect:</strong> {{prospect_name}}</p>
             <p><strong>Current Stage:</strong> {{pipeline_stage}}</p>
-            <p><strong>Days Inactive:</strong> {{days_inactive}}</p>
+            <p><strong>Days Inactive:</strong> {{days_inactive}} days</p>
+            <p><strong>Timeout Threshold:</strong> {{timeout_days}} days</p>
         </div>
 
         <p>Please review their progress and take appropriate action.</p>
@@ -859,7 +984,8 @@ A prospective member in your pipeline has been inactive and may need attention:
 
 Prospect: {{prospect_name}}
 Current Stage: {{pipeline_stage}}
-Days Inactive: {{days_inactive}}
+Days Inactive: {{days_inactive}} days
+Timeout Threshold: {{timeout_days}} days
 
 Please review their progress and take appropriate action.
 
@@ -1001,11 +1127,11 @@ DEFAULT_EVENT_REQUEST_STATUS_HTML = """<div class="container">
 
         <p>Your event request has been updated to: <strong>{{status_label}}</strong>.</p>
 
-        {{event_date}}
-
-        {{decline_reason}}
-
-        {{message}}
+        <div class="details">
+            <p><strong>Scheduled Date:</strong> {{event_date}}</p>
+            <p><strong>Reason:</strong> {{decline_reason}}</p>
+            <p><strong>Message:</strong> {{message}}</p>
+        </div>
 
         <p>Thank you for your request.</p>
     </div>
@@ -1020,11 +1146,9 @@ Hello {{contact_name}},
 
 Your event request has been updated to: {{status_label}}.
 
-{{event_date}}
-
-{{decline_reason}}
-
-{{message}}
+Scheduled Date: {{event_date}}
+Reason: {{decline_reason}}
+Message: {{message}}
 
 Thank you for your request.
 
@@ -1280,6 +1404,91 @@ DEFAULT_TRAINING_APPROVAL_SUBJECT = (
 )
 
 
+def build_items_list_html(
+    items: List[Dict[str, Any]],
+    total_value: float,
+    include_condition: bool = False,
+) -> str:
+    """Build an HTML table of outstanding items for email templates.
+
+    Args:
+        items: List of item dicts with keys: name, serial_number, asset_tag,
+               value, and optionally condition.
+        total_value: Pre-computed total value of all items.
+        include_condition: Whether to include a Condition column.
+
+    Returns:
+        An HTML ``<table>`` string ready for insertion into email templates.
+    """
+    import html as _h
+
+    cols = ["#", "Item", "Serial #", "Asset Tag"]
+    if include_condition:
+        cols.append("Condition")
+    cols.append("Value")
+
+    header_cells = "".join(
+        f'<th style="padding:8px 10px;text-align:{"right" if c == "Value" else "left"};font-size:12px;">{c}</th>'
+        for c in cols
+    )
+    rows = ""
+    for idx, item in enumerate(items, 1):
+        cells = (
+            f'<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">{idx}</td>'
+            f'<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">{_h.escape(str(item.get("name", "")))}</td>'
+            f'<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">{_h.escape(str(item.get("serial_number", "-")))}</td>'
+            f'<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">{_h.escape(str(item.get("asset_tag", "-")))}</td>'
+        )
+        if include_condition:
+            cond = item.get("condition", "unknown")
+            cells += f'<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">{_h.escape(str(cond).title())}</td>'
+        cells += f'<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">${item.get("value", 0):,.2f}</td>'
+        rows += f"<tr>{cells}</tr>"
+
+    col_count = len(cols)
+    return (
+        '<table style="border-collapse:collapse;width:100%;margin:16px 0;">'
+        f'<thead><tr style="background-color:#374151;color:white;">{header_cells}</tr></thead>'
+        f"<tbody>{rows}</tbody>"
+        '<tfoot><tr style="font-weight:bold;background-color:#f3f4f6;">'
+        f'<td colspan="{col_count - 1}" style="padding:8px 10px;text-align:right;">Total Outstanding Value:</td>'
+        f'<td style="padding:8px 10px;text-align:right;">${total_value:,.2f}</td>'
+        "</tr></tfoot></table>"
+    )
+
+
+def build_items_list_text(
+    items: List[Dict[str, Any]],
+    total_value: float,
+    include_condition: bool = False,
+) -> str:
+    """Build a plain-text list of outstanding items for email templates.
+
+    Args:
+        items: List of item dicts with keys: name, serial_number, asset_tag,
+               value, and optionally condition.
+        total_value: Pre-computed total value of all items.
+        include_condition: Whether to include condition info.
+
+    Returns:
+        A plain-text string listing all items.
+    """
+    lines = ["Outstanding Items:"]
+    for idx, item in enumerate(items, 1):
+        parts = [
+            f'  {idx}. {item.get("name", "Unknown")}',
+            f'Serial: {item.get("serial_number", "-")}',
+            f'Asset Tag: {item.get("asset_tag", "-")}',
+        ]
+        if include_condition:
+            parts.append(f'Condition: {str(item.get("condition", "unknown")).title()}')
+        parts.append(f'${item.get("value", 0):,.2f}')
+        lines.append(" \u2014 ".join(parts))
+    lines.append("")
+    lines.append(f"Total Outstanding Value: ${total_value:,.2f}")
+    return "\n".join(lines)
+
+
 class EmailTemplateService:
     """Service for managing and rendering email templates"""
 
@@ -1491,18 +1700,34 @@ class EmailTemplateService:
 
         return subject, full_html, text_body
 
+    # Variable names whose values contain pre-rendered, system-generated
+    # HTML (e.g. item tables, logo <img> tags).  These are built by
+    # trusted backend code and must NOT be HTML-escaped during rendering.
+    _RAW_HTML_VARIABLES: set = {
+        "items_list_html",
+        "items_issued_html",
+        "items_returned_html",
+        "organization_logo_img",
+    }
+
     def _replace_variables(self, text: str, context: Dict[str, Any]) -> str:
         """Replace {{variable_name}} placeholders with context values.
 
         All values are HTML-escaped to prevent injection of malicious
         HTML/JS through user-controlled template variables (e.g.
         election titles, custom messages, recipient names).
+
+        Variables listed in ``_RAW_HTML_VARIABLES`` are inserted without
+        escaping because they contain system-generated HTML (item tables,
+        logo images, etc.) that is already safe.
         """
         import html as _html
 
         def replacer(match):
             var_name = match.group(1).strip()
             value = str(context.get(var_name, match.group(0)))
+            if var_name in self._RAW_HTML_VARIABLES:
+                return value
             return _html.escape(value)
 
         return re.sub(r"\{\{(\s*\w+\s*)\}\}", replacer, text)
