@@ -18,8 +18,24 @@ import {
   Plus, Pencil, Trash2, GripVertical, ChevronUp, ChevronDown,
   Eye, EyeOff, RefreshCw, AlertCircle, Type, Hash, Mail, Phone,
   Calendar, Clock, List, CheckSquare, CircleDot, Users, Minus, FileText, PenTool,
-  GitBranch,
+  GitBranch, Copy,
 } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import FieldEditor from './FieldEditor';
 import type { SiblingField } from './FieldEditor';
 import { formsService } from '../../services/api';
@@ -82,6 +98,152 @@ export interface FormBuilderProps {
   compact?: boolean;
 }
 
+/** Props for each sortable field row. */
+interface SortableFieldRowProps {
+  field: FormField | FieldDefinition;
+  idx: number;
+  totalFields: number;
+  warning: string | null;
+  onEdit: (field: FormField | FieldDefinition) => void;
+  onDelete: (fieldId: string) => void;
+  onDuplicate: (field: FormField | FieldDefinition) => void;
+  onReorder: (fieldId: string, direction: 'up' | 'down') => void;
+}
+
+const SortableFieldRow = ({ field, idx, totalFields, warning, onEdit, onDelete, onDuplicate, onReorder }: SortableFieldRowProps) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: field.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`card-secondary flex gap-3 group items-center px-4 py-3 transition-colors ${
+        warning
+          ? 'border-yellow-500/40 hover:border-yellow-500/60 bg-yellow-500/5'
+          : 'hover:border-theme-surface-border'
+      }`}
+    >
+      {/* Drag handle */}
+      <div
+        className="text-theme-text-muted flex-shrink-0 cursor-grab active:cursor-grabbing"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="w-4 h-4" />
+      </div>
+
+      {/* Type icon */}
+      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+        warning
+          ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
+          : 'bg-theme-surface text-theme-text-muted'
+      }`}>
+        {FIELD_TYPE_ICONS[field.field_type] || <Type className="w-4 h-4" />}
+      </div>
+
+      {/* Field info */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm font-medium text-theme-text-primary truncate">{field.label}</span>
+          {field.required && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-700 dark:text-red-400 font-medium">Required</span>
+          )}
+          {field.width !== 'full' && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-theme-surface text-theme-text-muted">{field.width}</span>
+          )}
+          {field.condition_field_id && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-700 dark:text-purple-400 font-medium flex items-center gap-0.5">
+              <GitBranch className="w-2.5 h-2.5" />
+              Conditional
+            </span>
+          )}
+          {warning && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 font-medium flex items-center gap-0.5">
+              <AlertCircle className="w-2.5 h-2.5" />
+              Needs setup
+            </span>
+          )}
+        </div>
+        <span className="text-xs text-theme-text-muted">{field.field_type}</span>
+        {warning && (
+          <button
+            type="button"
+            onClick={() => onEdit(field)}
+            className="block text-xs text-yellow-700 dark:text-yellow-400 hover:underline mt-0.5"
+          >
+            {warning}
+          </button>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          type="button"
+          onClick={() => { onReorder(field.id, 'up'); }}
+          disabled={idx === 0}
+          className="p-1 text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30"
+          title="Move up"
+          aria-label={`Move ${field.label} up`}
+        >
+          <ChevronUp className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => { onReorder(field.id, 'down'); }}
+          disabled={idx === totalFields - 1}
+          className="p-1 text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30"
+          title="Move down"
+          aria-label={`Move ${field.label} down`}
+        >
+          <ChevronDown className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onDuplicate(field)}
+          className="p-1 text-theme-text-muted hover:text-theme-text-primary"
+          title="Duplicate field"
+          aria-label={`Duplicate ${field.label}`}
+        >
+          <Copy className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onEdit(field)}
+          className="p-1 text-theme-text-muted hover:text-cyan-700 dark:hover:text-cyan-400"
+          title="Edit field"
+          aria-label={`Edit ${field.label}`}
+        >
+          <Pencil className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => { onDelete(field.id); }}
+          className="p-1 text-theme-text-muted hover:text-red-700 dark:hover:text-red-400"
+          title="Delete field"
+          aria-label={`Delete ${field.label}`}
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const FormBuilder = ({
   formId,
   fields: externalFields,
@@ -99,6 +261,12 @@ const FormBuilder = ({
   const [previewMode, setPreviewMode] = useState(false);
 
   const isConnected = !!formId;
+
+  // DnD sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   // Load fields from backend
   useEffect(() => {
@@ -147,6 +315,7 @@ const FormBuilder = ({
       required: field.required,
       min_length: field.min_length || undefined,
       max_length: field.max_length || undefined,
+      validation_pattern: field.validation_pattern || undefined,
       options: field.options || undefined,
       condition_field_id: field.condition_field_id || undefined,
       condition_operator: field.condition_operator || undefined,
@@ -156,6 +325,53 @@ const FormBuilder = ({
     });
     setEditingFieldId(field.id);
     setEditorOpen(true);
+  };
+
+  const handleDuplicateField = async (field: FormField | FieldDefinition) => {
+    const fieldData: FormFieldCreate = {
+      label: `${field.label} (copy)`,
+      field_type: field.field_type,
+      placeholder: field.placeholder || undefined,
+      help_text: field.help_text || undefined,
+      default_value: field.default_value || undefined,
+      required: field.required,
+      min_length: field.min_length || undefined,
+      max_length: field.max_length || undefined,
+      validation_pattern: field.validation_pattern || undefined,
+      options: field.options ? [...field.options] : undefined,
+      width: field.width,
+      sort_order: field.sort_order + 1,
+    };
+
+    // Bump sort_order on all fields after the duplicated one
+    const reindexed = fields.map((f) =>
+      f.sort_order > field.sort_order ? { ...f, sort_order: f.sort_order + 1 } : f
+    );
+
+    if (isConnected) {
+      try {
+        setSaving(true);
+        await formsService.addField(formId!, fieldData);
+        await loadFields();
+      } catch {
+        setError('Failed to duplicate field.');
+      } finally {
+        setSaving(false);
+      }
+    } else {
+      const newField: FieldDefinition = {
+        id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        ...fieldData,
+        label: fieldData.label,
+        field_type: fieldData.field_type,
+        required: fieldData.required ?? false,
+        sort_order: fieldData.sort_order ?? fields.length,
+        width: fieldData.width || 'full',
+      };
+      const updated = [...reindexed, newField];
+      setFields(updated);
+      onFieldsChange?.(updated as FieldDefinition[]);
+    }
   };
 
   const handleSaveField = async (fieldData: FormFieldCreate) => {
@@ -267,6 +483,38 @@ const FormBuilder = ({
     }
   }, [fields, formId, isConnected, onFieldsChange]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const sorted = [...fields].sort((a, b) => a.sort_order - b.sort_order);
+    const oldIndex = sorted.findIndex((f) => f.id === active.id);
+    const newIndex = sorted.findIndex((f) => f.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+
+    // Reorder the array and reassign sort_order values
+    const [moved] = sorted.splice(oldIndex, 1);
+    if (!moved) return;
+    sorted.splice(newIndex, 0, moved);
+    sorted.forEach((f, i) => { f.sort_order = i; });
+
+    if (isConnected) {
+      try {
+        setSaving(true);
+        const fieldIds = sorted.map((f) => f.id);
+        await formsService.reorderFields(formId!, fieldIds);
+        await loadFields();
+      } catch {
+        setError('Failed to reorder fields.');
+      } finally {
+        setSaving(false);
+      }
+    } else {
+      setFields([...sorted]);
+      onFieldsChange?.([...sorted] as FieldDefinition[]);
+    }
+  }, [fields, formId, isConnected, onFieldsChange]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Loading
   if (loading) {
     return (
@@ -354,113 +602,27 @@ const FormBuilder = ({
         </div>
       )}
 
-      {/* Field list */}
+      {/* Field list with drag-and-drop */}
       {sortedFields.length > 0 && !previewMode && (
-        <div className="space-y-2">
-          {sortedFields.map((field, idx) => {
-            const warning = getFieldWarning(field);
-            return (
-            <div
-              key={field.id}
-              className={`card-secondary flex gap-3 group items-center px-4 py-3 transition-colors ${
-                warning
-                  ? 'border-yellow-500/40 hover:border-yellow-500/60 bg-yellow-500/5'
-                  : 'hover:border-theme-surface-border'
-              }`}
-            >
-              {/* Drag handle */}
-              <div className="text-theme-text-muted flex-shrink-0 cursor-grab">
-                <GripVertical className="w-4 h-4" />
-              </div>
-
-              {/* Type icon */}
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                warning
-                  ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
-                  : 'bg-theme-surface text-theme-text-muted'
-              }`}>
-                {FIELD_TYPE_ICONS[field.field_type] || <Type className="w-4 h-4" />}
-              </div>
-
-              {/* Field info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-medium text-theme-text-primary truncate">{field.label}</span>
-                  {field.required && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-700 dark:text-red-400 font-medium">Required</span>
-                  )}
-                  {field.width !== 'full' && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-theme-surface text-theme-text-muted">{field.width}</span>
-                  )}
-                  {field.condition_field_id && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-700 dark:text-purple-400 font-medium flex items-center gap-0.5">
-                      <GitBranch className="w-2.5 h-2.5" />
-                      Conditional
-                    </span>
-                  )}
-                  {warning && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 font-medium flex items-center gap-0.5">
-                      <AlertCircle className="w-2.5 h-2.5" />
-                      Needs setup
-                    </span>
-                  )}
-                </div>
-                <span className="text-xs text-theme-text-muted">{field.field_type}</span>
-                {warning && (
-                  <button
-                    type="button"
-                    onClick={() => handleEditField(field)}
-                    className="block text-xs text-yellow-700 dark:text-yellow-400 hover:underline mt-0.5"
-                  >
-                    {warning}
-                  </button>
-                )}
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  type="button"
-                  onClick={() => { void handleReorder(field.id, 'up'); }}
-                  disabled={idx === 0}
-                  className="p-1 text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30"
-                  title="Move up"
-                  aria-label={`Move ${field.label} up`}
-                >
-                  <ChevronUp className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { void handleReorder(field.id, 'down'); }}
-                  disabled={idx === sortedFields.length - 1}
-                  className="p-1 text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30"
-                  title="Move down"
-                  aria-label={`Move ${field.label} down`}
-                >
-                  <ChevronDown className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleEditField(field)}
-                  className="p-1 text-theme-text-muted hover:text-cyan-700 dark:hover:text-cyan-400"
-                  title="Edit field"
-                  aria-label={`Edit ${field.label}`}
-                >
-                  <Pencil className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { void handleDeleteField(field.id); }}
-                  className="p-1 text-theme-text-muted hover:text-red-700 dark:hover:text-red-400"
-                  title="Delete field"
-                  aria-label={`Delete ${field.label}`}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => { void handleDragEnd(e); }}>
+          <SortableContext items={sortedFields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
+            <div className="space-y-2">
+              {sortedFields.map((field, idx) => (
+                <SortableFieldRow
+                  key={field.id}
+                  field={field}
+                  idx={idx}
+                  totalFields={sortedFields.length}
+                  warning={getFieldWarning(field)}
+                  onEdit={handleEditField}
+                  onDelete={(id) => { void handleDeleteField(id); }}
+                  onDuplicate={(f) => { void handleDuplicateField(f); }}
+                  onReorder={(id, dir) => { void handleReorder(id, dir); }}
+                />
+              ))}
             </div>
-            ); })}
-        </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       {/* Preview mode */}

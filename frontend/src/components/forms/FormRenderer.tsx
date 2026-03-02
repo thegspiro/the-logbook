@@ -15,7 +15,7 @@
  *     onSubmit={(data) => myCustomHandler(data)}
  *   />
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Send, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
 import FieldRenderer from './FieldRenderer';
 import { formsService } from '../../services/api';
@@ -77,12 +77,26 @@ const FormRenderer = ({
   const [fields, setFields] = useState<FieldDefinition[]>(directFields || []);
   const [formData, setFormData] = useState<Record<string, string>>(initialValues || {});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(!!formId);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const errorSummaryRef = useRef<HTMLDivElement>(null);
+  const isDirtyRef = useRef(false);
 
   const isDark = theme === 'dark';
+
+  // Track dirty state for unsaved changes warning
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirtyRef.current && !submitted) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [submitted]);
 
   // Load form definition if formId is provided
   useEffect(() => {
@@ -127,6 +141,7 @@ const FormRenderer = ({
   };
 
   const handleFieldChange = useCallback((fieldId: string, value: string) => {
+    isDirtyRef.current = true;
     setFormData((prev) => ({ ...prev, [fieldId]: value }));
     // Clear field error on change
     setFieldErrors((prev) => {
@@ -163,57 +178,81 @@ const FormRenderer = ({
     [formData],
   );
 
+  /** Validate a single field. Returns error string or null. */
+  const validateField = useCallback((field: FieldDefinition): string | null => {
+    if (field.field_type === FieldType.SECTION_HEADER) return null;
+    if (!isFieldVisible(field)) return null;
+    const val = formData[field.id]?.trim() || '';
+
+    if (field.required && !val) {
+      return `${field.label} is required`;
+    }
+    if (val && field.min_length && val.length < field.min_length) {
+      return `Minimum ${field.min_length} characters`;
+    }
+    if (val && field.max_length && val.length > field.max_length) {
+      return `Maximum ${field.max_length} characters`;
+    }
+    if (val && field.field_type === FieldType.NUMBER) {
+      const num = Number(val);
+      if (isNaN(num)) {
+        return 'Must be a number';
+      }
+      if (field.min_value !== undefined && field.min_value !== null && num < field.min_value) {
+        return `Minimum value is ${field.min_value}`;
+      }
+      if (field.max_value !== undefined && field.max_value !== null && num > field.max_value) {
+        return `Maximum value is ${field.max_value}`;
+      }
+    }
+    if (val && field.field_type === FieldType.EMAIL && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+      return 'Invalid email address';
+    }
+    if (val && field.validation_pattern) {
+      try {
+        const regex = new RegExp(field.validation_pattern);
+        if (!regex.test(val)) {
+          return 'Invalid format';
+        }
+      } catch {
+        // Skip invalid regex patterns
+      }
+    }
+    return null;
+  }, [formData, isFieldVisible]);
+
+  /** Validate on blur — only shows errors for touched fields. */
+  const handleFieldBlur = useCallback((fieldId: string) => {
+    setTouchedFields((prev) => {
+      const next = new Set(prev);
+      next.add(fieldId);
+      return next;
+    });
+    const field = fields.find((f) => f.id === fieldId);
+    if (!field) return;
+    const fieldError = validateField(field);
+    setFieldErrors((prev) => {
+      if (fieldError) {
+        return { ...prev, [fieldId]: fieldError };
+      }
+      const next = { ...prev };
+      delete next[fieldId];
+      return next;
+    });
+  }, [fields, validateField]);
+
   const validate = (): boolean => {
     const errors: Record<string, string> = {};
 
     for (const field of fields) {
-      if (field.field_type === FieldType.SECTION_HEADER) continue;
-      // Skip validation for fields hidden by conditions
-      if (!isFieldVisible(field)) continue;
-      const val = formData[field.id]?.trim() || '';
-
-      if (field.required && !val) {
-        errors[field.id] = `${field.label} is required`;
-      }
-
-      if (val && field.min_length && val.length < field.min_length) {
-        errors[field.id] = `Minimum ${field.min_length} characters`;
-      }
-
-      if (val && field.max_length && val.length > field.max_length) {
-        errors[field.id] = `Maximum ${field.max_length} characters`;
-      }
-
-      if (val && field.field_type === FieldType.NUMBER) {
-        const num = Number(val);
-        if (isNaN(num)) {
-          errors[field.id] = 'Must be a number';
-        } else {
-          if (field.min_value !== undefined && field.min_value !== null && num < field.min_value) {
-            errors[field.id] = `Minimum value is ${field.min_value}`;
-          }
-          if (field.max_value !== undefined && field.max_value !== null && num > field.max_value) {
-            errors[field.id] = `Maximum value is ${field.max_value}`;
-          }
-        }
-      }
-
-      if (val && field.field_type === FieldType.EMAIL && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
-        errors[field.id] = 'Invalid email address';
-      }
-
-      if (val && field.validation_pattern) {
-        try {
-          const regex = new RegExp(field.validation_pattern);
-          if (!regex.test(val)) {
-            errors[field.id] = 'Invalid format';
-          }
-        } catch {
-          // Skip invalid regex patterns
-        }
+      const fieldError = validateField(field);
+      if (fieldError) {
+        errors[field.id] = fieldError;
       }
     }
 
+    // Mark all fields as touched on submit attempt
+    setTouchedFields(new Set(fields.map((f) => f.id)));
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -223,7 +262,9 @@ const FormRenderer = ({
     if (readOnly || submitting) return;
 
     if (!validate()) {
-      setError('Please fix the errors below.');
+      setError('Please fix the errors highlighted below.');
+      // Focus the error summary for screen readers
+      errorSummaryRef.current?.focus();
       return;
     }
 
@@ -243,11 +284,13 @@ const FormRenderer = ({
         const success = await onSubmit(sanitizedData);
         if (success) {
           setSubmitted(true);
+          isDirtyRef.current = false;
         }
       } else if (formId) {
         // Use formsService
         const submission = await formsService.submitForm(formId, sanitizedData);
         setSubmitted(true);
+        isDirtyRef.current = false;
         onSubmitSuccess?.(submission);
       }
     } catch (err: unknown) {
@@ -262,7 +305,9 @@ const FormRenderer = ({
     setSubmitted(false);
     setFormData(initialValues || {});
     setFieldErrors({});
+    setTouchedFields(new Set());
     setError(null);
+    isDirtyRef.current = false;
   };
 
   // Loading state
@@ -309,9 +354,14 @@ const FormRenderer = ({
 
   const formTitle = title || form?.name;
   const formDesc = description || form?.description;
+  const hasRequired = fields.some((f) => f.required && f.field_type !== FieldType.SECTION_HEADER);
+  const errorEntries = Object.entries(fieldErrors);
+  const visibleFields = fields
+    .filter((f) => isFieldVisible(f))
+    .sort((a, b) => a.sort_order - b.sort_order);
 
   return (
-    <form onSubmit={(e) => { void handleSubmit(e); }}>
+    <form onSubmit={(e) => { void handleSubmit(e); }} noValidate>
       {/* Header */}
       {(formTitle || formDesc) && (
         <div className={`mb-${compact ? '4' : '6'}`}>
@@ -320,8 +370,50 @@ const FormRenderer = ({
         </div>
       )}
 
-      {/* Error banner */}
-      {error && (
+      {/* Required fields legend */}
+      {hasRequired && (
+        <p className={`text-xs mb-4 ${isDark ? 'text-theme-text-muted' : 'text-theme-text-secondary'}`}>
+          Fields marked with <span className="text-red-700 dark:text-red-400">*</span> are required.
+        </p>
+      )}
+
+      {/* Accessible error summary */}
+      {errorEntries.length > 0 && (
+        <div
+          ref={errorSummaryRef}
+          tabIndex={-1}
+          role="alert"
+          aria-live="assertive"
+          className={`mb-4 p-3 rounded-lg ${isDark ? 'bg-red-500/10 border border-red-500/30' : 'bg-red-50 border border-red-200'}`}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <AlertCircle className="w-4 h-4 text-red-700 dark:text-red-400 flex-shrink-0" />
+            <p className={`text-sm font-medium ${isDark ? 'text-red-700 dark:text-red-300' : 'text-red-700'}`}>
+              {error || `Please fix ${errorEntries.length} ${errorEntries.length === 1 ? 'error' : 'errors'} below.`}
+            </p>
+          </div>
+          <ul className="list-disc list-inside space-y-0.5">
+            {errorEntries.map(([fieldId, msg]) => (
+              <li key={fieldId} className={`text-xs ${isDark ? 'text-red-700 dark:text-red-400' : 'text-red-600'}`}>
+                <a
+                  href={`#field-${fieldId}`}
+                  className="underline hover:no-underline"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    document.getElementById(`field-${fieldId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    document.getElementById(`field-${fieldId}`)?.focus();
+                  }}
+                >
+                  {msg}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Error banner (only show if no error entries — avoids duplication) */}
+      {error && errorEntries.length === 0 && (
         <div className={`mb-4 p-3 rounded-lg flex items-center gap-2 ${isDark ? 'bg-red-500/10 border border-red-500/30' : 'bg-red-50 border border-red-200'}`}>
           <AlertCircle className="w-4 h-4 text-red-700 dark:text-red-400 flex-shrink-0" />
           <p className={`text-sm ${isDark ? 'text-red-700 dark:text-red-300' : 'text-red-700'}`}>{error}</p>
@@ -330,23 +422,18 @@ const FormRenderer = ({
 
       {/* Fields */}
       <div className={`space-y-${compact ? '3' : '5'}`}>
-        {fields
-          .sort((a, b) => a.sort_order - b.sort_order)
-          .map((field) => {
-            const visible = isFieldVisible(field);
-            if (!visible) return null;
-            return (
-              <FieldRenderer
-                key={field.id}
-                field={field}
-                value={formData[field.id] || ''}
-                onChange={handleFieldChange}
-                theme={theme}
-                disabled={readOnly}
-                error={fieldErrors[field.id]}
-              />
-            );
-          })}
+        {visibleFields.map((field) => (
+          <FieldRenderer
+            key={field.id}
+            field={field}
+            value={formData[field.id] || ''}
+            onChange={handleFieldChange}
+            onBlur={handleFieldBlur}
+            theme={theme}
+            disabled={readOnly}
+            error={touchedFields.has(field.id) ? fieldErrors[field.id] : undefined}
+          />
+        ))}
       </div>
 
       {/* Actions */}

@@ -154,7 +154,7 @@ export interface FieldDefinition {
   max_length?: number | undefined;
   min_value?: number;
   max_value?: number;
-  validation_pattern?: string;
+  validation_pattern?: string | undefined;
   options?: { value: string; label: string }[] | undefined;
   condition_field_id?: string | undefined;
   condition_operator?: string | undefined;
@@ -167,13 +167,15 @@ export interface FieldRendererProps {
   field: FieldDefinition;
   value: string;
   onChange: (fieldId: string, value: string) => void;
+  /** Called when the field loses focus. */
+  onBlur?: (fieldId: string) => void;
   /** Use dark theme (internal app) or light theme (public forms). Default: dark */
   theme?: 'dark' | 'light';
   disabled?: boolean;
   error?: string | undefined;
 }
 
-const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = false, error }: FieldRendererProps) => {
+const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disabled = false, error }: FieldRendererProps) => {
   const { formatRank } = useRanks();
   const [memberResults, setMemberResults] = useState<MemberLookupResult[]>([]);
   const [memberQuery, setMemberQuery] = useState('');
@@ -198,6 +200,8 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
   const radioTextClass = 'text-theme-text-secondary';
   const sectionHeaderClass = 'text-theme-text-primary';
   const sectionSubClass = 'text-theme-text-muted';
+
+  const handleBlur = () => { onBlur?.(field.id); };
 
   const handleMemberSearch = async (query: string) => {
     setMemberQuery(query);
@@ -238,29 +242,38 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
       case 'email':
       case 'phone':
         return (
-          <input
-            type={field.field_type === FieldType.PHONE ? 'tel' : field.field_type}
-            className={inputClass}
-            placeholder={field.placeholder || ''}
-            value={value}
-            onChange={(e) => onChange(field.id, e.target.value)}
-            required={field.required}
-            disabled={disabled}
-            minLength={field.min_length || undefined}
-            maxLength={field.max_length || undefined}
-            pattern={field.validation_pattern || undefined}
-            {...ariaProps}
-          />
+          <>
+            <input
+              id={`field-${field.id}`}
+              type={field.field_type === FieldType.PHONE ? 'tel' : field.field_type}
+              className={inputClass}
+              placeholder={field.placeholder || ''}
+              value={value}
+              onChange={(e) => onChange(field.id, e.target.value)}
+              onBlur={handleBlur}
+              required={field.required}
+              disabled={disabled}
+              minLength={field.min_length || undefined}
+              maxLength={field.max_length || undefined}
+              pattern={field.validation_pattern || undefined}
+              {...ariaProps}
+            />
+            {field.max_length && (
+              <p className="text-[11px] text-theme-text-muted mt-1 text-right">{value.length} / {field.max_length}</p>
+            )}
+          </>
         );
 
       case 'number':
         return (
           <input
+            id={`field-${field.id}`}
             type="number"
             className={inputClass}
             placeholder={field.placeholder || ''}
             value={value}
             onChange={(e) => onChange(field.id, e.target.value)}
+            onBlur={handleBlur}
             required={field.required}
             disabled={disabled}
             min={field.min_value || undefined}
@@ -271,26 +284,35 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
 
       case 'textarea':
         return (
-          <textarea
-            className={`${inputClass} min-h-[100px] resize-y`}
-            placeholder={field.placeholder || ''}
-            value={value}
-            onChange={(e) => onChange(field.id, e.target.value)}
-            required={field.required}
-            disabled={disabled}
-            minLength={field.min_length || undefined}
-            maxLength={field.max_length || undefined}
-            {...ariaProps}
-          />
+          <>
+            <textarea
+              id={`field-${field.id}`}
+              className={`${inputClass} min-h-[100px] resize-y`}
+              placeholder={field.placeholder || ''}
+              value={value}
+              onChange={(e) => onChange(field.id, e.target.value)}
+              onBlur={handleBlur}
+              required={field.required}
+              disabled={disabled}
+              minLength={field.min_length || undefined}
+              maxLength={field.max_length || undefined}
+              {...ariaProps}
+            />
+            {field.max_length && (
+              <p className="text-[11px] text-theme-text-muted mt-1 text-right">{value.length} / {field.max_length}</p>
+            )}
+          </>
         );
 
       case 'date':
         return (
           <input
+            id={`field-${field.id}`}
             type="date"
             className={inputClass}
             value={value}
             onChange={(e) => onChange(field.id, e.target.value)}
+            onBlur={handleBlur}
             required={field.required}
             disabled={disabled}
             {...ariaProps}
@@ -300,11 +322,13 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
       case 'time':
         return (
           <input
+            id={`field-${field.id}`}
             type="time"
             step="900"
             className={inputClass}
             value={value}
             onChange={(e) => onChange(field.id, e.target.value)}
+            onBlur={handleBlur}
             required={field.required}
             disabled={disabled}
             {...ariaProps}
@@ -314,11 +338,13 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
       case 'datetime':
         return (
           <input
+            id={`field-${field.id}`}
             type="datetime-local"
             step="900"
             className={inputClass}
             value={value}
             onChange={(e) => onChange(field.id, e.target.value)}
+            onBlur={handleBlur}
             required={field.required}
             disabled={disabled}
             {...ariaProps}
@@ -328,9 +354,11 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
       case 'select':
         return (
           <select
+            id={`field-${field.id}`}
             className={inputClass}
             value={value}
             onChange={(e) => onChange(field.id, e.target.value)}
+            onBlur={handleBlur}
             required={field.required}
             disabled={disabled}
             {...ariaProps}
@@ -556,11 +584,13 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
       default:
         return (
           <input
+            id={`field-${field.id}`}
             type="text"
             className={inputClass}
             placeholder={field.placeholder || ''}
             value={value}
             onChange={(e) => onChange(field.id, e.target.value)}
+            onBlur={handleBlur}
             required={field.required}
             disabled={disabled}
             {...ariaProps}

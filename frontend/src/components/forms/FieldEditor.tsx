@@ -46,6 +46,17 @@ const CONDITION_OPERATORS = [
 
 const NEEDS_OPTIONS = ['select', 'multiselect', 'checkbox', 'radio'];
 
+/** Common validation pattern presets. */
+const VALIDATION_PRESETS = [
+  { value: '', label: 'None' },
+  { value: '^\\d{5}(-\\d{4})?$', label: 'US ZIP Code (12345 or 12345-6789)' },
+  { value: '^\\d{3}-\\d{2}-\\d{4}$', label: 'SSN (123-45-6789)' },
+  { value: '^https?://.+', label: 'URL (http:// or https://)' },
+  { value: '^\\d{10}$', label: '10-digit number' },
+  { value: '^[A-Z]{2}\\d{6,8}$', label: 'Certification ID (e.g., FF123456)' },
+  { value: 'custom', label: 'Custom pattern...' },
+] as const;
+
 /** Represents another field in the form that can be referenced as a condition source. */
 export interface SiblingField {
   id: string;
@@ -85,6 +96,13 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
   const [maxLength, setMaxLength] = useState<number | undefined>(field?.max_length || undefined);
   const [minValue, setMinValue] = useState<number | undefined>(field?.min_value ?? undefined);
   const [maxValue, setMaxValue] = useState<number | undefined>(field?.max_value ?? undefined);
+  const [validationPattern, setValidationPattern] = useState(field?.validation_pattern || '');
+  const [validationPreset, setValidationPreset] = useState<string>(() => {
+    const pattern = field?.validation_pattern || '';
+    if (!pattern) return '';
+    const preset = VALIDATION_PRESETS.find((p) => p.value === pattern);
+    return preset ? preset.value : 'custom';
+  });
   const [options, setOptions] = useState<FormFieldOption[]>(field?.options || [{ value: '', label: '' }]);
   const [width, setWidth] = useState(field?.width || 'full');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -107,6 +125,10 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
       setMaxLength(field.max_length || undefined);
       setMinValue(field.min_value ?? undefined);
       setMaxValue(field.max_value ?? undefined);
+      setValidationPattern(field.validation_pattern || '');
+      const pattern = field.validation_pattern || '';
+      const preset = VALIDATION_PRESETS.find((p) => p.value === pattern);
+      setValidationPreset(preset ? preset.value : pattern ? 'custom' : '');
       setOptions(field.options || [{ value: '', label: '' }]);
       setWidth(field.width || 'full');
       setConditionFieldId(field.condition_field_id || '');
@@ -160,6 +182,14 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
       }
     }
 
+    if (validationPattern) {
+      try {
+        new RegExp(validationPattern);
+      } catch {
+        errs.validation = 'Invalid regular expression pattern';
+      }
+    }
+
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -183,6 +213,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
       if (isTextLike) {
         if (minLength) fieldData.min_length = minLength;
         if (maxLength) fieldData.max_length = maxLength;
+        if (validationPattern.trim()) fieldData.validation_pattern = validationPattern.trim();
       }
 
       if (isNumeric) {
@@ -346,30 +377,76 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
 
               {/* Text validation */}
               {isTextLike && (
-                <div className="flex gap-3">
-                  <div className="flex-1">
-                    <label htmlFor="field-min-length" className="block text-xs font-medium text-theme-text-muted mb-1">Min Length</label>
-                    <input
-                      id="field-min-length"
-                      type="number"
-                      value={minLength ?? ''}
-                      onChange={(e) => setMinLength(e.target.value ? Number(e.target.value) : undefined)}
-                      min={0}
-                      className="card-secondary focus:border-pink-500 focus:ring-2 focus:ring-pink-500 px-3 py-2 text-sm text-theme-text-primary w-full"
-                    />
+                <>
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <label htmlFor="field-min-length" className="block text-xs font-medium text-theme-text-muted mb-1">Min Length</label>
+                      <input
+                        id="field-min-length"
+                        type="number"
+                        value={minLength ?? ''}
+                        onChange={(e) => setMinLength(e.target.value ? Number(e.target.value) : undefined)}
+                        min={0}
+                        className="card-secondary focus:border-pink-500 focus:ring-2 focus:ring-pink-500 px-3 py-2 text-sm text-theme-text-primary w-full"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label htmlFor="field-max-length" className="block text-xs font-medium text-theme-text-muted mb-1">Max Length</label>
+                      <input
+                        id="field-max-length"
+                        type="number"
+                        value={maxLength ?? ''}
+                        onChange={(e) => setMaxLength(e.target.value ? Number(e.target.value) : undefined)}
+                        min={0}
+                        className="card-secondary focus:border-pink-500 focus:ring-2 focus:ring-pink-500 px-3 py-2 text-sm text-theme-text-primary w-full"
+                      />
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <label htmlFor="field-max-length" className="block text-xs font-medium text-theme-text-muted mb-1">Max Length</label>
-                    <input
-                      id="field-max-length"
-                      type="number"
-                      value={maxLength ?? ''}
-                      onChange={(e) => setMaxLength(e.target.value ? Number(e.target.value) : undefined)}
-                      min={0}
+
+                  {/* Validation pattern presets */}
+                  <div>
+                    <label htmlFor="field-validation-preset" className="block text-xs font-medium text-theme-text-muted mb-1">Validation Pattern</label>
+                    <select
+                      id="field-validation-preset"
+                      value={validationPreset}
+                      onChange={(e) => {
+                        const preset = e.target.value;
+                        setValidationPreset(preset);
+                        if (preset === 'custom') {
+                          // Keep current pattern for editing
+                        } else {
+                          setValidationPattern(preset);
+                        }
+                      }}
                       className="card-secondary focus:border-pink-500 focus:ring-2 focus:ring-pink-500 px-3 py-2 text-sm text-theme-text-primary w-full"
-                    />
+                    >
+                      {VALIDATION_PRESETS.map((p) => (
+                        <option key={p.value} value={p.value}>{p.label}</option>
+                      ))}
+                    </select>
+                    {validationPreset === 'custom' && (
+                      <div className="mt-2">
+                        <input
+                          id="field-validation-pattern"
+                          type="text"
+                          value={validationPattern}
+                          onChange={(e) => setValidationPattern(e.target.value)}
+                          placeholder="e.g., ^[A-Z]{2}\d{4}$"
+                          className={`${inputClass} font-mono text-xs ${errors.validation ? 'border-red-500/50' : ''}`}
+                        />
+                        {errors.validation && <p className="text-xs text-red-700 dark:text-red-400 mt-1">{errors.validation}</p>}
+                        <p className="text-[10px] text-theme-text-muted mt-1">
+                          JavaScript regex pattern. Value must match the entire input.
+                        </p>
+                      </div>
+                    )}
+                    {validationPreset && validationPreset !== 'custom' && (
+                      <p className="text-[10px] text-theme-text-muted mt-1 font-mono">
+                        Pattern: {validationPattern}
+                      </p>
+                    )}
                   </div>
-                </div>
+                </>
               )}
 
               {/* Number validation */}

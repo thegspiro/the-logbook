@@ -350,7 +350,7 @@ export interface FormField {
   max_length?: number | undefined;
   min_value?: number;
   max_value?: number;
-  validation_pattern?: string;
+  validation_pattern?: string | undefined;
   options?: FormFieldOption[] | undefined;
   condition_field_id?: string | undefined;
   condition_operator?: string | undefined;
@@ -372,6 +372,7 @@ export interface FormFieldCreate {
   max_length?: number | undefined;
   min_value?: number;
   max_value?: number;
+  validation_pattern?: string | undefined;
   options?: FormFieldOption[] | undefined;
   condition_field_id?: string | undefined;
   condition_operator?: string | undefined;
