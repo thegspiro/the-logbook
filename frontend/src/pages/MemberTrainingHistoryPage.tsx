@@ -239,7 +239,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as FilterStatus)}
-              className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
             >
               <option value="all">All Status</option>
               <option value="completed">Completed</option>
@@ -257,7 +257,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                 setSortField(field as SortField);
                 setSortOrder(order as SortOrder);
               }}
-              className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
             >
               <option value="date-desc">Newest First</option>
               <option value="date-asc">Oldest First</option>

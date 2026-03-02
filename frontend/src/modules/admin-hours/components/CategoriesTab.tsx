@@ -170,7 +170,7 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
           {categories.map((cat) => (
             <div key={cat.id} className="bg-theme-surface rounded-lg shadow-md p-4 flex items-center gap-4">
               <div
-                className="w-4 h-4 rounded-full flex-shrink-0"
+                className="w-4 h-4 rounded-full shrink-0"
                 style={{ backgroundColor: cat.color ?? '#6B7280' }}
               />
               <div className="flex-1 min-w-0">

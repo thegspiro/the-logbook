@@ -77,7 +77,7 @@ const AdminHoursQRCodePage: React.FC = () => {
       </div>
 
       {/* Category Info */}
-      <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6 mb-6">
+      <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6 mb-6">
         <div className="flex items-center gap-3 mb-2">
           <div
             className="w-5 h-5 rounded-full"
@@ -94,7 +94,7 @@ const AdminHoursQRCodePage: React.FC = () => {
       </div>
 
       {/* QR Code */}
-      <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-8">
+      <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-8">
         <div className="text-center">
           <h3 className="text-xl font-semibold text-theme-text-primary mb-2">
             Scan to Clock In / Clock Out

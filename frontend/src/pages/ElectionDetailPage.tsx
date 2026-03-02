@@ -393,7 +393,7 @@ export const ElectionDetailPage: React.FC = () => {
             <div className="flex items-center gap-2 mb-2">
               <h2 className="text-2xl font-bold text-theme-text-primary">{election.title}</h2>
               {election.is_runoff && (
-                <span className="px-2 py-1 text-xs font-semibold bg-purple-100 text-purple-800 rounded">
+                <span className="px-2 py-1 text-xs font-semibold bg-purple-100 text-purple-800 rounded-sm">
                   Runoff Round {election.runoff_round}
                 </span>
               )}
@@ -421,7 +421,7 @@ export const ElectionDetailPage: React.FC = () => {
       </div>
 
       {/* Election Info */}
-      <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6 mb-6">
+      <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <div className="text-sm text-theme-text-muted">Start Date</div>
@@ -639,7 +639,7 @@ export const ElectionDetailPage: React.FC = () => {
         <div className="mb-6">
           <button
             onClick={() => setShowResults(!showResults)}
-            className="w-full bg-theme-surface backdrop-blur-sm shadow rounded-lg p-4 flex items-center justify-between hover:bg-theme-surface-hover"
+            className="w-full bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-4 flex items-center justify-between hover:bg-theme-surface-hover"
           >
             <span className="text-lg font-medium text-theme-text-primary">
               {showResults ? 'Hide Results' : 'View Results'}
@@ -686,7 +686,7 @@ export const ElectionDetailPage: React.FC = () => {
                 void handleLoadForensics();
               }
             }}
-            className="w-full bg-theme-surface backdrop-blur-sm shadow rounded-lg p-4 flex items-center justify-between hover:bg-theme-surface-hover"
+            className="w-full bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-4 flex items-center justify-between hover:bg-theme-surface-hover"
           >
             <span className="text-lg font-medium text-theme-text-primary">
               Forensics &amp; Integrity
@@ -705,7 +705,7 @@ export const ElectionDetailPage: React.FC = () => {
           </button>
 
           {showForensics && (
-            <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg mt-2 p-6 space-y-6">
+            <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg mt-2 p-6 space-y-6">
               {/* Integrity Check */}
               <div>
                 <div className="flex items-center justify-between mb-3">
@@ -756,12 +756,12 @@ export const ElectionDetailPage: React.FC = () => {
                       </div>
                     </div>
                     {integrityResult.tampered_vote_ids.length > 0 && (
-                      <div className="mt-3 p-3 bg-red-500/20 rounded">
+                      <div className="mt-3 p-3 bg-red-500/20 rounded-sm">
                         <p className="text-sm font-semibold text-red-300 mb-1">Tampered Vote IDs:</p>
                         <div className="space-y-1">
                           {integrityResult.tampered_vote_ids.map(id => (
                             <div key={id} className="flex items-center gap-2">
-                              <code className="text-xs text-red-300 bg-red-500/10 px-2 py-0.5 rounded">{id}</code>
+                              <code className="text-xs text-red-300 bg-red-500/10 px-2 py-0.5 rounded-sm">{id}</code>
                               <button
                                 onClick={() => setVoidVoteId(id)}
                                 className="text-xs text-red-600 underline hover:text-red-800"
@@ -790,7 +790,7 @@ export const ElectionDetailPage: React.FC = () => {
                     onChange={(e) => setVoidVoteId(e.target.value)}
                     placeholder="Vote ID (UUID)"
                     aria-label="Vote ID (UUID)"
-                    className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-sm text-theme-text-primary focus:outline-none focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+                    className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-sm text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
                   />
                   <input
                     type="text"
@@ -798,7 +798,7 @@ export const ElectionDetailPage: React.FC = () => {
                     onChange={(e) => setVoidVoteReason(e.target.value)}
                     placeholder="Reason for voiding"
                     aria-label="Reason for voiding"
-                    className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-sm text-theme-text-primary focus:outline-none focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+                    className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-sm text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
                   />
                   <button
                     onClick={() => { void handleVoidVote(); }}
@@ -856,7 +856,7 @@ export const ElectionDetailPage: React.FC = () => {
                       <h3 className="text-md font-semibold text-red-300 mb-2">
                         Suspicious IP Addresses
                       </h3>
-                      <div className="bg-red-500/10 border border-red-500/30 rounded p-3">
+                      <div className="bg-red-500/10 border border-red-500/30 rounded-sm p-3">
                         {Object.entries(forensicsReport.anomaly_detection.suspicious_ips).map(([ip, count]) => (
                           <div key={ip} className="flex justify-between text-sm py-1">
                             <code className="text-red-300">{ip}</code>
@@ -899,15 +899,15 @@ export const ElectionDetailPage: React.FC = () => {
                   <div className="border-t border-theme-surface-border pt-4">
                     <h3 className="text-md font-semibold text-theme-text-primary mb-2">Ballot Tokens</h3>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                      <div className="bg-theme-surface-secondary rounded p-3">
+                      <div className="bg-theme-surface-secondary rounded-sm p-3">
                         <div className="text-theme-text-muted">Issued</div>
                         <div className="text-xl font-semibold text-theme-text-primary">{forensicsReport.voting_tokens.total_issued}</div>
                       </div>
-                      <div className="bg-theme-surface-secondary rounded p-3">
+                      <div className="bg-theme-surface-secondary rounded-sm p-3">
                         <div className="text-theme-text-muted">Used</div>
                         <div className="text-xl font-semibold text-theme-text-primary">{forensicsReport.voting_tokens.total_used}</div>
                       </div>
-                      <div className="bg-theme-surface-secondary rounded p-3">
+                      <div className="bg-theme-surface-secondary rounded-sm p-3">
                         <div className="text-theme-text-muted">Unused</div>
                         <div className="text-xl font-semibold text-theme-text-primary">
                           {forensicsReport.voting_tokens.total_issued - forensicsReport.voting_tokens.total_used}
@@ -997,7 +997,7 @@ export const ElectionDetailPage: React.FC = () => {
 
             <div className="px-6 py-4">
               {election.email_sent && (
-                <div className="mb-4 bg-yellow-500/10 border border-yellow-500/30 rounded p-3">
+                <div className="mb-4 bg-yellow-500/10 border border-yellow-500/30 rounded-sm p-3">
                   <p className="text-sm text-yellow-300">
                     Ballot emails were previously sent{election.email_sent_at ? ` on ${formatDateTime(election.email_sent_at, tz)}` : ''}.
                     Sending again will generate new voting tokens for all eligible voters.
@@ -1006,7 +1006,7 @@ export const ElectionDetailPage: React.FC = () => {
               )}
 
               {sendEmailError && (
-                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded p-3" role="alert">
+                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert">
                   <p className="text-sm text-red-300">{sendEmailError}</p>
                 </div>
               )}
@@ -1027,7 +1027,7 @@ export const ElectionDetailPage: React.FC = () => {
                     onChange={(e) => setEmailSubject(e.target.value)}
                     placeholder={`Vote Now: ${election.title}`}
                     aria-label="Custom subject line"
-                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
                   />
                 </div>
 
@@ -1042,7 +1042,7 @@ export const ElectionDetailPage: React.FC = () => {
                     rows={3}
                     placeholder="Include any additional instructions or context for voters..."
                     aria-label="Additional message"
-                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
                   />
                 </div>
               </div>
@@ -1096,7 +1096,7 @@ export const ElectionDetailPage: React.FC = () => {
               {!isDraft && (
                 <div className="bg-red-500/10 border-l-4 border-red-600 p-4 mb-4" role="alert">
                   <div className="flex">
-                    <div className="flex-shrink-0">
+                    <div className="shrink-0">
                       <svg className="h-5 w-5 text-red-600" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                         <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                       </svg>
@@ -1128,7 +1128,7 @@ export const ElectionDetailPage: React.FC = () => {
               )}
 
               {deleteError && (
-                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded p-3" role="alert">
+                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert">
                   <p className="text-sm text-red-300">{deleteError}</p>
                 </div>
               )}
@@ -1155,7 +1155,7 @@ export const ElectionDetailPage: React.FC = () => {
                       onChange={(e) => setDeleteReason(e.target.value)}
                       rows={4}
                       placeholder="Provide a detailed reason why this active election must be deleted..."
-                      className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+                      className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
                       required
                       aria-required="true"
                     />
@@ -1217,7 +1217,7 @@ export const ElectionDetailPage: React.FC = () => {
 
             <div className="px-6 py-4">
               {extendError && (
-                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded p-3" role="alert">
+                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert">
                   <p className="text-sm text-red-300">{extendError}</p>
                 </div>
               )}
@@ -1242,7 +1242,7 @@ export const ElectionDetailPage: React.FC = () => {
                     id="extend-new-end-time"
                     value={newEndDate}
                     onChange={(e) => setNewEndDate(e.target.value)}
-                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
                   />
 
                   <div className="mt-2">
@@ -1251,28 +1251,28 @@ export const ElectionDetailPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => extendByHours(1)}
-                        className="px-3 py-1 text-xs bg-theme-surface text-theme-text-secondary rounded hover:bg-theme-surface-hover"
+                        className="px-3 py-1 text-xs bg-theme-surface text-theme-text-secondary rounded-sm hover:bg-theme-surface-hover"
                       >
                         +1 Hour
                       </button>
                       <button
                         type="button"
                         onClick={() => extendByHours(2)}
-                        className="px-3 py-1 text-xs bg-theme-surface text-theme-text-secondary rounded hover:bg-theme-surface-hover"
+                        className="px-3 py-1 text-xs bg-theme-surface text-theme-text-secondary rounded-sm hover:bg-theme-surface-hover"
                       >
                         +2 Hours
                       </button>
                       <button
                         type="button"
                         onClick={() => extendByHours(4)}
-                        className="px-3 py-1 text-xs bg-theme-surface text-theme-text-secondary rounded hover:bg-theme-surface-hover"
+                        className="px-3 py-1 text-xs bg-theme-surface text-theme-text-secondary rounded-sm hover:bg-theme-surface-hover"
                       >
                         +4 Hours
                       </button>
                       <button
                         type="button"
                         onClick={() => extendToEndOfDay()}
-                        className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 dark:bg-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/30"
+                        className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-sm hover:bg-blue-200 dark:bg-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/30"
                       >
                         End of Day
                       </button>
@@ -1358,7 +1358,7 @@ export const ElectionDetailPage: React.FC = () => {
                       {/* Item Header */}
                       <div className="bg-theme-surface-secondary px-6 py-4 border-b border-theme-surface-border">
                         <div className="flex items-start gap-3">
-                          <span className="flex-shrink-0 w-8 h-8 bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400 rounded-full flex items-center justify-center text-sm font-bold">
+                          <span className="shrink-0 w-8 h-8 bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400 rounded-full flex items-center justify-center text-sm font-bold">
                             {index + 1}
                           </span>
                           <div>
@@ -1420,19 +1420,19 @@ export const ElectionDetailPage: React.FC = () => {
 
                       {/* Item metadata for admin */}
                       <div className="px-6 py-2 bg-theme-surface-secondary border-t border-theme-surface-border flex flex-wrap gap-2">
-                        <span className="text-xs px-2 py-0.5 rounded bg-theme-surface-hover text-theme-text-muted">
+                        <span className="text-xs px-2 py-0.5 rounded-sm bg-theme-surface-hover text-theme-text-muted">
                           {item.type?.replace('_', ' ')}
                         </span>
-                        <span className="text-xs px-2 py-0.5 rounded bg-theme-surface-hover text-theme-text-muted">
+                        <span className="text-xs px-2 py-0.5 rounded-sm bg-theme-surface-hover text-theme-text-muted">
                           {isApprovalType ? 'Yes/No vote' : 'Candidate selection'}
                         </span>
                         {item.require_attendance && (
-                          <span className="text-xs px-2 py-0.5 rounded bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400">
+                          <span className="text-xs px-2 py-0.5 rounded-sm bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400">
                             Requires attendance
                           </span>
                         )}
                         {item.eligible_voter_types && !item.eligible_voter_types.includes('all') && (
-                          <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">
+                          <span className="text-xs px-2 py-0.5 rounded-sm bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">
                             Restricted: {item.eligible_voter_types.join(', ')}
                           </span>
                         )}
@@ -1491,7 +1491,7 @@ export const ElectionDetailPage: React.FC = () => {
               {/* Warning Message */}
               <div className="bg-orange-500/10 border-l-4 border-orange-500 p-4 mb-4">
                 <div className="flex">
-                  <div className="flex-shrink-0">
+                  <div className="shrink-0">
                     <svg className="h-5 w-5 text-orange-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                       <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                     </svg>
@@ -1514,7 +1514,7 @@ export const ElectionDetailPage: React.FC = () => {
               </div>
 
               {rollbackError && (
-                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded p-3" role="alert">
+                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert">
                   <p className="text-sm text-red-300">{rollbackError}</p>
                 </div>
               )}
@@ -1548,7 +1548,7 @@ export const ElectionDetailPage: React.FC = () => {
                     onChange={(e) => setRollbackReason(e.target.value)}
                     rows={4}
                     placeholder="Example: Vote counting error discovered, need to recount all ballots..."
-                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
                     required
                     aria-required="true"
                   />

@@ -227,7 +227,7 @@ const InputField: React.FC<{
       onBlur={onBlur}
       placeholder={placeholder}
       maxLength={maxLength}
-      className={`w-full px-3 py-2 bg-theme-surface-secondary border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent transition-all ${
+      className={`w-full px-3 py-2 bg-theme-surface-secondary border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent transition-all ${
         error ? 'border-theme-accent-red' : 'border-theme-surface-border'
       }`}
       aria-required={required}
@@ -257,7 +257,7 @@ const SelectField: React.FC<{
       id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`w-full px-3 py-2 bg-theme-surface-secondary border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent transition-all ${
+      className={`w-full px-3 py-2 bg-theme-surface-secondary border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent transition-all ${
         error ? 'border-theme-accent-red' : 'border-theme-surface-border'
       }`}
       aria-required={required}
@@ -690,7 +690,7 @@ const OrganizationSetup: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-8 px-4 relative">
+    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-8 px-4 relative">
       <ThemeToggle className="absolute top-4 right-4" />
       <div className="max-w-3xl mx-auto">
         {/* Back Button */}
@@ -855,7 +855,7 @@ const OrganizationSetup: React.FC = () => {
                 {/* Info banner explaining why mailing address is required */}
                 <div className="bg-theme-alert-info-bg border border-theme-alert-info-border rounded-lg p-3">
                   <div className="flex items-start space-x-2">
-                    <AlertCircle aria-hidden="true" className="w-4 h-4 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
+                    <AlertCircle aria-hidden="true" className="w-4 h-4 text-theme-alert-info-icon shrink-0 mt-0.5" />
                     <p className="text-sm text-theme-alert-info-text">
                       <strong>Why is this required?</strong> Your mailing address is used for official correspondence,
                       certifications, and legal documentation. If your physical location differs (e.g., PO Box vs. station address),
@@ -889,7 +889,7 @@ const OrganizationSetup: React.FC = () => {
                     type="checkbox"
                     checked={formData.physicalAddressSame}
                     onChange={(e) => updateFormData('physicalAddressSame', e.target.checked)}
-                    className="w-5 h-5 rounded border-theme-surface-border bg-theme-surface-secondary text-theme-accent-red focus:ring-theme-focus-ring focus:ring-offset-0"
+                    className="w-5 h-5 rounded-sm border-theme-surface-border bg-theme-surface-secondary text-theme-accent-red focus:ring-theme-focus-ring focus:ring-offset-0"
                   />
                   <span className="text-theme-text-secondary">Same as mailing address</span>
                 </label>
@@ -1071,7 +1071,7 @@ const OrganizationSetup: React.FC = () => {
                   ) : (
                     <div className="border-2 border-theme-surface-border rounded-lg p-6 bg-theme-surface-secondary">
                       <div className="flex items-start space-x-4">
-                        <div className="flex-shrink-0 w-24 h-24 bg-white dark:bg-slate-800 rounded-lg flex items-center justify-center overflow-hidden">
+                        <div className="shrink-0 w-24 h-24 bg-white dark:bg-slate-800 rounded-lg flex items-center justify-center overflow-hidden">
                           <img
                             src={formData.logo}
                             alt="Organization logo preview"
@@ -1095,7 +1095,7 @@ const OrganizationSetup: React.FC = () => {
                                   fileInputRef.current.value = '';
                                 }
                               }}
-                              className="flex-shrink-0 ml-4 p-2 hover:bg-theme-accent-orange-muted rounded-lg transition-colors"
+                              className="shrink-0 ml-4 p-2 hover:bg-theme-accent-orange-muted rounded-lg transition-colors"
                               aria-label="Remove logo"
                             >
                               <X aria-hidden="true" className="w-5 h-5 text-theme-accent-red" />
@@ -1114,7 +1114,7 @@ const OrganizationSetup: React.FC = () => {
                   )}
                 </div>
                 <p className="mt-2 text-xs text-theme-text-muted flex items-start">
-                  <ImageIcon aria-hidden="true" className="w-4 h-4 mr-1 flex-shrink-0 mt-0.5" />
+                  <ImageIcon aria-hidden="true" className="w-4 h-4 mr-1 shrink-0 mt-0.5" />
                   <span>
                     Your logo will be displayed in the header and on reports. You can change it
                     later in settings.
@@ -1138,7 +1138,7 @@ const OrganizationSetup: React.FC = () => {
           {hasAttemptedSubmit && Object.keys(validationErrors).length > 0 && (
             <div className="bg-red-900/30 border border-theme-accent-red/50 rounded-lg p-4">
               <div className="flex items-start gap-3">
-                <AlertCircle aria-hidden="true" className="w-5 h-5 text-theme-accent-red flex-shrink-0 mt-0.5" />
+                <AlertCircle aria-hidden="true" className="w-5 h-5 text-theme-accent-red shrink-0 mt-0.5" />
                 <div>
                   <p className="text-theme-accent-red font-medium">Please fix the following errors:</p>
                   <ul className="mt-2 text-sm text-theme-accent-red list-disc list-inside">
@@ -1152,13 +1152,13 @@ const OrganizationSetup: React.FC = () => {
           )}
 
           {/* Continue Button */}
-          <div className="pt-4 sticky bottom-0 md:relative bg-gradient-to-t from-theme-bg-to via-theme-bg-to to-transparent md:bg-none pb-4 md:pb-0 -mx-6 px-6 md:mx-0 md:px-0">
+          <div className="pt-4 sticky bottom-0 md:relative bg-linear-to-t from-theme-bg-to via-theme-bg-to to-transparent md:bg-none pb-4 md:pb-0 -mx-6 px-6 md:mx-0 md:px-0">
             <button
               onClick={() => { void handleContinue(); }}
               disabled={isSaving}
               className={`w-full px-6 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                 !isSaving
-                  ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-[1.02]'
+                  ? 'bg-linear-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-[1.02]'
                   : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
               aria-label="Continue to next step"

@@ -48,7 +48,7 @@ const TemplateCard: React.FC<{
 }> = ({ template, onClick }) => (
   <button
     onClick={onClick}
-    className="w-full text-left bg-theme-surface rounded-lg p-5 border border-theme-surface-border hover:border-red-500/50 hover:shadow-sm transition-all group"
+    className="w-full text-left bg-theme-surface rounded-lg p-5 border border-theme-surface-border hover:border-red-500/50 hover:shadow-xs transition-all group"
   >
     <div className="flex items-start justify-between">
       <div className="flex-1 min-w-0">
@@ -215,7 +215,7 @@ export const SkillsTestingPage: React.FC = () => {
             placeholder={activeTab === 'available' ? 'Search available tests...' : 'Search your results...'}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50"
+            className="w-full pl-10 pr-4 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
           />
         </div>
 

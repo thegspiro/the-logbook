@@ -36,7 +36,7 @@ export const TemplatesOverviewCard: React.FC<TemplatesOverviewCardProps> = ({
       {activeTemplates.length === 0 ? (
         <div className="p-4 bg-yellow-500/5 border border-yellow-500/20 rounded-lg">
           <div className="flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
+            <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400 mt-0.5 shrink-0" />
             <div>
               <p className="text-sm text-yellow-700 dark:text-yellow-400 font-medium">
                 No templates configured
@@ -58,7 +58,7 @@ export const TemplatesOverviewCard: React.FC<TemplatesOverviewCardProps> = ({
             >
               {t.color && (
                 <div
-                  className="w-3 h-3 rounded-full flex-shrink-0"
+                  className="w-3 h-3 rounded-full shrink-0"
                   style={{ backgroundColor: t.color }}
                 />
               )}
@@ -75,7 +75,7 @@ export const TemplatesOverviewCard: React.FC<TemplatesOverviewCardProps> = ({
                     {t.positions.map((pos, i) => (
                       <span
                         key={i}
-                        className="px-1.5 py-0.5 text-[10px] bg-violet-500/10 text-violet-700 dark:text-violet-300 rounded capitalize"
+                        className="px-1.5 py-0.5 text-[10px] bg-violet-500/10 text-violet-700 dark:text-violet-300 rounded-sm capitalize"
                       >
                         {pos}
                       </span>
@@ -84,7 +84,7 @@ export const TemplatesOverviewCard: React.FC<TemplatesOverviewCardProps> = ({
                 )}
               </div>
               {t.is_default && (
-                <span className="text-[10px] px-1.5 py-0.5 bg-green-500/10 text-green-700 dark:text-green-400 rounded flex-shrink-0">
+                <span className="text-[10px] px-1.5 py-0.5 bg-green-500/10 text-green-700 dark:text-green-400 rounded-sm shrink-0">
                   Default
                 </span>
               )}

@@ -297,7 +297,7 @@ export const TrainingAdminPage: React.FC = () => {
                 onClick={() => handlePageChange(page.id)}
                 role="tab"
                 aria-selected={isActive}
-                className={`flex items-center space-x-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 focus:ring-offset-[var(--ring-offset-bg)] ${
+                className={`flex items-center space-x-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) ${
                   isActive
                     ? "bg-red-600 text-white"
                     : "bg-theme-surface-secondary text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover"
@@ -320,7 +320,7 @@ export const TrainingAdminPage: React.FC = () => {
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
-                className={`whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring ${
+                className={`whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
                   activeTab === tab.id
                     ? "border-red-500 text-theme-text-primary"
                     : "border-transparent text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border"

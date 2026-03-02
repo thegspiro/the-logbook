@@ -247,7 +247,7 @@ const EmailTemplatesPage: React.FC = () => {
         {/* Error Banner */}
         {error && (
           <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-start space-x-3">
-            <AlertCircle className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" />
+            <AlertCircle className="w-5 h-5 text-red-400 mt-0.5 shrink-0" />
             <div className="flex-1">
               <p className="text-red-300 text-sm">{error}</p>
             </div>
@@ -405,19 +405,19 @@ const EmailTemplatesPage: React.FC = () => {
                                   className="flex items-center justify-between bg-theme-surface-secondary rounded-lg px-3 py-2"
                                 >
                                   <div className="flex items-center space-x-2 min-w-0">
-                                    <Paperclip className="w-4 h-4 text-theme-text-muted flex-shrink-0" />
+                                    <Paperclip className="w-4 h-4 text-theme-text-muted shrink-0" />
                                     <span className="text-theme-text-primary text-sm truncate">
                                       {att.filename}
                                     </span>
                                     {att.file_size && (
-                                      <span className="text-theme-text-muted text-xs flex-shrink-0">
+                                      <span className="text-theme-text-muted text-xs shrink-0">
                                         ({att.file_size})
                                       </span>
                                     )}
                                   </div>
                                   <button
                                     onClick={() => { void handleDeleteAttachment(att); }}
-                                    className="text-red-400 hover:text-red-300 flex-shrink-0 ml-2"
+                                    className="text-red-400 hover:text-red-300 shrink-0 ml-2"
                                     title="Delete attachment"
                                   >
                                     <Trash2 className="w-4 h-4" />

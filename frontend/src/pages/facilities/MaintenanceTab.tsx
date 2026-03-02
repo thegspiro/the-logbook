@@ -153,7 +153,7 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
     return facilities.find(f => f.id === facilityId)?.name || 'Unknown';
   };
 
-  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring';
+  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
   const labelCls = 'block text-xs font-medium text-theme-text-muted mb-1';
 
   return (
@@ -204,7 +204,7 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
           {filtered.map(record => (
             <div key={record.id} className="flex items-center gap-4 p-4 bg-theme-surface border border-theme-surface-border rounded-lg hover:border-theme-surface-border transition-all group">
               {/* Status Icon */}
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                 record.is_completed ? 'bg-emerald-500/10 text-emerald-500' :
                 record.is_overdue ? 'bg-red-500/10 text-red-500' :
                 'bg-amber-500/10 text-amber-500'
@@ -218,7 +218,7 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
                 <div className="flex items-center gap-2 mb-0.5">
                   <p className="text-sm font-medium text-theme-text-primary truncate">{record.description || 'Untitled'}</p>
                   {record.maintenance_type && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-theme-surface-hover text-theme-text-muted flex-shrink-0">
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-theme-surface-hover text-theme-text-muted shrink-0">
                       {record.maintenance_type.name}
                     </span>
                   )}

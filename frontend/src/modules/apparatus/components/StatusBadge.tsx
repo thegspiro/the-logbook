@@ -89,7 +89,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' })
   if (status.color) {
     return (
       <span
-        className={`${sizeClasses} font-semibold rounded border inline-flex items-center gap-1`}
+        className={`${sizeClasses} font-semibold rounded-sm border inline-flex items-center gap-1`}
         style={{
           backgroundColor: `${status.color}20`,
           color: status.color,
@@ -104,7 +104,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' })
 
   return (
     <span
-      className={`${sizeClasses} ${colors.background} ${colors.text} ${colors.border} font-semibold rounded border inline-flex items-center gap-1`}
+      className={`${sizeClasses} ${colors.background} ${colors.text} ${colors.border} font-semibold rounded-sm border inline-flex items-center gap-1`}
     >
       {status.icon && <span>{status.icon}</span>}
       {status.name.toUpperCase()}

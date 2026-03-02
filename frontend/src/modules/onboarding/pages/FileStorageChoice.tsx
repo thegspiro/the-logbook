@@ -185,7 +185,7 @@ const FileStorageChoice: React.FC = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
+    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
       <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} icon={<Mail aria-hidden="true" className="w-6 h-6 text-white" />} />
 
       <main className="flex-1 flex items-center justify-center p-4 py-8">
@@ -216,7 +216,7 @@ const FileStorageChoice: React.FC = () => {
           {emailPlatform && (emailPlatform === 'gmail' || emailPlatform === 'microsoft') && (
             <div className="alert-success mb-6 max-w-3xl mx-auto">
               <div className="flex items-start space-x-3">
-                <CheckCircle aria-hidden="true" className="w-5 h-5 text-theme-alert-success-icon flex-shrink-0 mt-0.5" />
+                <CheckCircle aria-hidden="true" className="w-5 h-5 text-theme-alert-success-icon shrink-0 mt-0.5" />
                 <div>
                   <p className="text-theme-alert-success-title text-sm font-medium mb-1">
                     Smart Recommendation
@@ -237,7 +237,7 @@ const FileStorageChoice: React.FC = () => {
               <button
                 key={platform.id}
                 onClick={() => setFileStoragePlatform(platform.id)}
-                className={`relative bg-theme-surface backdrop-blur-sm rounded-lg p-6 text-left border-2 transition-all duration-300 hover:scale-105 ${
+                className={`relative bg-theme-surface backdrop-blur-xs rounded-lg p-6 text-left border-2 transition-all duration-300 hover:scale-105 ${
                   fileStoragePlatform === platform.id
                     ? 'border-theme-accent-red shadow-lg'
                     : 'border-theme-surface-border hover:border-theme-surface-hover'
@@ -263,7 +263,7 @@ const FileStorageChoice: React.FC = () => {
 
                 <div className={`flex items-start space-x-4 ${fileStoragePlatform === platform.id ? 'mt-8' : platform.recommended ? 'mt-8' : ''}`}>
                   {/* Icon */}
-                  <div className={`flex-shrink-0 w-16 h-16 rounded-lg bg-gradient-to-br ${platform.color} flex items-center justify-center`}>
+                  <div className={`shrink-0 w-16 h-16 rounded-lg bg-linear-to-br ${platform.color} flex items-center justify-center`}>
                     {platform.icon}
                   </div>
 
@@ -280,16 +280,16 @@ const FileStorageChoice: React.FC = () => {
                     <ul className="space-y-1 mb-3">
                       {platform.features.map((feature, index) => (
                         <li key={index} className="flex items-start text-sm text-theme-text-secondary">
-                          <CheckCircle aria-hidden="true" className="w-4 h-4 text-theme-accent-green mr-2 flex-shrink-0 mt-0.5" />
+                          <CheckCircle aria-hidden="true" className="w-4 h-4 text-theme-accent-green mr-2 shrink-0 mt-0.5" />
                           <span>{feature}</span>
                         </li>
                       ))}
                     </ul>
 
                     {/* Setup Info */}
-                    <div className="bg-theme-alert-info-bg border border-theme-alert-info-border rounded px-3 py-2">
+                    <div className="bg-theme-alert-info-bg border border-theme-alert-info-border rounded-sm px-3 py-2">
                       <p className="text-theme-alert-info-text text-xs flex items-start">
-                        <Info aria-hidden="true" className="w-3 h-3 mr-1 flex-shrink-0 mt-0.5" />
+                        <Info aria-hidden="true" className="w-3 h-3 mr-1 shrink-0 mt-0.5" />
                         <span>{platform.setupInfo}</span>
                       </p>
                     </div>
@@ -318,7 +318,7 @@ const FileStorageChoice: React.FC = () => {
               disabled={!fileStoragePlatform || isSaving}
               className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                 fileStoragePlatform && !isSaving
-                  ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
+                  ? 'bg-linear-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
                   : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
@@ -337,7 +337,7 @@ const FileStorageChoice: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <footer className="bg-theme-nav-bg backdrop-blur-sm border-t border-theme-nav-border px-6 py-4">
+      <footer className="bg-theme-nav-bg backdrop-blur-xs border-t border-theme-nav-border px-6 py-4">
         <div className="max-w-7xl mx-auto text-center">
           <p className="text-theme-text-secondary text-sm">
             © {currentYear} {departmentName}. All rights reserved.

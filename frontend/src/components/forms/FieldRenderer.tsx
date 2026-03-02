@@ -390,7 +390,7 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
                         : selected.filter((v) => v !== opt.value);
                       onChange(field.id, updated.join(','));
                     }}
-                    className="w-4 h-4 text-pink-600 rounded"
+                    className="w-4 h-4 text-pink-600 rounded-sm"
                   />
                   <span className={radioTextClass}>{opt.label}</span>
                 </label>
@@ -418,7 +418,7 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
                         : checkedValues.filter((v) => v !== opt.value);
                       onChange(field.id, updated.join(','));
                     }}
-                    className="w-4 h-4 text-pink-600 rounded"
+                    className="w-4 h-4 text-pink-600 rounded-sm"
                   />
                   <span className={radioTextClass}>{opt.label}</span>
                 </label>
@@ -475,7 +475,7 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
                     onClick={() => selectMember(member)}
                     className="w-full text-left px-4 py-2 flex items-center gap-3 hover:bg-theme-surface-hover text-theme-text-primary"
                   >
-                    <User className="w-4 h-4 flex-shrink-0" />
+                    <User className="w-4 h-4 shrink-0" />
                     <div>
                       <p className="text-sm font-medium">{member.full_name}</p>
                       {member.rank && <p className="text-xs text-theme-text-muted">{formatRank(member.rank)}</p>}
@@ -523,9 +523,9 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
           return (
             <div className={`${inputClass} flex items-center justify-between py-3`}>
               <div className="flex items-center gap-2 min-w-0">
-                <FileText className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-pink-700 dark:text-pink-400' : 'text-blue-700 dark:text-blue-400'}`} />
+                <FileText className={`w-4 h-4 shrink-0 ${isDark ? 'text-pink-700 dark:text-pink-400' : 'text-blue-700 dark:text-blue-400'}`} />
                 <span className="text-sm truncate">{fileInfo.name}</span>
-                <span className="text-xs flex-shrink-0 text-theme-text-muted">
+                <span className="text-xs shrink-0 text-theme-text-muted">
                   ({formatFileSize(fileInfo.size)})
                 </span>
               </div>
@@ -533,7 +533,7 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
                 <button
                   type="button"
                   onClick={() => onChange(field.id, '')}
-                  className="flex-shrink-0 ml-2 text-theme-text-muted hover:text-red-700 dark:hover:text-red-400"
+                  className="shrink-0 ml-2 text-theme-text-muted hover:text-red-700 dark:hover:text-red-400"
                 >
                   <X className="w-4 h-4" />
                 </button>

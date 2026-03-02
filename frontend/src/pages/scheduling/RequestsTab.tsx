@@ -140,9 +140,9 @@ export const RequestsTab: React.FC = () => {
           </button>
         </div>
         <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-theme-text-muted flex-shrink-0" />
+          <Filter className="w-4 h-4 text-theme-text-muted shrink-0" />
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-            className="flex-1 sm:flex-none bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="flex-1 sm:flex-none bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500"
           >
             <option value="">All Statuses</option>
             <option value="pending">Pending</option>
@@ -177,7 +177,7 @@ export const RequestsTab: React.FC = () => {
                 <div key={req.id} className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-5">
                   <div className="flex items-start sm:items-center justify-between gap-3">
                     <div className="flex items-start sm:items-center gap-3 min-w-0">
-                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-orange-500/10 flex items-center justify-center flex-shrink-0">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
                         <ArrowLeftRight className="w-4 h-4 sm:w-5 sm:h-5 text-orange-500" />
                       </div>
                       <div className="min-w-0">
@@ -216,7 +216,7 @@ export const RequestsTab: React.FC = () => {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
+                    <div className="flex items-center gap-1 shrink-0">
                       {canManage && req.status === 'pending' && (
                         <button onClick={() => { setReviewing({ type: 'swap', id: req.id }); setReviewNotes(''); }}
                           className="p-2 text-theme-text-muted hover:text-green-600 hover:bg-green-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label="Review swap request"
@@ -269,7 +269,7 @@ export const RequestsTab: React.FC = () => {
                 <div key={req.id} className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-5">
                   <div className="flex items-start sm:items-center justify-between gap-3">
                     <div className="flex items-start sm:items-center gap-3 min-w-0">
-                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
                         <CalendarOff className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
                       </div>
                       <div className="min-w-0">
@@ -290,7 +290,7 @@ export const RequestsTab: React.FC = () => {
                         {req.reason && <p className="text-xs text-theme-text-secondary mt-1 line-clamp-2">{req.reason}</p>}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
+                    <div className="flex items-center gap-1 shrink-0">
                       {canManage && req.status === 'pending' && (
                         <button onClick={() => { setReviewing({ type: 'timeoff', id: req.id }); setReviewNotes(''); }}
                           className="p-2 text-theme-text-muted hover:text-green-600 hover:bg-green-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label="Review time-off request"

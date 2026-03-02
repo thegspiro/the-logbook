@@ -138,7 +138,7 @@ const DepartmentInfo: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4 relative">
+    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4 relative">
       <ThemeToggle className="absolute top-4 right-4" />
       <div className="max-w-2xl w-full">
         {/* Header */}
@@ -241,7 +241,7 @@ const DepartmentInfo: React.FC = () => {
               <div className="border-2 border-theme-input-border rounded-lg p-6 bg-theme-surface-secondary">
                 <div className="flex items-start space-x-4">
                   {/* Preview - transparent background to preserve PNG transparency */}
-                  <div className="flex-shrink-0 w-24 h-24 rounded-lg flex items-center justify-center overflow-hidden bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iOCIgaGVpZ2h0PSI4IiBmaWxsPSIjZTJlOGYwIi8+PHJlY3QgeD0iOCIgeT0iOCIgd2lkdGg9IjgiIGhlaWdodD0iOCIgZmlsbD0iI2UyZThmMCIvPjxyZWN0IHg9IjgiIHdpZHRoPSI4IiBoZWlnaHQ9IjgiIGZpbGw9IiNmMWY1ZjkiLz48cmVjdCB5PSI4IiB3aWR0aD0iOCIgaGVpZ2h0PSI4IiBmaWxsPSIjZjFmNWY5Ii8+PC9zdmc+')]">
+                  <div className="shrink-0 w-24 h-24 rounded-lg flex items-center justify-center overflow-hidden bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iOCIgaGVpZ2h0PSI4IiBmaWxsPSIjZTJlOGYwIi8+PHJlY3QgeD0iOCIgeT0iOCIgd2lkdGg9IjgiIGhlaWdodD0iOCIgZmlsbD0iI2UyZThmMCIvPjxyZWN0IHg9IjgiIHdpZHRoPSI4IiBoZWlnaHQ9IjgiIGZpbGw9IiNmMWY1ZjkiLz48cmVjdCB5PSI4IiB3aWR0aD0iOCIgaGVpZ2h0PSI4IiBmaWxsPSIjZjFmNWY5Ii8+PC9zdmc+')]">
                     <img
                       src={logoPreview}
                       alt="Department logo preview"
@@ -262,7 +262,7 @@ const DepartmentInfo: React.FC = () => {
                       </div>
                       <button
                         onClick={handleRemoveLogo}
-                        className="flex-shrink-0 ml-4 p-2 hover:bg-theme-accent-orange-muted rounded-lg transition-colors"
+                        className="shrink-0 ml-4 p-2 hover:bg-theme-accent-orange-muted rounded-lg transition-colors"
                         aria-label="Remove logo"
                       >
                         <X aria-hidden="true" className="w-5 h-5 text-theme-accent-red" />
@@ -283,7 +283,7 @@ const DepartmentInfo: React.FC = () => {
             </div>
 
             <p className="mt-2 text-xs text-theme-text-muted flex items-start">
-              <ImageIcon aria-hidden="true" className="w-4 h-4 mr-1 flex-shrink-0 mt-0.5" />
+              <ImageIcon aria-hidden="true" className="w-4 h-4 mr-1 shrink-0 mt-0.5" />
               <span>
                 Your logo will be displayed in the header and on reports. You can change it later in settings.
               </span>
@@ -308,7 +308,7 @@ const DepartmentInfo: React.FC = () => {
               disabled={!departmentName.trim() || isSaving}
               className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all duration-300 ${
                 departmentName.trim() && !isSaving
-                  ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
+                  ? 'bg-linear-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
                   : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
               aria-label="Continue to next step"

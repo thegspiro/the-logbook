@@ -66,7 +66,7 @@ const ConfigurationTab: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* CORS Origins */}
-      <div className="bg-theme-surface rounded-lg shadow p-6">
+      <div className="bg-theme-surface rounded-lg shadow-sm p-6">
         <h3 className="text-lg font-semibold text-theme-text-primary mb-4">
           Allowed Origins (CORS)
         </h3>
@@ -118,7 +118,7 @@ const ConfigurationTab: React.FC = () => {
       </div>
 
       {/* Rate Limiting */}
-      <div className="bg-theme-surface rounded-lg shadow p-6">
+      <div className="bg-theme-surface rounded-lg shadow-sm p-6">
         <h3 className="text-lg font-semibold text-theme-text-primary mb-4">
           Rate Limiting
         </h3>
@@ -146,7 +146,7 @@ const ConfigurationTab: React.FC = () => {
       </div>
 
       {/* Caching */}
-      <div className="bg-theme-surface rounded-lg shadow p-6">
+      <div className="bg-theme-surface rounded-lg shadow-sm p-6">
         <h3 className="text-lg font-semibold text-theme-text-primary mb-4">Caching</h3>
         <p className="text-sm text-theme-text-secondary mb-4">
           Configure how long responses are cached to reduce database load.
@@ -173,7 +173,7 @@ const ConfigurationTab: React.FC = () => {
       {/* Security Notice */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex">
-          <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0" />
+          <AlertCircle className="w-5 h-5 text-blue-600 shrink-0" />
           <div className="ml-3">
             <h4 className="text-sm font-medium text-blue-900">
               Security Best Practices

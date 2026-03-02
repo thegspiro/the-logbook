@@ -35,11 +35,11 @@ export const ProgressSteps: React.FC<ProgressStepsProps> = ({
             <li key={index} className={`flex items-center ${index < steps.length - 1 ? 'flex-1' : ''}`}>
               <div className="flex items-center gap-2">
                 <div
-                  className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
+                  className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
                     isComplete
                       ? 'bg-green-600 text-white'
                       : isCurrent
-                      ? 'bg-red-600 text-white ring-2 ring-red-600 ring-offset-2 ring-offset-[var(--surface-bg)]'
+                      ? 'bg-red-600 text-white ring-2 ring-red-600 ring-offset-2 ring-offset-(--surface-bg)'
                       : 'bg-theme-surface-secondary text-theme-text-muted border border-theme-surface-border'
                   }`}
                   aria-current={isCurrent ? 'step' : undefined}

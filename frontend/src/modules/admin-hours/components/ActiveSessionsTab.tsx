@@ -61,7 +61,7 @@ const ActiveSessionsTab: React.FC = () => {
               >
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-4 flex-1 min-w-0">
-                    <div className="relative flex-shrink-0">
+                    <div className="relative shrink-0">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                         isOverLimit ? 'bg-red-500/20' : isNearLimit ? 'bg-orange-500/20' : 'bg-blue-500/20'
                       }`}>
@@ -77,7 +77,7 @@ const ActiveSessionsTab: React.FC = () => {
                         <span className="text-theme-text-muted">-</span>
                         <div className="flex items-center gap-1.5">
                           <div
-                            className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                            className="w-2.5 h-2.5 rounded-full shrink-0"
                             style={{ backgroundColor: session.categoryColor ?? '#6B7280' }}
                           />
                           <span className="text-sm text-theme-text-secondary">{session.categoryName}</span>
@@ -112,7 +112,7 @@ const ActiveSessionsTab: React.FC = () => {
                   </div>
                   <button
                     onClick={() => { void handleForceClockOut(session.id, session.userName); }}
-                    className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm font-medium flex-shrink-0"
+                    className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm font-medium shrink-0"
                     title="End this session on behalf of the member"
                   >
                     <StopCircle className="w-4 h-4" />

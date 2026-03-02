@@ -114,7 +114,7 @@ const CategorySection: React.FC<CategorySectionProps> = ({ category, fields, onT
                       {field.field_name}
                     </code>
                     {field.is_sensitive && (
-                      <span className="px-2 py-0.5 text-xs font-semibold rounded bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400">
+                      <span className="px-2 py-0.5 text-xs font-semibold rounded-sm bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400">
                         PII
                       </span>
                     )}
@@ -132,7 +132,7 @@ const CategorySection: React.FC<CategorySectionProps> = ({ category, fields, onT
                     onChange={(e) => { void onToggle(field.id, e.target.checked); }}
                     className="sr-only peer"
                   />
-                  <div className="w-11 h-6 bg-theme-surface-border peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:after:bg-slate-200 after:border-theme-surface-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  <div className="w-11 h-6 bg-theme-surface-border peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:after:bg-slate-200 after:border-theme-surface-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                 </label>
               </div>
             </div>
@@ -217,7 +217,7 @@ export const DataWhitelistTab: React.FC = () => {
       {/* Security Warning */}
       <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
         <div className="flex">
-          <div className="flex-shrink-0">
+          <div className="shrink-0">
             <svg className="h-5 w-5 text-yellow-700 dark:text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
             </svg>
@@ -301,7 +301,7 @@ export const DataWhitelistTab: React.FC = () => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by field name, category, or description..."
-            className="w-full px-4 py-2 pl-10 border border-theme-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+            className="w-full px-4 py-2 pl-10 border border-theme-surface-border rounded-md focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
           />
           <svg
             className="absolute left-3 top-2.5 h-5 w-5 text-theme-text-muted"
@@ -341,7 +341,7 @@ export const DataWhitelistTab: React.FC = () => {
       {/* Help Text */}
       <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
         <div className="flex">
-          <div className="flex-shrink-0">
+          <div className="shrink-0">
             <svg className="h-5 w-5 text-blue-700 dark:text-blue-400" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
             </svg>

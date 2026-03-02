@@ -113,14 +113,14 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
 
   if (loading) {
     return (
-      <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6">
+      <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6">
         <div className="text-theme-text-muted text-center py-4">Loading voter overrides...</div>
       </div>
     );
   }
 
   return (
-    <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6">
+    <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-medium text-theme-text-primary">
           Voter Overrides ({overrides.length})
@@ -141,7 +141,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
       </div>
 
       {error && (
-        <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded p-3">
+        <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3">
           <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
         </div>
       )}
@@ -159,7 +159,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
                 type="text"
                 value={userId}
                 onChange={(e) => setUserId(e.target.value)}
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
                 placeholder="Enter the member's user ID..."
               />
             </div>
@@ -172,7 +172,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 rows={2}
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
                 placeholder="Reason for granting voting eligibility override..."
               />
               {reason.trim().length > 0 && reason.trim().length < 10 && (
@@ -248,14 +248,14 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
                           type="button"
                           onClick={() => { void handleRemove(override.user_id); }}
                           aria-label={`Confirm removal of override for ${override.user_name || override.user_id}`}
-                          className="btn-primary rounded px-2 py-1 text-xs"
+                          className="btn-primary rounded-sm px-2 py-1 text-xs"
                         >
                           Confirm
                         </button>
                         <button
                           type="button"
                           onClick={() => setConfirmingRemoveId(null)}
-                          className="px-2 py-1 text-xs border border-theme-surface-border rounded text-theme-text-secondary hover:bg-theme-surface-secondary"
+                          className="px-2 py-1 text-xs border border-theme-surface-border rounded-sm text-theme-text-secondary hover:bg-theme-surface-secondary"
                         >
                           Cancel
                         </button>
@@ -265,7 +265,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
                         type="button"
                         onClick={() => setConfirmingRemoveId(override.user_id)}
                         aria-label={`Remove override for ${override.user_name || override.user_id}`}
-                        className="px-2 py-1 text-xs bg-red-500/20 text-red-700 dark:text-red-300 rounded hover:bg-red-500/30"
+                        className="px-2 py-1 text-xs bg-red-500/20 text-red-700 dark:text-red-300 rounded-sm hover:bg-red-500/30"
                       >
                         Remove
                       </button>

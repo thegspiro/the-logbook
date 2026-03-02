@@ -97,7 +97,7 @@ export const ApplicationStatusPage: React.FC = () => {
         </div>
 
         {/* Status Card */}
-        <div className="bg-theme-surface rounded-xl shadow-sm border border-theme-surface-border p-6 mb-4">
+        <div className="bg-theme-surface rounded-xl shadow-xs border border-theme-surface-border p-6 mb-4">
           <div className="flex items-center justify-between mb-4">
             <div>
               <p className="text-xs text-theme-text-muted uppercase tracking-wider">Current Status</p>
@@ -133,7 +133,7 @@ export const ApplicationStatusPage: React.FC = () => {
 
         {/* Timeline */}
         {data.stage_timeline.length > 0 && (
-          <div className="bg-theme-surface rounded-xl shadow-sm border border-theme-surface-border p-6">
+          <div className="bg-theme-surface rounded-xl shadow-xs border border-theme-surface-border p-6">
             <h2 className="text-sm font-semibold text-theme-text-primary mb-4">Stage Progress</h2>
             <div className="space-y-3" role="list" aria-label="Application stage progress">
               {data.stage_timeline.map((stage, idx) => {
@@ -141,7 +141,7 @@ export const ApplicationStatusPage: React.FC = () => {
                 const isCurrent = stage.status === 'in_progress';
                 return (
                   <div key={idx} className="flex items-start gap-3" role="listitem">
-                    <div className="flex-shrink-0 mt-0.5" aria-hidden="true">
+                    <div className="shrink-0 mt-0.5" aria-hidden="true">
                       {isCompleted ? (
                         <CheckCircle2 className="w-5 h-5 text-emerald-700 dark:text-emerald-400" />
                       ) : isCurrent ? (

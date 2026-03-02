@@ -214,11 +214,11 @@ const TrainingProgramsPage: React.FC = () => {
                           <div className="flex items-center space-x-3 mb-2">
                             <h3 className="text-xl font-semibold text-theme-text-primary">{program.name}</h3>
                             {program.target_position && (
-                              <span className="px-2 py-1 bg-red-500/20 text-red-700 dark:text-red-400 text-xs rounded">
+                              <span className="px-2 py-1 bg-red-500/20 text-red-700 dark:text-red-400 text-xs rounded-sm">
                                 {program.target_position}
                               </span>
                             )}
-                            <span className="px-2 py-1 bg-blue-500/20 text-blue-700 dark:text-blue-400 text-xs rounded">
+                            <span className="px-2 py-1 bg-blue-500/20 text-blue-700 dark:text-blue-400 text-xs rounded-sm">
                               {program.structure_type}
                             </span>
                           </div>
@@ -324,11 +324,11 @@ const TrainingProgramsPage: React.FC = () => {
                                 {req.source}
                               </span>
                               {req.registry_name && (
-                                <span className="px-2 py-1 bg-purple-500/20 text-purple-700 dark:text-purple-400 text-xs rounded">
+                                <span className="px-2 py-1 bg-purple-500/20 text-purple-700 dark:text-purple-400 text-xs rounded-sm">
                                   {req.registry_name}
                                 </span>
                               )}
-                              <span className="px-2 py-1 bg-orange-500/20 text-orange-700 dark:text-orange-400 text-xs rounded">
+                              <span className="px-2 py-1 bg-orange-500/20 text-orange-700 dark:text-orange-400 text-xs rounded-sm">
                                 {req.requirement_type}
                               </span>
                             </div>

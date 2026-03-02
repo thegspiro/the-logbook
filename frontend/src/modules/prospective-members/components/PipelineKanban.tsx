@@ -156,7 +156,7 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
             onDragOver={(e) => handleDragOver(e, stage.id)}
             onDragLeave={handleDragLeave}
             onDrop={(e) => { void handleDrop(e, stage.id); }}
-            className={`flex-shrink-0 w-64 sm:w-72 bg-theme-input-bg rounded-lg border transition-all ${
+            className={`shrink-0 w-64 sm:w-72 bg-theme-input-bg rounded-lg border transition-all ${
               isDropTarget
                 ? 'border-red-500 bg-red-500/5'
                 : 'border-theme-surface-border'
@@ -199,7 +199,7 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
                             e.stopPropagation();
                             onToggleSelect(applicant.id);
                           }}
-                          className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                          className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                         />
                       </div>
                     )}

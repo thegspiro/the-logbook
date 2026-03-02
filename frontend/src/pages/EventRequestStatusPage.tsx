@@ -263,9 +263,9 @@ const EventRequestStatusPage: React.FC = () => {
                 {data.task_progress.tasks.map((task, idx) => (
                   <div key={idx} className="flex items-center gap-2 text-sm">
                     {task.completed ? (
-                      <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                      <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
                     ) : (
-                      <div className="w-4 h-4 rounded-full border-2 border-gray-300 dark:border-gray-500 flex-shrink-0" />
+                      <div className="w-4 h-4 rounded-full border-2 border-gray-300 dark:border-gray-500 shrink-0" />
                     )}
                     <span className={task.completed ? 'text-green-700 dark:text-green-400' : 'text-gray-600 dark:text-gray-400'}>
                       {task.label}
@@ -348,7 +348,7 @@ const EventRequestStatusPage: React.FC = () => {
                     value={cancelReason}
                     onChange={(e) => setCancelReason(e.target.value)}
                     placeholder="Reason for cancelling (optional)"
-                    className="w-full px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="w-full px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                   />
                   <div className="flex gap-2">
                     <button

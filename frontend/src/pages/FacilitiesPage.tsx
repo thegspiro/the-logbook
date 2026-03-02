@@ -149,7 +149,7 @@ export default function FacilitiesPage() {
     { id: 'inspections', label: 'Inspections', icon: ClipboardCheck },
   ];
 
-  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring';
+  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
 
   return (
     <div className="space-y-6">

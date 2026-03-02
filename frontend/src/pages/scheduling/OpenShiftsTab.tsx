@@ -103,11 +103,11 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
       {/* Filter Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
         <div className="flex items-center gap-2 flex-1">
-          <Filter className="w-4 h-4 text-theme-text-muted flex-shrink-0" />
-          <span className="text-sm text-theme-text-secondary flex-shrink-0">From:</span>
+          <Filter className="w-4 h-4 text-theme-text-muted shrink-0" />
+          <span className="text-sm text-theme-text-secondary shrink-0">From:</span>
           <input type="date" value={dateFilter}
             onChange={e => setDateFilter(e.target.value)}
-            className="flex-1 sm:flex-none bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="flex-1 sm:flex-none bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500"
           />
         </div>
         <button onClick={() => { void loadShifts(); }}
@@ -119,7 +119,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
 
       {/* Info */}
       <div className="flex items-start gap-3 p-4 bg-violet-500/5 border border-violet-500/20 rounded-xl">
-        <UserPlus className="w-5 h-5 text-violet-600 dark:text-violet-400 flex-shrink-0 mt-0.5" />
+        <UserPlus className="w-5 h-5 text-violet-600 dark:text-violet-400 shrink-0 mt-0.5" />
         <div className="text-sm text-theme-text-secondary">
           <p>Browse available shifts and sign up for open positions. A scheduling manager will review and confirm your signup.</p>
         </div>
@@ -155,7 +155,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                     >
                       <div className="flex items-start sm:items-center justify-between gap-3">
                         <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
-                          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0">
+                          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
                             <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-violet-500" />
                           </div>
                           <div className="min-w-0">
@@ -190,7 +190,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                         </div>
                         {/* Desktop buttons (hidden on mobile when signup form is open) */}
                         {signupShiftId !== shift.id && (
-                          <div className="flex items-center gap-2 flex-shrink-0">
+                          <div className="flex items-center gap-2 shrink-0">
                             <button onClick={() => setSignupShiftId(shift.id)}
                               className="flex items-center gap-1.5 px-3 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs sm:text-sm font-medium transition-colors"
                               aria-label="Sign up for this shift"
@@ -213,7 +213,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                         <div className="mt-3 pt-3 border-t border-theme-surface-border">
                           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                             <select value={signupPosition} onChange={e => setSignupPosition(e.target.value)}
-                              className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+                              className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500"
                             >
                               {(shift.apparatus_positions && shift.apparatus_positions.length > 0
                                 ? shift.apparatus_positions.map(p => [p, POSITION_LABELS[p] || p.charAt(0).toUpperCase() + p.slice(1)] as const)

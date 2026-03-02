@@ -134,7 +134,7 @@ export const ApparatusTypeDefaultsCard: React.FC<
                       onChange={(e) =>
                         setEditMinStaffing(parseInt(e.target.value, 10) || 1)
                       }
-                      className="w-24 px-2 py-1 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-violet-500"
+                      className="w-24 px-2 py-1 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-violet-500"
                     />
                   </div>
                   <PositionListEditor
@@ -150,11 +150,11 @@ export const ApparatusTypeDefaultsCard: React.FC<
                 <div className="flex items-start sm:items-center justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <Truck className="w-4 h-4 text-red-500 flex-shrink-0" />
+                      <Truck className="w-4 h-4 text-red-500 shrink-0" />
                       <h4 className="text-sm font-semibold text-theme-text-primary capitalize">
                         {type}
                       </h4>
-                      <span className="text-[10px] text-theme-text-muted bg-theme-surface-hover px-1.5 py-0.5 rounded">
+                      <span className="text-[10px] text-theme-text-muted bg-theme-surface-hover px-1.5 py-0.5 rounded-sm">
                         min {defaults.minStaffing}
                       </span>
                       {vehiclesOfType.length > 0 && (
@@ -173,7 +173,7 @@ export const ApparatusTypeDefaultsCard: React.FC<
                           return (
                             <span
                               key={i}
-                              className="px-1.5 py-0.5 text-[10px] bg-red-500/10 text-red-700 dark:text-red-400 rounded capitalize"
+                              className="px-1.5 py-0.5 text-[10px] bg-red-500/10 text-red-700 dark:text-red-400 rounded-sm capitalize"
                             >
                               {label}
                             </span>
@@ -184,7 +184,7 @@ export const ApparatusTypeDefaultsCard: React.FC<
                   </div>
                   <button
                     onClick={() => startEdit(type)}
-                    className="text-xs text-violet-600 dark:text-violet-400 hover:underline flex-shrink-0"
+                    className="text-xs text-violet-600 dark:text-violet-400 hover:underline shrink-0"
                   >
                     Edit
                   </button>

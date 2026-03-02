@@ -253,7 +253,7 @@ const InventoryMembersTab: React.FC = () => {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortOption)}
-              className="px-2 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+              className="px-2 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-emerald-500 text-sm"
             >
               {SORT_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -266,7 +266,7 @@ const InventoryMembersTab: React.FC = () => {
       {/* Error */}
       {error && (
         <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-center gap-3">
-          <AlertTriangle className="w-5 h-5 text-red-700 dark:text-red-400 flex-shrink-0" />
+          <AlertTriangle className="w-5 h-5 text-red-700 dark:text-red-400 shrink-0" />
           <p className="text-red-700 dark:text-red-300 text-sm flex-1">{error}</p>
           <button onClick={() => { void loadMembers(); }} className="text-red-700 dark:text-red-400 hover:text-red-500 text-sm flex items-center gap-1">
             <RefreshCw className="w-4 h-4" /> Retry
@@ -347,7 +347,7 @@ const InventoryMembersTab: React.FC = () => {
                           {member.checkout_count}
                         </span>
                         {member.overdue_count > 0 && (
-                          <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 text-xs font-semibold rounded bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/30">
+                          <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 text-xs font-semibold rounded-sm bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/30">
                             {member.overdue_count} overdue
                           </span>
                         )}

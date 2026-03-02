@@ -229,13 +229,13 @@ const IntegrationsPage: React.FC = () => {
                     </div>
                   </div>
                   {integration.status === 'connected' && (
-                    <span className="flex items-center space-x-1 px-2 py-0.5 text-xs bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/30 rounded">
+                    <span className="flex items-center space-x-1 px-2 py-0.5 text-xs bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/30 rounded-sm">
                       <Wifi className="w-3 h-3" />
                       <span>Connected</span>
                     </span>
                   )}
                   {integration.status === 'coming_soon' && (
-                    <span className="px-2 py-0.5 text-xs bg-slate-500/10 text-theme-text-muted border border-slate-500/30 rounded">
+                    <span className="px-2 py-0.5 text-xs bg-slate-500/10 text-theme-text-muted border border-slate-500/30 rounded-sm">
                       Coming Soon
                     </span>
                   )}
@@ -243,7 +243,7 @@ const IntegrationsPage: React.FC = () => {
                 <p className="text-theme-text-secondary text-sm mb-3">{integration.description}</p>
                 <div className="flex flex-wrap gap-1.5 mb-4">
                   {ui.features.map((feature) => (
-                    <span key={feature} className={`px-2 py-0.5 text-xs rounded ${ui.bgColor} ${ui.color}`}>
+                    <span key={feature} className={`px-2 py-0.5 text-xs rounded-sm ${ui.bgColor} ${ui.color}`}>
                       {feature}
                     </span>
                   ))}
@@ -308,7 +308,7 @@ const IntegrationsPage: React.FC = () => {
 
                     <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-lg p-3">
                       <div className="flex items-start space-x-2">
-                        <AlertCircle className="w-4 h-4 text-indigo-700 mt-0.5 flex-shrink-0" />
+                        <AlertCircle className="w-4 h-4 text-indigo-700 mt-0.5 shrink-0" />
                         <p className="text-indigo-700 text-sm">
                           Clicking Connect will enable this integration for your organization. You can disconnect it at any time.
                         </p>

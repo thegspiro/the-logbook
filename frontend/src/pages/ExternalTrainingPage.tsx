@@ -147,7 +147,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
         ) : (
           <form onSubmit={(e) => { void handleSubmit(e); }} className="p-6 space-y-4">
             {error && (
-              <div className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-3 rounded" role="alert">
+              <div className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-3 rounded-sm" role="alert">
                 {error}
               </div>
             )}
@@ -161,7 +161,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-theme-focus-ring"
+                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:border-theme-focus-ring"
                 placeholder="e.g., Vector Solutions - Main Account"
                 required
                 aria-required="true"
@@ -177,7 +177,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                 type="url"
                 value={formData.api_base_url}
                 onChange={(e) => setFormData(prev => ({ ...prev, api_base_url: e.target.value }))}
-                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-theme-focus-ring"
+                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:border-theme-focus-ring"
                 placeholder={formData.provider_type === 'vector_solutions' ? 'https://app.targetsolutions.com/v1' : 'https://api.example.com'}
                 required
                 aria-required="true"
@@ -198,7 +198,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                   id="provider-auth-type"
                   value={formData.auth_type}
                   onChange={(e) => setFormData(prev => ({ ...prev, auth_type: e.target.value as 'api_key' | 'basic' | 'oauth2' }))}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-theme-focus-ring"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:border-theme-focus-ring"
                 >
                   <option value="api_key">API Key</option>
                   <option value="basic">Basic Auth</option>
@@ -216,7 +216,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                 type="password"
                 value={formData.api_key}
                 onChange={(e) => setFormData(prev => ({ ...prev, api_key: e.target.value }))}
-                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-theme-focus-ring"
+                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:border-theme-focus-ring"
                 placeholder={formData.provider_type === 'vector_solutions' ? 'Enter your TargetSolutions AccessToken' : 'Enter your API key'}
                 required
                 aria-required="true"
@@ -241,7 +241,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                     ...prev,
                     config: { ...prev.config, site_id: e.target.value || undefined }
                   }))}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-theme-focus-ring"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:border-theme-focus-ring"
                   placeholder="Enter your TargetSolutions Site ID"
                 />
                 <p className="mt-1 text-xs text-theme-text-muted">
@@ -260,7 +260,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                   type="password"
                   value={formData.api_secret || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, api_secret: e.target.value }))}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-theme-focus-ring"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:border-theme-focus-ring"
                   placeholder="Enter your API secret"
                 />
               </div>
@@ -274,7 +274,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                 id="provider-description"
                 value={formData.description || ''}
                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-theme-focus-ring"
+                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:border-theme-focus-ring"
                 placeholder="Optional description for this integration"
                 rows={3}
               />
@@ -321,7 +321,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                     id="provider-sync-interval"
                     value={formData.sync_interval_hours}
                     onChange={(e) => setFormData(prev => ({ ...prev, sync_interval_hours: parseInt(e.target.value) }))}
-                    className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-theme-focus-ring"
+                    className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:border-theme-focus-ring"
                   >
                     <option value={6}>Every 6 hours</option>
                     <option value={12}>Every 12 hours</option>
@@ -604,7 +604,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
 
         <form onSubmit={(e) => { void handleSubmit(e); }} className="p-6 space-y-4">
           {error && (
-            <div className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-3 rounded" role="alert">
+            <div className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-3 rounded-sm" role="alert">
               {error}
             </div>
           )}
@@ -618,7 +618,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
               type="text"
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-theme-focus-ring"
+              className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:border-theme-focus-ring"
               required
               aria-required="true"
             />
@@ -633,7 +633,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
               type="url"
               value={formData.api_base_url}
               onChange={(e) => setFormData(prev => ({ ...prev, api_base_url: e.target.value }))}
-              className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-theme-focus-ring"
+              className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:border-theme-focus-ring"
               required
               aria-required="true"
             />
@@ -648,7 +648,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
               type="password"
               value={formData.api_key}
               onChange={(e) => setFormData(prev => ({ ...prev, api_key: e.target.value }))}
-              className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-theme-focus-ring"
+              className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:border-theme-focus-ring"
               placeholder="Enter new API key to update"
             />
           </div>
@@ -663,7 +663,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
                 type="password"
                 value={formData.api_secret}
                 onChange={(e) => setFormData(prev => ({ ...prev, api_secret: e.target.value }))}
-                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-theme-focus-ring"
+                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:border-theme-focus-ring"
                 placeholder="Enter new API secret to update"
               />
             </div>
@@ -677,7 +677,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
               id="edit-provider-description"
               value={formData.description}
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-theme-focus-ring"
+              className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:border-theme-focus-ring"
               rows={3}
             />
           </div>
@@ -720,7 +720,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
                   id="edit-provider-sync-interval"
                   value={formData.sync_interval_hours}
                   onChange={(e) => setFormData(prev => ({ ...prev, sync_interval_hours: parseInt(e.target.value) }))}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-theme-focus-ring"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:border-theme-focus-ring"
                 >
                   <option value={6}>Every 6 hours</option>
                   <option value={12}>Every 12 hours</option>
@@ -871,7 +871,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                             {mapping.auto_mapped && <span className="text-xs">(auto)</span>}
                           </span>
                         ) : (
-                          <button className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded">
+                          <button className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded-sm">
                             Map Category
                           </button>
                         )}
@@ -915,7 +915,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                             {mapping.auto_mapped && <span className="text-xs">(auto)</span>}
                           </span>
                         ) : (
-                          <button className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded">
+                          <button className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded-sm">
                             Map User
                           </button>
                         )}

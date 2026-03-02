@@ -279,7 +279,7 @@ const DocumentsPage: React.FC = () => {
         {/* Error Toast */}
         {error && (
           <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-start space-x-3">
-            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+            <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
             <div className="flex-1">
               <p className="text-red-300 text-sm">{error}</p>
             </div>
@@ -339,7 +339,7 @@ const DocumentsPage: React.FC = () => {
               <div className="flex bg-theme-surface-secondary rounded-lg p-1" role="group" aria-label="View mode">
                 <button
                   onClick={() => setViewMode('grid')}
-                  className={`p-2.5 rounded ${viewMode === 'grid' ? 'bg-amber-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                  className={`p-2.5 rounded-sm ${viewMode === 'grid' ? 'bg-amber-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
                   aria-label="Grid view"
                   aria-pressed={viewMode === 'grid'}
                 >
@@ -347,7 +347,7 @@ const DocumentsPage: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setViewMode('list')}
-                  className={`p-2.5 rounded ${viewMode === 'list' ? 'bg-amber-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                  className={`p-2.5 rounded-sm ${viewMode === 'list' ? 'bg-amber-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
                   aria-label="List view"
                   aria-pressed={viewMode === 'list'}
                 >
@@ -407,7 +407,7 @@ const DocumentsPage: React.FC = () => {
                       className="stat-card group hover:bg-theme-surface-hover transition-all"
                     >
                       <div className="flex items-start space-x-3">
-                        <File className="w-8 h-8 text-amber-400 flex-shrink-0" />
+                        <File className="w-8 h-8 text-amber-400 shrink-0" />
                         <div className="flex-1 min-w-0">
                           <h3 className="text-theme-text-primary font-semibold truncate">{doc.name}</h3>
                           {doc.description && (
@@ -459,7 +459,7 @@ const DocumentsPage: React.FC = () => {
                         <tr key={doc.id} className="border-b border-theme-surface-border hover:bg-theme-surface-hover transition-colors">
                           <td className="px-4 py-3">
                             <div className="flex items-center space-x-2">
-                              <File className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                              <File className="w-4 h-4 text-amber-400 shrink-0" />
                               <div>
                                 <p className="text-theme-text-primary text-sm font-medium truncate max-w-xs">{doc.name}</p>
                                 {doc.description && (

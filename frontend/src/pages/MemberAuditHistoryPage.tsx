@@ -215,7 +215,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
         </div>
 
         {/* Filter Bar */}
-        <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-4 mb-6">
+        <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-4 mb-6">
           <div className="flex items-center gap-3">
             <label
               htmlFor="event-type-filter"
@@ -227,7 +227,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
               id="event-type-filter"
               value={eventTypeFilter}
               onChange={(e) => setEventTypeFilter(e.target.value as EventTypeFilter)}
-              className="px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
             >
               {EVENT_TYPE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -247,7 +247,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
 
         {/* Timeline List */}
         {entries.length === 0 && !loading ? (
-          <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+          <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
             <div className="text-center py-12">
               <div className="text-theme-text-muted text-4xl mb-4">
                 &#128221;
@@ -284,7 +284,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
                   {/* Timeline connector */}
                   <div className="flex flex-col items-center">
                     <div
-                      className={`w-3 h-3 rounded-full mt-5 flex-shrink-0 ${severityStyle.dot}`}
+                      className={`w-3 h-3 rounded-full mt-5 shrink-0 ${severityStyle.dot}`}
                       title={severityStyle.label}
                     />
                     {!isLast && (
@@ -294,7 +294,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
 
                   {/* Entry Card */}
                   <div className="flex-1 mb-4">
-                    <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-4">
+                    <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-4">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-theme-text-primary">
@@ -329,7 +329,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
                         {hasEventData && (
                           <button
                             onClick={() => toggleEntryExpanded(entry.id)}
-                            className="text-sm text-theme-text-muted hover:text-theme-text-primary flex-shrink-0"
+                            className="text-sm text-theme-text-muted hover:text-theme-text-primary shrink-0"
                             aria-expanded={isExpanded}
                             aria-label={isExpanded ? 'Collapse details' : 'Expand details'}
                           >
@@ -350,7 +350,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
                                 <span className="text-xs text-theme-text-muted">
                                   {formatEventDataKey(key)}
                                 </span>
-                                <span className="text-sm text-theme-text-secondary break-words">
+                                <span className="text-sm text-theme-text-secondary wrap-break-word">
                                   {formatEventDataValue(value)}
                                 </span>
                               </div>

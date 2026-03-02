@@ -115,7 +115,7 @@ export const AccessLogsTab: React.FC = () => {
               value={filters.ip_address || ''}
               onChange={(e) => handleFilterChange('ip_address', e.target.value)}
               placeholder="e.g., 192.168.1.1"
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
             />
           </div>
 
@@ -129,7 +129,7 @@ export const AccessLogsTab: React.FC = () => {
               value={filters.endpoint || ''}
               onChange={(e) => handleFilterChange('endpoint', e.target.value)}
               placeholder="e.g., /api/public/v1/organization/info"
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
             />
           </div>
 
@@ -141,7 +141,7 @@ export const AccessLogsTab: React.FC = () => {
             <select
               value={filters.status_code || ''}
               onChange={(e) => handleFilterChange('status_code', e.target.value ? parseInt(e.target.value) : undefined)}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
             >
               <option value="">All</option>
               <option value="200">200 - OK</option>
@@ -161,7 +161,7 @@ export const AccessLogsTab: React.FC = () => {
             <select
               value={filters.flagged_suspicious === undefined ? '' : filters.flagged_suspicious.toString()}
               onChange={(e) => handleFilterChange('flagged_suspicious', e.target.value === '' ? undefined : e.target.value === 'true')}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
             >
               <option value="">All</option>
               <option value="true">Flagged Only</option>
@@ -177,7 +177,7 @@ export const AccessLogsTab: React.FC = () => {
             <select
               value={filters.limit || 50}
               onChange={(e) => handleFilterChange('limit', parseInt(e.target.value))}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
             >
               <option value="25">25</option>
               <option value="50">50</option>
@@ -253,7 +253,7 @@ export const AccessLogsTab: React.FC = () => {
                         {formatDateTime(log.timestamp, tz)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-semibold rounded ${getMethodColor(log.method)}`}>
+                        <span className={`px-2 py-1 text-xs font-semibold rounded-sm ${getMethodColor(log.method)}`}>
                           {log.method}
                         </span>
                       </td>
@@ -273,7 +273,7 @@ export const AccessLogsTab: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {log.flagged_suspicious && (
-                          <span className="px-2 py-1 text-xs font-semibold rounded bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400">
+                          <span className="px-2 py-1 text-xs font-semibold rounded-sm bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400">
                             Suspicious
                           </span>
                         )}

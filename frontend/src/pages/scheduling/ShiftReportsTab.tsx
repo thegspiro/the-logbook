@@ -402,7 +402,7 @@ export const ShiftReportsTab: React.FC = () => {
           className="w-full flex items-center justify-between p-4 sm:p-5 text-left hover:bg-theme-surface-hover transition-colors"
         >
           <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
               <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-violet-500" />
             </div>
             <div className="min-w-0">
@@ -418,7 +418,7 @@ export const ShiftReportsTab: React.FC = () => {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             {/* Review status badge */}
             {report.review_status !== 'approved' && (
               <span className={`px-2 py-0.5 text-xs font-medium ${statusStyle.bg} ${statusStyle.text} border border-current/20 rounded-full`}>
@@ -491,7 +491,7 @@ export const ShiftReportsTab: React.FC = () => {
                       </span>
                       {skill.comment && (
                         <p className="mt-0.5 ml-2 text-xs text-theme-text-muted italic flex items-start gap-1">
-                          <MessageSquare className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                          <MessageSquare className="w-3 h-3 mt-0.5 shrink-0" />
                           {skill.comment}
                         </p>
                       )}
@@ -512,7 +512,7 @@ export const ShiftReportsTab: React.FC = () => {
                       {task.description && <span className="text-theme-text-muted"> — {task.description}</span>}
                       {task.comment && (
                         <p className="mt-0.5 ml-2 text-xs text-theme-text-muted italic flex items-start gap-1">
-                          <MessageSquare className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                          <MessageSquare className="w-3 h-3 mt-0.5 shrink-0" />
                           {task.comment}
                         </p>
                       )}
@@ -618,7 +618,7 @@ export const ShiftReportsTab: React.FC = () => {
       {/* Encryption notice for officers */}
       {canManage && viewMode === 'create' && (
         <div className="flex items-center gap-2 px-3 py-2 bg-green-500/5 border border-green-500/20 rounded-lg text-xs text-green-700 dark:text-green-400">
-          <Shield className="w-3.5 h-3.5 flex-shrink-0" />
+          <Shield className="w-3.5 h-3.5 shrink-0" />
           Narratives and evaluations are encrypted at rest (AES-256) to protect against data exfiltration.
         </div>
       )}
@@ -657,7 +657,7 @@ export const ShiftReportsTab: React.FC = () => {
                         : 'hover:bg-theme-surface-hover text-theme-text-primary'
                     }`}
                   >
-                    <UserIcon className="w-4 h-4 flex-shrink-0" />
+                    <UserIcon className="w-4 h-4 shrink-0" />
                     {m.full_name || `${m.first_name} ${m.last_name}`}
                   </button>
                 ))}

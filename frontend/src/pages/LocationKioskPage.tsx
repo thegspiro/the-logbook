@@ -114,7 +114,7 @@ const LocationKioskPage: React.FC = () => {
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-red-500 mb-6" />
           <p className="text-xl text-white">Loading display...</p>
@@ -126,7 +126,7 @@ const LocationKioskPage: React.FC = () => {
   // Error state (permanent — bad code)
   if (error && !data) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-8">
+      <div className="min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-8">
         <div className="text-center max-w-md">
           <MapPin className="w-16 h-16 text-slate-500 mx-auto mb-6" />
           <h1 className="text-2xl font-bold text-white mb-4">Display Unavailable</h1>
@@ -143,7 +143,7 @@ const LocationKioskPage: React.FC = () => {
   const currentEvent = hasEvents ? events[currentEventIndex % events.length] : null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
+    <div className="min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
       {/* Header bar */}
       <div className="flex items-center justify-between px-8 py-4 bg-black/30">
         <div className="flex items-center gap-3">

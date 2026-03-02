@@ -180,7 +180,7 @@ const AdminHoursPage: React.FC = () => {
           <div className="flex flex-col md:flex-row md:items-center gap-5">
             {/* Left: icon + info */}
             <div className="flex items-start gap-4 flex-1 min-w-0">
-              <div className="relative flex-shrink-0">
+              <div className="relative shrink-0">
                 <div className={`w-14 h-14 rounded-full flex items-center justify-center ${isSessionNearLimit ? 'bg-orange-500/20' : 'bg-blue-500/20'}`}>
                   <Timer className={`w-7 h-7 ${isSessionNearLimit ? 'text-orange-400' : 'text-blue-400'}`} />
                 </div>
@@ -192,7 +192,7 @@ const AdminHoursPage: React.FC = () => {
                 </p>
                 <div className="flex items-center gap-2 mt-1">
                   <div
-                    className="w-3 h-3 rounded-full flex-shrink-0"
+                    className="w-3 h-3 rounded-full shrink-0"
                     style={{ backgroundColor: activeSession.categoryColor ?? '#6B7280' }}
                   />
                   <span className="text-theme-text-primary font-medium truncate">{activeSession.categoryName}</span>
@@ -213,7 +213,7 @@ const AdminHoursPage: React.FC = () => {
                 </div>
                 {isSessionNearLimit && (
                   <p className="text-sm text-orange-300 flex items-center gap-1.5 mt-2">
-                    <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
                     Approaching session limit &mdash; please clock out soon
                   </p>
                 )}
@@ -405,7 +405,7 @@ const AdminHoursPage: React.FC = () => {
               {myEntries.map((entry) => (
                 <div key={entry.id} className={`px-4 py-3 flex items-center gap-3 ${entry.status === 'rejected' ? 'bg-red-500/5' : ''}`}>
                   <div
-                    className="w-3 h-3 rounded-full flex-shrink-0"
+                    className="w-3 h-3 rounded-full shrink-0"
                     style={{ backgroundColor: entry.categoryColor ?? '#6B7280' }}
                   />
                   <div className="flex-1 min-w-0">

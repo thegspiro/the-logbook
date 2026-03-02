@@ -357,7 +357,7 @@ export const WaiverManagementPage: React.FC = () => {
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
-                className={`whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 transition-colors focus:outline-none ${
+                className={`whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 transition-colors focus:outline-hidden ${
                   activeTab === tab.id
                     ? 'border-red-500 text-theme-text-primary'
                     : 'border-transparent text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border'
@@ -469,7 +469,7 @@ export const WaiverManagementPage: React.FC = () => {
                   <select
                     value={formData.user_id}
                     onChange={(e) => setFormData({ ...formData, user_id: e.target.value })}
-                    className="w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                     required
                   >
                     <option value="">Select a member...</option>
@@ -487,7 +487,7 @@ export const WaiverManagementPage: React.FC = () => {
                   <select
                     value={formData.waiver_type}
                     onChange={(e) => setFormData({ ...formData, waiver_type: e.target.value })}
-                    className="w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                   >
                     {WAIVER_TYPES.map((t) => (
                       <option key={t.value} value={t.value}>{t.label}</option>
@@ -510,7 +510,7 @@ export const WaiverManagementPage: React.FC = () => {
                               : formData.applies_to.filter((v) => v !== o.value);
                             setFormData({ ...formData, applies_to: updated });
                           }}
-                          className="rounded border-theme-surface-border text-blue-600 focus:ring-theme-focus-ring"
+                          className="rounded-sm border-theme-surface-border text-blue-600 focus:ring-theme-focus-ring"
                         />
                         {o.label}
                       </label>
@@ -536,7 +536,7 @@ export const WaiverManagementPage: React.FC = () => {
                         type="date"
                         value={formData.start_date}
                         onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                        className="w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                         required
                       />
                     </div>
@@ -547,7 +547,7 @@ export const WaiverManagementPage: React.FC = () => {
                           type="date"
                           value={formData.end_date}
                           onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                          className="w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                          className="w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                           required
                         />
                       </div>
@@ -558,7 +558,7 @@ export const WaiverManagementPage: React.FC = () => {
                       type="checkbox"
                       checked={formData.is_permanent}
                       onChange={(e) => setFormData({ ...formData, is_permanent: e.target.checked, end_date: '' })}
-                      className="rounded border-theme-surface-border text-blue-600 focus:ring-theme-focus-ring"
+                      className="rounded-sm border-theme-surface-border text-blue-600 focus:ring-theme-focus-ring"
                     />
                     <span className="text-sm text-theme-text-secondary">
                       Permanent (no end date)
@@ -578,7 +578,7 @@ export const WaiverManagementPage: React.FC = () => {
                     value={formData.reason}
                     onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
                     rows={3}
-                    className="w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                     placeholder="Reason for the waiver..."
                   />
                 </div>
@@ -620,7 +620,7 @@ export const WaiverManagementPage: React.FC = () => {
                 value={memberFilter}
                 onChange={(e) => setMemberFilter(e.target.value)}
                 placeholder="Search by member name..."
-                className="rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-1.5 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring w-64"
+                className="rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-1.5 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring w-64"
               />
               <div className="ml-auto text-xs text-theme-text-muted self-center">
                 {filteredHistory.length} waiver{filteredHistory.length !== 1 ? 's' : ''}

@@ -72,7 +72,7 @@ const ErrorMonitoringPage: React.FC = () => {
       {/* Statistics Cards */}
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
+          <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
             <div className="text-theme-text-muted text-sm font-medium mb-1">Total Errors</div>
             <div className="text-3xl font-bold text-theme-text-primary">{stats.total}</div>
           </div>
@@ -81,7 +81,7 @@ const ErrorMonitoringPage: React.FC = () => {
             .sort(([, a], [, b]) => b - a)
             .slice(0, 3)
             .map(([type, count]) => (
-              <div key={type} className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
+              <div key={type} className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
                 <div className="text-theme-text-muted text-sm font-medium mb-1 truncate">{type}</div>
                 <div className="text-3xl font-bold text-red-600">{count}</div>
               </div>
@@ -90,13 +90,13 @@ const ErrorMonitoringPage: React.FC = () => {
       )}
 
       {/* Actions Bar */}
-      <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-4 mb-6 flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-4 mb-6 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <label className="text-sm font-medium text-theme-text-secondary">Filter:</label>
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="border border-theme-input-border rounded-md px-3 py-2 text-sm text-theme-text-primary bg-theme-input-bg focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+            className="border border-theme-input-border rounded-md px-3 py-2 text-sm text-theme-text-primary bg-theme-input-bg focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
           >
             <option value="all">All Errors</option>
             {stats &&
@@ -125,7 +125,7 @@ const ErrorMonitoringPage: React.FC = () => {
       </div>
 
       {/* Error List */}
-      <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md overflow-hidden">
+      <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md overflow-hidden">
         {errors.length === 0 ? (
           <div className="p-8 text-center text-theme-text-muted">
             <svg
@@ -220,7 +220,7 @@ const ErrorMonitoringPage: React.FC = () => {
 
       {/* Recent Errors Preview */}
       {stats && stats.recentErrors.length > 0 && filter === 'all' && (
-        <div className="mt-6 bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
+        <div className="mt-6 bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
           <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Recent Errors</h2>
           <div className="space-y-4">
             {stats.recentErrors.map((error: ErrorLog) => (

@@ -180,7 +180,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
                   type="checkbox"
                   checked={getCurrentValue(field.key)}
                   onChange={(e) => setDraft({ ...draft, [field.key]: e.target.checked })}
-                  className="w-5 h-5 rounded bg-theme-input-bg border-theme-input-border text-blue-600 focus:ring-theme-focus-ring"
+                  className="w-5 h-5 rounded-sm bg-theme-input-bg border-theme-input-border text-blue-600 focus:ring-theme-focus-ring"
                 />
               </label>
             ))}
@@ -201,7 +201,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
               type="checkbox"
               checked={getCurrentValue('report_review_required')}
               onChange={(e) => setDraft({ ...draft, report_review_required: e.target.checked })}
-              className="w-5 h-5 rounded bg-theme-input-bg border-theme-input-border text-blue-600 focus:ring-theme-focus-ring"
+              className="w-5 h-5 rounded-sm bg-theme-input-bg border-theme-input-border text-blue-600 focus:ring-theme-focus-ring"
             />
           </label>
 
@@ -278,7 +278,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
                           setDraft({ ...draft, rating_scale_labels: updated });
                         }}
                         placeholder={DEFAULT_COMPETENCY_LABELS[String(level)]}
-                        className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-1.5 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-1.5 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                       />
                     </div>
                   );
@@ -488,11 +488,11 @@ const MyTrainingPage: React.FC = () => {
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-center space-x-2">
                             {req.is_met ? (
-                              <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0" />
+                              <CheckCircle2 className="w-5 h-5 text-green-400 shrink-0" />
                             ) : isOverdue ? (
-                              <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />
+                              <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
                             ) : (
-                              <Clock className="w-5 h-5 text-yellow-400 flex-shrink-0" />
+                              <Clock className="w-5 h-5 text-yellow-400 shrink-0" />
                             )}
                             <div>
                               <p className="text-sm font-medium text-theme-text-primary">{req.name}</p>
@@ -501,7 +501,7 @@ const MyTrainingPage: React.FC = () => {
                               )}
                             </div>
                           </div>
-                          <div className="text-right flex-shrink-0 ml-4">
+                          <div className="text-right shrink-0 ml-4">
                             <span className={`text-sm font-bold ${
                               req.is_met ? 'text-green-400' :
                               isOverdue ? 'text-red-400' :
@@ -527,7 +527,7 @@ const MyTrainingPage: React.FC = () => {
 
                         {/* Expired certification / blocks activity warning */}
                         {req.blocks_activity && (
-                          <div className="bg-red-500/10 border border-red-500/30 rounded px-2 py-1.5 mb-2">
+                          <div className="bg-red-500/10 border border-red-500/30 rounded-sm px-2 py-1.5 mb-2">
                             <p className="text-xs text-red-400 font-medium">
                               Certification expired — renew ASAP. This may prevent you from signing up for shifts.
                             </p>
@@ -536,7 +536,7 @@ const MyTrainingPage: React.FC = () => {
 
                         {/* Waiver adjustment notice */}
                         {req.waived_months != null && req.waived_months > 0 && (
-                          <div className="bg-blue-500/10 border border-blue-500/20 rounded px-2 py-1 mb-2">
+                          <div className="bg-blue-500/10 border border-blue-500/20 rounded-sm px-2 py-1 mb-2">
                             <p className="text-xs text-blue-300">
                               Adjusted for {req.waived_months} waived month{req.waived_months > 1 ? 's' : ''} of leave
                               {req.original_required_hours != null && req.original_required_hours !== req.required_hours && (
@@ -612,7 +612,7 @@ const MyTrainingPage: React.FC = () => {
                 {data.enrollments.map((e) => (
                   <div key={e.id} className="bg-theme-surface rounded-lg p-4">
                     <div className="flex items-center justify-between mb-2">
-                      <span className={`text-xs px-2 py-1 rounded ${getStatusColor(e.status)}`}>
+                      <span className={`text-xs px-2 py-1 rounded-sm ${getStatusColor(e.status)}`}>
                         {e.status.replace('_', ' ')}
                       </span>
                       <span className="text-sm text-theme-text-primary font-semibold">{Math.round(e.progress_percentage)}%</span>
@@ -643,7 +643,7 @@ const MyTrainingPage: React.FC = () => {
                               )}
                               <span className="text-theme-text-secondary">{Math.round(r.progress_percentage)}%</span>
                             </div>
-                            <span className={`px-1.5 py-0.5 rounded ${getStatusColor(r.status)}`}>
+                            <span className={`px-1.5 py-0.5 rounded-sm ${getStatusColor(r.status)}`}>
                               {r.status.replace('_', ' ')}
                             </span>
                           </div>
@@ -678,7 +678,7 @@ const MyTrainingPage: React.FC = () => {
                         <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.completion_date, tz)}</td>
                         <td className="px-4 py-2 whitespace-nowrap">{r.hours_completed}</td>
                         <td className="px-4 py-2">
-                          <span className={`text-xs px-2 py-1 rounded ${getStatusColor(r.status)}`}>
+                          <span className={`text-xs px-2 py-1 rounded-sm ${getStatusColor(r.status)}`}>
                             {r.status.replace('_', ' ')}
                           </span>
                         </td>
@@ -721,7 +721,7 @@ const MyTrainingPage: React.FC = () => {
                     {v?.show_skills_observed && sr.skills_observed && (sr.skills_observed as Array<{ skill_name?: string; demonstrated?: boolean }>).length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-2">
                         {(sr.skills_observed as Array<{ skill_name?: string; demonstrated?: boolean }>).map((s, i) => (
-                          <span key={i} className={`text-xs px-2 py-0.5 rounded ${s.demonstrated ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-theme-text-muted'}`}>
+                          <span key={i} className={`text-xs px-2 py-0.5 rounded-sm ${s.demonstrated ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-theme-text-muted'}`}>
                             {s.skill_name}
                           </span>
                         ))}
@@ -754,7 +754,7 @@ const MyTrainingPage: React.FC = () => {
                         <td className="px-4 py-2 whitespace-nowrap">{formatDate(s.completion_date, tz)}</td>
                         <td className="px-4 py-2 whitespace-nowrap">{s.hours_completed}</td>
                         <td className="px-4 py-2">
-                          <span className={`text-xs px-2 py-1 rounded ${getStatusColor(s.status)}`}>
+                          <span className={`text-xs px-2 py-1 rounded-sm ${getStatusColor(s.status)}`}>
                             {s.status.replace('_', ' ')}
                           </span>
                         </td>

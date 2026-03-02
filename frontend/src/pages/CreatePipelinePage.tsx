@@ -310,7 +310,7 @@ const StepPhases: React.FC<{
                 <span className="text-red-400 font-bold text-sm">Phase {phase.phase_number}</span>
                 <span className="text-theme-text-primary font-medium">{phase.name || 'Untitled Phase'}</span>
                 {phase.requirements.length > 0 && (
-                  <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs rounded">
+                  <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs rounded-sm">
                     {phase.requirements.length} req{phase.requirements.length !== 1 ? 's' : ''}
                   </span>
                 )}
@@ -408,7 +408,7 @@ const StepRequirements: React.FC<{
             </h3>
             <button
               onClick={() => onAddRequirement(phase.id)}
-              className="flex items-center space-x-1 px-2 py-1 bg-theme-surface text-theme-text-secondary rounded hover:bg-theme-surface-hover text-xs"
+              className="flex items-center space-x-1 px-2 py-1 bg-theme-surface text-theme-text-secondary rounded-sm hover:bg-theme-surface-hover text-xs"
             >
               <Plus className="w-3 h-3" />
               <span>Add Requirement</span>
@@ -492,7 +492,7 @@ const StepRequirements: React.FC<{
                             type="checkbox"
                             checked={req.is_required}
                             onChange={(e) => onUpdateRequirement(phase.id, req.id, 'is_required', e.target.checked)}
-                            className="w-3 h-3 text-red-500 bg-theme-input-bg border-theme-input-border rounded"
+                            className="w-3 h-3 text-red-500 bg-theme-input-bg border-theme-input-border rounded-sm"
                           />
                           <span>Required</span>
                         </label>
@@ -607,7 +607,7 @@ const StepMilestones: React.FC<{
             </h3>
             <button
               onClick={() => onAddMilestone(phase.id)}
-              className="flex items-center space-x-1 px-2 py-1 bg-theme-surface text-theme-text-secondary rounded hover:bg-theme-surface-hover text-xs"
+              className="flex items-center space-x-1 px-2 py-1 bg-theme-surface text-theme-text-secondary rounded-sm hover:bg-theme-surface-hover text-xs"
             >
               <Plus className="w-3 h-3" />
               <span>Add Milestone</span>
@@ -741,10 +741,10 @@ const StepReview: React.FC<{
         <h3 className="text-lg font-semibold text-theme-text-primary mb-3">{info.name || 'Untitled Program'}</h3>
         {info.description && <p className="text-theme-text-muted text-sm mb-3">{info.description}</p>}
         <div className="flex flex-wrap gap-2 text-xs">
-          {info.code && <span className="px-2 py-1 bg-theme-surface-hover text-theme-text-secondary rounded">{info.code}</span>}
-          {info.target_position && <span className="px-2 py-1 bg-red-500/20 text-red-400 rounded">{info.target_position}</span>}
-          <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded">{info.structure_type}</span>
-          {info.is_template && <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded">Template</span>}
+          {info.code && <span className="px-2 py-1 bg-theme-surface-hover text-theme-text-secondary rounded-sm">{info.code}</span>}
+          {info.target_position && <span className="px-2 py-1 bg-red-500/20 text-red-400 rounded-sm">{info.target_position}</span>}
+          <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded-sm">{info.structure_type}</span>
+          {info.is_template && <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded-sm">Template</span>}
         </div>
       </div>
 
@@ -756,8 +756,8 @@ const StepReview: React.FC<{
           </h4>
           {phase.description && <p className="text-theme-text-muted text-sm mb-3">{phase.description}</p>}
           <div className="flex flex-wrap gap-2 text-xs mb-3">
-            {phase.time_limit_days && <span className="px-2 py-1 bg-theme-surface-hover text-theme-text-secondary rounded">{phase.time_limit_days} day limit</span>}
-            {phase.requires_manual_advancement && <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded">Manual advancement</span>}
+            {phase.time_limit_days && <span className="px-2 py-1 bg-theme-surface-hover text-theme-text-secondary rounded-sm">{phase.time_limit_days} day limit</span>}
+            {phase.requires_manual_advancement && <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded-sm">Manual advancement</span>}
           </div>
 
           {phase.requirements.length > 0 && (
@@ -1093,7 +1093,7 @@ const CreatePipelinePage: React.FC = () => {
         {/* Step content */}
         <div className="card-secondary mb-6 p-6">
           {error && (
-            <div className="bg-red-500/10 border border-red-500 text-red-400 px-4 py-3 rounded mb-4">
+            <div className="bg-red-500/10 border border-red-500 text-red-400 px-4 py-3 rounded-sm mb-4">
               {error}
             </div>
           )}

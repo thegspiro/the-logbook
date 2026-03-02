@@ -496,7 +496,7 @@ const SchedulingPage: React.FC = () => {
           </nav>
           {/* Scroll fade hint on right edge (mobile) */}
           <div
-            className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-theme-bg to-transparent pointer-events-none sm:hidden"
+            className="absolute right-0 top-0 bottom-0 w-8 bg-linear-to-l from-theme-bg to-transparent pointer-events-none sm:hidden"
             aria-hidden="true"
           />
         </div>
@@ -584,7 +584,7 @@ const SchedulingPage: React.FC = () => {
                       onClick={() => setViewMode("week")}
                       role="tab"
                       aria-selected={viewMode === "week"}
-                      className={`px-3 py-1 rounded text-sm ${viewMode === "week" ? "bg-violet-600 text-white" : "text-theme-text-muted hover:text-white"}`}
+                      className={`px-3 py-1 rounded-sm text-sm ${viewMode === "week" ? "bg-violet-600 text-white" : "text-theme-text-muted hover:text-white"}`}
                     >
                       Week
                     </button>
@@ -592,7 +592,7 @@ const SchedulingPage: React.FC = () => {
                       onClick={() => setViewMode("month")}
                       role="tab"
                       aria-selected={viewMode === "month"}
-                      className={`px-3 py-1 rounded text-sm ${viewMode === "month" ? "bg-violet-600 text-white" : "text-theme-text-muted hover:text-white"}`}
+                      className={`px-3 py-1 rounded-sm text-sm ${viewMode === "month" ? "bg-violet-600 text-white" : "text-theme-text-muted hover:text-white"}`}
                     >
                       Month
                     </button>
@@ -604,7 +604,7 @@ const SchedulingPage: React.FC = () => {
             {/* Error State */}
             {error && (
               <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-6 flex items-center space-x-3">
-                <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400 flex-shrink-0" />
+                <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400 shrink-0" />
                 <p className="text-red-700 dark:text-red-300">{error}</p>
               </div>
             )}
@@ -838,7 +838,7 @@ const SchedulingPage: React.FC = () => {
                             <button
                               key={shift.id}
                               onClick={() => handleShiftClick(shift)}
-                              className={`mb-1 px-1.5 py-1 rounded border text-xs w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift) ?? ""}`}
+                              className={`mb-1 px-1.5 py-1 rounded-sm border text-xs w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift) ?? ""}`}
                               style={getShiftStyle(shift)}
                             >
                               <p className="font-medium truncate">
@@ -1272,7 +1272,7 @@ const SchedulingPage: React.FC = () => {
                                   {tmpl.positions?.map((pos, i) => (
                                     <span
                                       key={i}
-                                      className="px-2 py-0.5 text-[10px] bg-violet-500/10 text-violet-700 dark:text-violet-300 rounded capitalize font-medium"
+                                      className="px-2 py-0.5 text-[10px] bg-violet-500/10 text-violet-700 dark:text-violet-300 rounded-sm capitalize font-medium"
                                     >
                                       {pos}
                                     </span>
@@ -1320,7 +1320,7 @@ const SchedulingPage: React.FC = () => {
                               const tmpl = effectiveTemplates.find((t) => t.id === shiftForm.shiftTemplate) || defaultTemplate;
                               return tmpl?.start_time_of_day || '';
                             })()}
-                            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+                            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500"
                           />
                         </div>
                         <div>
@@ -1329,7 +1329,7 @@ const SchedulingPage: React.FC = () => {
                             type="time"
                             value={shiftForm.customEndTime}
                             onChange={(e) => setShiftForm({ ...shiftForm, customEndTime: e.target.value })}
-                            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+                            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500"
                           />
                         </div>
                       </div>
@@ -1387,7 +1387,7 @@ const SchedulingPage: React.FC = () => {
                                   {selected.positions.map((pos, i) => (
                                     <span
                                       key={i}
-                                      className="px-2 py-0.5 text-xs bg-violet-500/10 text-violet-700 dark:text-violet-300 rounded capitalize"
+                                      className="px-2 py-0.5 text-xs bg-violet-500/10 text-violet-700 dark:text-violet-300 rounded-sm capitalize"
                                     >
                                       {pos}
                                     </span>
@@ -1553,7 +1553,7 @@ const SchedulingPage: React.FC = () => {
                     {createError && (
                       <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
                         <div className="flex items-start space-x-2">
-                          <AlertCircle className="w-4 h-4 text-red-700 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                          <AlertCircle className="w-4 h-4 text-red-700 dark:text-red-400 mt-0.5 shrink-0" />
                           <p className="text-red-700 dark:text-red-300 text-sm">
                             {createError}
                           </p>

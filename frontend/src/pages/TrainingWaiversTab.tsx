@@ -231,7 +231,7 @@ const TrainingWaiversTab: React.FC = () => {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search by name, rank, or reason..."
-          className="rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-1.5 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring w-72"
+          className="rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-1.5 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring w-72"
         />
         <div className="ml-auto text-xs text-theme-text-muted self-center">
           {filteredWaivers.length} waiver{filteredWaivers.length !== 1 ? 's' : ''}

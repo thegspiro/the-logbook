@@ -60,7 +60,7 @@ const Welcome: React.FC = () => {
   // Show a brief loading state while we check onboarding status
   if (checking) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
+      <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-theme-accent-red mb-4"></div>
         </div>
@@ -69,7 +69,7 @@ const Welcome: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4 relative">
+    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4 relative">
       <ThemeToggle className="absolute top-4 right-4" />
       <div className="max-w-3xl w-full text-center space-y-8">
         {/* Title */}
@@ -81,7 +81,7 @@ const Welcome: React.FC = () => {
           }`}
         >
           Welcome to{' '}
-          <span className="bg-gradient-to-r from-red-400 to-orange-500 bg-clip-text text-transparent">
+          <span className="bg-linear-to-r from-red-400 to-orange-500 bg-clip-text text-transparent">
             The Logbook
           </span>
         </h1>
@@ -103,16 +103,16 @@ const Welcome: React.FC = () => {
 
           {/* Badge indicators */}
           <div className="mt-8 flex flex-wrap justify-center gap-4 text-sm">
-            <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-theme-text-secondary border border-theme-surface-border">
+            <span className="px-4 py-2 bg-theme-surface backdrop-blur-xs rounded-full text-theme-text-secondary border border-theme-surface-border">
               HIPAA-Oriented Security
             </span>
-            <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-theme-text-secondary border border-theme-surface-border">
+            <span className="px-4 py-2 bg-theme-surface backdrop-blur-xs rounded-full text-theme-text-secondary border border-theme-surface-border">
               Section 508 Accessible
             </span>
-            <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-theme-text-secondary border border-theme-surface-border">
+            <span className="px-4 py-2 bg-theme-surface backdrop-blur-xs rounded-full text-theme-text-secondary border border-theme-surface-border">
               Zero Plain Text Passwords
             </span>
-            <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-theme-text-secondary border border-theme-surface-border">
+            <span className="px-4 py-2 bg-theme-surface backdrop-blur-xs rounded-full text-theme-text-secondary border border-theme-surface-border">
               Tamper-Proof Audit Logs
             </span>
           </div>
@@ -121,7 +121,7 @@ const Welcome: React.FC = () => {
           <div className="mt-12">
             <button
               onClick={() => navigate('/onboarding')}
-              className="px-8 py-4 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white text-lg font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+              className="px-8 py-4 bg-linear-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white text-lg font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
             >
               Get Started
             </button>

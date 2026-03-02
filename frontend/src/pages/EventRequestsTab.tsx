@@ -517,7 +517,7 @@ const EventRequestsTab: React.FC = () => {
                     className="w-full flex items-center justify-between p-4 text-left hover:bg-theme-surface-secondary transition-colors"
                   >
                     <div className="flex items-center gap-4 min-w-0 flex-1">
-                      <StatusIcon className="w-5 h-5 flex-shrink-0 text-theme-text-muted" />
+                      <StatusIcon className="w-5 h-5 shrink-0 text-theme-text-muted" />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-theme-text-primary truncate">
@@ -560,9 +560,9 @@ const EventRequestsTab: React.FC = () => {
                       </div>
                     </div>
                     {isExpanded ? (
-                      <ChevronUp className="w-5 h-5 text-theme-text-muted flex-shrink-0" />
+                      <ChevronUp className="w-5 h-5 text-theme-text-muted shrink-0" />
                     ) : (
-                      <ChevronDown className="w-5 h-5 text-theme-text-muted flex-shrink-0" />
+                      <ChevronDown className="w-5 h-5 text-theme-text-muted shrink-0" />
                     )}
                   </button>
 
@@ -583,22 +583,22 @@ const EventRequestsTab: React.FC = () => {
                               </h4>
                               <dl className="space-y-1 text-sm">
                                 <div className="flex gap-2">
-                                  <dt className="text-theme-text-muted w-24 flex-shrink-0">Name:</dt>
+                                  <dt className="text-theme-text-muted w-24 shrink-0">Name:</dt>
                                   <dd className="text-theme-text-primary">{expandedDetail.contact_name}</dd>
                                 </div>
                                 <div className="flex gap-2">
-                                  <dt className="text-theme-text-muted w-24 flex-shrink-0">Email:</dt>
+                                  <dt className="text-theme-text-muted w-24 shrink-0">Email:</dt>
                                   <dd className="text-theme-text-primary">{expandedDetail.contact_email}</dd>
                                 </div>
                                 {expandedDetail.contact_phone && (
                                   <div className="flex gap-2">
-                                    <dt className="text-theme-text-muted w-24 flex-shrink-0">Phone:</dt>
+                                    <dt className="text-theme-text-muted w-24 shrink-0">Phone:</dt>
                                     <dd className="text-theme-text-primary">{expandedDetail.contact_phone}</dd>
                                   </div>
                                 )}
                                 {expandedDetail.organization_name && (
                                   <div className="flex gap-2">
-                                    <dt className="text-theme-text-muted w-24 flex-shrink-0">Org:</dt>
+                                    <dt className="text-theme-text-muted w-24 shrink-0">Org:</dt>
                                     <dd className="text-theme-text-primary">{expandedDetail.organization_name}</dd>
                                   </div>
                                 )}
@@ -611,25 +611,25 @@ const EventRequestsTab: React.FC = () => {
                               </h4>
                               <dl className="space-y-1 text-sm">
                                 <div className="flex gap-2">
-                                  <dt className="text-theme-text-muted w-24 flex-shrink-0">Type:</dt>
+                                  <dt className="text-theme-text-muted w-24 shrink-0">Type:</dt>
                                   <dd className="text-theme-text-primary">
                                     {getOutreachLabel(expandedDetail.outreach_type)}
                                   </dd>
                                 </div>
                                 {expandedDetail.audience_size && (
                                   <div className="flex gap-2">
-                                    <dt className="text-theme-text-muted w-24 flex-shrink-0">Audience:</dt>
+                                    <dt className="text-theme-text-muted w-24 shrink-0">Audience:</dt>
                                     <dd className="text-theme-text-primary">~{expandedDetail.audience_size} people</dd>
                                   </div>
                                 )}
                                 {expandedDetail.age_group && (
                                   <div className="flex gap-2">
-                                    <dt className="text-theme-text-muted w-24 flex-shrink-0">Age Group:</dt>
+                                    <dt className="text-theme-text-muted w-24 shrink-0">Age Group:</dt>
                                     <dd className="text-theme-text-primary">{expandedDetail.age_group}</dd>
                                   </div>
                                 )}
                                 <div className="flex gap-2">
-                                  <dt className="text-theme-text-muted w-24 flex-shrink-0">Venue:</dt>
+                                  <dt className="text-theme-text-muted w-24 shrink-0">Venue:</dt>
                                   <dd className="text-theme-text-primary flex items-center gap-1">
                                     <MapPin className="w-3 h-3" />
                                     {getVenueLabel(expandedDetail.venue_preference)}
@@ -637,7 +637,7 @@ const EventRequestsTab: React.FC = () => {
                                 </div>
                                 {expandedDetail.venue_address && (
                                   <div className="flex gap-2">
-                                    <dt className="text-theme-text-muted w-24 flex-shrink-0">Address:</dt>
+                                    <dt className="text-theme-text-muted w-24 shrink-0">Address:</dt>
                                     <dd className="text-theme-text-primary">{expandedDetail.venue_address}</dd>
                                   </div>
                                 )}
@@ -772,9 +772,9 @@ const EventRequestsTab: React.FC = () => {
                                       className="w-full flex items-center gap-3 p-2.5 rounded-lg text-left hover:bg-theme-surface transition-colors disabled:opacity-50"
                                     >
                                       {isCompleted ? (
-                                        <CheckSquare className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
+                                        <CheckSquare className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0" />
                                       ) : (
-                                        <Square className="w-5 h-5 text-theme-text-muted flex-shrink-0" />
+                                        <Square className="w-5 h-5 text-theme-text-muted shrink-0" />
                                       )}
                                       <div className="min-w-0">
                                         <span className={`text-sm font-medium ${isCompleted ? 'text-theme-text-muted line-through' : 'text-theme-text-primary'}`}>
@@ -822,7 +822,7 @@ const EventRequestsTab: React.FC = () => {
                                 <select
                                   value={selectedTemplateId}
                                   onChange={(e) => setSelectedTemplateId(e.target.value)}
-                                  className="flex-1 px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                                  className="flex-1 px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                                 >
                                   <option value="">Choose a template...</option>
                                   {emailTemplates.map((tpl) => (
@@ -907,7 +907,7 @@ const EventRequestsTab: React.FC = () => {
                                     type="text"
                                     value={declineReason}
                                     onChange={(e) => setDeclineReason(e.target.value)}
-                                    className="px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                                    className="px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                                     placeholder="Reason for declining..."
                                   />
                                   <button
@@ -1065,9 +1065,9 @@ const EventRequestsTab: React.FC = () => {
                                     }`}
                                   >
                                     {isComment ? (
-                                      <MessageSquare className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                                      <MessageSquare className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
                                     ) : (
-                                      <div className="w-2 h-2 rounded-full bg-theme-text-muted mt-1.5 flex-shrink-0" />
+                                      <div className="w-2 h-2 rounded-full bg-theme-text-muted mt-1.5 shrink-0" />
                                     )}
                                     <div className="min-w-0 flex-1">
                                       {isComment ? (
@@ -1075,7 +1075,7 @@ const EventRequestsTab: React.FC = () => {
                                       ) : (
                                         <p className="text-theme-text-primary">
                                           {entry.new_status && (
-                                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium mr-1 ${STATUS_CONFIG[entry.new_status as EventRequestStatus]?.color || 'bg-gray-100 text-gray-800'}`}>
+                                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-sm text-xs font-medium mr-1 ${STATUS_CONFIG[entry.new_status as EventRequestStatus]?.color || 'bg-gray-100 text-gray-800'}`}>
                                               {STATUS_CONFIG[entry.new_status as EventRequestStatus]?.label || entry.new_status}
                                             </span>
                                           )}
@@ -1130,7 +1130,7 @@ const EventRequestsTab: React.FC = () => {
                                   }
                                 }}
                                 placeholder="Add a comment..."
-                                className="flex-1 px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                                className="flex-1 px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                               />
                               <button
                                 type="button"

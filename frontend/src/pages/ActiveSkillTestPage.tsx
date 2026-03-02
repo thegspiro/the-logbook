@@ -221,7 +221,7 @@ const ScoreCriterion: React.FC<{
             <button
               key={i}
               onClick={() => handleScoreChange(i)}
-              className={`min-w-[3rem] h-12 rounded-xl text-lg font-bold transition-all ${
+              className={`min-w-12 h-12 rounded-xl text-lg font-bold transition-all ${
                 currentScore === i
                   ? isCritical
                     ? i >= passingScore
@@ -481,7 +481,7 @@ const CriterionNotes: React.FC<{
           onChange={(e) => onChange(e.target.value)}
           placeholder="Notes for this criterion..."
           rows={2}
-          className="w-full px-3 py-2 text-sm bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50 resize-none"
+          className="w-full px-3 py-2 text-sm bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50 resize-none"
           autoFocus
         />
       )}
@@ -728,7 +728,7 @@ const ReviewSection: React.FC<{
           onChange={(e) => onNotesChange(e.target.value)}
           placeholder="Add notes for this section..."
           rows={2}
-          className="w-full px-3 py-2 text-sm bg-theme-bg border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted/50 focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50 resize-none"
+          className="w-full px-3 py-2 text-sm bg-theme-bg border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted/50 focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50 resize-none"
         />
       </div>
     </div>
@@ -1102,7 +1102,7 @@ export const ActiveSkillTestPage: React.FC = () => {
     return (
       <div className="min-h-screen flex flex-col">
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-theme-surface/95 backdrop-blur-sm border-b border-theme-surface-border px-4 py-3">
+        <div className="sticky top-0 z-10 bg-theme-surface/95 backdrop-blur-xs border-b border-theme-surface-border px-4 py-3">
           <div className="flex items-center justify-between">
             <button
               onClick={() => navigate(currentTest.is_practice ? '/training/skills-testing' : '/training/admin?page=skills-testing&tab=tests')}
@@ -1135,9 +1135,9 @@ export const ActiveSkillTestPage: React.FC = () => {
               : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
           }`}>
             {currentTest.result === 'pass' ? (
-              <CheckCircle2 className="w-10 h-10 text-green-500 flex-shrink-0" />
+              <CheckCircle2 className="w-10 h-10 text-green-500 shrink-0" />
             ) : (
-              <XCircle className="w-10 h-10 text-red-500 flex-shrink-0" />
+              <XCircle className="w-10 h-10 text-red-500 shrink-0" />
             )}
             <div className="flex-1">
               <p className={`text-lg font-bold ${currentTest.result === 'pass' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
@@ -1220,7 +1220,7 @@ export const ActiveSkillTestPage: React.FC = () => {
         </div>
 
         {/* Bottom bar */}
-        <div className="sticky bottom-0 bg-theme-surface/95 backdrop-blur-sm border-t border-theme-surface-border px-4 py-3 safe-area-inset-bottom">
+        <div className="sticky bottom-0 bg-theme-surface/95 backdrop-blur-xs border-t border-theme-surface-border px-4 py-3 safe-area-inset-bottom">
           {currentTest.is_practice ? (
             <div className="space-y-2">
               <button
@@ -1267,7 +1267,7 @@ export const ActiveSkillTestPage: React.FC = () => {
     return (
       <div className="min-h-screen flex flex-col">
         {/* Review Header */}
-        <div className="sticky top-0 z-10 bg-theme-surface/95 backdrop-blur-sm border-b border-theme-surface-border px-4 py-3">
+        <div className="sticky top-0 z-10 bg-theme-surface/95 backdrop-blur-xs border-b border-theme-surface-border px-4 py-3">
           <div className="flex items-center justify-between">
             <button
               onClick={() => setReviewing(false)}
@@ -1331,7 +1331,7 @@ export const ActiveSkillTestPage: React.FC = () => {
         </div>
 
         {/* Action Bar */}
-        <div className="sticky bottom-0 bg-theme-surface/95 backdrop-blur-sm border-t border-theme-surface-border px-4 py-3 safe-area-inset-bottom">
+        <div className="sticky bottom-0 bg-theme-surface/95 backdrop-blur-xs border-t border-theme-surface-border px-4 py-3 safe-area-inset-bottom">
           {currentTest.is_practice ? (
             <div className="space-y-2">
               <button
@@ -1377,7 +1377,7 @@ export const ActiveSkillTestPage: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Top Bar */}
-      <div className="sticky top-0 z-10 bg-theme-surface/95 backdrop-blur-sm border-b border-theme-surface-border px-4 py-3">
+      <div className="sticky top-0 z-10 bg-theme-surface/95 backdrop-blur-xs border-b border-theme-surface-border px-4 py-3">
         <div className="flex items-center justify-between mb-2">
           <button
             onClick={() => navigate('/training/admin?page=skills-testing&tab=tests')}
@@ -1445,7 +1445,7 @@ export const ActiveSkillTestPage: React.FC = () => {
       </div>
 
       {/* Bottom Navigation Bar */}
-      <div className="sticky bottom-0 bg-theme-surface/95 backdrop-blur-sm border-t border-theme-surface-border px-4 py-3 safe-area-inset-bottom">
+      <div className="sticky bottom-0 bg-theme-surface/95 backdrop-blur-xs border-t border-theme-surface-border px-4 py-3 safe-area-inset-bottom">
         <div className="flex gap-3">
           <button
             onClick={() => setActiveSectionIndex(activeSectionIndex - 1)}

@@ -724,7 +724,7 @@ const EventsSettingsTab: React.FC = () => {
                     void updateLeadTime(val);
                   }
                 }}
-                className="w-20 px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                className="w-20 px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
               />
               <span className="text-sm text-theme-text-muted">
                 days ({Math.floor(settings.request_pipeline.min_lead_time_days / 7)} weeks)
@@ -926,7 +926,7 @@ const EventsSettingsTab: React.FC = () => {
                 <select
                   value={newTemplateTrigger}
                   onChange={(e) => setNewTemplateTrigger(e.target.value)}
-                  className="px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                 >
                   <option value="">Manual send only</option>
                   {Object.entries(TRIGGER_LABELS).map(([key, label]) => (
@@ -963,7 +963,7 @@ const EventsSettingsTab: React.FC = () => {
                   <p className="text-xs text-theme-text-muted mt-0.5">
                     Subject: {tpl.subject}
                     {tpl.trigger && (
-                      <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
+                      <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-sm text-xs bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
                         Auto: {TRIGGER_LABELS[tpl.trigger] || tpl.trigger}
                       </span>
                     )}

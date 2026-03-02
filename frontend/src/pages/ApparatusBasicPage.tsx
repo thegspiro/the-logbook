@@ -200,7 +200,7 @@ export default function ApparatusBasicPage() {
   };
 
   const getTypeInfo = (type: string) => APPARATUS_TYPES.find(t => t.value === type) || APPARATUS_TYPES[APPARATUS_TYPES.length - 1];
-  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring';
+  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
   const labelCls = 'block text-sm font-medium text-theme-text-secondary mb-1';
 
   return (
@@ -222,7 +222,7 @@ export default function ApparatusBasicPage() {
 
       {/* Info Banner */}
       <div className="flex items-start gap-3 p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl">
-        <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+        <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
         <div className="text-sm text-theme-text-secondary">
           <p>Apparatus defined here are available for shift scheduling. Each apparatus includes crew positions that determine how many members are needed to staff it per shift. Enable the full Apparatus module for maintenance tracking, equipment inventory, and more.</p>
         </div>
@@ -265,7 +265,7 @@ export default function ApparatusBasicPage() {
               <div key={apparatus.id} className="bg-theme-surface border border-theme-surface-border rounded-xl p-5 group hover:border-theme-text-muted/30 transition-colors">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center text-lg flex-shrink-0">
+                    <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center text-lg shrink-0">
                       {typeInfo?.icon}
                     </div>
                     <div>
@@ -374,14 +374,14 @@ export default function ApparatusBasicPage() {
                     <div key={i} className="flex items-center gap-2">
                       <span className="text-xs text-theme-text-muted w-6 text-right">{i + 1}.</span>
                       <select value={pos} onChange={e => updatePosition(i, e.target.value)}
-                        className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                       >
                         {POSITION_OPTIONS.map(o => (
                           <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>
                         ))}
                       </select>
                       {form.positions.length > 1 && (
-                        <button onClick={() => removePosition(i)} aria-label="Remove position" className="p-1.5 text-theme-text-muted hover:text-red-500 rounded transition-colors">
+                        <button onClick={() => removePosition(i)} aria-label="Remove position" className="p-1.5 text-theme-text-muted hover:text-red-500 rounded-sm transition-colors">
                           <X className="w-4 h-4" aria-hidden="true" />
                         </button>
                       )}

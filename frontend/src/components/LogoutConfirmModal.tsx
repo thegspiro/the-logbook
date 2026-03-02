@@ -44,7 +44,7 @@ export const LogoutConfirmModal: React.FC<LogoutConfirmModalProps> = ({
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 transition-opacity"
+        className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 transition-opacity"
         onClick={onCancel}
         aria-hidden="true"
       />
@@ -61,7 +61,7 @@ export const LogoutConfirmModal: React.FC<LogoutConfirmModalProps> = ({
           {/* Close button */}
           <button
             onClick={onCancel}
-            className="absolute top-4 right-4 text-theme-text-muted hover:text-theme-text-primary transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 focus:ring-offset-[var(--ring-offset-bg)] rounded"
+            className="absolute top-4 right-4 text-theme-text-muted hover:text-theme-text-primary transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) rounded-sm"
             aria-label="Close dialog"
           >
             <X className="w-5 h-5" aria-hidden="true" />
@@ -92,13 +92,13 @@ export const LogoutConfirmModal: React.FC<LogoutConfirmModalProps> = ({
           <div className="flex space-x-3">
             <button
               onClick={onCancel}
-              className="flex-1 px-4 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-theme-focus-ring transition-colors"
+              className="flex-1 px-4 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={onConfirm}
-              className="btn-primary flex-1 focus:ring-offset-[var(--ring-offset-bg)] font-medium rounded-md text-sm"
+              className="btn-primary flex-1 focus:ring-offset-(--ring-offset-bg) font-medium rounded-md text-sm"
               autoFocus
             >
               Logout

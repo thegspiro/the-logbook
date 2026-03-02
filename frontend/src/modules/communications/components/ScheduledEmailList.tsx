@@ -134,7 +134,7 @@ const ScheduledEmailList: React.FC = () => {
                 <button
                   onClick={() => void handleCancel(email.id)}
                   disabled={isSaving}
-                  className="rounded p-1 text-red-500 hover:bg-red-50 disabled:opacity-50 dark:hover:bg-red-900/20"
+                  className="rounded-sm p-1 text-red-500 hover:bg-red-50 disabled:opacity-50 dark:hover:bg-red-900/20"
                   title="Cancel"
                 >
                   <Trash2 className="h-4 w-4" />

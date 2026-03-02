@@ -141,7 +141,7 @@ function LocationSetupWizard({
   const [isSaving, setIsSaving] = useState(false);
   const [roomForm, setRoomForm] = useState<WizardRoom>({ name: '', room_number: '', floor: '', capacity: '' });
 
-  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring';
+  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
   const labelCls = 'block text-sm font-medium text-theme-text-secondary mb-1';
 
   /* ── Step navigation ── */
@@ -338,7 +338,7 @@ function LocationSetupWizard({
                   onClick={() => { void handleModeSelect('single_station'); }}
                   className="flex items-center gap-4 p-4 bg-theme-surface-hover border-2 border-theme-surface-border rounded-xl hover:border-red-500/50 transition-all text-left group"
                 >
-                  <div className="w-12 h-12 rounded-xl bg-theme-surface flex items-center justify-center flex-shrink-0 group-hover:bg-red-500/10 transition-colors">
+                  <div className="w-12 h-12 rounded-xl bg-theme-surface flex items-center justify-center shrink-0 group-hover:bg-red-500/10 transition-colors">
                     <Building className="w-6 h-6 text-theme-text-muted group-hover:text-red-500 transition-colors" />
                   </div>
                   <div>
@@ -352,7 +352,7 @@ function LocationSetupWizard({
                   onClick={() => { void handleModeSelect('multi_station'); }}
                   className="flex items-center gap-4 p-4 bg-theme-surface-hover border-2 border-theme-surface-border rounded-xl hover:border-red-500/50 transition-all text-left group"
                 >
-                  <div className="w-12 h-12 rounded-xl bg-theme-surface flex items-center justify-center flex-shrink-0 group-hover:bg-red-500/10 transition-colors">
+                  <div className="w-12 h-12 rounded-xl bg-theme-surface flex items-center justify-center shrink-0 group-hover:bg-red-500/10 transition-colors">
                     <Building2 className="w-6 h-6 text-theme-text-muted group-hover:text-red-500 transition-colors" />
                   </div>
                   <div>
@@ -738,7 +738,7 @@ function RoomCard({ room, onEdit, onDelete }: { room: Location; onEdit: (r: Loca
     <div className="flex flex-col p-3 bg-theme-surface border border-theme-surface-border rounded-lg group">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 min-w-0">
-          <DoorOpen className="w-4 h-4 text-theme-text-muted flex-shrink-0" />
+          <DoorOpen className="w-4 h-4 text-theme-text-muted shrink-0" />
           <div className="min-w-0">
             <p className="text-sm font-medium text-theme-text-primary truncate">
               {room.name}{room.room_number ? ` #${room.room_number}` : ''}
@@ -750,14 +750,14 @@ function RoomCard({ room, onEdit, onDelete }: { room: Location; onEdit: (r: Loca
         </div>
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           {kioskUrl && (
-            <button onClick={() => setShowQR(prev => !prev)} aria-label="Toggle QR code" className="p-1 text-theme-text-muted hover:text-blue-500 rounded transition-colors" title="Show QR code">
+            <button onClick={() => setShowQR(prev => !prev)} aria-label="Toggle QR code" className="p-1 text-theme-text-muted hover:text-blue-500 rounded-sm transition-colors" title="Show QR code">
               <QrCode className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
           )}
-          <button onClick={() => onEdit(room)} aria-label="Edit room" className="p-1 text-theme-text-muted hover:text-theme-text-primary rounded transition-colors">
+          <button onClick={() => onEdit(room)} aria-label="Edit room" className="p-1 text-theme-text-muted hover:text-theme-text-primary rounded-sm transition-colors">
             <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
-          <button onClick={() => onDelete(room)} aria-label="Delete room" className="p-1 text-theme-text-muted hover:text-red-500 rounded transition-colors">
+          <button onClick={() => onDelete(room)} aria-label="Delete room" className="p-1 text-theme-text-muted hover:text-red-500 rounded-sm transition-colors">
             <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
         </div>
@@ -1015,7 +1015,7 @@ export default function LocationsPage() {
     }
   };
 
-  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring';
+  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
   const labelCls = 'block text-sm font-medium text-theme-text-secondary mb-1';
 
   const isSingleStation = stationMode === 'single_station';
@@ -1122,7 +1122,7 @@ export default function LocationsPage() {
 
       {/* Info Banner */}
       <div className="flex items-start gap-3 p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl">
-        <QrCode className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+        <QrCode className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
         <div className="text-sm text-theme-text-secondary">
           {isSingleStation ? (
             <p>Set up your station address and rooms. These are used for event scheduling, meeting rooms, training sessions, and QR code check-in. Since you operate from a single location, members will be automatically associated with this station.</p>
@@ -1168,14 +1168,14 @@ export default function LocationsPage() {
               <div key={station.id} className="bg-theme-surface border border-theme-surface-border rounded-xl overflow-hidden">
                 {/* Station Header */}
                 <div className="flex items-center gap-4 p-5">
-                  <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
                     <Building2 className="w-5 h-5 text-red-500" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="text-lg font-semibold text-theme-text-primary">{station.name}</h3>
                     {address && (
                       <p className="flex items-center gap-1.5 text-sm text-theme-text-secondary mt-0.5">
-                        <MapPin className="w-3.5 h-3.5 flex-shrink-0" /> {address}
+                        <MapPin className="w-3.5 h-3.5 shrink-0" /> {address}
                       </p>
                     )}
                     {station.description && (

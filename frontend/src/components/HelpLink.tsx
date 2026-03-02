@@ -82,7 +82,7 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
       <div className="relative inline-block">
         <button
           onClick={handleClick}
-          className="text-theme-text-muted hover:text-theme-text-primary transition-colors p-1 rounded focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+          className="text-theme-text-muted hover:text-theme-text-primary transition-colors p-1 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
           aria-label={`Help: ${topic}`}
           type="button"
         >
@@ -97,7 +97,7 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
                 <p>{tooltip}</p>
                 <button
                   onClick={() => setShowTooltip(false)}
-                  className="text-theme-text-muted hover:text-theme-text-primary flex-shrink-0"
+                  className="text-theme-text-muted hover:text-theme-text-primary shrink-0"
                   aria-label="Close help"
                 >
                   <X className="w-4 h-4" aria-hidden="true" />
@@ -126,7 +126,7 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
         href={getDocUrl()}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center space-x-2 px-3 py-1.5 bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary text-sm rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+        className="inline-flex items-center space-x-2 px-3 py-1.5 bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary text-sm rounded-md transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
       >
         <HelpCircle className="w-4 h-4" aria-hidden="true" />
         <span>{label}</span>
@@ -142,7 +142,7 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
         href={getDocUrl()}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center space-x-1 text-cyan-700 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring rounded"
+        className="inline-flex items-center space-x-1 text-cyan-700 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 text-sm transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-sm"
       >
         <HelpCircle className="w-4 h-4" aria-hidden="true" />
         <span>{label}</span>

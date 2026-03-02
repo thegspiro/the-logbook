@@ -248,7 +248,7 @@ const AddMember: React.FC = () => {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <header className="bg-theme-input-bg backdrop-blur-sm border-b border-theme-surface-border px-6 py-4">
+      <header className="bg-theme-input-bg backdrop-blur-xs border-b border-theme-surface-border px-6 py-4">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -290,7 +290,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('firstName', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.firstName ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring`}
                   placeholder="John"
                 />
                 {errors.firstName && (
@@ -321,7 +321,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('lastName', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.lastName ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring`}
                   placeholder="Doe"
                 />
                 {errors.lastName && (
@@ -341,7 +341,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('membershipNumber', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.membershipNumber ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring`}
                   placeholder="FF-001"
                 />
                 {errors.membershipNumber && (
@@ -373,7 +373,7 @@ const AddMember: React.FC = () => {
                     type="text"
                     value={membershipIdOverride}
                     onChange={(e) => setMembershipIdOverride(e.target.value)}
-                    className="flex-1 max-w-xs px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="flex-1 max-w-xs px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                     placeholder={membershipIdPreview}
                   />
                   <span className="text-sm text-theme-text-muted">
@@ -408,7 +408,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('street', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.street ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring`}
                   placeholder="123 Main Street"
                 />
                 {errors.street && (
@@ -427,7 +427,7 @@ const AddMember: React.FC = () => {
                     onChange={(e) => handleInputChange('city', e.target.value)}
                     className={`w-full px-4 py-2 bg-theme-input-bg border ${
                       errors.city ? 'border-red-500' : 'border-theme-input-border'
-                    } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring`}
+                    } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring`}
                     placeholder="Springfield"
                   />
                   {errors.city && (
@@ -445,7 +445,7 @@ const AddMember: React.FC = () => {
                     onChange={(e) => handleInputChange('state', e.target.value)}
                     className={`w-full px-4 py-2 bg-theme-input-bg border ${
                       errors.state ? 'border-red-500' : 'border-theme-input-border'
-                    } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring`}
+                    } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring`}
                     placeholder="IL"
                     maxLength={2}
                   />
@@ -464,7 +464,7 @@ const AddMember: React.FC = () => {
                     onChange={(e) => handleInputChange('zipCode', e.target.value)}
                     className={`w-full px-4 py-2 bg-theme-input-bg border ${
                       errors.zipCode ? 'border-red-500' : 'border-theme-input-border'
-                    } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring`}
+                    } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring`}
                     placeholder="62701"
                   />
                   {errors.zipCode && (
@@ -493,7 +493,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('primaryPhone', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.primaryPhone ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring`}
                   placeholder="(555) 123-4567"
                 />
                 {errors.primaryPhone && (
@@ -524,7 +524,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('email', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.email ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring`}
                   placeholder="john.doe@example.com"
                 />
                 {errors.email && (
@@ -604,7 +604,7 @@ const AddMember: React.FC = () => {
                         }}
                         className={`w-full px-4 py-2 pr-10 bg-theme-input-bg border ${
                           errors.password ? 'border-red-500' : 'border-theme-input-border'
-                        } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring`}
+                        } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring`}
                         placeholder="Minimum 12 characters"
                         autoComplete="new-password"
                       />
@@ -636,7 +636,7 @@ const AddMember: React.FC = () => {
                       }}
                       className={`w-full px-4 py-2 bg-theme-input-bg border ${
                         errors.confirmPassword ? 'border-red-500' : 'border-theme-input-border'
-                      } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring`}
+                      } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring`}
                       placeholder="Re-enter password"
                       autoComplete="new-password"
                     />
@@ -773,7 +773,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('emergencyName1', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.emergencyName1 ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring`}
                   placeholder="Jane Doe"
                 />
                 {errors.emergencyName1 && (
@@ -791,7 +791,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('emergencyRelationship1', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.emergencyRelationship1 ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring`}
                   placeholder="Spouse"
                 />
                 {errors.emergencyRelationship1 && (
@@ -809,7 +809,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('emergencyPhone1', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.emergencyPhone1 ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring`}
                   placeholder="(555) 123-4567"
                 />
                 {errors.emergencyPhone1 && (
@@ -910,7 +910,7 @@ const AddMember: React.FC = () => {
             <button
               type="submit"
               disabled={isSaving}
-              className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white rounded-lg transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center space-x-2 px-6 py-3 bg-linear-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white rounded-lg transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSaving ? (
                 <>

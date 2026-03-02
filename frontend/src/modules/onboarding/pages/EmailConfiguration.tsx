@@ -238,7 +238,7 @@ const EmailConfiguration: React.FC = () => {
             {/* OAuth vs App Password Toggle */}
             <div className="alert-info mb-6">
               <div className="flex items-start space-x-3 mb-4">
-                <AlertCircle aria-hidden="true" className="w-5 h-5 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
+                <AlertCircle aria-hidden="true" className="w-5 h-5 text-theme-alert-info-icon shrink-0 mt-0.5" />
                 <div>
                   <p className="text-theme-alert-info-title text-sm font-medium mb-1">
                     Choose Authentication Method
@@ -378,7 +378,7 @@ const EmailConfiguration: React.FC = () => {
           <>
             <div className="alert-info mb-6">
               <div className="flex items-start space-x-3">
-                <AlertCircle aria-hidden="true" className="w-5 h-5 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
+                <AlertCircle aria-hidden="true" className="w-5 h-5 text-theme-alert-info-icon shrink-0 mt-0.5" />
                 <div>
                   <p className="text-theme-alert-info-title text-sm font-medium mb-1">
                     Microsoft 365 / Azure AD Setup
@@ -543,7 +543,7 @@ const EmailConfiguration: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
+    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
       <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} icon={<Mail aria-hidden="true" className="w-6 h-6 text-white" />} />
 
       {/* Main Content */}
@@ -661,7 +661,7 @@ const EmailConfiguration: React.FC = () => {
             <button
               onClick={() => { void handleContinue(); }}
               disabled={isSaving}
-              className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white rounded-lg font-semibold transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              className="flex-1 px-6 py-3 bg-linear-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white rounded-lg font-semibold transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
             >
               {isSaving ? 'Saving Securely...' : 'Continue'}
             </button>
@@ -676,7 +676,7 @@ const EmailConfiguration: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <footer className="bg-theme-nav-bg backdrop-blur-sm border-t border-theme-nav-border px-6 py-4">
+      <footer className="bg-theme-nav-bg backdrop-blur-xs border-t border-theme-nav-border px-6 py-4">
         <div className="max-w-7xl mx-auto text-center">
           <p className="text-theme-text-secondary text-sm">
             © {currentYear} {departmentName}. All rights reserved.

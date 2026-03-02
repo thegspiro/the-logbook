@@ -127,7 +127,7 @@ const ModuleOverview: React.FC = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
+    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
       <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} icon={<Mail aria-hidden="true" className="w-6 h-6 text-white" />} />
 
       <main className="flex-1 p-4 py-8">
@@ -168,7 +168,7 @@ const ModuleOverview: React.FC = () => {
               disabled={isSaving || enabledCount === 0}
               className={`px-6 py-2 rounded-lg font-semibold transition-all ${
                 enabledCount > 0 && !isSaving
-                  ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white'
+                  ? 'bg-linear-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white'
                   : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
             >
@@ -199,7 +199,7 @@ const ModuleOverview: React.FC = () => {
                 return (
                   <div
                     key={module.id}
-                    className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border-2 border-red-500/30 hover:border-red-500/50 transition-all"
+                    className="bg-theme-surface backdrop-blur-xs rounded-lg p-6 border-2 border-red-500/30 hover:border-red-500/50 transition-all"
                   >
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center space-x-3">
@@ -319,7 +319,7 @@ const ModuleOverview: React.FC = () => {
                 return (
                   <div
                     key={module.id}
-                    className="card-secondary backdrop-blur-sm hover:border-theme-surface-hover p-5 transition-all"
+                    className="card-secondary backdrop-blur-xs hover:border-theme-surface-hover p-5 transition-all"
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center space-x-2">
@@ -359,7 +359,7 @@ const ModuleOverview: React.FC = () => {
         </div>
       </main>
 
-      <footer className="bg-theme-nav-bg backdrop-blur-sm border-t border-theme-nav-border px-6 py-4">
+      <footer className="bg-theme-nav-bg backdrop-blur-xs border-t border-theme-nav-border px-6 py-4">
         <div className="max-w-7xl mx-auto text-center">
           <p className="text-theme-text-secondary text-sm">© {currentYear} {departmentName}. All rights reserved.</p>
           <p className="text-theme-text-muted text-xs mt-1">Powered by The Logbook</p>
