@@ -80,7 +80,7 @@ const ModuleConfigTemplate: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to p-4 py-8 relative">
+    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to p-4 py-8 relative">
       <ThemeToggle className="absolute top-4 right-4" />
       <div className="max-w-4xl w-full mx-auto">
         {/* Header */}
@@ -103,7 +103,7 @@ const ModuleConfigTemplate: React.FC = () => {
         {/* Two-Tier Permission Model Explanation */}
         <div className="alert-info mb-6">
           <div className="flex items-start">
-            <Info aria-hidden="true" className="w-5 h-5 text-theme-alert-info-icon mt-0.5 mr-3 flex-shrink-0" />
+            <Info aria-hidden="true" className="w-5 h-5 text-theme-alert-info-icon mt-0.5 mr-3 shrink-0" />
             <div>
               <p className="text-theme-alert-info-title font-semibold mb-1">How Permissions Work</p>
               <p className="text-theme-text-secondary text-sm">
@@ -117,7 +117,7 @@ const ModuleConfigTemplate: React.FC = () => {
 
         <div className="grid md:grid-cols-2 gap-6 mb-6">
           {/* View Access Card */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-alert-success-border">
+          <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6 border border-theme-alert-success-border">
             <div className="flex items-center mb-4">
               <div className="w-12 h-12 bg-green-600 rounded-lg flex items-center justify-center mr-4">
                 <Eye aria-hidden="true" className="w-6 h-6 text-white" />
@@ -133,7 +133,7 @@ const ModuleConfigTemplate: React.FC = () => {
               <ul className="space-y-2">
                 {config?.permissions.view.map((perm, idx) => (
                   <li key={idx} className="flex items-center text-theme-text-secondary text-sm">
-                    <CheckCircle aria-hidden="true" className="w-4 h-4 text-theme-accent-green mr-2 flex-shrink-0" />
+                    <CheckCircle aria-hidden="true" className="w-4 h-4 text-theme-accent-green mr-2 shrink-0" />
                     {perm}
                   </li>
                 ))}
@@ -146,7 +146,7 @@ const ModuleConfigTemplate: React.FC = () => {
           </div>
 
           {/* Manage Access Card */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-alert-warning-border">
+          <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6 border border-theme-alert-warning-border">
             <div className="flex items-center mb-4">
               <div className="w-12 h-12 bg-orange-600 rounded-lg flex items-center justify-center mr-4">
                 <Edit3 aria-hidden="true" className="w-6 h-6 text-white" />
@@ -162,7 +162,7 @@ const ModuleConfigTemplate: React.FC = () => {
               <ul className="space-y-2">
                 {config?.permissions.manage.map((perm, idx) => (
                   <li key={idx} className="flex items-center text-theme-text-secondary text-sm">
-                    <Shield aria-hidden="true" className="w-4 h-4 text-theme-accent-orange mr-2 flex-shrink-0" />
+                    <Shield aria-hidden="true" className="w-4 h-4 text-theme-accent-orange mr-2 shrink-0" />
                     {perm}
                   </li>
                 ))}
@@ -243,7 +243,7 @@ const ModuleConfigTemplate: React.FC = () => {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 px-6 py-3 bg-linear-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? 'Saving...' : 'Save Permissions'}
           </button>

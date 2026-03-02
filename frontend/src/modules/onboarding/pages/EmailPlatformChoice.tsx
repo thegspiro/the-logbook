@@ -116,7 +116,7 @@ const EmailPlatformChoice: React.FC = () => {
   const selectedPlatformData = platforms.find(p => p.id === emailPlatform);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
+    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
       <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} icon={<Mail aria-hidden="true" className="w-6 h-6 text-white" />} />
 
       {/* Main Content */}
@@ -150,7 +150,7 @@ const EmailPlatformChoice: React.FC = () => {
               <button
                 key={platform.id}
                 onClick={() => setEmailPlatform(platform.id)}
-                className={`group relative bg-theme-surface backdrop-blur-sm rounded-lg border-2 transition-all duration-300 text-left ${
+                className={`group relative bg-theme-surface backdrop-blur-xs rounded-lg border-2 transition-all duration-300 text-left ${
                   emailPlatform === platform.id
                     ? 'border-theme-accent-red shadow-lg'
                     : 'border-theme-surface-border hover:border-theme-accent-red'
@@ -164,7 +164,7 @@ const EmailPlatformChoice: React.FC = () => {
                     <div
                       className={`w-16 h-16 rounded-lg flex items-center justify-center transition-all ${
                         emailPlatform === platform.id
-                          ? `bg-gradient-to-br ${platform.color} text-white`
+                          ? `bg-linear-to-br ${platform.color} text-white`
                           : 'bg-theme-surface text-theme-text-muted group-hover:bg-theme-surface-hover'
                       }`}
                     >
@@ -184,7 +184,7 @@ const EmailPlatformChoice: React.FC = () => {
                   <ul className="space-y-2 text-sm text-theme-text-secondary mb-4">
                     {platform.features.map((feature, index) => (
                       <li key={index} className="flex items-start">
-                        <span className="text-theme-accent-green mr-2 flex-shrink-0">✓</span>
+                        <span className="text-theme-accent-green mr-2 shrink-0">✓</span>
                         <span>{feature}</span>
                       </li>
                     ))}
@@ -194,7 +194,7 @@ const EmailPlatformChoice: React.FC = () => {
                   {platform.setupInfo && (
                     <div className="bg-theme-surface-secondary rounded-lg p-3 border border-theme-input-border">
                       <div className="flex items-start space-x-2">
-                        <Info aria-hidden="true" className="w-4 h-4 text-theme-accent-blue flex-shrink-0 mt-0.5" />
+                        <Info aria-hidden="true" className="w-4 h-4 text-theme-accent-blue shrink-0 mt-0.5" />
                         <p className="text-xs text-theme-text-muted">
                           {platform.setupInfo}
                         </p>
@@ -229,7 +229,7 @@ const EmailPlatformChoice: React.FC = () => {
           {selectedPlatformData && selectedPlatformData.id !== 'other' && (
             <div className="alert-info mb-8">
               <div className="flex items-start space-x-3">
-                <Info aria-hidden="true" className="w-5 h-5 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
+                <Info aria-hidden="true" className="w-5 h-5 text-theme-alert-info-icon shrink-0 mt-0.5" />
                 <div>
                   <p className="text-theme-alert-info-title text-sm font-medium mb-1">
                     Next Step
@@ -250,7 +250,7 @@ const EmailPlatformChoice: React.FC = () => {
               disabled={!emailPlatform}
               className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                 emailPlatform
-                  ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
+                  ? 'bg-linear-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
                   : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
@@ -276,7 +276,7 @@ const EmailPlatformChoice: React.FC = () => {
       </main>
 
       {/* Footer with Department Name and Copyright */}
-      <footer className="bg-theme-nav-bg backdrop-blur-sm border-t border-theme-nav-border px-6 py-4">
+      <footer className="bg-theme-nav-bg backdrop-blur-xs border-t border-theme-nav-border px-6 py-4">
         <div className="max-w-7xl mx-auto text-center">
           <p className="text-theme-text-secondary text-sm">
             © {currentYear} {departmentName}. All rights reserved.

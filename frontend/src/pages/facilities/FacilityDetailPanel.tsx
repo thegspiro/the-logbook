@@ -145,7 +145,7 @@ export default function FacilityDetailPanel({
 
   const address = [facility.address_line1, facility.city, facility.state, facility.zip_code].filter(Boolean).join(', ');
 
-  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring';
+  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
   const labelCls = 'block text-xs font-medium text-theme-text-muted mb-1';
 
   return (
@@ -216,7 +216,7 @@ export default function FacilityDetailPanel({
         <div className="space-y-4">
           {address && (
             <div className="flex items-start gap-2 text-sm text-theme-text-secondary">
-              <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
+              <MapPin className="w-4 h-4 mt-0.5 shrink-0" />
               <span>{address}{facility.address_line2 ? `, ${facility.address_line2}` : ''}</span>
             </div>
           )}

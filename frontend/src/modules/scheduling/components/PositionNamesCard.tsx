@@ -83,7 +83,7 @@ export const PositionNamesCard: React.FC<PositionNamesCardProps> = ({
                 type="checkbox"
                 checked={settings.enabledPositions.includes(pos.value)}
                 onChange={() => togglePosition(pos.value)}
-                className="rounded border-theme-input-border"
+                className="rounded-sm border-theme-input-border"
               />
               <span className="text-sm text-theme-text-primary">
                 {pos.label}
@@ -110,18 +110,18 @@ export const PositionNamesCard: React.FC<PositionNamesCardProps> = ({
                     type="checkbox"
                     checked={settings.enabledPositions.includes(cp.value)}
                     onChange={() => togglePosition(cp.value)}
-                    className="rounded border-theme-input-border"
+                    className="rounded-sm border-theme-input-border"
                   />
                   <span className="text-sm text-theme-text-primary">
                     {cp.label}
                   </span>
-                  <span className="text-[10px] text-theme-text-muted bg-theme-surface-hover px-1.5 py-0.5 rounded">
+                  <span className="text-[10px] text-theme-text-muted bg-theme-surface-hover px-1.5 py-0.5 rounded-sm">
                     {cp.value}
                   </span>
                 </div>
                 <button
                   onClick={() => removeCustomPosition(cp.value)}
-                  className="p-1 text-red-500 hover:bg-red-500/10 rounded"
+                  className="p-1 text-red-500 hover:bg-red-500/10 rounded-sm"
                   title="Remove custom position"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -148,7 +148,7 @@ export const PositionNamesCard: React.FC<PositionNamesCardProps> = ({
               );
             }}
             placeholder="Display name (e.g., Tillerman)"
-            className="flex-1 px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder-theme-text-muted"
+            className="flex-1 px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-violet-500 placeholder-theme-text-muted"
           />
           <button
             onClick={addCustomPosition}
@@ -156,7 +156,7 @@ export const PositionNamesCard: React.FC<PositionNamesCardProps> = ({
               !newPositionLabel.trim() ||
               allPositionOptions.some((p) => p.value === newPositionValue)
             }
-            className="px-4 py-2 text-sm bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+            className="px-4 py-2 text-sm bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
           >
             Add Position
           </button>
@@ -164,7 +164,7 @@ export const PositionNamesCard: React.FC<PositionNamesCardProps> = ({
         {newPositionLabel.trim() && (
           <p className="text-[10px] text-theme-text-muted mt-1">
             Internal key:{" "}
-            <code className="bg-theme-surface-hover px-1 py-0.5 rounded">
+            <code className="bg-theme-surface-hover px-1 py-0.5 rounded-sm">
               {newPositionValue}
             </code>
             {allPositionOptions.some((p) => p.value === newPositionValue) && (

@@ -203,7 +203,7 @@ const SubmissionViewer = ({
   if (error) {
     return (
       <div className="p-4 rounded-lg flex items-center gap-2 bg-red-500/10 border border-red-500/30">
-        <AlertCircle className="w-4 h-4 text-red-700 dark:text-red-400 flex-shrink-0" />
+        <AlertCircle className="w-4 h-4 text-red-700 dark:text-red-400 shrink-0" />
         <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
         {formId && (
           <button onClick={() => { void loadData(); }} className="ml-auto text-xs text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 underline">Retry</button>
@@ -266,16 +266,16 @@ const SubmissionViewer = ({
                 className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-theme-surface-secondary transition-colors"
               >
                 {isExpanded ? (
-                  <ChevronDown className="w-4 h-4 text-theme-text-muted flex-shrink-0" />
+                  <ChevronDown className="w-4 h-4 text-theme-text-muted shrink-0" />
                 ) : (
-                  <ChevronRight className="w-4 h-4 text-theme-text-muted flex-shrink-0" />
+                  <ChevronRight className="w-4 h-4 text-theme-text-muted shrink-0" />
                 )}
 
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   {sub.is_public_submission ? (
-                    <Globe className="w-4 h-4 text-cyan-700 dark:text-cyan-400 flex-shrink-0" />
+                    <Globe className="w-4 h-4 text-cyan-700 dark:text-cyan-400 shrink-0" />
                   ) : (
-                    <User className="w-4 h-4 text-theme-text-muted flex-shrink-0" />
+                    <User className="w-4 h-4 text-theme-text-muted shrink-0" />
                   )}
                   <span className="text-sm text-theme-text-primary truncate">
                     {sub.submitter_name || sub.submitted_by || 'Anonymous'}
@@ -290,19 +290,19 @@ const SubmissionViewer = ({
                   const allOk = results.every((r) => r.success === true);
                   const anyFailed = results.some((r) => r.success === false);
                   return anyFailed ? (
-                    <span className="flex items-center gap-1 text-[11px] text-red-700 dark:text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full flex-shrink-0" title="Integration failed">
+                    <span className="flex items-center gap-1 text-[11px] text-red-700 dark:text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full shrink-0" title="Integration failed">
                       <XCircle className="w-3 h-3" />
                       Failed
                     </span>
                   ) : allOk ? (
-                    <span className="flex items-center gap-1 text-[11px] text-green-700 dark:text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full flex-shrink-0" title="Integration succeeded">
+                    <span className="flex items-center gap-1 text-[11px] text-green-700 dark:text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full shrink-0" title="Integration succeeded">
                       <CheckCircle2 className="w-3 h-3" />
                       Synced
                     </span>
                   ) : null;
                 })()}
 
-                <div className="flex items-center gap-1.5 text-xs text-theme-text-muted flex-shrink-0">
+                <div className="flex items-center gap-1.5 text-xs text-theme-text-muted shrink-0">
                   <Clock className="w-3 h-3" />
                   {formatShortDateTime(sub.submitted_at, tz)}
                 </div>
@@ -315,7 +315,7 @@ const SubmissionViewer = ({
                     {Object.entries(sub.data).map(([fieldId, value]) => (
                       <div key={fieldId} className="bg-theme-surface-secondary rounded-lg px-3 py-2">
                         <p className="text-xs text-theme-text-muted font-medium mb-0.5">{getFieldLabel(fieldId)}</p>
-                        <p className="text-sm text-theme-text-primary break-words">{formatValue(fieldId, value)}</p>
+                        <p className="text-sm text-theme-text-primary wrap-break-word">{formatValue(fieldId, value)}</p>
                       </div>
                     ))}
                   </div>
@@ -340,9 +340,9 @@ const SubmissionViewer = ({
                           >
                             <div className="flex items-center gap-2 mb-1">
                               {succeeded ? (
-                                <CheckCircle2 className="w-3.5 h-3.5 text-green-700 dark:text-green-400 flex-shrink-0" />
+                                <CheckCircle2 className="w-3.5 h-3.5 text-green-700 dark:text-green-400 shrink-0" />
                               ) : (
-                                <XCircle className="w-3.5 h-3.5 text-red-700 dark:text-red-400 flex-shrink-0" />
+                                <XCircle className="w-3.5 h-3.5 text-red-700 dark:text-red-400 shrink-0" />
                               )}
                               <span className={`text-xs font-medium capitalize ${
                                 succeeded ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'

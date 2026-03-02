@@ -85,7 +85,7 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
                 placeholder="e.g., Website Integration Key"
                 required
                 aria-required="true"
-                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
               />
               <p className="text-xs text-theme-text-muted mt-1">
                 A descriptive name to identify this API key
@@ -108,7 +108,7 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
                   rate_limit: e.target.value ? parseInt(e.target.value) : undefined
                 })}
                 placeholder="Leave blank for default (1000)"
-                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
               />
               <p className="text-xs text-theme-text-muted mt-1">
                 Optional: Override the default rate limit for this key
@@ -129,7 +129,7 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
                   ...formData,
                   expires_at: e.target.value || undefined
                 })}
-                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
               />
               <p className="text-xs text-theme-text-muted mt-1">
                 Optional: Set when this key should expire
@@ -194,7 +194,7 @@ const KeyDisplayModal: React.FC<KeyDisplayModalProps> = ({ isOpen, apiKey, onClo
         {/* Warning Banner */}
         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
           <div className="flex">
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                 <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
               </svg>
@@ -216,7 +216,7 @@ const KeyDisplayModal: React.FC<KeyDisplayModalProps> = ({ isOpen, apiKey, onClo
             </code>
             <button
               onClick={copyToClipboard}
-              className="btn-info rounded ml-4 px-3 py-1 text-sm flex-shrink-0"
+              className="btn-info rounded-sm ml-4 px-3 py-1 text-sm shrink-0"
               aria-label={copied ? 'Copied to clipboard' : 'Copy API key to clipboard'}
             >
               {copied ? (
@@ -237,10 +237,10 @@ const KeyDisplayModal: React.FC<KeyDisplayModalProps> = ({ isOpen, apiKey, onClo
         <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
           <h4 className="text-sm font-semibold text-blue-900 mb-2">Usage Instructions</h4>
           <p className="text-sm text-blue-800 mb-2">
-            Include this API key in the <code className="bg-blue-100 px-1 py-0.5 rounded">X-API-Key</code> header
+            Include this API key in the <code className="bg-blue-100 px-1 py-0.5 rounded-sm">X-API-Key</code> header
             when making requests to the public API:
           </p>
-          <pre className="bg-blue-100 p-2 rounded text-xs overflow-x-auto">
+          <pre className="bg-blue-100 p-2 rounded-sm text-xs overflow-x-auto">
 {`curl -H "X-API-Key: ${apiKey}" \\
   https://your-domain.com/api/public/v1/organization/info`}
           </pre>
@@ -333,12 +333,12 @@ export const APIKeysTab: React.FC = () => {
 
   const getStatusBadge = (key: PublicPortalAPIKey) => {
     if (!key.is_active) {
-      return <span className="px-2 py-1 text-xs font-semibold rounded bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400">Revoked</span>;
+      return <span className="px-2 py-1 text-xs font-semibold rounded-sm bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400">Revoked</span>;
     }
     if (key.is_expired) {
-      return <span className="px-2 py-1 text-xs font-semibold rounded bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400">Expired</span>;
+      return <span className="px-2 py-1 text-xs font-semibold rounded-sm bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400">Expired</span>;
     }
-    return <span className="px-2 py-1 text-xs font-semibold rounded bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400">Active</span>;
+    return <span className="px-2 py-1 text-xs font-semibold rounded-sm bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400">Active</span>;
   };
 
   if (loading) {
@@ -431,7 +431,7 @@ export const APIKeysTab: React.FC = () => {
                     <div className="text-sm font-medium text-theme-text-primary">{key.name}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <code className="text-xs font-mono bg-theme-surface-secondary px-2 py-1 rounded">
+                    <code className="text-xs font-mono bg-theme-surface-secondary px-2 py-1 rounded-sm">
                       {key.key_prefix}...
                     </code>
                   </td>

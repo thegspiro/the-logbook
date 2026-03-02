@@ -333,12 +333,27 @@ class MembershipPipelineService:
         if not pipeline:
             return None
 
-        step_map = {s.id: s for s in pipeline.steps}
+        # Use individual UPDATE statements instead of ORM attribute mutation
+        # to avoid stale session state issues with the double-commit pattern
+        # in get_session().
         for i, step_id in enumerate(step_ids):
-            if step_id in step_map:
-                step_map[step_id].sort_order = i
+            await self.db.execute(
+                update(MembershipPipelineStep)
+                .where(
+                    and_(
+                        MembershipPipelineStep.id == step_id,
+                        MembershipPipelineStep.pipeline_id == pipeline_id,
+                    )
+                )
+                .values(sort_order=i)
+            )
 
-        await self.db.commit()
+        await self.db.flush()
+
+        # Expire stale ORM objects so the re-fetch gets fresh data
+        for step in pipeline.steps:
+            await self.db.refresh(step, ["sort_order"])
+
         return sorted(pipeline.steps, key=lambda s: s.sort_order)
 
     # =========================================================================

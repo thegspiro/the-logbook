@@ -20,7 +20,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
   );
 
   return (
-    <div className="bg-theme-surface shadow overflow-hidden sm:rounded-lg">
+    <div className="bg-theme-surface shadow-sm overflow-hidden sm:rounded-lg">
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-theme-surface-border" aria-label="Organization members">
           <thead className="bg-theme-surface-secondary">
@@ -85,7 +85,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
                   <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
                     <Link to={`/members/${member.id}`} className="flex items-center group">
                       {member.photo_url ? (
-                        <div className="flex-shrink-0 h-10 w-10">
+                        <div className="shrink-0 h-10 w-10">
                           <img
                             className="h-10 w-10 rounded-full"
                             src={member.photo_url}
@@ -93,7 +93,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
                           />
                         </div>
                       ) : (
-                        <div className="flex-shrink-0 h-10 w-10 rounded-full bg-theme-surface-secondary flex items-center justify-center">
+                        <div className="shrink-0 h-10 w-10 rounded-full bg-theme-surface-secondary flex items-center justify-center">
                           <span className="text-theme-text-muted font-medium">
                             {(member.first_name?.[0] ?? member.username?.[0] ?? '').toUpperCase()}
                           </span>

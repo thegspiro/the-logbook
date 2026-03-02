@@ -250,7 +250,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" onClick={onClose} aria-hidden="true" />
 
       {/* Modal */}
       <div className="relative bg-theme-surface-modal border border-theme-surface-border rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
@@ -259,7 +259,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
           <h3 id="field-editor-title" className="text-lg font-semibold text-theme-text-primary">
             {isEditing ? 'Edit Field' : 'Add Field'}
           </h3>
-          <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary p-1 rounded focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 focus:ring-offset-[var(--ring-offset-bg)]" aria-label="Close dialog">
+          <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary p-1 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg)" aria-label="Close dialog">
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
@@ -356,7 +356,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
                     type="checkbox"
                     checked={required}
                     onChange={(e) => setRequired(e.target.checked)}
-                    className="w-4 h-4 text-pink-600 rounded"
+                    className="w-4 h-4 text-pink-600 rounded-sm"
                   />
                   <span className="text-sm text-theme-text-secondary">Required</span>
                 </label>
@@ -485,7 +485,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
                   <div className="space-y-2">
                     {options.map((opt, i) => (
                       <div key={i} className="flex items-center gap-2">
-                        <GripVertical className="w-4 h-4 text-theme-text-muted flex-shrink-0" aria-hidden="true" />
+                        <GripVertical className="w-4 h-4 text-theme-text-muted shrink-0" aria-hidden="true" />
                         <input
                           type="text"
                           value={opt.label}

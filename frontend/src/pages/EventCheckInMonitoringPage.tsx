@@ -145,7 +145,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         {/* Total Checked In */}
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
+        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
           <div className="text-theme-text-muted text-sm font-medium mb-1">Checked In</div>
           <div className="text-3xl font-bold text-theme-text-primary">{stats.total_checked_in}</div>
           <div className="text-sm text-theme-text-secondary mt-1">
@@ -154,7 +154,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
         </div>
 
         {/* Check-In Rate */}
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
+        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
           <div className="text-theme-text-muted text-sm font-medium mb-1">Check-In Rate</div>
           <div className="text-3xl font-bold text-theme-text-primary">{stats.check_in_rate}%</div>
           <div className="mt-2">
@@ -168,7 +168,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
         </div>
 
         {/* Total RSVPs */}
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
+        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
           <div className="text-theme-text-muted text-sm font-medium mb-1">Total RSVPs</div>
           <div className="text-3xl font-bold text-theme-text-primary">{stats.total_rsvps}</div>
           <div className="text-sm text-theme-text-secondary mt-1">
@@ -177,7 +177,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
         </div>
 
         {/* Average Check-In Time */}
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
+        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
           <div className="text-theme-text-muted text-sm font-medium mb-1">Avg Check-In Time</div>
           <div className="text-3xl font-bold text-theme-text-primary">
             {stats.avg_check_in_time_minutes !== null
@@ -189,7 +189,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
       </div>
 
       {/* Event Info */}
-      <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6 mb-6">
+      <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Event Details</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -211,7 +211,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
       </div>
 
       {/* Recent Check-Ins */}
-      <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
+      <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold text-theme-text-primary">Recent Check-Ins</h2>
           {stats.last_check_in_at && (

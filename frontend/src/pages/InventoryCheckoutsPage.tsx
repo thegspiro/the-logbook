@@ -137,7 +137,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-3 min-w-0">
-            <div className="bg-blue-600 rounded-lg p-2 flex-shrink-0">
+            <div className="bg-blue-600 rounded-lg p-2 shrink-0">
               <Package className="w-6 h-6 text-white" aria-hidden="true" />
             </div>
             <div className="min-w-0">
@@ -149,7 +149,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
           </div>
           <button
             onClick={() => { void fetchCheckouts(); }}
-            className="flex items-center space-x-2 px-3 sm:px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary rounded-lg border border-theme-surface-border transition-colors flex-shrink-0"
+            className="flex items-center space-x-2 px-3 sm:px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary rounded-lg border border-theme-surface-border transition-colors shrink-0"
           >
             <RefreshCw className="w-4 h-4" aria-hidden="true" />
             <span className="hidden sm:inline">Refresh</span>

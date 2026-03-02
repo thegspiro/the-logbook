@@ -162,9 +162,9 @@ export const CommandPalette: React.FC = () => {
   let flatIndex = -1;
 
   return (
-    <div className="fixed inset-0 z-[60] overflow-y-auto">
+    <div className="fixed inset-0 z-60 overflow-y-auto">
       <div
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+        className="fixed inset-0 bg-black/50 backdrop-blur-xs"
         onClick={() => setIsOpen(false)}
         aria-hidden="true"
       />
@@ -177,7 +177,7 @@ export const CommandPalette: React.FC = () => {
         >
           {/* Search input */}
           <div className="flex items-center gap-3 px-4 border-b border-theme-surface-border">
-            <Search className="w-5 h-5 text-theme-text-muted flex-shrink-0" aria-hidden="true" />
+            <Search className="w-5 h-5 text-theme-text-muted shrink-0" aria-hidden="true" />
             <input
               ref={inputRef}
               type="text"
@@ -188,7 +188,7 @@ export const CommandPalette: React.FC = () => {
               }}
               onKeyDown={handleKeyDown}
               placeholder="Search pages, actions..."
-              className="flex-1 py-3.5 bg-transparent text-theme-text-primary placeholder-theme-text-muted text-sm focus:outline-none"
+              className="flex-1 py-3.5 bg-transparent text-theme-text-primary placeholder-theme-text-muted text-sm focus:outline-hidden"
               aria-label="Search commands"
               autoComplete="off"
             />
@@ -229,7 +229,7 @@ export const CommandPalette: React.FC = () => {
                         role="option"
                         aria-selected={isSelected}
                       >
-                        <Icon className="w-4 h-4 flex-shrink-0 opacity-60" />
+                        <Icon className="w-4 h-4 shrink-0 opacity-60" />
                         <span className="flex-1">{item.label}</span>
                         {isSelected && (
                           <span className="text-xs text-theme-text-muted">Enter</span>
@@ -245,19 +245,19 @@ export const CommandPalette: React.FC = () => {
           {/* Footer hint */}
           <div className="px-4 py-2 border-t border-theme-surface-border flex items-center gap-4 text-xs text-theme-text-muted">
             <span>
-              <kbd className="px-1.5 py-0.5 bg-theme-surface-secondary rounded text-[10px] font-mono">
+              <kbd className="px-1.5 py-0.5 bg-theme-surface-secondary rounded-sm text-[10px] font-mono">
                 &uarr;&darr;
               </kbd>{' '}
               Navigate
             </span>
             <span>
-              <kbd className="px-1.5 py-0.5 bg-theme-surface-secondary rounded text-[10px] font-mono">
+              <kbd className="px-1.5 py-0.5 bg-theme-surface-secondary rounded-sm text-[10px] font-mono">
                 Enter
               </kbd>{' '}
               Select
             </span>
             <span>
-              <kbd className="px-1.5 py-0.5 bg-theme-surface-secondary rounded text-[10px] font-mono">
+              <kbd className="px-1.5 py-0.5 bg-theme-surface-secondary rounded-sm text-[10px] font-mono">
                 Esc
               </kbd>{' '}
               Close

@@ -161,7 +161,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
   };
 
   return (
-    <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6">
+    <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-medium text-theme-text-primary">
           Ballot Items ({ballotItems.length})
@@ -209,14 +209,14 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 <div className="font-medium text-theme-text-primary text-sm">{template.name}</div>
                 <p className="text-xs text-theme-text-muted mt-1">{template.description}</p>
                 <div className="flex gap-2 mt-2">
-                  <span className="px-2 py-0.5 text-xs bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 rounded">
+                  <span className="px-2 py-0.5 text-xs bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 rounded-sm">
                     {template.vote_type === VoteType.APPROVAL ? 'Yes/No' : 'Candidates'}
                   </span>
-                  <span className="px-2 py-0.5 text-xs bg-theme-surface text-theme-text-secondary rounded">
+                  <span className="px-2 py-0.5 text-xs bg-theme-surface text-theme-text-secondary rounded-sm">
                     {getVoterTypeLabel(template.eligible_voter_types)}
                   </span>
                   {template.require_attendance && (
-                    <span className="px-2 py-0.5 text-xs bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded">
+                    <span className="px-2 py-0.5 text-xs bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded-sm">
                       Attendance Required
                     </span>
                   )}
@@ -247,7 +247,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 type="text"
                 value={templateNameInput}
                 onChange={(e) => setTemplateNameInput(e.target.value)}
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
                 placeholder={
                   selectedTemplate.type === BallotItemType.MEMBERSHIP_APPROVAL
                     ? 'e.g., John Smith'
@@ -261,11 +261,11 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
               Preview: <span className="font-medium">{selectedTemplate.title_template.replace('{name}', templateNameInput || '...')}</span>
             </div>
             <div className="flex gap-2 mt-2">
-              <span className="px-2 py-0.5 text-xs bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 rounded">
+              <span className="px-2 py-0.5 text-xs bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 rounded-sm">
                 Voters: {getVoterTypeLabel(selectedTemplate.eligible_voter_types)}
               </span>
               {selectedTemplate.require_attendance && (
-                <span className="px-2 py-0.5 text-xs bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded">
+                <span className="px-2 py-0.5 text-xs bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded-sm">
                   Attendance Required
                 </span>
               )}
@@ -302,7 +302,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 type="text"
                 value={customForm.title || ''}
                 onChange={(e) => setCustomForm((prev) => ({ ...prev, title: e.target.value }))}
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
                 placeholder="Ballot item title"
               />
             </div>
@@ -313,7 +313,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 value={customForm.description || ''}
                 onChange={(e) => setCustomForm((prev) => ({ ...prev, description: e.target.value }))}
                 rows={2}
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
                 placeholder="Optional description..."
               />
             </div>
@@ -324,7 +324,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 <select
                   value={customForm.type}
                   onChange={(e) => setCustomForm((prev) => ({ ...prev, type: e.target.value }))}
-                  className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
+                  className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
                 >
                   <option value="general_vote">General Vote</option>
                   <option value="membership_approval">Membership Approval</option>
@@ -337,7 +337,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 <select
                   value={customForm.vote_type}
                   onChange={(e) => setCustomForm((prev) => ({ ...prev, vote_type: e.target.value }))}
-                  className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
+                  className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
                 >
                   <option value="approval">Approval (Yes/No)</option>
                   <option value="candidate_selection">Candidate Selection</option>
@@ -355,7 +355,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                     eligible_voter_types: e.target.value.split(','),
                   }))
                 }
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
               >
                 {VOTER_TYPE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -373,7 +373,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 onChange={(e) =>
                   setCustomForm((prev) => ({ ...prev, require_attendance: e.target.checked }))
                 }
-                className="rounded border-theme-input-border text-blue-600"
+                className="rounded-sm border-theme-input-border text-blue-600"
               />
               <label htmlFor="require_attendance" className="text-sm text-theme-text-primary">
                 Require meeting attendance to vote
@@ -430,17 +430,17 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                     <p className="mt-1 ml-8 text-sm text-theme-text-muted">{item.description}</p>
                   )}
                   <div className="flex flex-wrap gap-2 mt-2 ml-8">
-                    <span className="px-2 py-0.5 text-xs bg-blue-500/20 text-blue-700 dark:text-blue-300 rounded">
+                    <span className="px-2 py-0.5 text-xs bg-blue-500/20 text-blue-700 dark:text-blue-300 rounded-sm">
                       {item.type.replace('_', ' ')}
                     </span>
-                    <span className="px-2 py-0.5 text-xs bg-purple-500/20 text-purple-700 dark:text-purple-300 rounded">
+                    <span className="px-2 py-0.5 text-xs bg-purple-500/20 text-purple-700 dark:text-purple-300 rounded-sm">
                       {item.vote_type === VoteType.APPROVAL ? 'Yes/No Vote' : 'Candidate Selection'}
                     </span>
-                    <span className="px-2 py-0.5 text-xs bg-theme-surface text-theme-text-secondary rounded">
+                    <span className="px-2 py-0.5 text-xs bg-theme-surface text-theme-text-secondary rounded-sm">
                       {getVoterTypeLabel(item.eligible_voter_types)}
                     </span>
                     {item.require_attendance && (
-                      <span className="px-2 py-0.5 text-xs bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded">
+                      <span className="px-2 py-0.5 text-xs bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded-sm">
                         Attendance Required
                       </span>
                     )}
@@ -453,7 +453,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                       type="button"
                       onClick={() => { void handleMoveItem(index, 'up'); }}
                       disabled={index === 0 || saving}
-                      className="min-w-[44px] min-h-[44px] flex items-center justify-center text-theme-text-muted hover:text-theme-text-secondary disabled:opacity-30 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded"
+                      className="min-w-[44px] min-h-[44px] flex items-center justify-center text-theme-text-muted hover:text-theme-text-secondary disabled:opacity-30 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-red-500 rounded-sm"
                       aria-label="Move up"
                     >
                       &#9650;
@@ -462,7 +462,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                       type="button"
                       onClick={() => { void handleMoveItem(index, 'down'); }}
                       disabled={index === ballotItems.length - 1 || saving}
-                      className="min-w-[44px] min-h-[44px] flex items-center justify-center text-theme-text-muted hover:text-theme-text-secondary disabled:opacity-30 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded"
+                      className="min-w-[44px] min-h-[44px] flex items-center justify-center text-theme-text-muted hover:text-theme-text-secondary disabled:opacity-30 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-red-500 rounded-sm"
                       aria-label="Move down"
                     >
                       &#9660;
@@ -471,7 +471,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                       type="button"
                       onClick={() => { void handleRemoveItem(item.id); }}
                       disabled={saving}
-                      className="min-w-[44px] min-h-[44px] flex items-center justify-center text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:opacity-30 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded"
+                      className="min-w-[44px] min-h-[44px] flex items-center justify-center text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:opacity-30 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-red-500 rounded-sm"
                       aria-label="Remove item"
                     >
                       &#10005;

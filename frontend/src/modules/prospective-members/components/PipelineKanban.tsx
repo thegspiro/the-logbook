@@ -14,6 +14,7 @@ import {
   Users,
   CalendarCheck,
   Globe,
+  Mail,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type {
@@ -28,6 +29,8 @@ interface PipelineKanbanProps {
   stages: PipelineStage[];
   applicants: ApplicantListItem[];
   onApplicantClick: (applicant: ApplicantListItem) => void;
+  selectedApplicants?: Set<string> | undefined;
+  onToggleSelect?: ((id: string) => void) | undefined;
 }
 
 const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
@@ -37,6 +40,7 @@ const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
   manual_approval: CheckCircle,
   meeting: CalendarCheck,
   status_page_toggle: Globe,
+  automated_email: Mail,
 };
 
 const STAGE_HEADER_COLORS: Record<StageType, string> = {
@@ -46,12 +50,15 @@ const STAGE_HEADER_COLORS: Record<StageType, string> = {
   manual_approval: 'border-emerald-500',
   meeting: 'border-teal-500',
   status_page_toggle: 'border-sky-500',
+  automated_email: 'border-rose-500',
 };
 
 export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
   stages,
   applicants,
   onApplicantClick,
+  selectedApplicants,
+  onToggleSelect,
 }) => {
   const { advanceApplicant, isAdvancing } = useProspectiveMembersStore();
   const [draggedApplicant, setDraggedApplicant] = useState<ApplicantListItem | null>(null);
@@ -149,7 +156,7 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
             onDragOver={(e) => handleDragOver(e, stage.id)}
             onDragLeave={handleDragLeave}
             onDrop={(e) => { void handleDrop(e, stage.id); }}
-            className={`flex-shrink-0 w-64 sm:w-72 bg-theme-input-bg rounded-lg border transition-all ${
+            className={`shrink-0 w-64 sm:w-72 bg-theme-input-bg rounded-lg border transition-all ${
               isDropTarget
                 ? 'border-red-500 bg-red-500/5'
                 : 'border-theme-surface-border'
@@ -182,13 +189,27 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
                 </div>
               ) : (
                 stageApplicants.map((applicant) => (
-                  <ApplicantCard
-                    key={applicant.id}
-                    applicant={applicant}
-                    onClick={onApplicantClick}
-                    onDragStart={handleDragStart}
-                    isDragging={draggedApplicant?.id === applicant.id}
-                  />
+                  <div key={applicant.id} className="relative">
+                    {onToggleSelect && (
+                      <div className="absolute top-2 left-2 z-10">
+                        <input
+                          type="checkbox"
+                          checked={selectedApplicants?.has(applicant.id) ?? false}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            onToggleSelect(applicant.id);
+                          }}
+                          className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                        />
+                      </div>
+                    )}
+                    <ApplicantCard
+                      applicant={applicant}
+                      onClick={onApplicantClick}
+                      onDragStart={handleDragStart}
+                      isDragging={draggedApplicant?.id === applicant.id}
+                    />
+                  </div>
                 ))
               )}
             </div>

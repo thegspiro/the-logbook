@@ -51,7 +51,7 @@ export const ErrorAlert: React.FC<ErrorAlertProps> = ({
     >
       <div className="flex items-start gap-3">
         {/* Error Icon */}
-        <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400 flex-shrink-0 mt-0.5" />
+        <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400 shrink-0 mt-0.5" />
 
         {/* Content */}
         <div className="flex-1 min-w-0">
@@ -64,7 +64,7 @@ export const ErrorAlert: React.FC<ErrorAlertProps> = ({
               {canRetry && onRetry && (
                 <button
                   onClick={() => { void onRetry?.(); }}
-                  className="inline-flex items-center px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded transition-colors"
+                  className="inline-flex items-center px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-sm transition-colors"
                   aria-label="Retry action"
                 >
                   <RefreshCw className="w-3.5 h-3.5 mr-1.5" />

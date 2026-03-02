@@ -42,7 +42,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
       {/* Progress Bar */}
       <div className="w-full bg-theme-surface rounded-full h-2 mb-4">
         <div
-          className="bg-gradient-to-r from-red-600 to-orange-600 h-2 rounded-full transition-all duration-500"
+          className="bg-linear-to-r from-red-600 to-orange-600 h-2 rounded-full transition-all duration-500"
           style={{ width: `${percentage}%` }}
           role="progressbar"
           aria-valuenow={percentage}
@@ -73,7 +73,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
                 >
                   {/* Step Number/Check */}
                   <div
-                    className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
+                    className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
                       isCurrent
                         ? 'bg-white dark:bg-slate-200 text-red-600'
                         : isCompleted
@@ -102,7 +102,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
                 {/* Chevron Separator (except after last step) */}
                 {index < ONBOARDING_STEPS.length - 1 && (
                   <ChevronRight
-                    className={`w-4 h-4 flex-shrink-0 ${
+                    className={`w-4 h-4 shrink-0 ${
                       isCompleted ? 'text-theme-accent-green' : 'text-theme-text-muted'
                     }`}
                     aria-hidden="true"

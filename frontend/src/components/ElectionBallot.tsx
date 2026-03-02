@@ -195,7 +195,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
 
   if (loading) {
     return (
-      <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6">
+      <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6">
         <div className="text-theme-text-muted text-center py-4">Loading ballot...</div>
       </div>
     );
@@ -248,12 +248,12 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6">
+      <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6">
         <h3 className="text-lg font-medium text-theme-text-primary mb-2">Cast Your Vote</h3>
         <p className="text-sm text-theme-text-muted mb-4">{getMethodLabel()}</p>
 
         {error && (
-          <div role="alert" className="mb-4 bg-red-500/10 border border-red-500/30 rounded p-3">
+          <div role="alert" className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3">
             <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
           </div>
         )}
@@ -305,7 +305,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
                             return (
                               <div
                                 key={candidateId}
-                                className="flex items-center justify-between py-1 px-2 bg-theme-surface-secondary rounded mb-1"
+                                className="flex items-center justify-between py-1 px-2 bg-theme-surface-secondary rounded-sm mb-1"
                               >
                                 <span className="text-sm text-theme-text-primary">
                                   <span className="font-bold text-blue-700 dark:text-blue-400 mr-2">#{idx + 1}</span>

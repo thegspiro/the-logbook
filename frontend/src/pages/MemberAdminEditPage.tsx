@@ -321,7 +321,7 @@ export const MemberAdminEditPage: React.FC = () => {
 
         <div className="space-y-6">
           {/* Personal Information */}
-          <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+          <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
             <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Personal Information</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
@@ -332,7 +332,7 @@ export const MemberAdminEditPage: React.FC = () => {
                   type="text"
                   value={form.first_name}
                   onChange={(e) => handleFieldChange('first_name', e.target.value)}
-                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                   disabled={saving}
                 />
               </div>
@@ -344,7 +344,7 @@ export const MemberAdminEditPage: React.FC = () => {
                   type="text"
                   value={form.middle_name}
                   onChange={(e) => handleFieldChange('middle_name', e.target.value)}
-                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                   disabled={saving}
                 />
               </div>
@@ -356,7 +356,7 @@ export const MemberAdminEditPage: React.FC = () => {
                   type="text"
                   value={form.last_name}
                   onChange={(e) => handleFieldChange('last_name', e.target.value)}
-                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                   disabled={saving}
                 />
               </div>
@@ -371,7 +371,7 @@ export const MemberAdminEditPage: React.FC = () => {
                   type="date"
                   value={form.date_of_birth}
                   onChange={(e) => handleFieldChange('date_of_birth', e.target.value)}
-                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                   disabled={saving}
                 />
                 <p className="text-xs text-theme-text-muted mt-1">
@@ -386,7 +386,7 @@ export const MemberAdminEditPage: React.FC = () => {
                   type="email"
                   value={form.personal_email}
                   onChange={(e) => handleFieldChange('personal_email', e.target.value)}
-                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                   disabled={saving}
                 />
               </div>
@@ -394,7 +394,7 @@ export const MemberAdminEditPage: React.FC = () => {
           </div>
 
           {/* Department Information */}
-          <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+          <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
             <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Department Information</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
@@ -405,7 +405,7 @@ export const MemberAdminEditPage: React.FC = () => {
                   type="text"
                   value={form.membership_number}
                   onChange={(e) => handleFieldChange('membership_number', e.target.value)}
-                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                   disabled={saving}
                 />
               </div>
@@ -416,7 +416,7 @@ export const MemberAdminEditPage: React.FC = () => {
                 <select
                   value={form.rank}
                   onChange={(e) => handleFieldChange('rank', e.target.value)}
-                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                   disabled={saving}
                 >
                   <option value="">Select Rank</option>
@@ -432,7 +432,7 @@ export const MemberAdminEditPage: React.FC = () => {
                 <select
                   value={form.station}
                   onChange={(e) => handleFieldChange('station', e.target.value)}
-                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                   disabled={saving}
                 >
                   <option value="">Select Station</option>
@@ -452,7 +452,7 @@ export const MemberAdminEditPage: React.FC = () => {
                   type="date"
                   value={form.hire_date}
                   onChange={(e) => handleFieldChange('hire_date', e.target.value)}
-                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                   disabled={saving}
                 />
                 <p className="text-xs text-theme-text-muted mt-1">
@@ -466,7 +466,7 @@ export const MemberAdminEditPage: React.FC = () => {
                 <select
                   value={form.membership_type}
                   onChange={(e) => handleFieldChange('membership_type', e.target.value)}
-                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                   disabled={saving}
                 >
                   <option value="">Select Type</option>
@@ -479,7 +479,7 @@ export const MemberAdminEditPage: React.FC = () => {
           </div>
 
           {/* Contact Information */}
-          <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+          <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
             <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Contact Information</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
@@ -505,7 +505,7 @@ export const MemberAdminEditPage: React.FC = () => {
                   type="tel"
                   value={form.phone}
                   onChange={(e) => handleFieldChange('phone', e.target.value)}
-                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                   disabled={saving}
                 />
               </div>
@@ -517,7 +517,7 @@ export const MemberAdminEditPage: React.FC = () => {
                   type="tel"
                   value={form.mobile}
                   onChange={(e) => handleFieldChange('mobile', e.target.value)}
-                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                   disabled={saving}
                 />
               </div>
@@ -525,7 +525,7 @@ export const MemberAdminEditPage: React.FC = () => {
           </div>
 
           {/* Address */}
-          <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+          <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
             <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Address</h2>
             <div className="space-y-4">
               <div>
@@ -536,7 +536,7 @@ export const MemberAdminEditPage: React.FC = () => {
                   type="text"
                   value={form.address_street}
                   onChange={(e) => handleFieldChange('address_street', e.target.value)}
-                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                   disabled={saving}
                 />
               </div>
@@ -549,7 +549,7 @@ export const MemberAdminEditPage: React.FC = () => {
                     type="text"
                     value={form.address_city}
                     onChange={(e) => handleFieldChange('address_city', e.target.value)}
-                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                     disabled={saving}
                   />
                 </div>
@@ -561,7 +561,7 @@ export const MemberAdminEditPage: React.FC = () => {
                     type="text"
                     value={form.address_state}
                     onChange={(e) => handleFieldChange('address_state', e.target.value)}
-                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                     disabled={saving}
                   />
                 </div>
@@ -573,7 +573,7 @@ export const MemberAdminEditPage: React.FC = () => {
                     type="text"
                     value={form.address_zip}
                     onChange={(e) => handleFieldChange('address_zip', e.target.value)}
-                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                     disabled={saving}
                   />
                 </div>
@@ -585,7 +585,7 @@ export const MemberAdminEditPage: React.FC = () => {
                     type="text"
                     value={form.address_country}
                     onChange={(e) => handleFieldChange('address_country', e.target.value)}
-                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                     disabled={saving}
                   />
                 </div>
@@ -594,7 +594,7 @@ export const MemberAdminEditPage: React.FC = () => {
           </div>
 
           {/* Emergency Contacts */}
-          <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+          <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-theme-text-primary">Emergency Contacts</h2>
               <button
@@ -641,7 +641,7 @@ export const MemberAdminEditPage: React.FC = () => {
                         type="text"
                         value={contact.name}
                         onChange={(e) => handleEmergencyContactChange(index, 'name', e.target.value)}
-                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                         disabled={saving}
                       />
                     </div>
@@ -653,7 +653,7 @@ export const MemberAdminEditPage: React.FC = () => {
                         type="text"
                         value={contact.relationship}
                         onChange={(e) => handleEmergencyContactChange(index, 'relationship', e.target.value)}
-                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                         disabled={saving}
                       />
                     </div>
@@ -665,7 +665,7 @@ export const MemberAdminEditPage: React.FC = () => {
                         type="tel"
                         value={contact.phone}
                         onChange={(e) => handleEmergencyContactChange(index, 'phone', e.target.value)}
-                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                         disabled={saving}
                       />
                     </div>
@@ -677,7 +677,7 @@ export const MemberAdminEditPage: React.FC = () => {
                         type="email"
                         value={contact.email || ''}
                         onChange={(e) => handleEmergencyContactChange(index, 'email', e.target.value)}
-                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                         disabled={saving}
                       />
                     </div>
@@ -700,7 +700,7 @@ export const MemberAdminEditPage: React.FC = () => {
           </div>
 
           {/* Actions */}
-          <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+          <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
                 <Link

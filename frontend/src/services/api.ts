@@ -48,6 +48,7 @@ export type {
   BatchReturnRequest, BatchReturnResultItem, BatchReturnResponse,
   MemberInventorySummary, MembersInventoryListResponse, LabelFormat,
   NFPACompliance, NFPAExposureRecord, NFPASummary, NFPARetirementDueItem,
+  InventoryImportResult,
 } from './eventServices';
 
 // Elections

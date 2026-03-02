@@ -131,7 +131,7 @@ const ActionItemsPage: React.FC = () => {
             type="checkbox"
             checked={assignedToMe}
             onChange={e => setAssignedToMe(e.target.checked)}
-            className="rounded border-theme-input-border bg-theme-input-bg"
+            className="rounded-sm border-theme-input-border bg-theme-input-bg"
           />
           Assigned to me
         </label>
@@ -171,11 +171,11 @@ const ActionItemsPage: React.FC = () => {
                     {item.description}
                   </p>
                   <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${STATUS_BADGES[item.status] || 'bg-gray-100 text-gray-800'}`}>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium ${STATUS_BADGES[item.status] || 'bg-gray-100 text-gray-800'}`}>
                       {item.status.replace('_', ' ')}
                     </span>
                     {item.priority && (
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${PRIORITY_BADGES[item.priority] || ''}`}>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium ${PRIORITY_BADGES[item.priority] || ''}`}>
                         {item.priority}
                       </span>
                     )}

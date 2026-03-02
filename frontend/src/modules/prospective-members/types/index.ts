@@ -14,7 +14,8 @@ export type StageType =
   | 'election_vote'
   | 'manual_approval'
   | 'meeting'
-  | 'status_page_toggle';
+  | 'status_page_toggle'
+  | 'automated_email';
 
 export type ApplicantStatus =
   | 'active'
@@ -139,11 +140,34 @@ export interface MeetingStageConfig {
   meeting_type: MeetingType;
   meeting_description?: string | undefined;
   required_attendees?: string[] | undefined;
+  linked_event_type?: string | undefined;
+  linked_event_id?: string | undefined;
 }
 
 export interface StatusPageToggleConfig {
   enable_public_status: boolean;
   custom_message?: string | undefined;
+}
+
+export interface AutomatedEmailSection {
+  id: string;
+  title: string;
+  content: string;
+  enabled: boolean;
+}
+
+export interface AutomatedEmailStageConfig {
+  email_subject: string;
+  include_welcome: boolean;
+  welcome_message?: string | undefined;
+  include_faq_link: boolean;
+  faq_url?: string | undefined;
+  include_next_meeting: boolean;
+  next_meeting_details?: string | undefined;
+  next_meeting_event_type?: string | undefined;
+  next_meeting_event_id?: string | undefined;
+  include_status_tracker: boolean;
+  custom_sections?: AutomatedEmailSection[] | undefined;
 }
 
 export type StageConfig =
@@ -152,7 +176,8 @@ export type StageConfig =
   | ElectionStageConfig
   | ManualApprovalConfig
   | MeetingStageConfig
-  | StatusPageToggleConfig;
+  | StatusPageToggleConfig
+  | AutomatedEmailStageConfig;
 
 // =============================================================================
 // Pipeline Stage
@@ -208,6 +233,8 @@ export interface Pipeline {
   name: string;
   description?: string | undefined;
   is_active: boolean;
+  is_template: boolean;
+  is_default: boolean;
   inactivity_config: InactivityConfig;
   public_status_enabled: boolean;
   stages: PipelineStage[];
@@ -220,6 +247,7 @@ export interface PipelineCreate {
   name: string;
   description?: string | undefined;
   is_active?: boolean | undefined;
+  is_template?: boolean | undefined;
   inactivity_config?: InactivityConfig | undefined;
 }
 
@@ -227,6 +255,8 @@ export interface PipelineUpdate {
   name?: string | undefined;
   description?: string | undefined;
   is_active?: boolean | undefined;
+  is_default?: boolean | undefined;
+  is_template?: boolean | undefined;
   inactivity_config?: InactivityConfig | undefined;
   public_status_enabled?: boolean | undefined;
 }
@@ -236,6 +266,8 @@ export interface PipelineListItem {
   name: string;
   description?: string | undefined;
   is_active: boolean;
+  is_template: boolean;
+  is_default: boolean;
   stage_count: number;
   applicant_count: number;
   created_at: string;

@@ -476,7 +476,7 @@ const Dashboard: React.FC = () => {
               className="w-full mb-6 sm:mb-8 bg-theme-surface border border-red-500/20 rounded-xl p-4 hover:border-red-500/40 transition-colors text-left group"
             >
               <div className="flex items-center gap-3 sm:gap-4">
-                <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center flex-shrink-0">
+                <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
                   <Rocket className="w-5 h-5 text-red-500" />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -497,7 +497,7 @@ const Dashboard: React.FC = () => {
                     />
                   </div>
                 </div>
-                <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
+                <div className="hidden sm:flex items-center gap-3 shrink-0">
                   <div className="w-24 bg-theme-surface-secondary rounded-full h-2">
                     <div
                       className="h-2 rounded-full bg-red-500 transition-all"
@@ -531,7 +531,7 @@ const Dashboard: React.FC = () => {
                       Active Members
                     </p>
                     {loadingAdmin ? (
-                      <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
+                      <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded-sm"></div>
                     ) : (
                       <p className="text-theme-text-primary text-2xl font-bold mt-1">
                         {adminSummary?.active_members ?? 0}
@@ -552,7 +552,7 @@ const Dashboard: React.FC = () => {
                       Training Compliance
                     </p>
                     {loadingAdmin ? (
-                      <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
+                      <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded-sm"></div>
                     ) : (
                       <p className="text-theme-text-primary text-2xl font-bold mt-1">
                         {adminSummary?.training_completion_pct ?? 0}%
@@ -573,7 +573,7 @@ const Dashboard: React.FC = () => {
                       Upcoming Events
                     </p>
                     {loadingAdmin ? (
-                      <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
+                      <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded-sm"></div>
                     ) : (
                       <p className="text-theme-text-primary text-2xl font-bold mt-1">
                         {adminSummary?.upcoming_events_count ?? 0}
@@ -595,7 +595,7 @@ const Dashboard: React.FC = () => {
                       Action Items
                     </p>
                     {loadingAdmin ? (
-                      <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
+                      <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded-sm"></div>
                     ) : (
                       <p className="text-theme-text-primary text-2xl font-bold mt-1">
                         {adminSummary?.open_action_items ?? 0}
@@ -625,7 +625,7 @@ const Dashboard: React.FC = () => {
                       Admin Hours
                     </p>
                     {loadingAdmin ? (
-                      <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
+                      <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded-sm"></div>
                     ) : (
                       <p className="text-theme-text-primary text-2xl font-bold mt-1">
                         {adminSummary?.recent_admin_hours ?? 0}
@@ -657,7 +657,7 @@ const Dashboard: React.FC = () => {
                   Total Hours
                 </p>
                 {loadingHours ? (
-                  <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
+                  <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded-sm"></div>
                 ) : (
                   <p className="text-theme-text-primary text-2xl font-bold mt-1">
                     {totalHours}
@@ -676,7 +676,7 @@ const Dashboard: React.FC = () => {
                   Training
                 </p>
                 {loadingHours ? (
-                  <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
+                  <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded-sm"></div>
                 ) : (
                   <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">
                     {hours.training}
@@ -695,7 +695,7 @@ const Dashboard: React.FC = () => {
                   Standby
                 </p>
                 {loadingHours ? (
-                  <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
+                  <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded-sm"></div>
                 ) : (
                   <p className="text-yellow-700 dark:text-yellow-400 text-2xl font-bold mt-1">
                     {hours.standby}
@@ -722,7 +722,7 @@ const Dashboard: React.FC = () => {
                   Administrative
                 </p>
                 {loadingHours ? (
-                  <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
+                  <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded-sm"></div>
                 ) : (
                   <p className="text-purple-400 text-2xl font-bold mt-1">
                     {hours.administrative}
@@ -778,20 +778,20 @@ const Dashboard: React.FC = () => {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           {msg.is_pinned && (
-                            <Pin className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                            <Pin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                           )}
                           <h4 className="text-theme-text-primary font-semibold text-sm truncate">
                             {msg.title}
                           </h4>
                           {msg.priority !== "normal" && (
                             <span
-                              className={`text-[10px] px-1.5 py-0.5 rounded font-medium uppercase ${priorityBadge[msg.priority]}`}
+                              className={`text-[10px] px-1.5 py-0.5 rounded-sm font-medium uppercase ${priorityBadge[msg.priority]}`}
                             >
                               {msg.priority}
                             </span>
                           )}
                           {!msg.is_read && (
-                            <span className="w-2 h-2 bg-amber-400 rounded-full flex-shrink-0" />
+                            <span className="w-2 h-2 bg-amber-400 rounded-full shrink-0" />
                           )}
                         </div>
                         <p className="text-theme-text-secondary text-sm whitespace-pre-line line-clamp-3">
@@ -826,7 +826,7 @@ const Dashboard: React.FC = () => {
                                 e.stopPropagation();
                                 void acknowledgeMessage(msg.id);
                               }}
-                              className="text-xs px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded font-medium"
+                              className="text-xs px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-sm font-medium"
                             >
                               Acknowledge
                             </button>
@@ -1081,7 +1081,7 @@ const Dashboard: React.FC = () => {
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className="h-8 bg-slate-700/30 animate-pulse rounded"
+                  className="h-8 bg-slate-700/30 animate-pulse rounded-sm"
                 ></div>
               ))}
             </div>
@@ -1094,7 +1094,7 @@ const Dashboard: React.FC = () => {
               {notifications.slice(0, 8).map((notif, idx) => (
                 <div key={notif.id ?? idx} className="flex items-start gap-3">
                   <div
-                    className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${notif.read ? "bg-theme-text-muted" : "bg-blue-500"}`}
+                    className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${notif.read ? "bg-theme-text-muted" : "bg-blue-500"}`}
                   />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-theme-text-primary truncate">
@@ -1222,7 +1222,7 @@ const Dashboard: React.FC = () => {
                             {enrollment.program?.name || "Program"}
                           </h4>
                           {upcomingDeadline && (
-                            <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded flex items-center space-x-1">
+                            <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded-sm flex items-center space-x-1">
                               <AlertTriangle className="w-3 h-3" />
                               <span>Deadline Soon</span>
                             </span>
@@ -1264,7 +1264,7 @@ const Dashboard: React.FC = () => {
                                   key={rp.id}
                                   className="flex items-start space-x-2 text-sm"
                                 >
-                                  <TrendingUp className="w-3 h-3 text-blue-400 mt-0.5 flex-shrink-0" />
+                                  <TrendingUp className="w-3 h-3 text-blue-400 mt-0.5 shrink-0" />
                                   <span className="text-theme-text-secondary">
                                     {rp.requirement?.name || "Requirement"}
                                   </span>
@@ -1387,7 +1387,7 @@ const Dashboard: React.FC = () => {
                     {lowStockAlerts.map((a) => (
                       <span
                         key={a.category_id}
-                        className="text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-500/10 px-2 py-1 rounded"
+                        className="text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-500/10 px-2 py-1 rounded-sm"
                       >
                         {a.category_name}: {a.current_stock} left
                       </span>

@@ -81,7 +81,7 @@ export const InlineEdit: React.FC<InlineEditProps> = ({
           onKeyDown={handleKeyDown}
           onBlur={() => { void handleSave(); }}
           disabled={saving}
-          className={`px-2 py-1 text-sm bg-theme-input-bg border border-red-500 rounded text-theme-text-primary focus:outline-none ${inputClassName}`}
+          className={`px-2 py-1 text-sm bg-theme-input-bg border border-red-500 rounded-sm text-theme-text-primary focus:outline-hidden ${inputClassName}`}
         />
         {saving ? (
           <Loader2 className="w-4 h-4 animate-spin text-theme-text-muted" />
@@ -112,7 +112,7 @@ export const InlineEdit: React.FC<InlineEditProps> = ({
   return (
     <button
       onClick={() => setEditing(true)}
-      className={`group inline-flex items-center gap-1.5 text-left hover:bg-theme-surface-hover rounded px-1 -mx-1 py-0.5 transition-colors ${className}`}
+      className={`group inline-flex items-center gap-1.5 text-left hover:bg-theme-surface-hover rounded-sm px-1 -mx-1 py-0.5 transition-colors ${className}`}
       title="Click to edit"
     >
       {renderDisplay ? renderDisplay(value) : (

@@ -703,7 +703,7 @@ const PositionSetup: React.FC = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
+    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
       <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} />
 
       <main className="flex-1 p-4 py-8">
@@ -730,7 +730,7 @@ const PositionSetup: React.FC = () => {
           <div className="space-y-4 mb-6">
             <div className="alert-info">
               <div className="flex items-start">
-                <Info className="w-5 h-5 text-theme-alert-info-icon mt-0.5 mr-3 flex-shrink-0" aria-hidden="true" />
+                <Info className="w-5 h-5 text-theme-alert-info-icon mt-0.5 mr-3 shrink-0" aria-hidden="true" />
                 <div>
                   <p className="text-theme-alert-info-title font-semibold mb-1">How Permissions Work</p>
                   <p className="text-theme-text-secondary text-sm">
@@ -744,7 +744,7 @@ const PositionSetup: React.FC = () => {
 
             <div className="alert-success">
               <div className="flex items-start">
-                <CheckCircle className="w-5 h-5 text-theme-alert-success-icon mt-0.5 mr-3 flex-shrink-0" aria-hidden="true" />
+                <CheckCircle className="w-5 h-5 text-theme-alert-success-icon mt-0.5 mr-3 shrink-0" aria-hidden="true" />
                 <div>
                   <p className="text-theme-alert-success-title font-semibold mb-1">Don't Worry - You Can Change These Later</p>
                   <p className="text-theme-text-secondary text-sm">
@@ -777,7 +777,7 @@ const PositionSetup: React.FC = () => {
                 disabled={isSaving || selectedCount < 2}
                 className={`px-6 py-2 rounded-lg font-semibold transition-all ${
                   selectedCount >= 2 && !isSaving
-                    ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white'
+                    ? 'bg-linear-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white'
                     : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
                 }`}
               >
@@ -844,7 +844,7 @@ const PositionSetup: React.FC = () => {
                                 </div>
                               </div>
                               {isSelected && (
-                                <CheckCircle className="w-5 h-5 text-theme-accent-green flex-shrink-0" aria-hidden="true" />
+                                <CheckCircle className="w-5 h-5 text-theme-accent-green shrink-0" aria-hidden="true" />
                               )}
                             </div>
                           </div>
@@ -894,12 +894,12 @@ const PositionSetup: React.FC = () => {
                               <div className="flex items-center gap-2">
                                 <p className="text-theme-text-primary font-semibold">{position.name}</p>
                                 {isITManager && (
-                                  <span className="text-xs bg-theme-alert-purple-bg text-theme-alert-purple-text px-2 py-0.5 rounded">
+                                  <span className="text-xs bg-theme-alert-purple-bg text-theme-alert-purple-text px-2 py-0.5 rounded-sm">
                                     System
                                   </span>
                                 )}
                                 {position.isCustom && (
-                                  <span className="text-xs bg-theme-alert-info-bg text-theme-alert-info-text px-2 py-0.5 rounded">
+                                  <span className="text-xs bg-theme-alert-info-bg text-theme-alert-info-text px-2 py-0.5 rounded-sm">
                                     Custom
                                   </span>
                                 )}
@@ -914,7 +914,7 @@ const PositionSetup: React.FC = () => {
                                   e.stopPropagation();
                                   togglePosition(position);
                                 }}
-                                className="p-1 hover:bg-theme-accent-orange-muted rounded text-theme-text-muted hover:text-theme-accent-red transition-colors"
+                                className="p-1 hover:bg-theme-accent-orange-muted rounded-sm text-theme-text-muted hover:text-theme-accent-red transition-colors"
                                 aria-label={`Remove ${position.name} position`}
                               >
                                 <X className="w-4 h-4" aria-hidden="true" />
@@ -943,7 +943,7 @@ const PositionSetup: React.FC = () => {
                                 return (
                                   <div
                                     key={catId}
-                                    className="flex items-center justify-between py-2 px-3 bg-theme-surface-secondary rounded"
+                                    className="flex items-center justify-between py-2 px-3 bg-theme-surface-secondary rounded-sm"
                                   >
                                     <span className="text-theme-text-secondary text-sm">{cat.name}</span>
                                     <div className="flex items-center gap-2">
@@ -998,7 +998,7 @@ const PositionSetup: React.FC = () => {
       {/* Custom Position Modal */}
       {showCustomModal && (
         <div
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50"
           role="dialog"
           aria-modal="true"
           aria-labelledby="custom-position-modal-title"
@@ -1048,7 +1048,7 @@ const PositionSetup: React.FC = () => {
               </button>
               <button
                 onClick={createCustomPosition}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white rounded-lg font-semibold transition-colors"
+                className="flex-1 px-4 py-2 bg-linear-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white rounded-lg font-semibold transition-colors"
               >
                 Create Position
               </button>
@@ -1057,7 +1057,7 @@ const PositionSetup: React.FC = () => {
         </div>
       )}
 
-      <footer className="bg-theme-nav-bg backdrop-blur-sm border-t border-theme-nav-border px-6 py-4">
+      <footer className="bg-theme-nav-bg backdrop-blur-xs border-t border-theme-nav-border px-6 py-4">
         <div className="max-w-7xl mx-auto text-center">
           <p className="text-theme-text-secondary text-sm">© {currentYear} {departmentName}. All rights reserved.</p>
           <p className="text-theme-text-muted text-xs mt-1">Powered by The Logbook</p>

@@ -98,7 +98,7 @@ const CustomPatternBuilder: React.FC<CustomPatternBuilderProps> = ({ cyclePatter
           <label className="text-xs font-medium text-theme-text-secondary whitespace-nowrap">Cycle Length:</label>
           <button
             onClick={() => adjustLength(cycleDays - 1)}
-            className="p-1 rounded border border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary hover:border-violet-500 transition-colors"
+            className="p-1 rounded-sm border border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary hover:border-violet-500 transition-colors"
             aria-label="Decrease cycle length"
           >
             <Minus className="w-3.5 h-3.5" />
@@ -106,7 +106,7 @@ const CustomPatternBuilder: React.FC<CustomPatternBuilderProps> = ({ cyclePatter
           <span className="text-sm font-semibold text-theme-text-primary w-16 text-center">{cycleDays} days</span>
           <button
             onClick={() => adjustLength(cycleDays + 1)}
-            className="p-1 rounded border border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary hover:border-violet-500 transition-colors"
+            className="p-1 rounded-sm border border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary hover:border-violet-500 transition-colors"
             aria-label="Increase cycle length"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -133,16 +133,16 @@ const CustomPatternBuilder: React.FC<CustomPatternBuilderProps> = ({ cyclePatter
       {/* Quick fill buttons */}
       <div className="flex items-center gap-2">
         <span className="text-xs text-theme-text-muted">Quick fill:</span>
-        <button onClick={() => fillRange('day')} className="px-2 py-1 text-[11px] rounded border border-amber-400/50 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors">
+        <button onClick={() => fillRange('day')} className="px-2 py-1 text-[11px] rounded-sm border border-amber-400/50 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors">
           All Day
         </button>
-        <button onClick={() => fillRange('night')} className="px-2 py-1 text-[11px] rounded border border-indigo-400/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 transition-colors">
+        <button onClick={() => fillRange('night')} className="px-2 py-1 text-[11px] rounded-sm border border-indigo-400/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 transition-colors">
           All Night
         </button>
-        <button onClick={() => fillRange('on')} className="px-2 py-1 text-[11px] rounded border border-violet-400/50 text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 transition-colors">
+        <button onClick={() => fillRange('on')} className="px-2 py-1 text-[11px] rounded-sm border border-violet-400/50 text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 transition-colors">
           All On
         </button>
-        <button onClick={resetAll} className="flex items-center gap-1 px-2 py-1 text-[11px] rounded border border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary transition-colors">
+        <button onClick={resetAll} className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-sm border border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary transition-colors">
           <RotateCcw className="w-3 h-3" /> Clear
         </button>
       </div>

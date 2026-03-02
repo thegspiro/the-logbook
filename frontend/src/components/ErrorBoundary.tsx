@@ -92,7 +92,7 @@ export class ErrorBoundary extends Component<Props, State> {
   override render(): ReactNode {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
+        <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
           <div className="card max-w-2xl p-8 w-full">
             <div className="text-center">
               {/* Error Icon */}
@@ -165,13 +165,13 @@ export class ErrorBoundary extends Component<Props, State> {
                 </button>
                 <button
                   onClick={this.handleReload}
-                  className="inline-flex items-center justify-center px-6 py-3 border border-theme-surface-border text-base font-medium rounded-md text-theme-text-primary bg-theme-surface hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--ring-offset-bg)] focus:ring-theme-focus-ring transition-colors"
+                  className="inline-flex items-center justify-center px-6 py-3 border border-theme-surface-border text-base font-medium rounded-md text-theme-text-primary bg-theme-surface hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:ring-theme-focus-ring transition-colors"
                 >
                   Reload Page
                 </button>
                 <button
                   onClick={this.handleGoHome}
-                  className="inline-flex items-center justify-center px-6 py-3 border border-theme-surface-border text-base font-medium rounded-md text-theme-text-primary bg-theme-surface hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--ring-offset-bg)] focus:ring-theme-focus-ring transition-colors"
+                  className="inline-flex items-center justify-center px-6 py-3 border border-theme-surface-border text-base font-medium rounded-md text-theme-text-primary bg-theme-surface hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:ring-theme-focus-ring transition-colors"
                 >
                   Go to Dashboard
                 </button>

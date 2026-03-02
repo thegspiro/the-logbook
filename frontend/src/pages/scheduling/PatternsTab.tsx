@@ -50,7 +50,7 @@ const PATTERN_TYPE_LABELS: Record<string, string> = {
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const inputCls =
-  "w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500";
+  "w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500";
 
 const LazyFallback = () => (
   <div className="flex items-center justify-center py-8">
@@ -75,7 +75,7 @@ const CycleStrip: React.FC<{ config: Record<string, unknown> }> = ({
         return (
           <div
             key={i}
-            className={`h-1.5 flex-1 rounded-sm ${bg}`}
+            className={`h-1.5 flex-1 rounded-xs ${bg}`}
             title={`Day ${i + 1}: ${entry}`}
           />
         );
@@ -438,7 +438,7 @@ export const PatternsTab: React.FC = () => {
                       : "border-theme-surface-border text-theme-text-muted hover:border-violet-500/40"
                   }`}
                 >
-                  <Icon className="w-4 h-4 flex-shrink-0" />
+                  <Icon className="w-4 h-4 shrink-0" />
                   <div>
                     <p className="text-xs font-semibold">{label}</p>
                     <p className="text-[10px] opacity-70">{desc}</p>
@@ -828,7 +828,7 @@ export const PatternsTab: React.FC = () => {
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div
-                      className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
                         pattern.is_active
                           ? "bg-violet-500/10"
                           : "bg-gray-500/10"
@@ -900,7 +900,7 @@ export const PatternsTab: React.FC = () => {
                       {cyclePattern && <CycleStrip config={config} />}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2 shrink-0">
                     {isExpanded ? (
                       <ChevronUp className="w-4 h-4 text-theme-text-muted" />
                     ) : (
@@ -962,7 +962,7 @@ export const PatternsTab: React.FC = () => {
                             return (
                               <span
                                 key={i}
-                                className={`px-2 py-1 text-[10px] font-semibold rounded ${cls}`}
+                                className={`px-2 py-1 text-[10px] font-semibold rounded-sm ${cls}`}
                               >
                                 D{i + 1}:{" "}
                                 {String(entry).charAt(0).toUpperCase() +

@@ -208,7 +208,7 @@ const ITTeamBackupAccess: React.FC = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
+    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
       <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} icon={<Mail aria-hidden="true" className="w-6 h-6 text-white" />} />
 
       <main className="flex-1 flex items-center justify-center p-4 py-8">
@@ -290,7 +290,7 @@ const ITTeamBackupAccess: React.FC = () => {
                         type="text"
                         value={member.name}
                         onChange={(e) => updateITMember(member.id, 'name', e.target.value)}
-                        className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
+                        className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 transition-all ${
                           errors[index === 0 ? 'primaryName' : `member${index}Name`]
                             ? 'border-theme-accent-red focus:ring-theme-focus-ring'
                             : 'border-theme-input-border focus:ring-theme-focus-ring'
@@ -327,7 +327,7 @@ const ITTeamBackupAccess: React.FC = () => {
                         type="email"
                         value={member.email}
                         onChange={(e) => updateITMember(member.id, 'email', e.target.value)}
-                        className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
+                        className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 transition-all ${
                           errors[index === 0 ? 'primaryEmail' : `member${index}Email`]
                             ? 'border-theme-accent-red focus:ring-theme-focus-ring'
                             : 'border-theme-input-border focus:ring-theme-focus-ring'
@@ -350,7 +350,7 @@ const ITTeamBackupAccess: React.FC = () => {
                         type="tel"
                         value={member.phone}
                         onChange={(e) => updateITMember(member.id, 'phone', e.target.value)}
-                        className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
+                        className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 transition-all ${
                           errors[index === 0 ? 'primaryPhone' : `member${index}Phone`]
                             ? 'border-theme-accent-red focus:ring-theme-focus-ring'
                             : 'border-theme-input-border focus:ring-theme-focus-ring'
@@ -377,7 +377,7 @@ const ITTeamBackupAccess: React.FC = () => {
 
               <div className="alert-warning mb-6">
                 <div className="flex items-start space-x-3">
-                  <AlertCircle className="w-5 h-5 text-theme-alert-warning-icon flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="w-5 h-5 text-theme-alert-warning-icon shrink-0 mt-0.5" />
                   <div>
                     <p className="text-theme-alert-warning-title text-sm font-medium mb-1">
                       Critical for Account Recovery
@@ -488,7 +488,7 @@ const ITTeamBackupAccess: React.FC = () => {
                 className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                   isSaving
                     ? 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
-                    : 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
+                    : 'bg-linear-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
                 }`}
               >
                 {isSaving ? 'Saving Securely...' : 'Continue to Module Selection'}
@@ -503,7 +503,7 @@ const ITTeamBackupAccess: React.FC = () => {
         </div>
       </main>
 
-      <footer className="bg-theme-nav-bg backdrop-blur-sm border-t border-theme-nav-border px-6 py-4">
+      <footer className="bg-theme-nav-bg backdrop-blur-xs border-t border-theme-nav-border px-6 py-4">
         <div className="max-w-7xl mx-auto text-center">
           <p className="text-theme-text-secondary text-sm">© {currentYear} {departmentName}. All rights reserved.</p>
           <p className="text-theme-text-muted text-xs mt-1">Powered by The Logbook</p>

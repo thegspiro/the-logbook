@@ -72,6 +72,8 @@ function mapStageTypeToBackend(stageType: StageType): { step_type: string; actio
       return { step_type: 'action', action_type: 'schedule_meeting' };
     case 'status_page_toggle':
       return { step_type: 'action', action_type: 'custom' };
+    case 'automated_email':
+      return { step_type: 'action', action_type: 'send_email' };
     case 'manual_approval':
     default:
       return { step_type: 'checkbox' };
@@ -83,6 +85,7 @@ function mapStepTypeToFrontend(stepType: string, actionType?: string | null, con
   if (stepType === 'action') {
     if (actionType === 'collect_document') return 'document_upload';
     if (actionType === 'schedule_meeting') return 'meeting';
+    if (actionType === 'send_email') return 'automated_email';
     // Distinguish between form_submission, election_vote, and status_page_toggle
     // by inspecting the config JSON
     if (config && 'enable_public_status' in config) return 'status_page_toggle';
@@ -111,6 +114,18 @@ function getDefaultStageConfig(stageType: StageType): PipelineStage['config'] {
       return { meeting_type: 'chief_meeting', meeting_description: '' };
     case 'status_page_toggle':
       return { enable_public_status: true, custom_message: '' };
+    case 'automated_email':
+      return {
+        email_subject: 'Welcome to the Membership Process',
+        include_welcome: true,
+        welcome_message: '',
+        include_faq_link: false,
+        faq_url: '',
+        include_next_meeting: false,
+        next_meeting_details: '',
+        include_status_tracker: false,
+        custom_sections: [],
+      };
     case 'manual_approval':
     default:
       return { approver_roles: [], require_notes: false };
@@ -148,6 +163,8 @@ function mapPipelineResponse(data: BackendPipelineResponse): Pipeline {
     name: data.name,
     description: data.description ?? undefined,
     is_active: data.is_active ?? !data.is_template,
+    is_template: data.is_template ?? false,
+    is_default: data.is_default ?? false,
     inactivity_config: inactivityConfig,
     public_status_enabled: data.public_status_enabled ?? false,
     stages: (data.steps || []).map(mapStepToStage),
@@ -164,6 +181,8 @@ function mapPipelineListItem(data: BackendPipelineListResponse): PipelineListIte
     name: data.name,
     description: data.description ?? undefined,
     is_active: data.is_active ?? !data.is_template,
+    is_template: data.is_template ?? false,
+    is_default: data.is_default ?? false,
     stage_count: data.step_count ?? 0,
     applicant_count: data.prospect_count ?? 0,
     created_at: data.created_at,
@@ -359,9 +378,16 @@ function mapDocumentResponse(doc: BackendDocumentResponse, applicantId: string):
 // =============================================================================
 
 export const pipelineService = {
-  async getPipelines(): Promise<PipelineListItem[]> {
-    const response = await api.get<BackendPipelineListResponse[]>('/prospective-members/pipelines');
+  async getPipelines(includeTemplates?: boolean): Promise<PipelineListItem[]> {
+    const params: Record<string, unknown> = {};
+    if (includeTemplates) params.include_templates = true;
+    const response = await api.get<BackendPipelineListResponse[]>('/prospective-members/pipelines', { params });
     return response.data.map(mapPipelineListItem);
+  },
+
+  async getTemplates(): Promise<PipelineListItem[]> {
+    const all = await this.getPipelines(true);
+    return all.filter((p) => p.is_template);
   },
 
   async getPipeline(pipelineId: string): Promise<Pipeline> {
@@ -374,6 +400,7 @@ export const pipelineService = {
       name: data.name,
       description: data.description,
       is_active: data.is_active ?? true,
+      is_template: data.is_template ?? false,
       inactivity_config: data.inactivity_config,
     };
     const response = await api.post<BackendPipelineResponse>('/prospective-members/pipelines', payload);
@@ -385,7 +412,10 @@ export const pipelineService = {
     if (data.name !== undefined) payload.name = data.name;
     if (data.description !== undefined) payload.description = data.description;
     if (data.is_active !== undefined) payload.is_active = data.is_active;
+    if (data.is_default !== undefined) payload.is_default = data.is_default;
+    if (data.is_template !== undefined) payload.is_template = data.is_template;
     if (data.inactivity_config !== undefined) payload.inactivity_config = data.inactivity_config;
+    if (data.public_status_enabled !== undefined) payload.public_status_enabled = data.public_status_enabled;
 
     const response = await api.put<BackendPipelineResponse>(
       `/prospective-members/pipelines/${pipelineId}`,
@@ -396,6 +426,21 @@ export const pipelineService = {
 
   async deletePipeline(pipelineId: string): Promise<void> {
     await api.delete(`/prospective-members/pipelines/${pipelineId}`);
+  },
+
+  async duplicatePipeline(pipelineId: string, name: string): Promise<Pipeline> {
+    const response = await api.post<BackendPipelineResponse>(
+      `/prospective-members/pipelines/${pipelineId}/duplicate`,
+      null,
+      { params: { name } }
+    );
+    return mapPipelineResponse(response.data);
+  },
+
+  async saveAsTemplate(pipelineId: string, name: string): Promise<Pipeline> {
+    // Duplicate the pipeline and mark it as a template
+    const duplicated = await this.duplicatePipeline(pipelineId, name);
+    return this.updatePipeline(duplicated.id, { is_template: true, is_active: false });
   },
 
   async getPipelineStats(pipelineId: string): Promise<PipelineStats> {

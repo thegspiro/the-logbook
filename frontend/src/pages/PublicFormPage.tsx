@@ -335,7 +335,7 @@ const PublicFormPage = () => {
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="bg-theme-surface rounded-xl shadow-lg overflow-hidden mb-6">
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-6">
+          <div className="bg-linear-to-r from-blue-600 to-blue-700 px-8 py-6">
             {form.organization_name && (
               <p className="text-blue-100 text-sm mb-1">{clean(form.organization_name)}</p>
             )}

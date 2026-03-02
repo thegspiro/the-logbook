@@ -159,6 +159,7 @@ export const StageType = {
   MANUAL_APPROVAL: 'manual_approval',
   MEETING: 'meeting',
   STATUS_PAGE_TOGGLE: 'status_page_toggle',
+  AUTOMATED_EMAIL: 'automated_email',
 } as const;
 export type StageType = (typeof StageType)[keyof typeof StageType];
 

@@ -520,7 +520,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
         <div className="flex items-center justify-between h-16 px-4">
           <Link
             to="/dashboard"
-            className="flex items-center focus:outline-none focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
+            className="flex items-center focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
           >
             {logoPreview ? (
               <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden">
@@ -539,14 +539,14 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
               </div>
             )}
             <div className="ml-3 min-w-0 flex-1">
-              <span className="text-theme-text-primary text-lg font-semibold break-words leading-tight">
+              <span className="text-theme-text-primary text-lg font-semibold wrap-break-word leading-tight">
                 {departmentName}
               </span>
             </div>
           </Link>
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="text-theme-text-primary p-2 rounded-md hover:bg-theme-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+            className="text-theme-text-primary p-2 rounded-md hover:bg-theme-surface-hover transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
             aria-expanded={mobileMenuOpen}
             aria-controls="side-navigation"
             aria-label={
@@ -591,10 +591,10 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                 <div className="flex items-center justify-center">
                   <Link
                     to="/dashboard"
-                    className="flex items-center overflow-hidden focus:outline-none focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
+                    className="flex items-center overflow-hidden focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
                   >
                     {logoPreview ? (
-                      <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+                      <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
                         <img
                           src={logoPreview}
                           alt={`${departmentName} logo`}
@@ -603,7 +603,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                       </div>
                     ) : (
                       <div
-                        className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center flex-shrink-0"
+                        className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center shrink-0"
                         aria-hidden="true"
                       >
                         <Home className="w-6 h-6 text-white" />
@@ -613,7 +613,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                 </div>
                 <button
                   onClick={() => setCollapsed(false)}
-                  className="hidden md:block mt-2 w-full text-theme-text-secondary hover:text-theme-text-primary p-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="hidden md:block mt-2 w-full text-theme-text-secondary hover:text-theme-text-primary p-2 rounded-sm transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                   aria-label="Expand navigation"
                 >
                   <ChevronRight
@@ -626,10 +626,10 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
               <div className="flex items-center justify-between">
                 <Link
                   to="/dashboard"
-                  className="flex items-center overflow-hidden focus:outline-none focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
+                  className="flex items-center overflow-hidden focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
                 >
                   {logoPreview ? (
-                    <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
                       <img
                         src={logoPreview}
                         alt={`${departmentName} logo`}
@@ -638,14 +638,14 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                     </div>
                   ) : (
                     <div
-                      className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center flex-shrink-0"
+                      className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center shrink-0"
                       aria-hidden="true"
                     >
                       <Home className="w-6 h-6 text-white" />
                     </div>
                   )}
                   <div className="ml-3 min-w-0">
-                    <span className="text-theme-text-primary text-sm font-semibold block break-words leading-tight">
+                    <span className="text-theme-text-primary text-sm font-semibold block wrap-break-word leading-tight">
                       {departmentName}
                     </span>
                     <p className="text-theme-text-muted text-xs">Dashboard</p>
@@ -653,7 +653,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                 </Link>
                 <button
                   onClick={() => setCollapsed(true)}
-                  className="hidden md:block text-theme-text-secondary hover:text-theme-text-primary p-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                  className="hidden md:block text-theme-text-secondary hover:text-theme-text-primary p-2 rounded-sm transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
                   aria-label="Collapse navigation"
                 >
                   <ChevronRight
@@ -741,7 +741,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                       aria-controls={
                         hasSubItems ? `submenu-${item.label}` : undefined
                       }
-                      className={`w-full flex items-center rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-theme-focus-ring ${
+                      className={`w-full flex items-center rounded-lg transition-all focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
                         collapsed ? "justify-center p-3" : "px-4 py-3"
                       } ${
                         parentActive && !hasSubItems
@@ -754,7 +754,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                       aria-label={collapsed ? item.label : undefined}
                     >
                       <Icon
-                        className={`w-5 h-5 flex-shrink-0 ${collapsed ? "" : "mr-3"}`}
+                        className={`w-5 h-5 shrink-0 ${collapsed ? "" : "mr-3"}`}
                         aria-hidden="true"
                       />
                       {!collapsed && (
@@ -794,14 +794,14 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                                 onMouseEnter={() => prefetchRoute(subItem.path)}
                                 onFocus={() => prefetchRoute(subItem.path)}
                                 aria-current={subActive ? "page" : undefined}
-                                className={`w-full flex items-center px-4 py-2 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-theme-focus-ring ${
+                                className={`w-full flex items-center px-4 py-2 rounded-lg transition-all focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
                                   subActive
                                     ? "bg-red-600 text-white"
                                     : "text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary"
                                 }`}
                               >
                                 <SubIcon
-                                  className="w-4 h-4 mr-3 flex-shrink-0"
+                                  className="w-4 h-4 mr-3 shrink-0"
                                   aria-hidden="true"
                                 />
                                 <span className="text-sm">{subItem.label}</span>
@@ -821,14 +821,14 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
           <div className="p-4 border-t border-theme-surface-border space-y-1">
             <button
               onClick={cycleTheme}
-              className={`w-full flex items-center text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-theme-focus-ring ${
+              className={`w-full flex items-center text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary rounded-lg transition-all focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
                 collapsed ? "justify-center p-3" : "px-4 py-3"
               }`}
               title={collapsed ? `Theme: ${themeLabel}` : undefined}
               aria-label={`Current theme: ${themeLabel}. Click to cycle theme.`}
             >
               <ThemeIcon
-                className={`w-5 h-5 flex-shrink-0 ${collapsed ? "" : "mr-3"}`}
+                className={`w-5 h-5 shrink-0 ${collapsed ? "" : "mr-3"}`}
                 aria-hidden="true"
               />
               {!collapsed && (
@@ -837,14 +837,14 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
             </button>
             <button
               onClick={onLogout}
-              className={`w-full flex items-center text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-theme-focus-ring ${
+              className={`w-full flex items-center text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary rounded-lg transition-all focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
                 collapsed ? "justify-center p-3" : "px-4 py-3"
               }`}
               title={collapsed ? "Logout" : undefined}
               aria-label={collapsed ? "Logout" : undefined}
             >
               <LogOut
-                className={`w-5 h-5 flex-shrink-0 ${collapsed ? "" : "mr-3"}`}
+                className={`w-5 h-5 shrink-0 ${collapsed ? "" : "mr-3"}`}
                 aria-hidden="true"
               />
               {!collapsed && (

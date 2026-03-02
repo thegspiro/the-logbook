@@ -458,7 +458,7 @@ const OnboardingCheck: React.FC = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
+      <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
         <div className="card max-w-md p-8 text-center w-full">
           <div className="text-theme-accent-red text-6xl mb-4">{schemaError ? '🔧' : '⚠️'}</div>
           <h2 className="text-2xl font-bold text-theme-text-primary mb-4">
@@ -472,12 +472,12 @@ const OnboardingCheck: React.FC = () => {
               <p className="text-theme-alert-warning-title text-sm font-semibold mb-2">To Fix This Issue:</p>
               <ol className="text-theme-text-secondary text-sm space-y-2 list-decimal list-inside">
                 <li>Stop all containers:
-                  <code className="block mt-1 bg-theme-alert-warning-bg rounded px-2 py-1 text-theme-alert-warning-title font-mono text-xs">
+                  <code className="block mt-1 bg-theme-alert-warning-bg rounded-sm px-2 py-1 text-theme-alert-warning-title font-mono text-xs">
                     docker compose down -v
                   </code>
                 </li>
                 <li>Rebuild and start:
-                  <code className="block mt-1 bg-theme-alert-warning-bg rounded px-2 py-1 text-theme-alert-warning-title font-mono text-xs">
+                  <code className="block mt-1 bg-theme-alert-warning-bg rounded-sm px-2 py-1 text-theme-alert-warning-title font-mono text-xs">
                     docker compose up --build
                   </code>
                 </li>
@@ -511,7 +511,7 @@ const OnboardingCheck: React.FC = () => {
           <div className="flex gap-3">
             <button
               onClick={handleRetry}
-              className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white font-semibold rounded-lg transition-all duration-300"
+              className="flex-1 px-6 py-3 bg-linear-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white font-semibold rounded-lg transition-all duration-300"
             >
               Try Again
             </button>
@@ -530,7 +530,7 @@ const OnboardingCheck: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
+    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
           <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-red-500 mb-4"></div>
@@ -578,7 +578,7 @@ const OnboardingCheck: React.FC = () => {
           {!startupInfo && isWaiting && (
             <div className="mt-4 pt-4 border-t border-theme-nav-border">
               <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 mt-0.5">
+                <div className="shrink-0 mt-0.5">
                   <div className="p-2 bg-theme-alert-info-bg rounded-lg border border-theme-alert-info-border">
                     <div className="text-theme-alert-info-icon animate-pulse">
                       <Server className="h-5 w-5" />
@@ -607,7 +607,7 @@ const OnboardingCheck: React.FC = () => {
                   <>
                     {/* Current Phase with Icon */}
                     <div className="flex items-start gap-3 mb-3">
-                      <div className="flex-shrink-0 mt-0.5">
+                      <div className="shrink-0 mt-0.5">
                         <div className="p-2 bg-theme-alert-warning-bg rounded-lg border border-theme-alert-warning-border">
                           <div className="text-theme-alert-warning-icon animate-pulse">
                             {phaseDetails.icon}
@@ -651,7 +651,7 @@ const OnboardingCheck: React.FC = () => {
                         )}
                         <div className="w-full bg-theme-surface rounded-full h-2.5 mb-2">
                           <div
-                            className="bg-gradient-to-r from-orange-500 to-yellow-500 h-2.5 rounded-full transition-all duration-300"
+                            className="bg-linear-to-r from-orange-500 to-yellow-500 h-2.5 rounded-full transition-all duration-300"
                             style={{ width: `${(startupInfo.migrations.completed / startupInfo.migrations.total) * 100}%` }}
                           ></div>
                         </div>
@@ -680,7 +680,7 @@ const OnboardingCheck: React.FC = () => {
             <div className="mt-4 pt-4 border-t border-theme-nav-border">
               <div className="bg-theme-alert-info-bg rounded-lg p-4 border border-theme-alert-info-border">
                 <div className="flex items-start gap-3">
-                  <div className="text-3xl flex-shrink-0">{educationalTips[currentTipIndex]?.icon}</div>
+                  <div className="text-3xl shrink-0">{educationalTips[currentTipIndex]?.icon}</div>
                   <div className="flex-1">
                     <h4 className="text-theme-alert-info-title font-semibold text-sm mb-1">
                       {educationalTips[currentTipIndex]?.title}
@@ -709,7 +709,7 @@ const OnboardingCheck: React.FC = () => {
               {/* Retry progress bar */}
               <div className="w-full bg-theme-surface rounded-full h-2 mb-3">
                 <div
-                  className="bg-gradient-to-r from-red-500 to-orange-500 h-2 rounded-full transition-all duration-500"
+                  className="bg-linear-to-r from-red-500 to-orange-500 h-2 rounded-full transition-all duration-500"
                   style={{ width: `${progressPercent}%` }}
                 ></div>
               </div>
@@ -779,7 +779,7 @@ const OnboardingCheck: React.FC = () => {
                 <p className="text-theme-text-muted text-xs mb-2">
                   If startup is taking too long, check the logs:
                 </p>
-                <code className="block bg-theme-surface-secondary text-theme-accent-green text-xs p-2 rounded font-mono">
+                <code className="block bg-theme-surface-secondary text-theme-accent-green text-xs p-2 rounded-sm font-mono">
                   docker compose logs backend
                 </code>
               </div>

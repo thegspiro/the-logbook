@@ -563,7 +563,7 @@ export const MemberProfilePage: React.FC = () => {
             &larr; Back
           </button>
 
-          <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+          <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-4">
                 {/* Profile Photo with Upload */}
@@ -676,7 +676,7 @@ export const MemberProfilePage: React.FC = () => {
           <div className="lg:col-span-2 space-y-6">
             {/* Training & Certifications */}
             {trainingEnabled && (
-              <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+              <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
                 {/* Compliance Summary Card */}
                 {complianceSummary && (
                   <div className="mb-6">
@@ -865,7 +865,7 @@ export const MemberProfilePage: React.FC = () => {
 
             {/* Admin Hours Summary */}
             {adminHoursSummary && adminHoursSummary.totalEntries > 0 && (
-              <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+              <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold text-theme-text-primary">
                     Administrative Hours
@@ -922,7 +922,7 @@ export const MemberProfilePage: React.FC = () => {
               </div>
             )}
             {adminHoursLoading && (
-              <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+              <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
                 <h2 className="text-lg font-semibold text-theme-text-primary mb-4">
                   Administrative Hours
                 </h2>
@@ -934,7 +934,7 @@ export const MemberProfilePage: React.FC = () => {
 
             {/* Assigned Inventory - Only shown if inventory module is enabled */}
             {inventoryModuleEnabled && (
-              <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+              <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
                 <h2 className="text-lg font-semibold text-theme-text-primary mb-4">
                   Assigned Inventory
                 </h2>
@@ -1008,7 +1008,7 @@ export const MemberProfilePage: React.FC = () => {
           {/* Right Column - Contact & Additional Info */}
           <div className="space-y-6">
             {/* Contact Information */}
-            <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+            <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-theme-text-primary">
                   Contact Information
@@ -1068,7 +1068,7 @@ export const MemberProfilePage: React.FC = () => {
                       onChange={(e) =>
                         handleFormChange("email", e.target.value)
                       }
-                      className="form-input w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                      className="form-input w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                     />
                   </div>
                   <div>
@@ -1081,7 +1081,7 @@ export const MemberProfilePage: React.FC = () => {
                       onChange={(e) =>
                         handleFormChange("phone", e.target.value)
                       }
-                      className="form-input w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                      className="form-input w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                     />
                   </div>
                   <div>
@@ -1094,7 +1094,7 @@ export const MemberProfilePage: React.FC = () => {
                       onChange={(e) =>
                         handleFormChange("mobile", e.target.value)
                       }
-                      className="form-input w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                      className="form-input w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                     />
                   </div>
 
@@ -1167,7 +1167,7 @@ export const MemberProfilePage: React.FC = () => {
             </div>
 
             {/* Address & Personal Email */}
-            <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+            <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-theme-text-primary">
                   Address
@@ -1240,7 +1240,7 @@ export const MemberProfilePage: React.FC = () => {
                           personal_email: e.target.value,
                         }))
                       }
-                      className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                      className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                       placeholder="Home email for post-separation contact"
                     />
                   </div>
@@ -1257,7 +1257,7 @@ export const MemberProfilePage: React.FC = () => {
                           address_street: e.target.value,
                         }))
                       }
-                      className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                      className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                     />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1274,7 +1274,7 @@ export const MemberProfilePage: React.FC = () => {
                             address_city: e.target.value,
                           }))
                         }
-                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                       />
                     </div>
                     <div>
@@ -1290,7 +1290,7 @@ export const MemberProfilePage: React.FC = () => {
                             address_state: e.target.value,
                           }))
                         }
-                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                       />
                     </div>
                   </div>
@@ -1308,7 +1308,7 @@ export const MemberProfilePage: React.FC = () => {
                             address_zip: e.target.value,
                           }))
                         }
-                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                       />
                     </div>
                     <div>
@@ -1324,7 +1324,7 @@ export const MemberProfilePage: React.FC = () => {
                             address_country: e.target.value,
                           }))
                         }
-                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                       />
                     </div>
                   </div>
@@ -1351,7 +1351,7 @@ export const MemberProfilePage: React.FC = () => {
             </div>
 
             {/* Emergency Contacts */}
-            <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+            <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-theme-text-primary">
                   Emergency Contacts
@@ -1379,7 +1379,7 @@ export const MemberProfilePage: React.FC = () => {
                             {ec.name}
                           </p>
                           {ec.is_primary && (
-                            <span className="px-1.5 py-0.5 text-xs bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400 rounded">
+                            <span className="px-1.5 py-0.5 text-xs bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400 rounded-sm">
                               Primary
                             </span>
                           )}
@@ -1426,7 +1426,7 @@ export const MemberProfilePage: React.FC = () => {
                                   e.target.checked,
                                 )
                               }
-                              className="h-3 w-3 text-blue-600 focus:ring-theme-focus-ring border-theme-surface-border rounded"
+                              className="h-3 w-3 text-blue-600 focus:ring-theme-focus-ring border-theme-surface-border rounded-sm"
                             />
                             Primary
                           </label>
@@ -1448,7 +1448,7 @@ export const MemberProfilePage: React.FC = () => {
                           onChange={(e) =>
                             handleContactChange(i, "name", e.target.value)
                           }
-                          className="px-2 py-1.5 border border-theme-surface-border rounded text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                          className="px-2 py-1.5 border border-theme-surface-border rounded-sm text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                         />
                         <input
                           type="text"
@@ -1461,7 +1461,7 @@ export const MemberProfilePage: React.FC = () => {
                               e.target.value,
                             )
                           }
-                          className="px-2 py-1.5 border border-theme-surface-border rounded text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                          className="px-2 py-1.5 border border-theme-surface-border rounded-sm text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                         />
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1472,7 +1472,7 @@ export const MemberProfilePage: React.FC = () => {
                           onChange={(e) =>
                             handleContactChange(i, "phone", e.target.value)
                           }
-                          className="px-2 py-1.5 border border-theme-surface-border rounded text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                          className="px-2 py-1.5 border border-theme-surface-border rounded-sm text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                         />
                         <input
                           type="email"
@@ -1481,7 +1481,7 @@ export const MemberProfilePage: React.FC = () => {
                           onChange={(e) =>
                             handleContactChange(i, "email", e.target.value)
                           }
-                          className="px-2 py-1.5 border border-theme-surface-border rounded text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                          className="px-2 py-1.5 border border-theme-surface-border rounded-sm text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                         />
                       </div>
                     </div>
@@ -1516,7 +1516,7 @@ export const MemberProfilePage: React.FC = () => {
             </div>
 
             {/* Employment Info */}
-            <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+            <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
               <h2 className="text-lg font-semibold text-theme-text-primary mb-4">
                 Employment
               </h2>
@@ -1543,7 +1543,7 @@ export const MemberProfilePage: React.FC = () => {
             </div>
 
             {/* Quick Stats */}
-            <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+            <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
               <h2 className="text-lg font-semibold text-theme-text-primary mb-4">
                 Quick Stats
               </h2>
@@ -1609,7 +1609,7 @@ export const MemberProfilePage: React.FC = () => {
 
             {/* Active Leaves of Absence */}
             {activeLeaves.length > 0 && (
-              <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+              <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
                 <h2 className="text-lg font-semibold text-theme-text-primary mb-4">
                   Leave of Absence
                 </h2>

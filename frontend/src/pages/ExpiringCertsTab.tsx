@@ -126,7 +126,7 @@ const ExpiringCertsTab: React.FC = () => {
                   <td className="px-4 py-3 text-theme-text-secondary">{cert.requirement_name}</td>
                   <td className="px-4 py-3 text-theme-text-secondary">{formatDate(cert.expiry_date, tz)}</td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border ${getUrgencyClass(cert.days_until_expiry)}`}>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-xs font-medium border ${getUrgencyClass(cert.days_until_expiry)}`}>
                       {cert.days_until_expiry < 0 ? (
                         <AlertTriangle className="w-3 h-3" />
                       ) : (

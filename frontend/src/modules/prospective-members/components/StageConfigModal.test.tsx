@@ -4,11 +4,33 @@ import userEvent from '@testing-library/user-event';
 import type { FormsListResponse } from '@/services/inventoryService';
 
 const mockGetForms = vi.fn();
+const mockGetEvents = vi.fn();
 
 vi.mock('@/services/formsServices', () => ({
   formsService: {
     getForms: (...args: unknown[]) => mockGetForms(...args) as unknown,
   },
+}));
+
+vi.mock('@/services/eventServices', () => ({
+  eventService: {
+    getEvents: (...args: unknown[]) => mockGetEvents(...args) as unknown,
+  },
+}));
+
+vi.mock('@/utils/eventHelpers', () => ({
+  getEventTypeLabel: (type: string) => {
+    const labels: Record<string, string> = {
+      business_meeting: 'Business Meeting',
+      training: 'Training',
+      public_education: 'Public Education',
+    };
+    return labels[type] ?? type;
+  },
+}));
+
+vi.mock('@/utils/dateFormatting', () => ({
+  formatDateTime: (d: string) => new Date(d).toLocaleString(),
 }));
 
 import { StageConfigModal } from './StageConfigModal';
@@ -57,6 +79,31 @@ const mockForms: FormsListResponse = {
   limit: 200,
 };
 
+const mockUpcomingEvents = [
+  {
+    id: 'evt-1',
+    title: 'March Business Meeting',
+    event_type: 'business_meeting',
+    start_datetime: '2026-03-15T19:00:00Z',
+    end_datetime: '2026-03-15T21:00:00Z',
+    location_name: 'Station 1',
+    requires_rsvp: false,
+    is_mandatory: false,
+    is_cancelled: false,
+  },
+  {
+    id: 'evt-2',
+    title: 'Spring Training Session',
+    event_type: 'training',
+    start_datetime: '2026-03-20T09:00:00Z',
+    end_datetime: '2026-03-20T12:00:00Z',
+    location_name: 'Training Center',
+    requires_rsvp: true,
+    is_mandatory: true,
+    is_cancelled: false,
+  },
+];
+
 const defaultProps = {
   isOpen: true,
   onClose: vi.fn(),
@@ -68,6 +115,7 @@ describe('StageConfigModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetForms.mockResolvedValue(mockForms);
+    mockGetEvents.mockResolvedValue(mockUpcomingEvents);
   });
 
   it('renders the modal when open', () => {
@@ -305,10 +353,198 @@ describe('StageConfigModal', () => {
   });
 
   // =========================================================================
-  // All 6 Stage Types Present
+  // Automated Email Stage Type Tests
   // =========================================================================
 
-  it('shows all 6 stage type options', () => {
+  it('displays automated email stage type option', () => {
+    render(<StageConfigModal {...defaultProps} />);
+    expect(screen.getByText('Automated Email')).toBeInTheDocument();
+    expect(screen.getByText('Send an automated email to the prospect at this stage.')).toBeInTheDocument();
+  });
+
+  it('shows email config sections when automated email is selected', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Automated Email'));
+
+    expect(screen.getByLabelText('Email Subject')).toBeInTheDocument();
+    expect(screen.getByText('Welcome Message')).toBeInTheDocument();
+    expect(screen.getByText('Membership FAQ Link')).toBeInTheDocument();
+    expect(screen.getByText('Next Meeting Details')).toBeInTheDocument();
+    expect(screen.getByText('Application Tracker Link')).toBeInTheDocument();
+  });
+
+  it('saves automated email stage with correct config', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Automated Email'));
+    await user.type(screen.getByLabelText(/stage name/i), 'Welcome Email');
+
+    // Subject should have a default value
+    const subjectInput = screen.getByLabelText('Email Subject');
+    await user.clear(subjectInput);
+    await user.type(subjectInput, 'Welcome to Our Department!');
+
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(defaultProps.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Welcome Email',
+        stage_type: 'automated_email',
+        config: expect.objectContaining({
+          email_subject: 'Welcome to Our Department!',
+          include_welcome: true,
+        }) as unknown,
+      })
+    );
+  });
+
+  it('validates that email subject is required', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Automated Email'));
+    await user.type(screen.getByLabelText(/stage name/i), 'Welcome Email');
+
+    // Clear the default subject
+    const subjectInput = screen.getByLabelText('Email Subject');
+    await user.clear(subjectInput);
+
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(screen.getByText('Email subject is required')).toBeInTheDocument();
+    expect(defaultProps.onSave).not.toHaveBeenCalled();
+  });
+
+  it('can toggle optional email sections on and off', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Automated Email'));
+
+    // FAQ link should be unchecked by default, check it
+    const faqCheckbox = screen.getByRole('checkbox', { name: 'Membership FAQ Link' });
+    expect(faqCheckbox).not.toBeChecked();
+    await user.click(faqCheckbox);
+
+    // URL input should now appear
+    expect(screen.getByLabelText('FAQ URL')).toBeInTheDocument();
+  });
+
+  it('can add custom sections', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Automated Email'));
+
+    await user.click(screen.getByText('Add custom section'));
+
+    // Custom section fields should appear
+    expect(screen.getByText('Custom Section')).toBeInTheDocument();
+  });
+
+  // =========================================================================
+  // Event Linking Tests
+  // =========================================================================
+
+  it('fetches upcoming events when modal opens', async () => {
+    render(<StageConfigModal {...defaultProps} />);
+    await waitFor(() => {
+      expect(mockGetEvents).toHaveBeenCalledWith(
+        expect.objectContaining({
+          end_after: expect.any(String) as string,
+          include_cancelled: false,
+        })
+      );
+    });
+  });
+
+  it('shows event type picker in meeting stage config', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Meeting'));
+
+    expect(screen.getByLabelText(/link to upcoming event/i)).toBeInTheDocument();
+  });
+
+  it('shows next upcoming event preview when event type is selected in meeting stage', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Meeting'));
+
+    await waitFor(() => {
+      expect(mockGetEvents).toHaveBeenCalled();
+    });
+
+    await user.selectOptions(screen.getByLabelText(/link to upcoming event/i), 'business_meeting');
+
+    await waitFor(() => {
+      expect(screen.getByText('March Business Meeting')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Station 1/)).toBeInTheDocument();
+  });
+
+  it('shows event type picker in automated email next meeting section', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Automated Email'));
+
+    // Enable the next meeting section
+    const meetingCheckbox = screen.getByRole('checkbox', { name: 'Next Meeting Details' });
+    await user.click(meetingCheckbox);
+
+    expect(screen.getByLabelText(/pull from upcoming event/i)).toBeInTheDocument();
+  });
+
+  it('shows next upcoming event preview in automated email when event type is selected', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Automated Email'));
+
+    await waitFor(() => {
+      expect(mockGetEvents).toHaveBeenCalled();
+    });
+
+    const meetingCheckbox = screen.getByRole('checkbox', { name: 'Next Meeting Details' });
+    await user.click(meetingCheckbox);
+
+    await user.selectOptions(screen.getByLabelText(/pull from upcoming event/i), 'training');
+
+    await waitFor(() => {
+      expect(screen.getByText('Spring Training Session')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Training Center/)).toBeInTheDocument();
+  });
+
+  it('shows no upcoming events message when no events match selected type', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Meeting'));
+
+    await waitFor(() => {
+      expect(mockGetEvents).toHaveBeenCalled();
+    });
+
+    // Select an event type with no upcoming events
+    await user.selectOptions(screen.getByLabelText(/link to upcoming event/i), 'ceremony');
+
+    await waitFor(() => {
+      expect(screen.getByText(/no upcoming ceremony events found/i)).toBeInTheDocument();
+    });
+  });
+
+  // =========================================================================
+  // All 7 Stage Types Present
+  // =========================================================================
+
+  it('shows all 7 stage type options', () => {
     render(<StageConfigModal {...defaultProps} />);
     expect(screen.getByText('Form Submission')).toBeInTheDocument();
     expect(screen.getByText('Document Upload')).toBeInTheDocument();
@@ -316,5 +552,6 @@ describe('StageConfigModal', () => {
     expect(screen.getByText('Election / Vote')).toBeInTheDocument();
     expect(screen.getByText('Manual Approval')).toBeInTheDocument();
     expect(screen.getByText('Enable Status Page')).toBeInTheDocument();
+    expect(screen.getByText('Automated Email')).toBeInTheDocument();
   });
 });

@@ -446,7 +446,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
                                 value={sel.returnCondition}
                                 onChange={(e) => updateCondition(item.recordId, e.target.value)}
                                 aria-label={`Return condition for ${item.itemName}`}
-                                className="px-2 py-1 border border-theme-border rounded text-xs bg-theme-surface text-theme-text-primary"
+                                className="px-2 py-1 border border-theme-border rounded-sm text-xs bg-theme-surface text-theme-text-primary"
                               >
                                 {CONDITION_OPTIONS.map((c) => (
                                   <option key={c.value} value={c.value}>{c.label}</option>
@@ -470,7 +470,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
                                     )
                                   }
                                   aria-label={`Return quantity for ${item.itemName}`}
-                                  className="w-16 px-2 py-1 border border-theme-border rounded text-xs text-center bg-theme-surface text-theme-text-primary"
+                                  className="w-16 px-2 py-1 border border-theme-border rounded-sm text-xs text-center bg-theme-surface text-theme-text-primary"
                                 />
                                 <span className="text-xs text-theme-text-muted">
                                   of {item.quantityIssued}

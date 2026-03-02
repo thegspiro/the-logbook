@@ -56,7 +56,7 @@ export const TopProgressBar: React.FC = () => {
 
   return (
     <div
-      className="fixed top-0 left-0 right-0 z-[60] h-0.5 bg-transparent pointer-events-none"
+      className="fixed top-0 left-0 right-0 z-60 h-0.5 bg-transparent pointer-events-none"
       role="progressbar"
       aria-valuenow={progress}
       aria-valuemin={0}

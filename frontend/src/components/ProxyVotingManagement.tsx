@@ -115,7 +115,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
 
   if (loading) {
     return (
-      <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6">
+      <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6">
         <div className="text-theme-text-muted text-center py-4">Loading proxy authorizations...</div>
       </div>
     );
@@ -123,8 +123,8 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
 
   if (error) {
     return (
-      <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6">
-        <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded p-3">
+      <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6">
+        <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3">
           <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
         </div>
         <button
@@ -139,7 +139,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
   }
 
   return (
-    <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6">
+    <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6">
       {/* Header */}
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-medium text-theme-text-primary">
@@ -180,7 +180,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
                 type="text"
                 value={formData.delegating_user_id}
                 onChange={(e) => setFormData((prev) => ({ ...prev, delegating_user_id: e.target.value }))}
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
                 placeholder="User ID of the absent member"
               />
             </div>
@@ -192,7 +192,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
                 type="text"
                 value={formData.proxy_user_id}
                 onChange={(e) => setFormData((prev) => ({ ...prev, proxy_user_id: e.target.value }))}
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
                 placeholder="User ID of the proxy voter"
               />
             </div>
@@ -206,7 +206,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
                     proxy_type: e.target.value as 'single_election' | 'regular',
                   }))
                 }
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
               >
                 <option value="single_election">Single Election</option>
                 <option value="regular">Regular (Ongoing)</option>
@@ -218,7 +218,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
                 value={formData.reason}
                 onChange={(e) => setFormData((prev) => ({ ...prev, reason: e.target.value }))}
                 rows={2}
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
                 placeholder="Reason for proxy authorization (e.g., medical leave, out of town)"
               />
             </div>
@@ -275,7 +275,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
                     }`}>
                       {auth.proxy_type === 'single_election' ? 'Single Election' : 'Regular'}
                     </span>
-                    <span className="px-2 py-0.5 text-xs bg-green-500/20 text-green-700 dark:text-green-300 rounded">
+                    <span className="px-2 py-0.5 text-xs bg-green-500/20 text-green-700 dark:text-green-300 rounded-sm">
                       Active
                     </span>
                   </div>
@@ -291,7 +291,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
                     onClick={() => { void handleRevoke(auth.id, auth.delegating_user_name); }}
                     disabled={revokingId === auth.id}
                     aria-label={`Revoke proxy authorization for ${auth.delegating_user_name || auth.delegating_user_id}`}
-                    className="ml-4 px-3 py-1 text-xs bg-red-500/20 text-red-700 dark:text-red-300 rounded hover:bg-red-500/30 disabled:opacity-50"
+                    className="ml-4 px-3 py-1 text-xs bg-red-500/20 text-red-700 dark:text-red-300 rounded-sm hover:bg-red-500/30 disabled:opacity-50"
                   >
                     {revokingId === auth.id ? 'Revoking...' : 'Revoke'}
                   </button>
@@ -326,7 +326,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
                     }`}>
                       {auth.proxy_type === 'single_election' ? 'Single Election' : 'Regular'}
                     </span>
-                    <span className="px-2 py-0.5 text-xs bg-red-500/20 text-red-700 dark:text-red-300 rounded">
+                    <span className="px-2 py-0.5 text-xs bg-red-500/20 text-red-700 dark:text-red-300 rounded-sm">
                       Revoked
                     </span>
                   </div>

@@ -28,6 +28,7 @@ import {
   ArrowUp,
   ArrowDown,
   Copy,
+  Upload,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
@@ -829,7 +830,7 @@ const InventoryPage: React.FC = () => {
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div className="flex items-center space-x-3 min-w-0">
-            <div className="bg-emerald-600 rounded-lg p-2 flex-shrink-0">
+            <div className="bg-emerald-600 rounded-lg p-2 shrink-0">
               <Package className="w-6 h-6 text-theme-text-primary" aria-hidden="true" />
             </div>
             <div className="min-w-0">
@@ -840,7 +841,7 @@ const InventoryPage: React.FC = () => {
             </div>
           </div>
           {canManage && (
-            <div className="flex items-center space-x-2 sm:space-x-3 flex-shrink-0">
+            <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
               {selectedItemIds.size > 0 && (
                 <div className="relative">
                   <div className="flex items-center">
@@ -944,7 +945,7 @@ const InventoryPage: React.FC = () => {
         {/* Error Banner */}
         {error && (
           <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-center gap-3" role="alert">
-            <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400 flex-shrink-0" aria-hidden="true" />
+            <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400 shrink-0" aria-hidden="true" />
             <p className="text-red-700 dark:text-red-300 text-sm flex-1">{error}</p>
             <button onClick={() => { void loadData(); }} className="flex items-center gap-1 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-sm" aria-label="Retry loading inventory">
               <RefreshCw className="w-4 h-4" aria-hidden="true" /> Retry
@@ -998,7 +999,7 @@ const InventoryPage: React.FC = () => {
                   {alert.items && alert.items.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-1">
                       {alert.items.map((item, idx) => (
-                        <span key={idx} className="inline-flex items-center gap-1 text-xs bg-yellow-500/15 rounded px-2 py-0.5 text-yellow-700 dark:text-yellow-300">
+                        <span key={idx} className="inline-flex items-center gap-1 text-xs bg-yellow-500/15 rounded-sm px-2 py-0.5 text-yellow-700 dark:text-yellow-300">
                           {item.name}
                           <span className="text-yellow-600 dark:text-yellow-400 font-medium">({item.quantity})</span>
                         </span>
@@ -1037,7 +1038,7 @@ const InventoryPage: React.FC = () => {
                     </p>
                     {wo.description && <p className="text-theme-text-secondary text-xs mt-0.5 truncate">{wo.description}</p>}
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={() => { void handleReviewWriteOff(wo.id, 'approved'); }}
                       disabled={submitting}
@@ -1109,7 +1110,7 @@ const InventoryPage: React.FC = () => {
                     </p>
                     {req.reason && <p className="text-theme-text-secondary text-xs mt-0.5 truncate">{req.reason}</p>}
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={() => setShowApproveConfirm(req)}
                       className="btn-success p-1.5"
@@ -1258,7 +1259,7 @@ const InventoryPage: React.FC = () => {
                     id="inventory-status-filter"
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
-                    className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
                   >
                     <option value="">All Statuses</option>
                     {STATUS_OPTIONS.map(s => (
@@ -1270,7 +1271,7 @@ const InventoryPage: React.FC = () => {
                     id="inventory-category-filter"
                     value={categoryFilter}
                     onChange={(e) => setCategoryFilter(e.target.value)}
-                    className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
                   >
                     <option value="">All Categories</option>
                     {categories.map(c => (
@@ -1282,7 +1283,7 @@ const InventoryPage: React.FC = () => {
                     id="inventory-type-filter"
                     value={itemTypeFilter}
                     onChange={(e) => setItemTypeFilter(e.target.value)}
-                    className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
                   >
                     <option value="">All Types</option>
                     {ITEM_TYPES.map(t => (
@@ -1294,7 +1295,7 @@ const InventoryPage: React.FC = () => {
                     id="inventory-condition-filter"
                     value={conditionFilter}
                     onChange={(e) => setConditionFilter(e.target.value)}
-                    className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
                   >
                     <option value="">All Conditions</option>
                     {CONDITION_OPTIONS.map(c => (
@@ -1304,6 +1305,10 @@ const InventoryPage: React.FC = () => {
                 </div>
                 {canManage && (
                   <div className="flex items-center gap-2 ml-auto">
+                    <Link to="/inventory/import" className="flex items-center gap-1.5 px-3 py-2 text-sm text-theme-text-secondary hover:text-theme-text-primary bg-theme-input-bg border border-theme-input-border rounded-lg hover:bg-theme-surface-hover transition-colors" title="Import CSV">
+                      <Upload className="w-4 h-4" aria-hidden="true" />
+                      <span className="hidden sm:inline">Import</span>
+                    </Link>
                     <button onClick={() => { void handleExportCsv(); }} className="flex items-center gap-1.5 px-3 py-2 text-sm text-theme-text-secondary hover:text-theme-text-primary bg-theme-input-bg border border-theme-input-border rounded-lg hover:bg-theme-surface-hover transition-colors" title="Export CSV">
                       <Download className="w-4 h-4" aria-hidden="true" />
                       <span className="hidden sm:inline">Export</span>
@@ -1371,7 +1376,7 @@ const InventoryPage: React.FC = () => {
                               type="checkbox"
                               checked={items.length > 0 && selectedItemIds.size === items.length}
                               onChange={toggleSelectAll}
-                              className="h-4 w-4 rounded border-theme-input-border text-emerald-600 focus:ring-emerald-500"
+                              className="h-4 w-4 rounded-sm border-theme-input-border text-emerald-600 focus:ring-emerald-500"
                               aria-label="Select all items"
                             />
                           </th>
@@ -1422,7 +1427,7 @@ const InventoryPage: React.FC = () => {
                                 type="checkbox"
                                 checked={selectedItemIds.has(item.id)}
                                 onChange={() => toggleItemSelection(item.id)}
-                                className="h-4 w-4 rounded border-theme-input-border text-emerald-600 focus:ring-emerald-500"
+                                className="h-4 w-4 rounded-sm border-theme-input-border text-emerald-600 focus:ring-emerald-500"
                                 aria-label={`Select ${item.name}`}
                               />
                             </td>
@@ -1436,17 +1441,17 @@ const InventoryPage: React.FC = () => {
                               {(item.size || item.color || item.asset_tag) && (
                                 <div className="flex flex-wrap gap-1 mt-1">
                                   {item.size && (
-                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[11px] font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
                                       {item.size}
                                     </span>
                                   )}
                                   {item.color && (
-                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300">
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[11px] font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300">
                                       {item.color}
                                     </span>
                                   )}
                                   {item.asset_tag && (
-                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[11px] font-mono bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
                                       {item.asset_tag}
                                     </span>
                                   )}
@@ -1472,7 +1477,7 @@ const InventoryPage: React.FC = () => {
                             </span>
                           </td>
                           <td className="px-3 sm:px-6 py-4">
-                            <span className={`px-2 py-1 text-xs font-semibold rounded border ${getStatusStyle(item.status)}`}>
+                            <span className={`px-2 py-1 text-xs font-semibold rounded-sm border ${getStatusStyle(item.status)}`}>
                               {item.status.replace('_', ' ').toUpperCase()}
                             </span>
                           </td>
@@ -1480,24 +1485,24 @@ const InventoryPage: React.FC = () => {
                           {canManage && (
                             <td className="px-3 py-4" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center gap-1">
-                                <button onClick={() => openEditModal(item)} className="p-1.5 text-theme-text-muted hover:text-emerald-500 rounded" title="Edit item" aria-label={`Edit ${item.name}`}>
+                                <button onClick={() => openEditModal(item)} className="p-1.5 text-theme-text-muted hover:text-emerald-500 rounded-sm" title="Edit item" aria-label={`Edit ${item.name}`}>
                                   <Pencil className="w-4 h-4" aria-hidden="true" />
                                 </button>
-                                <button onClick={() => handleDuplicateItem(item)} className="p-1.5 text-theme-text-muted hover:text-blue-500 rounded" title="Duplicate item" aria-label={`Duplicate ${item.name}`}>
+                                <button onClick={() => handleDuplicateItem(item)} className="p-1.5 text-theme-text-muted hover:text-blue-500 rounded-sm" title="Duplicate item" aria-label={`Duplicate ${item.name}`}>
                                   <Copy className="w-4 h-4" aria-hidden="true" />
                                 </button>
                                 {item.tracking_type === 'pool' && item.status !== 'retired' && (
-                                  <button onClick={() => openPoolIssueModal(item)} className="p-1.5 text-theme-text-muted hover:text-purple-500 rounded" title="Issue from pool" aria-label={`Issue ${item.name}`}>
+                                  <button onClick={() => openPoolIssueModal(item)} className="p-1.5 text-theme-text-muted hover:text-purple-500 rounded-sm" title="Issue from pool" aria-label={`Issue ${item.name}`}>
                                     <Send className="w-4 h-4" aria-hidden="true" />
                                   </button>
                                 )}
                                 {item.status !== 'retired' && (
-                                  <button onClick={() => openWriteOffModal(item)} className="p-1.5 text-theme-text-muted hover:text-orange-500 rounded" title="Write off item" aria-label={`Write off ${item.name}`}>
+                                  <button onClick={() => openWriteOffModal(item)} className="p-1.5 text-theme-text-muted hover:text-orange-500 rounded-sm" title="Write off item" aria-label={`Write off ${item.name}`}>
                                     <FileX className="w-4 h-4" aria-hidden="true" />
                                   </button>
                                 )}
                                 {item.status !== 'retired' && (
-                                  <button onClick={() => setShowRetireConfirm(item)} className="p-1.5 text-theme-text-muted hover:text-red-500 rounded" title="Retire item" aria-label={`Retire ${item.name}`}>
+                                  <button onClick={() => setShowRetireConfirm(item)} className="p-1.5 text-theme-text-muted hover:text-red-500 rounded-sm" title="Retire item" aria-label={`Retire ${item.name}`}>
                                     <Archive className="w-4 h-4" aria-hidden="true" />
                                   </button>
                                 )}
@@ -1561,11 +1566,11 @@ const InventoryPage: React.FC = () => {
                     <div className="flex items-start justify-between mb-3">
                       <h3 className="text-theme-text-primary font-semibold text-lg">{cat.name}</h3>
                       <div className="flex items-center gap-2">
-                        <span className="px-2 py-1 text-xs font-medium rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 capitalize">
+                        <span className="px-2 py-1 text-xs font-medium rounded-sm bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 capitalize">
                           {cat.item_type}
                         </span>
                         {canManage && (
-                          <button onClick={() => openEditCategory(cat)} className="p-1 text-theme-text-muted hover:text-emerald-500 rounded" title="Edit category" aria-label={`Edit ${cat.name}`}>
+                          <button onClick={() => openEditCategory(cat)} className="p-1 text-theme-text-muted hover:text-emerald-500 rounded-sm" title="Edit category" aria-label={`Edit ${cat.name}`}>
                             <Pencil className="w-4 h-4" aria-hidden="true" />
                           </button>
                         )}
@@ -1576,16 +1581,16 @@ const InventoryPage: React.FC = () => {
                     )}
                     <div className="flex flex-wrap gap-2 mt-3">
                       {cat.requires_serial_number && (
-                        <span className="px-2 py-0.5 text-xs bg-blue-500/10 text-blue-700 dark:text-blue-400 rounded">Serial # Required</span>
+                        <span className="px-2 py-0.5 text-xs bg-blue-500/10 text-blue-700 dark:text-blue-400 rounded-sm">Serial # Required</span>
                       )}
                       {cat.requires_maintenance && (
-                        <span className="px-2 py-0.5 text-xs bg-orange-500/10 text-orange-700 dark:text-orange-400 rounded">Maintenance Tracked</span>
+                        <span className="px-2 py-0.5 text-xs bg-orange-500/10 text-orange-700 dark:text-orange-400 rounded-sm">Maintenance Tracked</span>
                       )}
                       {cat.requires_assignment && (
-                        <span className="px-2 py-0.5 text-xs bg-purple-500/10 text-purple-700 dark:text-purple-400 rounded">Assignment Required</span>
+                        <span className="px-2 py-0.5 text-xs bg-purple-500/10 text-purple-700 dark:text-purple-400 rounded-sm">Assignment Required</span>
                       )}
                       {cat.low_stock_threshold != null && (
-                        <span className="px-2 py-0.5 text-xs bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 rounded">
+                        <span className="px-2 py-0.5 text-xs bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 rounded-sm">
                           Low Stock: {cat.low_stock_threshold}
                         </span>
                       )}
@@ -1746,7 +1751,7 @@ const InventoryPage: React.FC = () => {
                         <input id="maint-next-due" type="date" value={maintenanceForm.next_due_date || ''} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, next_due_date: e.target.value })} className="form-input focus:ring-emerald-500" />
                       </div>
                       <div className="flex items-center gap-2">
-                        <input id="maint-completed" type="checkbox" checked={maintenanceForm.is_completed || false} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, is_completed: e.target.checked })} className="rounded border-theme-input-border text-emerald-600 focus:ring-emerald-500" />
+                        <input id="maint-completed" type="checkbox" checked={maintenanceForm.is_completed || false} onChange={(e) => setMaintenanceForm({ ...maintenanceForm, is_completed: e.target.checked })} className="rounded-sm border-theme-input-border text-emerald-600 focus:ring-emerald-500" />
                         <label htmlFor="maint-completed" className="text-sm text-theme-text-secondary">Mark as completed</label>
                       </div>
 
@@ -2253,7 +2258,7 @@ const InventoryPage: React.FC = () => {
                           <input
                             type="checkbox" checked={categoryForm.requires_serial_number}
                             onChange={(e) => setCategoryForm({ ...categoryForm, requires_serial_number: e.target.checked })}
-                            className="rounded border-theme-input-border bg-theme-input-bg text-emerald-600 focus:ring-emerald-500"
+                            className="rounded-sm border-theme-input-border bg-theme-input-bg text-emerald-600 focus:ring-emerald-500"
                           />
                           <span className="text-sm text-theme-text-secondary">Requires serial number</span>
                         </label>
@@ -2261,7 +2266,7 @@ const InventoryPage: React.FC = () => {
                           <input
                             type="checkbox" checked={categoryForm.requires_maintenance}
                             onChange={(e) => setCategoryForm({ ...categoryForm, requires_maintenance: e.target.checked })}
-                            className="rounded border-theme-input-border bg-theme-input-bg text-emerald-600 focus:ring-emerald-500"
+                            className="rounded-sm border-theme-input-border bg-theme-input-bg text-emerald-600 focus:ring-emerald-500"
                           />
                           <span className="text-sm text-theme-text-secondary">Requires maintenance tracking</span>
                         </label>
@@ -2269,7 +2274,7 @@ const InventoryPage: React.FC = () => {
                           <input
                             type="checkbox" checked={categoryForm.requires_assignment}
                             onChange={(e) => setCategoryForm({ ...categoryForm, requires_assignment: e.target.checked })}
-                            className="rounded border-theme-input-border bg-theme-input-bg text-emerald-600 focus:ring-emerald-500"
+                            className="rounded-sm border-theme-input-border bg-theme-input-bg text-emerald-600 focus:ring-emerald-500"
                           />
                           <span className="text-sm text-theme-text-secondary">Requires member assignment</span>
                         </label>
@@ -2277,7 +2282,7 @@ const InventoryPage: React.FC = () => {
                           <input
                             type="checkbox" checked={categoryForm.nfpa_tracking_enabled || false}
                             onChange={(e) => setCategoryForm({ ...categoryForm, nfpa_tracking_enabled: e.target.checked })}
-                            className="rounded border-theme-input-border bg-theme-input-bg text-emerald-600 focus:ring-emerald-500"
+                            className="rounded-sm border-theme-input-border bg-theme-input-bg text-emerald-600 focus:ring-emerald-500"
                           />
                           <span className="text-sm text-theme-text-secondary">NFPA 1851/1852 compliance tracking</span>
                         </label>
@@ -2732,19 +2737,19 @@ const InventoryPage: React.FC = () => {
                       </div>
                       <div className="space-y-2">
                         <label className="flex items-center space-x-2">
-                          <input type="checkbox" checked={editCategoryForm.requires_serial_number || false} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, requires_serial_number: e.target.checked })} className="rounded border-theme-input-border bg-theme-input-bg text-emerald-600 focus:ring-emerald-500" />
+                          <input type="checkbox" checked={editCategoryForm.requires_serial_number || false} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, requires_serial_number: e.target.checked })} className="rounded-sm border-theme-input-border bg-theme-input-bg text-emerald-600 focus:ring-emerald-500" />
                           <span className="text-sm text-theme-text-secondary">Requires serial number</span>
                         </label>
                         <label className="flex items-center space-x-2">
-                          <input type="checkbox" checked={editCategoryForm.requires_maintenance || false} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, requires_maintenance: e.target.checked })} className="rounded border-theme-input-border bg-theme-input-bg text-emerald-600 focus:ring-emerald-500" />
+                          <input type="checkbox" checked={editCategoryForm.requires_maintenance || false} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, requires_maintenance: e.target.checked })} className="rounded-sm border-theme-input-border bg-theme-input-bg text-emerald-600 focus:ring-emerald-500" />
                           <span className="text-sm text-theme-text-secondary">Requires maintenance tracking</span>
                         </label>
                         <label className="flex items-center space-x-2">
-                          <input type="checkbox" checked={editCategoryForm.requires_assignment || false} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, requires_assignment: e.target.checked })} className="rounded border-theme-input-border bg-theme-input-bg text-emerald-600 focus:ring-emerald-500" />
+                          <input type="checkbox" checked={editCategoryForm.requires_assignment || false} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, requires_assignment: e.target.checked })} className="rounded-sm border-theme-input-border bg-theme-input-bg text-emerald-600 focus:ring-emerald-500" />
                           <span className="text-sm text-theme-text-secondary">Requires member assignment</span>
                         </label>
                         <label className="flex items-center space-x-2">
-                          <input type="checkbox" checked={editCategoryForm.nfpa_tracking_enabled || false} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, nfpa_tracking_enabled: e.target.checked })} className="rounded border-theme-input-border bg-theme-input-bg text-emerald-600 focus:ring-emerald-500" />
+                          <input type="checkbox" checked={editCategoryForm.nfpa_tracking_enabled || false} onChange={(e) => setEditCategoryForm({ ...editCategoryForm, nfpa_tracking_enabled: e.target.checked })} className="rounded-sm border-theme-input-border bg-theme-input-bg text-emerald-600 focus:ring-emerald-500" />
                           <span className="text-sm text-theme-text-secondary">NFPA 1851/1852 compliance tracking</span>
                         </label>
                       </div>

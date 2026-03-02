@@ -176,7 +176,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
 
   const displayList = view === 'upcoming' ? upcoming : past;
 
-  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-violet-500';
+  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-violet-500';
 
   if (loading) {
     return (
@@ -235,7 +235,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
               >
                 <div className="flex items-start sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
                       <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-violet-500" />
                     </div>
                     <div className="min-w-0">
@@ -255,7 +255,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                     <span className={`hidden sm:inline-block px-2.5 py-1 text-xs font-medium rounded-full border capitalize ${statusColor}`}>
                       {assignment.status}
                     </span>

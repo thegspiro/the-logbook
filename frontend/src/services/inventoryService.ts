@@ -10,7 +10,7 @@ import type {
   ItemIssuance, InventoryItemsListResponse, ItemHistoryEvent, InventorySummary,
   InventoryCategoryCreate, ScanLookupResponse, BatchCheckoutRequest, BatchCheckoutResponse,
   BatchReturnRequest, BatchReturnResponse, LabelFormat, NFPACompliance, NFPAExposureRecord,
-  NFPASummary, NFPARetirementDueItem, MembersInventoryListResponse,
+  NFPASummary, NFPARetirementDueItem, MembersInventoryListResponse, InventoryImportResult,
 } from './eventServices';
 
 export const inventoryService = {
@@ -251,6 +251,20 @@ export const inventoryService = {
 
   async exportItemsCsv(params?: { category_id?: string | undefined; status?: string | undefined; search?: string | undefined }): Promise<Blob> {
     const response = await api.get<Blob>('/inventory/items/export', { params, responseType: 'blob' });
+    return response.data;
+  },
+
+  async downloadImportTemplate(): Promise<Blob> {
+    const response = await api.get<Blob>('/inventory/items/import-template', { responseType: 'blob' });
+    return response.data;
+  },
+
+  async importItemsCsv(file: File): Promise<InventoryImportResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post<InventoryImportResult>('/inventory/items/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return response.data;
   },
 

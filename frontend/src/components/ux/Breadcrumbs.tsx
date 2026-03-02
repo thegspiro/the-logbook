@@ -104,7 +104,7 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, className = '' 
         </li>
         {crumbs.map((crumb, index) => (
           <li key={index} className="flex items-center">
-            <ChevronRight className="w-3.5 h-3.5 text-theme-text-muted mx-1 flex-shrink-0" aria-hidden="true" />
+            <ChevronRight className="w-3.5 h-3.5 text-theme-text-muted mx-1 shrink-0" aria-hidden="true" />
             {crumb.path ? (
               <Link
                 to={crumb.path}

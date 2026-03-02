@@ -19,6 +19,7 @@ import {
   Globe,
   Loader2,
   AlertCircle,
+  Mail,
 } from 'lucide-react';
 import type {
   PipelineStage,
@@ -32,11 +33,16 @@ import type {
   MeetingStageConfig,
   MeetingType,
   StatusPageToggleConfig,
+  AutomatedEmailStageConfig,
   StageConfig,
 } from '../types';
 import { DEFAULT_ELECTION_PACKAGE_FIELDS } from '../types';
 import { formsService } from '@/services/formsServices';
 import type { FormDef } from '@/services/inventoryService';
+import { eventService } from '@/services/eventServices';
+import type { EventListItem } from '@/types/event';
+import { getEventTypeLabel } from '@/utils/eventHelpers';
+import { formatDateTime } from '@/utils/dateFormatting';
 
 interface StageConfigModalProps {
   isOpen: boolean;
@@ -83,6 +89,81 @@ const STAGE_TYPE_OPTIONS: { value: StageType; label: string; icon: React.Element
     icon: Globe,
     description: 'Activate the public status page for the prospect at this stage.',
   },
+  {
+    value: 'automated_email',
+    label: 'Automated Email',
+    icon: Mail,
+    description: 'Send an automated email to the prospect at this stage.',
+  },
+];
+
+// Stage presets for quick configuration
+interface StagePreset {
+  label: string;
+  name: string;
+  description: string;
+  stageType: StageType;
+  config: () => StageConfig;
+}
+
+const STAGE_PRESETS: StagePreset[] = [
+  {
+    label: 'Application Form',
+    name: 'Application Form',
+    description: 'Collect basic applicant information via a form.',
+    stageType: 'form_submission',
+    config: () => ({ form_id: '', form_name: '' }),
+  },
+  {
+    label: 'Background Check Docs',
+    name: 'Background Check Documents',
+    description: 'Require background check and ID documents.',
+    stageType: 'document_upload',
+    config: () => ({ required_document_types: ['Background Check', 'Photo ID'], allow_multiple: true }),
+  },
+  {
+    label: 'Chief Interview',
+    name: 'Meeting with Chief',
+    description: 'Schedule a one-on-one meeting with the fire chief.',
+    stageType: 'meeting',
+    config: () => ({ meeting_type: 'chief_meeting' as MeetingType, meeting_description: 'Interview with the fire chief to discuss expectations and commitment.' }),
+  },
+  {
+    label: 'Membership Vote',
+    name: 'Membership Election',
+    description: 'Hold a membership vote for the applicant.',
+    stageType: 'election_vote',
+    config: () => ({
+      voting_method: 'simple_majority' as const,
+      victory_condition: 'majority' as const,
+      eligible_voter_roles: ['member'],
+      anonymous_voting: true,
+    }),
+  },
+  {
+    label: 'Welcome Email',
+    name: 'Send Welcome Email',
+    description: 'Send welcome information to the accepted member.',
+    stageType: 'automated_email',
+    config: () => ({
+      email_subject: 'Welcome to the Department!',
+      include_welcome: true,
+      welcome_message: 'Congratulations! We are pleased to welcome you.',
+      include_faq_link: true,
+      faq_url: '',
+      include_next_meeting: true,
+      next_meeting_details: '',
+      include_status_tracker: false,
+      custom_sections: [],
+    }),
+  },
+  {
+    label: 'Coordinator Approval',
+    name: 'Coordinator Approval',
+    description: 'Membership coordinator reviews and approves.',
+    stageType: 'manual_approval',
+    config: () => ({ approver_roles: ['membership_coordinator'], require_notes: true }),
+  },
 ];
 
 const MEETING_TYPE_OPTIONS: { value: MeetingType; label: string; description: string }[] = [
@@ -90,6 +171,16 @@ const MEETING_TYPE_OPTIONS: { value: MeetingType; label: string; description: st
   { value: 'informational', label: 'Informational Meeting', description: 'General info session about the department.' },
   { value: 'business_meeting', label: 'Business Meeting', description: 'Attend a regular business meeting.' },
   { value: 'other', label: 'Other', description: 'Custom meeting type.' },
+];
+
+const EVENT_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'business_meeting', label: 'Business Meeting' },
+  { value: 'training', label: 'Training' },
+  { value: 'public_education', label: 'Public Education' },
+  { value: 'social', label: 'Social' },
+  { value: 'fundraiser', label: 'Fundraiser' },
+  { value: 'ceremony', label: 'Ceremony' },
+  { value: 'other', label: 'Other' },
 ];
 
 const DEFAULT_CONFIGS: Record<StageType, () => StageConfig> = {
@@ -104,6 +195,17 @@ const DEFAULT_CONFIGS: Record<StageType, () => StageConfig> = {
   manual_approval: () => ({ approver_roles: [], require_notes: false }),
   meeting: () => ({ meeting_type: 'chief_meeting' as MeetingType, meeting_description: '' }),
   status_page_toggle: () => ({ enable_public_status: true, custom_message: '' }),
+  automated_email: () => ({
+    email_subject: 'Welcome to the Membership Process',
+    include_welcome: true,
+    welcome_message: '',
+    include_faq_link: false,
+    faq_url: '',
+    include_next_meeting: false,
+    next_meeting_details: '',
+    include_status_tracker: false,
+    custom_sections: [],
+  }),
 };
 
 export const StageConfigModal: React.FC<StageConfigModalProps> = ({
@@ -128,6 +230,8 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   const [availableForms, setAvailableForms] = useState<FormDef[]>([]);
   const [formsLoading, setFormsLoading] = useState(false);
   const [formsError, setFormsError] = useState<string | null>(null);
+  const [upcomingEvents, setUpcomingEvents] = useState<EventListItem[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
 
   // Fetch published forms when the modal opens
   useEffect(() => {
@@ -152,6 +256,36 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
       }
     };
     void fetchForms();
+    return () => { cancelled = true; };
+  }, [isOpen]);
+
+  // Fetch upcoming events when the modal opens
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    const fetchEvents = async () => {
+      setEventsLoading(true);
+      try {
+        const events = await eventService.getEvents({
+          end_after: new Date().toISOString(),
+          include_cancelled: false,
+          limit: 100,
+        });
+        if (!cancelled) {
+          // Sort by start_datetime ascending (soonest first)
+          const sorted = [...events].sort(
+            (a, b) => new Date(a.start_datetime).getTime() - new Date(b.start_datetime).getTime()
+          );
+          setUpcomingEvents(sorted);
+        }
+      } catch {
+        // Non-critical — events dropdown will simply be empty
+        if (!cancelled) setUpcomingEvents([]);
+      } finally {
+        if (!cancelled) setEventsLoading(false);
+      }
+    };
+    void fetchEvents();
     return () => { cancelled = true; };
   }, [isOpen]);
 
@@ -184,6 +318,42 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
     }
     setErrors({});
   }, [editingStage, isOpen]);
+
+  /** Get next upcoming event for a given event type */
+  const getNextEventForType = (eventType: string): EventListItem | undefined => {
+    return upcomingEvents.find((e) => e.event_type === eventType);
+  };
+
+  /** Render a preview card for the next upcoming event of a given type */
+  const renderEventPreview = (eventType: string | undefined) => {
+    if (!eventType) return null;
+    if (eventsLoading) {
+      return (
+        <div className="flex items-center gap-2 text-sm text-theme-text-muted mt-2">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          Loading events...
+        </div>
+      );
+    }
+    const nextEvent = getNextEventForType(eventType);
+    if (!nextEvent) {
+      return (
+        <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+          No upcoming {getEventTypeLabel(eventType).toLowerCase()} events found.
+        </p>
+      );
+    }
+    return (
+      <div className="mt-2 rounded-md border border-theme-surface-border bg-theme-surface-hover p-3">
+        <p className="text-xs font-medium text-theme-text-muted mb-1">Next upcoming event:</p>
+        <p className="text-sm font-medium text-theme-text-primary">{nextEvent.title}</p>
+        <p className="text-xs text-theme-text-muted mt-0.5">
+          {formatDateTime(nextEvent.start_datetime)}
+          {nextEvent.location_name ? ` — ${nextEvent.location_name}` : nextEvent.location ? ` — ${nextEvent.location}` : ''}
+        </p>
+      </div>
+    );
+  };
 
   const handleStageTypeChange = (type: StageType) => {
     setStageType(type);
@@ -232,6 +402,11 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
       }
     }
 
+    if (stageType === 'automated_email') {
+      const c = config as AutomatedEmailStageConfig;
+      if (!c.email_subject.trim()) newErrors.email_subject = 'Email subject is required';
+    }
+
     if (hasTimeoutOverride) {
       if (!Number.isFinite(timeoutOverrideDays) || timeoutOverrideDays < 1) {
         newErrors.timeout_override = 'Timeout override must be at least 1 day';
@@ -270,6 +445,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   const approvalConfig = config as ManualApprovalConfig;
   const meetingConfig = config as MeetingStageConfig;
   const statusPageConfig = config as StatusPageToggleConfig;
+  const emailConfig = config as AutomatedEmailStageConfig;
 
   return (
     <div
@@ -309,7 +485,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
               placeholder="e.g., Application Review"
               required
               aria-required="true"
-              className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
             />
             {errors.name && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.name}</p>}
           </div>
@@ -325,9 +501,35 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Describe what happens at this stage..."
               rows={2}
-              className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring resize-none"
+              className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring resize-none"
             />
           </div>
+
+          {/* Stage Presets (only when creating, not editing) */}
+          {!editingStage && (
+            <div>
+              <label className="block text-sm font-medium text-theme-text-secondary mb-2">
+                Quick Presets
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {STAGE_PRESETS.map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => {
+                      setName(preset.name);
+                      setDescription(preset.description);
+                      setStageType(preset.stageType);
+                      setConfig(preset.config());
+                    }}
+                    className="px-3 py-1.5 text-xs rounded-lg border border-theme-surface-border text-theme-text-secondary hover:border-red-500/50 hover:text-theme-text-primary transition-colors"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Stage Type */}
           <div>
@@ -402,7 +604,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                         } as FormStageConfig);
                         setErrors(prev => ({ ...prev, form_id: '' }));
                       }}
-                      className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                      className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                     >
                       <option value="">Select a form...</option>
                       {availableForms.map((form) => (
@@ -443,7 +645,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                         }}
                         placeholder="e.g., Photo ID, Background Check"
                         aria-label={`Document type ${idx + 1}`}
-                        className="flex-1 bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="flex-1 bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                       />
                       {docConfig.required_document_types.length > 1 && (
                         <button
@@ -481,7 +683,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     onChange={(e) =>
                       setConfig({ ...docConfig, allow_multiple: e.target.checked })
                     }
-                    className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                    className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                   />
                   Allow multiple files per document type
                 </label>
@@ -501,7 +703,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     onChange={(e) =>
                       setConfig({ ...meetingConfig, meeting_type: e.target.value as MeetingType })
                     }
-                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                   >
                     {MEETING_TYPE_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -510,6 +712,36 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                   <p className="mt-1 text-xs text-theme-text-muted">
                     {MEETING_TYPE_OPTIONS.find(o => o.value === meetingConfig.meeting_type)?.description}
                   </p>
+                </div>
+                <div>
+                  <label htmlFor="stage-meeting-event-type" className="block text-sm text-theme-text-muted mb-2">
+                    Link to Upcoming Event (optional)
+                  </label>
+                  <select
+                    id="stage-meeting-event-type"
+                    value={meetingConfig.linked_event_type ?? ''}
+                    onChange={(e) => {
+                      const eventType = e.target.value || undefined;
+                      const nextEvent = eventType ? getNextEventForType(eventType) : undefined;
+                      setConfig({
+                        ...meetingConfig,
+                        linked_event_type: eventType,
+                        linked_event_id: nextEvent?.id,
+                      });
+                    }}
+                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                  >
+                    <option value="">None — enter details manually</option>
+                    {EVENT_TYPE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        Next {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-theme-text-muted">
+                    Automatically pull details from the next upcoming event of this type.
+                  </p>
+                  {renderEventPreview(meetingConfig.linked_event_type)}
                 </div>
                 <div>
                   <label htmlFor="stage-meeting-description" className="block text-sm text-theme-text-muted mb-2">
@@ -523,7 +755,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     }
                     placeholder="e.g., Meet with Chief Smith to discuss expectations and department culture..."
                     rows={2}
-                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring resize-none"
+                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring resize-none"
                   />
                 </div>
               </div>
@@ -540,7 +772,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     onChange={(e) =>
                       setConfig({ ...electionConfig, voting_method: e.target.value as ElectionStageConfig['voting_method'] })
                     }
-                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                   >
                     <option value="simple_majority">Simple Majority</option>
                     <option value="approval">Approval Voting</option>
@@ -555,7 +787,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     onChange={(e) =>
                       setConfig({ ...electionConfig, victory_condition: e.target.value as ElectionStageConfig['victory_condition'] })
                     }
-                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                   >
                     <option value="most_votes">Most Votes</option>
                     <option value="majority">Majority (&gt;50%)</option>
@@ -576,7 +808,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                       onChange={(e) =>
                         setConfig({ ...electionConfig, victory_percentage: Number(e.target.value) })
                       }
-                      className="w-32 bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                      className="w-32 bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                     />
                     <span className="ml-2 text-theme-text-muted text-sm">%</span>
                   </div>
@@ -588,7 +820,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     onChange={(e) =>
                       setConfig({ ...electionConfig, anonymous_voting: e.target.checked })
                     }
-                    className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                    className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                   />
                   Anonymous voting
                 </label>
@@ -617,7 +849,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                             type="checkbox"
                             checked={fields.include_email}
                             onChange={(e) => updateField('include_email', e.target.checked)}
-                            className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                            className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                           />
                           Include email address
                         </label>
@@ -626,7 +858,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                             type="checkbox"
                             checked={fields.include_phone}
                             onChange={(e) => updateField('include_phone', e.target.checked)}
-                            className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                            className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                           />
                           Include phone number
                         </label>
@@ -635,7 +867,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                             type="checkbox"
                             checked={fields.include_address}
                             onChange={(e) => updateField('include_address', e.target.checked)}
-                            className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                            className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                           />
                           Include address
                         </label>
@@ -644,7 +876,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                             type="checkbox"
                             checked={fields.include_date_of_birth}
                             onChange={(e) => updateField('include_date_of_birth', e.target.checked)}
-                            className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                            className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                           />
                           Include date of birth
                         </label>
@@ -653,7 +885,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                             type="checkbox"
                             checked={fields.include_documents}
                             onChange={(e) => updateField('include_documents', e.target.checked)}
-                            className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                            className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                           />
                           Include uploaded documents
                         </label>
@@ -662,7 +894,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                             type="checkbox"
                             checked={fields.include_stage_history}
                             onChange={(e) => updateField('include_stage_history', e.target.checked)}
-                            className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                            className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                           />
                           Include stage completion history
                         </label>
@@ -676,7 +908,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                             value={fields.custom_note_prompt ?? ''}
                             onChange={(e) => updateField('custom_note_prompt', e.target.value)}
                             placeholder="e.g., Please describe the applicant's qualifications..."
-                            className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                            className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                           />
                         </div>
                       </div>
@@ -696,7 +928,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     onChange={(e) =>
                       setConfig({ ...approvalConfig, require_notes: e.target.checked })
                     }
-                    className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                    className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                   />
                   Require approval notes
                 </label>
@@ -730,7 +962,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     onChange={(e) =>
                       setConfig({ ...statusPageConfig, enable_public_status: e.target.checked })
                     }
-                    className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                    className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                   />
                   Enable public status page at this stage
                 </label>
@@ -746,8 +978,257 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     }
                     placeholder="e.g., Welcome! You can now track your application progress here."
                     rows={2}
-                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring resize-none"
+                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring resize-none"
                   />
+                </div>
+              </div>
+            )}
+
+            {/* Automated Email Config */}
+            {stageType === 'automated_email' && (
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="stage-email-subject" className="block text-sm text-theme-text-muted mb-2">
+                    Email Subject
+                  </label>
+                  <input
+                    id="stage-email-subject"
+                    type="text"
+                    value={emailConfig.email_subject}
+                    onChange={(e) =>
+                      setConfig({ ...emailConfig, email_subject: e.target.value })
+                    }
+                    placeholder="e.g., Welcome to the Membership Process"
+                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                  />
+                  {errors.email_subject && (
+                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.email_subject}</p>
+                  )}
+                </div>
+
+                <p className="text-xs text-theme-text-muted">
+                  Configure the sections to include in the email. The prospect's name will be used as the greeting automatically.
+                </p>
+
+                {/* Welcome Section */}
+                <div className="rounded-lg border border-theme-surface-border p-4 space-y-3">
+                  <label className="flex items-center gap-2 text-sm font-medium text-theme-text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={emailConfig.include_welcome}
+                      onChange={(e) =>
+                        setConfig({ ...emailConfig, include_welcome: e.target.checked })
+                      }
+                      className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                    />
+                    Welcome Message
+                  </label>
+                  {emailConfig.include_welcome && (
+                    <textarea
+                      value={emailConfig.welcome_message ?? ''}
+                      onChange={(e) =>
+                        setConfig({ ...emailConfig, welcome_message: e.target.value })
+                      }
+                      placeholder="Thank you for your interest in joining our department! We look forward to getting to know you through this process."
+                      rows={3}
+                      aria-label="Welcome message content"
+                      className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring resize-none"
+                    />
+                  )}
+                </div>
+
+                {/* FAQ Link Section */}
+                <div className="rounded-lg border border-theme-surface-border p-4 space-y-3">
+                  <label className="flex items-center gap-2 text-sm font-medium text-theme-text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={emailConfig.include_faq_link}
+                      onChange={(e) =>
+                        setConfig({ ...emailConfig, include_faq_link: e.target.checked })
+                      }
+                      className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                    />
+                    Membership FAQ Link
+                  </label>
+                  {emailConfig.include_faq_link && (
+                    <input
+                      type="url"
+                      value={emailConfig.faq_url ?? ''}
+                      onChange={(e) =>
+                        setConfig({ ...emailConfig, faq_url: e.target.value })
+                      }
+                      placeholder="https://your-department.com/membership-faq"
+                      aria-label="FAQ URL"
+                      className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                    />
+                  )}
+                </div>
+
+                {/* Next Meeting Section */}
+                <div className="rounded-lg border border-theme-surface-border p-4 space-y-3">
+                  <label className="flex items-center gap-2 text-sm font-medium text-theme-text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={emailConfig.include_next_meeting}
+                      onChange={(e) =>
+                        setConfig({ ...emailConfig, include_next_meeting: e.target.checked })
+                      }
+                      className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                    />
+                    Next Meeting Details
+                  </label>
+                  {emailConfig.include_next_meeting && (
+                    <div className="space-y-3">
+                      <div>
+                        <label htmlFor="email-meeting-event-type" className="block text-xs text-theme-text-muted mb-1.5">
+                          Pull from upcoming event
+                        </label>
+                        <select
+                          id="email-meeting-event-type"
+                          value={emailConfig.next_meeting_event_type ?? ''}
+                          onChange={(e) => {
+                            const eventType = e.target.value || undefined;
+                            const nextEvent = eventType ? getNextEventForType(eventType) : undefined;
+                            setConfig({
+                              ...emailConfig,
+                              next_meeting_event_type: eventType,
+                              next_meeting_event_id: nextEvent?.id,
+                            });
+                          }}
+                          className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                        >
+                          <option value="">None — enter details manually</option>
+                          {EVENT_TYPE_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              Next {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        {renderEventPreview(emailConfig.next_meeting_event_type)}
+                      </div>
+                      <div>
+                        <label htmlFor="email-meeting-details" className="block text-xs text-theme-text-muted mb-1.5">
+                          {emailConfig.next_meeting_event_type ? 'Additional details (optional)' : 'Meeting details'}
+                        </label>
+                        <textarea
+                          id="email-meeting-details"
+                          value={emailConfig.next_meeting_details ?? ''}
+                          onChange={(e) =>
+                            setConfig({ ...emailConfig, next_meeting_details: e.target.value })
+                          }
+                          placeholder={emailConfig.next_meeting_event_type
+                            ? 'Any extra info to include alongside the event details...'
+                            : 'Our next informational meeting is on the first Monday of the month at 7 PM at Station 1. All prospective members are encouraged to attend.'}
+                          rows={2}
+                          aria-label="Next meeting details"
+                          className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring resize-none"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Application Tracker Section */}
+                <div className="rounded-lg border border-theme-surface-border p-4 space-y-2">
+                  <label className="flex items-center gap-2 text-sm font-medium text-theme-text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={emailConfig.include_status_tracker}
+                      onChange={(e) =>
+                        setConfig({ ...emailConfig, include_status_tracker: e.target.checked })
+                      }
+                      className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                    />
+                    Application Tracker Link
+                  </label>
+                  <p className="text-xs text-theme-text-muted ml-6">
+                    Includes a link to the prospect's public status page so they can track their application progress.
+                    Requires the public status page to be enabled.
+                  </p>
+                </div>
+
+                {/* Custom Sections */}
+                <div className="pt-2">
+                  <h4 className="text-sm font-medium text-theme-text-secondary mb-3">Custom Sections</h4>
+                  {(emailConfig.custom_sections ?? []).map((section, idx) => (
+                    <div key={section.id} className="rounded-lg border border-theme-surface-border p-4 mb-3 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="flex items-center gap-2 text-sm font-medium text-theme-text-secondary">
+                          <input
+                            type="checkbox"
+                            checked={section.enabled}
+                            onChange={(e) => {
+                              const updated = [...(emailConfig.custom_sections ?? [])];
+                              const item = updated[idx];
+                              if (item) {
+                                updated[idx] = { ...item, enabled: e.target.checked };
+                                setConfig({ ...emailConfig, custom_sections: updated });
+                              }
+                            }}
+                            className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                          />
+                          Custom Section
+                        </label>
+                        <button
+                          onClick={() => {
+                            const updated = (emailConfig.custom_sections ?? []).filter((_, i) => i !== idx);
+                            setConfig({ ...emailConfig, custom_sections: updated });
+                          }}
+                          className="text-theme-text-muted hover:text-red-700 dark:hover:text-red-400 transition-colors"
+                          aria-label={`Remove custom section ${idx + 1}`}
+                        >
+                          <Trash2 className="w-4 h-4" aria-hidden="true" />
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        value={section.title}
+                        onChange={(e) => {
+                          const updated = [...(emailConfig.custom_sections ?? [])];
+                          const item = updated[idx];
+                          if (item) {
+                            updated[idx] = { ...item, title: e.target.value };
+                            setConfig({ ...emailConfig, custom_sections: updated });
+                          }
+                        }}
+                        placeholder="Section title"
+                        aria-label={`Custom section ${idx + 1} title`}
+                        className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                      />
+                      <textarea
+                        value={section.content}
+                        onChange={(e) => {
+                          const updated = [...(emailConfig.custom_sections ?? [])];
+                          const item = updated[idx];
+                          if (item) {
+                            updated[idx] = { ...item, content: e.target.value };
+                            setConfig({ ...emailConfig, custom_sections: updated });
+                          }
+                        }}
+                        placeholder="Section content..."
+                        rows={2}
+                        aria-label={`Custom section ${idx + 1} content`}
+                        className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring resize-none"
+                      />
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => {
+                      const newSection = {
+                        id: crypto.randomUUID(),
+                        title: '',
+                        content: '',
+                        enabled: true,
+                      };
+                      setConfig({
+                        ...emailConfig,
+                        custom_sections: [...(emailConfig.custom_sections ?? []), newSection],
+                      });
+                    }}
+                    className="flex items-center gap-1 text-sm text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
+                  >
+                    <Plus className="w-3 h-3" aria-hidden="true" /> Add custom section
+                  </button>
                 </div>
               </div>
             )}
@@ -768,7 +1249,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                 type="checkbox"
                 checked={hasTimeoutOverride}
                 onChange={(e) => setHasTimeoutOverride(e.target.checked)}
-                className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
               />
               Use a custom timeout for this stage
             </label>
@@ -781,7 +1262,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                   value={timeoutOverrideDays}
                   onChange={(e) => setTimeoutOverrideDays(Math.max(1, Number(e.target.value)))}
                   aria-label="Timeout override days"
-                  className="w-24 bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-24 bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                 />
                 <span className="text-sm text-theme-text-muted">days before marked inactive</span>
               </div>
@@ -794,7 +1275,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
               type="checkbox"
               checked={isRequired}
               onChange={(e) => setIsRequired(e.target.checked)}
-              className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+              className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
             />
             This stage is required (cannot be skipped)
           </label>
@@ -810,7 +1291,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                 type="checkbox"
                 checked={notifyProspect}
                 onChange={(e) => setNotifyProspect(e.target.checked)}
-                className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
               />
               Notify prospect when this stage is completed
             </label>
@@ -822,7 +1303,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                 type="checkbox"
                 checked={publicVisible}
                 onChange={(e) => setPublicVisible(e.target.checked)}
-                className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
               />
               Show this stage on the public status page
             </label>

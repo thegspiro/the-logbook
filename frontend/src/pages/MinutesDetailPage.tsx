@@ -447,7 +447,7 @@ export const MinutesDetailPage: React.FC = () => {
 
       {/* Linked Event */}
       {(linkedEvent || (canManage && isEditable)) && (
-        <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-4 mb-6">
+        <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-4 mb-6">
           <div className="flex justify-between items-center">
             <h3 className="text-sm font-medium text-theme-text-secondary">Linked Meeting Event</h3>
             {canManage && isEditable && (
@@ -471,7 +471,7 @@ export const MinutesDetailPage: React.FC = () => {
           </div>
           {linkedEvent ? (
             <div className="mt-2 flex items-center gap-3">
-              <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">Business Meeting</span>
+              <span className="text-xs px-2 py-0.5 rounded-sm bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">Business Meeting</span>
               <Link
                 to={`/events/${linkedEvent.id}`}
                 className="text-sm text-blue-600 hover:text-blue-800 font-medium"
@@ -497,7 +497,7 @@ export const MinutesDetailPage: React.FC = () => {
 
       {/* Workflow Actions */}
       {canManage && (
-        <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-4 mb-6">
+        <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-4 mb-6">
           <div className="flex flex-wrap gap-3">
             {(minutes.status === 'draft' || minutes.status === 'rejected') && (
               <button
@@ -555,7 +555,7 @@ export const MinutesDetailPage: React.FC = () => {
       )}
 
       {/* Meeting Info */}
-      <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6 mb-6">
+      <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6 mb-6">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           {minutes.called_to_order_at && (
             <div>
@@ -588,7 +588,7 @@ export const MinutesDetailPage: React.FC = () => {
               {minutes.attendees.map((a, i) => (
                 <span
                   key={i}
-                  className={`text-xs px-2 py-1 rounded ${a.present ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400' : 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400 line-through'}`}
+                  className={`text-xs px-2 py-1 rounded-sm ${a.present ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400' : 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400 line-through'}`}
                 >
                   {a.name}{a.role ? ` (${a.role})` : ''}
                 </span>
@@ -624,7 +624,7 @@ export const MinutesDetailPage: React.FC = () => {
                 value={newSectionTitle}
                 onChange={(e) => setNewSectionTitle(e.target.value)}
                 placeholder="e.g., Fire Prevention Report"
-                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
               />
             </div>
             <button
@@ -644,7 +644,7 @@ export const MinutesDetailPage: React.FC = () => {
         )}
 
         {minutes.sections.length === 0 ? (
-          <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-8 text-center">
+          <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-8 text-center">
             <p className="text-theme-text-muted">No sections defined for these minutes.</p>
             {canManage && isEditable && (
               <button
@@ -662,7 +662,7 @@ export const MinutesDetailPage: React.FC = () => {
               const isEditing = editingSection === section.key;
 
               return (
-                <div key={section.key} className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+                <div key={section.key} className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
                   <div className="flex justify-between items-center mb-2">
                     <div className="flex items-center gap-2">
                       {canManage && isEditable && (
@@ -717,7 +717,7 @@ export const MinutesDetailPage: React.FC = () => {
                         rows={6}
                         value={sectionValue}
                         onChange={(e) => setSectionValue(e.target.value)}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                         aria-label={`${section.title} content`}
                       />
                       <div className="mt-2 flex gap-2">
@@ -758,7 +758,7 @@ export const MinutesDetailPage: React.FC = () => {
       </div>
 
       {/* Motions */}
-      <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6 mb-6">
+      <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6 mb-6">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-theme-text-primary">Motions ({minutes.motions.length})</h3>
           {canManage && isEditable && (
@@ -781,7 +781,7 @@ export const MinutesDetailPage: React.FC = () => {
               onChange={(e) => setMotionForm({ ...motionForm, motion_text: e.target.value })}
               placeholder="Motion text..."
               aria-label="Motion text"
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
             />
             <div className="grid grid-cols-3 gap-3">
               <div>
@@ -793,7 +793,7 @@ export const MinutesDetailPage: React.FC = () => {
                   onChange={(e) => setMotionForm({ ...motionForm, moved_by: e.target.value })}
                   placeholder="Moved by"
                   aria-label="Moved by"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div>
@@ -805,7 +805,7 @@ export const MinutesDetailPage: React.FC = () => {
                   onChange={(e) => setMotionForm({ ...motionForm, seconded_by: e.target.value })}
                   placeholder="Seconded by"
                   aria-label="Seconded by"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div>
@@ -815,7 +815,7 @@ export const MinutesDetailPage: React.FC = () => {
                   value={motionForm.status}
                   onChange={(e) => setMotionForm({ ...motionForm, status: e.target.value as MotionStatus })}
                   aria-label="Motion status"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                 >
                   <option value="passed">Passed</option>
                   <option value="failed">Failed</option>
@@ -835,7 +835,7 @@ export const MinutesDetailPage: React.FC = () => {
                   onChange={(e) => setMotionForm({ ...motionForm, votes_for: e.target.value ? parseInt(e.target.value) : undefined })}
                   placeholder="Votes for"
                   aria-label="Votes for"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div>
@@ -848,7 +848,7 @@ export const MinutesDetailPage: React.FC = () => {
                   onChange={(e) => setMotionForm({ ...motionForm, votes_against: e.target.value ? parseInt(e.target.value) : undefined })}
                   placeholder="Votes against"
                   aria-label="Votes against"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div>
@@ -861,7 +861,7 @@ export const MinutesDetailPage: React.FC = () => {
                   onChange={(e) => setMotionForm({ ...motionForm, votes_abstain: e.target.value ? parseInt(e.target.value) : undefined })}
                   placeholder="Abstentions"
                   aria-label="Abstentions"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
             </div>
@@ -885,7 +885,7 @@ export const MinutesDetailPage: React.FC = () => {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-xs text-theme-text-muted font-mono">#{i + 1}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded font-medium ${MOTION_STATUS_BADGES[motion.status]}`}>
+                      <span className={`text-xs px-2 py-0.5 rounded-sm font-medium ${MOTION_STATUS_BADGES[motion.status]}`}>
                         {motion.status}
                       </span>
                     </div>
@@ -917,7 +917,7 @@ export const MinutesDetailPage: React.FC = () => {
       </div>
 
       {/* Action Items */}
-      <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6 mb-6">
+      <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6 mb-6">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-theme-text-primary">Action Items ({minutes.action_items.length})</h3>
           {canManage && isEditable && (
@@ -940,7 +940,7 @@ export const MinutesDetailPage: React.FC = () => {
               onChange={(e) => setActionForm({ ...actionForm, description: e.target.value })}
               placeholder="Action item description..."
               aria-label="Action item description"
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
             />
             <div className="grid grid-cols-3 gap-3">
               <div>
@@ -952,7 +952,7 @@ export const MinutesDetailPage: React.FC = () => {
                   onChange={(e) => setActionForm({ ...actionForm, assignee_name: e.target.value })}
                   placeholder="Assignee name"
                   aria-label="Assignee name"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div>
@@ -963,7 +963,7 @@ export const MinutesDetailPage: React.FC = () => {
                   value={actionForm.due_date || ''}
                   onChange={(e) => setActionForm({ ...actionForm, due_date: e.target.value || undefined })}
                   aria-label="Due date"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div>
@@ -973,7 +973,7 @@ export const MinutesDetailPage: React.FC = () => {
                   value={actionForm.priority}
                   onChange={(e) => setActionForm({ ...actionForm, priority: e.target.value as ActionItemPriority })}
                   aria-label="Priority"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                 >
                   <option value="low">Low</option>
                   <option value="medium">Medium</option>
@@ -1001,10 +1001,10 @@ export const MinutesDetailPage: React.FC = () => {
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-xs px-2 py-0.5 rounded font-medium ${ACTION_STATUS_BADGES[item.status]}`}>
+                      <span className={`text-xs px-2 py-0.5 rounded-sm font-medium ${ACTION_STATUS_BADGES[item.status]}`}>
                         {item.status.replace('_', ' ')}
                       </span>
-                      <span className={`text-xs px-2 py-0.5 rounded ${PRIORITY_BADGES[item.priority]}`}>
+                      <span className={`text-xs px-2 py-0.5 rounded-sm ${PRIORITY_BADGES[item.priority]}`}>
                         {item.priority}
                       </span>
                     </div>
@@ -1024,7 +1024,7 @@ export const MinutesDetailPage: React.FC = () => {
                         value={item.status}
                         onChange={(e) => { void handleUpdateActionItemStatus(item.id, e.target.value); }}
                         aria-label={`Update status for: ${item.description.substring(0, 30)}`}
-                        className="text-xs bg-theme-input-bg border border-theme-input-border rounded px-2 py-1 text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring"
+                        className="text-xs bg-theme-input-bg border border-theme-input-border rounded-sm px-2 py-1 text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring"
                       >
                         <option value="pending">Pending</option>
                         <option value="in_progress">In Progress</option>
@@ -1126,7 +1126,7 @@ export const MinutesDetailPage: React.FC = () => {
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
                 placeholder="Describe what needs to be corrected..."
-                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
               />
               <div className="mt-4 flex justify-end gap-3">
                 <button

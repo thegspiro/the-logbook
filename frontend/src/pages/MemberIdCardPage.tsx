@@ -168,7 +168,7 @@ export const MemberIdCardPage: React.FC = () => {
       <div className="w-full max-w-sm id-card-printable" id="member-id-card">
         <div className="bg-theme-surface rounded-2xl shadow-lg overflow-hidden border border-theme-surface-border print:shadow-none print:border print:border-gray-300 print:rounded-lg">
           {/* Card Header — accent stripe */}
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-4 print:bg-blue-700 print:py-3">
+          <div className="bg-linear-to-r from-blue-600 to-indigo-700 px-6 py-4 print:bg-blue-700 print:py-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-white">
                 <CreditCard className="h-5 w-5" />
@@ -177,7 +177,7 @@ export const MemberIdCardPage: React.FC = () => {
                 </span>
               </div>
               {org?.logo && (
-                <div className="h-9 w-9 rounded-md bg-white/90 p-1 flex items-center justify-center flex-shrink-0">
+                <div className="h-9 w-9 rounded-md bg-white/90 p-1 flex items-center justify-center shrink-0">
                   <img
                     src={org.logo}
                     alt={org.name}
@@ -201,10 +201,10 @@ export const MemberIdCardPage: React.FC = () => {
                 <img
                   src={member.photo_url}
                   alt={displayName}
-                  className="h-20 w-20 rounded-lg object-cover flex-shrink-0 border-2 border-theme-surface-border"
+                  className="h-20 w-20 rounded-lg object-cover shrink-0 border-2 border-theme-surface-border"
                 />
               ) : (
-                <div className="h-20 w-20 rounded-lg bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center flex-shrink-0 border-2 border-theme-surface-border print:bg-indigo-100">
+                <div className="h-20 w-20 rounded-lg bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center shrink-0 border-2 border-theme-surface-border print:bg-indigo-100">
                   <span className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 print:text-indigo-600">
                     {initials}
                   </span>

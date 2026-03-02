@@ -257,7 +257,7 @@ const TrainingRequirementsPage: React.FC = () => {
                 id="source-filter"
                 value={filterSource}
                 onChange={(e) => setFilterSource(e.target.value as FilterSource)}
-                className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent"
+                className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent"
               >
                 <option value="all">All Sources</option>
                 <option value="department">Department</option>
@@ -405,7 +405,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
             <div className="flex items-center space-x-3 mb-2">
               <h3 className="text-theme-text-primary text-lg font-bold">{requirement.name}</h3>
               {requirement.requirement_type && (
-                <span className="text-xs font-semibold px-2 py-1 rounded bg-green-700 text-theme-text-primary">
+                <span className="text-xs font-semibold px-2 py-1 rounded-sm bg-green-700 text-theme-text-primary">
                   {getRequirementTypeLabel(requirement.requirement_type)}
                 </span>
               )}
@@ -426,7 +426,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                 </span>
               )}
               {!requirement.active && (
-                <span className="text-xs font-semibold px-2 py-1 rounded bg-theme-surface-hover text-theme-text-primary">
+                <span className="text-xs font-semibold px-2 py-1 rounded-sm bg-theme-surface-hover text-theme-text-primary">
                   Inactive
                 </span>
               )}
@@ -1011,7 +1011,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                     applies_to_all: e.target.checked,
                     ...(e.target.checked ? { required_membership_types: [] } : {}),
                   })}
-                  className="w-5 h-5 rounded border-theme-input-border bg-theme-input-bg text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                  className="w-5 h-5 rounded-sm border-theme-input-border bg-theme-input-bg text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                 />
                 <span className="text-theme-text-secondary">Applies to all members</span>
               </label>
@@ -1048,7 +1048,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                               : [...prev.required_membership_types, memberType.value],
                           }));
                         }}
-                        className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                        className="w-4 h-4 rounded-sm border-theme-input-border bg-theme-input-bg text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                       />
                       <span className="text-sm">{memberType.label}</span>
                     </label>

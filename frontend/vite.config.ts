@@ -144,10 +144,20 @@ export default defineConfig({
             if (id.includes('zustand')) {
               return 'vendor-state';
             }
-            // React core + scheduler + all React-dependent libs in one
-            // chunk. This prevents circular inter-chunk dependencies
-            // (e.g. react-dom→scheduler in vendor, vendor→react).
-            if (id.includes('react') || id.includes('scheduler') || id.includes('@hookform')) {
+            // React core + react-dom + scheduler ONLY. Use path-segment
+            // matching ('/react/') instead of substring matching ('react')
+            // to avoid pulling in third-party packages whose names happen
+            // to contain "react" (e.g. react-hot-toast, qrcode.react).
+            // Those packages may depend on non-React vendor libs (goober,
+            // csstype) which creates a circular chunk dependency:
+            //   vendor-react → vendor → vendor-react
+            // causing "Cannot read properties of undefined (reading
+            // 'useLayoutEffect')" at runtime.
+            if (
+              id.includes('/react/') ||
+              id.includes('/react-dom/') ||
+              id.includes('scheduler')
+            ) {
               return 'vendor-react';
             }
             return 'vendor';

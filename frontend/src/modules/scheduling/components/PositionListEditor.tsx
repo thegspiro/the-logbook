@@ -61,7 +61,7 @@ export const PositionListEditor: React.FC<PositionListEditorProps> = ({
             <select
               value={pos}
               onChange={(e) => handleChange(i, e.target.value)}
-              className="flex-1 px-2 py-1 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-violet-500"
+              className="flex-1 px-2 py-1 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-violet-500"
             >
               {availablePositions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -71,7 +71,7 @@ export const PositionListEditor: React.FC<PositionListEditorProps> = ({
             </select>
             <button
               onClick={() => handleRemove(i)}
-              className="p-1 text-red-500 hover:bg-red-500/10 rounded"
+              className="p-1 text-red-500 hover:bg-red-500/10 rounded-sm"
             >
               <X className="w-3.5 h-3.5" />
             </button>

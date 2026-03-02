@@ -67,15 +67,15 @@ const DEFAULT_FORM_DATA: EventCreate = {
 
 /* Shared Tailwind classes for consistency */
 const inputClass =
-  'w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring';
+  'w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
 
 const selectClass =
-  'w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring';
+  'w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
 
 const labelClass = 'block text-sm font-semibold text-theme-text-primary mb-2';
 
 const checkboxClass =
-  'w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring';
+  'w-4 h-4 rounded-sm border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring';
 
 export const EventForm: React.FC<EventFormProps> = ({
   initialData,
@@ -392,7 +392,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                 key={h}
                 type="button"
                 onClick={() => setDuration(h)}
-                className="px-4 py-2 text-sm font-medium text-theme-text-secondary border border-theme-surface-border rounded-lg hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring transition-colors"
+                className="px-4 py-2 text-sm font-medium text-theme-text-secondary border border-theme-surface-border rounded-lg hover:bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring transition-colors"
               >
                 {h} {h === 1 ? 'hour' : 'hours'}
               </button>
@@ -446,7 +446,7 @@ export const EventForm: React.FC<EventFormProps> = ({
         {locationMode === 'select' && selectedLocation && (
           <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
             <div className="flex items-start gap-3">
-              <MapPin className="w-5 h-5 text-blue-700 mt-0.5 flex-shrink-0" />
+              <MapPin className="w-5 h-5 text-blue-700 mt-0.5 shrink-0" />
               <div className="flex-1">
                 <p className="font-semibold text-theme-text-primary">{selectedLocation.name}</p>
                 {selectedLocation.building && (
@@ -795,7 +795,7 @@ export const EventForm: React.FC<EventFormProps> = ({
         <button
           type="button"
           onClick={onCancel}
-          className="px-6 py-3 border border-theme-surface-border rounded-lg text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring transition-colors"
+          className="px-6 py-3 border border-theme-surface-border rounded-lg text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring transition-colors"
         >
           Cancel
         </button>

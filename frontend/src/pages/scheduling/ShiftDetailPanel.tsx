@@ -405,7 +405,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
 
   const openPositions = crewBoard?.filter(s => !s.assignment).map(s => s.position) || [];
 
-  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500';
+  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500';
 
   const renderAssignmentRow = (assignment: Assignment) => {
     const effectiveStatus = assignment.status || 'assigned';
@@ -415,7 +415,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     return (
       <div key={assignment.id} className={`flex items-center justify-between gap-2 p-2.5 sm:p-3 rounded-lg border ${isCurrentUser ? 'border-violet-500/30 bg-violet-500/5' : 'border-theme-surface-border bg-theme-surface-hover/30'}`}>
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <div className="w-8 h-8 rounded-full bg-theme-surface-hover flex items-center justify-center text-sm font-medium text-theme-text-primary flex-shrink-0">
+          <div className="w-8 h-8 rounded-full bg-theme-surface-hover flex items-center justify-center text-sm font-medium text-theme-text-primary shrink-0">
             {(assignment.user_name || '?').charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0">
@@ -428,7 +428,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                 onChange={e => { void handlePositionChange(assignment.id, e.target.value, assignment.position); }}
                 onBlur={() => { if (!updatingPosition) setEditingPositionId(null); }}
                 disabled={updatingPosition}
-                className="text-xs bg-theme-input-bg border border-theme-input-border rounded px-1 py-0.5 text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-violet-500"
+                className="text-xs bg-theme-input-bg border border-theme-input-border rounded-sm px-1 py-0.5 text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-violet-500"
                 autoFocus
               >
                 {positionOptions.map(([val, label]) => (
@@ -449,19 +449,19 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           <span className={`px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full capitalize ${statusColor}`}>
             {effectiveStatus}
           </span>
           {isCurrentUser && isAssigned && confirmingDecline !== assignment.id && (
             <>
               <button onClick={() => { void handleConfirm(assignment.id); }} disabled={confirming}
-                className="p-1.5 text-green-600 hover:bg-green-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center disabled:opacity-50" aria-label="Confirm assignment"
+                className="p-1.5 text-green-600 hover:bg-green-500/10 rounded-sm transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center disabled:opacity-50" aria-label="Confirm assignment"
               >
                 {confirming ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
               </button>
               <button onClick={() => setConfirmingDecline(assignment.id)}
-                className="p-1.5 text-red-500 hover:bg-red-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Decline assignment"
+                className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-sm transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Decline assignment"
               >
                 <XCircle className="w-4 h-4" />
               </button>
@@ -480,7 +480,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           )}
           {canManage && !isCurrentUser && confirmingRemove !== assignment.id && (
             <button onClick={() => setConfirmingRemove(assignment.id)}
-              className="p-1.5 text-theme-text-muted hover:text-red-500 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Remove assignment"
+              className="p-1.5 text-theme-text-muted hover:text-red-500 rounded-sm transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Remove assignment"
             >
               <XCircle className="w-4 h-4" />
             </button>
@@ -499,7 +499,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           {canManage && !isPast && editingNotesId !== assignment.id && (
             <button
               onClick={() => { setEditingNotesId(assignment.id); setEditingNotesValue(assignment.notes || ''); }}
-              className={`p-1.5 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center ${assignment.notes ? 'text-violet-500 hover:bg-violet-500/10' : 'text-theme-text-muted hover:text-violet-500 hover:bg-violet-500/10'}`}
+              className={`p-1.5 rounded-sm transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center ${assignment.notes ? 'text-violet-500 hover:bg-violet-500/10' : 'text-theme-text-muted hover:text-violet-500 hover:bg-violet-500/10'}`}
               aria-label="Edit notes" title={assignment.notes ? 'Edit notes' : 'Add notes'}
             >
               <FileText className="w-4 h-4" />
@@ -516,12 +516,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
             <input type="text" value={editingNotesValue}
               onChange={e => setEditingNotesValue(e.target.value)}
               placeholder="Assignment notes..."
-              className="flex-1 text-xs bg-theme-input-bg border border-theme-input-border rounded px-2 py-1 text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-violet-500"
+              className="flex-1 text-xs bg-theme-input-bg border border-theme-input-border rounded-sm px-2 py-1 text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-violet-500"
               autoFocus
               onKeyDown={e => { if (e.key === 'Enter') void handleSaveAssignmentNotes(assignment.id); }}
             />
             <button onClick={() => { void handleSaveAssignmentNotes(assignment.id); }} disabled={savingNotes}
-              className="px-2 py-1 text-xs bg-violet-600 text-white rounded hover:bg-violet-700 disabled:opacity-50"
+              className="px-2 py-1 text-xs bg-violet-600 text-white rounded-sm hover:bg-violet-700 disabled:opacity-50"
             >{savingNotes ? '...' : 'Save'}</button>
             <button onClick={() => setEditingNotesId(null)}
               className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary"
@@ -538,7 +538,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
 
       {/* Panel — uses drawer-panel CSS class for mobile-responsive width */}
-      <div className="drawer-panel overflow-y-auto overscroll-contain !bg-theme-surface">
+      <div className="drawer-panel overflow-y-auto overscroll-contain bg-theme-surface!">
         {/* Header */}
         <div className="sticky top-0 bg-theme-surface border-b border-theme-surface-border p-4 sm:p-6 z-10">
           <div className="flex items-center justify-between">
@@ -548,7 +548,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                 {shiftDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: tz })}
               </p>
             </div>
-            <div className="flex items-center gap-1 flex-shrink-0">
+            <div className="flex items-center gap-1 shrink-0">
               {canManage && !isPast && (
                 <>
                   <button onClick={() => { setEditForm({ shift_date: shift.shift_date, start_time: toTimeValue(shift.start_time), end_time: toTimeValue(shift.end_time), apparatus_id: shift.apparatus_id || '', color: shift.color || '', notes: shift.notes || '', shift_officer_id: shift.shift_officer_id || '' }); setIsEditing(!isEditing); }}
@@ -642,7 +642,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                 <div className="flex items-center gap-2">
                   <input type="color" value={editForm.color || '#8b5cf6'}
                     onChange={e => setEditForm(p => ({...p, color: e.target.value}))}
-                    className="w-8 h-8 rounded border border-theme-input-border cursor-pointer bg-transparent p-0"
+                    className="w-8 h-8 rounded-sm border border-theme-input-border cursor-pointer bg-transparent p-0"
                   />
                   <span className="text-xs text-theme-text-muted">{editForm.color || 'Default'}</span>
                   {editForm.color && (
@@ -763,7 +763,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                     <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                       {assignment ? (
                         <>
-                          <div className="w-8 h-8 rounded-full bg-theme-surface-hover flex items-center justify-center text-sm font-medium text-theme-text-primary flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-theme-surface-hover flex items-center justify-center text-sm font-medium text-theme-text-primary shrink-0">
                             {(assignment.user_name || '?').charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0">
@@ -777,7 +777,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                                 onChange={e => { void handlePositionChange(assignment.id, e.target.value, assignment.position); }}
                                 onBlur={() => { if (!updatingPosition) setEditingPositionId(null); }}
                                 disabled={updatingPosition}
-                                className="text-xs bg-theme-input-bg border border-theme-input-border rounded px-1 py-0.5 text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-violet-500"
+                                className="text-xs bg-theme-input-bg border border-theme-input-border rounded-sm px-1 py-0.5 text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-violet-500"
                                 autoFocus
                               >
                                 {positionOptions.map(([val, label]) => (
@@ -800,7 +800,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                         </>
                       ) : (
                         <>
-                          <div className="w-8 h-8 rounded-full border-2 border-dashed border-theme-surface-border flex items-center justify-center flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full border-2 border-dashed border-theme-surface-border flex items-center justify-center shrink-0">
                             <UserPlus className="w-3.5 h-3.5 text-theme-text-muted" />
                           </div>
                           <div>
@@ -812,7 +812,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                         </>
                       )}
                     </div>
-                    <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                    <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                       {assignment ? (
                         <>
                           <span className={`px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full capitalize ${ASSIGNMENT_STATUS_COLORS[assignment.status || 'assigned'] || ASSIGNMENT_STATUS_COLORS.assigned}`}>
@@ -821,12 +821,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                           {assignment.user_id === user?.id && assignment.status === 'assigned' && confirmingDecline !== assignment.id && (
                             <>
                               <button onClick={() => { void handleConfirm(assignment.id); }}
-                                className="p-1.5 text-green-600 hover:bg-green-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Confirm assignment"
+                                className="p-1.5 text-green-600 hover:bg-green-500/10 rounded-sm transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Confirm assignment"
                               >
                                 <Check className="w-4 h-4" />
                               </button>
                               <button onClick={() => setConfirmingDecline(assignment.id)}
-                                className="p-1.5 text-red-500 hover:bg-red-500/10 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Decline assignment"
+                                className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-sm transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Decline assignment"
                               >
                                 <XCircle className="w-4 h-4" />
                               </button>
@@ -845,7 +845,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                           )}
                           {canManage && assignment.user_id !== user?.id && confirmingRemove !== assignment.id && (
                             <button onClick={() => setConfirmingRemove(assignment.id)}
-                              className="p-1.5 text-theme-text-muted hover:text-red-500 rounded transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Remove assignment"
+                              className="p-1.5 text-theme-text-muted hover:text-red-500 rounded-sm transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Remove assignment"
                             >
                               <XCircle className="w-4 h-4" />
                             </button>

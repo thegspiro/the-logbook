@@ -48,7 +48,7 @@ const StructureBadge: React.FC<{ type: ProgramStructureType }> = ({ type }) => {
   };
 
   return (
-    <span className={`px-2 py-1 text-xs rounded ${colors[type]}`}>
+    <span className={`px-2 py-1 text-xs rounded-sm ${colors[type]}`}>
       {type === 'phases' ? 'Phase-based' : type === 'sequential' ? 'Sequential' : 'Flexible'}
     </span>
   );
@@ -65,7 +65,7 @@ const PositionBadge: React.FC<{ position: string }> = ({ position }) => {
   };
 
   return (
-    <span className="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded">
+    <span className="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded-sm">
       {labels[position] || position}
     </span>
   );
@@ -93,7 +93,7 @@ const ReqTypeBadge: React.FC<{ type: string }> = ({ type }) => {
   };
 
   return (
-    <span className={`px-2 py-0.5 text-xs rounded ${colors[type] || 'bg-theme-surface-secondary text-theme-text-muted'}`}>
+    <span className={`px-2 py-0.5 text-xs rounded-sm ${colors[type] || 'bg-theme-surface-secondary text-theme-text-muted'}`}>
       {labels[type] || type}
     </span>
   );
@@ -318,7 +318,7 @@ const PipelineDetailPage: React.FC = () => {
               <div className="flex items-center space-x-3 mb-2">
                 <h1 className="text-2xl font-bold text-theme-text-primary">{program.name}</h1>
                 {program.is_template && (
-                  <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded">Template</span>
+                  <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded-sm">Template</span>
                 )}
               </div>
               {program.description && (
@@ -326,12 +326,12 @@ const PipelineDetailPage: React.FC = () => {
               )}
               <div className="flex flex-wrap items-center gap-2">
                 {program.code && (
-                  <span className="px-2 py-0.5 bg-theme-surface text-theme-text-secondary text-xs rounded font-mono">{program.code}</span>
+                  <span className="px-2 py-0.5 bg-theme-surface text-theme-text-secondary text-xs rounded-sm font-mono">{program.code}</span>
                 )}
                 <StructureBadge type={program.structure_type} />
                 {program.target_position && <PositionBadge position={program.target_position} />}
                 {program.version > 1 && (
-                  <span className="px-2 py-0.5 bg-theme-surface text-theme-text-muted text-xs rounded">v{program.version}</span>
+                  <span className="px-2 py-0.5 bg-theme-surface text-theme-text-muted text-xs rounded-sm">v{program.version}</span>
                 )}
               </div>
             </div>

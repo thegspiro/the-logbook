@@ -268,7 +268,7 @@ const Members: React.FC = () => {
         {/* Error Banner */}
         {error && (
           <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400 flex-shrink-0" />
+            <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400 shrink-0" />
             <p className="text-red-700 dark:text-red-300 text-sm flex-1">{error}</p>
             <button
               onClick={() => { void loadMembers(); }}
@@ -325,7 +325,7 @@ const Members: React.FC = () => {
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
               >
                 <option value="all">All Status</option>
                 <option value="active">Active</option>
@@ -405,10 +405,10 @@ const Members: React.FC = () => {
                       <img
                         src={member.photo_url}
                         alt={`${member.first_name} ${member.last_name}`}
-                        className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                        className="w-10 h-10 rounded-full object-cover shrink-0"
                       />
                     ) : (
-                      <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0">
+                      <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold shrink-0">
                         {getInitials(member.first_name, member.last_name)}
                       </div>
                     )}
@@ -420,7 +420,7 @@ const Members: React.FC = () => {
                     </div>
                   </div>
                   <span
-                    className={`px-2 py-1 text-xs font-semibold rounded border flex-shrink-0 ml-2 ${getStatusColor(member.status)}`}
+                    className={`px-2 py-1 text-xs font-semibold rounded-sm border shrink-0 ml-2 ${getStatusColor(member.status)}`}
                   >
                     {member.status.replace('_', ' ').toUpperCase()}
                   </span>
@@ -438,15 +438,15 @@ const Members: React.FC = () => {
                     )}
                     {contactInfoEnabled.enabled && contactInfoEnabled.show_email && member.email && (
                       <div className="flex items-center gap-1 truncate">
-                        <Mail className="w-3 h-3 flex-shrink-0" />
+                        <Mail className="w-3 h-3 shrink-0" />
                         <span className="truncate">{member.email}</span>
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center space-x-1 flex-shrink-0">
+                  <div className="flex items-center space-x-1 shrink-0">
                     <button
                       onClick={() => navigate(`/members/${member.id}`)}
-                      className="p-2 text-blue-700 dark:text-blue-400 hover:bg-blue-500/10 rounded transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+                      className="p-2 text-blue-700 dark:text-blue-400 hover:bg-blue-500/10 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                       title="View/Edit Profile"
                     >
                       <Edit className="w-4 h-4" />
@@ -454,7 +454,7 @@ const Members: React.FC = () => {
                     {currentUser?.id !== member.id && (
                       <button
                         onClick={() => handleDeleteMember(member)}
-                        className="p-2 text-red-700 dark:text-red-400 hover:bg-red-500/10 rounded transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+                        className="p-2 text-red-700 dark:text-red-400 hover:bg-red-500/10 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                         title="Delete"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -475,7 +475,7 @@ const Members: React.FC = () => {
               <div className="flex items-center gap-2 ml-auto">
                 <button
                   onClick={handleExportCSV}
-                  className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors inline-flex items-center gap-1"
+                  className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-sm transition-colors inline-flex items-center gap-1"
                 >
                   <Download className="w-3 h-3" />
                   Export Selected
@@ -501,7 +501,7 @@ const Members: React.FC = () => {
                         type="checkbox"
                         checked={paginatedMembers.length > 0 && selectedIds.size === paginatedMembers.length}
                         onChange={toggleSelectAll}
-                        className="rounded border-theme-input-border text-blue-600 focus:ring-theme-focus-ring"
+                        className="rounded-sm border-theme-input-border text-blue-600 focus:ring-theme-focus-ring"
                         aria-label="Select all members"
                       />
                     </th>
@@ -535,7 +535,7 @@ const Members: React.FC = () => {
                           type="checkbox"
                           checked={selectedIds.has(member.id)}
                           onChange={() => toggleSelect(member.id)}
-                          className="rounded border-theme-input-border text-blue-600 focus:ring-theme-focus-ring"
+                          className="rounded-sm border-theme-input-border text-blue-600 focus:ring-theme-focus-ring"
                           aria-label={`Select ${member.first_name} ${member.last_name}`}
                         />
                       </td>
@@ -615,7 +615,7 @@ const Members: React.FC = () => {
                         <div className="flex items-center justify-end space-x-2">
                           <button
                             onClick={() => navigate(`/members/${member.id}`)}
-                            className="p-2 text-blue-700 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-500/10 rounded transition-colors"
+                            className="p-2 text-blue-700 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-500/10 rounded-sm transition-colors"
                             title="View/Edit Profile"
                           >
                             <Edit className="w-4 h-4" />
@@ -623,7 +623,7 @@ const Members: React.FC = () => {
                           {currentUser?.id !== member.id && (
                             <button
                               onClick={() => handleDeleteMember(member)}
-                              className="p-2 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
+                              className="p-2 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-500/10 rounded-sm transition-colors"
                               title="Delete"
                             >
                               <Trash2 className="w-4 h-4" />

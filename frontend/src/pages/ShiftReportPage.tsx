@@ -44,7 +44,7 @@ const StarRating: React.FC<{
           key={star}
           type="button"
           onClick={() => onChange(star)}
-          className="focus:outline-none"
+          className="focus:outline-hidden"
         >
           <Star
             className={`${sizeClass} ${star <= value ? 'text-yellow-400 fill-yellow-400' : 'text-gray-600'}`}
@@ -129,7 +129,7 @@ const ReportCard: React.FC<{
               <span className="text-theme-text-muted text-xs">Skills Observed</span>
               <div className="flex flex-wrap gap-1 mt-1">
                 {report.skills_observed.map((s, i) => (
-                  <span key={i} className={`text-xs px-2 py-0.5 rounded ${s.demonstrated ? 'bg-green-500/20 text-green-400' : 'bg-theme-surface-secondary text-theme-text-muted'}`}>
+                  <span key={i} className={`text-xs px-2 py-0.5 rounded-sm ${s.demonstrated ? 'bg-green-500/20 text-green-400' : 'bg-theme-surface-secondary text-theme-text-muted'}`}>
                     {s.skill_name}
                   </span>
                 ))}
@@ -147,12 +147,12 @@ const ReportCard: React.FC<{
             </div>
           )}
           {report.requirements_progressed && report.requirements_progressed.length > 0 && (
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded p-2 text-xs text-blue-300">
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-sm p-2 text-xs text-blue-300">
               Updated {report.requirements_progressed.length} pipeline requirement(s)
             </div>
           )}
           {report.trainee_comments && (
-            <div className="bg-theme-surface-secondary rounded p-2">
+            <div className="bg-theme-surface-secondary rounded-sm p-2">
               <span className="text-theme-text-muted text-xs">Trainee Comments: </span>
               <span className="text-theme-text-secondary text-sm">{report.trainee_comments}</span>
             </div>
@@ -515,7 +515,7 @@ const ShiftReportPage: React.FC = () => {
                     placeholder="Custom call type..."
                     className="form-input flex-1"
                   />
-                  <button type="button" onClick={addCallType} className="px-3 py-1.5 bg-theme-surface-secondary text-theme-text-primary rounded text-sm hover:bg-theme-surface-hover">
+                  <button type="button" onClick={addCallType} className="px-3 py-1.5 bg-theme-surface-secondary text-theme-text-primary rounded-sm text-sm hover:bg-theme-surface-hover">
                     Add
                   </button>
                 </div>
@@ -607,7 +607,7 @@ const ShiftReportPage: React.FC = () => {
                       type="checkbox"
                       checked={skill.demonstrated}
                       onChange={(e) => updateSkill(i, { demonstrated: e.target.checked })}
-                      className="w-4 h-4 rounded border-theme-surface-border bg-theme-surface text-green-600"
+                      className="w-4 h-4 rounded-sm border-theme-surface-border bg-theme-surface text-green-600"
                     />
                     <span className="text-xs text-theme-text-muted">Demo'd</span>
                   </label>
@@ -708,7 +708,7 @@ const ShiftReportPage: React.FC = () => {
                     <div className="mt-1 flex justify-end">
                       <button
                         onClick={() => { void handleAcknowledge(r.id); }}
-                        className="btn-success rounded px-3 py-1 text-xs"
+                        className="btn-success rounded-sm px-3 py-1 text-xs"
                       >
                         Acknowledge
                       </button>

@@ -111,7 +111,7 @@ const StorageTreeNode: React.FC<StorageTreeNodeProps> = ({ area, depth, onEdit, 
         {/* Expand/collapse */}
         <button
           onClick={() => setExpanded(!expanded)}
-          className={`p-0.5 rounded transition-colors ${hasChildren ? 'text-theme-text-muted hover:text-theme-text-primary' : 'invisible'}`}
+          className={`p-0.5 rounded-sm transition-colors ${hasChildren ? 'text-theme-text-muted hover:text-theme-text-primary' : 'invisible'}`}
           aria-label={expanded ? 'Collapse' : 'Expand'}
         >
           {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
@@ -158,13 +158,13 @@ const StorageTreeNode: React.FC<StorageTreeNodeProps> = ({ area, depth, onEdit, 
         {/* Actions */}
         {canManage && (
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={() => onAddChild(area)} className="p-1 text-theme-text-muted hover:text-emerald-600 rounded" title="Add child">
+            <button onClick={() => onAddChild(area)} className="p-1 text-theme-text-muted hover:text-emerald-600 rounded-sm" title="Add child">
               <Plus className="w-3.5 h-3.5" />
             </button>
-            <button onClick={() => onEdit(area)} className="p-1 text-theme-text-muted hover:text-blue-600 rounded" title="Edit">
+            <button onClick={() => onEdit(area)} className="p-1 text-theme-text-muted hover:text-blue-600 rounded-sm" title="Edit">
               <Pencil className="w-3.5 h-3.5" />
             </button>
-            <button onClick={() => onDelete(area)} className="p-1 text-theme-text-muted hover:text-red-600 rounded" title="Delete">
+            <button onClick={() => onDelete(area)} className="p-1 text-theme-text-muted hover:text-red-600 rounded-sm" title="Delete">
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -187,7 +187,7 @@ const StorageTreeNode: React.FC<StorageTreeNodeProps> = ({ area, depth, onEdit, 
                 <Link
                   key={item.id}
                   to={`/inventory?item=${item.id}`}
-                  className="flex items-center gap-2 px-3 py-1.5 hover:bg-theme-surface-hover rounded text-xs group/item"
+                  className="flex items-center gap-2 px-3 py-1.5 hover:bg-theme-surface-hover rounded-sm text-xs group/item"
                 >
                   <span className="text-theme-text-primary font-medium truncate">
                     {item.name}
@@ -202,7 +202,7 @@ const StorageTreeNode: React.FC<StorageTreeNodeProps> = ({ area, depth, onEdit, 
                       x{item.quantity}
                     </span>
                   )}
-                  <span className={`ml-auto px-1.5 py-0.5 rounded border text-[10px] font-semibold uppercase whitespace-nowrap ${STATUS_STYLES[item.status] ?? 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border'}`}>
+                  <span className={`ml-auto px-1.5 py-0.5 rounded-sm border text-[10px] font-semibold uppercase whitespace-nowrap ${STATUS_STYLES[item.status] ?? 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border'}`}>
                     {item.status.replace('_', ' ')}
                   </span>
                 </Link>

@@ -65,6 +65,7 @@ const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
   manual_approval: CheckCircle,
   meeting: CalendarCheck,
   status_page_toggle: Globe,
+  automated_email: Mail,
 };
 
 export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
@@ -101,6 +102,8 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   const [showNotesInput, setShowNotesInput] = useState(false);
   const [showRejectConfirm, setShowRejectConfirm] = useState(false);
   const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
+  const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+  const [isSkipping, setIsSkipping] = useState(false);
   const [showPii, setShowPii] = useState(true);
   const [pkgNotes, setPkgNotes] = useState('');
   const [pkgStatement, setPkgStatement] = useState('');
@@ -229,7 +232,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
   if (!isOpen) return null;
 
-  const isActionInProgress = isAdvancing || isRejecting || isHolding || isResuming || isWithdrawing;
+  const isActionInProgress = isAdvancing || isRejecting || isHolding || isResuming || isWithdrawing || isSkipping;
 
   const handleAdvance = async () => {
     if (!applicant) return;
@@ -246,6 +249,29 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
       setShowNotesInput(false);
     } catch {
       toast.error('Failed to advance applicant');
+    }
+  };
+
+  const handleSkipStage = async () => {
+    if (!applicant) return;
+    setIsSkipping(true);
+    try {
+      // Complete current step then advance
+      if (applicant.current_stage_id) {
+        await applicantService.completeStep(
+          applicant.id,
+          applicant.current_stage_id,
+          `Stage skipped by coordinator${actionNotes ? `: ${actionNotes}` : ''}`
+        );
+      }
+      await advanceApplicant(applicant.id, 'Stage skipped');
+      toast.success('Stage skipped');
+      setShowSkipConfirm(false);
+      setActionNotes('');
+    } catch {
+      toast.error('Failed to skip stage');
+    } finally {
+      setIsSkipping(false);
     }
   };
 
@@ -366,7 +392,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-theme-surface-border">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-sm font-bold text-white">
+                <div className="w-10 h-10 rounded-full bg-linear-to-br from-red-500 to-red-700 flex items-center justify-center text-sm font-bold text-white">
                   {getInitials(applicant.first_name, applicant.last_name)}
                 </div>
                 <div>
@@ -486,7 +512,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         onChange={(e) => setEditFields((f) => ({ ...f, first_name: e.target.value }))}
                         placeholder="First name"
                         aria-label="First name"
-                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                       />
                       <input
                         type="text"
@@ -494,7 +520,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         onChange={(e) => setEditFields((f) => ({ ...f, last_name: e.target.value }))}
                         placeholder="Last name"
                         aria-label="Last name"
-                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                       />
                     </div>
                     <input
@@ -503,7 +529,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       onChange={(e) => setEditFields((f) => ({ ...f, email: e.target.value }))}
                       placeholder="Email"
                       aria-label="Email address"
-                      className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                      className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                     />
                     <input
                       type="text"
@@ -511,14 +537,14 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       onChange={(e) => setEditFields((f) => ({ ...f, phone: e.target.value }))}
                       placeholder="Phone"
                       aria-label="Phone number"
-                      className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                      className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                     />
                     <input
                       type="date"
                       value={editFields.date_of_birth}
                       onChange={(e) => setEditFields((f) => ({ ...f, date_of_birth: e.target.value }))}
                       aria-label="Date of birth"
-                      className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                      className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                     />
                     <input
                       type="text"
@@ -526,7 +552,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       onChange={(e) => setEditFields((f) => ({ ...f, address_street: e.target.value }))}
                       placeholder="Street address"
                       aria-label="Street address"
-                      className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                      className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                     />
                     <div className="form-grid-3">
                       <input
@@ -535,7 +561,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         onChange={(e) => setEditFields((f) => ({ ...f, address_city: e.target.value }))}
                         placeholder="City"
                         aria-label="City"
-                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                       />
                       <input
                         type="text"
@@ -543,7 +569,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         onChange={(e) => setEditFields((f) => ({ ...f, address_state: e.target.value }))}
                         placeholder="State"
                         aria-label="State"
-                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                       />
                       <input
                         type="text"
@@ -551,7 +577,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         onChange={(e) => setEditFields((f) => ({ ...f, address_zip: e.target.value }))}
                         placeholder="ZIP"
                         aria-label="ZIP code"
-                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                       />
                     </div>
                   </div>
@@ -702,7 +728,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                               onChange={(e) => setPkgNotes(e.target.value)}
                               placeholder="Internal notes about this applicant..."
                               rows={2}
-                              className="w-full bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring resize-none"
+                              className="w-full bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring resize-none"
                             />
                           </div>
                           <div>
@@ -714,7 +740,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                               onChange={(e) => setPkgStatement(e.target.value)}
                               placeholder="Statement shown to voters on the ballot..."
                               rows={2}
-                              className="w-full bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring resize-none"
+                              className="w-full bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring resize-none"
                             />
                           </div>
                           <div className="flex items-center gap-2 justify-end">
@@ -790,6 +816,53 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 </div>
               )}
 
+              {/* Visual Stage Progress */}
+              {applicant.stage_history.length > 0 && (
+                <div className="p-4 border-b border-theme-surface-border">
+                  <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
+                    Progress
+                  </h3>
+                  <div className="flex items-center gap-1 overflow-x-auto pb-1">
+                    {applicant.stage_history.map((entry, idx) => {
+                      const isComplete = !!entry.completed_at;
+                      const isCurrent = idx === applicant.stage_history.length - 1 && !isComplete;
+                      const StageIcon = STAGE_TYPE_ICONS[entry.stage_type] ?? Circle;
+                      return (
+                        <React.Fragment key={entry.id}>
+                          {idx > 0 && (
+                            <div className={`shrink-0 w-4 h-0.5 ${isComplete || isCurrent ? 'bg-emerald-400' : 'bg-theme-surface-border'}`} />
+                          )}
+                          <div
+                            className={`flex items-center gap-1 px-2 py-1 rounded text-xs shrink-0 ${
+                              isComplete
+                                ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                                : isCurrent
+                                ? 'bg-red-500/10 text-red-700 dark:text-red-400 ring-1 ring-red-500/30'
+                                : 'bg-theme-surface-hover text-theme-text-muted'
+                            }`}
+                            title={`${entry.stage_name}${isComplete ? ' (Complete)' : isCurrent ? ' (Current)' : ''}`}
+                          >
+                            {isComplete ? (
+                              <CheckCircle2 className="w-3 h-3" />
+                            ) : (
+                              <StageIcon className="w-3 h-3" />
+                            )}
+                            <span className="max-w-[80px] truncate">{entry.stage_name}</span>
+                          </div>
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
+                  {/* Time in pipeline summary */}
+                  <p className="text-xs text-theme-text-muted mt-2">
+                    {applicant.stage_history.filter((e) => !!e.completed_at).length} of {applicant.stage_history.length} stages completed
+                    {applicant.stage_history.length > 0 && (
+                      <> &middot; In pipeline since {formatDate(applicant.created_at, tz)}</>
+                    )}
+                  </p>
+                </div>
+              )}
+
               {/* Stage History Timeline */}
               <div className="p-4 border-b border-theme-surface-border">
                 <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
@@ -809,11 +882,11 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                             {/* Timeline line */}
                             <div className="flex flex-col items-center">
                               {isComplete ? (
-                                <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
                               ) : isCurrent ? (
-                                <div className="w-5 h-5 rounded-full border-2 border-red-500 bg-red-500/20 flex-shrink-0" />
+                                <div className="w-5 h-5 rounded-full border-2 border-red-500 bg-red-500/20 shrink-0" />
                               ) : (
-                                <Circle className="w-5 h-5 text-slate-400 dark:text-slate-600 flex-shrink-0" />
+                                <Circle className="w-5 h-5 text-slate-400 dark:text-slate-600 shrink-0" />
                               )}
                               {idx < applicant.stage_history.length - 1 && (
                                 <div className="w-px h-full min-h-[24px] bg-theme-surface-border my-1" />
@@ -837,7 +910,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                                 </p>
                               )}
                               {entry.notes && (
-                                <p className="text-xs text-theme-text-muted mt-1 bg-theme-surface-secondary rounded px-2 py-1">
+                                <p className="text-xs text-theme-text-muted mt-1 bg-theme-surface-secondary rounded-sm px-2 py-1">
                                   {entry.notes}
                                 </p>
                               )}
@@ -960,7 +1033,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       onChange={(e) => setActionNotes(e.target.value)}
                       placeholder="Add notes for this action..."
                       rows={2}
-                      className="flex-1 bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring resize-none"
+                      className="flex-1 bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring resize-none"
                     />
                   </div>
                 )}
@@ -985,6 +1058,31 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       >
                         {isWithdrawing && <Loader2 className="w-3 h-3 animate-spin" />}
                         Confirm Withdraw
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Skip stage confirmation */}
+                {showSkipConfirm && (
+                  <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-3">
+                    <p className="text-sm text-purple-600 dark:text-purple-300 mb-2">
+                      Skip the current stage? This will mark it as completed and advance the applicant.
+                    </p>
+                    <div className="flex items-center gap-2 justify-end">
+                      <button
+                        onClick={() => setShowSkipConfirm(false)}
+                        className="px-3 py-1.5 text-xs text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => { void handleSkipStage(); }}
+                        disabled={isSkipping}
+                        className="px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50 flex gap-1 items-center"
+                      >
+                        {isSkipping && <Loader2 className="w-3 h-3 animate-spin" />}
+                        Confirm Skip
                       </button>
                     </div>
                   </div>
@@ -1044,6 +1142,15 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     <span className="action-label">Hold</span>
                   </button>
                   <button
+                    onClick={() => setShowSkipConfirm(true)}
+                    disabled={isActionInProgress}
+                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-purple-400 border border-purple-500/30 rounded-lg hover:bg-purple-500/10 transition-colors disabled:opacity-50"
+                    title="Skip this stage and advance"
+                  >
+                    {isSkipping ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRight className="w-3.5 h-3.5" />}
+                    <span className="action-label">Skip</span>
+                  </button>
+                  <button
                     onClick={() => setShowRejectConfirm(true)}
                     disabled={isActionInProgress}
                     className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
@@ -1078,7 +1185,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       onChange={(e) => setActionNotes(e.target.value)}
                       placeholder="Add notes for this action..."
                       rows={2}
-                      className="flex-1 bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring resize-none"
+                      className="flex-1 bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring resize-none"
                     />
                   </div>
                 )}
@@ -1177,7 +1284,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       onChange={(e) => setActionNotes(e.target.value)}
                       placeholder="Add notes for reactivation..."
                       rows={2}
-                      className="flex-1 bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring resize-none"
+                      className="flex-1 bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring resize-none"
                     />
                   </div>
                 )}
@@ -1217,7 +1324,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       onChange={(e) => setActionNotes(e.target.value)}
                       placeholder="Add notes for reactivation..."
                       rows={2}
-                      className="flex-1 bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring resize-none"
+                      className="flex-1 bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring resize-none"
                     />
                   </div>
                 )}

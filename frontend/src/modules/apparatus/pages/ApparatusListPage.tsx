@@ -100,13 +100,13 @@ export const ApparatusListPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-theme-bg via-red-900 to-theme-bg">
+    <div className="min-h-screen bg-linear-to-br from-theme-bg via-red-900 to-theme-bg">
       {/* Header */}
-      <header className="bg-theme-input-bg backdrop-blur-sm border-b border-theme-surface-border px-4 sm:px-6 py-4">
+      <header className="bg-theme-input-bg backdrop-blur-xs border-b border-theme-surface-border px-4 sm:px-6 py-4">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center space-x-3 min-w-0">
-              <div className="bg-red-600 rounded-lg p-2 flex-shrink-0">
+              <div className="bg-red-600 rounded-lg p-2 shrink-0">
                 <Truck className="w-6 h-6 text-theme-text-primary" />
               </div>
               <div className="min-w-0">
@@ -116,7 +116,7 @@ export const ApparatusListPage: React.FC = () => {
             </div>
             <button
               onClick={() => navigate('/dashboard')}
-              className="text-theme-text-secondary hover:text-theme-text-primary transition-colors text-sm flex-shrink-0"
+              className="text-theme-text-secondary hover:text-theme-text-primary transition-colors text-sm shrink-0"
             >
               <span className="hidden sm:inline">← Back to Dashboard</span>
               <span className="sm:hidden">← Back</span>
@@ -358,7 +358,7 @@ export const ApparatusListPage: React.FC = () => {
                         >
                           <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
-                              <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center text-white font-bold flex-shrink-0">
+                              <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center text-white font-bold shrink-0">
                                 {apparatus.unitNumber.substring(0, 2)}
                               </div>
                               <div className="ml-3 min-w-0">
@@ -404,21 +404,21 @@ export const ApparatusListPage: React.FC = () => {
                             <div className="flex items-center justify-end space-x-1 sm:space-x-2">
                               <button
                                 onClick={() => navigate(`/apparatus/${apparatus.id}`)}
-                                className="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-blue-700 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-500/10 rounded transition-colors"
+                                className="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-blue-700 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-500/10 rounded-sm transition-colors"
                                 title="View Details"
                               >
                                 <Eye className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => navigate(`/apparatus/${apparatus.id}/edit`)}
-                                className="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-green-700 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-500/10 rounded transition-colors"
+                                className="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-green-700 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-500/10 rounded-sm transition-colors"
                                 title="Edit"
                               >
                                 <Edit className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => navigate(`/apparatus/${apparatus.id}`)}
-                                className="hidden sm:inline-flex p-2 min-w-[44px] min-h-[44px] items-center justify-center text-yellow-700 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300 hover:bg-yellow-500/10 rounded transition-colors"
+                                className="hidden sm:inline-flex p-2 min-w-[44px] min-h-[44px] items-center justify-center text-yellow-700 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300 hover:bg-yellow-500/10 rounded-sm transition-colors"
                                 title="View Details"
                               >
                                 <Wrench className="w-4 h-4" />
@@ -426,7 +426,7 @@ export const ApparatusListPage: React.FC = () => {
                               {!apparatus.isArchived && (
                                 <button
                                   onClick={() => navigate(`/apparatus/${apparatus.id}`)}
-                                  className="hidden sm:inline-flex p-2 min-w-[44px] min-h-[44px] items-center justify-center text-theme-text-muted hover:text-theme-text-secondary hover:bg-theme-surface-secondary rounded transition-colors"
+                                  className="hidden sm:inline-flex p-2 min-w-[44px] min-h-[44px] items-center justify-center text-theme-text-muted hover:text-theme-text-secondary hover:bg-theme-surface-secondary rounded-sm transition-colors"
                                   title="Archive"
                                 >
                                   <Archive className="w-4 h-4" />

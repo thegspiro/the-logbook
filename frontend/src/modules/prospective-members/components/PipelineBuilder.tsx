@@ -21,6 +21,7 @@ import {
   EyeOff,
   CalendarCheck,
   Globe,
+  Mail,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type {
@@ -44,6 +45,7 @@ const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
   manual_approval: CheckCircle,
   meeting: CalendarCheck,
   status_page_toggle: Globe,
+  automated_email: Mail,
 };
 
 const STAGE_TYPE_COLORS: Record<StageType, string> = {
@@ -53,6 +55,7 @@ const STAGE_TYPE_COLORS: Record<StageType, string> = {
   manual_approval: 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
   meeting: 'text-teal-700 dark:text-teal-400 bg-teal-500/10 border-teal-500/30',
   status_page_toggle: 'text-sky-700 dark:text-sky-400 bg-sky-500/10 border-sky-500/30',
+  automated_email: 'text-rose-700 dark:text-rose-400 bg-rose-500/10 border-rose-500/30',
 };
 
 const STAGE_TYPE_LABELS: Record<StageType, string> = {
@@ -62,6 +65,7 @@ const STAGE_TYPE_LABELS: Record<StageType, string> = {
   manual_approval: 'Manual Approval',
   meeting: 'Meeting',
   status_page_toggle: 'Enable Status Page',
+  automated_email: 'Automated Email',
 };
 
 export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
@@ -224,12 +228,12 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
                 </div>
 
                 {/* Stage Number */}
-                <div className="w-8 h-8 rounded-full bg-theme-surface-hover flex items-center justify-center text-sm font-bold text-theme-text-secondary flex-shrink-0">
+                <div className="w-8 h-8 rounded-full bg-theme-surface-hover flex items-center justify-center text-sm font-bold text-theme-text-secondary shrink-0">
                   {index + 1}
                 </div>
 
                 {/* Type Badge */}
-                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium flex-shrink-0 ${colorClass}`}>
+                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium shrink-0 ${colorClass}`}>
                   <Icon className="w-3.5 h-3.5" />
                   {STAGE_TYPE_LABELS[stage.stage_type]}
                 </div>
@@ -241,18 +245,18 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
                       {stage.name}
                     </span>
                     {stage.is_required && (
-                      <span className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">
+                      <span className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded-sm">
                         Required
                       </span>
                     )}
                     {stage.notify_prospect_on_completion && (
-                      <span className="text-xs text-blue-700 dark:text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded flex items-center gap-0.5" title="Notifies prospect on completion">
+                      <span className="text-xs text-blue-700 dark:text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-sm flex items-center gap-0.5" title="Notifies prospect on completion">
                         <Bell className="w-2.5 h-2.5" />
                         Notify
                       </span>
                     )}
                     {!stage.public_visible && (
-                      <span className="text-xs text-theme-text-muted bg-theme-surface-hover px-1.5 py-0.5 rounded flex items-center gap-0.5" title="Hidden from public status page">
+                      <span className="text-xs text-theme-text-muted bg-theme-surface-hover px-1.5 py-0.5 rounded-sm flex items-center gap-0.5" title="Hidden from public status page">
                         <EyeOff className="w-2.5 h-2.5" />
                         Hidden
                       </span>
@@ -266,7 +270,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-1 flex-shrink-0">
+                <div className="flex items-center gap-1 shrink-0">
                   <button
                     onClick={() => { void moveStage(index, index - 1); }}
                     disabled={index === 0 || isSaving}

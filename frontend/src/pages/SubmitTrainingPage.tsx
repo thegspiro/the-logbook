@@ -46,7 +46,7 @@ const StatusBadge: React.FC<{ status: SubmissionStatus }> = ({ status }) => {
   const config = STATUS_CONFIG[status];
   const Icon = config.icon;
   return (
-    <span className={`inline-flex items-center space-x-1 px-2 py-0.5 text-xs rounded ${config.color}`}>
+    <span className={`inline-flex items-center space-x-1 px-2 py-0.5 text-xs rounded-sm ${config.color}`}>
       <Icon className="w-3 h-3" />
       <span>{config.label}</span>
     </span>
@@ -201,13 +201,13 @@ const SubmissionForm: React.FC<{
 
       {config.member_instructions && (
         <div className="flex items-start space-x-2 bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-          <Info className="w-4 h-4 text-blue-700 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+          <Info className="w-4 h-4 text-blue-700 dark:text-blue-400 mt-0.5 shrink-0" />
           <p className="text-blue-700 dark:text-blue-300 text-sm">{config.member_instructions}</p>
         </div>
       )}
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500 text-red-700 dark:text-red-400 px-4 py-3 rounded text-sm">
+        <div className="bg-red-500/10 border border-red-500 text-red-700 dark:text-red-400 px-4 py-3 rounded-sm text-sm">
           {error}
         </div>
       )}
@@ -298,7 +298,7 @@ const SubmissionForm: React.FC<{
             ? 'bg-green-500/10 border border-green-500/30 text-green-700 dark:text-green-400'
             : 'bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-400'
         }`}>
-          <Clock className="w-4 h-4 flex-shrink-0" />
+          <Clock className="w-4 h-4 shrink-0" />
           <span>
             {calculatedHours > 0
               ? `Training Hours: ${formatHours(calculatedHours)} (${calculatedHours} hours)`
@@ -583,7 +583,7 @@ const SubmitTrainingPage: React.FC = () => {
                           {sub.location && <span>at {sub.location}</span>}
                         </div>
                         {sub.reviewer_notes && (
-                          <div className="mt-2 bg-theme-surface rounded p-2 text-sm">
+                          <div className="mt-2 bg-theme-surface rounded-sm p-2 text-sm">
                             <span className="text-theme-text-muted text-xs">Officer notes: </span>
                             <span className="text-theme-text-secondary">{sub.reviewer_notes}</span>
                           </div>
@@ -593,14 +593,14 @@ const SubmitTrainingPage: React.FC = () => {
                         <div className="flex items-center space-x-1 ml-4">
                           <button
                             onClick={() => setEditingSubmission(sub)}
-                            className="p-1.5 text-theme-text-muted hover:text-theme-text-primary rounded"
+                            className="p-1.5 text-theme-text-muted hover:text-theme-text-primary rounded-sm"
                             aria-label="Edit submission"
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => { void handleDelete(sub.id); }}
-                            className="p-1.5 text-theme-text-muted hover:text-red-700 dark:hover:text-red-400 rounded"
+                            className="p-1.5 text-theme-text-muted hover:text-red-700 dark:hover:text-red-400 rounded-sm"
                             aria-label="Delete submission"
                           >
                             <Trash2 className="w-4 h-4" />

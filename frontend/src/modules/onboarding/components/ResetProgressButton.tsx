@@ -96,7 +96,7 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
         >
           {/* Backdrop */}
           <div
-            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/70 backdrop-blur-xs"
             onClick={() => !isResetting && setShowModal(false)}
             aria-hidden="true"
           />

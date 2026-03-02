@@ -91,7 +91,7 @@ export const DepartmentDefaultsCard: React.FC<DepartmentDefaultsCardProps> = ({
                   requireAssignmentConfirmation: e.target.checked,
                 }))
               }
-              className="rounded border-theme-input-border"
+              className="rounded-sm border-theme-input-border"
             />
             Require assignment confirmation
           </label>

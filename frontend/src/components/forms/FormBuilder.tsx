@@ -139,7 +139,7 @@ const SortableFieldRow = ({ field, idx, totalFields, warning, onEdit, onDelete, 
     >
       {/* Drag handle */}
       <div
-        className="text-theme-text-muted flex-shrink-0 cursor-grab active:cursor-grabbing"
+        className="text-theme-text-muted shrink-0 cursor-grab active:cursor-grabbing"
         {...attributes}
         {...listeners}
       >
@@ -147,7 +147,7 @@ const SortableFieldRow = ({ field, idx, totalFields, warning, onEdit, onDelete, 
       </div>
 
       {/* Type icon */}
-      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
         warning
           ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
           : 'bg-theme-surface text-theme-text-muted'
@@ -160,19 +160,19 @@ const SortableFieldRow = ({ field, idx, totalFields, warning, onEdit, onDelete, 
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-medium text-theme-text-primary truncate">{field.label}</span>
           {field.required && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-700 dark:text-red-400 font-medium">Required</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-red-500/20 text-red-700 dark:text-red-400 font-medium">Required</span>
           )}
           {field.width !== 'full' && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-theme-surface text-theme-text-muted">{field.width}</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-theme-surface text-theme-text-muted">{field.width}</span>
           )}
           {field.condition_field_id && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-700 dark:text-purple-400 font-medium flex items-center gap-0.5">
+            <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-purple-500/20 text-purple-700 dark:text-purple-400 font-medium flex items-center gap-0.5">
               <GitBranch className="w-2.5 h-2.5" />
               Conditional
             </span>
           )}
           {warning && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 font-medium flex items-center gap-0.5">
+            <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 font-medium flex items-center gap-0.5">
               <AlertCircle className="w-2.5 h-2.5" />
               Needs setup
             </span>
@@ -351,7 +351,7 @@ const FormBuilder = ({
     if (isConnected) {
       try {
         setSaving(true);
-        await formsService.addField(formId!, fieldData);
+        await formsService.addField(formId, fieldData);
         await loadFields();
       } catch {
         setError('Failed to duplicate field.');
@@ -370,7 +370,7 @@ const FormBuilder = ({
       };
       const updated = [...reindexed, newField];
       setFields(updated);
-      onFieldsChange?.(updated as FieldDefinition[]);
+      onFieldsChange?.(updated);
     }
   };
 
@@ -502,7 +502,7 @@ const FormBuilder = ({
       try {
         setSaving(true);
         const fieldIds = sorted.map((f) => f.id);
-        await formsService.reorderFields(formId!, fieldIds);
+        await formsService.reorderFields(formId, fieldIds);
         await loadFields();
       } catch {
         setError('Failed to reorder fields.');
@@ -565,7 +565,7 @@ const FormBuilder = ({
       {/* Incomplete fields banner */}
       {incompleteCount > 0 && !previewMode && (
         <div className="mb-4 p-3 rounded-lg flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/30">
-          <AlertCircle className="w-4 h-4 text-yellow-700 dark:text-yellow-400 flex-shrink-0" />
+          <AlertCircle className="w-4 h-4 text-yellow-700 dark:text-yellow-400 shrink-0" />
           <p className="text-sm text-yellow-700 dark:text-yellow-300">
             {incompleteCount} {incompleteCount === 1 ? 'field needs' : 'fields need'} additional setup before this form is ready to use.
           </p>
@@ -575,7 +575,7 @@ const FormBuilder = ({
       {/* Error */}
       {error && (
         <div className="mb-4 p-3 rounded-lg flex items-center gap-2 bg-red-500/10 border border-red-500/30">
-          <AlertCircle className="w-4 h-4 text-red-700 dark:text-red-400 flex-shrink-0" />
+          <AlertCircle className="w-4 h-4 text-red-700 dark:text-red-400 shrink-0" />
           <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
           <button onClick={() => setError(null)} className="ml-auto text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300">
             <span className="sr-only">Dismiss</span>&times;
