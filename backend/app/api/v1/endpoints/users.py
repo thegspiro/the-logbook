@@ -1107,6 +1107,8 @@ async def admin_reset_password(
     **Authentication required**
     """
     from app.core.security import hash_password, validate_password_strength
+    from app.models.user import Session as UserSession
+    from app.services.auth_service import _save_password_to_history
 
     if str(user_id) == str(current_user.id):
         raise HTTPException(
@@ -1139,6 +1141,10 @@ async def admin_reset_password(
     # Capture username before commit
     target_username = user.username
 
+    # Save current password to history before changing (HIPAA §164.312(d))
+    if user.password_hash:
+        await _save_password_to_history(db, str(user.id), user.password_hash)
+
     user.password_hash = hash_password(reset_data.new_password)
     user.must_change_password = reset_data.force_change
     user.failed_login_attempts = 0
@@ -1148,8 +1154,14 @@ async def admin_reset_password(
     if not reset_data.force_change:
         user.password_changed_at = datetime.now(timezone.utc)
 
-    await db.commit()
+    # Revoke all existing sessions to force re-login with the new password
+    sessions_result = await db.execute(
+        select(UserSession).where(UserSession.user_id == str(user_id))
+    )
+    for session in sessions_result.scalars().all():
+        await db.delete(session)
 
+    # Write audit log before commit so it's in the same transaction
     await log_audit_event(
         db=db,
         event_type="admin_password_reset",
@@ -1163,6 +1175,8 @@ async def admin_reset_password(
         user_id=str(current_user.id),
         username=current_user.username,
     )
+
+    await db.commit()
 
     return {"message": f"Password has been reset for {target_username}"}
 

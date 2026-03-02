@@ -795,7 +795,11 @@ class AuthService:
         user.failed_login_attempts = 0
         user.locked_until = None
 
-        await self.db.flush()
+        # Revoke all existing sessions — forces re-login with new password
+        # and invalidates any stolen tokens that triggered the reset
+        await self._revoke_all_user_sessions(str(user.id))
+
+        await self.db.commit()
         logger.info("Password successfully reset via token")
 
         return True, None
