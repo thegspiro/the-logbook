@@ -26,6 +26,7 @@ import {
   QrCode,
   Pencil,
   ArrowLeft,
+  BarChart3,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuthStore } from '../stores/authStore';
@@ -37,7 +38,7 @@ import {
   type FormDetailDef,
   type FormIntegrationCreate,
 } from '../services/api';
-import { FormBuilder, FormRenderer, SubmissionViewer } from '../components/forms';
+import { FormBuilder, FormRenderer, SubmissionViewer, FormResultsPanel } from '../components/forms';
 import { FormStatus } from '../constants/enums';
 
 interface StarterTemplate {
@@ -221,6 +222,7 @@ const FormsPage: React.FC = () => {
   const [forms, setForms] = useState<FormDef[]>([]);
   const [summary, setSummary] = useState<FormsSummary | null>(null);
   const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
+  const [submissionsView, setSubmissionsView] = useState<'list' | 'results'>('list');
   const [selectedFormDetail, setSelectedFormDetail] = useState<FormDetailDef | null>(null);
 
   const [formData, setFormData] = useState({
@@ -232,7 +234,7 @@ const FormsPage: React.FC = () => {
 
   // Form detail view (builder/preview/submissions)
   const [editingForm, setEditingForm] = useState<FormDetailDef | null>(null);
-  const [detailTab, setDetailTab] = useState<'builder' | 'preview' | 'submissions'>('builder');
+  const [detailTab, setDetailTab] = useState<'builder' | 'preview' | 'submissions' | 'results'>('builder');
 
   // Integration state
   const [integrationTarget, setIntegrationTarget] = useState('membership');
@@ -835,19 +837,44 @@ const FormsPage: React.FC = () => {
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-theme-text-primary text-lg font-semibold">
-                    Submissions
+                    {submissionsView === 'list' ? 'Submissions' : 'Results'}
                   </h2>
-                  <button
-                    onClick={() => setSelectedFormId(null)}
-                    className="text-theme-text-muted hover:text-theme-text-primary text-sm"
-                  >
-                    Clear selection
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <div className="flex bg-theme-surface-secondary rounded-lg p-0.5">
+                      <button
+                        onClick={() => setSubmissionsView('list')}
+                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                          submissionsView === 'list' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+                        }`}
+                      >
+                        Responses
+                      </button>
+                      <button
+                        onClick={() => setSubmissionsView('results')}
+                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1 ${
+                          submissionsView === 'results' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+                        }`}
+                      >
+                        <BarChart3 className="w-3 h-3" />
+                        Results
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => { setSelectedFormId(null); setSubmissionsView('list'); }}
+                      className="text-theme-text-muted hover:text-theme-text-primary text-sm"
+                    >
+                      Clear selection
+                    </button>
+                  </div>
                 </div>
-                <SubmissionViewer
-                  formId={selectedFormId}
-                  allowDelete={canManage}
-                />
+                {submissionsView === 'list' ? (
+                  <SubmissionViewer
+                    formId={selectedFormId}
+                    allowDelete={canManage}
+                  />
+                ) : (
+                  <FormResultsPanel formId={selectedFormId} />
+                )}
               </div>
             ) : (
               <div className="card p-12 text-center">
@@ -934,6 +961,16 @@ const FormsPage: React.FC = () => {
                 >
                   Submissions
                 </button>
+                <button
+                  onClick={() => setDetailTab('results')}
+                  role="tab"
+                  aria-selected={detailTab === 'results'}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    detailTab === 'results' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+                  }`}
+                >
+                  Results
+                </button>
               </div>
 
               {/* Builder Tab */}
@@ -961,6 +998,13 @@ const FormsPage: React.FC = () => {
                     formId={editingForm.id}
                     allowDelete={canManage}
                   />
+                </div>
+              )}
+
+              {/* Results Tab */}
+              {detailTab === 'results' && (
+                <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-xl p-6">
+                  <FormResultsPanel formId={editingForm.id} />
                 </div>
               )}
             </div>

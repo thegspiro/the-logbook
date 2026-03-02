@@ -36,3 +36,6 @@ export type { FormBuilderProps } from './FormBuilder';
 
 export { default as SubmissionViewer } from './SubmissionViewer';
 export type { SubmissionViewerProps } from './SubmissionViewer';
+
+export { default as FormResultsPanel } from './FormResultsPanel';
+export type { FormResultsPanelProps } from './FormResultsPanel';
