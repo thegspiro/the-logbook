@@ -245,20 +245,35 @@ class PropertyReturnService:
 
     @staticmethod
     def _format_org_address(org: Organization) -> str:
-        if not org.settings:
-            return ""
-        addr = org.settings.get("address", {})
-        if not addr:
-            return ""
-        parts = []
-        if addr.get("street"):
-            parts.append(addr["street"])
-        city_state = ", ".join(filter(None, [addr.get("city"), addr.get("state")]))
-        if city_state and addr.get("zip"):
-            city_state += f" {addr['zip']}"
+        """Format the organization's address from model columns.
+
+        Prefers the physical address when it differs from the mailing
+        address; otherwise falls back to the mailing address.
+        """
+        if not getattr(org, "physical_address_same", True) and org.physical_address_line1:
+            line1 = org.physical_address_line1
+            line2 = org.physical_address_line2
+            city = org.physical_city
+            state = org.physical_state
+            zip_code = org.physical_zip
+        else:
+            line1 = org.mailing_address_line1
+            line2 = org.mailing_address_line2
+            city = org.mailing_city
+            state = org.mailing_state
+            zip_code = org.mailing_zip
+
+        parts: list[str] = []
+        if line1:
+            parts.append(line1)
+        if line2:
+            parts.append(line2)
+        city_state = ", ".join(filter(None, [city, state]))
+        if city_state and zip_code:
+            city_state += f" {zip_code}"
         if city_state:
             parts.append(city_state)
-        return "\n".join(parts) if parts else ""
+        return "\n".join(parts)
 
     def _render_html(
         self,
