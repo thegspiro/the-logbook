@@ -121,11 +121,15 @@ export const formsService = {
 };
 
 // Public forms service (no auth required)
+// The public API lives at /api/public/v1/... (outside the /api/v1 prefix).
+// VITE_API_URL is typically "/api/v1", so we strip the version segment to get
+// the bare "/api" base, avoiding a doubled path like "/api/v1/public/v1/...".
+const PUBLIC_API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/v\d+$/, '');
 
 export const publicFormsService = {
   async getForm(slug: string): Promise<PublicFormDef> {
     const response = await axios.get<PublicFormDef>(
-      `${import.meta.env.VITE_API_URL || '/api'}/public/v1/forms/${slug}`
+      `${PUBLIC_API_BASE}/public/v1/forms/${slug}`
     );
     return response.data;
   },
@@ -137,7 +141,7 @@ export const publicFormsService = {
       payload.website = honeypot;
     }
     const response = await axios.post<PublicFormSubmissionResponse>(
-      `${import.meta.env.VITE_API_URL || '/api'}/public/v1/forms/${slug}/submit`,
+      `${PUBLIC_API_BASE}/public/v1/forms/${slug}/submit`,
       payload
     );
     return response.data;
