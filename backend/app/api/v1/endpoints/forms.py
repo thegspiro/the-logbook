@@ -683,6 +683,50 @@ async def get_submission(
     return submission
 
 
+@router.post(
+    "/{form_id}/submissions/{submission_id}/reprocess",
+    response_model=FormSubmissionResponse,
+)
+async def reprocess_submission_integrations(
+    form_id: UUID,
+    submission_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("forms.manage")),
+):
+    """
+    Re-run integrations for an existing submission
+
+    **Authentication required**
+    **Requires permission: forms.manage**
+    """
+    service = FormsService(db)
+    submission, error = await service.reprocess_submission_integrations(
+        submission_id=submission_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="form_integration_reprocessed",
+        event_category="forms",
+        severity="info",
+        event_data={
+            "form_id": str(form_id),
+            "submission_id": str(submission_id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return submission
+
+
 @router.delete(
     "/{form_id}/submissions/{submission_id}", status_code=status.HTTP_204_NO_CONTENT
 )

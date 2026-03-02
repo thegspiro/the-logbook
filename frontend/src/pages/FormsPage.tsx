@@ -276,6 +276,7 @@ const FormsPage: React.FC = () => {
   const [integrationTarget, setIntegrationTarget] = useState('membership');
   const [integrationType, setIntegrationType] = useState('membership_interest');
   const [fieldMappings, setFieldMappings] = useState<Record<string, string>>({});
+  const [integrationHealth, setIntegrationHealth] = useState<{ total: number; processed: number; succeeded: number; failed: number } | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -418,9 +419,30 @@ const FormsPage: React.FC = () => {
 
   const handleOpenIntegrationModal = async (formId: string) => {
     try {
-      const detail = await formsService.getForm(formId);
+      const [detail, subsData] = await Promise.all([
+        formsService.getForm(formId),
+        formsService.getSubmissions(formId, { skip: 0, limit: 500 }),
+      ]);
       setSelectedFormDetail(detail);
       setSelectedFormId(formId);
+
+      // Compute integration health from submissions
+      const subs = subsData.submissions;
+      let processed = 0;
+      let succeeded = 0;
+      let failed = 0;
+      for (const sub of subs) {
+        if (sub.integration_processed && sub.integration_result) {
+          processed++;
+          const results = Object.values(sub.integration_result as Record<string, Record<string, unknown>>);
+          if (results.some((r) => r.success === false)) {
+            failed++;
+          } else {
+            succeeded++;
+          }
+        }
+      }
+      setIntegrationHealth({ total: subsData.total, processed, succeeded, failed });
       setShowIntegrationModal(true);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to load form details';
@@ -1361,6 +1383,32 @@ const FormsPage: React.FC = () => {
                       <X className="w-5 h-5" aria-hidden="true" />
                     </button>
                   </div>
+
+                  {/* Integration Health Stats */}
+                  {integrationHealth && integrationHealth.processed > 0 && (
+                    <div className="mb-4 grid grid-cols-3 gap-2">
+                      <div className="rounded-lg bg-theme-surface-secondary p-2.5 text-center">
+                        <p className="text-lg font-bold text-theme-text-primary">{integrationHealth.processed}</p>
+                        <p className="text-[10px] text-theme-text-muted uppercase tracking-wide">Processed</p>
+                      </div>
+                      <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-2.5 text-center">
+                        <p className="text-lg font-bold text-green-700 dark:text-green-400">{integrationHealth.succeeded}</p>
+                        <p className="text-[10px] text-green-700 dark:text-green-400 uppercase tracking-wide">Succeeded</p>
+                      </div>
+                      <div className={`rounded-lg p-2.5 text-center ${
+                        integrationHealth.failed > 0
+                          ? 'bg-red-500/10 border border-red-500/20'
+                          : 'bg-theme-surface-secondary'
+                      }`}>
+                        <p className={`text-lg font-bold ${
+                          integrationHealth.failed > 0 ? 'text-red-700 dark:text-red-400' : 'text-theme-text-primary'
+                        }`}>{integrationHealth.failed}</p>
+                        <p className={`text-[10px] uppercase tracking-wide ${
+                          integrationHealth.failed > 0 ? 'text-red-700 dark:text-red-400' : 'text-theme-text-muted'
+                        }`}>Failed</p>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Current integrations */}
                   {selectedFormDetail?.integrations && selectedFormDetail.integrations.length > 0 && (
