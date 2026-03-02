@@ -1323,25 +1323,18 @@ class EmailTemplateService:
         templates = list(result.scalars().all())
 
         # Sync available_variables with current code definitions
-        dirty = False
+        dirty_templates: list[EmailTemplate] = []
         for tmpl in templates:
             canonical = get_variables_for_type(tmpl.template_type)
             if tmpl.available_variables != canonical:
                 tmpl.available_variables = canonical
-                dirty = True
-        if dirty:
+                dirty_templates.append(tmpl)
+        if dirty_templates:
             await self.db.flush()
-            # Re-query after flush: onupdate=func.now() on updated_at causes
-            # SQLAlchemy to expire that attribute on flushed objects.  Accessing
-            # expired attributes in async mode triggers a synchronous lazy-load
-            # which raises MissingGreenlet.  A fresh SELECT re-populates them.
-            result = await self.db.execute(
-                select(EmailTemplate)
-                .where(EmailTemplate.organization_id == str(organization_id))
-                .options(selectinload(EmailTemplate.attachments))
-                .order_by(EmailTemplate.template_type, EmailTemplate.name)
-            )
-            templates = list(result.scalars().all())
+            # Refresh dirty objects so updated_at (onupdate=func.now()) is
+            # eagerly loaded — prevents MissingGreenlet during serialization.
+            for tmpl in dirty_templates:
+                await self.db.refresh(tmpl, ["updated_at"])
 
         return templates
 
