@@ -14,7 +14,8 @@ export type StageType =
   | 'election_vote'
   | 'manual_approval'
   | 'meeting'
-  | 'status_page_toggle';
+  | 'status_page_toggle'
+  | 'automated_email';
 
 export type ApplicantStatus =
   | 'active'
@@ -146,13 +147,33 @@ export interface StatusPageToggleConfig {
   custom_message?: string | undefined;
 }
 
+export interface AutomatedEmailSection {
+  id: string;
+  title: string;
+  content: string;
+  enabled: boolean;
+}
+
+export interface AutomatedEmailStageConfig {
+  email_subject: string;
+  include_welcome: boolean;
+  welcome_message?: string | undefined;
+  include_faq_link: boolean;
+  faq_url?: string | undefined;
+  include_next_meeting: boolean;
+  next_meeting_details?: string | undefined;
+  include_status_tracker: boolean;
+  custom_sections?: AutomatedEmailSection[] | undefined;
+}
+
 export type StageConfig =
   | FormStageConfig
   | DocumentStageConfig
   | ElectionStageConfig
   | ManualApprovalConfig
   | MeetingStageConfig
-  | StatusPageToggleConfig;
+  | StatusPageToggleConfig
+  | AutomatedEmailStageConfig;
 
 // =============================================================================
 // Pipeline Stage
