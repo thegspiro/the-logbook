@@ -327,6 +327,8 @@ class EmailService:
         attendee_count: int,
         approval_deadline: datetime,
         submitter_name: Optional[str] = None,
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
     ) -> tuple[int, int]:
         """
         Send training approval request notification to training officers
@@ -340,105 +342,66 @@ class EmailService:
             attendee_count: Number of attendees to approve
             approval_deadline: Deadline for approval
             submitter_name: Name of the person who submitted for approval
+            db: Optional database session for loading templates
+            organization_id: Optional org ID for loading templates
 
         Returns:
             Tuple of (success_count, failure_count)
         """
-        subject = f"Training Approval Required: {course_name}"
+        context = {
+            "course_name": course_name,
+            "event_title": event_title,
+            "event_date": self._format_local_dt(event_date),
+            "attendee_count": str(attendee_count),
+            "approval_deadline": self._format_local_dt(approval_deadline),
+            "submitter_name": submitter_name or "",
+            "approval_url": approval_url,
+        }
 
-        # HTML-escape user-controlled values
-        esc = self._esc
-        e_course_name = esc(course_name)
-        e_event_title = esc(event_title)
-        e_submitter_name = esc(submitter_name) if submitter_name else ""
-        e_approval_url = esc(approval_url)
+        subject = None
+        html_body = None
+        text_body = None
 
-        html_body = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background-color: #2563eb; color: white; padding: 20px; text-align: center; }}
-        .content {{ padding: 20px; background-color: #f9fafb; }}
-        .details {{ background-color: white; padding: 15px; border-radius: 6px; margin: 15px 0; }}
-        .details-row {{ display: flex; padding: 8px 0; border-bottom: 1px solid #e5e7eb; }}
-        .details-label {{ font-weight: bold; width: 140px; color: #6b7280; }}
-        .button {{ display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; }}
-        .warning {{ color: #dc2626; font-weight: bold; }}
-        .footer {{ padding: 20px; text-align: center; font-size: 12px; color: #6b7280; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>Training Approval Required</h1>
-        </div>
-        <div class="content">
-            <p>A training session has been submitted for approval and requires your review.</p>
+        # Try loading the admin-configured template from the database
+        if db and organization_id:
+            try:
+                from app.models.email_template import EmailTemplateType
+                from app.services.email_template_service import EmailTemplateService
 
-            <div class="details">
-                <div class="details-row">
-                    <span class="details-label">Course Name:</span>
-                    <span>{e_course_name}</span>
-                </div>
-                <div class="details-row">
-                    <span class="details-label">Event:</span>
-                    <span>{e_event_title}</span>
-                </div>
-                <div class="details-row">
-                    <span class="details-label">Date:</span>
-                    <span>{self._format_local_dt(event_date)}</span>
-                </div>
-                <div class="details-row">
-                    <span class="details-label">Attendees:</span>
-                    <span>{attendee_count} member(s)</span>
-                </div>
-                {f'<div class="details-row"><span class="details-label">Submitted By:</span><span>{e_submitter_name}</span></div>' if e_submitter_name else ''}
-                <div class="details-row">
-                    <span class="details-label">Deadline:</span>
-                    <span class="warning">{self._format_local_dt(approval_deadline)}</span>
-                </div>
-            </div>
+                template_service = EmailTemplateService(db)
+                template = await template_service.get_template(
+                    organization_id, EmailTemplateType.TRAINING_APPROVAL
+                )
+                if template:
+                    subject, html_body, text_body = template_service.render(
+                        template, context, organization=self.organization
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to load training approval template, using default: {e}"
+                )
 
-            <p>Please review the attendee hours and approve or make adjustments as needed.</p>
+        # Fall back to inline default if no template loaded
+        if not subject:
+            import re
 
-            <p style="text-align: center;">
-                <a href="{e_approval_url}" class="button">Review & Approve Training</a>
-            </p>
+            from app.services.email_template_service import (
+                DEFAULT_CSS,
+                DEFAULT_TRAINING_APPROVAL_HTML,
+                DEFAULT_TRAINING_APPROVAL_SUBJECT,
+                DEFAULT_TRAINING_APPROVAL_TEXT,
+            )
 
-            <p><small>If the button doesn't work, copy and paste this URL into your browser:<br/>{e_approval_url}</small></p>
-        </div>
-        <div class="footer">
-            <p>This is an automated message from {self._smtp_config['from_name']}</p>
-            <p>Please do not reply to this email.</p>
-        </div>
-    </div>
-</body>
-</html>
-"""
-
-        text_body = f"""
-Training Approval Required
-
-A training session has been submitted for approval and requires your review.
-
-Course Name: {course_name}
-Event: {event_title}
-Date: {self._format_local_dt(event_date)}
-Attendees: {attendee_count} member(s)
-{f"Submitted By: {submitter_name}" if submitter_name else ""}
-Approval Deadline: {self._format_local_dt(approval_deadline)}
-
-Please review the attendee hours and approve or make adjustments as needed.
-
-Review & Approve: {approval_url}
-
----
-This is an automated message from {self._smtp_config['from_name']}
-Please do not reply to this email.
-"""
+            subject = DEFAULT_TRAINING_APPROVAL_SUBJECT
+            rendered_html = DEFAULT_TRAINING_APPROVAL_HTML
+            rendered_text = DEFAULT_TRAINING_APPROVAL_TEXT
+            for key, val in context.items():
+                pattern = r"\{\{\s*" + re.escape(key) + r"\s*\}\}"
+                subject = re.sub(pattern, str(val), subject)
+                rendered_html = re.sub(pattern, str(val), rendered_html)
+                rendered_text = re.sub(pattern, str(val), rendered_text)
+            html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{rendered_html}</body></html>"
+            text_body = rendered_text
 
         return await self.send_email(
             to_emails=to_emails,
@@ -663,6 +626,8 @@ Please do not reply to this email.
         user_name: str,
         organization_name: str,
         ip_address: Optional[str] = None,
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
     ) -> tuple[int, int]:
         """
         Notify IT team members that a password reset was requested.
@@ -673,6 +638,8 @@ Please do not reply to this email.
             user_name: Display name of the user
             organization_name: Organization name
             ip_address: IP address the request originated from
+            db: Optional database session for loading templates
+            organization_id: Optional org ID for loading templates
 
         Returns:
             Tuple of (success_count, failure_count)
@@ -680,67 +647,58 @@ Please do not reply to this email.
         timestamp = self._format_local_dt(datetime.now(timezone.utc))
         ip_display = ip_address or "Unknown"
 
-        subject = f"[IT Notice] Password Reset Requested — {organization_name}"
+        context = {
+            "user_name": user_name,
+            "user_email": user_email,
+            "request_time": timestamp,
+            "ip_address": ip_display,
+            "organization_name": organization_name,
+        }
 
-        # HTML-escape user-controlled values
-        esc = self._esc
-        e_org_name = esc(organization_name)
-        e_user_name = esc(user_name)
-        e_user_email = esc(user_email)
-        e_ip_display = esc(ip_display)
+        subject = None
+        html_body = None
+        text_body = None
 
-        html_body = f"""<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background-color: #f59e0b; color: white; padding: 20px; text-align: center; }}
-        .header h1 {{ margin: 0; font-size: 20px; }}
-        .content {{ padding: 20px; background-color: #f9fafb; }}
-        .details {{ background-color: white; padding: 15px; border-radius: 6px; margin: 15px 0; border: 1px solid #e5e7eb; }}
-        .details p {{ margin: 4px 0; }}
-        .footer {{ padding: 20px; text-align: center; font-size: 12px; color: #6b7280; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>Password Reset Notification</h1>
-        </div>
-        <div class="content">
-            <p>A password reset has been requested for a member of <strong>{e_org_name}</strong>.</p>
+        # Try loading the admin-configured template from the database
+        if db and organization_id:
+            try:
+                from app.models.email_template import EmailTemplateType
+                from app.services.email_template_service import EmailTemplateService
 
-            <div class="details">
-                <p><strong>Member:</strong> {e_user_name}</p>
-                <p><strong>Email:</strong> {e_user_email}</p>
-                <p><strong>Requested At:</strong> {timestamp}</p>
-                <p><strong>IP Address:</strong> {e_ip_display}</p>
-            </div>
+                template_service = EmailTemplateService(db)
+                template = await template_service.get_template(
+                    organization_id, EmailTemplateType.IT_PASSWORD_NOTIFICATION
+                )
+                if template:
+                    subject, html_body, text_body = template_service.render(
+                        template, context, organization=self.organization
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to load IT password notification template, using default: {e}"
+                )
 
-            <p>This is for informational purposes. If this request appears suspicious, please investigate and consider disabling the account.</p>
-        </div>
-        <div class="footer">
-            <p>This is an automated IT notification from {e_org_name}.</p>
-        </div>
-    </div>
-</body>
-</html>"""
+        # Fall back to inline default if no template loaded
+        if not subject:
+            import re
 
-        text_body = f"""Password Reset Notification — {organization_name}
+            from app.services.email_template_service import (
+                DEFAULT_CSS,
+                DEFAULT_IT_PASSWORD_NOTIFICATION_HTML,
+                DEFAULT_IT_PASSWORD_NOTIFICATION_SUBJECT,
+                DEFAULT_IT_PASSWORD_NOTIFICATION_TEXT,
+            )
 
-A password reset has been requested for a member.
-
-Member: {user_name}
-Email: {user_email}
-Requested At: {timestamp}
-IP Address: {ip_display}
-
-This is for informational purposes. If this request appears suspicious,
-please investigate and consider disabling the account.
-
----
-Automated IT notification from {organization_name}."""
+            subject = DEFAULT_IT_PASSWORD_NOTIFICATION_SUBJECT
+            rendered_html = DEFAULT_IT_PASSWORD_NOTIFICATION_HTML
+            rendered_text = DEFAULT_IT_PASSWORD_NOTIFICATION_TEXT
+            for key, val in context.items():
+                pattern = r"\{\{\s*" + re.escape(key) + r"\s*\}\}"
+                subject = re.sub(pattern, str(val), subject)
+                rendered_html = re.sub(pattern, str(val), rendered_html)
+                rendered_text = re.sub(pattern, str(val), rendered_text)
+            html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{rendered_html}</body></html>"
+            text_body = rendered_text
 
         return await self.send_email(
             to_emails=to_emails,
@@ -760,6 +718,8 @@ Automated IT notification from {organization_name}."""
         location_name: Optional[str] = None,
         location_details: Optional[str] = None,
         event_url: Optional[str] = None,
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
     ) -> bool:
         """
         Send an event reminder email.
@@ -774,99 +734,70 @@ Automated IT notification from {organization_name}."""
             location_name: Optional location display name
             location_details: Optional additional location info
             event_url: Optional link to view the event
+            db: Optional database session for loading templates
+            organization_id: Optional org ID for loading templates
 
         Returns:
             True if sent successfully
         """
         start_str = self._format_local_dt(event_start)
         end_str = self._format_local_dt(event_end, "%I:%M %p")
-        subject = f"Reminder: {event_title}"
 
-        # HTML-escape user-controlled values
-        esc = self._esc
-        e_recipient_name = esc(recipient_name)
-        e_event_title = esc(event_title)
-        e_event_type = esc(event_type)
+        context = {
+            "recipient_name": recipient_name,
+            "event_title": event_title,
+            "event_type": event_type,
+            "event_start": start_str,
+            "event_end": end_str,
+            "location_name": location_name or "",
+            "location_details": location_details or "",
+            "event_url": event_url or "",
+        }
 
-        location_html = ""
-        location_text = ""
-        if location_name:
-            location_html = f'<div class="details-row"><span class="details-label">Location:</span><span>{esc(location_name)}</span></div>'
-            location_text = f"Location: {location_name}"
-            if location_details:
-                location_html += f'<div class="details-row"><span class="details-label">Details:</span><span>{esc(location_details)}</span></div>'
-                location_text += f"\nDetails: {location_details}"
+        subject = None
+        html_body = None
+        text_body = None
 
-        button_html = ""
-        button_text = ""
-        if event_url:
-            button_html = f'<p style="text-align: center;"><a href="{esc(event_url)}" class="button">View Event</a></p>'
-            button_text = f"\nView Event: {event_url}"
+        # Try loading the admin-configured template from the database
+        if db and organization_id:
+            try:
+                from app.models.email_template import EmailTemplateType
+                from app.services.email_template_service import EmailTemplateService
 
-        html_body = f"""<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background-color: #dc2626; color: white; padding: 20px; text-align: center; }}
-        .header h1 {{ margin: 0; font-size: 20px; }}
-        .content {{ padding: 20px; background-color: #f9fafb; }}
-        .details {{ background-color: white; padding: 15px; border-radius: 6px; margin: 15px 0; border: 1px solid #e5e7eb; }}
-        .details-row {{ display: flex; padding: 8px 0; border-bottom: 1px solid #e5e7eb; }}
-        .details-label {{ font-weight: bold; width: 100px; color: #6b7280; }}
-        .button {{ display: inline-block; padding: 12px 24px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; }}
-        .footer {{ padding: 20px; text-align: center; font-size: 12px; color: #6b7280; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>Event Reminder</h1>
-        </div>
-        <div class="content">
-            <p>Hello {e_recipient_name},</p>
-            <p>This is a reminder about an upcoming event.</p>
+                template_service = EmailTemplateService(db)
+                template = await template_service.get_template(
+                    organization_id, EmailTemplateType.EVENT_REMINDER
+                )
+                if template:
+                    subject, html_body, text_body = template_service.render(
+                        template, context, organization=self.organization
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to load event reminder template, using default: {e}"
+                )
 
-            <div class="details">
-                <div class="details-row">
-                    <span class="details-label">Event:</span>
-                    <span>{e_event_title}</span>
-                </div>
-                <div class="details-row">
-                    <span class="details-label">Type:</span>
-                    <span>{e_event_type}</span>
-                </div>
-                <div class="details-row">
-                    <span class="details-label">When:</span>
-                    <span>{start_str} &ndash; {end_str}</span>
-                </div>
-                {location_html}
-            </div>
+        # Fall back to inline default if no template loaded
+        if not subject:
+            import re
 
-            {button_html}
-        </div>
-        <div class="footer">
-            <p>This is an automated reminder from {self._smtp_config['from_name']}</p>
-        </div>
-    </div>
-</body>
-</html>"""
+            from app.services.email_template_service import (
+                DEFAULT_CSS,
+                DEFAULT_EVENT_REMINDER_HTML,
+                DEFAULT_EVENT_REMINDER_SUBJECT,
+                DEFAULT_EVENT_REMINDER_TEXT,
+            )
 
-        text_body = f"""Event Reminder
-
-Hello {recipient_name},
-
-This is a reminder about an upcoming event.
-
-Event: {event_title}
-Type: {event_type}
-When: {start_str} - {end_str}
-{location_text}
-{button_text}
-
----
-This is an automated reminder from {self._smtp_config['from_name']}"""
+            subject = DEFAULT_EVENT_REMINDER_SUBJECT
+            rendered_html = DEFAULT_EVENT_REMINDER_HTML
+            rendered_text = DEFAULT_EVENT_REMINDER_TEXT
+            for key, val in context.items():
+                pattern = r"\{\{\s*" + re.escape(key) + r"\s*\}\}"
+                subject = re.sub(pattern, str(val), subject)
+                rendered_html = re.sub(pattern, str(val), rendered_html)
+                rendered_text = re.sub(pattern, str(val), rendered_text)
+            html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{rendered_html}</body></html>"
+            text_body = rendered_text
 
         success_count, _ = await self.send_email(
             to_emails=[to_email],
@@ -885,6 +816,10 @@ This is an automated reminder from {self._smtp_config['from_name']}"""
         days_inactive: int,
         timeout_days: int,
         organization_name: str,
+        coordinator_name: str = "",
+        prospect_url: str = "",
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
     ) -> bool:
         """
         Send an inactivity warning email to coordinator(s) about a stalled prospect.
@@ -896,60 +831,65 @@ This is an automated reminder from {self._smtp_config['from_name']}"""
             days_inactive: Number of days since last activity
             timeout_days: Configured inactivity timeout
             organization_name: Organization display name
+            coordinator_name: Name of the pipeline coordinator
+            prospect_url: Link to the prospect's profile
+            db: Optional database session for loading templates
+            organization_id: Optional org ID for loading templates
         """
-        subject = f"Inactivity Warning: {prospect_name} — {days_inactive} days"
+        context = {
+            "coordinator_name": coordinator_name or "Coordinator",
+            "prospect_name": prospect_name,
+            "days_inactive": str(days_inactive),
+            "timeout_days": str(timeout_days),
+            "pipeline_stage": current_stage,
+            "organization_name": organization_name,
+            "prospect_url": prospect_url,
+        }
 
-        # HTML-escape user-controlled values
-        esc = self._esc
-        e_prospect_name = esc(prospect_name)
-        e_current_stage = esc(current_stage)
-        e_organization_name = esc(organization_name)
+        subject = None
+        html_body = None
+        text_body = None
 
-        html_body = f"""<!DOCTYPE html>
-<html>
-<head><style>
-  body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; padding: 0; background: #f9fafb; }}
-  .container {{ max-width: 560px; margin: 20px auto; background: #fff; border-radius: 8px; border: 1px solid #e5e7eb; overflow: hidden; }}
-  .header {{ background: #dc2626; color: #fff; padding: 20px 24px; }}
-  .content {{ padding: 24px; color: #374151; line-height: 1.6; }}
-  .details {{ background: #f9fafb; border-radius: 6px; padding: 16px; margin: 16px 0; }}
-  .footer {{ padding: 16px 24px; font-size: 12px; color: #9ca3af; border-top: 1px solid #f3f4f6; }}
-</style></head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h2 style="margin:0;">Inactivity Warning</h2>
-    </div>
-    <div class="content">
-      <p>A prospective member's application has been inactive and may require your attention.</p>
-      <div class="details">
-        <p><strong>Applicant:</strong> {e_prospect_name}</p>
-        <p><strong>Current Stage:</strong> {e_current_stage}</p>
-        <p><strong>Days Inactive:</strong> {days_inactive} days</p>
-        <p><strong>Timeout Threshold:</strong> {timeout_days} days</p>
-      </div>
-      <p>Please review this application and take appropriate action.</p>
-    </div>
-    <div class="footer">
-      <p>Automated notification from {e_organization_name}.</p>
-    </div>
-  </div>
-</body>
-</html>"""
+        # Try loading the admin-configured template from the database
+        if db and organization_id:
+            try:
+                from app.models.email_template import EmailTemplateType
+                from app.services.email_template_service import EmailTemplateService
 
-        text_body = f"""Inactivity Warning — {organization_name}
+                template_service = EmailTemplateService(db)
+                template = await template_service.get_template(
+                    organization_id, EmailTemplateType.INACTIVITY_WARNING
+                )
+                if template:
+                    subject, html_body, text_body = template_service.render(
+                        template, context, organization=self.organization
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to load inactivity warning template, using default: {e}"
+                )
 
-A prospective member's application has been inactive.
+        # Fall back to inline default if no template loaded
+        if not subject:
+            import re
 
-Applicant: {prospect_name}
-Current Stage: {current_stage}
-Days Inactive: {days_inactive} days
-Timeout Threshold: {timeout_days} days
+            from app.services.email_template_service import (
+                DEFAULT_CSS,
+                DEFAULT_INACTIVITY_WARNING_HTML,
+                DEFAULT_INACTIVITY_WARNING_SUBJECT,
+                DEFAULT_INACTIVITY_WARNING_TEXT,
+            )
 
-Please review this application and take appropriate action.
-
----
-Automated notification from {organization_name}."""
+            subject = DEFAULT_INACTIVITY_WARNING_SUBJECT
+            rendered_html = DEFAULT_INACTIVITY_WARNING_HTML
+            rendered_text = DEFAULT_INACTIVITY_WARNING_TEXT
+            for key, val in context.items():
+                pattern = r"\{\{\s*" + re.escape(key) + r"\s*\}\}"
+                subject = re.sub(pattern, str(val), subject)
+                rendered_html = re.sub(pattern, str(val), rendered_html)
+                rendered_text = re.sub(pattern, str(val), rendered_text)
+            html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{rendered_html}</body></html>"
+            text_body = rendered_text
 
         success_count, _ = await self.send_email(
             to_emails=to_emails,

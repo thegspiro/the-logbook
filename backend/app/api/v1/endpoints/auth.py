@@ -672,6 +672,8 @@ async def forgot_password(
                     or user.username,
                     organization_name=org_name,
                     ip_address=ip_address,
+                    db=db,
+                    organization_id=str(organization.id),
                 )
             except Exception as e:
                 logger.error(f"Failed to send IT team notification: {e}")

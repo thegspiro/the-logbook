@@ -399,6 +399,8 @@ class TrainingSessionService:
                 attendee_count=attendee_count,
                 approval_deadline=approval_deadline,
                 submitter_name=submitter_name,
+                db=self.db,
+                organization_id=str(organization_id),
             )
 
         except Exception as e:

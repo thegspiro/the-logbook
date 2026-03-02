@@ -132,23 +132,75 @@ async def _send_request_notification(
 
         # Notify the requester
         if trigger_config.get("notify_requester", False):
-            e_contact = _html.escape(event_request.contact_name or "")
-            e_status = _html.escape(status_label)
-            subject = f"Event Request Update — {status_label}"
-            body = f"""<p>Hello {e_contact},</p>
-<p>Your event request has been updated to: <strong>{e_status}</strong>.</p>"""
-            if event_request.event_date:
-                body += f"<p>Scheduled date: <strong>{event_request.event_date.strftime('%B %d, %Y at %I:%M %p')}</strong></p>"
-            if event_request.decline_reason:
-                body += f"<p>Reason: {_html.escape(event_request.decline_reason)}</p>"
-            if extra_context and extra_context.get("message"):
-                body += f"<p>{_html.escape(extra_context['message'])}</p>"
-            body += "<p>Thank you for your request.</p>"
+            org_name = org.name if org else "Department"
+            context = {
+                "contact_name": event_request.contact_name or "",
+                "status_label": status_label,
+                "event_date": (
+                    event_request.event_date.strftime("%B %d, %Y at %I:%M %p")
+                    if event_request.event_date
+                    else ""
+                ),
+                "decline_reason": event_request.decline_reason or "",
+                "message": (
+                    extra_context.get("message", "")
+                    if extra_context
+                    else ""
+                ),
+                "organization_name": org_name,
+            }
+
+            subject = None
+            html_body = None
+            text_body = None
+
+            # Try loading the admin-configured template
+            try:
+                from app.models.email_template import EmailTemplateType
+                from app.services.email_template_service import EmailTemplateService
+
+                tmpl_svc = EmailTemplateService(db)
+                template = await tmpl_svc.get_template(
+                    str(org.id), EmailTemplateType.EVENT_REQUEST_STATUS
+                )
+                if template:
+                    subject, html_body, text_body = tmpl_svc.render(
+                        template, context, organization=org
+                    )
+            except Exception as tmpl_err:
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    f"Failed to load event_request_status template, using default: {tmpl_err}"
+                )
+
+            # Fall back to inline default
+            if not subject:
+                import re
+
+                from app.services.email_template_service import (
+                    DEFAULT_CSS,
+                    DEFAULT_EVENT_REQUEST_STATUS_HTML,
+                    DEFAULT_EVENT_REQUEST_STATUS_SUBJECT,
+                    DEFAULT_EVENT_REQUEST_STATUS_TEXT,
+                )
+
+                subject = DEFAULT_EVENT_REQUEST_STATUS_SUBJECT
+                rendered_html = DEFAULT_EVENT_REQUEST_STATUS_HTML
+                rendered_text = DEFAULT_EVENT_REQUEST_STATUS_TEXT
+                for key, val in context.items():
+                    pattern = r"\{\{\s*" + re.escape(key) + r"\s*\}\}"
+                    subject = re.sub(pattern, str(val), subject)
+                    rendered_html = re.sub(pattern, str(val), rendered_html)
+                    rendered_text = re.sub(pattern, str(val), rendered_text)
+                html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{rendered_html}</body></html>"
+                text_body = rendered_text
 
             await email_service.send_email(
                 to_emails=[event_request.contact_email],
                 subject=subject,
-                html_body=body,
+                html_body=html_body,
+                text_body=text_body,
             )
 
         # Notify the assigned coordinator

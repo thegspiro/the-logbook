@@ -574,6 +574,8 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                                     location_name=location_name,
                                     location_details=event.location_details,
                                     event_url=event_url,
+                                    db=db,
+                                    organization_id=str(org.id),
                                 )
                                 if sent:
                                     org_emails += 1
