@@ -462,7 +462,7 @@ async def get_current_user_info(
         select(Organization).where(Organization.id == current_user.organization_id)
     )
     org = org_result.scalar_one_or_none()
-    timezone = org.timezone if org else "America/New_York"
+    org_timezone = org.timezone if org else "America/New_York"
 
     return CurrentUser(
         id=current_user.id,
@@ -472,7 +472,7 @@ async def get_current_user_info(
         last_name=current_user.last_name,
         full_name=current_user.full_name,
         organization_id=current_user.organization_id,
-        timezone=timezone,
+        timezone=org_timezone,
         roles=position_names,
         positions=position_names,
         rank=current_user.rank,

@@ -894,7 +894,7 @@ class MembershipPipelineService:
             address_state=prospect.address_state,
             address_zip=prospect.address_zip,
             emergency_contacts=emergency_contacts or [],
-            membership_id=membership_id,
+            membership_number=membership_id,
             rank=rank,
             station=station,
             status=UserStatus.ACTIVE,

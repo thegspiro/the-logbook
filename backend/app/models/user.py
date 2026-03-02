@@ -309,8 +309,6 @@ class User(Base):
 
     @property
     def mfa_backup_codes(self) -> list | None:
-        pass
-
         raw = self._mfa_backup_codes_encrypted
         if raw is None:
             return None

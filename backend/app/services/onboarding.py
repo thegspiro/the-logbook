@@ -5,7 +5,6 @@ Handles first-time system setup and configuration.
 This module guides users through initial setup and can be disabled once complete.
 """
 
-import secrets
 from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional
 
@@ -667,8 +666,10 @@ class OnboardingService:
                 username = f"{base_username}{suffix}"
                 suffix += 1
 
-            # Generate a secure temporary password
-            temp_password = secrets.token_urlsafe(16)
+            # Generate a secure temporary password that passes validation
+            from app.core.security import generate_temporary_password
+
+            temp_password = generate_temporary_password()
 
             user, error = await auth_service.register_user(
                 organization_id=organization_id,
