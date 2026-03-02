@@ -57,12 +57,12 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   const Icon = config.icon;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm">
+    <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm" aria-describedby="confirm-dialog-message">
       <div className="flex flex-col items-center text-center">
         <div className={`w-12 h-12 rounded-full ${config.iconBg} flex items-center justify-center mb-4`}>
           <Icon className={`w-6 h-6 ${config.iconColor}`} />
         </div>
-        <p className="text-theme-text-secondary text-sm">{message}</p>
+        <p id="confirm-dialog-message" className="text-theme-text-secondary text-sm">{message}</p>
       </div>
       <div className="flex gap-3 mt-6">
         <button

@@ -161,7 +161,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
         proxyVotingEnabled
           ? 'bg-green-500/10 border border-green-500/30 text-green-700 dark:text-green-300'
           : 'bg-yellow-500/10 border border-yellow-500/30 text-yellow-700 dark:text-yellow-300'
-      }`}>
+      }`} role="status" aria-live="polite">
         {proxyVotingEnabled
           ? 'Proxy voting is enabled for this organization.'
           : 'Proxy voting is not enabled for this organization. Contact an administrator to enable it.'}
@@ -290,6 +290,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
                     type="button"
                     onClick={() => { void handleRevoke(auth.id, auth.delegating_user_name); }}
                     disabled={revokingId === auth.id}
+                    aria-label={`Revoke proxy authorization for ${auth.delegating_user_name || auth.delegating_user_id}`}
                     className="ml-4 px-3 py-1 text-xs bg-red-500/20 text-red-700 dark:text-red-300 rounded hover:bg-red-500/30 disabled:opacity-50"
                   >
                     {revokingId === auth.id ? 'Revoking...' : 'Revoke'}

@@ -181,7 +181,10 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
 
   const isDark = theme === 'dark';
   const errorId = `field-error-${field.id}`;
-  const ariaProps = error ? { 'aria-describedby': errorId, 'aria-invalid': true as const } : {};
+  const ariaProps = {
+    ...(error ? { 'aria-describedby': errorId, 'aria-invalid': true as const } : {}),
+    ...(field.required ? { 'aria-required': true as const } : {}),
+  };
 
   const inputClass = isDark
     ? `w-full px-3 py-2 bg-theme-surface-secondary border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-pink-500 focus:border-pink-500 ${

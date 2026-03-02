@@ -8,7 +8,7 @@ import React from 'react';
 
 export const PrivacyNotice: React.FC = () => {
   return (
-    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6" role="note">
       <div className="flex items-start">
         <div className="flex-shrink-0">
           <svg

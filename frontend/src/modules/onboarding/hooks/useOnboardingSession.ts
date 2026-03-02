@@ -7,7 +7,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { apiClient } from '../services/api-client';
-import { getErrorMessage } from '@/utils/errorHandling';
+import { getErrorMessage, toAppError } from '@/utils/errorHandling';
 
 interface OrganizationData {
   name: string;
@@ -134,10 +134,10 @@ export const useOnboardingSession = (): UseOnboardingSessionReturn => {
 
       setIsLoading(false);
     } catch (err: unknown) {
-      const errorMessage = getErrorMessage(err, 'Failed to save organization');
-      setError(errorMessage);
+      const appError = toAppError(err);
+      setError(appError.message || 'Failed to save organization');
       setIsLoading(false);
-      throw new Error(errorMessage);
+      throw Object.assign(new Error(appError.message || 'Failed to save organization'), appError);
     }
   }, []);
 

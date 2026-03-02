@@ -247,6 +247,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
                         <button
                           type="button"
                           onClick={() => { void handleRemove(override.user_id); }}
+                          aria-label={`Confirm removal of override for ${override.user_name || override.user_id}`}
                           className="btn-primary rounded px-2 py-1 text-xs"
                         >
                           Confirm
@@ -263,6 +264,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
                       <button
                         type="button"
                         onClick={() => setConfirmingRemoveId(override.user_id)}
+                        aria-label={`Remove override for ${override.user_name || override.user_id}`}
                         className="px-2 py-1 text-xs bg-red-500/20 text-red-700 dark:text-red-300 rounded hover:bg-red-500/30"
                       >
                         Remove

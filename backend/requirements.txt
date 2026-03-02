@@ -19,7 +19,7 @@ alembic==1.18.4
 pymysql==1.1.1
 aiomysql==0.2.0
 greenlet==3.3.2  # Required by SQLAlchemy for async operations
-cryptography==44.0.0  # Required by PyMySQL for secure connections
+cryptography==44.0.3  # Required by PyMySQL for secure connections (CVE-2024-12797 fix, OpenSSL 3.4.1)
 
 # ============================================
 # Redis & Caching
@@ -31,13 +31,13 @@ hiredis==3.1.0
 # Authentication & Security
 # ============================================
 PyJWT[crypto]==2.11.0
-bcrypt==4.2.1
-python-multipart==0.0.20
+bcrypt==4.3.0
+python-multipart==0.0.22
 pyotp==2.9.0
 qrcode==8.0
 
 # OAuth & SSO
-authlib==1.4.0
+authlib==1.6.8
 python-ldap==3.4.5
 pysaml2==7.5.4
 
@@ -80,7 +80,7 @@ Pillow==11.3.0
 httpx==0.28.1
 requests==2.32.3  # For health checks (CVE-2024-35195 & CVE-2024-47081 fixes)
 aiofiles==24.1.0
-websockets==14.1
+websockets==14.2
 
 # ============================================
 # Data Validation & Parsing

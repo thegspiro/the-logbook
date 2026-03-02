@@ -10,6 +10,7 @@ import { useAdminHoursStore } from '../store/adminHoursStore';
 import { adminHoursEntryService } from '../services/api';
 import { formatDuration } from '../utils/formatDuration';
 import { DEFAULT_PAGE_SIZE } from '../../../constants/config';
+import { getErrorMessage } from '@/utils/errorHandling';
 import toast from 'react-hot-toast';
 
 const AllEntriesTab: React.FC = () => {
@@ -54,8 +55,8 @@ const AllEntriesTab: React.FC = () => {
         a.download = 'admin_hours_export.csv';
         a.click();
         URL.revokeObjectURL(blobUrl);
-      } catch {
-        toast.error('Failed to export CSV');
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to export CSV'));
       }
     })();
   };

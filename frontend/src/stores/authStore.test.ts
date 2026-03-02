@@ -170,8 +170,8 @@ describe('authStore', () => {
 
       const stored = sessionStorage.getItem('login_lockout');
       expect(stored).not.toBeNull();
-      const parsed = JSON.parse(stored!);
-      expect(parsed.loginAttempts).toBe(1);
+      const parsed: unknown = JSON.parse(stored ?? '{}');
+      expect(parsed).toHaveProperty('loginAttempts', 1);
     });
 
     it('clears lockout state from sessionStorage on successful login', async () => {

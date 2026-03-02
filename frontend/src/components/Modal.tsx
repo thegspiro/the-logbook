@@ -21,6 +21,7 @@ interface ModalProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   closeOnClickOutside?: boolean;
   closeOnEscape?: boolean;
+  'aria-describedby'?: string;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -32,6 +33,7 @@ export const Modal: React.FC<ModalProps> = ({
   size = 'md',
   closeOnClickOutside = true,
   closeOnEscape = true,
+  'aria-describedby': ariaDescribedBy,
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -122,6 +124,7 @@ export const Modal: React.FC<ModalProps> = ({
       aria-labelledby="modal-title"
       role="dialog"
       aria-modal="true"
+      aria-describedby={ariaDescribedBy}
     >
       <div
         className="flex items-center justify-center min-h-screen px-4 py-4 text-center sm:block sm:p-0"

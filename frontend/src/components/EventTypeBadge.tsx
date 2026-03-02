@@ -19,11 +19,13 @@ const sizeClasses = {
 };
 
 export const EventTypeBadge: React.FC<EventTypeBadgeProps> = ({ type, size = 'md' }) => {
+  const label = getEventTypeLabel(type);
   return (
     <span
       className={`inline-flex items-center rounded-full font-medium ${getEventTypeBadgeColor(type)} ${sizeClasses[size]}`}
+      aria-label={`Event type: ${label}`}
     >
-      {getEventTypeLabel(type)}
+      {label}
     </span>
   );
 };

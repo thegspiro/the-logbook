@@ -355,6 +355,7 @@ const FormBuilder = ({
                   disabled={idx === 0}
                   className="p-1 text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30"
                   title="Move up"
+                  aria-label={`Move ${field.label} up`}
                 >
                   <ChevronUp className="w-4 h-4" />
                 </button>
@@ -364,6 +365,7 @@ const FormBuilder = ({
                   disabled={idx === sortedFields.length - 1}
                   className="p-1 text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30"
                   title="Move down"
+                  aria-label={`Move ${field.label} down`}
                 >
                   <ChevronDown className="w-4 h-4" />
                 </button>
@@ -372,6 +374,7 @@ const FormBuilder = ({
                   onClick={() => handleEditField(field)}
                   className="p-1 text-theme-text-muted hover:text-cyan-700 dark:hover:text-cyan-400"
                   title="Edit field"
+                  aria-label={`Edit ${field.label}`}
                 >
                   <Pencil className="w-4 h-4" />
                 </button>
@@ -380,6 +383,7 @@ const FormBuilder = ({
                   onClick={() => { void handleDeleteField(field.id); }}
                   className="p-1 text-theme-text-muted hover:text-red-700 dark:hover:text-red-400"
                   title="Delete field"
+                  aria-label={`Delete ${field.label}`}
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
