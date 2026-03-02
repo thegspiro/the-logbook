@@ -115,7 +115,7 @@ const EventQRCodePage: React.FC = () => {
       </div>
 
       {/* Event Info */}
-      <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6 mb-6">
+      <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-2xl font-semibold text-theme-text-primary mb-2">{qrData.event_name}</h2>
 
         <div className="space-y-2 text-theme-text-secondary">
@@ -144,7 +144,7 @@ const EventQRCodePage: React.FC = () => {
       </div>
 
       {/* QR Code Section */}
-      <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-8">
+      <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-8">
         {qrData.is_valid ? (
           <div className="text-center">
             <div className="mb-6">

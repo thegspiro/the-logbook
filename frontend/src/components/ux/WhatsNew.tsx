@@ -99,7 +99,7 @@ export const WhatsNew: React.FC = () => {
                 {entry.items.map((item, i) => (
                   <li key={i} className="flex items-start gap-2">
                     <span
-                      className={`px-1.5 py-0.5 text-[10px] font-medium rounded border flex-shrink-0 mt-0.5 ${typeStyles[item.type]}`}
+                      className={`px-1.5 py-0.5 text-[10px] font-medium rounded-sm border shrink-0 mt-0.5 ${typeStyles[item.type]}`}
                     >
                       {typeLabels[item.type]}
                     </span>

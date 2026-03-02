@@ -128,7 +128,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                 key={a.id}
                 className="flex items-center gap-3 p-3 bg-theme-surface-hover/50 rounded-lg"
               >
-                <Truck className="w-4 h-4 text-red-500 flex-shrink-0" />
+                <Truck className="w-4 h-4 text-red-500 shrink-0" />
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-theme-text-primary truncate">
                     {a.unit_number} — {a.name}
@@ -141,7 +141,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                       {a.positions.map((pos, i) => (
                         <span
                           key={i}
-                          className="px-1.5 py-0.5 text-[10px] bg-red-500/10 text-red-700 dark:text-red-400 rounded capitalize"
+                          className="px-1.5 py-0.5 text-[10px] bg-red-500/10 text-red-700 dark:text-red-400 rounded-sm capitalize"
                         >
                           {pos}
                         </span>

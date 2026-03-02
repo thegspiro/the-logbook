@@ -47,7 +47,7 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
       aria-sort={isActive ? (currentDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
       {label}
-      <span className="flex-shrink-0">
+      <span className="shrink-0">
         {isActive && currentDirection === 'asc' ? (
           <ArrowUp className="w-3.5 h-3.5" />
         ) : isActive && currentDirection === 'desc' ? (

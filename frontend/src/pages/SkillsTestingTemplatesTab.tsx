@@ -97,21 +97,21 @@ const TemplateRow: React.FC<{
     </td>
     <td className="px-4 py-3">
       <div className="flex items-center justify-end gap-1">
-        <button onClick={onView} className="p-1.5 rounded hover:bg-theme-surface-hover transition-colors" title="View">
+        <button onClick={onView} className="p-1.5 rounded-sm hover:bg-theme-surface-hover transition-colors" title="View">
           <Eye className="w-4 h-4 text-theme-text-muted" />
         </button>
-        <button onClick={onEdit} className="p-1.5 rounded hover:bg-theme-surface-hover transition-colors" title="Edit">
+        <button onClick={onEdit} className="p-1.5 rounded-sm hover:bg-theme-surface-hover transition-colors" title="Edit">
           <Pencil className="w-4 h-4 text-theme-text-muted" />
         </button>
         {template.status === 'draft' && (
-          <button onClick={onPublish} className="p-1.5 rounded hover:bg-theme-surface-hover transition-colors" title="Publish">
+          <button onClick={onPublish} className="p-1.5 rounded-sm hover:bg-theme-surface-hover transition-colors" title="Publish">
             <Send className="w-4 h-4 text-green-600" />
           </button>
         )}
-        <button onClick={onDuplicate} className="p-1.5 rounded hover:bg-theme-surface-hover transition-colors" title="Duplicate">
+        <button onClick={onDuplicate} className="p-1.5 rounded-sm hover:bg-theme-surface-hover transition-colors" title="Duplicate">
           <Copy className="w-4 h-4 text-theme-text-muted" />
         </button>
-        <button onClick={onDelete} className="p-1.5 rounded hover:bg-theme-surface-hover transition-colors" title="Archive">
+        <button onClick={onDelete} className="p-1.5 rounded-sm hover:bg-theme-surface-hover transition-colors" title="Archive">
           <Trash2 className="w-4 h-4 text-red-500" />
         </button>
       </div>
@@ -206,14 +206,14 @@ const SkillsTestingTemplatesTab: React.FC = () => {
             placeholder="Search templates..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50"
+            className="w-full pl-10 pr-4 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
           />
         </div>
         <div className="flex gap-2">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring/50"
+            className="px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
             aria-label="Filter by status"
           >
             <option value="">All Statuses</option>

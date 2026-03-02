@@ -1,147 +1,535 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --color-primary-50: #fef2f2;
+  --color-primary-100: #fee2e2;
+  --color-primary-200: #fecaca;
+  --color-primary-300: #fca5a5;
+  --color-primary-400: #f87171;
+  --color-primary-500: #ef4444;
+  --color-primary-600: #dc2626;
+  --color-primary-700: #b91c1c;
+  --color-primary-800: #991b1b;
+  --color-primary-900: #7f1d1d;
+  --color-primary-950: #450a0a;
+
+  --color-theme-bg-from: var(--bg-gradient-from);
+  --color-theme-bg-via: var(--bg-gradient-via);
+  --color-theme-bg-to: var(--bg-gradient-to);
+  --color-theme-surface: var(--surface-bg);
+  --color-theme-surface-secondary: var(--surface-secondary);
+  --color-theme-surface-hover: var(--surface-hover);
+  --color-theme-surface-border: var(--surface-border);
+  --color-theme-surface-modal: var(--surface-modal);
+  --color-theme-text-primary: var(--text-primary);
+  --color-theme-text-secondary: var(--text-secondary);
+  --color-theme-text-muted: var(--text-muted);
+  --color-theme-nav-bg: var(--nav-bg);
+  --color-theme-nav-border: var(--nav-border);
+  --color-theme-input-bg: var(--input-bg);
+  --color-theme-input-border: var(--input-border);
+  --color-theme-accent-red: var(--accent-red);
+  --color-theme-accent-green: var(--accent-green);
+  --color-theme-accent-blue: var(--accent-blue);
+  --color-theme-accent-orange: var(--accent-orange);
+  --color-theme-accent-yellow: var(--accent-yellow);
+  --color-theme-accent-cyan: var(--accent-cyan);
+  --color-theme-accent-purple: var(--accent-purple);
+  --color-theme-accent-red-muted: var(--accent-red-muted);
+  --color-theme-accent-green-muted: var(--accent-green-muted);
+  --color-theme-accent-blue-muted: var(--accent-blue-muted);
+  --color-theme-accent-orange-muted: var(--accent-orange-muted);
+  --color-theme-accent-purple-muted: var(--accent-purple-muted);
+  --color-theme-focus-ring: var(--focus-ring);
+  --color-theme-toast-success: var(--toast-success);
+  --color-theme-toast-error: var(--toast-error);
+  --color-theme-toast-warning-bg: var(--toast-warning-bg);
+  --color-theme-toast-warning-text: var(--toast-warning-text);
+  --color-theme-status-passed: var(--status-passed);
+  --color-theme-status-failed: var(--status-failed);
+  --color-theme-status-pending: var(--status-pending);
+  --color-theme-alert-info-bg: var(--alert-info-bg);
+  --color-theme-alert-info-border: var(--alert-info-border);
+  --color-theme-alert-info-icon: var(--alert-info-icon);
+  --color-theme-alert-info-title: var(--alert-info-title);
+  --color-theme-alert-info-text: var(--alert-info-text);
+  --color-theme-alert-success-bg: var(--alert-success-bg);
+  --color-theme-alert-success-border: var(--alert-success-border);
+  --color-theme-alert-success-icon: var(--alert-success-icon);
+  --color-theme-alert-success-title: var(--alert-success-title);
+  --color-theme-alert-success-text: var(--alert-success-text);
+  --color-theme-alert-warning-bg: var(--alert-warning-bg);
+  --color-theme-alert-warning-border: var(--alert-warning-border);
+  --color-theme-alert-warning-icon: var(--alert-warning-icon);
+  --color-theme-alert-warning-title: var(--alert-warning-title);
+  --color-theme-alert-warning-text: var(--alert-warning-text);
+  --color-theme-alert-purple-bg: var(--alert-purple-bg);
+  --color-theme-alert-purple-border: var(--alert-purple-border);
+  --color-theme-alert-purple-icon: var(--alert-purple-icon);
+  --color-theme-alert-purple-title: var(--alert-purple-title);
+  --color-theme-alert-purple-text: var(--alert-purple-text);
+  --color-theme-alert-danger-bg: var(--alert-danger-bg);
+  --color-theme-alert-danger-border: var(--alert-danger-border);
+  --color-theme-alert-danger-icon: var(--alert-danger-icon);
+  --color-theme-alert-danger-title: var(--alert-danger-title);
+  --color-theme-alert-danger-text: var(--alert-danger-text);
+
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, sans-serif;
+
+  --animate-fade-in: fadeIn 1s ease-in-out;
+  --animate-slide-up: slideUp 0.5s ease-out;
+  --animate-slide-down: slideDown 0.5s ease-out;
+  --animate-success-pop: successPop 0.4s ease-out;
+  --animate-success-check: successCheck 0.3s ease-out 0.2s both;
+  --animate-success-draw: successDraw 0.4s ease-out 0.3s both;
+  --animate-page-enter: pageEnter 0.15s ease-out;
+
+  @keyframes fadeIn {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+  @keyframes slideUp {
+    0% {
+      transform: translateY(20px);
+      opacity: 0;
+    }
+    100% {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+  @keyframes slideDown {
+    0% {
+      transform: translateY(-20px);
+      opacity: 0;
+    }
+    100% {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+  @keyframes successPop {
+    0% {
+      transform: scale(0.8);
+      opacity: 0;
+    }
+    50% {
+      transform: scale(1.05);
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+  @keyframes successCheck {
+    0% {
+      transform: scale(0);
+      opacity: 0;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+  @keyframes successDraw {
+    0% {
+      stroke-dashoffset: 24;
+      stroke-dasharray: 24;
+    }
+    100% {
+      stroke-dashoffset: 0;
+      stroke-dasharray: 24;
+    }
+  }
+  @keyframes pageEnter {
+    0% {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+@utility scrollbar-thin {
+  &::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background-color: var(--scrollbar-track);
+  }
+
+  &::-webkit-scrollbar-thumb {
+    @apply bg-slate-600 rounded-full;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-500;
+  }
+}
+
+/* ================================================================
+   Reusable Component Classes
+   Use these instead of repeating long Tailwind class strings inline.
+   To update the look of all inputs/cards/buttons, edit here.
+   ================================================================ */
+@utility form-input {
+  /* --- Form Controls --- */
+  @apply w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg
+           text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring;
+}
+@utility form-input-sm {
+  @apply w-full px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-sm
+           text-theme-text-primary text-sm focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring;
+}
+@utility form-checkbox {
+  @apply w-4 h-4 text-blue-700 dark:text-blue-500 bg-theme-input-bg
+           border-theme-input-border rounded-sm focus:ring-theme-focus-ring;
+}
+@utility form-label {
+  @apply block text-sm font-medium text-theme-text-secondary mb-1;
+}
+@utility form-label-sm {
+  @apply block text-xs font-medium text-theme-text-secondary mb-1;
+}
+@utility card {
+  /* --- Cards & Surfaces --- */
+  @apply bg-theme-surface backdrop-blur-xs rounded-lg border border-theme-surface-border;
+}
+@utility card-secondary {
+  @apply bg-theme-surface-secondary rounded-lg border border-theme-surface-border;
+}
+@utility btn-primary {
+  /* --- Buttons --- */
+  @apply px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors
+           focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50;
+}
+@utility btn-secondary {
+  @apply px-4 py-2 bg-theme-surface text-theme-text-primary rounded-lg
+           hover:bg-theme-surface-hover border border-theme-surface-border transition-colors
+           focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50;
+}
+@utility btn-success {
+  @apply px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors
+           focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50;
+}
+@utility btn-info {
+  @apply px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors
+           focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50;
+}
+@utility btn-warning {
+  @apply px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors
+           focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50;
+}
+@utility btn-sm {
+  /* --- Standardized Button Sizes (#79) --- */
+  @apply px-2.5 py-1.5 text-xs rounded-md;
+}
+@utility btn-md {
+  @apply px-4 py-2 text-sm rounded-lg;
+}
+@utility btn-lg {
+  @apply px-6 py-3 text-base rounded-lg;
+}
+@utility btn-icon {
+  @apply p-2 rounded-lg min-w-[44px] min-h-[44px] inline-flex items-center justify-center;
+}
+@utility btn-icon-sm {
+  @apply p-1.5 rounded-md min-w-[36px] min-h-[36px] inline-flex items-center justify-center;
+}
+@utility stat-card {
+  /* --- Stat Cards --- */
+  @apply bg-theme-surface backdrop-blur-xs rounded-lg p-5 border border-theme-surface-border;
+}
+@utility alert-info {
+  /* --- Alert / Info Boxes --- */
+  @apply bg-theme-alert-info-bg border border-theme-alert-info-border rounded-lg p-4;
+}
+@utility alert-success {
+  @apply bg-theme-alert-success-bg border border-theme-alert-success-border rounded-lg p-4;
+}
+@utility alert-warning {
+  @apply bg-theme-alert-warning-bg border border-theme-alert-warning-border rounded-lg p-4;
+}
+@utility alert-purple {
+  @apply bg-theme-alert-purple-bg border border-theme-alert-purple-border rounded-lg p-4;
+}
+@utility alert-danger {
+  @apply bg-theme-alert-danger-bg border border-theme-alert-danger-border rounded-lg p-4;
+}
+@utility toggle-knob {
+  /* --- Toggle Switch --- */
+  /* Standard toggle-switch knob: always a visible light circle */
+  @apply pointer-events-none inline-block transform rounded-full
+           bg-white dark:bg-slate-200 shadow-sm ring-0 transition duration-200 ease-in-out;
+}
+@utility toggle-knob-sm {
+  @apply toggle-knob h-4 w-4;
+}
+@utility toggle-knob-md {
+  @apply toggle-knob h-5 w-5;
+}
+@utility qr-container {
+  /* --- QR Code Container --- */
+  /* QR codes require a white background for scanner contrast, regardless of theme */
+  @apply bg-white p-8 rounded-lg border-4 border-theme-surface-border;
+}
+@utility color-dot {
+  /* --- Dynamic Color Dot/Badge --- */
+  /* For user-selected category colors applied via inline style.
+     Add filter: brightness() in dark mode so the dot stays visible. */
+  @apply rounded-full;
+  /* Dark mode: brighten dynamic colors for better visibility */
+  .dark & {
+    filter: brightness(1.2);
+  }
+}
+@utility drawer-panel {
+  /* --- Mobile-Responsive Patterns --- */
+
+  /* Drawer panel — full-width on mobile, capped at 32rem on sm+ */
+  @apply fixed top-0 right-0 h-full w-full flex flex-col shadow-2xl z-50;
+  @apply bg-theme-surface border-l border-theme-surface-border;
+  max-width: 100%;
+  @media (min-width: 640px) {
+    max-width: 32rem; /* ~512px, equivalent to max-w-lg */
+  }
+}
+@utility action-bar {
+  /* Drawer / modal action-button bars — wrap gracefully on small screens */
+  @apply flex items-center gap-2 flex-wrap;
+  @media (max-width: 479px) {
+    @apply gap-1.5;
+    & .action-label {
+      @apply sr-only;
+    }
+  }
+}
+@utility action-label {
+  @media (max-width: 479px) {
+    .action-bar & {
+      @apply sr-only;
+    }
+  }
+}
+@utility form-grid-2 {
+  /* Responsive form grids: 1-col on mobile, multi-col on sm+ */
+  @apply grid grid-cols-1 gap-3;
+  @media (min-width: 640px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@utility form-grid-3 {
+  @apply grid grid-cols-1 gap-2;
+  @media (min-width: 640px) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@utility tab-scroll {
+  /* Horizontally-scrollable tab bar with hidden scrollbar */
+  @apply flex items-center gap-1 border-b border-theme-surface-border;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+  & > button {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+}
+@utility table-col-secondary {
+  /* Table column visibility tiers */
+  display: none;
+  @media (min-width: 768px) {
+    display: table-cell;
+  }
+}
+@utility table-col-tertiary {
+  display: none;
+  @media (min-width: 1024px) {
+    display: table-cell;
+  }
+}
+@utility modal-body {
+  /* Mobile-safe modal body — accounts for on-screen keyboard */
+  @apply max-h-[85vh] overflow-y-auto;
+  @media (min-width: 640px) {
+    max-height: 90vh;
+  }
+}
 
 /* Theme CSS Custom Properties */
 :root {
   /* Background gradient */
-  --bg-gradient-from: #f1f5f9;   /* slate-100 */
-  --bg-gradient-via: #fef2f2;    /* red-50 */
-  --bg-gradient-to: #f1f5f9;     /* slate-100 */
+  --bg-gradient-from: #f1f5f9; /* slate-100 */
+  --bg-gradient-via: #fef2f2; /* red-50 */
+  --bg-gradient-to: #f1f5f9; /* slate-100 */
 
   /* Surfaces */
-  --surface-bg: #ffffff;                    /* white */
-  --surface-secondary: #f8fafc;             /* slate-50 */
-  --surface-hover: #f1f5f9;                 /* slate-100 */
-  --surface-border: #e2e8f0;               /* slate-200 */
-  --surface-modal: #ffffff;                 /* opaque white — for modals over overlays */
+  --surface-bg: #ffffff; /* white */
+  --surface-secondary: #f8fafc; /* slate-50 */
+  --surface-hover: #f1f5f9; /* slate-100 */
+  --surface-border: #e2e8f0; /* slate-200 */
+  --surface-modal: #ffffff; /* opaque white — for modals over overlays */
 
   /* Text */
-  --text-primary: #0f172a;                  /* slate-900 */
-  --text-secondary: #475569;               /* slate-600 */
-  --text-muted: #64748b;                   /* slate-500 — 4.76:1 on white (WCAG AA) */
+  --text-primary: #0f172a; /* slate-900 */
+  --text-secondary: #475569; /* slate-600 */
+  --text-muted: #64748b; /* slate-500 — 4.76:1 on white (WCAG AA) */
 
   /* Navigation */
-  --nav-bg: #ffffff;                        /* white */
-  --nav-border: #e2e8f0;                   /* slate-200 */
+  --nav-bg: #ffffff; /* white */
+  --nav-border: #e2e8f0; /* slate-200 */
 
   /* Inputs */
-  --input-bg: #ffffff;                      /* white */
-  --input-border: #cbd5e1;                 /* slate-300 */
+  --input-bg: #ffffff; /* white */
+  --input-border: #cbd5e1; /* slate-300 */
 
   /* Scrollbar */
-  --scrollbar-track: #f1f5f9;              /* slate-100 */
+  --scrollbar-track: #f1f5f9; /* slate-100 */
 
   /* Focus ring offset */
-  --ring-offset-bg: #ffffff;               /* white */
+  --ring-offset-bg: #ffffff; /* white */
 
   /* Accent colors – AA-compliant on light surfaces */
-  --accent-red: #b91c1c;                   /* red-700  – 6.2:1 on #fff */
-  --accent-green: #15803d;                 /* green-700 – 5.9:1 on #fff */
-  --accent-blue: #1d4ed8;                  /* blue-700 – 6.5:1 on #fff */
-  --accent-orange: #c2410c;               /* orange-700 – 5.3:1 on #fff */
-  --accent-yellow: #a16207;               /* yellow-700 – 4.8:1 on #fff */
-  --accent-cyan: #0e7490;                 /* cyan-700 – 5.2:1 on #fff */
-  --accent-purple: #7e22ce;               /* purple-700 – 7.3:1 on #fff */
+  --accent-red: #b91c1c; /* red-700  – 6.2:1 on #fff */
+  --accent-green: #15803d; /* green-700 – 5.9:1 on #fff */
+  --accent-blue: #1d4ed8; /* blue-700 – 6.5:1 on #fff */
+  --accent-orange: #c2410c; /* orange-700 – 5.3:1 on #fff */
+  --accent-yellow: #a16207; /* yellow-700 – 4.8:1 on #fff */
+  --accent-cyan: #0e7490; /* cyan-700 – 5.2:1 on #fff */
+  --accent-purple: #7e22ce; /* purple-700 – 7.3:1 on #fff */
 
   /* Muted accent backgrounds */
-  --accent-red-muted: #fef2f2;            /* red-50 */
-  --accent-green-muted: #f0fdf4;          /* green-50 */
-  --accent-blue-muted: #eff6ff;           /* blue-50 */
-  --accent-orange-muted: #fff7ed;         /* orange-50 */
-  --accent-purple-muted: #faf5ff;         /* purple-50 */
+  --accent-red-muted: #fef2f2; /* red-50 */
+  --accent-green-muted: #f0fdf4; /* green-50 */
+  --accent-blue-muted: #eff6ff; /* blue-50 */
+  --accent-orange-muted: #fff7ed; /* orange-50 */
+  --accent-purple-muted: #faf5ff; /* purple-50 */
 
   /* Focus ring */
-  --focus-ring: #3b82f6;                  /* blue-500 */
+  --focus-ring: #3b82f6; /* blue-500 */
 
   /* Toast icon colors */
-  --toast-success: #10b981;              /* emerald-500 */
-  --toast-error: #ef4444;                /* red-500 */
-  --toast-icon-secondary: #ffffff;       /* white */
-  --toast-warning-bg: #fbbf24;           /* amber-400 */
-  --toast-warning-text: #1a1a2e;         /* dark navy */
+  --toast-success: #10b981; /* emerald-500 */
+  --toast-error: #ef4444; /* red-500 */
+  --toast-icon-secondary: #ffffff; /* white */
+  --toast-warning-bg: #fbbf24; /* amber-400 */
+  --toast-warning-text: #1a1a2e; /* dark navy */
 
   /* Status indicator colors */
-  --status-passed: #16a34a;              /* green-600 */
-  --status-failed: #dc2626;              /* red-600 */
-  --status-pending: #ca8a04;             /* yellow-600 */
+  --status-passed: #16a34a; /* green-600 */
+  --status-failed: #dc2626; /* red-600 */
+  --status-pending: #ca8a04; /* yellow-600 */
 
   /* Alert: Info (blue) */
-  --alert-info-bg: #eff6ff;                /* blue-50 */
-  --alert-info-border: #bfdbfe;            /* blue-200 */
-  --alert-info-icon: #2563eb;              /* blue-600 */
-  --alert-info-title: #1e40af;             /* blue-800 */
-  --alert-info-text: #1d4ed8;              /* blue-700 */
+  --alert-info-bg: #eff6ff; /* blue-50 */
+  --alert-info-border: #bfdbfe; /* blue-200 */
+  --alert-info-icon: #2563eb; /* blue-600 */
+  --alert-info-title: #1e40af; /* blue-800 */
+  --alert-info-text: #1d4ed8; /* blue-700 */
 
   /* Alert: Success (green) */
-  --alert-success-bg: #f0fdf4;             /* green-50 */
-  --alert-success-border: #bbf7d0;         /* green-200 */
-  --alert-success-icon: #16a34a;           /* green-600 */
-  --alert-success-title: #166534;          /* green-800 */
-  --alert-success-text: #15803d;           /* green-700 */
+  --alert-success-bg: #f0fdf4; /* green-50 */
+  --alert-success-border: #bbf7d0; /* green-200 */
+  --alert-success-icon: #16a34a; /* green-600 */
+  --alert-success-title: #166534; /* green-800 */
+  --alert-success-text: #15803d; /* green-700 */
 
   /* Alert: Warning (amber) */
-  --alert-warning-bg: #fffbeb;             /* amber-50 */
-  --alert-warning-border: #fde68a;         /* amber-200 */
-  --alert-warning-icon: #d97706;           /* amber-600 */
-  --alert-warning-title: #92400e;          /* amber-800 */
-  --alert-warning-text: #b45309;           /* amber-700 */
+  --alert-warning-bg: #fffbeb; /* amber-50 */
+  --alert-warning-border: #fde68a; /* amber-200 */
+  --alert-warning-icon: #d97706; /* amber-600 */
+  --alert-warning-title: #92400e; /* amber-800 */
+  --alert-warning-text: #b45309; /* amber-700 */
 
   /* Alert: Purple */
-  --alert-purple-bg: #faf5ff;              /* purple-50 */
-  --alert-purple-border: #e9d5ff;          /* purple-200 */
-  --alert-purple-icon: #9333ea;            /* purple-600 */
-  --alert-purple-title: #6b21a8;           /* purple-800 */
-  --alert-purple-text: #7e22ce;            /* purple-700 */
+  --alert-purple-bg: #faf5ff; /* purple-50 */
+  --alert-purple-border: #e9d5ff; /* purple-200 */
+  --alert-purple-icon: #9333ea; /* purple-600 */
+  --alert-purple-title: #6b21a8; /* purple-800 */
+  --alert-purple-text: #7e22ce; /* purple-700 */
 
   /* Alert: Danger (red) */
-  --alert-danger-bg: #fef2f2;              /* red-50 */
-  --alert-danger-border: #fecaca;          /* red-200 */
-  --alert-danger-icon: #dc2626;            /* red-600 */
-  --alert-danger-title: #991b1b;           /* red-800 */
-  --alert-danger-text: #b91c1c;            /* red-700 */
+  --alert-danger-bg: #fef2f2; /* red-50 */
+  --alert-danger-border: #fecaca; /* red-200 */
+  --alert-danger-icon: #dc2626; /* red-600 */
+  --alert-danger-title: #991b1b; /* red-800 */
+  --alert-danger-text: #b91c1c; /* red-700 */
 }
 
 .dark {
   /* Background gradient */
-  --bg-gradient-from: #0f172a;              /* slate-900 */
-  --bg-gradient-via: #7f1d1d;              /* red-900 */
-  --bg-gradient-to: #0f172a;               /* slate-900 */
+  --bg-gradient-from: #0f172a; /* slate-900 */
+  --bg-gradient-via: #7f1d1d; /* red-900 */
+  --bg-gradient-to: #0f172a; /* slate-900 */
 
   /* Surfaces */
-  --surface-bg: rgba(255, 255, 255, 0.1);  /* white/10 */
+  --surface-bg: rgba(255, 255, 255, 0.1); /* white/10 */
   --surface-secondary: rgba(255, 255, 255, 0.05); /* white/5 */
   --surface-hover: rgba(255, 255, 255, 0.15); /* white/15 */
   --surface-border: rgba(255, 255, 255, 0.2); /* white/20 */
-  --surface-modal: #1e293b;                /* slate-800 — opaque for modals over overlays */
+  --surface-modal: #1e293b; /* slate-800 — opaque for modals over overlays */
 
   /* Text */
-  --text-primary: #ffffff;                  /* white */
-  --text-secondary: #cbd5e1;              /* slate-300 */
-  --text-muted: #a1b1c7;                   /* between slate-400 and slate-300 — 5.2:1 on slate-900 for AA small text */
+  --text-primary: #ffffff; /* white */
+  --text-secondary: #cbd5e1; /* slate-300 */
+  --text-muted: #a1b1c7; /* between slate-400 and slate-300 — 5.2:1 on slate-900 for AA small text */
 
   /* Navigation */
-  --nav-bg: #0f172a;                       /* slate-900 */
+  --nav-bg: #0f172a; /* slate-900 */
   --nav-border: rgba(255, 255, 255, 0.1); /* white/10 */
 
   /* Inputs */
-  --input-bg: rgba(15, 23, 42, 0.5);      /* slate-900/50 */
-  --input-border: #475569;                 /* slate-600 */
+  --input-bg: rgba(15, 23, 42, 0.5); /* slate-900/50 */
+  --input-border: #475569; /* slate-600 */
 
   /* Scrollbar */
-  --scrollbar-track: #1e293b;              /* slate-800 */
+  --scrollbar-track: #1e293b; /* slate-800 */
 
   /* Focus ring offset */
-  --ring-offset-bg: #0f172a;              /* slate-900 */
+  --ring-offset-bg: #0f172a; /* slate-900 */
 
   /* Accent colors – AA-compliant on dark surfaces */
-  --accent-red: #f87171;                  /* red-400  – 6.1:1 on #0f172a */
-  --accent-green: #4ade80;               /* green-400 – 8.1:1 on #0f172a */
-  --accent-blue: #60a5fa;                /* blue-400 – 5.7:1 on #0f172a */
-  --accent-orange: #fb923c;              /* orange-400 – 6.7:1 on #0f172a */
-  --accent-yellow: #facc15;              /* yellow-400 – 12.2:1 on #0f172a */
-  --accent-cyan: #22d3ee;               /* cyan-400 – 10.1:1 on #0f172a */
-  --accent-purple: #c084fc;             /* purple-400 – 6.2:1 on #0f172a */
+  --accent-red: #f87171; /* red-400  – 6.1:1 on #0f172a */
+  --accent-green: #4ade80; /* green-400 – 8.1:1 on #0f172a */
+  --accent-blue: #60a5fa; /* blue-400 – 5.7:1 on #0f172a */
+  --accent-orange: #fb923c; /* orange-400 – 6.7:1 on #0f172a */
+  --accent-yellow: #facc15; /* yellow-400 – 12.2:1 on #0f172a */
+  --accent-cyan: #22d3ee; /* cyan-400 – 10.1:1 on #0f172a */
+  --accent-purple: #c084fc; /* purple-400 – 6.2:1 on #0f172a */
 
   /* Muted accent backgrounds */
   --accent-red-muted: rgba(239, 68, 68, 0.1);
@@ -151,54 +539,54 @@
   --accent-purple-muted: rgba(168, 85, 247, 0.1);
 
   /* Focus ring */
-  --focus-ring: #60a5fa;                 /* blue-400 */
+  --focus-ring: #60a5fa; /* blue-400 */
 
   /* Toast icon colors */
-  --toast-success: #34d399;              /* emerald-400 */
-  --toast-error: #f87171;                /* red-400 */
-  --toast-icon-secondary: #ffffff;       /* white */
-  --toast-warning-bg: #fbbf24;           /* amber-400 */
-  --toast-warning-text: #1a1a2e;         /* dark navy */
+  --toast-success: #34d399; /* emerald-400 */
+  --toast-error: #f87171; /* red-400 */
+  --toast-icon-secondary: #ffffff; /* white */
+  --toast-warning-bg: #fbbf24; /* amber-400 */
+  --toast-warning-text: #1a1a2e; /* dark navy */
 
   /* Status indicator colors */
-  --status-passed: #4ade80;              /* green-400 */
-  --status-failed: #f87171;              /* red-400 */
-  --status-pending: #facc15;             /* yellow-400 */
+  --status-passed: #4ade80; /* green-400 */
+  --status-failed: #f87171; /* red-400 */
+  --status-pending: #facc15; /* yellow-400 */
 
   /* Alert: Info (blue) */
   --alert-info-bg: rgba(59, 130, 246, 0.1);
   --alert-info-border: rgba(59, 130, 246, 0.5);
-  --alert-info-icon: #60a5fa;              /* blue-400 */
-  --alert-info-title: #93c5fd;             /* blue-300 */
-  --alert-info-text: #bfdbfe;              /* blue-200 */
+  --alert-info-icon: #60a5fa; /* blue-400 */
+  --alert-info-title: #93c5fd; /* blue-300 */
+  --alert-info-text: #bfdbfe; /* blue-200 */
 
   /* Alert: Success (green) */
   --alert-success-bg: rgba(34, 197, 94, 0.1);
   --alert-success-border: rgba(34, 197, 94, 0.5);
-  --alert-success-icon: #4ade80;           /* green-400 */
-  --alert-success-title: #86efac;          /* green-300 */
-  --alert-success-text: #bbf7d0;           /* green-200 */
+  --alert-success-icon: #4ade80; /* green-400 */
+  --alert-success-title: #86efac; /* green-300 */
+  --alert-success-text: #bbf7d0; /* green-200 */
 
   /* Alert: Warning (amber) */
   --alert-warning-bg: rgba(245, 158, 11, 0.1);
   --alert-warning-border: rgba(245, 158, 11, 0.5);
-  --alert-warning-icon: #fbbf24;           /* amber-400 */
-  --alert-warning-title: #fcd34d;          /* amber-300 */
-  --alert-warning-text: #fde68a;           /* amber-200 */
+  --alert-warning-icon: #fbbf24; /* amber-400 */
+  --alert-warning-title: #fcd34d; /* amber-300 */
+  --alert-warning-text: #fde68a; /* amber-200 */
 
   /* Alert: Purple */
   --alert-purple-bg: rgba(168, 85, 247, 0.1);
   --alert-purple-border: rgba(168, 85, 247, 0.5);
-  --alert-purple-icon: #c084fc;            /* purple-400 */
-  --alert-purple-title: #d8b4fe;           /* purple-300 */
-  --alert-purple-text: #e9d5ff;            /* purple-200 */
+  --alert-purple-icon: #c084fc; /* purple-400 */
+  --alert-purple-title: #d8b4fe; /* purple-300 */
+  --alert-purple-text: #e9d5ff; /* purple-200 */
 
   /* Alert: Danger (red) */
   --alert-danger-bg: rgba(239, 68, 68, 0.1);
   --alert-danger-border: rgba(239, 68, 68, 0.5);
-  --alert-danger-icon: #f87171;            /* red-400 */
-  --alert-danger-title: #fca5a5;           /* red-300 */
-  --alert-danger-text: #fecaca;            /* red-200 */
+  --alert-danger-icon: #f87171; /* red-400 */
+  --alert-danger-title: #fca5a5; /* red-300 */
+  --alert-danger-text: #fecaca; /* red-200 */
 }
 
 /* High-contrast theme (#84) */
@@ -301,253 +689,8 @@
 }
 
 .high-contrast *:focus-visible {
-  outline: 3px solid #ffff00 !important;
-  outline-offset: 2px;
-}
-
-/* Custom scrollbar */
-@layer utilities {
-  .scrollbar-thin::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
-
-  .scrollbar-thin::-webkit-scrollbar-track {
-    background-color: var(--scrollbar-track);
-  }
-
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    @apply bg-slate-600 rounded-full;
-  }
-
-  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    @apply bg-slate-500;
-  }
-}
-
-/* ================================================================
-   Reusable Component Classes
-   Use these instead of repeating long Tailwind class strings inline.
-   To update the look of all inputs/cards/buttons, edit here.
-   ================================================================ */
-@layer components {
-  /* --- Form Controls --- */
-  .form-input {
-    @apply w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg
-           text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring;
-  }
-
-  .form-input-sm {
-    @apply w-full px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded
-           text-theme-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-theme-focus-ring;
-  }
-
-  .form-checkbox {
-    @apply w-4 h-4 text-blue-700 dark:text-blue-500 bg-theme-input-bg
-           border-theme-input-border rounded focus:ring-theme-focus-ring;
-  }
-
-  .form-label {
-    @apply block text-sm font-medium text-theme-text-secondary mb-1;
-  }
-
-  .form-label-sm {
-    @apply block text-xs font-medium text-theme-text-secondary mb-1;
-  }
-
-  /* --- Cards & Surfaces --- */
-  .card {
-    @apply bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border;
-  }
-
-  .card-secondary {
-    @apply bg-theme-surface-secondary rounded-lg border border-theme-surface-border;
-  }
-
-  /* --- Buttons --- */
-  .btn-primary {
-    @apply px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors
-           focus:outline-none focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50;
-  }
-
-  .btn-secondary {
-    @apply px-4 py-2 bg-theme-surface text-theme-text-primary rounded-lg
-           hover:bg-theme-surface-hover border border-theme-surface-border transition-colors
-           focus:outline-none focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50;
-  }
-
-  .btn-success {
-    @apply px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors
-           focus:outline-none focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50;
-  }
-
-  .btn-info {
-    @apply px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors
-           focus:outline-none focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50;
-  }
-
-  .btn-warning {
-    @apply px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors
-           focus:outline-none focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50;
-  }
-
-  /* --- Standardized Button Sizes (#79) --- */
-  .btn-sm {
-    @apply px-2.5 py-1.5 text-xs rounded-md;
-  }
-  .btn-md {
-    @apply px-4 py-2 text-sm rounded-lg;
-  }
-  .btn-lg {
-    @apply px-6 py-3 text-base rounded-lg;
-  }
-  .btn-icon {
-    @apply p-2 rounded-lg min-w-[44px] min-h-[44px] inline-flex items-center justify-center;
-  }
-  .btn-icon-sm {
-    @apply p-1.5 rounded-md min-w-[36px] min-h-[36px] inline-flex items-center justify-center;
-  }
-
-  /* --- Stat Cards --- */
-  .stat-card {
-    @apply bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border;
-  }
-
-  /* --- Alert / Info Boxes --- */
-  .alert-info {
-    @apply bg-theme-alert-info-bg border border-theme-alert-info-border rounded-lg p-4;
-  }
-  .alert-success {
-    @apply bg-theme-alert-success-bg border border-theme-alert-success-border rounded-lg p-4;
-  }
-  .alert-warning {
-    @apply bg-theme-alert-warning-bg border border-theme-alert-warning-border rounded-lg p-4;
-  }
-  .alert-purple {
-    @apply bg-theme-alert-purple-bg border border-theme-alert-purple-border rounded-lg p-4;
-  }
-  .alert-danger {
-    @apply bg-theme-alert-danger-bg border border-theme-alert-danger-border rounded-lg p-4;
-  }
-
-  /* --- Toggle Switch --- */
-  /* Standard toggle-switch knob: always a visible light circle */
-  .toggle-knob {
-    @apply pointer-events-none inline-block transform rounded-full
-           bg-white dark:bg-slate-200 shadow ring-0 transition duration-200 ease-in-out;
-  }
-  .toggle-knob-sm {
-    @apply toggle-knob h-4 w-4;
-  }
-  .toggle-knob-md {
-    @apply toggle-knob h-5 w-5;
-  }
-
-  /* --- QR Code Container --- */
-  /* QR codes require a white background for scanner contrast, regardless of theme */
-  .qr-container {
-    @apply bg-white p-8 rounded-lg border-4 border-theme-surface-border;
-  }
-
-  /* --- Dynamic Color Dot/Badge --- */
-  /* For user-selected category colors applied via inline style.
-     Add filter: brightness() in dark mode so the dot stays visible. */
-  .color-dot {
-    @apply rounded-full;
-    /* Dark mode: brighten dynamic colors for better visibility */
-  }
-  .dark .color-dot {
-    filter: brightness(1.2);
-  }
-
-  /* --- Mobile-Responsive Patterns --- */
-
-  /* Drawer panel — full-width on mobile, capped at 32rem on sm+ */
-  .drawer-panel {
-    @apply fixed top-0 right-0 h-full w-full flex flex-col shadow-2xl z-50;
-    @apply bg-theme-surface border-l border-theme-surface-border;
-    max-width: 100%;
-  }
-  @media (min-width: 640px) {
-    .drawer-panel {
-      max-width: 32rem; /* ~512px, equivalent to max-w-lg */
-    }
-  }
-
-  /* Drawer / modal action-button bars — wrap gracefully on small screens */
-  .action-bar {
-    @apply flex items-center gap-2 flex-wrap;
-  }
-  @media (max-width: 479px) {
-    .action-bar {
-      @apply gap-1.5;
-    }
-    .action-bar .action-label {
-      @apply sr-only;
-    }
-  }
-
-  /* Responsive form grids: 1-col on mobile, multi-col on sm+ */
-  .form-grid-2 {
-    @apply grid grid-cols-1 gap-3;
-  }
-  @media (min-width: 640px) {
-    .form-grid-2 {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-  }
-
-  .form-grid-3 {
-    @apply grid grid-cols-1 gap-2;
-  }
-  @media (min-width: 640px) {
-    .form-grid-3 {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-  }
-
-  /* Horizontally-scrollable tab bar with hidden scrollbar */
-  .tab-scroll {
-    @apply flex items-center gap-1 border-b border-theme-surface-border;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-  .tab-scroll::-webkit-scrollbar {
-    display: none;
-  }
-  .tab-scroll > button {
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-
-  /* Table column visibility tiers */
-  .table-col-secondary {
-    display: none;
-  }
-  @media (min-width: 768px) {
-    .table-col-secondary {
-      display: table-cell;
-    }
-  }
-  .table-col-tertiary {
-    display: none;
-  }
-  @media (min-width: 1024px) {
-    .table-col-tertiary {
-      display: table-cell;
-    }
-  }
-
-  /* Mobile-safe modal body — accounts for on-screen keyboard */
-  .modal-body {
-    @apply max-h-[85vh] overflow-y-auto;
-  }
-  @media (min-width: 640px) {
-    .modal-body {
-      max-height: 90vh;
-    }
-  }
+outline: 3px solid #ffff00 !important;
+outline-offset: 2px;
 }
 
 /* Smooth scroll behavior — respect reduced motion preference */
@@ -633,7 +776,7 @@ option {
 }
 
 *:focus-visible {
-  @apply outline-none ring-2 ring-theme-focus-ring ring-offset-2;
+  @apply outline-hidden ring-2 ring-theme-focus-ring ring-offset-2;
   --tw-ring-offset-color: var(--ring-offset-bg);
 }
 

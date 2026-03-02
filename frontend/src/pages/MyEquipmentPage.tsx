@@ -252,7 +252,7 @@ const MyEquipmentPage: React.FC = () => {
         {/* Overdue Banner */}
         {overdueCount > 0 && (
           <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-center gap-3">
-            <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0" />
+            <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />
             <p className="text-red-700 dark:text-red-300 text-sm font-medium">
               You have {overdueCount} overdue item{overdueCount !== 1 ? 's' : ''}. Please return {overdueCount === 1 ? 'it' : 'them'} as soon as possible.
             </p>
@@ -281,7 +281,7 @@ const MyEquipmentPage: React.FC = () => {
                       <div className="mt-2 space-y-1">
                         {item.category_name && (
                           <p className="text-theme-text-secondary text-xs">
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-theme-surface-secondary text-theme-text-muted text-xs">{item.category_name}</span>
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm bg-theme-surface-secondary text-theme-text-muted text-xs">{item.category_name}</span>
                           </p>
                         )}
                         {(item.quantity ?? 1) > 1 && (

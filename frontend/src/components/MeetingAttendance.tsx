@@ -108,14 +108,14 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
 
   if (loading) {
     return (
-      <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6">
+      <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6">
         <div className="text-theme-text-muted text-center py-4">Loading attendance...</div>
       </div>
     );
   }
 
   return (
-    <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6">
+    <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-medium text-theme-text-primary">
           Meeting Attendance ({attendees.length})
@@ -147,7 +147,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
                   <button
                     type="button"
                     onClick={() => { void handleRemove(attendee.user_id, attendee.name); }}
-                    className="ml-1 p-1 min-w-[28px] min-h-[28px] flex items-center justify-center text-green-700 dark:text-green-500 hover:text-red-700 dark:hover:text-red-400 text-xs rounded focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="ml-1 p-1 min-w-[28px] min-h-[28px] flex items-center justify-center text-green-700 dark:text-green-500 hover:text-red-700 dark:hover:text-red-400 text-xs rounded-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                     title="Remove from attendance"
                     aria-label={`Remove ${attendee.name} from attendance`}
                   >
@@ -173,7 +173,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
+              className="block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
               placeholder="Search by name or membership number..."
             />
           </div>
@@ -215,7 +215,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
                     type="button"
                     onClick={() => { void handleCheckIn(member.id); }}
                     disabled={checking === member.id}
-                    className="btn-info rounded px-3 py-1 text-xs"
+                    className="btn-info rounded-sm px-3 py-1 text-xs"
                   >
                     {checking === member.id ? 'Checking in...' : 'Check In'}
                   </button>

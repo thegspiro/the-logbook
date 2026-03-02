@@ -171,7 +171,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
 
         <form onSubmit={(e) => { void handleSubmit(e); }} className="p-6 space-y-4">
           {error && (
-            <div className="bg-red-500/10 border border-red-500 text-red-700 dark:text-red-400 px-4 py-3 rounded text-sm">
+            <div className="bg-red-500/10 border border-red-500 text-red-700 dark:text-red-400 px-4 py-3 rounded-sm text-sm">
               {error}
             </div>
           )}
@@ -370,7 +370,7 @@ const TypeBadge: React.FC<{ type: TrainingType }> = ({ type }) => {
   };
 
   return (
-    <span className={`px-2 py-0.5 text-xs rounded ${colors[type]}`}>
+    <span className={`px-2 py-0.5 text-xs rounded-sm ${colors[type]}`}>
       {labels[type]}
     </span>
   );
@@ -568,14 +568,14 @@ const CourseLibraryPage: React.FC = () => {
                   <div className="flex items-center space-x-1">
                     <button
                       onClick={() => { setEditCourse(course); setShowModal(true); }}
-                      className="p-1.5 text-theme-text-muted hover:text-theme-text-primary rounded"
+                      className="p-1.5 text-theme-text-muted hover:text-theme-text-primary rounded-sm"
                       aria-label={`Edit ${course.name}`}
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => { void handleDelete(course.id, course.name); }}
-                      className="p-1.5 text-theme-text-muted hover:text-red-700 dark:hover:text-red-400 rounded"
+                      className="p-1.5 text-theme-text-muted hover:text-red-700 dark:hover:text-red-400 rounded-sm"
                       aria-label={`Delete ${course.name}`}
                     >
                       <Trash2 className="w-4 h-4" />
@@ -590,7 +590,7 @@ const CourseLibraryPage: React.FC = () => {
                 <div className="flex flex-wrap gap-1.5 mb-3">
                   <TypeBadge type={course.training_type} />
                   {!course.active && (
-                    <span className="px-2 py-0.5 text-xs rounded bg-red-500/20 text-red-700 dark:text-red-400">Inactive</span>
+                    <span className="px-2 py-0.5 text-xs rounded-sm bg-red-500/20 text-red-700 dark:text-red-400">Inactive</span>
                   )}
                 </div>
 

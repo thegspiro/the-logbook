@@ -200,7 +200,7 @@ const SetupCard: React.FC<SetupCardProps> = ({ item, onNavigate }) => {
     >
       <div className="flex items-center gap-4">
         {/* Status Icon */}
-        <div className="flex-shrink-0">
+        <div className="shrink-0">
           {item.is_complete ? (
             <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
               <CheckCircle2 className="w-5 h-5 text-emerald-500" />
@@ -221,12 +221,12 @@ const SetupCard: React.FC<SetupCardProps> = ({ item, onNavigate }) => {
               {item.title}
             </h3>
             {item.required && !item.is_complete && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-red-500/10 text-red-600 dark:text-red-400 uppercase">
+              <span className="text-[10px] px-1.5 py-0.5 rounded-sm font-medium bg-red-500/10 text-red-600 dark:text-red-400 uppercase">
                 Required
               </span>
             )}
             {item.is_complete && item.count > 0 && item.key !== 'org_settings' && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <span className="text-[10px] px-1.5 py-0.5 rounded-sm font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
                 {item.count} {item.count === 1 ? 'item' : 'items'}
               </span>
             )}
@@ -235,7 +235,7 @@ const SetupCard: React.FC<SetupCardProps> = ({ item, onNavigate }) => {
         </div>
 
         {/* Arrow */}
-        <ChevronRight className="w-5 h-5 text-theme-text-muted group-hover:text-red-500 transition-colors flex-shrink-0" />
+        <ChevronRight className="w-5 h-5 text-theme-text-muted group-hover:text-red-500 transition-colors shrink-0" />
       </div>
     </button>
   );

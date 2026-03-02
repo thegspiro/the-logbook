@@ -46,7 +46,7 @@ interface ItemDetailModalProps {
 }
 
 const inputClass =
-  'w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-emerald-500';
+  'w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-emerald-500';
 
 function formatDate(dateStr?: string | null): string {
   if (!dateStr) return '—';
@@ -828,7 +828,7 @@ function ExposuresTab({
                   onChange={(e) =>
                     setForm({ ...form, decon_required: e.target.checked })
                   }
-                  className="rounded border-theme-input-border"
+                  className="rounded-sm border-theme-input-border"
                 />
                 Decontamination required
               </label>

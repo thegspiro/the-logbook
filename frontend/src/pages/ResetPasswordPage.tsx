@@ -106,7 +106,7 @@ export const ResetPasswordPage: React.FC = () => {
 
   if (isValidating) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-12 px-4 sm:px-6 lg:px-8">
+      <main className="min-h-screen flex items-center justify-center bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-12 px-4 sm:px-6 lg:px-8">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-red-500 mb-4"></div>
           <p className="text-theme-text-primary text-lg">Validating reset link...</p>
@@ -117,7 +117,7 @@ export const ResetPasswordPage: React.FC = () => {
 
   if (!tokenValid) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-12 px-4 sm:px-6 lg:px-8">
+      <main className="min-h-screen flex items-center justify-center bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full">
           <div className="card p-8 text-center">
             <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-500/20 mb-4">
@@ -136,7 +136,7 @@ export const ResetPasswordPage: React.FC = () => {
               </Link>
               <Link
                 to="/login"
-                className="block text-theme-text-secondary hover:text-theme-text-primary transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring rounded px-3 py-2"
+                className="block text-theme-text-secondary hover:text-theme-text-primary transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-sm px-3 py-2"
               >
                 Back to Login
               </Link>
@@ -149,7 +149,7 @@ export const ResetPasswordPage: React.FC = () => {
 
   if (success) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-12 px-4 sm:px-6 lg:px-8">
+      <main className="min-h-screen flex items-center justify-center bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full">
           <div className="card p-8 text-center">
             <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-500/20 mb-4">
@@ -164,7 +164,7 @@ export const ResetPasswordPage: React.FC = () => {
             </p>
             <Link
               to="/login"
-              className="inline-flex items-center space-x-2 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring rounded px-3 py-2"
+              className="inline-flex items-center space-x-2 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-sm px-3 py-2"
             >
               <span>Go to Login Now</span>
               <ArrowLeft className="w-4 h-4 rotate-180" aria-hidden="true" />
@@ -176,7 +176,7 @@ export const ResetPasswordPage: React.FC = () => {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-12 px-4 sm:px-6 lg:px-8">
+    <main className="min-h-screen flex items-center justify-center bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-extrabold text-theme-text-primary mb-2">
@@ -192,7 +192,7 @@ export const ResetPasswordPage: React.FC = () => {
             {error && (
               <div className="rounded-md bg-red-500/20 border border-red-500/50 p-4" role="alert" aria-live="polite">
                 <div className="flex">
-                  <div className="flex-shrink-0">
+                  <div className="shrink-0">
                     <svg className="h-5 w-5 text-red-700 dark:text-red-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
                     </svg>
@@ -218,7 +218,7 @@ export const ResetPasswordPage: React.FC = () => {
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
-                  className="block w-full pl-10 pr-10 py-2 border border-theme-surface-border rounded-md bg-theme-surface-secondary text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent sm:text-sm"
+                  className="block w-full pl-10 pr-10 py-2 border border-theme-surface-border rounded-md bg-theme-surface-secondary text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent sm:text-sm"
                   placeholder="Enter new password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -227,7 +227,7 @@ export const ResetPasswordPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-theme-text-muted hover:text-theme-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:rounded"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-theme-text-muted hover:text-theme-text-primary focus:outline-hidden focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:rounded-sm"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? (
@@ -252,9 +252,9 @@ export const ResetPasswordPage: React.FC = () => {
                     ].map((check, idx) => (
                       <li key={idx} className="flex items-center space-x-2">
                         {check.valid ? (
-                          <CheckCircle className="w-4 h-4 text-green-700 dark:text-green-400 flex-shrink-0" aria-hidden="true" />
+                          <CheckCircle className="w-4 h-4 text-green-700 dark:text-green-400 shrink-0" aria-hidden="true" />
                         ) : (
-                          <div className="w-4 h-4 rounded-full border-2 border-theme-input-border flex-shrink-0" aria-hidden="true" />
+                          <div className="w-4 h-4 rounded-full border-2 border-theme-input-border shrink-0" aria-hidden="true" />
                         )}
                         <span className={check.valid ? 'text-green-700 dark:text-green-300' : 'text-theme-text-muted'}>
                           {check.label}
@@ -280,7 +280,7 @@ export const ResetPasswordPage: React.FC = () => {
                   type={showConfirmPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
-                  className="block w-full pl-10 pr-10 py-2 border border-theme-surface-border rounded-md bg-theme-surface-secondary text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent sm:text-sm"
+                  className="block w-full pl-10 pr-10 py-2 border border-theme-surface-border rounded-md bg-theme-surface-secondary text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent sm:text-sm"
                   placeholder="Confirm new password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
@@ -289,7 +289,7 @@ export const ResetPasswordPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-theme-text-muted hover:text-theme-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:rounded"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-theme-text-muted hover:text-theme-text-primary focus:outline-hidden focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:rounded-sm"
                   aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                 >
                   {showConfirmPassword ? (
@@ -328,7 +328,7 @@ export const ResetPasswordPage: React.FC = () => {
           <div className="mt-6 text-center">
             <Link
               to="/login"
-              className="inline-flex items-center space-x-2 text-sm text-theme-text-secondary hover:text-theme-text-primary transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring rounded px-3 py-2"
+              className="inline-flex items-center space-x-2 text-sm text-theme-text-secondary hover:text-theme-text-primary transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-sm px-3 py-2"
             >
               <ArrowLeft className="w-4 h-4" aria-hidden="true" />
               <span>Back to Login</span>

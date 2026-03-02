@@ -95,7 +95,7 @@ export const ApparatusTypeBadge: React.FC<ApparatusTypeBadgeProps> = ({
   if (type.color) {
     return (
       <span
-        className={`${sizeClasses} font-semibold rounded border inline-flex items-center gap-1`}
+        className={`${sizeClasses} font-semibold rounded-sm border inline-flex items-center gap-1`}
         style={{
           backgroundColor: `${type.color}20`,
           color: type.color,
@@ -110,7 +110,7 @@ export const ApparatusTypeBadge: React.FC<ApparatusTypeBadgeProps> = ({
 
   return (
     <span
-      className={`${sizeClasses} ${colors.background} ${colors.text} ${colors.border} font-semibold rounded border inline-flex items-center gap-1`}
+      className={`${sizeClasses} ${colors.background} ${colors.text} ${colors.border} font-semibold rounded-sm border inline-flex items-center gap-1`}
     >
       {showIcon && type.icon && <span>{type.icon}</span>}
       {type.name}

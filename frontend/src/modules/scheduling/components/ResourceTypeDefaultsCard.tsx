@@ -110,7 +110,7 @@ export const ResourceTypeDefaultsCard: React.FC<
                         <h4 className="text-sm font-semibold text-theme-text-primary">
                           {defaults.label}
                         </h4>
-                        <span className="text-[10px] text-theme-text-muted bg-theme-surface-hover px-1.5 py-0.5 rounded">
+                        <span className="text-[10px] text-theme-text-muted bg-theme-surface-hover px-1.5 py-0.5 rounded-sm">
                           {defaults.positions.length} positions
                         </span>
                       </div>
@@ -123,7 +123,7 @@ export const ResourceTypeDefaultsCard: React.FC<
                             return (
                               <span
                                 key={i}
-                                className="px-1.5 py-0.5 text-[10px] bg-purple-500/10 text-purple-700 dark:text-purple-400 rounded capitalize"
+                                className="px-1.5 py-0.5 text-[10px] bg-purple-500/10 text-purple-700 dark:text-purple-400 rounded-sm capitalize"
                               >
                                 {label}
                               </span>
@@ -134,7 +134,7 @@ export const ResourceTypeDefaultsCard: React.FC<
                     </div>
                     <button
                       onClick={() => startEdit(type)}
-                      className="text-xs text-violet-600 dark:text-violet-400 hover:underline flex-shrink-0"
+                      className="text-xs text-violet-600 dark:text-violet-400 hover:underline shrink-0"
                     >
                       Edit
                     </button>

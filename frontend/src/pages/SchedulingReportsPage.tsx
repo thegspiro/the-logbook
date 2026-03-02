@@ -114,7 +114,7 @@ const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
           type="date"
           value={startDate}
           onChange={(e) => onStartChange(e.target.value)}
-          className="px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+          className="px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
           required
         />
       </div>
@@ -127,7 +127,7 @@ const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
           type="date"
           value={endDate}
           onChange={(e) => onEndChange(e.target.value)}
-          className="px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+          className="px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
           required
         />
       </div>
@@ -594,13 +594,13 @@ export const SchedulingReportsPage: React.FC = () => {
                         <td className="py-3 px-4 text-right text-theme-text-primary">{row.total_shifts}</td>
                         <td className="py-3 px-4 text-right text-theme-text-secondary">{row.total_assigned}</td>
                         <td className="py-3 px-4 text-right">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400">
                             {row.total_confirmed}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-right">
                           {row.understaffed_shifts > 0 ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400">
                               {row.understaffed_shifts}
                             </span>
                           ) : (
@@ -638,7 +638,7 @@ export const SchedulingReportsPage: React.FC = () => {
                   id="call-group-by"
                   value={groupBy}
                   onChange={(e) => setGroupBy(e.target.value)}
-                  className="px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+                  className="px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
                 >
                   <option value="day">Day</option>
                   <option value="week">Week</option>
@@ -710,7 +710,7 @@ export const SchedulingReportsPage: React.FC = () => {
                             {Object.entries(row.by_type).map(([type, count]) => (
                               <span
                                 key={type}
-                                className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400"
+                                className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400"
                               >
                                 {type}: {count}
                               </span>
@@ -807,7 +807,7 @@ export const SchedulingReportsPage: React.FC = () => {
                         <td className="py-3 px-4 text-right text-theme-text-primary">{member.total_shifts_assigned || 0}</td>
                         <td className="py-3 px-4 text-right">
                           {(member.time_off_days || 0) > 0 ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400">
                               {member.time_off_days}
                             </span>
                           ) : (
@@ -815,13 +815,13 @@ export const SchedulingReportsPage: React.FC = () => {
                           )}
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400">
                             {member.available_dates?.length || 0}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-right">
                           {(member.unavailable_dates?.length || 0) > 0 ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400">
                               {member.unavailable_dates.length}
                             </span>
                           ) : (
@@ -857,7 +857,7 @@ export const SchedulingReportsPage: React.FC = () => {
                 type="date"
                 value={complianceRefDate}
                 onChange={(e) => setComplianceRefDate(e.target.value)}
-                className="px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+                className="px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
               />
             </div>
             <button
@@ -968,14 +968,14 @@ export const SchedulingReportsPage: React.FC = () => {
                       >
                         <div className="flex items-center gap-3">
                           {isExpanded ? (
-                            <ChevronDown className="w-5 h-5 text-theme-text-muted flex-shrink-0" aria-hidden="true" />
+                            <ChevronDown className="w-5 h-5 text-theme-text-muted shrink-0" aria-hidden="true" />
                           ) : (
-                            <ChevronRight className="w-5 h-5 text-theme-text-muted flex-shrink-0" aria-hidden="true" />
+                            <ChevronRight className="w-5 h-5 text-theme-text-muted shrink-0" aria-hidden="true" />
                           )}
                           <div>
                             <h3 className="font-semibold text-theme-text-primary">{req.requirement_name}</h3>
                             <div className="flex flex-wrap items-center gap-2 mt-1">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">
                                 {req.requirement_type === 'shifts' ? 'Shifts' : 'Hours'}
                               </span>
                               <span className="text-xs text-theme-text-muted capitalize">
@@ -990,7 +990,7 @@ export const SchedulingReportsPage: React.FC = () => {
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-4 flex-shrink-0 ml-4">
+                        <div className="flex items-center gap-4 shrink-0 ml-4">
                           {/* Compliance rate badge */}
                           <div className="text-right">
                             <div className={`text-lg font-bold ${
@@ -1065,12 +1065,12 @@ export const SchedulingReportsPage: React.FC = () => {
                                     </td>
                                     <td className="py-2 px-4 text-center">
                                       {member.compliant ? (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400">
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-xs font-medium bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400">
                                           <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
                                           Compliant
                                         </span>
                                       ) : (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400">
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-xs font-medium bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400">
                                           <XCircle className="w-3 h-3" aria-hidden="true" />
                                           Behind
                                         </span>

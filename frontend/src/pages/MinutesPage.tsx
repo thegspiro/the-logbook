@@ -252,7 +252,7 @@ const MinutesPage: React.FC = () => {
               id="type-filter"
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
             >
               <option value="all">All Types</option>
               {MEETING_TYPES.map(t => (
@@ -267,7 +267,7 @@ const MinutesPage: React.FC = () => {
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-6">
           <div className="flex items-center space-x-2">
-            <AlertCircle className="w-5 h-5 text-red-700 flex-shrink-0" />
+            <AlertCircle className="w-5 h-5 text-red-700 shrink-0" />
             <p className="text-red-300 text-sm">{error}</p>
             <button onClick={() => setError(null)} className="ml-auto text-red-700 hover:text-red-600">
               <X className="w-4 h-4" />
@@ -298,7 +298,7 @@ const MinutesPage: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-2">
                       <h3 className="text-theme-text-primary font-semibold text-lg truncate">{meeting.title}</h3>
-                      <span className={`px-2 py-0.5 text-xs rounded border ${typeInfo?.color}`}>
+                      <span className={`px-2 py-0.5 text-xs rounded-sm border ${typeInfo?.color}`}>
                         {typeInfo?.label}
                       </span>
                       {meeting.status && (
@@ -454,9 +454,9 @@ const MinutesPage: React.FC = () => {
                 Structured templates for recording meeting minutes with attendees, motions, and votes.
               </p>
               <div className="flex flex-wrap gap-1.5">
-                <span className="px-2 py-0.5 text-xs bg-cyan-500/10 text-cyan-700 rounded">Roll Call</span>
-                <span className="px-2 py-0.5 text-xs bg-cyan-500/10 text-cyan-700 rounded">Motions</span>
-                <span className="px-2 py-0.5 text-xs bg-cyan-500/10 text-cyan-700 rounded">Votes</span>
+                <span className="px-2 py-0.5 text-xs bg-cyan-500/10 text-cyan-700 rounded-sm">Roll Call</span>
+                <span className="px-2 py-0.5 text-xs bg-cyan-500/10 text-cyan-700 rounded-sm">Motions</span>
+                <span className="px-2 py-0.5 text-xs bg-cyan-500/10 text-cyan-700 rounded-sm">Votes</span>
               </div>
             </div>
             <div className="card p-6">
@@ -466,9 +466,9 @@ const MinutesPage: React.FC = () => {
                 Track action items from meetings with assignees, due dates, and completion status.
               </p>
               <div className="flex flex-wrap gap-1.5">
-                <span className="px-2 py-0.5 text-xs bg-green-500/10 text-green-700 rounded">Assignees</span>
-                <span className="px-2 py-0.5 text-xs bg-green-500/10 text-green-700 rounded">Due Dates</span>
-                <span className="px-2 py-0.5 text-xs bg-green-500/10 text-green-700 rounded">Follow-up</span>
+                <span className="px-2 py-0.5 text-xs bg-green-500/10 text-green-700 rounded-sm">Assignees</span>
+                <span className="px-2 py-0.5 text-xs bg-green-500/10 text-green-700 rounded-sm">Due Dates</span>
+                <span className="px-2 py-0.5 text-xs bg-green-500/10 text-green-700 rounded-sm">Follow-up</span>
               </div>
             </div>
             <div className="card p-6">
@@ -478,8 +478,8 @@ const MinutesPage: React.FC = () => {
                 Full-text search across all meeting minutes for compliance and quick reference.
               </p>
               <div className="flex flex-wrap gap-1.5">
-                <span className="px-2 py-0.5 text-xs bg-amber-500/10 text-amber-700 rounded">Full-text Search</span>
-                <span className="px-2 py-0.5 text-xs bg-amber-500/10 text-amber-700 rounded">PDF Export</span>
+                <span className="px-2 py-0.5 text-xs bg-amber-500/10 text-amber-700 rounded-sm">Full-text Search</span>
+                <span className="px-2 py-0.5 text-xs bg-amber-500/10 text-amber-700 rounded-sm">PDF Export</span>
               </div>
             </div>
           </div>
@@ -520,7 +520,7 @@ const MinutesPage: React.FC = () => {
                 {createError && (
                   <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4">
                     <div className="flex items-center space-x-2">
-                      <AlertCircle className="w-4 h-4 text-red-700 flex-shrink-0" />
+                      <AlertCircle className="w-4 h-4 text-red-700 shrink-0" />
                       <p className="text-red-300 text-sm">{createError}</p>
                     </div>
                   </div>

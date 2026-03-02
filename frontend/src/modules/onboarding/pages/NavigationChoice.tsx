@@ -73,7 +73,7 @@ const NavigationChoice: React.FC = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
+    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
       <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} icon={<LayoutDashboard aria-hidden="true" className="w-6 h-6 text-white" />} />
 
       {/* Main Content */}
@@ -100,7 +100,7 @@ const NavigationChoice: React.FC = () => {
             {/* Top Navigation Option */}
             <button
               onClick={() => setNavigationLayout('top')}
-              className={`group relative bg-theme-surface backdrop-blur-sm rounded-lg border-2 transition-all duration-300 overflow-hidden ${
+              className={`group relative bg-theme-surface backdrop-blur-xs rounded-lg border-2 transition-all duration-300 overflow-hidden ${
                 navigationLayout === 'top'
                   ? 'border-theme-accent-red shadow-lg'
                   : 'border-theme-surface-border hover:border-theme-accent-red'
@@ -136,15 +136,15 @@ const NavigationChoice: React.FC = () => {
                 <div className="bg-theme-surface-secondary rounded-lg p-4 border border-theme-input-border">
                   <div className="space-y-2">
                     {/* Header bar */}
-                    <div className="bg-theme-surface rounded h-8 flex items-center px-2 space-x-1">
-                      <div className="bg-red-500 rounded h-4 w-12"></div>
-                      <div className="bg-theme-surface-border rounded h-4 w-16"></div>
-                      <div className="bg-theme-surface-border rounded h-4 w-16"></div>
-                      <div className="bg-theme-surface-border rounded h-4 w-16"></div>
-                      <div className="bg-theme-surface-border rounded h-4 w-16"></div>
+                    <div className="bg-theme-surface rounded-sm h-8 flex items-center px-2 space-x-1">
+                      <div className="bg-red-500 rounded-sm h-4 w-12"></div>
+                      <div className="bg-theme-surface-border rounded-sm h-4 w-16"></div>
+                      <div className="bg-theme-surface-border rounded-sm h-4 w-16"></div>
+                      <div className="bg-theme-surface-border rounded-sm h-4 w-16"></div>
+                      <div className="bg-theme-surface-border rounded-sm h-4 w-16"></div>
                     </div>
                     {/* Content area */}
-                    <div className="bg-theme-surface rounded h-32"></div>
+                    <div className="bg-theme-surface rounded-sm h-32"></div>
                   </div>
                   <p className="text-xs text-theme-text-muted mt-3 text-center">
                     Horizontal menu bar
@@ -191,7 +191,7 @@ const NavigationChoice: React.FC = () => {
             {/* Left Sidebar Option */}
             <button
               onClick={() => setNavigationLayout('left')}
-              className={`group relative bg-theme-surface backdrop-blur-sm rounded-lg border-2 transition-all duration-300 overflow-hidden ${
+              className={`group relative bg-theme-surface backdrop-blur-xs rounded-lg border-2 transition-all duration-300 overflow-hidden ${
                 navigationLayout === 'left'
                   ? 'border-theme-accent-red shadow-lg'
                   : 'border-theme-surface-border hover:border-theme-accent-red'
@@ -227,15 +227,15 @@ const NavigationChoice: React.FC = () => {
                 <div className="bg-theme-surface-secondary rounded-lg p-4 border border-theme-input-border">
                   <div className="flex space-x-2">
                     {/* Sidebar */}
-                    <div className="bg-theme-surface rounded w-16 flex flex-col space-y-1 p-1">
-                      <div className="bg-red-500 rounded h-4 w-full"></div>
-                      <div className="bg-theme-surface-border rounded h-4 w-full"></div>
-                      <div className="bg-theme-surface-border rounded h-4 w-full"></div>
-                      <div className="bg-theme-surface-border rounded h-4 w-full"></div>
-                      <div className="bg-theme-surface-border rounded h-4 w-full"></div>
+                    <div className="bg-theme-surface rounded-sm w-16 flex flex-col space-y-1 p-1">
+                      <div className="bg-red-500 rounded-sm h-4 w-full"></div>
+                      <div className="bg-theme-surface-border rounded-sm h-4 w-full"></div>
+                      <div className="bg-theme-surface-border rounded-sm h-4 w-full"></div>
+                      <div className="bg-theme-surface-border rounded-sm h-4 w-full"></div>
+                      <div className="bg-theme-surface-border rounded-sm h-4 w-full"></div>
                     </div>
                     {/* Content area */}
-                    <div className="bg-theme-surface rounded flex-1 h-32"></div>
+                    <div className="bg-theme-surface rounded-sm flex-1 h-32"></div>
                   </div>
                   <p className="text-xs text-theme-text-muted mt-3 text-center">
                     Vertical sidebar menu
@@ -293,13 +293,13 @@ const NavigationChoice: React.FC = () => {
           )}
 
           {/* Continue Button */}
-          <div className="max-w-md mx-auto sticky bottom-0 md:relative bg-gradient-to-t from-theme-bg-to via-theme-bg-to to-transparent md:bg-none pb-4 md:pb-0">
+          <div className="max-w-md mx-auto sticky bottom-0 md:relative bg-linear-to-t from-theme-bg-to via-theme-bg-to to-transparent md:bg-none pb-4 md:pb-0">
             <button
               onClick={() => { void handleContinue(); }}
               disabled={!navigationLayout || isSaving}
               className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                 navigationLayout && !isSaving
-                  ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
+                  ? 'bg-linear-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
                   : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
@@ -323,7 +323,7 @@ const NavigationChoice: React.FC = () => {
       </main>
 
       {/* Footer with Department Name and Copyright */}
-      <footer className="bg-theme-nav-bg backdrop-blur-sm border-t border-theme-nav-border px-6 py-4">
+      <footer className="bg-theme-nav-bg backdrop-blur-xs border-t border-theme-nav-border px-6 py-4">
         <div className="max-w-7xl mx-auto text-center">
           <p className="text-theme-text-secondary text-sm">
             © {currentYear} {departmentName}. All rights reserved.

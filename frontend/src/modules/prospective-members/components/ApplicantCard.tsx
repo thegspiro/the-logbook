@@ -57,7 +57,7 @@ export const ApplicantCard: React.FC<ApplicantCardProps> = ({
             ? 'bg-red-500/10 text-red-700 dark:text-red-400'
             : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
         }`}>
-          <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+          <AlertTriangle className="w-3 h-3 shrink-0" />
           <span>
             {alertLevel === 'critical' ? 'Approaching timeout' : 'Activity slowing'}
             {applicant.days_since_activity != null && ` — ${applicant.days_since_activity}d idle`}
@@ -68,14 +68,14 @@ export const ApplicantCard: React.FC<ApplicantCardProps> = ({
       {/* Header */}
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+          <div className="w-8 h-8 rounded-full bg-linear-to-br from-red-500 to-red-700 flex items-center justify-center text-xs font-bold text-white shrink-0">
             {initials}
           </div>
           <div className="min-w-0">
             <p className="text-sm font-medium text-theme-text-primary truncate">
               {applicant.first_name} {applicant.last_name}
             </p>
-            <span className={`inline-block text-xs px-1.5 py-0.5 rounded ${STATUS_COLORS[applicant.status]}`}>
+            <span className={`inline-block text-xs px-1.5 py-0.5 rounded-sm ${STATUS_COLORS[applicant.status]}`}>
               {applicant.status.replace('_', ' ')}
             </span>
           </div>
@@ -86,13 +86,13 @@ export const ApplicantCard: React.FC<ApplicantCardProps> = ({
       <div className="space-y-1 mb-2.5">
         {applicant.email && (
           <div className="flex items-center gap-1.5 text-xs text-theme-text-muted">
-            <Mail className="w-3 h-3 flex-shrink-0" />
+            <Mail className="w-3 h-3 shrink-0" />
             <span className="truncate">{applicant.email}</span>
           </div>
         )}
         {applicant.phone && (
           <div className="flex items-center gap-1.5 text-xs text-theme-text-muted">
-            <Phone className="w-3 h-3 flex-shrink-0" />
+            <Phone className="w-3 h-3 shrink-0" />
             <span>{applicant.phone}</span>
           </div>
         )}

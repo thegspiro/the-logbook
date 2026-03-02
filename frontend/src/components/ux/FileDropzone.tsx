@@ -146,9 +146,9 @@ export const FileDropzone: React.FC<FileDropzoneProps> = ({
               className="flex items-center gap-3 p-2 bg-theme-surface-secondary rounded-lg"
             >
               {fp.preview ? (
-                <img src={fp.preview} alt="" className="w-10 h-10 rounded object-cover" />
+                <img src={fp.preview} alt="" className="w-10 h-10 rounded-sm object-cover" />
               ) : (
-                <div className="w-10 h-10 rounded bg-theme-surface-hover flex items-center justify-center">
+                <div className="w-10 h-10 rounded-sm bg-theme-surface-hover flex items-center justify-center">
                   {fp.file.type.startsWith('image/') ? (
                     <Image className="w-5 h-5 text-theme-text-muted" />
                   ) : (

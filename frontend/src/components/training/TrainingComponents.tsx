@@ -311,7 +311,7 @@ export const ProgramPhaseTimeline: React.FC<ProgramPhaseTimelineProps> = ({
             {/* Connector line */}
             {idx > 0 && (
               <div
-                className={`h-0.5 w-8 flex-shrink-0 ${isCompleted || isCurrent ? 'bg-blue-400' : 'bg-theme-surface-secondary'}`}
+                className={`h-0.5 w-8 shrink-0 ${isCompleted || isCurrent ? 'bg-blue-400' : 'bg-theme-surface-secondary'}`}
               />
             )}
 
@@ -330,7 +330,7 @@ export const ProgramPhaseTimeline: React.FC<ProgramPhaseTimelineProps> = ({
                 )}
               </div>
               <span
-                className={`max-w-[5rem] truncate text-center text-xs ${
+                className={`max-w-20 truncate text-center text-xs ${
                   isCompleted
                     ? 'font-medium text-green-700'
                     : isCurrent

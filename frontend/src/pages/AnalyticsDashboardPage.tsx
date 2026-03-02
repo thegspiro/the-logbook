@@ -105,22 +105,22 @@ const AnalyticsDashboardPage: React.FC = () => {
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
+        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
           <div className="text-theme-text-muted text-sm font-medium mb-1">Total Scans</div>
           <div className="text-3xl font-bold text-blue-600">{metrics.totalScans}</div>
         </div>
 
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
+        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
           <div className="text-theme-text-muted text-sm font-medium mb-1">Successful Check-Ins</div>
           <div className="text-3xl font-bold text-green-600">{metrics.successfulCheckIns}</div>
         </div>
 
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
+        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
           <div className="text-theme-text-muted text-sm font-medium mb-1">Success Rate</div>
           <div className="text-3xl font-bold text-theme-text-primary">{metrics.successRate}%</div>
         </div>
 
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
+        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
           <div className="text-theme-text-muted text-sm font-medium mb-1">Avg Time to Check-In</div>
           <div className="text-3xl font-bold text-theme-text-primary">{metrics.avgTimeToCheckIn}s</div>
         </div>
@@ -128,7 +128,7 @@ const AnalyticsDashboardPage: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         {/* Device Breakdown */}
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
+        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
           <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Device Breakdown</h2>
           <div className="space-y-3">
             {Object.entries(metrics.deviceBreakdown || {}).map(([device, count]) => {
@@ -156,7 +156,7 @@ const AnalyticsDashboardPage: React.FC = () => {
         </div>
 
         {/* Error Breakdown */}
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
+        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
           <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Error Breakdown</h2>
           {Object.keys(metrics.errorBreakdown).length === 0 ? (
             <div className="text-center py-8 text-theme-text-muted">
@@ -182,7 +182,7 @@ const AnalyticsDashboardPage: React.FC = () => {
                 .map(([errorType, count]) => (
                   <div key={errorType} className="flex justify-between items-center">
                     <span className="text-sm text-theme-text-secondary truncate flex-1">{errorType}</span>
-                    <span className="px-2 py-1 bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400 rounded text-xs font-semibold ml-2">
+                    <span className="px-2 py-1 bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400 rounded-sm text-xs font-semibold ml-2">
                       {count}
                     </span>
                   </div>
@@ -193,7 +193,7 @@ const AnalyticsDashboardPage: React.FC = () => {
       </div>
 
       {/* Hourly Activity */}
-      <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6 mb-6">
+      <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Activity by Hour</h2>
         <div className="flex items-end justify-between gap-1 h-48">
           {(metrics.hourlyActivity || []).map(({ hour, count }) => {
@@ -216,7 +216,7 @@ const AnalyticsDashboardPage: React.FC = () => {
 
       {/* Check-In Trends */}
       {(metrics.checkInTrends || []).length > 0 && (
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
+        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
           <h2 className="text-lg font-semibold text-theme-text-primary mb-4">
             Check-In Trends (Last 24 Hours)
           </h2>

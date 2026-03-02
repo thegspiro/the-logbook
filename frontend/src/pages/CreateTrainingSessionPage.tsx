@@ -341,7 +341,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                   const address = [selected.address, selected.city, selected.state, selected.zip].filter(Boolean).join(', ');
                   return (
                     <div className="flex items-start gap-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                      <MapPin className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                      <MapPin className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
                       <div className="text-sm">
                         <p className="font-medium text-theme-text-primary">{selected.name}</p>
                         {address && <p className="text-theme-text-secondary">{address}</p>}
@@ -423,7 +423,7 @@ const CreateTrainingSessionPage: React.FC = () => {
               {/* Use Existing Course or Create New */}
               <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-6">
                 <div className="flex items-start">
-                  <AlertCircle className="w-5 h-5 text-blue-700 mt-0.5 mr-3 flex-shrink-0" />
+                  <AlertCircle className="w-5 h-5 text-blue-700 mt-0.5 mr-3 shrink-0" />
                   <div className="flex-1">
                     <p className="text-blue-700 font-semibold mb-2">Course Selection</p>
                     <div className="space-y-3">
@@ -643,7 +643,7 @@ const CreateTrainingSessionPage: React.FC = () => {
 
               <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-6">
                 <div className="flex items-start">
-                  <QrCode className="w-5 h-5 text-green-700 mt-0.5 mr-3 flex-shrink-0" />
+                  <QrCode className="w-5 h-5 text-green-700 mt-0.5 mr-3 shrink-0" />
                   <div>
                     <p className="text-green-700 font-semibold mb-1">QR Code Check-In</p>
                     <p className="text-theme-text-secondary text-sm">

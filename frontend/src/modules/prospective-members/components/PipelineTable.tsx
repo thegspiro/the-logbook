@@ -349,7 +349,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                         onClick={() => onApplicantClick(applicant)}
                       >
                         <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-linear-to-br from-red-500 to-red-700 flex items-center justify-center text-xs font-bold text-white shrink-0">
                             {getInitials(applicant.first_name, applicant.last_name)}
                           </div>
                           <span className="text-sm font-medium text-theme-text-primary">
@@ -373,7 +373,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                         className="p-3"
                         onClick={() => onApplicantClick(applicant)}
                       >
-                        <span className={`inline-block text-xs px-2 py-0.5 rounded ${statusBadge.className}`}>
+                        <span className={`inline-block text-xs px-2 py-0.5 rounded-sm ${statusBadge.className}`}>
                           {statusBadge.label}
                         </span>
                       </td>

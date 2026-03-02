@@ -26,7 +26,7 @@ const OnboardingHeader: React.FC<OnboardingHeaderProps> = ({
   const themeLabel = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
 
   return (
-    <header className="bg-theme-nav-bg backdrop-blur-sm border-b border-theme-nav-border px-6 py-4">
+    <header className="bg-theme-nav-bg backdrop-blur-xs border-b border-theme-nav-border px-6 py-4">
       <div className="max-w-7xl mx-auto flex items-center">
         {logoPreview ? (
           <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-lg flex items-center justify-center overflow-hidden mr-4">
@@ -47,7 +47,7 @@ const OnboardingHeader: React.FC<OnboardingHeaderProps> = ({
         </div>
         <button
           onClick={cycleTheme}
-          className="ml-4 text-theme-text-secondary p-2 rounded-md hover:bg-theme-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+          className="ml-4 text-theme-text-secondary p-2 rounded-md hover:bg-theme-surface-hover transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
           title={`Theme: ${themeLabel}`}
           aria-label={`Current theme: ${themeLabel}. Click to cycle theme.`}
         >

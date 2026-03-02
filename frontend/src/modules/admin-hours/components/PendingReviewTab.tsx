@@ -149,7 +149,7 @@ const PendingReviewTab: React.FC = () => {
                 type="checkbox"
                 checked={selectedEntryIds.size === allEntries.length && allEntries.length > 0}
                 onChange={toggleSelectAll}
-                className="w-4 h-4 rounded border-gray-300"
+                className="w-4 h-4 rounded-sm border-gray-300"
               />
               Select All
             </label>
@@ -259,7 +259,7 @@ const PendingReviewTab: React.FC = () => {
                         type="checkbox"
                         checked={selectedEntryIds.has(entry.id)}
                         onChange={() => toggleEntrySelection(entry.id)}
-                        className="w-4 h-4 rounded border-gray-300 mt-1"
+                        className="w-4 h-4 rounded-sm border-gray-300 mt-1"
                       />
                       <div>
                         <div className="flex items-center gap-2 mb-1">
@@ -291,11 +291,11 @@ const PendingReviewTab: React.FC = () => {
                             value={rejectionReason}
                             onChange={(e) => setRejectionReason(e.target.value)}
                             placeholder="Reason..."
-                            className="px-2 py-1 bg-theme-surface-secondary border border-theme-surface-border rounded text-sm text-theme-text-primary"
+                            className="px-2 py-1 bg-theme-surface-secondary border border-theme-surface-border rounded-sm text-sm text-theme-text-primary"
                           />
                           <button
                             onClick={() => { void handleReject(entry.id); }}
-                            className="btn-primary rounded px-3 py-1 text-sm"
+                            className="btn-primary rounded-sm px-3 py-1 text-sm"
                           >
                             Confirm
                           </button>

@@ -143,7 +143,7 @@ const PlatformAnalyticsPage: React.FC = () => {
 
       {/* Login Trend Chart */}
       {(data.loginTrend?.length ?? 0) > 0 && (
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6 mb-6">
+        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6 mb-6">
           <h3 className="text-lg font-semibold text-theme-text-primary mb-4">Daily Login Activity (30 Days)</h3>
           <BarChart data={data.loginTrend} color="blue" />
         </div>
@@ -179,7 +179,7 @@ const PlatformAnalyticsPage: React.FC = () => {
         />
 
         {/* Error Trend */}
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6 lg:col-span-2">
+        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6 lg:col-span-2">
           <h3 className="text-sm font-medium text-theme-text-muted mb-3">Error Trend (7 Days)</h3>
           {(data.errorTrend?.length ?? 0) > 0 ? (
             <BarChart data={data.errorTrend} color="red" />
@@ -191,7 +191,7 @@ const PlatformAnalyticsPage: React.FC = () => {
 
       {/* Top Error Types */}
       {Object.keys(data.topErrorTypes ?? {}).length > 0 && (
-        <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6 mb-6">
+        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6 mb-6">
           <h3 className="text-lg font-semibold text-theme-text-primary mb-4">Top Error Types</h3>
           <div className="space-y-2">
             {Object.entries(data.topErrorTypes ?? {})
@@ -199,7 +199,7 @@ const PlatformAnalyticsPage: React.FC = () => {
               .map(([errorType, count]) => (
                 <div key={errorType} className="flex justify-between items-center">
                   <span className="text-sm text-theme-text-secondary truncate flex-1">{errorType}</span>
-                  <span className="px-2 py-1 bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400 rounded text-xs font-semibold ml-2">
+                  <span className="px-2 py-1 bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400 rounded-sm text-xs font-semibold ml-2">
                     {count}
                   </span>
                 </div>
@@ -244,7 +244,7 @@ const StatCard: React.FC<StatCardProps> = ({ icon: Icon, label, sublabel, value,
   const displayValue = typeof value === 'number' ? (value ?? 0).toLocaleString() : (value ?? '—');
 
   return (
-    <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
+    <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
       <div className="flex items-center gap-2 mb-1">
         <Icon className="w-4 h-4 text-theme-text-muted" />
         <span className="text-theme-text-muted text-sm font-medium">{label}</span>
@@ -269,7 +269,7 @@ const ModuleCard: React.FC<ModuleCardProps> = ({ module }) => {
   };
 
   return (
-    <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-5">
+    <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-5">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <Package className="w-4 h-4 text-theme-text-muted" />

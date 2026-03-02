@@ -228,12 +228,12 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
                 </div>
 
                 {/* Stage Number */}
-                <div className="w-8 h-8 rounded-full bg-theme-surface-hover flex items-center justify-center text-sm font-bold text-theme-text-secondary flex-shrink-0">
+                <div className="w-8 h-8 rounded-full bg-theme-surface-hover flex items-center justify-center text-sm font-bold text-theme-text-secondary shrink-0">
                   {index + 1}
                 </div>
 
                 {/* Type Badge */}
-                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium flex-shrink-0 ${colorClass}`}>
+                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium shrink-0 ${colorClass}`}>
                   <Icon className="w-3.5 h-3.5" />
                   {STAGE_TYPE_LABELS[stage.stage_type]}
                 </div>
@@ -245,18 +245,18 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
                       {stage.name}
                     </span>
                     {stage.is_required && (
-                      <span className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">
+                      <span className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded-sm">
                         Required
                       </span>
                     )}
                     {stage.notify_prospect_on_completion && (
-                      <span className="text-xs text-blue-700 dark:text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded flex items-center gap-0.5" title="Notifies prospect on completion">
+                      <span className="text-xs text-blue-700 dark:text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-sm flex items-center gap-0.5" title="Notifies prospect on completion">
                         <Bell className="w-2.5 h-2.5" />
                         Notify
                       </span>
                     )}
                     {!stage.public_visible && (
-                      <span className="text-xs text-theme-text-muted bg-theme-surface-hover px-1.5 py-0.5 rounded flex items-center gap-0.5" title="Hidden from public status page">
+                      <span className="text-xs text-theme-text-muted bg-theme-surface-hover px-1.5 py-0.5 rounded-sm flex items-center gap-0.5" title="Hidden from public status page">
                         <EyeOff className="w-2.5 h-2.5" />
                         Hidden
                       </span>
@@ -270,7 +270,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-1 flex-shrink-0">
+                <div className="flex items-center gap-1 shrink-0">
                   <button
                     onClick={() => { void moveStage(index, index - 1); }}
                     disabled={index === 0 || isSaving}

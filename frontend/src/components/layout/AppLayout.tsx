@@ -95,7 +95,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const content = children ?? <Outlet />;
 
   const footer = (
-    <footer className="bg-theme-input-bg backdrop-blur-sm border-t border-theme-surface-border mt-auto" role="contentinfo">
+    <footer className="bg-theme-input-bg backdrop-blur-xs border-t border-theme-surface-border mt-auto" role="contentinfo">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <p className="text-center text-theme-text-secondary text-sm">
           &copy; {new Date().getFullYear()} {departmentName}. All rights reserved.
@@ -115,7 +115,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         {/* Skip to main content link for keyboard users */}
         <a
           href="#main-content"
-          className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-4 focus:left-4 focus:px-4 focus:py-2 focus:bg-red-600 focus:text-white focus:rounded-md focus:outline-none focus:ring-2 focus:ring-white"
+          className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-4 focus:left-4 focus:px-4 focus:py-2 focus:bg-red-600 focus:text-white focus:rounded-md focus:outline-hidden focus:ring-2 focus:ring-white"
         >
           Skip to main content
         </a>
@@ -148,7 +148,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       {/* Skip to main content link for keyboard users */}
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-4 focus:left-4 focus:px-4 focus:py-2 focus:bg-red-600 focus:text-white focus:rounded-md focus:outline-none focus:ring-2 focus:ring-white"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-4 focus:left-4 focus:px-4 focus:py-2 focus:bg-red-600 focus:text-white focus:rounded-md focus:outline-hidden focus:ring-2 focus:ring-white"
       >
         Skip to main content
       </a>

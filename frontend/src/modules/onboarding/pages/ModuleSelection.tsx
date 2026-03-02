@@ -142,19 +142,19 @@ const ModuleSelection: React.FC = () => {
       switch (module.category) {
         case 'core':
           return (
-            <span className="text-xs font-semibold px-2 py-1 bg-blue-600 text-white rounded">
+            <span className="text-xs font-semibold px-2 py-1 bg-blue-600 text-white rounded-sm">
               CORE
             </span>
           );
         case 'recommended':
           return (
-            <span className="text-xs font-semibold px-2 py-1 bg-green-600 text-white rounded">
+            <span className="text-xs font-semibold px-2 py-1 bg-green-600 text-white rounded-sm">
               RECOMMENDED
             </span>
           );
         case 'optional':
           return (
-            <span className="text-xs font-semibold px-2 py-1 bg-purple-600 text-white rounded">
+            <span className="text-xs font-semibold px-2 py-1 bg-purple-600 text-white rounded-sm">
               OPTIONAL
             </span>
           );
@@ -164,7 +164,7 @@ const ModuleSelection: React.FC = () => {
     return (
       <div
         key={module.id}
-        className={`bg-theme-surface backdrop-blur-sm rounded-lg border-2 transition-all duration-300 ${
+        className={`bg-theme-surface backdrop-blur-xs rounded-lg border-2 transition-all duration-300 ${
           isSelected
             ? 'border-theme-surface-border shadow-lg ring-2 ring-white/40'
             : module.canDisable
@@ -181,7 +181,7 @@ const ModuleSelection: React.FC = () => {
         >
           <div className="flex items-start space-x-4">
             {/* Selection Indicator */}
-            <div className="flex-shrink-0 mt-1">
+            <div className="shrink-0 mt-1">
               {isSelected ? (
                 <CheckCircle aria-hidden="true" className="w-6 h-6 text-theme-accent-green" />
               ) : module.canDisable ? (
@@ -192,7 +192,7 @@ const ModuleSelection: React.FC = () => {
             </div>
 
             {/* Icon */}
-            <div className={`flex-shrink-0 bg-gradient-to-br ${getCategoryColor()} rounded-lg p-3`}>
+            <div className={`shrink-0 bg-linear-to-br ${getCategoryColor()} rounded-lg p-3`}>
               <div className="text-white">{icon}</div>
             </div>
 
@@ -210,7 +210,7 @@ const ModuleSelection: React.FC = () => {
                 <ul className="space-y-1">
                   {module.features.slice(0, 3).map((feature, index) => (
                     <li key={index} className="text-theme-text-secondary text-sm flex items-start space-x-2">
-                      <CheckCircle aria-hidden="true" className="w-3.5 h-3.5 text-theme-accent-green flex-shrink-0 mt-0.5" />
+                      <CheckCircle aria-hidden="true" className="w-3.5 h-3.5 text-theme-accent-green shrink-0 mt-0.5" />
                       <span>{feature}</span>
                     </li>
                   ))}
@@ -269,7 +269,7 @@ const ModuleSelection: React.FC = () => {
                 <ul className="space-y-1">
                   {module.features.map((feature, index) => (
                     <li key={index} className="text-theme-text-secondary text-sm flex items-start space-x-2">
-                      <CheckCircle aria-hidden="true" className="w-4 h-4 text-theme-accent-green flex-shrink-0 mt-0.5" />
+                      <CheckCircle aria-hidden="true" className="w-4 h-4 text-theme-accent-green shrink-0 mt-0.5" />
                       <span>{feature}</span>
                     </li>
                   ))}
@@ -287,7 +287,7 @@ const ModuleSelection: React.FC = () => {
   const optionalModules = AVAILABLE_MODULES.filter((m) => m.category === 'optional');
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
+    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
       <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} />
 
       <main className="flex-1 flex items-center justify-center p-4 py-8">
@@ -309,7 +309,7 @@ const ModuleSelection: React.FC = () => {
           {/* Info Banner */}
           <div className="alert-info mb-6">
             <div className="flex items-start space-x-3">
-              <Info aria-hidden="true" className="w-5 h-5 text-theme-alert-info-icon flex-shrink-0 mt-0.5" />
+              <Info aria-hidden="true" className="w-5 h-5 text-theme-alert-info-icon shrink-0 mt-0.5" />
               <div>
                 <p className="text-theme-alert-info-title text-sm font-medium mb-1">Module Categories</p>
                 <div className="text-theme-alert-info-text text-sm space-y-1">
@@ -376,7 +376,7 @@ const ModuleSelection: React.FC = () => {
               className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                 isSaving
                   ? 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
-                  : 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
+                  : 'bg-linear-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
               }`}
             >
               {isSaving ? 'Saving Module Configuration...' : 'Continue to Admin Setup'}

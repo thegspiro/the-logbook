@@ -408,7 +408,7 @@ export const ProspectiveMembersPage: React.FC = () => {
             )}
           </div>
           <div className="flex items-center gap-1.5 mb-6 px-1">
-            <Info className="w-3 h-3 text-theme-text-muted flex-shrink-0" />
+            <Info className="w-3 h-3 text-theme-text-muted shrink-0" />
             <p className="text-xs text-theme-text-muted">
               Statistics include active applicants only. Inactive, rejected, and withdrawn (archived) applicants are excluded from conversion rate and averages.
             </p>
@@ -471,7 +471,7 @@ export const ProspectiveMembersPage: React.FC = () => {
               const pipeline = pipelines.find((p) => p.id === e.target.value);
               if (pipeline) void fetchPipeline(pipeline.id);
             }}
-            className="bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+            className="bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
           >
             {pipelines.map((p) => (
               <option key={p.id} value={p.id}>
@@ -489,7 +489,7 @@ export const ProspectiveMembersPage: React.FC = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search applicants..."
-            className="w-full bg-theme-surface border border-theme-surface-border rounded-lg pl-10 pr-4 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+            className="w-full bg-theme-surface border border-theme-surface-border rounded-lg pl-10 pr-4 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
           />
         </div>
 
@@ -595,7 +595,7 @@ export const ProspectiveMembersPage: React.FC = () => {
       {/* Error State */}
       {error && (
         <div className="mb-4 bg-red-500/10 border border-red-500/20 rounded-lg p-4 flex items-center gap-2">
-          <XCircle className="w-5 h-5 text-red-700 dark:text-red-400 flex-shrink-0" />
+          <XCircle className="w-5 h-5 text-red-700 dark:text-red-400 shrink-0" />
           <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
         </div>
       )}
@@ -633,7 +633,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                       type="checkbox"
                       checked={selectedApplicants.size === applicants.length}
                       onChange={toggleAllApplicants}
-                      className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                      className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                     />
                     {selectedApplicants.size} selected
                   </label>
@@ -796,7 +796,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                             setSelectedInactive(new Set());
                           }
                         }}
-                        className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                        className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                       />
                     </th>
                     <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Name</th>
@@ -826,12 +826,12 @@ export const ProspectiveMembersPage: React.FC = () => {
                             }
                             setSelectedInactive(next);
                           }}
-                          className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                          className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                         />
                       </td>
                       <td className="p-3">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-theme-surface-hover flex items-center justify-center text-xs font-bold text-theme-text-secondary flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-theme-surface-hover flex items-center justify-center text-xs font-bold text-theme-text-secondary shrink-0">
                             {getInitials(applicant.first_name, applicant.last_name)}
                           </div>
                           <span className="text-sm font-medium text-theme-text-secondary">
@@ -906,7 +906,7 @@ export const ProspectiveMembersPage: React.FC = () => {
           {/* Purge Note */}
           {inactiveApplicants.length > 0 && (
             <div className="flex items-start gap-2 mt-4 p-3 bg-theme-input-bg border border-theme-surface-border rounded-lg">
-              <Info className="w-3.5 h-3.5 text-theme-text-muted flex-shrink-0 mt-0.5" />
+              <Info className="w-3.5 h-3.5 text-theme-text-muted shrink-0 mt-0.5" />
               <p className="text-xs text-theme-text-muted">
                 Inactive applications are excluded from pipeline statistics.
                 Purging permanently deletes applicant data and cannot be undone.
@@ -958,7 +958,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                           className="flex items-center gap-2.5 cursor-pointer"
                           onClick={() => { void fetchApplicant(applicant.id); }}
                         >
-                          <div className="w-8 h-8 rounded-full bg-theme-surface-hover flex items-center justify-center text-xs font-bold text-theme-text-secondary flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-theme-surface-hover flex items-center justify-center text-xs font-bold text-theme-text-secondary shrink-0">
                             {getInitials(applicant.first_name, applicant.last_name)}
                           </div>
                           <span className="text-sm font-medium text-theme-text-secondary">
@@ -1041,7 +1041,7 @@ export const ProspectiveMembersPage: React.FC = () => {
           {/* Info Note */}
           {withdrawnApplicants.length > 0 && (
             <div className="flex items-start gap-2 mt-4 p-3 bg-theme-input-bg border border-theme-surface-border rounded-lg">
-              <Info className="w-3.5 h-3.5 text-theme-text-muted flex-shrink-0 mt-0.5" />
+              <Info className="w-3.5 h-3.5 text-theme-text-muted shrink-0 mt-0.5" />
               <p className="text-xs text-theme-text-muted">
                 Withdrawn applications are from prospective members who voluntarily left the pipeline process.
                 You can reactivate them to place them back into the active pipeline at their previous stage.
@@ -1141,7 +1141,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                     onChange={(e) =>
                       setNewApplicant({ ...newApplicant, first_name: e.target.value })
                     }
-                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                   />
                 </div>
                 <div>
@@ -1152,7 +1152,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                     onChange={(e) =>
                       setNewApplicant({ ...newApplicant, last_name: e.target.value })
                     }
-                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                   />
                 </div>
               </div>
@@ -1164,7 +1164,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                   onChange={(e) =>
                     setNewApplicant({ ...newApplicant, email: e.target.value })
                   }
-                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div>
@@ -1175,7 +1175,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                   onChange={(e) =>
                     setNewApplicant({ ...newApplicant, phone: e.target.value })
                   }
-                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                 />
               </div>
               <div>
@@ -1188,7 +1188,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                       target_membership_type: e.target.value as 'probationary' | 'administrative',
                     })
                   }
-                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                 >
                   <option value="probationary">Probationary</option>
                   <option value="administrative">Administrative</option>

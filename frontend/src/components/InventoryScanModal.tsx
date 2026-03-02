@@ -573,12 +573,12 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                                     {result.item.name}
                                   </p>
                                   {result.item.size && (
-                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 shrink-0">
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[11px] font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 shrink-0">
                                       {result.item.size}
                                     </span>
                                   )}
                                   {result.item.color && (
-                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 shrink-0">
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[11px] font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 shrink-0">
                                       {result.item.color}
                                     </span>
                                   )}
@@ -679,12 +679,12 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                             {si.itemName}
                           </p>
                           {si.size && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 shrink-0">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[11px] font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 shrink-0">
                               {si.size}
                             </span>
                           )}
                           {si.color && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 shrink-0">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[11px] font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 shrink-0">
                               {si.color}
                             </span>
                           )}
@@ -703,7 +703,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                             min={1}
                             value={si.quantity}
                             onChange={(e) => updateQuantity(si.itemId, parseInt(e.target.value) || 1)}
-                            className="w-16 px-2 py-1 border border-theme-border rounded text-sm text-center bg-theme-surface text-theme-text-primary"
+                            className="w-16 px-2 py-1 border border-theme-border rounded-sm text-sm text-center bg-theme-surface text-theme-text-primary"
                             title="Quantity"
                           />
                         )}
@@ -713,7 +713,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                           <select
                             value={si.returnCondition}
                             onChange={(e) => updateCondition(si.itemId, e.target.value)}
-                            className="px-2 py-1 border border-theme-border rounded text-sm bg-theme-surface text-theme-text-primary"
+                            className="px-2 py-1 border border-theme-border rounded-sm text-sm bg-theme-surface text-theme-text-primary"
                             title="Return condition"
                           >
                             {RETURN_CONDITION_OPTIONS.map((c) => (
@@ -724,7 +724,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
 
                         <button
                           onClick={() => removeItem(si.itemId)}
-                          className="p-2 min-w-[36px] min-h-[36px] flex items-center justify-center text-theme-text-muted hover:text-red-600 rounded focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                          className="p-2 min-w-[36px] min-h-[36px] flex items-center justify-center text-theme-text-muted hover:text-red-600 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                           title="Remove"
                           aria-label={`Remove item ${si.itemName}`}
                         >

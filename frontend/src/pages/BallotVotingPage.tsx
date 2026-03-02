@@ -271,12 +271,12 @@ export const BallotVotingPage: React.FC = () => {
             return (
               <div
                 key={item.id}
-                className="bg-theme-surface rounded-lg shadow-sm border border-theme-surface-border overflow-hidden"
+                className="bg-theme-surface rounded-lg shadow-xs border border-theme-surface-border overflow-hidden"
               >
                 {/* Item Header */}
                 <div className="bg-theme-surface-secondary px-6 py-4 border-b border-theme-surface-border">
                   <div className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-8 h-8 bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400 rounded-full flex items-center justify-center text-sm font-bold">
+                    <span className="shrink-0 w-8 h-8 bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400 rounded-full flex items-center justify-center text-sm font-bold">
                       {index + 1}
                     </span>
                     <div>
@@ -368,7 +368,7 @@ export const BallotVotingPage: React.FC = () => {
                           onChange={(e) => updateWriteInName(item.id, e.target.value)}
                           placeholder="Enter name or option..."
                           aria-label="Enter name or option"
-                          className="mt-2 ml-7 block w-[calc(100%-1.75rem)] border border-theme-surface-border rounded-md shadow-sm py-2 px-3 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm bg-theme-input-bg text-theme-text-primary"
+                          className="mt-2 ml-7 block w-[calc(100%-1.75rem)] border border-theme-surface-border rounded-md shadow-xs py-2 px-3 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm bg-theme-input-bg text-theme-text-primary"
                           autoFocus
                         />
                       )}
@@ -443,7 +443,7 @@ export const BallotVotingPage: React.FC = () => {
                         isAbstain ? 'bg-theme-surface-secondary' : 'bg-blue-50'
                       }`}
                     >
-                      <span className="flex-shrink-0 w-6 h-6 bg-theme-surface-secondary text-theme-text-secondary rounded-full flex items-center justify-center text-xs font-bold">
+                      <span className="shrink-0 w-6 h-6 bg-theme-surface-secondary text-theme-text-secondary rounded-full flex items-center justify-center text-xs font-bold">
                         {index + 1}
                       </span>
                       <div className="flex-1">

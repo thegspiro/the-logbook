@@ -89,7 +89,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
 
   const labelClass = 'block text-sm font-medium text-theme-text-secondary mb-1';
   const inputClass =
-    'w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-theme-focus-ring font-mono text-sm';
+    'w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-500 dark:placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring font-mono text-sm';
 
   return (
     <div className="space-y-4">
@@ -157,7 +157,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
                     key={v.name}
                     onClick={() => insertVariable(v)}
                     title={v.description}
-                    className="inline-flex items-center px-2.5 py-1 bg-orange-500/10 border border-orange-500/30 rounded text-xs text-orange-600 dark:text-orange-400 hover:bg-orange-500/20 transition-colors font-mono"
+                    className="inline-flex items-center px-2.5 py-1 bg-orange-500/10 border border-orange-500/30 rounded-sm text-xs text-orange-600 dark:text-orange-400 hover:bg-orange-500/20 transition-colors font-mono"
                   >
                     {`{{${v.name}}}`}
                   </button>

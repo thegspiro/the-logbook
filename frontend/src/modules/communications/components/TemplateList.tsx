@@ -97,7 +97,7 @@ export const TemplateList: React.FC<TemplateListProps> = ({
                 : 'hover:bg-theme-surface-hover border border-transparent'
             }`}
           >
-            <Icon className={`w-5 h-5 flex-shrink-0 ${display.color}`} />
+            <Icon className={`w-5 h-5 shrink-0 ${display.color}`} />
             <div className="flex-1 min-w-0">
               <p
                 className={`text-sm font-medium truncate ${
@@ -109,11 +109,11 @@ export const TemplateList: React.FC<TemplateListProps> = ({
               <p className="text-xs text-theme-text-muted truncate">{display.label}</p>
             </div>
             {template.is_active ? (
-              <span title="Active" className="flex-shrink-0">
+              <span title="Active" className="shrink-0">
                 <CheckCircle2 className="w-4 h-4 text-green-500" />
               </span>
             ) : (
-              <span title="Inactive" className="flex-shrink-0">
+              <span title="Inactive" className="shrink-0">
                 <XCircle className="w-4 h-4 text-theme-text-muted" />
               </span>
             )}

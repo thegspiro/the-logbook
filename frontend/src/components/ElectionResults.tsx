@@ -86,7 +86,7 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
   return (
     <div className="space-y-6">
       {/* Overall Stats */}
-      <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6">
+      <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6">
         <h3 className="text-lg font-medium text-theme-text-primary mb-4">Election Summary</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-blue-500/10 rounded-lg p-4">
@@ -124,7 +124,7 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
         <div className="space-y-4">
           <h3 className="text-lg font-medium text-theme-text-primary">Results by Position</h3>
           {results.results_by_position.map((positionResult) => (
-            <div key={positionResult.position} className="bg-theme-surface backdrop-blur-sm rounded-lg p-6">
+            <div key={positionResult.position} className="bg-theme-surface backdrop-blur-xs rounded-lg p-6">
               <div className="flex justify-between items-center mb-4">
                 <h4 className="text-md font-semibold text-theme-text-primary">{positionResult.position}</h4>
                 <span className="text-sm text-theme-text-muted">
@@ -193,7 +193,7 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
       {/* Overall Results (if no positions or single election) */}
       {(!results.results_by_position || results.results_by_position.length === 0) &&
         results.overall_results && results.overall_results.length > 0 && (
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6">
+          <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6">
             <h3 className="text-lg font-medium text-theme-text-primary mb-4">Results</h3>
             <div className="space-y-3">
               {results.overall_results.map((candidate) => (

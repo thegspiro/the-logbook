@@ -531,7 +531,7 @@ const NavigationCard: React.FC<NavigationCardProps> = ({ icon: Icon, title, desc
       onClick={onClick}
       className="card group hover:bg-theme-surface-hover p-6 text-left transition-all"
     >
-      <div className={`bg-gradient-to-br ${colorClasses[color]} rounded-lg p-3 w-fit mb-4 group-hover:scale-110 transition-transform`}>
+      <div className={`bg-linear-to-br ${colorClasses[color]} rounded-lg p-3 w-fit mb-4 group-hover:scale-110 transition-transform`}>
         <Icon className="w-6 h-6 text-theme-text-primary" />
       </div>
       <h3 className="text-theme-text-primary font-bold text-lg mb-2">{title}</h3>
@@ -580,7 +580,7 @@ const UpcomingExpirationsWidget: React.FC<UpcomingExpirationsWidgetProps> = ({ e
           <div
             key={item.id}
             onClick={() => onViewMember(item.memberId)}
-            className="flex items-center justify-between p-3 bg-theme-input-bg/50 rounded cursor-pointer hover:bg-theme-surface transition-colors"
+            className="flex items-center justify-between p-3 bg-theme-input-bg/50 rounded-sm cursor-pointer hover:bg-theme-surface transition-colors"
           >
             <div>
               <p className="text-theme-text-primary text-sm font-medium">{item.memberName}</p>
@@ -613,8 +613,8 @@ const RecentCompletionsWidget: React.FC<RecentCompletionsWidgetProps> = ({ compl
     ) : (
       <div className="space-y-3">
         {completions.map((item) => (
-          <div key={item.id} className="flex items-center space-x-3 p-3 bg-theme-input-bg/50 rounded">
-            <CheckCircle className="w-5 h-5 text-green-700 flex-shrink-0" />
+          <div key={item.id} className="flex items-center space-x-3 p-3 bg-theme-input-bg/50 rounded-sm">
+            <CheckCircle className="w-5 h-5 text-green-700 shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-theme-text-primary text-sm font-medium truncate">{item.memberName}</p>
               <p className="text-theme-text-muted text-xs">{item.courseName}</p>
@@ -649,11 +649,11 @@ const TrainingHoursSummaryWidget: React.FC<TrainingHoursSummaryWidgetProps> = ({
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-          <div className="bg-theme-input-bg/50 rounded p-3">
+          <div className="bg-theme-input-bg/50 rounded-sm p-3">
             <p className="text-theme-text-muted text-xs">Average per Member</p>
             <p className="text-theme-text-primary font-bold text-xl">{stats.avgHoursPerMember} hrs</p>
           </div>
-          <div className="bg-theme-input-bg/50 rounded p-3">
+          <div className="bg-theme-input-bg/50 rounded-sm p-3">
             <p className="text-theme-text-muted text-xs">Goal Progress</p>
             <p className="text-theme-text-primary font-bold text-xl">{progressPercent}%</p>
           </div>
@@ -735,10 +735,10 @@ const RequirementStatusItem: React.FC<RequirementStatusItemProps> = ({ name, sta
   };
 
   return (
-    <div className="p-3 bg-theme-input-bg/50 rounded">
+    <div className="p-3 bg-theme-input-bg/50 rounded-sm">
       <div className="flex items-center justify-between">
         <span className="text-theme-text-primary text-sm font-medium truncate flex-1 mr-2">{name}</span>
-        <span className={`text-xs font-semibold px-2 py-1 rounded ${(statusConfig[status] ?? { color: 'bg-gray-600', label: status }).color} text-theme-text-primary whitespace-nowrap`}>
+        <span className={`text-xs font-semibold px-2 py-1 rounded-sm ${(statusConfig[status] ?? { color: 'bg-gray-600', label: status }).color} text-theme-text-primary whitespace-nowrap`}>
           {(statusConfig[status] ?? { color: 'bg-gray-600', label: status }).label}
         </span>
       </div>

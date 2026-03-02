@@ -281,7 +281,7 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
           {/* Error */}
           {error && (
             <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 flex items-start gap-2">
-              <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
               <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
             </div>
           )}

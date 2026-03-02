@@ -384,7 +384,7 @@ export const ReportsPage: React.FC = () => {
             </p>
           )}
           {Object.entries(statusSummary).map(([status, count]) => (
-            <span key={status} className="text-xs px-2 py-1 bg-theme-surface rounded text-theme-text-secondary">
+            <span key={status} className="text-xs px-2 py-1 bg-theme-surface rounded-sm text-theme-text-secondary">
               {status}: <span className="font-semibold text-theme-text-primary">{count}</span>
             </span>
           ))}
@@ -465,7 +465,7 @@ export const ReportsPage: React.FC = () => {
             <p className="text-xs text-theme-text-muted mb-1">By Training Type:</p>
             <div className="flex flex-wrap gap-2">
               {Object.entries(byType).map(([type, count]) => (
-                <span key={type} className="text-xs px-2 py-1 bg-theme-surface rounded text-theme-text-secondary">
+                <span key={type} className="text-xs px-2 py-1 bg-theme-surface rounded-sm text-theme-text-secondary">
                   {type.replace(/_/g, ' ')}: <span className="font-semibold text-theme-text-primary">{count}</span>
                 </span>
               ))}
@@ -539,7 +539,7 @@ export const ReportsPage: React.FC = () => {
             <p className="text-xs text-theme-text-muted mb-1">By Category:</p>
             <div className="flex flex-wrap gap-2">
               {Object.entries(byCategory).map(([cat, hrs]) => (
-                <span key={cat} className="text-xs px-2 py-1 bg-theme-surface rounded text-theme-text-secondary">
+                <span key={cat} className="text-xs px-2 py-1 bg-theme-surface rounded-sm text-theme-text-secondary">
                   {cat}: <span className="font-semibold text-theme-text-primary">{hrs}h</span>
                 </span>
               ))}
@@ -636,7 +636,7 @@ export const ReportsPage: React.FC = () => {
             <button
               key={category.id}
               onClick={() => setSelectedCategory(category.id)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring ${
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
                 selectedCategory === category.id
                   ? 'bg-red-600 text-white'
                   : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
@@ -666,7 +666,7 @@ export const ReportsPage: React.FC = () => {
             <button
               key={preset.id}
               onClick={() => handlePresetChange(preset.id)}
-              className={`px-3 py-1.5 rounded text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring ${
+              className={`px-3 py-1.5 rounded text-sm font-medium transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
                 datePreset === preset.id
                   ? 'bg-red-600 text-white'
                   : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
@@ -684,7 +684,7 @@ export const ReportsPage: React.FC = () => {
                 setStartDate(e.target.value);
                 setDatePreset('custom');
               }}
-              className="form-input bg-theme-surface border border-theme-surface-border rounded px-3 py-1.5 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="form-input bg-theme-surface border border-theme-surface-border rounded-sm px-3 py-1.5 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
             />
             <span className="text-theme-text-muted text-sm">to</span>
             <input
@@ -694,7 +694,7 @@ export const ReportsPage: React.FC = () => {
                 setEndDate(e.target.value);
                 setDatePreset('custom');
               }}
-              className="form-input bg-theme-surface border border-theme-surface-border rounded px-3 py-1.5 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+              className="form-input bg-theme-surface border border-theme-surface-border rounded-sm px-3 py-1.5 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
             />
           </div>
         </div>
@@ -704,7 +704,7 @@ export const ReportsPage: React.FC = () => {
       {error && !activeReport && (
         <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4">
           <div className="flex items-start space-x-3">
-            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
+            <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" aria-hidden="true" />
             <div className="flex-1">
               <p className="text-sm text-red-300">{error}</p>
             </div>
@@ -723,7 +723,7 @@ export const ReportsPage: React.FC = () => {
           return (
             <div
               key={report.id}
-              className={`card-secondary backdrop-blur-sm p-6 transition-all ${
+              className={`card-secondary backdrop-blur-xs p-6 transition-all ${
  report.available
  ? 'hover:bg-theme-surface hover:border-theme-surface-border cursor-pointer'
  : 'opacity-60 cursor-not-allowed'
@@ -734,7 +734,7 @@ export const ReportsPage: React.FC = () => {
                   <Icon className="w-6 h-6 text-red-500" aria-hidden="true" />
                 </div>
                 {!report.available && (
-                  <span className="px-2 py-1 bg-yellow-500/20 text-yellow-300 text-xs font-medium rounded">
+                  <span className="px-2 py-1 bg-yellow-500/20 text-yellow-300 text-xs font-medium rounded-sm">
                     Coming Soon
                   </span>
                 )}
@@ -785,7 +785,7 @@ export const ReportsPage: React.FC = () => {
       {/* Info Banner */}
       <div className="mt-8 bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
         <div className="flex items-start space-x-3">
-          <AlertCircle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
+          <AlertCircle className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" aria-hidden="true" />
           <div>
             <h4 className="text-sm font-medium text-blue-300 mb-1">
               Report Generation
@@ -839,7 +839,7 @@ export const ReportsPage: React.FC = () => {
               <div className="px-6 py-4 border-t border-theme-surface-border flex justify-end">
                 <button
                   onClick={closeModal}
-                  className="px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  className="px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary text-sm font-medium rounded-lg transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                 >
                   Close
                 </button>

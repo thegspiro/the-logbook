@@ -104,12 +104,12 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
 
       {/* Member selector */}
       <div className="flex items-center gap-2">
-        <Users className="w-4 h-4 text-theme-text-muted flex-shrink-0" />
+        <Users className="w-4 h-4 text-theme-text-muted shrink-0" />
         <select
           value={selectedMemberId}
           onChange={(e) => handleMemberChange(e.target.value)}
           disabled={isLoadingMembers}
-          className="flex-1 rounded-md border border-theme-surface-border bg-theme-surface px-2 py-1.5 text-xs text-theme-text-primary focus:border-blue-500 focus:outline-none"
+          className="flex-1 rounded-md border border-theme-surface-border bg-theme-surface px-2 py-1.5 text-xs text-theme-text-primary focus:border-blue-500 focus:outline-hidden"
         >
           <option value="">Sample data (default)</option>
           {members.map((m) => {

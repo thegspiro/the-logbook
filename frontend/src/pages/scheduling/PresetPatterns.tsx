@@ -35,7 +35,7 @@ const CyclePreview: React.FC<{ pattern: PresetPatternDef }> = ({ pattern }) => {
         return (
           <div
             key={i}
-            className={`h-2 flex-1 rounded-sm ${bg}`}
+            className={`h-2 flex-1 rounded-xs ${bg}`}
             title={`Day ${i + 1}: ${title}`}
           />
         );
@@ -61,16 +61,16 @@ const PresetPatterns: React.FC<PresetPatternsProps> = ({ onSelect, selectedId })
     <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap text-xs text-theme-text-muted">
         <span className="flex items-center gap-1">
-          <div className="w-3 h-2 rounded-sm bg-violet-500" /> On duty
+          <div className="w-3 h-2 rounded-xs bg-violet-500" /> On duty
         </span>
         <span className="flex items-center gap-1">
-          <div className="w-3 h-2 rounded-sm bg-amber-400 dark:bg-amber-500" /> Day shift
+          <div className="w-3 h-2 rounded-xs bg-amber-400 dark:bg-amber-500" /> Day shift
         </span>
         <span className="flex items-center gap-1">
-          <div className="w-3 h-2 rounded-sm bg-indigo-500 dark:bg-indigo-400" /> Night shift
+          <div className="w-3 h-2 rounded-xs bg-indigo-500 dark:bg-indigo-400" /> Night shift
         </span>
         <span className="flex items-center gap-1">
-          <div className="w-3 h-2 rounded-sm bg-gray-300 dark:bg-gray-600" /> Off duty
+          <div className="w-3 h-2 rounded-xs bg-gray-300 dark:bg-gray-600" /> Off duty
         </span>
       </div>
 
@@ -88,7 +88,7 @@ const PresetPatterns: React.FC<PresetPatternsProps> = ({ onSelect, selectedId })
               }`}
             >
               <div className="flex items-start gap-3">
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
                   isSelected ? 'bg-violet-500/20 text-violet-500' : 'bg-theme-input-bg text-theme-text-muted'
                 }`}>
                   <CategoryIcon category={preset.category} />

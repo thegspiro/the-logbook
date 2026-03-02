@@ -387,7 +387,7 @@ const FormRenderer = ({
           className={`mb-4 p-3 rounded-lg ${isDark ? 'bg-red-500/10 border border-red-500/30' : 'bg-red-50 border border-red-200'}`}
         >
           <div className="flex items-center gap-2 mb-2">
-            <AlertCircle className="w-4 h-4 text-red-700 dark:text-red-400 flex-shrink-0" />
+            <AlertCircle className="w-4 h-4 text-red-700 dark:text-red-400 shrink-0" />
             <p className={`text-sm font-medium ${isDark ? 'text-red-700 dark:text-red-300' : 'text-red-700'}`}>
               {error || `Please fix ${errorEntries.length} ${errorEntries.length === 1 ? 'error' : 'errors'} below.`}
             </p>
@@ -415,7 +415,7 @@ const FormRenderer = ({
       {/* Error banner (only show if no error entries — avoids duplication) */}
       {error && errorEntries.length === 0 && (
         <div className={`mb-4 p-3 rounded-lg flex items-center gap-2 ${isDark ? 'bg-red-500/10 border border-red-500/30' : 'bg-red-50 border border-red-200'}`}>
-          <AlertCircle className="w-4 h-4 text-red-700 dark:text-red-400 flex-shrink-0" />
+          <AlertCircle className="w-4 h-4 text-red-700 dark:text-red-400 shrink-0" />
           <p className={`text-sm ${isDark ? 'text-red-700 dark:text-red-300' : 'text-red-700'}`}>{error}</p>
         </div>
       )}

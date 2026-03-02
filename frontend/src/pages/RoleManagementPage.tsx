@@ -168,7 +168,7 @@ export const RoleManagementPage: React.FC = () => {
           </div>
         )}
 
-        <div className="bg-theme-surface backdrop-blur-sm shadow overflow-hidden sm:rounded-lg">
+        <div className="bg-theme-surface backdrop-blur-xs shadow-sm overflow-hidden sm:rounded-lg">
           <ul className="divide-y divide-theme-surface-border">
             {roles.map((role) => (
               <li key={role.id} className="px-6 py-4">
@@ -190,7 +190,7 @@ export const RoleManagementPage: React.FC = () => {
                       {role.permissions.slice(0, 5).map((perm) => (
                         <span
                           key={perm}
-                          className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-theme-surface text-theme-text-secondary"
+                          className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-theme-surface text-theme-text-secondary"
                         >
                           {perm.split('.').pop()}
                         </span>
@@ -260,7 +260,7 @@ export const RoleManagementPage: React.FC = () => {
                     disabled={editingRole?.is_system}
                     required
                     aria-required="true"
-                    className="mt-1 block w-full rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-sm focus:border-theme-focus-ring focus:ring-theme-focus-ring sm:text-sm disabled:bg-slate-700"
+                    className="mt-1 block w-full rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-xs focus:border-theme-focus-ring focus:ring-theme-focus-ring sm:text-sm disabled:bg-slate-700"
                   />
                 </div>
 
@@ -272,7 +272,7 @@ export const RoleManagementPage: React.FC = () => {
                       type="text"
                       value={formData.slug}
                       onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
-                      className="mt-1 block w-full rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-sm focus:border-theme-focus-ring focus:ring-theme-focus-ring sm:text-sm"
+                      className="mt-1 block w-full rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-xs focus:border-theme-focus-ring focus:ring-theme-focus-ring sm:text-sm"
                       placeholder="custom_role"
                     />
                   </div>
@@ -285,7 +285,7 @@ export const RoleManagementPage: React.FC = () => {
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     rows={2}
-                    className="mt-1 block w-full rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-sm focus:border-theme-focus-ring focus:ring-theme-focus-ring sm:text-sm"
+                    className="mt-1 block w-full rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-xs focus:border-theme-focus-ring focus:ring-theme-focus-ring sm:text-sm"
                   />
                 </div>
 
@@ -299,7 +299,7 @@ export const RoleManagementPage: React.FC = () => {
                       max="100"
                       value={formData.priority}
                       onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value) || 0 })}
-                      className="mt-1 block w-32 rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-sm focus:border-theme-focus-ring focus:ring-theme-focus-ring sm:text-sm"
+                      className="mt-1 block w-32 rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-xs focus:border-theme-focus-ring focus:ring-theme-focus-ring sm:text-sm"
                     />
                     <p className="mt-1 text-xs text-theme-text-muted">Higher priority roles have more authority</p>
                   </div>
