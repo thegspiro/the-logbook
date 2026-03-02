@@ -526,7 +526,7 @@ const FormsPage: React.FC = () => {
             role="tab"
             aria-selected={activeTab === 'forms'}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'forms' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-white'
+              activeTab === 'forms' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
             }`}
           >
             My Forms
@@ -536,7 +536,7 @@ const FormsPage: React.FC = () => {
             role="tab"
             aria-selected={activeTab === 'templates'}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'templates' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-white'
+              activeTab === 'templates' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
             }`}
           >
             Starter Templates
@@ -546,7 +546,7 @@ const FormsPage: React.FC = () => {
             role="tab"
             aria-selected={activeTab === 'submissions'}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'submissions' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-white'
+              activeTab === 'submissions' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
             }`}
           >
             Submissions
@@ -598,26 +598,34 @@ const FormsPage: React.FC = () => {
             ) : forms.length === 0 ? (
               <div className="card p-12 text-center">
                 <FormInput className="w-16 h-16 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
-                <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Custom Forms</h3>
-                <p className="text-theme-text-secondary mb-6">
-                  Create a custom form from scratch or start from a starter template.
+                <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Custom Forms Yet</h3>
+                <p className="text-theme-text-secondary mb-2">
+                  Build custom forms for incident reports, equipment inspections, public signup pages, and more.
+                </p>
+                <p className="text-theme-text-muted text-sm mb-6">
+                  Start from a template for a quick setup, or create a blank form from scratch.
                 </p>
                 {canManage && (
-                  <div className="flex items-center justify-center space-x-3">
-                    <button
-                      onClick={() => setShowCreateModal(true)}
-                      className="px-6 py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-lg transition-colors inline-flex items-center space-x-2"
-                    >
-                      <Plus className="w-5 h-5" aria-hidden="true" />
-                      <span>Create Form</span>
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('templates')}
-                      className="px-6 py-3 bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-secondary rounded-lg transition-colors inline-flex items-center space-x-2"
-                    >
-                      <Copy className="w-5 h-5" aria-hidden="true" />
-                      <span>Use Template</span>
-                    </button>
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="flex items-center justify-center space-x-3">
+                      <button
+                        onClick={() => setActiveTab('templates')}
+                        className="px-6 py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-lg transition-colors inline-flex items-center space-x-2"
+                      >
+                        <Copy className="w-5 h-5" aria-hidden="true" />
+                        <span>Browse Templates</span>
+                      </button>
+                      <button
+                        onClick={() => setShowCreateModal(true)}
+                        className="px-6 py-3 bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-secondary rounded-lg transition-colors inline-flex items-center space-x-2"
+                      >
+                        <Plus className="w-5 h-5" aria-hidden="true" />
+                        <span>Blank Form</span>
+                      </button>
+                    </div>
+                    <p className="text-theme-text-muted text-xs mt-2">
+                      Tip: The &quot;Membership Interest Form&quot; template is great for collecting prospective member signups from a public link.
+                    </p>
                   </div>
                 )}
               </div>
@@ -667,74 +675,99 @@ const FormsPage: React.FC = () => {
                       </div>
                     )}
 
+                    {/* Workflow guidance for draft forms */}
+                    {canManage && form.status === FormStatus.DRAFT && (
+                      <div className="mb-3 p-3 bg-yellow-500/5 border border-yellow-500/20 rounded-lg">
+                        <p className="text-yellow-700 dark:text-yellow-300 text-xs font-medium mb-1">Next steps:</p>
+                        <div className="flex items-center gap-3 text-xs text-yellow-700 dark:text-yellow-400">
+                          <span className={`flex items-center gap-1 ${(form.field_count ?? 0) > 0 ? 'line-through opacity-50' : 'font-medium'}`}>
+                            <span className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[10px]">1</span>
+                            Add fields
+                          </span>
+                          <span className="text-yellow-500/40">&rarr;</span>
+                          <span className="flex items-center gap-1">
+                            <span className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[10px]">2</span>
+                            Publish
+                          </span>
+                          <span className="text-yellow-500/40">&rarr;</span>
+                          <span className="flex items-center gap-1">
+                            <span className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[10px]">3</span>
+                            Share link
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-4 text-xs text-theme-text-muted">
                         <span>{form.field_count ?? 0} fields</span>
                         <span>{form.submission_count ?? 0} submissions</span>
                       </div>
-                      <div className="flex items-center space-x-1">
-                        {canManage && (
-                          <button
-                            onClick={() => { void handleEditForm(form.id); }}
-                            className="p-1.5 text-pink-700 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 hover:bg-pink-500/10 rounded transition-colors"
-                            aria-label="Edit form fields"
-                          >
-                            <Pencil className="w-4 h-4" aria-hidden="true" />
-                          </button>
-                        )}
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-theme-surface-border">
+                      {canManage && (
                         <button
-                          onClick={() => handleViewSubmissions(form.id)}
-                          className="p-1.5 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded transition-colors"
-                          aria-label="View submissions"
+                          onClick={() => { void handleEditForm(form.id); }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-pink-700 dark:text-pink-400 bg-pink-500/10 hover:bg-pink-500/20 rounded-lg transition-colors"
                         >
-                          <Eye className="w-4 h-4" aria-hidden="true" />
+                          <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
+                          Edit Fields
                         </button>
-                        {canManage && (
-                          <button
-                            onClick={() => handleShareForm(form)}
-                            className="p-1.5 text-cyan-700 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 hover:bg-cyan-500/10 rounded transition-colors"
-                            aria-label="Public sharing settings"
-                          >
-                            <Globe className="w-4 h-4" aria-hidden="true" />
-                          </button>
-                        )}
-                        {canManage && (
-                          <button
-                            onClick={() => { void handleOpenIntegrationModal(form.id); }}
-                            className="p-1.5 text-orange-700 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 hover:bg-orange-500/10 rounded transition-colors"
-                            aria-label="Manage integrations"
-                          >
-                            <Plug className="w-4 h-4" aria-hidden="true" />
-                          </button>
-                        )}
-                        {canManage && form.status === FormStatus.DRAFT && (
-                          <button
-                            onClick={() => { void handlePublish(form.id); }}
-                            className="p-1.5 text-green-700 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-500/10 rounded transition-colors"
-                            aria-label="Publish form"
-                          >
-                            <Send className="w-4 h-4" aria-hidden="true" />
-                          </button>
-                        )}
-                        {canManage && form.status === FormStatus.PUBLISHED && (
-                          <button
-                            onClick={() => { void handleArchive(form.id); }}
-                            className="p-1.5 text-yellow-700 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300 hover:bg-yellow-500/10 rounded transition-colors"
-                            aria-label="Archive form"
-                          >
-                            <Archive className="w-4 h-4" aria-hidden="true" />
-                          </button>
-                        )}
-                        {canManage && (
-                          <button
-                            onClick={() => { void handleDelete(form.id); }}
-                            className="p-1.5 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
-                            aria-label="Delete form"
-                          >
-                            <Trash2 className="w-4 h-4" aria-hidden="true" />
-                          </button>
-                        )}
-                      </div>
+                      )}
+                      <button
+                        onClick={() => handleViewSubmissions(form.id)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-theme-text-muted hover:text-theme-text-primary bg-theme-surface-secondary hover:bg-theme-surface-hover rounded-lg transition-colors"
+                      >
+                        <Eye className="w-3.5 h-3.5" aria-hidden="true" />
+                        Submissions
+                      </button>
+                      {canManage && (
+                        <button
+                          onClick={() => handleShareForm(form)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-cyan-700 dark:text-cyan-400 bg-cyan-500/10 hover:bg-cyan-500/20 rounded-lg transition-colors"
+                        >
+                          <Globe className="w-3.5 h-3.5" aria-hidden="true" />
+                          Share
+                        </button>
+                      )}
+                      {canManage && (
+                        <button
+                          onClick={() => { void handleOpenIntegrationModal(form.id); }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-orange-700 dark:text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 rounded-lg transition-colors"
+                        >
+                          <Plug className="w-3.5 h-3.5" aria-hidden="true" />
+                          Integrations
+                        </button>
+                      )}
+                      {canManage && form.status === FormStatus.DRAFT && (
+                        <button
+                          onClick={() => { void handlePublish(form.id); }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 dark:text-green-400 bg-green-500/10 hover:bg-green-500/20 rounded-lg transition-colors"
+                        >
+                          <Send className="w-3.5 h-3.5" aria-hidden="true" />
+                          Publish
+                        </button>
+                      )}
+                      {canManage && form.status === FormStatus.PUBLISHED && (
+                        <button
+                          onClick={() => { void handleArchive(form.id); }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-yellow-700 dark:text-yellow-400 bg-yellow-500/10 hover:bg-yellow-500/20 rounded-lg transition-colors"
+                        >
+                          <Archive className="w-3.5 h-3.5" aria-hidden="true" />
+                          Archive
+                        </button>
+                      )}
+                      {canManage && (
+                        <button
+                          onClick={() => { void handleDelete(form.id); }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors ml-auto"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                          Delete
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}

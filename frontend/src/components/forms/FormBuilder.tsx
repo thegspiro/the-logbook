@@ -304,8 +304,19 @@ const FormBuilder = ({
       {/* Empty state */}
       {sortedFields.length === 0 && (
         <div className="card-secondary border-dashed p-8 text-center">
-          <Plus className="w-8 h-8 text-theme-text-muted mx-auto mb-2" />
-          <p className="text-theme-text-muted text-sm">No fields yet. Click "Add Field" to start building your form.</p>
+          <Plus className="w-8 h-8 text-theme-text-muted mx-auto mb-3" />
+          <p className="text-theme-text-primary text-sm font-medium mb-1">No fields yet</p>
+          <p className="text-theme-text-muted text-sm mb-4">
+            Click &quot;Add Field&quot; to start building your form. Choose from text inputs, dropdowns, checkboxes, date pickers, and more.
+          </p>
+          <button
+            type="button"
+            onClick={handleAddField}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add Your First Field
+          </button>
         </div>
       )}
 
