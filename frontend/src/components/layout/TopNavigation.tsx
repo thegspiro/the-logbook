@@ -85,6 +85,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
     checkPermission('admin_hours.manage') ||
     checkPermission('positions.manage_permissions') ||
     checkPermission('settings.manage') ||
+    checkPermission('forms.view') ||
     checkPermission('analytics.view');
 
   // Build the divider sentinel used between Admin sub-groups
@@ -156,7 +157,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
         ...(isModuleOn('inventory') ? [{ label: 'Inventory Admin', path: '/inventory/admin', permission: 'inventory.manage' }] : []),
         { label: 'Admin Hours', path: '/admin-hours/manage', permission: 'admin_hours.manage' },
         DIV,
-        ...(isModuleOn('forms') ? [{ label: 'Forms', path: '/forms', permission: 'settings.manage' }] : []),
+        ...(isModuleOn('forms') ? [{ label: 'Forms', path: '/forms', permission: 'forms.view' }] : []),
         ...(isModuleOn('integrations') ? [{ label: 'Integrations', path: '/integrations', permission: 'settings.manage' }] : []),
         ...(isModuleOn('reports') ? [{ label: 'Reports', path: '/reports' }] : []),
         DIV,
