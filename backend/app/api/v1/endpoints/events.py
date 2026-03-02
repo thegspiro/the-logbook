@@ -14,15 +14,16 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from loguru import logger
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.core.utils import safe_error_detail
-from app.models.event import Event, EventType, RSVPStatus
-from app.models.user import User
+from app.core.utils import generate_uuid, safe_error_detail
+from app.models.event import Event, EventExternalAttendee, EventType, RSVPStatus
+from app.models.user import Organization, User
 from app.schemas.documents import DocumentFolderResponse
 from app.schemas.event import (
     CheckInMonitoringStats,
@@ -225,6 +226,304 @@ async def create_event(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
+
+
+# ============================================
+# Event Module Settings
+# ============================================
+
+EVENT_SETTINGS_DEFAULTS = {
+    "enabled_event_types": [
+        "business_meeting",
+        "public_education",
+        "training",
+        "social",
+        "fundraiser",
+        "ceremony",
+        "other",
+    ],
+    "visible_event_types": [
+        "business_meeting",
+        "public_education",
+        "training",
+        "other",
+    ],
+    "event_type_labels": {},
+    "outreach_event_types": [
+        {"value": "fire_safety_demo", "label": "Fire Safety Demo"},
+        {"value": "station_tour", "label": "Station Tour"},
+        {"value": "cpr_first_aid", "label": "CPR / First Aid Class"},
+        {"value": "career_talk", "label": "Career Talk"},
+        {"value": "other", "label": "Other"},
+    ],
+    "request_pipeline": {
+        "min_lead_time_days": 21,
+        "default_assignee_id": None,
+        "public_progress_visible": False,
+        "tasks": [
+            {
+                "id": "review_request",
+                "label": "Review Request",
+                "description": "Review the incoming request details",
+            },
+            {
+                "id": "assign_coordinator",
+                "label": "Assign Coordinator",
+                "description": "Assign a team member to coordinate this event",
+            },
+            {
+                "id": "confirm_date",
+                "label": "Confirm Date",
+                "description": "Confirm the event date with the requester",
+            },
+            {
+                "id": "plan_content",
+                "label": "Plan Content",
+                "description": "Prepare lesson plan or presentation content",
+            },
+            {
+                "id": "arrange_volunteers",
+                "label": "Arrange Volunteers",
+                "description": "Recruit and assign volunteers",
+            },
+            {
+                "id": "prepare_equipment",
+                "label": "Prepare Equipment",
+                "description": "Gather and prepare necessary equipment",
+            },
+        ],
+        "email_triggers": {
+            "on_submitted": {
+                "enabled": True,
+                "notify_assignee": True,
+                "notify_requester": True,
+            },
+            "on_in_progress": {"enabled": True, "notify_requester": True},
+            "on_scheduled": {"enabled": True, "notify_requester": True},
+            "on_postponed": {"enabled": True, "notify_requester": True},
+            "on_completed": {"enabled": True, "notify_requester": True},
+            "on_declined": {"enabled": True, "notify_requester": True},
+            "on_cancelled": {"enabled": True, "notify_requester": True},
+            "days_before_event": {"enabled": True, "days": [7, 1]},
+        },
+    },
+    "defaults": {
+        "event_type": "other",
+        "check_in_window_type": "flexible",
+        "check_in_minutes_before": 30,
+        "check_in_minutes_after": 15,
+        "require_checkout": False,
+        "requires_rsvp": False,
+        "allowed_rsvp_statuses": ["going", "not_going"],
+        "allow_guests": False,
+        "is_mandatory": False,
+        "send_reminders": True,
+        "reminder_schedule": [24],
+        "default_reminder_time": "12:00",
+        "default_duration_minutes": 60,
+    },
+    "qr_code": {
+        "show_event_description": True,
+        "show_location_details": True,
+        "custom_instructions": "",
+    },
+    "cancellation": {
+        "require_reason": True,
+        "notify_attendees": True,
+    },
+}
+
+
+@router.get("/settings")
+async def get_event_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Get event module settings for the organization.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    org = result.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    settings = (org.settings or {}).get("events", {})
+    # Merge with defaults so frontend always gets a complete object
+    merged = {**EVENT_SETTINGS_DEFAULTS}
+    for key, default_val in EVENT_SETTINGS_DEFAULTS.items():
+        if key in settings:
+            if isinstance(default_val, dict):
+                merged[key] = {**default_val, **settings[key]}
+            else:
+                merged[key] = settings[key]
+
+    return merged
+
+
+@router.patch("/settings")
+async def update_event_settings(
+    updates: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Update event module settings for the organization.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    org = result.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    current_settings = dict(org.settings or {})
+    current_events = current_settings.get("events", {})
+
+    # Deep merge the updates into existing event settings
+    for key, value in updates.items():
+        if key in EVENT_SETTINGS_DEFAULTS:
+            if isinstance(value, dict) and isinstance(current_events.get(key), dict):
+                current_events[key] = {**current_events.get(key, {}), **value}
+            else:
+                current_events[key] = value
+
+    current_settings["events"] = current_events
+    org.settings = current_settings
+    await db.commit()
+    await db.refresh(org)
+
+    # Return merged result
+    merged = {**EVENT_SETTINGS_DEFAULTS}
+    for key, default_val in EVENT_SETTINGS_DEFAULTS.items():
+        if key in current_events:
+            if isinstance(default_val, dict):
+                merged[key] = {**default_val, **current_events[key]}
+            else:
+                merged[key] = current_events[key]
+
+    return merged
+
+
+@router.get("/visible-event-types")
+async def get_visible_event_types(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get the list of event types visible as primary filter categories.
+
+    Types not in this list are grouped under the "Other" tab.
+    Available to all authenticated users.
+    """
+    result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    org = result.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    settings = (org.settings or {}).get("events", {})
+    visible = settings.get(
+        "visible_event_types",
+        EVENT_SETTINGS_DEFAULTS["visible_event_types"],
+    )
+    return {"visible_event_types": visible}
+
+
+@router.get("/templates", response_model=list[EventTemplateResponse])
+async def list_event_templates(
+    include_inactive: bool = False,
+    skip: int = 0,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    List all event templates
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+    templates = await service.list_templates(
+        organization_id=current_user.organization_id,
+        include_inactive=include_inactive,
+        skip=skip,
+        limit=limit,
+    )
+    return [EventTemplateResponse.model_validate(t) for t in templates]
+
+
+# ============================================
+# Public Calendar (no auth required)
+# ============================================
+
+
+class PublicEventItem(BaseModel):
+    id: str
+    title: str
+    description: str | None = None
+    event_type: str
+    start_datetime: str
+    end_datetime: str
+    location: str | None = None
+    location_details: str | None = None
+
+
+@router.get("/public-calendar", response_model=list[PublicEventItem])
+async def get_public_calendar(
+    organization_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Public-facing event calendar. Returns upcoming public events.
+    No authentication required — intended for community-facing portals.
+    """
+    public_types = [
+        EventType.PUBLIC_EDUCATION.value,
+        EventType.FUNDRAISER.value,
+        EventType.CEREMONY.value,
+        EventType.SOCIAL.value,
+    ]
+
+    result = await db.execute(
+        select(Event)
+        .where(
+            Event.organization_id == organization_id,
+            Event.event_type.in_(public_types),
+            Event.start_datetime >= datetime.now(dt_timezone.utc),
+            Event.is_cancelled == False,  # noqa: E712
+        )
+        .order_by(Event.start_datetime.asc())
+        .limit(50)
+    )
+    events = result.scalars().all()
+
+    return [
+        PublicEventItem(
+            id=e.id,
+            title=e.title,
+            description=e.description,
+            event_type=(
+                e.event_type.value
+                if hasattr(e.event_type, "value")
+                else str(e.event_type)
+            ),
+            start_datetime=e.start_datetime.isoformat(),
+            end_datetime=e.end_datetime.isoformat(),
+            location=e.location,
+            location_details=e.location_details,
+        )
+        for e in events
+    ]
 
 
 @router.get("/{event_id}", response_model=EventResponse)
@@ -1015,30 +1314,6 @@ async def create_event_template(
     return EventTemplateResponse.model_validate(template)
 
 
-@router.get("/templates", response_model=list[EventTemplateResponse])
-async def list_event_templates(
-    include_inactive: bool = False,
-    skip: int = 0,
-    limit: int = 100,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("events.manage")),
-):
-    """
-    List all event templates
-
-    **Authentication required**
-    **Requires permission: events.manage**
-    """
-    service = EventService(db)
-    templates = await service.list_templates(
-        organization_id=current_user.organization_id,
-        include_inactive=include_inactive,
-        skip=skip,
-        limit=limit,
-    )
-    return [EventTemplateResponse.model_validate(t) for t in templates]
-
-
 @router.get("/templates/{template_id}", response_model=EventTemplateResponse)
 async def get_event_template(
     template_id: UUID,
@@ -1431,12 +1706,6 @@ async def get_event_folder(
 # External Attendees (for public outreach events)
 # ============================================
 
-from pydantic import BaseModel
-
-from app.core.utils import generate_uuid
-from app.models.event import EventExternalAttendee
-
-
 class ExternalAttendeeCreate(BaseModel):
     name: str
     email: str | None = None
@@ -1653,279 +1922,3 @@ async def remove_external_attendee(
 
     await db.delete(attendee)
     await db.commit()
-
-
-# ============================================
-# Event Module Settings
-# ============================================
-
-from app.models.user import Organization
-
-EVENT_SETTINGS_DEFAULTS = {
-    "enabled_event_types": [
-        "business_meeting",
-        "public_education",
-        "training",
-        "social",
-        "fundraiser",
-        "ceremony",
-        "other",
-    ],
-    "visible_event_types": [
-        "business_meeting",
-        "public_education",
-        "training",
-        "other",
-    ],
-    "event_type_labels": {},
-    "outreach_event_types": [
-        {"value": "fire_safety_demo", "label": "Fire Safety Demo"},
-        {"value": "station_tour", "label": "Station Tour"},
-        {"value": "cpr_first_aid", "label": "CPR / First Aid Class"},
-        {"value": "career_talk", "label": "Career Talk"},
-        {"value": "other", "label": "Other"},
-    ],
-    "request_pipeline": {
-        "min_lead_time_days": 21,
-        "default_assignee_id": None,
-        "public_progress_visible": False,
-        "tasks": [
-            {
-                "id": "review_request",
-                "label": "Review Request",
-                "description": "Review the incoming request details",
-            },
-            {
-                "id": "assign_coordinator",
-                "label": "Assign Coordinator",
-                "description": "Assign a team member to coordinate this event",
-            },
-            {
-                "id": "confirm_date",
-                "label": "Confirm Date",
-                "description": "Confirm the event date with the requester",
-            },
-            {
-                "id": "plan_content",
-                "label": "Plan Content",
-                "description": "Prepare lesson plan or presentation content",
-            },
-            {
-                "id": "arrange_volunteers",
-                "label": "Arrange Volunteers",
-                "description": "Recruit and assign volunteers",
-            },
-            {
-                "id": "prepare_equipment",
-                "label": "Prepare Equipment",
-                "description": "Gather and prepare necessary equipment",
-            },
-        ],
-        "email_triggers": {
-            "on_submitted": {
-                "enabled": True,
-                "notify_assignee": True,
-                "notify_requester": True,
-            },
-            "on_in_progress": {"enabled": True, "notify_requester": True},
-            "on_scheduled": {"enabled": True, "notify_requester": True},
-            "on_postponed": {"enabled": True, "notify_requester": True},
-            "on_completed": {"enabled": True, "notify_requester": True},
-            "on_declined": {"enabled": True, "notify_requester": True},
-            "on_cancelled": {"enabled": True, "notify_requester": True},
-            "days_before_event": {"enabled": True, "days": [7, 1]},
-        },
-    },
-    "defaults": {
-        "event_type": "other",
-        "check_in_window_type": "flexible",
-        "check_in_minutes_before": 30,
-        "check_in_minutes_after": 15,
-        "require_checkout": False,
-        "requires_rsvp": False,
-        "allowed_rsvp_statuses": ["going", "not_going"],
-        "allow_guests": False,
-        "is_mandatory": False,
-        "send_reminders": True,
-        "reminder_schedule": [24],
-        "default_reminder_time": "12:00",
-        "default_duration_minutes": 60,
-    },
-    "qr_code": {
-        "show_event_description": True,
-        "show_location_details": True,
-        "custom_instructions": "",
-    },
-    "cancellation": {
-        "require_reason": True,
-        "notify_attendees": True,
-    },
-}
-
-
-@router.get("/settings")
-async def get_event_settings(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("events.manage")),
-):
-    """
-    Get event module settings for the organization.
-
-    **Authentication required**
-    **Requires permission: events.manage**
-    """
-    result = await db.execute(
-        select(Organization).where(Organization.id == current_user.organization_id)
-    )
-    org = result.scalar_one_or_none()
-    if not org:
-        raise HTTPException(status_code=404, detail="Organization not found")
-
-    settings = (org.settings or {}).get("events", {})
-    # Merge with defaults so frontend always gets a complete object
-    merged = {**EVENT_SETTINGS_DEFAULTS}
-    for key, default_val in EVENT_SETTINGS_DEFAULTS.items():
-        if key in settings:
-            if isinstance(default_val, dict):
-                merged[key] = {**default_val, **settings[key]}
-            else:
-                merged[key] = settings[key]
-
-    return merged
-
-
-@router.patch("/settings")
-async def update_event_settings(
-    updates: dict,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("events.manage")),
-):
-    """
-    Update event module settings for the organization.
-
-    **Authentication required**
-    **Requires permission: events.manage**
-    """
-    result = await db.execute(
-        select(Organization).where(Organization.id == current_user.organization_id)
-    )
-    org = result.scalar_one_or_none()
-    if not org:
-        raise HTTPException(status_code=404, detail="Organization not found")
-
-    current_settings = dict(org.settings or {})
-    current_events = current_settings.get("events", {})
-
-    # Deep merge the updates into existing event settings
-    for key, value in updates.items():
-        if key in EVENT_SETTINGS_DEFAULTS:
-            if isinstance(value, dict) and isinstance(current_events.get(key), dict):
-                current_events[key] = {**current_events.get(key, {}), **value}
-            else:
-                current_events[key] = value
-
-    current_settings["events"] = current_events
-    org.settings = current_settings
-    await db.commit()
-    await db.refresh(org)
-
-    # Return merged result
-    merged = {**EVENT_SETTINGS_DEFAULTS}
-    for key, default_val in EVENT_SETTINGS_DEFAULTS.items():
-        if key in current_events:
-            if isinstance(default_val, dict):
-                merged[key] = {**default_val, **current_events[key]}
-            else:
-                merged[key] = current_events[key]
-
-    return merged
-
-
-@router.get("/visible-event-types")
-async def get_visible_event_types(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Get the list of event types visible as primary filter categories.
-
-    Types not in this list are grouped under the "Other" tab.
-    Available to all authenticated users.
-    """
-    result = await db.execute(
-        select(Organization).where(Organization.id == current_user.organization_id)
-    )
-    org = result.scalar_one_or_none()
-    if not org:
-        raise HTTPException(status_code=404, detail="Organization not found")
-
-    settings = (org.settings or {}).get("events", {})
-    visible = settings.get(
-        "visible_event_types",
-        EVENT_SETTINGS_DEFAULTS["visible_event_types"],
-    )
-    return {"visible_event_types": visible}
-
-
-# ============================================
-# Public Calendar (no auth required)
-# ============================================
-
-
-class PublicEventItem(BaseModel):
-    id: str
-    title: str
-    description: str | None = None
-    event_type: str
-    start_datetime: str
-    end_datetime: str
-    location: str | None = None
-    location_details: str | None = None
-
-
-@router.get("/public-calendar", response_model=list[PublicEventItem])
-async def get_public_calendar(
-    organization_id: str,
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Public-facing event calendar. Returns upcoming public events.
-    No authentication required — intended for community-facing portals.
-    """
-    public_types = [
-        EventType.PUBLIC_EDUCATION.value,
-        EventType.FUNDRAISER.value,
-        EventType.CEREMONY.value,
-        EventType.SOCIAL.value,
-    ]
-
-    result = await db.execute(
-        select(Event)
-        .where(
-            Event.organization_id == organization_id,
-            Event.event_type.in_(public_types),
-            Event.start_datetime >= datetime.now(dt_timezone.utc),
-            Event.is_cancelled == False,  # noqa: E712
-        )
-        .order_by(Event.start_datetime.asc())
-        .limit(50)
-    )
-    events = result.scalars().all()
-
-    return [
-        PublicEventItem(
-            id=e.id,
-            title=e.title,
-            description=e.description,
-            event_type=(
-                e.event_type.value
-                if hasattr(e.event_type, "value")
-                else str(e.event_type)
-            ),
-            start_datetime=e.start_datetime.isoformat(),
-            end_datetime=e.end_datetime.isoformat(),
-            location=e.location,
-            location_details=e.location_details,
-        )
-        for e in events
-    ]
