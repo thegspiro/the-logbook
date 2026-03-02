@@ -343,11 +343,11 @@ describe('publicFormsService', () => {
       mockAxiosPost.mockResolvedValueOnce({ data: response });
       const data = { name: 'Jane' };
 
-      const result = await publicFormsService.submitForm('my-form-slug', data, 'Jane Doe', 'jane@example.com');
+      const result = await publicFormsService.submitForm('my-form-slug', data);
 
       expect(mockAxiosPost).toHaveBeenCalledWith(
         '/api/public/v1/forms/my-form-slug/submit',
-        { data, submitter_name: 'Jane Doe', submitter_email: 'jane@example.com' },
+        { data },
       );
       expect(result).toEqual(response);
     });
@@ -355,7 +355,7 @@ describe('publicFormsService', () => {
     it('should include honeypot field when provided (bot detection)', async () => {
       mockAxiosPost.mockResolvedValueOnce({ data: {} });
 
-      await publicFormsService.submitForm('slug', {}, undefined, undefined, 'bot-value');
+      await publicFormsService.submitForm('slug', {}, 'bot-value');
 
       expect(mockAxiosPost).toHaveBeenCalledWith(
         '/api/public/v1/forms/slug/submit',

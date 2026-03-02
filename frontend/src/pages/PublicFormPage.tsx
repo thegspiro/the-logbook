@@ -14,8 +14,6 @@ const PublicFormPage = () => {
   const { slug } = useParams<{ slug: string }>();
   const [form, setForm] = useState<PublicFormDef | null>(null);
   const [formData, setFormData] = useState<Record<string, string>>({});
-  const [submitterName, setSubmitterName] = useState('');
-  const [submitterEmail, setSubmitterEmail] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -72,8 +70,6 @@ const PublicFormPage = () => {
       const result = await publicFormsService.submitForm(
         slug ?? '',
         formData,
-        submitterName || undefined,
-        submitterEmail || undefined,
         honeypotRef.current?.value || undefined
       );
       setSubmitted(true);
@@ -321,8 +317,6 @@ const PublicFormPage = () => {
               onClick={() => {
                 setSubmitted(false);
                 setFormData({});
-                setSubmitterName('');
-                setSubmitterEmail('');
               }}
               className="btn-info mt-6 px-6"
             >
@@ -359,33 +353,6 @@ const PublicFormPage = () => {
               <p className="text-red-700 text-sm">{error}</p>
             </div>
           )}
-
-          {/* Contact Info Section */}
-          <div className="mb-8 pb-6 border-b border-theme-surface-border">
-            <h3 className="text-sm font-semibold text-theme-text-muted uppercase tracking-wide mb-4">Your Information (Optional)</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Name</label>
-                <input
-                  type="text"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-theme-text-primary placeholder-theme-text-muted"
-                  placeholder="Your name"
-                  value={submitterName}
-                  onChange={(e) => setSubmitterName(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Email</label>
-                <input
-                  type="email"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-theme-text-primary placeholder-theme-text-muted"
-                  placeholder="your@email.com"
-                  value={submitterEmail}
-                  onChange={(e) => setSubmitterEmail(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
 
           {/* Form Fields */}
           <div className="space-y-6">

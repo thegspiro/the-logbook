@@ -134,8 +134,8 @@ export const publicFormsService = {
     return response.data;
   },
 
-  async submitForm(slug: string, data: Record<string, unknown>, submitterName?: string, submitterEmail?: string, honeypot?: string): Promise<PublicFormSubmissionResponse> {
-    const payload: Record<string, unknown> = { data, submitter_name: submitterName, submitter_email: submitterEmail };
+  async submitForm(slug: string, data: Record<string, unknown>, honeypot?: string): Promise<PublicFormSubmissionResponse> {
+    const payload: Record<string, unknown> = { data };
     // Honeypot field - only sent if bot filled it in (real users never will)
     if (honeypot) {
       payload.website = honeypot;
