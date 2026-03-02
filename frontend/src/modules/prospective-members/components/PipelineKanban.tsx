@@ -29,6 +29,8 @@ interface PipelineKanbanProps {
   stages: PipelineStage[];
   applicants: ApplicantListItem[];
   onApplicantClick: (applicant: ApplicantListItem) => void;
+  selectedApplicants?: Set<string> | undefined;
+  onToggleSelect?: ((id: string) => void) | undefined;
 }
 
 const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
@@ -55,6 +57,8 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
   stages,
   applicants,
   onApplicantClick,
+  selectedApplicants,
+  onToggleSelect,
 }) => {
   const { advanceApplicant, isAdvancing } = useProspectiveMembersStore();
   const [draggedApplicant, setDraggedApplicant] = useState<ApplicantListItem | null>(null);
@@ -185,13 +189,27 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
                 </div>
               ) : (
                 stageApplicants.map((applicant) => (
-                  <ApplicantCard
-                    key={applicant.id}
-                    applicant={applicant}
-                    onClick={onApplicantClick}
-                    onDragStart={handleDragStart}
-                    isDragging={draggedApplicant?.id === applicant.id}
-                  />
+                  <div key={applicant.id} className="relative">
+                    {onToggleSelect && (
+                      <div className="absolute top-2 left-2 z-10">
+                        <input
+                          type="checkbox"
+                          checked={selectedApplicants?.has(applicant.id) ?? false}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            onToggleSelect(applicant.id);
+                          }}
+                          className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                        />
+                      </div>
+                    )}
+                    <ApplicantCard
+                      applicant={applicant}
+                      onClick={onApplicantClick}
+                      onDragStart={handleDragStart}
+                      isDragging={draggedApplicant?.id === applicant.id}
+                    />
+                  </div>
                 ))
               )}
             </div>

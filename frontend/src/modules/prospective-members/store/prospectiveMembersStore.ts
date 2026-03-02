@@ -85,6 +85,10 @@ interface ProspectiveMembersState {
   fetchPipeline: (id: string) => Promise<void>;
   fetchPipelineStats: (id: string) => Promise<void>;
   setCurrentPipeline: (pipeline: Pipeline | null) => void;
+  duplicatePipeline: (id: string, name: string) => Promise<Pipeline>;
+  setDefaultPipeline: (id: string) => Promise<void>;
+  saveAsTemplate: (id: string, name: string) => Promise<void>;
+  fetchTemplates: () => Promise<PipelineListItem[]>;
 
   // Applicant actions
   fetchApplicants: (page?: number) => Promise<void>;
@@ -214,6 +218,50 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
 
     setCurrentPipeline: (pipeline) => {
       set({ currentPipeline: pipeline });
+    },
+
+    duplicatePipeline: async (id: string, name: string) => {
+      set({ error: null });
+      try {
+        const duplicated = await pipelineService.duplicatePipeline(id, name);
+        await get().fetchPipelines();
+        return duplicated;
+      } catch (error) {
+        set({ error: handleStoreError(error, 'Failed to duplicate pipeline') });
+        throw error;
+      }
+    },
+
+    setDefaultPipeline: async (id: string) => {
+      set({ error: null });
+      try {
+        const updated = await pipelineService.updatePipeline(id, { is_default: true });
+        set({ currentPipeline: updated });
+        await get().fetchPipelines();
+      } catch (error) {
+        set({ error: handleStoreError(error, 'Failed to set default pipeline') });
+        throw error;
+      }
+    },
+
+    saveAsTemplate: async (id: string, name: string) => {
+      set({ error: null });
+      try {
+        await pipelineService.saveAsTemplate(id, name);
+        await get().fetchPipelines();
+      } catch (error) {
+        set({ error: handleStoreError(error, 'Failed to save as template') });
+        throw error;
+      }
+    },
+
+    fetchTemplates: async () => {
+      try {
+        return await pipelineService.getTemplates();
+      } catch (error) {
+        set({ error: handleStoreError(error, 'Failed to fetch templates') });
+        return [];
+      }
     },
 
     // Applicant actions

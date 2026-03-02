@@ -94,6 +94,10 @@ export const ProspectiveMembersPage: React.FC = () => {
   const [conversionApplicant, setConversionApplicant] = useState<Applicant | null>(null);
   const [selectedInactive, setSelectedInactive] = useState<Set<string>>(new Set());
   const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
+  const [selectedApplicants, setSelectedApplicants] = useState<Set<string>>(new Set());
+  const [isBulkAdvancing, setIsBulkAdvancing] = useState(false);
+  const [isBulkRejecting, setIsBulkRejecting] = useState(false);
+  const [showBulkRejectConfirm, setShowBulkRejectConfirm] = useState(false);
 
   // New applicant form state
   const [newApplicant, setNewApplicant] = useState({
@@ -150,6 +154,74 @@ export const ProspectiveMembersPage: React.FC = () => {
   const handleConvert = (applicant: Applicant) => {
     setConversionApplicant(applicant);
     setDetailDrawerOpen(false);
+  };
+
+  const toggleApplicantSelection = (id: string) => {
+    setSelectedApplicants((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleAllApplicants = () => {
+    if (selectedApplicants.size === applicants.length) {
+      setSelectedApplicants(new Set());
+    } else {
+      setSelectedApplicants(new Set(applicants.map((a) => a.id)));
+    }
+  };
+
+  const handleBulkAdvance = async () => {
+    if (!currentPipeline) return;
+    const ids = Array.from(selectedApplicants);
+    setIsBulkAdvancing(true);
+    let successCount = 0;
+    for (const id of ids) {
+      try {
+        await applicantService.advanceStage(id);
+        successCount++;
+      } catch {
+        // continue with remaining
+      }
+    }
+    setIsBulkAdvancing(false);
+    setSelectedApplicants(new Set());
+    if (successCount > 0) {
+      toast.success(`Advanced ${successCount} applicant${successCount === 1 ? '' : 's'}`);
+      void fetchApplicants();
+    }
+    if (successCount < ids.length) {
+      toast.error(`Failed to advance ${ids.length - successCount} applicant(s)`);
+    }
+  };
+
+  const handleBulkReject = async () => {
+    const ids = Array.from(selectedApplicants);
+    setIsBulkRejecting(true);
+    let successCount = 0;
+    for (const id of ids) {
+      try {
+        await applicantService.rejectApplicant(id, 'Bulk rejection');
+        successCount++;
+      } catch {
+        // continue with remaining
+      }
+    }
+    setIsBulkRejecting(false);
+    setSelectedApplicants(new Set());
+    setShowBulkRejectConfirm(false);
+    if (successCount > 0) {
+      toast.success(`Rejected ${successCount} applicant${successCount === 1 ? '' : 's'}`);
+      void fetchApplicants();
+    }
+    if (successCount < ids.length) {
+      toast.error(`Failed to reject ${ids.length - successCount} applicant(s)`);
+    }
   };
 
   const isLastStage = useMemo(() => {
@@ -553,11 +625,78 @@ export const ProspectiveMembersPage: React.FC = () => {
             </div>
           ) : (
             <>
+              {/* Bulk Actions Bar */}
+              {selectedApplicants.size > 0 && (
+                <div className="mb-3 flex items-center gap-3 p-3 bg-theme-surface border border-theme-surface-border rounded-lg">
+                  <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={selectedApplicants.size === applicants.length}
+                      onChange={toggleAllApplicants}
+                      className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                    />
+                    {selectedApplicants.size} selected
+                  </label>
+                  <div className="flex items-center gap-2 ml-auto">
+                    <button
+                      onClick={() => { void handleBulkAdvance(); }}
+                      disabled={isBulkAdvancing}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {isBulkAdvancing ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      )}
+                      Advance All
+                    </button>
+                    {showBulkRejectConfirm ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setShowBulkRejectConfirm(false)}
+                          className="px-3 py-1.5 text-xs text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => { void handleBulkReject(); }}
+                          disabled={isBulkRejecting}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {isBulkRejecting ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <XCircle className="w-3.5 h-3.5" />
+                          )}
+                          Confirm Reject
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setShowBulkRejectConfirm(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors"
+                      >
+                        <XCircle className="w-3.5 h-3.5" />
+                        Reject All
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setSelectedApplicants(new Set())}
+                      className="p-1.5 text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                      title="Clear selection"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
               {viewMode === 'kanban' && (
                 <PipelineKanban
                   stages={sortedStages}
                   applicants={applicants}
                   onApplicantClick={handleApplicantClick}
+                  selectedApplicants={selectedApplicants}
+                  onToggleSelect={toggleApplicantSelection}
                 />
               )}
               {viewMode === 'table' && (
@@ -568,6 +707,9 @@ export const ProspectiveMembersPage: React.FC = () => {
                   totalPages={totalPages}
                   onPageChange={(page) => { void fetchApplicants(page); }}
                   onApplicantClick={handleApplicantClick}
+                  selectedApplicants={selectedApplicants}
+                  onToggleSelect={toggleApplicantSelection}
+                  onToggleAll={toggleAllApplicants}
                 />
               )}
             </>

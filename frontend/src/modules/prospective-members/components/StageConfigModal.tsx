@@ -97,6 +97,75 @@ const STAGE_TYPE_OPTIONS: { value: StageType; label: string; icon: React.Element
   },
 ];
 
+// Stage presets for quick configuration
+interface StagePreset {
+  label: string;
+  name: string;
+  description: string;
+  stageType: StageType;
+  config: () => StageConfig;
+}
+
+const STAGE_PRESETS: StagePreset[] = [
+  {
+    label: 'Application Form',
+    name: 'Application Form',
+    description: 'Collect basic applicant information via a form.',
+    stageType: 'form_submission',
+    config: () => ({ form_id: '', form_name: '' }),
+  },
+  {
+    label: 'Background Check Docs',
+    name: 'Background Check Documents',
+    description: 'Require background check and ID documents.',
+    stageType: 'document_upload',
+    config: () => ({ required_document_types: ['Background Check', 'Photo ID'], allow_multiple: true }),
+  },
+  {
+    label: 'Chief Interview',
+    name: 'Meeting with Chief',
+    description: 'Schedule a one-on-one meeting with the fire chief.',
+    stageType: 'meeting',
+    config: () => ({ meeting_type: 'chief_meeting' as MeetingType, meeting_description: 'Interview with the fire chief to discuss expectations and commitment.' }),
+  },
+  {
+    label: 'Membership Vote',
+    name: 'Membership Election',
+    description: 'Hold a membership vote for the applicant.',
+    stageType: 'election_vote',
+    config: () => ({
+      voting_method: 'simple_majority' as const,
+      victory_condition: 'majority' as const,
+      eligible_voter_roles: ['member'],
+      anonymous_voting: true,
+    }),
+  },
+  {
+    label: 'Welcome Email',
+    name: 'Send Welcome Email',
+    description: 'Send welcome information to the accepted member.',
+    stageType: 'automated_email',
+    config: () => ({
+      email_subject: 'Welcome to the Department!',
+      include_welcome: true,
+      welcome_message: 'Congratulations! We are pleased to welcome you.',
+      include_faq_link: true,
+      faq_url: '',
+      include_next_meeting: true,
+      next_meeting_details: '',
+      include_status_tracker: false,
+      custom_sections: [],
+    }),
+  },
+  {
+    label: 'Coordinator Approval',
+    name: 'Coordinator Approval',
+    description: 'Membership coordinator reviews and approves.',
+    stageType: 'manual_approval',
+    config: () => ({ approver_roles: ['membership_coordinator'], require_notes: true }),
+  },
+];
+
 const MEETING_TYPE_OPTIONS: { value: MeetingType; label: string; description: string }[] = [
   { value: 'chief_meeting', label: 'Meeting with Chief', description: 'One-on-one or small group meeting with the chief.' },
   { value: 'informational', label: 'Informational Meeting', description: 'General info session about the department.' },
@@ -435,6 +504,32 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
               className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring resize-none"
             />
           </div>
+
+          {/* Stage Presets (only when creating, not editing) */}
+          {!editingStage && (
+            <div>
+              <label className="block text-sm font-medium text-theme-text-secondary mb-2">
+                Quick Presets
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {STAGE_PRESETS.map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => {
+                      setName(preset.name);
+                      setDescription(preset.description);
+                      setStageType(preset.stageType);
+                      setConfig(preset.config());
+                    }}
+                    className="px-3 py-1.5 text-xs rounded-lg border border-theme-surface-border text-theme-text-secondary hover:border-red-500/50 hover:text-theme-text-primary transition-colors"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Stage Type */}
           <div>

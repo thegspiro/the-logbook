@@ -233,6 +233,8 @@ export interface Pipeline {
   name: string;
   description?: string | undefined;
   is_active: boolean;
+  is_template: boolean;
+  is_default: boolean;
   inactivity_config: InactivityConfig;
   public_status_enabled: boolean;
   stages: PipelineStage[];
@@ -245,6 +247,7 @@ export interface PipelineCreate {
   name: string;
   description?: string | undefined;
   is_active?: boolean | undefined;
+  is_template?: boolean | undefined;
   inactivity_config?: InactivityConfig | undefined;
 }
 
@@ -252,6 +255,8 @@ export interface PipelineUpdate {
   name?: string | undefined;
   description?: string | undefined;
   is_active?: boolean | undefined;
+  is_default?: boolean | undefined;
+  is_template?: boolean | undefined;
   inactivity_config?: InactivityConfig | undefined;
   public_status_enabled?: boolean | undefined;
 }
@@ -261,6 +266,8 @@ export interface PipelineListItem {
   name: string;
   description?: string | undefined;
   is_active: boolean;
+  is_template: boolean;
+  is_default: boolean;
   stage_count: number;
   applicant_count: number;
   created_at: string;

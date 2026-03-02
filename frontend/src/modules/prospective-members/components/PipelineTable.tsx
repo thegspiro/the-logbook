@@ -35,6 +35,9 @@ interface PipelineTableProps {
   totalPages: number;
   onPageChange: (page: number) => void;
   onApplicantClick: (applicant: ApplicantListItem) => void;
+  selectedApplicants?: Set<string> | undefined;
+  onToggleSelect?: ((id: string) => void) | undefined;
+  onToggleAll?: (() => void) | undefined;
 }
 
 const STATUS_BADGES: Record<ApplicantStatus, { label: string; className: string }> = {
@@ -89,11 +92,16 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
   totalPages,
   onPageChange,
   onApplicantClick,
+  selectedApplicants: externalSelected,
+  onToggleSelect: externalToggle,
+  onToggleAll: externalToggleAll,
 }) => {
   const tz = useTimezone();
   const { advanceApplicant, holdApplicant, rejectApplicant, withdrawApplicant, isRejecting, isWithdrawing } =
     useProspectiveMembersStore();
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [internalSelected, setInternalSelected] = useState<Set<string>>(new Set());
+  const selected = externalSelected ?? internalSelected;
+  const setSelected = externalSelected ? () => {} : setInternalSelected;
   const [actionMenuId, setActionMenuId] = useState<string | null>(null);
   const [showBulkRejectConfirm, setShowBulkRejectConfirm] = useState(false);
   const [rejectConfirmId, setRejectConfirmId] = useState<string | null>(null);
@@ -162,15 +170,15 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
     applicants.length > 0 && selected.size === applicants.length;
   const someSelected = selected.size > 0 && !allSelected;
 
-  const toggleAll = () => {
+  const toggleAll = externalToggleAll ?? (() => {
     if (allSelected) {
       setSelected(new Set());
     } else {
       setSelected(new Set(applicants.map((a) => a.id)));
     }
-  };
+  });
 
-  const toggleOne = (id: string) => {
+  const toggleOne = externalToggle ?? ((id: string) => {
     const next = new Set(selected);
     if (next.has(id)) {
       next.delete(id);
@@ -178,7 +186,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
       next.add(id);
     }
     setSelected(next);
-  };
+  });
 
   const handleBulkAction = async (action: 'advance' | 'hold' | 'reject') => {
     const ids = Array.from(selected);
