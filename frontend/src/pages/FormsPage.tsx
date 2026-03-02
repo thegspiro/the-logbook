@@ -837,7 +837,7 @@ const FormsPage: React.FC = () => {
         {/* Form Detail / Editor View */}
         {editingForm && (
           <div
-            className="fixed inset-0 z-50 bg-black/95 overflow-y-auto"
+            className="fixed inset-0 z-50 bg-theme-surface overflow-y-auto"
             role="dialog"
             aria-modal="true"
             aria-labelledby="form-editor-title"
@@ -876,7 +876,7 @@ const FormsPage: React.FC = () => {
                   role="tab"
                   aria-selected={detailTab === 'builder'}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    detailTab === 'builder' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-white'
+                    detailTab === 'builder' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
                   }`}
                 >
                   Form Builder
@@ -886,7 +886,7 @@ const FormsPage: React.FC = () => {
                   role="tab"
                   aria-selected={detailTab === 'preview'}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    detailTab === 'preview' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-white'
+                    detailTab === 'preview' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
                   }`}
                 >
                   Preview & Submit
@@ -896,7 +896,7 @@ const FormsPage: React.FC = () => {
                   role="tab"
                   aria-selected={detailTab === 'submissions'}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    detailTab === 'submissions' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-white'
+                    detailTab === 'submissions' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
                   }`}
                 >
                   Submissions
