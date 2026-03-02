@@ -27,6 +27,29 @@ import type { FormField, FormFieldCreate } from '../../services/api';
 import type { FieldDefinition } from './FieldRenderer';
 import { FieldType } from '../../constants/enums';
 
+/** Field types that require at least one option to function. */
+const OPTION_FIELD_TYPES = new Set(['select', 'multiselect', 'checkbox', 'radio']);
+
+/** Returns a human-readable warning if a field is incomplete, or null if OK. */
+const getFieldWarning = (field: { field_type: string; options?: unknown[] | null | undefined; label?: string | undefined }): string | null => {
+  if (OPTION_FIELD_TYPES.has(field.field_type)) {
+    const validOptions = (field.options ?? []).filter((o) => {
+      if (typeof o === 'object' && o !== null && 'label' in o && 'value' in o) {
+        const opt = o as { label: string; value: string };
+        return opt.label.trim() && opt.value.trim();
+      }
+      return false;
+    });
+    if (validOptions.length === 0) {
+      return 'Needs options — click Edit to add choices';
+    }
+  }
+  if (!field.label?.trim()) {
+    return 'Missing label';
+  }
+  return null;
+};
+
 const FIELD_TYPE_ICONS: Record<string, React.ReactNode> = {
   text: <Type className="w-4 h-4" />,
   textarea: <FileText className="w-4 h-4" />,
@@ -106,6 +129,7 @@ const FormBuilder = ({
   };
 
   const sortedFields = [...fields].sort((a, b) => a.sort_order - b.sort_order);
+  const incompleteCount = sortedFields.filter((f) => getFieldWarning(f) !== null).length;
 
   const handleAddField = () => {
     setEditingField(null);
@@ -290,6 +314,16 @@ const FormBuilder = ({
         </div>
       </div>
 
+      {/* Incomplete fields banner */}
+      {incompleteCount > 0 && !previewMode && (
+        <div className="mb-4 p-3 rounded-lg flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/30">
+          <AlertCircle className="w-4 h-4 text-yellow-700 dark:text-yellow-400 flex-shrink-0" />
+          <p className="text-sm text-yellow-700 dark:text-yellow-300">
+            {incompleteCount} {incompleteCount === 1 ? 'field needs' : 'fields need'} additional setup before this form is ready to use.
+          </p>
+        </div>
+      )}
+
       {/* Error */}
       {error && (
         <div className="mb-4 p-3 rounded-lg flex items-center gap-2 bg-red-500/10 border border-red-500/30">
@@ -323,10 +357,16 @@ const FormBuilder = ({
       {/* Field list */}
       {sortedFields.length > 0 && !previewMode && (
         <div className="space-y-2">
-          {sortedFields.map((field, idx) => (
+          {sortedFields.map((field, idx) => {
+            const warning = getFieldWarning(field);
+            return (
             <div
               key={field.id}
-              className="card-secondary flex gap-3 group hover:border-theme-surface-border items-center px-4 py-3 transition-colors"
+              className={`card-secondary flex gap-3 group items-center px-4 py-3 transition-colors ${
+                warning
+                  ? 'border-yellow-500/40 hover:border-yellow-500/60 bg-yellow-500/5'
+                  : 'hover:border-theme-surface-border'
+              }`}
             >
               {/* Drag handle */}
               <div className="text-theme-text-muted flex-shrink-0 cursor-grab">
@@ -334,13 +374,17 @@ const FormBuilder = ({
               </div>
 
               {/* Type icon */}
-              <div className="w-8 h-8 rounded-lg bg-theme-surface flex items-center justify-center flex-shrink-0 text-theme-text-muted">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                warning
+                  ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
+                  : 'bg-theme-surface text-theme-text-muted'
+              }`}>
                 {FIELD_TYPE_ICONS[field.field_type] || <Type className="w-4 h-4" />}
               </div>
 
               {/* Field info */}
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-medium text-theme-text-primary truncate">{field.label}</span>
                   {field.required && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-700 dark:text-red-400 font-medium">Required</span>
@@ -354,8 +398,23 @@ const FormBuilder = ({
                       Conditional
                     </span>
                   )}
+                  {warning && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 font-medium flex items-center gap-0.5">
+                      <AlertCircle className="w-2.5 h-2.5" />
+                      Needs setup
+                    </span>
+                  )}
                 </div>
                 <span className="text-xs text-theme-text-muted">{field.field_type}</span>
+                {warning && (
+                  <button
+                    type="button"
+                    onClick={() => handleEditField(field)}
+                    className="block text-xs text-yellow-700 dark:text-yellow-400 hover:underline mt-0.5"
+                  >
+                    {warning}
+                  </button>
+                )}
               </div>
 
               {/* Actions */}
@@ -400,7 +459,7 @@ const FormBuilder = ({
                 </button>
               </div>
             </div>
-          ))}
+            ); })}
         </div>
       )}
 
