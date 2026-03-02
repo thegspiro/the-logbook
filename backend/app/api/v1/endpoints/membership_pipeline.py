@@ -333,12 +333,24 @@ async def reorder_steps(
 
     **Requires permission: members.manage**
     """
+    from app.core.utils import safe_error_detail
+
     service = MembershipPipelineService(db)
-    steps = await service.reorder_steps(
-        str(pipeline_id),
-        current_user.organization_id,
-        [str(sid) for sid in data.step_ids],
-    )
+    try:
+        steps = await service.reorder_steps(
+            str(pipeline_id),
+            current_user.organization_id,
+            [str(sid) for sid in data.step_ids],
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
     if steps is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found"
