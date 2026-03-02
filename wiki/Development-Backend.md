@@ -344,11 +344,27 @@ async def test_create_user():
 - **Type System**: Enhanced type checking
 - **Experimental GIL Removal**: Better multi-threading (experimental)
 
+### Modern Typing (2026-03-02)
+
+The entire backend uses Python 3.13+ typing conventions (`pyupgrade --py313-plus`):
+
+```python
+# Modern style (used throughout)
+def get_items(ids: list[str], filter: str | None = None) -> dict[str, int]:
+    ...
+
+# Legacy style (no longer used)
+from typing import List, Optional, Dict
+def get_items(ids: List[str], filter: Optional[str] = None) -> Dict[str, int]:
+    ...
+```
+
 ### Benefits for The Logbook
-✅ Faster API response times
-✅ Lower memory usage
-✅ Better type safety
-✅ Long-term support until October 2029
+- Faster API response times
+- Lower memory usage
+- Better type safety
+- Modern typing conventions throughout
+- Long-term support until October 2029
 
 ---
 

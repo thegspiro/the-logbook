@@ -68,9 +68,15 @@ GET    /api/v1/scheduling/apparatus          # List basic apparatus
 
 ---
 
-## Recent Improvements (2026-03-01)
+## Recent Improvements (2026-03-02)
 
-### Shift Editing & Position Changes
+### Component Decomposition & Architecture
+- **ShiftSettingsPanel decomposed**: Split from an 800+ line component into 6 focused card components: `ApparatusTypeDefaultsCard`, `DepartmentDefaultsCard`, `PositionNamesCard`, `ResourceTypeDefaultsCard`, `TemplatesOverviewCard`, `PositionListEditor`
+- **Dedicated types**: New `shiftSettings.ts` type file for scheduling configuration types
+- **Route module extraction**: Scheduling routes defined in `modules/scheduling/routes.tsx` with `lazyWithRetry()` for chunk-loading resilience
+- **Type safety**: Full TypeScript typing added to scheduling service API
+
+### Shift Editing & Position Changes (2026-03-01)
 - **Expanded shift editing**: Officers can edit shift times, apparatus assignment, color, notes, and custom creation times directly from the shift detail panel
 - **Inline position change UI**: Change member position assignments (Officer, Driver, Firefighter, etc.) directly on shift cards without opening a separate modal
 

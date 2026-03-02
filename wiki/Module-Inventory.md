@@ -22,6 +22,7 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 - **Overdue Tracking** — Computed at read time; scheduled task for reporting
 - **CSV Export** — Export filtered inventory data to CSV
 - **Sort & Filter** — Members tab supports sort by name, total items, overdue, or most assigned
+- **Mobile Member ID Scanning** — Camera-based member ID scanning for quick member lookup during checkout (scan QR/barcode from member ID card)
 
 ---
 
@@ -250,6 +251,7 @@ Condition options are centralized in `frontend/src/constants/enums.ts`:
 |-----------|---------|
 | `InventoryPage` | Main inventory management page with items/categories tabs |
 | `InventoryMembersTab` | Per-member inventory view with sorting and expandable details |
+| `MemberIdScannerModal` | Camera-based member ID scanning for quick member lookup |
 | `InventoryScanModal` | Barcode scanning + live search for batch checkout/return |
 | `ReturnItemsModal` | List-based return workflow for a member's held items |
 | `useInventoryWebSocket` | Hook for real-time WebSocket updates with auto-reconnect |

@@ -81,17 +81,60 @@ frontend/src/
 │   └── ux/            # UX components (Skeleton, Breadcrumbs, Pagination, etc.)
 ├── constants/         # Centralized constants (config.ts, enums.ts)
 ├── pages/             # Page components (one per route)
-├── modules/           # Feature modules
+├── modules/           # Feature modules (self-contained)
+│   ├── action-items/  # Action items from meetings
+│   ├── admin/         # Admin pages routes
+│   ├── admin-hours/   # Admin hours tracking
+│   ├── apparatus/     # Apparatus/vehicle management
+│   ├── communications/# Email templates & messaging
+│   ├── documents/     # Document management routes
+│   ├── elections/     # Elections & voting
+│   ├── events/        # Event management routes
+│   ├── facilities/    # Facilities management routes
+│   ├── forms/         # Custom forms routes
+│   ├── integrations/  # Integration routes
+│   ├── inventory/     # Inventory routes
+│   ├── membership/    # Membership management
+│   ├── minutes/       # Meeting minutes routes
+│   ├── notifications/ # Notification routes
 │   ├── onboarding/    # Onboarding wizard
-│   ├── training/      # Training module
+│   ├── public-portal/ # Public portal
 │   ├── scheduling/    # Scheduling module
-│   └── ...
+│   ├── settings/      # Settings routes
+│   └── training/      # Training module
 ├── hooks/             # Custom React hooks
-├── services/          # API service functions
+├── services/          # API service functions (split into 13 domain files)
+│   ├── apiClient.ts           # Shared axios instance with interceptors
+│   ├── authService.ts         # Authentication API
+│   ├── userServices.ts        # User management API
+│   ├── eventServices.ts       # Event management API
+│   ├── trainingServices.ts    # Training API
+│   ├── inventoryService.ts    # Inventory API
+│   ├── electionService.ts     # Elections API
+│   ├── communicationsServices.ts  # Communications API
+│   ├── documentsService.ts    # Documents API
+│   ├── formsServices.ts       # Forms API
+│   ├── adminServices.ts       # Admin API
+│   ├── facilitiesServices.ts  # Facilities API
+│   └── meetingsServices.ts    # Meetings API
 ├── stores/            # State management
 ├── types/             # TypeScript type definitions
 ├── utils/             # Utility functions
 └── styles/            # Global styles and CSS variables
+```
+
+### Module Structure
+
+Each module follows a consistent structure:
+```
+modules/<module>/
+├── index.ts           # Barrel export
+├── routes.tsx         # Route definitions with lazyWithRetry()
+├── pages/             # Module-specific page components
+├── components/        # Module-specific components
+├── services/          # Module-specific API service
+├── store/             # Module-specific Zustand store
+└── types/             # Module-specific TypeScript types
 ```
 
 ---
@@ -102,7 +145,8 @@ frontend/src/
 
 - **No `as any`** — Use proper types. All `as any` assertions have been removed.
 - **Interface over Type** — Prefer `interface` for object shapes
-- **Strict mode** — TypeScript strict mode is enabled
+- **Strict mode** — TypeScript strict mode is enabled with additional checks: `exactOptionalPropertyTypes`, `noImplicitReturns`, `noImplicitOverride`, `allowUnreachableCode: false`, `allowUnusedLabels: false`
+- **exactOptionalPropertyTypes** — Do not assign `undefined` to optional properties; omit them instead
 - **Explicit return types** — On exported functions
 
 ### React
@@ -161,19 +205,27 @@ The application targets WCAG 2.1 Level AA:
 
 ## API Integration
 
-API calls use service functions in `src/services/`:
+API calls are organized into 13 domain-specific service files in `src/services/`. Each service uses a shared `apiClient` with consistent interceptors:
 
 ```typescript
 // Example: fetch members
-import { apiClient } from '../services/apiClient';
+import { userService } from '@/services/userServices';
 
-const response = await apiClient.get('/api/v1/users');
+const users = await userService.getUsers();
+
+// Or use the raw API client
+import { apiClient } from '@/services/apiClient';
+const response = await apiClient.get('/users');
 ```
 
-The API client automatically:
-- Adds JWT `Authorization` header
-- Handles token refresh on 401 responses
+The shared API client automatically:
+- Sends httpOnly cookies with `withCredentials: true`
+- Attaches CSRF token on state-changing requests
+- Handles 401 → refresh → retry flow
+- Includes stale-while-revalidate caching for GET requests
 - Translates technical errors to user-friendly messages
+
+Module-scoped services (e.g., `modules/scheduling/services/api.ts`) use `createApiClient()` for the same interceptor setup.
 
 ---
 

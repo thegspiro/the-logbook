@@ -120,6 +120,19 @@ docker-compose up -d
 
 ## 📊 Latest Updates
 
+### March 2026 (Mar 2) — Mobile ID Scanner, 610 Tests, Architecture Overhaul, Security Hardening & Backend Modernization
+
+- **Mobile member ID scanner**: Camera-based member ID scanning for inventory checkout workflow; fixed mobile toolbar layout for button accessibility
+- **610 new frontend tests**: Comprehensive test suites added for 8 services, 3 stores, and 8 utilities covering auth, communications, documents, elections, events, forms, users, admin hours, apparatus, membership, error tracking, API cache, date formatting, and more
+- **ARIA accessibility**: Added ARIA attributes across modals, forms, buttons, badges, and interactive elements throughout the UI
+- **Frontend architecture overhaul**: Split monolithic `services/api.ts` (5,330 lines) into 13 domain files; extracted all inline routes from `App.tsx` into 15+ module `routes.tsx` files; enabled `exactOptionalPropertyTypes`; decomposed 3 large page components into 18 focused sub-components
+- **Backend modernization**: Modernized Python typing across 56 files (`pyupgrade --py313-plus`); fixed IP spoofing vulnerability in security middleware; replaced deprecated startup handlers with lifespan context manager
+- **Module improvements**: Unified error handling across all module stores; type safety for scheduling and prospective-members APIs; expanded module registry with metadata for 20+ modules
+- **MissingGreenlet fixes**: Fixed across all remaining backend services and email template endpoints
+- **Email template enhancements**: Default templates for ballot/event/training; org logo in all templates; email scheduling; live org data in preview; member dropdown for test emails
+- **PWA & mobile**: Added PWA shortcuts; corrected push notification claims; repaired `usePullToRefresh` hook; wired pull-to-refresh into Dashboard
+- **Security**: Updated backend security dependencies; hardened X-Forwarded-For parsing to prevent IP spoofing
+
 ### March 2026 (Mar 1) — Email Templates, Admin Hours Editing, Shift Enhancements, Training Registries & CSS Overhaul
 
 - **Email notification templates management**: Full admin page for creating, editing, previewing, and deleting email templates; 10 new template types with per-type sample context for realistic previews; MySQL ENUM migration for sync

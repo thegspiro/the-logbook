@@ -413,4 +413,34 @@ Black formatting has been applied to 9 additional backend files. If you see form
 
 ---
 
+## Python Typing Modernization (2026-03-02)
+
+### Backend type errors after updating
+
+**Cause:** Python typing modernized across 56 files using `pyupgrade --py313-plus`. All `Optional[X]` → `X | None`, `List[X]` → `list[X]`, etc.
+
+**Requirement:** Python 3.10+ (project requires 3.13+). Older Python versions will raise `TypeError` at import time.
+
+---
+
+## IP Spoofing Fix (2026-03-02)
+
+### User IP addresses incorrect in audit logs
+
+**Status (Fixed):** Security middleware hardened to use only the rightmost untrusted IP from `X-Forwarded-For`. If using a reverse proxy, ensure it is configured as trusted.
+
+### Deprecated startup warnings in logs
+
+**Status (Fixed):** `on_event("startup")`/`on_event("shutdown")` replaced with FastAPI lifespan context manager.
+
+---
+
+## MissingGreenlet — Remaining Services (2026-03-02)
+
+### Problem: MissingGreenlet errors on email template or other service endpoints
+
+**Status (Fixed):** Added `selectinload()` eager loading across all remaining backend services. Template `create_template` now refreshes timestamps explicitly to prevent MissingGreenlet during response serialization.
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Database Issues](Troubleshooting-Database)

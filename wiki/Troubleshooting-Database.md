@@ -243,4 +243,22 @@ docker-compose restart backend
 
 ---
 
+## MissingGreenlet Across Services (2026-03-02)
+
+### Comprehensive Fix Applied
+
+**Status (Fixed):** `selectinload()` eager loading has been added across all remaining backend services that access lazy-loaded SQLAlchemy relationships in async contexts. Specifically fixed in:
+- Email template create/update/list endpoints
+- Template timestamp refresh on `create_template`
+- All remaining services with relationship access patterns
+
+If you still encounter `MissingGreenlet: greenlet_spawn has not been called` errors, ensure you are on the latest version:
+```bash
+git pull origin main
+docker-compose build --no-cache backend
+docker-compose up -d
+```
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Backend Issues](Troubleshooting-Backend)

@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Mobile Member ID Scanner (2026-03-02)
+
+- **Camera-based member ID scanning**: New `MemberIdScannerModal` component lets admins scan a member's QR/barcode ID card to instantly look up and select them during inventory checkout, replacing manual name search
+- **Mobile toolbar layout fix**: Fixed mobile toolbar layout so the "Scan Member ID" button is accessible alongside search and filter controls
+
+### ARIA Accessibility & 610 New Tests (2026-03-02)
+
+- **ARIA accessibility improvements**: Added `aria-label`, `aria-labelledby`, `aria-describedby`, `role` attributes across modals, forms, buttons, badges, and interactive elements (ElectionBallot, ElectionResults, CandidateManagement, ProxyVoting, FieldRenderer, FormBuilder, SubmissionViewer, ConfirmDialog, ReturnItemsModal, VoterOverride, AllEntriesTab, PageTransition, SuccessAnimation, EventTypeBadge, RSVPStatusBadge, PrivacyNotice)
+- **610 new frontend tests**: Added comprehensive test suites for services (`authService`, `communicationsServices`, `documentsService`, `electionService`, `eventServices`, `formsServices`, `userServices`, `errorTracking`), stores (`adminHoursStore`, `apparatusStore`, `membershipStore`), and utilities (`apiCache`, `dateFormatting`, `eventHelpers`, `lazyWithRetry`, `passwordValidation`, `storeHelpers`)
+- **Security dependency updates**: Updated backend `requirements.txt` with 10 security-related package updates
+
+### Frontend Architecture Overhaul (2026-03-02)
+
+- **exactOptionalPropertyTypes enabled**: Enabled `exactOptionalPropertyTypes` across entire frontend (57 files updated), preventing accidental `undefined` assignment to optional properties
+- **API service split**: Split monolithic `services/api.ts` (5,330 lines) into 13 domain-specific service files (`adminServices`, `apiClient`, `authService`, `communicationsServices`, `documentsService`, `electionService`, `eventServices`, `facilitiesServices`, `formsServices`, `inventoryService`, `meetingsServices`, `trainingServices`, `userServices`)
+- **Route module extraction**: Extracted all inline route definitions from `App.tsx` into dedicated module `routes.tsx` files (action-items, admin, documents, events, facilities, forms, integrations, inventory, minutes, notifications, settings, training, elections, membership, apparatus, admin-hours, communications); `App.tsx` reduced from ~500 lines to a thin orchestrator
+- **Additional strict TypeScript flags**: Enabled `noImplicitReturns`, `noImplicitOverride`, `allowUnreachableCode: false`, `allowUnusedLabels: false`
+- **Module component decomposition**: Decomposed large page components into focused sub-components:
+  - `AdminHoursManagePage` → `ActiveSessionsTab`, `AllEntriesTab`, `CategoriesTab`, `PendingReviewTab`, `SummaryTab`
+  - `ApparatusDetailPage` → `ApparatusDetailHeader`, `ApparatusOverviewTab`, `DocumentsTab`, `EquipmentTab`, `FuelLogsTab`, `MaintenanceTab`, `OperatorsTab`
+  - `ShiftSettingsPanel` → `ApparatusTypeDefaultsCard`, `DepartmentDefaultsCard`, `PositionNamesCard`, `ResourceTypeDefaultsCard`, `TemplatesOverviewCard`, `PositionListEditor`
+- **Lazy loading standardization**: All module route files use `lazyWithRetry()` for consistent chunk-loading resilience
+- **Module registry expansion**: Updated `types/modules.ts` with missing modules and metadata for all 20+ feature modules
+
+### Backend Modernization (2026-03-02)
+
+- **Python typing modernization**: Applied `pyupgrade --py313-plus` across 56 backend files — replaced `Optional[X]` with `X | None`, `List[X]` with `list[X]`, `Dict[K,V]` with `dict[K,V]`, `Tuple` with `tuple`, and legacy `Union` types
+- **IP spoofing vulnerability fix**: Hardened `X-Forwarded-For` header parsing in security middleware to prevent IP spoofing; only trusts the rightmost untrusted IP
+- **Deprecated API cleanup**: Removed deprecated `on_event` startup/shutdown handlers in favor of lifespan context manager; fixed deprecated `datetime.utcnow()` calls in core modules
+
+### Module Architecture Improvements (2026-03-02)
+
+- **Type safety for module APIs**: Added full TypeScript typing to `prospective-members/services/api.ts` and `scheduling/services/api.ts` with proper request/response types
+- **Public-portal and scheduling module structures**: Completed module directory structures with barrel exports, route files, and type definitions
+- **Error handling unification**: Unified error handling patterns across all module Zustand stores with consistent `toAppError()` / `getErrorMessage()` usage
+
+### MissingGreenlet Fixes (2026-03-02)
+
+- **Remaining services fixed**: Added `selectinload()` eager loading across all remaining backend services that accessed lazy-loaded SQLAlchemy relationships in async contexts
+- **Email template endpoints**: Fixed MissingGreenlet on email template create/update/list operations
+- **Template timestamp refresh**: Added explicit timestamp refresh on `create_template` to prevent MissingGreenlet when serializing response
+
+### Email Template Enhancements (2026-03-02)
+
+- **Default templates added**: Added missing default email templates for ballot notifications, event reminders, and training due alerts
+- **Organization logo in all templates**: All email templates now include the organization's logo in the header
+- **Email scheduling**: Added ability to schedule email sends for a future date/time
+- **Election ballot variables**: Template preview includes election-specific variables (ballot title, candidates, voting deadline)
+- **Live org data in preview**: Template preview now loads real organization data instead of placeholder values
+- **Member dropdown for test emails**: Preview panel includes a member selector to send test emails to specific members
+- **Template variable fixes**: Fixed variable interpolation in template preview rendering
+
+### Mobile & PWA Improvements (2026-03-02)
+
+- **PWA shortcuts**: Added shortcut links to the PWA manifest for quick access to Dashboard, Events, and Scheduling
+- **Push notification claims corrected**: Removed misleading push notification feature claims from mobile module; clarified that notifications are email + in-app only
+- **Mobile module repair**: Fixed broken `usePullToRefresh` hook, wired pull-to-refresh into Dashboard, corrected feature capability claims
+
 ### Email Notification Templates & Management (2026-03-01)
 
 - **Email Templates Management Page**: Full admin page for creating, editing, previewing, and deleting email notification templates with per-type sample context data for realistic previews

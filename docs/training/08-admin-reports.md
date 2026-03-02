@@ -587,7 +587,10 @@ The setup checklist shows all steps complete. The system is ready for use.
 | Public portal not accessible | Verify the public portal is enabled and the domain/URL is configured correctly. Check that API keys are active. |
 | Error monitor showing many errors | Some errors are expected (failed login attempts, rate limiting). Focus on Critical and Error severity items. |
 | Email templates page not visible | Navigate to **Administration > Email Templates**. Requires `settings.manage` permission. |
-| "Data truncated" error on email template | Run `alembic upgrade head` to sync the MySQL ENUM with the 10 new template types. |
+| "Data truncated" error on email template | Run `alembic upgrade head` to sync the MySQL ENUM with the new template types. |
+| Email template preview shows placeholder data | As of 2026-03-02, template preview loads live organization data. Clear browser cache to get the updated preview. |
+| Cannot send test email to specific member | Use the member dropdown in the preview panel to select a recipient for test emails. |
+| Email scheduling not available | Email scheduling was added 2026-03-02. Ensure you are on the latest version. |
 | Standard modules missing after fresh install | Standard modules now default to enabled. If missing, check **Settings > Modules** and enable them. The Settings UI has been redesigned with module cards. |
 | OrganizationSettings page crashes | Update to the latest version. A crash in the `redacted()` method and an auth secret leak have been fixed. |
 
