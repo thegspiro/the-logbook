@@ -21,6 +21,7 @@ import {
   ArrowUpDown,
   Loader2,
   Shield,
+  ScanLine,
 } from 'lucide-react';
 import {
   inventoryService,
@@ -29,6 +30,7 @@ import {
 } from '../services/api';
 import { InventoryScanModal } from '../components/InventoryScanModal';
 import { ReturnItemsModal } from '../components/ReturnItemsModal';
+import { MemberIdScannerModal } from '../components/MemberIdScannerModal';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
@@ -71,6 +73,9 @@ const InventoryMembersTab: React.FC = () => {
     userId: string;
     memberName: string;
   }>({ isOpen: false, userId: '', memberName: '' });
+
+  // Member ID scanner modal
+  const [memberScannerOpen, setMemberScannerOpen] = useState(false);
 
   // Debounce search
   useEffect(() => {
@@ -127,6 +132,17 @@ const InventoryMembersTab: React.FC = () => {
       mode: 'checkout',
       userId: member.user_id,
       memberName: member.full_name || member.username,
+    });
+  };
+
+  const handleMemberScanned = (scanned: { userId: string; memberName: string }) => {
+    setMemberScannerOpen(false);
+    // Open the assign-items modal for the scanned member
+    setScanModal({
+      isOpen: true,
+      mode: 'checkout',
+      userId: scanned.userId,
+      memberName: scanned.memberName,
     });
   };
 
@@ -226,6 +242,13 @@ const InventoryMembersTab: React.FC = () => {
               ))}
             </select>
           </div>
+          <button
+            onClick={() => setMemberScannerOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
+            title="Scan a member's digital ID to start assigning items"
+          >
+            <ScanLine className="w-4 h-4" /> <span className="hidden sm:inline">Scan Member ID</span><span className="sm:hidden">Scan ID</span>
+          </button>
           <button
             onClick={() => { void loadMembers(); }}
             className="flex items-center gap-1.5 px-3 py-2 text-sm text-theme-text-muted hover:text-theme-text-primary transition-colors"
@@ -484,6 +507,13 @@ const InventoryMembersTab: React.FC = () => {
         userId={returnModal.userId}
         memberName={returnModal.memberName}
         onComplete={() => { void handleScanComplete(); }}
+      />
+
+      {/* Member ID Scanner Modal */}
+      <MemberIdScannerModal
+        isOpen={memberScannerOpen}
+        onClose={() => setMemberScannerOpen(false)}
+        onMemberIdentified={handleMemberScanned}
       />
     </div>
   );
