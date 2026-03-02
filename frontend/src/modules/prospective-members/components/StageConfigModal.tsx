@@ -15,6 +15,10 @@ import {
   Trash2,
   Clock,
   Bell,
+  CalendarCheck,
+  Globe,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import type {
   PipelineStage,
@@ -25,8 +29,14 @@ import type {
   ElectionStageConfig,
   ElectionPackageFieldConfig,
   ManualApprovalConfig,
+  MeetingStageConfig,
+  MeetingType,
+  StatusPageToggleConfig,
+  StageConfig,
 } from '../types';
 import { DEFAULT_ELECTION_PACKAGE_FIELDS } from '../types';
+import { formsService } from '@/services/formsServices';
+import type { FormDef } from '@/services/inventoryService';
 
 interface StageConfigModalProps {
   isOpen: boolean;
@@ -50,6 +60,12 @@ const STAGE_TYPE_OPTIONS: { value: StageType; label: string; icon: React.Element
     description: 'Require document uploads (ID, background check, etc.).',
   },
   {
+    value: 'meeting',
+    label: 'Meeting',
+    icon: CalendarCheck,
+    description: 'Require attendance at or scheduling of a meeting.',
+  },
+  {
     value: 'election_vote',
     label: 'Election / Vote',
     icon: Vote,
@@ -61,9 +77,22 @@ const STAGE_TYPE_OPTIONS: { value: StageType; label: string; icon: React.Element
     icon: CheckCircle,
     description: 'Admin or designated role manually approves advancement.',
   },
+  {
+    value: 'status_page_toggle',
+    label: 'Enable Status Page',
+    icon: Globe,
+    description: 'Activate the public status page for the prospect at this stage.',
+  },
 ];
 
-const DEFAULT_CONFIGS: Record<StageType, () => FormStageConfig | DocumentStageConfig | ElectionStageConfig | ManualApprovalConfig> = {
+const MEETING_TYPE_OPTIONS: { value: MeetingType; label: string; description: string }[] = [
+  { value: 'chief_meeting', label: 'Meeting with Chief', description: 'One-on-one or small group meeting with the chief.' },
+  { value: 'informational', label: 'Informational Meeting', description: 'General info session about the department.' },
+  { value: 'business_meeting', label: 'Business Meeting', description: 'Attend a regular business meeting.' },
+  { value: 'other', label: 'Other', description: 'Custom meeting type.' },
+];
+
+const DEFAULT_CONFIGS: Record<StageType, () => StageConfig> = {
   form_submission: () => ({ form_id: '', form_name: '' }),
   document_upload: () => ({ required_document_types: [''], allow_multiple: true }),
   election_vote: () => ({
@@ -73,6 +102,8 @@ const DEFAULT_CONFIGS: Record<StageType, () => FormStageConfig | DocumentStageCo
     anonymous_voting: true,
   }),
   manual_approval: () => ({ approver_roles: [], require_notes: false }),
+  meeting: () => ({ meeting_type: 'chief_meeting' as MeetingType, meeting_description: '' }),
+  status_page_toggle: () => ({ enable_public_status: true, custom_message: '' }),
 };
 
 export const StageConfigModal: React.FC<StageConfigModalProps> = ({
@@ -85,7 +116,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [stageType, setStageType] = useState<StageType>('manual_approval');
-  const [config, setConfig] = useState<FormStageConfig | DocumentStageConfig | ElectionStageConfig | ManualApprovalConfig>(
+  const [config, setConfig] = useState<StageConfig>(
     DEFAULT_CONFIGS.manual_approval()
   );
   const [isRequired, setIsRequired] = useState(true);
@@ -94,6 +125,35 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   const [hasTimeoutOverride, setHasTimeoutOverride] = useState(false);
   const [timeoutOverrideDays, setTimeoutOverrideDays] = useState<number>(180);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [availableForms, setAvailableForms] = useState<FormDef[]>([]);
+  const [formsLoading, setFormsLoading] = useState(false);
+  const [formsError, setFormsError] = useState<string | null>(null);
+
+  // Fetch published forms when the modal opens
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    const fetchForms = async () => {
+      setFormsLoading(true);
+      setFormsError(null);
+      try {
+        const response = await formsService.getForms({ status: 'published', limit: 200 });
+        if (!cancelled) {
+          setAvailableForms(response.forms);
+        }
+      } catch {
+        if (!cancelled) {
+          setFormsError('Failed to load forms');
+        }
+      } finally {
+        if (!cancelled) {
+          setFormsLoading(false);
+        }
+      }
+    };
+    void fetchForms();
+    return () => { cancelled = true; };
+  }, [isOpen]);
 
   useEffect(() => {
     if (editingStage) {
@@ -128,6 +188,15 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   const handleStageTypeChange = (type: StageType) => {
     setStageType(type);
     setConfig(DEFAULT_CONFIGS[type]());
+  };
+
+  const retryLoadForms = () => {
+    setFormsLoading(true);
+    setFormsError(null);
+    void formsService.getForms({ status: 'published', limit: 200 }).then(
+      (response) => { setAvailableForms(response.forms); setFormsLoading(false); },
+      () => { setFormsError('Failed to load forms'); setFormsLoading(false); }
+    );
   };
 
   const validate = (): boolean => {
@@ -199,6 +268,8 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   const docConfig = config as DocumentStageConfig;
   const electionConfig = config as ElectionStageConfig;
   const approvalConfig = config as ManualApprovalConfig;
+  const meetingConfig = config as MeetingStageConfig;
+  const statusPageConfig = config as StatusPageToggleConfig;
 
   return (
     <div
@@ -298,18 +369,55 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
             {stageType === 'form_submission' && (
               <div>
                 <label htmlFor="stage-form-id" className="block text-sm text-theme-text-muted mb-2">
-                  Form ID (from Forms module)
+                  Form
                 </label>
-                <input
-                  id="stage-form-id"
-                  type="text"
-                  value={(config as FormStageConfig).form_id}
-                  onChange={(e) =>
-                    setConfig({ ...config, form_id: e.target.value } as FormStageConfig)
-                  }
-                  placeholder="Enter form ID or select from Forms module"
-                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
-                />
+                {formsLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-theme-text-muted py-2.5">
+                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                    Loading forms...
+                  </div>
+                ) : formsError ? (
+                  <div className="flex items-center gap-2 text-sm text-red-700 dark:text-red-400 py-2.5">
+                    <AlertCircle className="w-4 h-4" aria-hidden="true" />
+                    {formsError}
+                    <button
+                      type="button"
+                      onClick={retryLoadForms}
+                      className="text-red-700 dark:text-red-400 underline hover:no-underline"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <select
+                      id="stage-form-id"
+                      value={(config as FormStageConfig).form_id}
+                      onChange={(e) => {
+                        const selectedForm = availableForms.find(f => f.id === e.target.value);
+                        setConfig({
+                          ...config,
+                          form_id: e.target.value,
+                          form_name: selectedForm?.name ?? '',
+                        } as FormStageConfig);
+                        setErrors(prev => ({ ...prev, form_id: '' }));
+                      }}
+                      className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                    >
+                      <option value="">Select a form...</option>
+                      {availableForms.map((form) => (
+                        <option key={form.id} value={form.id}>
+                          {form.name}{form.category ? ` (${form.category})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {availableForms.length === 0 && (
+                      <p className="mt-1 text-xs text-theme-text-muted">
+                        No published forms found. Create and publish a form in the Forms module first.
+                      </p>
+                    )}
+                  </>
+                )}
                 {errors.form_id && (
                   <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.form_id}</p>
                 )}
@@ -377,6 +485,47 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                   />
                   Allow multiple files per document type
                 </label>
+              </div>
+            )}
+
+            {/* Meeting Config */}
+            {stageType === 'meeting' && (
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="stage-meeting-type" className="block text-sm text-theme-text-muted mb-2">
+                    Meeting Type
+                  </label>
+                  <select
+                    id="stage-meeting-type"
+                    value={meetingConfig.meeting_type}
+                    onChange={(e) =>
+                      setConfig({ ...meetingConfig, meeting_type: e.target.value as MeetingType })
+                    }
+                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring"
+                  >
+                    {MEETING_TYPE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-theme-text-muted">
+                    {MEETING_TYPE_OPTIONS.find(o => o.value === meetingConfig.meeting_type)?.description}
+                  </p>
+                </div>
+                <div>
+                  <label htmlFor="stage-meeting-description" className="block text-sm text-theme-text-muted mb-2">
+                    Meeting Details (optional)
+                  </label>
+                  <textarea
+                    id="stage-meeting-description"
+                    value={meetingConfig.meeting_description ?? ''}
+                    onChange={(e) =>
+                      setConfig({ ...meetingConfig, meeting_description: e.target.value })
+                    }
+                    placeholder="e.g., Meet with Chief Smith to discuss expectations and department culture..."
+                    rows={2}
+                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring resize-none"
+                  />
+                </div>
               </div>
             )}
 
@@ -555,6 +704,51 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                   Approver roles can be configured in the organization settings.
                   Any user with the <code className="text-theme-text-muted">prospective_members.manage</code> permission can approve.
                 </p>
+              </div>
+            )}
+
+            {/* Status Page Toggle Config */}
+            {stageType === 'status_page_toggle' && (
+              <div className="space-y-4">
+                <div className="bg-theme-surface-hover rounded-lg p-4 border border-theme-surface-border">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Globe className="w-4 h-4 text-theme-text-muted" aria-hidden="true" />
+                    <span className="text-sm font-medium text-theme-text-primary">
+                      {statusPageConfig.enable_public_status ? 'Enables' : 'Disables'} the public status page
+                    </span>
+                  </div>
+                  <p className="text-xs text-theme-text-muted">
+                    When the prospect reaches this stage, their public status page will be
+                    {statusPageConfig.enable_public_status ? ' activated' : ' deactivated'}.
+                    They will receive a link to check their application progress.
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
+                  <input
+                    type="checkbox"
+                    checked={statusPageConfig.enable_public_status}
+                    onChange={(e) =>
+                      setConfig({ ...statusPageConfig, enable_public_status: e.target.checked })
+                    }
+                    className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                  />
+                  Enable public status page at this stage
+                </label>
+                <div>
+                  <label htmlFor="stage-status-page-message" className="block text-sm text-theme-text-muted mb-2">
+                    Custom Status Message (optional)
+                  </label>
+                  <textarea
+                    id="stage-status-page-message"
+                    value={statusPageConfig.custom_message ?? ''}
+                    onChange={(e) =>
+                      setConfig({ ...statusPageConfig, custom_message: e.target.value })
+                    }
+                    placeholder="e.g., Welcome! You can now track your application progress here."
+                    rows={2}
+                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring resize-none"
+                  />
+                </div>
               </div>
             )}
           </div>

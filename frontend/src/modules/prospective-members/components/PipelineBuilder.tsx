@@ -19,6 +19,8 @@ import {
   Loader2,
   Bell,
   EyeOff,
+  CalendarCheck,
+  Globe,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type {
@@ -40,6 +42,8 @@ const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
   document_upload: Upload,
   election_vote: Vote,
   manual_approval: CheckCircle,
+  meeting: CalendarCheck,
+  status_page_toggle: Globe,
 };
 
 const STAGE_TYPE_COLORS: Record<StageType, string> = {
@@ -47,6 +51,8 @@ const STAGE_TYPE_COLORS: Record<StageType, string> = {
   document_upload: 'text-amber-700 dark:text-amber-400 bg-amber-500/10 border-amber-500/30',
   election_vote: 'text-purple-700 dark:text-purple-400 bg-purple-500/10 border-purple-500/30',
   manual_approval: 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
+  meeting: 'text-teal-700 dark:text-teal-400 bg-teal-500/10 border-teal-500/30',
+  status_page_toggle: 'text-sky-700 dark:text-sky-400 bg-sky-500/10 border-sky-500/30',
 };
 
 const STAGE_TYPE_LABELS: Record<StageType, string> = {
@@ -54,6 +60,8 @@ const STAGE_TYPE_LABELS: Record<StageType, string> = {
   document_upload: 'Document Upload',
   election_vote: 'Election / Vote',
   manual_approval: 'Manual Approval',
+  meeting: 'Meeting',
+  status_page_toggle: 'Enable Status Page',
 };
 
 export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({

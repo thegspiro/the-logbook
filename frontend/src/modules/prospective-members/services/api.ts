@@ -68,6 +68,10 @@ function mapStageTypeToBackend(stageType: StageType): { step_type: string; actio
       return { step_type: 'action', action_type: 'collect_document' };
     case 'election_vote':
       return { step_type: 'action', action_type: 'custom' };
+    case 'meeting':
+      return { step_type: 'action', action_type: 'schedule_meeting' };
+    case 'status_page_toggle':
+      return { step_type: 'action', action_type: 'custom' };
     case 'manual_approval':
     default:
       return { step_type: 'checkbox' };
@@ -75,9 +79,14 @@ function mapStageTypeToBackend(stageType: StageType): { step_type: string; actio
 }
 
 /** Map backend step_type + action_type to frontend stage_type */
-function mapStepTypeToFrontend(stepType: string, actionType?: string | null): StageType {
+function mapStepTypeToFrontend(stepType: string, actionType?: string | null, config?: Record<string, unknown> | null): StageType {
   if (stepType === 'action') {
     if (actionType === 'collect_document') return 'document_upload';
+    if (actionType === 'schedule_meeting') return 'meeting';
+    // Distinguish between form_submission, election_vote, and status_page_toggle
+    // by inspecting the config JSON
+    if (config && 'enable_public_status' in config) return 'status_page_toggle';
+    if (config && 'voting_method' in config) return 'election_vote';
     return 'form_submission';
   }
   // checkbox and note both map to manual_approval
@@ -98,6 +107,10 @@ function getDefaultStageConfig(stageType: StageType): PipelineStage['config'] {
         eligible_voter_roles: [],
         anonymous_voting: true,
       };
+    case 'meeting':
+      return { meeting_type: 'chief_meeting', meeting_description: '' };
+    case 'status_page_toggle':
+      return { enable_public_status: true, custom_message: '' };
     case 'manual_approval':
     default:
       return { approver_roles: [], require_notes: false };
@@ -106,14 +119,15 @@ function getDefaultStageConfig(stageType: StageType): PipelineStage['config'] {
 
 /** Map a backend pipeline step response to a frontend PipelineStage */
 function mapStepToStage(step: BackendStepResponse): PipelineStage {
-  const stageType = mapStepTypeToFrontend(step.step_type, step.action_type);
+  const backendConfig = step.config ?? null;
+  const stageType = mapStepTypeToFrontend(step.step_type, step.action_type, backendConfig);
   return {
     id: step.id,
     pipeline_id: step.pipeline_id,
     name: step.name,
     description: step.description ?? undefined,
     stage_type: stageType,
-    config: getDefaultStageConfig(stageType),
+    config: backendConfig ? { ...getDefaultStageConfig(stageType), ...backendConfig } : getDefaultStageConfig(stageType),
     sort_order: step.sort_order ?? 0,
     is_required: step.required ?? true,
     notify_prospect_on_completion: step.notify_prospect_on_completion ?? false,
@@ -166,6 +180,7 @@ function mapStageCreateToBackend(stage: PipelineStageCreate): BackendStepCreateP
     action_type,
     sort_order: stage.sort_order,
     required: stage.is_required ?? true,
+    config: stage.config as unknown as Record<string, unknown> | undefined,
     notify_prospect_on_completion: stage.notify_prospect_on_completion ?? false,
     public_visible: stage.public_visible ?? true,
   };
