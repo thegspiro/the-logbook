@@ -164,7 +164,7 @@ describe('lazyWithRetry', () => {
     const originalError = new Error('Original failure');
     const importFn = vi.fn()
       .mockRejectedValueOnce(originalError)
-      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+       
       .mockRejectedValueOnce(undefined);
 
     const factory = captureFactory(importFn);
@@ -195,9 +195,9 @@ describe('lazyWithRetry', () => {
 
   it('does not treat non-Error values as chunk-load errors', async () => {
     const importFn = vi.fn()
-      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+       
       .mockRejectedValueOnce('string error')
-      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+       
       .mockRejectedValueOnce('string error again');
 
     const factory = captureFactory(importFn);
