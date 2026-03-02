@@ -163,6 +163,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
     checkPermission("admin_hours.manage") ||
     checkPermission("positions.manage_permissions") ||
     checkPermission("settings.manage") ||
+    checkPermission("forms.view") ||
     checkPermission("analytics.view");
 
   const navItems: NavItem[] = [
@@ -382,15 +383,15 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
             label: "Forms & Comms",
             path: "#",
             icon: FormInput,
-            permission: "settings.manage",
             subItems: [
               {
                 label: "Email Templates",
                 path: "/communications/email-templates",
                 icon: Mail,
+                permission: "settings.manage",
               },
               ...(isModuleOn("forms")
-                ? [{ label: "Forms", path: "/forms", icon: FormInput }]
+                ? [{ label: "Forms", path: "/forms", icon: FormInput, permission: "forms.view" }]
                 : []),
               ...(isModuleOn("integrations")
                 ? [
@@ -398,6 +399,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                       label: "Integrations",
                       path: "/integrations",
                       icon: Plug,
+                      permission: "settings.manage",
                     },
                   ]
                 : []),

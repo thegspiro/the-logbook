@@ -23,7 +23,7 @@ export const getFormsRoutes = () => {
       <Route
         path="/forms"
         element={
-          <ProtectedRoute requiredPermission="settings.manage">
+          <ProtectedRoute requiredPermission="forms.view">
             <Suspense fallback={null}>
               <FormsPage />
             </Suspense>
