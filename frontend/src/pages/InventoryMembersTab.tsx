@@ -217,10 +217,28 @@ const InventoryMembersTab: React.FC = () => {
         </div>
       </div>
 
-      {/* Search */}
-      <div className="bg-theme-surface rounded-lg p-4 border border-theme-surface-border mb-6">
+      {/* Search & Actions */}
+      <div className="bg-theme-surface rounded-lg p-4 border border-theme-surface-border mb-6 space-y-3">
+        {/* Row 1: Scan Member ID (prominent on mobile) */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setMemberScannerOpen(true)}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
+            title="Scan a member's digital ID to start assigning items"
+          >
+            <ScanLine className="w-4 h-4" /> Scan Member ID
+          </button>
+          <button
+            onClick={() => { void loadMembers(); }}
+            className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-theme-text-muted hover:text-theme-text-primary transition-colors"
+            title="Refresh"
+          >
+            <RefreshCw className="w-4 h-4" /> <span className="hidden sm:inline">Refresh</span>
+          </button>
+        </div>
+        {/* Row 2: Search + Sort */}
         <div className="flex items-center gap-3">
-          <div className="relative flex-1 max-w-md">
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
             <input
               type="text"
@@ -242,20 +260,6 @@ const InventoryMembersTab: React.FC = () => {
               ))}
             </select>
           </div>
-          <button
-            onClick={() => setMemberScannerOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
-            title="Scan a member's digital ID to start assigning items"
-          >
-            <ScanLine className="w-4 h-4" /> <span className="hidden sm:inline">Scan Member ID</span><span className="sm:hidden">Scan ID</span>
-          </button>
-          <button
-            onClick={() => { void loadMembers(); }}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm text-theme-text-muted hover:text-theme-text-primary transition-colors"
-            title="Refresh"
-          >
-            <RefreshCw className="w-4 h-4" /> Refresh
-          </button>
         </div>
       </div>
 
