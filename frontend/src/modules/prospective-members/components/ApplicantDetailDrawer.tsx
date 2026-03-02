@@ -34,6 +34,8 @@ import {
   Activity,
   Pencil,
   Save,
+  CalendarCheck,
+  Globe,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type {
@@ -61,6 +63,8 @@ const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
   document_upload: Upload,
   election_vote: Vote,
   manual_approval: CheckCircle,
+  meeting: CalendarCheck,
+  status_page_toggle: Globe,
 };
 
 export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({

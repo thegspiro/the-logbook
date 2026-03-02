@@ -12,7 +12,9 @@ export type StageType =
   | 'form_submission'
   | 'document_upload'
   | 'election_vote'
-  | 'manual_approval';
+  | 'manual_approval'
+  | 'meeting'
+  | 'status_page_toggle';
 
 export type ApplicantStatus =
   | 'active'
@@ -131,11 +133,26 @@ export interface ManualApprovalConfig {
   require_notes: boolean;
 }
 
+export type MeetingType = 'chief_meeting' | 'informational' | 'business_meeting' | 'other';
+
+export interface MeetingStageConfig {
+  meeting_type: MeetingType;
+  meeting_description?: string | undefined;
+  required_attendees?: string[] | undefined;
+}
+
+export interface StatusPageToggleConfig {
+  enable_public_status: boolean;
+  custom_message?: string | undefined;
+}
+
 export type StageConfig =
   | FormStageConfig
   | DocumentStageConfig
   | ElectionStageConfig
-  | ManualApprovalConfig;
+  | ManualApprovalConfig
+  | MeetingStageConfig
+  | StatusPageToggleConfig;
 
 // =============================================================================
 // Pipeline Stage
@@ -766,6 +783,7 @@ export interface BackendStepCreatePayload {
   action_type?: string | undefined;
   sort_order: number;
   required: boolean;
+  config?: Record<string, unknown> | undefined;
   notify_prospect_on_completion: boolean;
   public_visible: boolean;
 }
@@ -778,6 +796,7 @@ export interface BackendStepUpdatePayload {
   action_type?: string | undefined;
   sort_order?: number | undefined;
   required?: boolean | undefined;
+  config?: Record<string, unknown> | undefined;
   notify_prospect_on_completion?: boolean | undefined;
   public_visible?: boolean | undefined;
 }

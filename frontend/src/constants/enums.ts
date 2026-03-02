@@ -157,6 +157,8 @@ export const StageType = {
   DOCUMENT_UPLOAD: 'document_upload',
   ELECTION_VOTE: 'election_vote',
   MANUAL_APPROVAL: 'manual_approval',
+  MEETING: 'meeting',
+  STATUS_PAGE_TOGGLE: 'status_page_toggle',
 } as const;
 export type StageType = (typeof StageType)[keyof typeof StageType];
 

@@ -12,6 +12,8 @@ import {
   Vote,
   CheckCircle,
   Users,
+  CalendarCheck,
+  Globe,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type {
@@ -33,6 +35,8 @@ const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
   document_upload: Upload,
   election_vote: Vote,
   manual_approval: CheckCircle,
+  meeting: CalendarCheck,
+  status_page_toggle: Globe,
 };
 
 const STAGE_HEADER_COLORS: Record<StageType, string> = {
@@ -40,6 +44,8 @@ const STAGE_HEADER_COLORS: Record<StageType, string> = {
   document_upload: 'border-amber-500',
   election_vote: 'border-purple-500',
   manual_approval: 'border-emerald-500',
+  meeting: 'border-teal-500',
+  status_page_toggle: 'border-sky-500',
 };
 
 export const PipelineKanban: React.FC<PipelineKanbanProps> = ({

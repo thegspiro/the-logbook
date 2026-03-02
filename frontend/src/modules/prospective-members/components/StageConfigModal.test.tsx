@@ -1,0 +1,320 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type { FormsListResponse } from '@/services/inventoryService';
+
+const mockGetForms = vi.fn();
+
+vi.mock('@/services/formsServices', () => ({
+  formsService: {
+    getForms: (...args: unknown[]) => mockGetForms(...args) as unknown,
+  },
+}));
+
+import { StageConfigModal } from './StageConfigModal';
+
+const mockForms: FormsListResponse = {
+  forms: [
+    {
+      id: 'form-1',
+      organization_id: 'org-1',
+      name: 'New Member Application',
+      description: 'Application for new members',
+      category: 'membership',
+      status: 'published',
+      allow_multiple_submissions: false,
+      require_authentication: true,
+      notify_on_submission: true,
+      is_public: true,
+      public_slug: 'new-member-app',
+      version: 1,
+      is_template: false,
+      field_count: 10,
+      submission_count: 5,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-15T00:00:00Z',
+    },
+    {
+      id: 'form-2',
+      organization_id: 'org-1',
+      name: 'Background Check Authorization',
+      category: '',
+      status: 'published',
+      allow_multiple_submissions: false,
+      require_authentication: true,
+      notify_on_submission: false,
+      is_public: false,
+      version: 1,
+      is_template: false,
+      field_count: 5,
+      submission_count: 3,
+      created_at: '2026-01-05T00:00:00Z',
+      updated_at: '2026-01-10T00:00:00Z',
+    },
+  ],
+  total: 2,
+  skip: 0,
+  limit: 200,
+};
+
+const defaultProps = {
+  isOpen: true,
+  onClose: vi.fn(),
+  onSave: vi.fn(),
+  existingStageCount: 0,
+};
+
+describe('StageConfigModal', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetForms.mockResolvedValue(mockForms);
+  });
+
+  it('renders the modal when open', () => {
+    render(<StageConfigModal {...defaultProps} />);
+    expect(screen.getByText('Add Pipeline Stage')).toBeInTheDocument();
+  });
+
+  it('does not render when closed', () => {
+    render(<StageConfigModal {...defaultProps} isOpen={false} />);
+    expect(screen.queryByText('Add Pipeline Stage')).not.toBeInTheDocument();
+  });
+
+  // =========================================================================
+  // Form Dropdown Tests
+  // =========================================================================
+
+  it('fetches published forms when modal opens', async () => {
+    render(<StageConfigModal {...defaultProps} />);
+    await waitFor(() => {
+      expect(mockGetForms).toHaveBeenCalledWith({ status: 'published', limit: 200 });
+    });
+  });
+
+  it('shows form dropdown with published forms when form_submission type is selected', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Form Submission'));
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('New Member Application (membership)')).toBeInTheDocument();
+    expect(screen.getByText('Background Check Authorization')).toBeInTheDocument();
+  });
+
+  it('sets form_id and form_name when a form is selected from dropdown', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Form Submission'));
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox')).toBeInTheDocument();
+    });
+
+    await user.type(screen.getByLabelText(/stage name/i), 'Application Step');
+    await user.selectOptions(screen.getByRole('combobox'), 'form-1');
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(defaultProps.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stage_type: 'form_submission',
+        config: expect.objectContaining({
+          form_id: 'form-1',
+          form_name: 'New Member Application',
+        }) as unknown,
+      })
+    );
+  });
+
+  it('shows error state when forms fail to load', async () => {
+    mockGetForms.mockRejectedValue(new Error('Network error'));
+    render(<StageConfigModal {...defaultProps} />);
+
+    await userEvent.click(screen.getByText('Form Submission'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to load forms')).toBeInTheDocument();
+    });
+  });
+
+  it('allows retrying after a form fetch failure', async () => {
+    const user = userEvent.setup();
+    mockGetForms.mockRejectedValueOnce(new Error('Network error'));
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Form Submission'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to load forms')).toBeInTheDocument();
+    });
+
+    mockGetForms.mockResolvedValueOnce(mockForms);
+    await user.click(screen.getByText('Retry'));
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox')).toBeInTheDocument();
+    });
+  });
+
+  it('shows helpful message when no published forms exist', async () => {
+    mockGetForms.mockResolvedValue({ forms: [], total: 0, skip: 0, limit: 200 });
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Form Submission'));
+
+    await waitFor(() => {
+      expect(screen.getByText(/no published forms found/i)).toBeInTheDocument();
+    });
+  });
+
+  it('validates that a form is selected before saving', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Form Submission'));
+    await user.type(screen.getByLabelText(/stage name/i), 'Application Step');
+
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(screen.getByText('Please select a form')).toBeInTheDocument();
+    expect(defaultProps.onSave).not.toHaveBeenCalled();
+  });
+
+  it('shows category in parentheses for forms that have one', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Form Submission'));
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox')).toBeInTheDocument();
+    });
+
+    const options = screen.getAllByRole('option');
+    expect(options[1]?.textContent).toBe('New Member Application (membership)');
+    expect(options[2]?.textContent).toBe('Background Check Authorization');
+  });
+
+  // =========================================================================
+  // Meeting Stage Type Tests
+  // =========================================================================
+
+  it('displays meeting stage type option', () => {
+    render(<StageConfigModal {...defaultProps} />);
+    expect(screen.getByText('Meeting')).toBeInTheDocument();
+    expect(screen.getByText('Require attendance at or scheduling of a meeting.')).toBeInTheDocument();
+  });
+
+  it('shows meeting type dropdown when meeting type is selected', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Meeting'));
+
+    expect(screen.getByLabelText('Meeting Type')).toBeInTheDocument();
+    expect(screen.getByText('Meeting with Chief')).toBeInTheDocument();
+    expect(screen.getByText('Informational Meeting')).toBeInTheDocument();
+    expect(screen.getByText('Business Meeting')).toBeInTheDocument();
+    expect(screen.getByText('Other')).toBeInTheDocument();
+  });
+
+  it('saves meeting stage with correct config', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Meeting'));
+    await user.type(screen.getByLabelText(/stage name/i), 'Meet the Chief');
+    await user.selectOptions(screen.getByLabelText('Meeting Type'), 'chief_meeting');
+    await user.type(
+      screen.getByLabelText(/meeting details/i),
+      'Meet with Chief Smith'
+    );
+
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(defaultProps.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Meet the Chief',
+        stage_type: 'meeting',
+        config: expect.objectContaining({
+          meeting_type: 'chief_meeting',
+          meeting_description: 'Meet with Chief Smith',
+        }) as unknown,
+      })
+    );
+  });
+
+  it('allows changing meeting type', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Meeting'));
+    await user.selectOptions(screen.getByLabelText('Meeting Type'), 'business_meeting');
+
+    expect(screen.getByText('Attend a regular business meeting.')).toBeInTheDocument();
+  });
+
+  // =========================================================================
+  // Status Page Toggle Stage Type Tests
+  // =========================================================================
+
+  it('displays status page toggle stage type option', () => {
+    render(<StageConfigModal {...defaultProps} />);
+    expect(screen.getByText('Enable Status Page')).toBeInTheDocument();
+    expect(screen.getByText('Activate the public status page for the prospect at this stage.')).toBeInTheDocument();
+  });
+
+  it('shows status page toggle config when selected', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Enable Status Page'));
+
+    expect(screen.getByText(/enables the public status page/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/enable public status page at this stage/i)).toBeChecked();
+  });
+
+  it('saves status page toggle stage with correct config', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Enable Status Page'));
+    await user.type(screen.getByLabelText(/stage name/i), 'Activate Status Page');
+    await user.type(
+      screen.getByLabelText(/custom status message/i),
+      'Welcome! Track your progress here.'
+    );
+
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(defaultProps.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Activate Status Page',
+        stage_type: 'status_page_toggle',
+        config: expect.objectContaining({
+          enable_public_status: true,
+          custom_message: 'Welcome! Track your progress here.',
+        }) as unknown,
+      })
+    );
+  });
+
+  // =========================================================================
+  // All 6 Stage Types Present
+  // =========================================================================
+
+  it('shows all 6 stage type options', () => {
+    render(<StageConfigModal {...defaultProps} />);
+    expect(screen.getByText('Form Submission')).toBeInTheDocument();
+    expect(screen.getByText('Document Upload')).toBeInTheDocument();
+    expect(screen.getByText('Meeting')).toBeInTheDocument();
+    expect(screen.getByText('Election / Vote')).toBeInTheDocument();
+    expect(screen.getByText('Manual Approval')).toBeInTheDocument();
+    expect(screen.getByText('Enable Status Page')).toBeInTheDocument();
+  });
+});
