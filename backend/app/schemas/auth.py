@@ -164,6 +164,12 @@ class PasswordReset(BaseModel):
     new_password: str = Field(..., min_length=12)
 
 
+class ValidateResetToken(BaseModel):
+    """Schema for validating a password reset token"""
+
+    token: str = Field(..., min_length=1)
+
+
 class EmailVerification(BaseModel):
     """Schema for email verification"""
 

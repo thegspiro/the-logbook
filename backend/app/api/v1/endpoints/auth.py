@@ -42,6 +42,7 @@ from app.schemas.auth import (
     TokenResponse,
     UserLogin,
     UserRegister,
+    ValidateResetToken,
 )
 from app.services.auth_service import RESET_TOKEN_EXPIRY_MINUTES, AuthService
 
@@ -735,7 +736,7 @@ async def reset_password(
 
 @router.post("/validate-reset-token", dependencies=[rate_limit_password_reset()])
 async def validate_reset_token(
-    token_data: dict,
+    token_data: ValidateResetToken,
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -743,15 +744,8 @@ async def validate_reset_token(
 
     Returns whether the token is valid and the associated email.
     """
-    token = token_data.get("token")
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid password reset link. Please request a new reset link from the login page.",
-        )
-
     auth_service = AuthService(db)
-    is_valid, email = await auth_service.validate_reset_token(token)
+    is_valid, email = await auth_service.validate_reset_token(token_data.token)
 
     if not is_valid:
         raise HTTPException(
