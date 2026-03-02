@@ -243,7 +243,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
       </div>
 
       {error && (
-        <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded p-3">
+        <div role="alert" className="mb-4 bg-red-500/10 border border-red-500/30 rounded p-3">
           <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
         </div>
       )}
@@ -291,6 +291,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                     type="button"
                     onClick={() => setFormData((prev) => ({ ...prev, name: '', user_id: '' }))}
                     className="ml-2 text-theme-text-muted hover:text-red-400"
+                    aria-label="Clear selected member"
                   >
                     (clear)
                   </button>
@@ -466,6 +467,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                             <button
                               type="button"
                               onClick={() => { void handleToggleAccepted(candidate); }}
+                              aria-label={`${candidate.accepted ? 'Accepted' : 'Accept'} ${candidate.name}`}
                               className={`px-2 py-1 text-xs rounded ${
                                 candidate.accepted
                                   ? 'bg-green-500/20 text-green-700 dark:text-green-300 hover:bg-green-500/30'
@@ -477,6 +479,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                             <button
                               type="button"
                               onClick={() => startEdit(candidate)}
+                              aria-label={`Edit ${candidate.name}`}
                               className="px-2 py-1 text-xs bg-theme-surface text-theme-text-secondary rounded hover:bg-theme-surface-hover"
                             >
                               Edit
@@ -484,6 +487,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                             <button
                               type="button"
                               onClick={() => { void handleDelete(candidate.id, candidate.name); }}
+                              aria-label={`Remove ${candidate.name}`}
                               className="px-2 py-1 text-xs bg-red-500/20 text-red-700 dark:text-red-300 rounded hover:bg-red-500/30"
                             >
                               Remove

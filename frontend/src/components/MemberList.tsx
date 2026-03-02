@@ -22,7 +22,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
   return (
     <div className="bg-theme-surface shadow overflow-hidden sm:rounded-lg">
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-theme-surface-border">
+        <table className="min-w-full divide-y divide-theme-surface-border" aria-label="Organization members">
           <thead className="bg-theme-surface-secondary">
             <tr>
               <th

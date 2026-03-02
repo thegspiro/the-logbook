@@ -253,7 +253,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
         <p className="text-sm text-theme-text-muted mb-4">{getMethodLabel()}</p>
 
         {error && (
-          <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded p-3">
+          <div role="alert" className="mb-4 bg-red-500/10 border border-red-500/30 rounded p-3">
             <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
           </div>
         )}
@@ -296,7 +296,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
                 <>
                   {/* Ranked Choice: Show ranking */}
                   {votingMethod === 'ranked_choice' && (
-                    <div className="space-y-2">
+                    <div className="space-y-2" role="group" aria-label={`Ranked choice candidates${position !== '_default' ? ` for ${position}` : ''}`}>
                       {(rankings[position] || []).length > 0 && (
                         <div className="mb-4 p-3 bg-blue-500/10 rounded-lg">
                           <p className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-2">Your Rankings:</p>
@@ -314,6 +314,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => handleRankingRemove(position, candidateId)}
+                                  aria-label={`Remove ${candidate?.name ?? 'candidate'} from ranking`}
                                   className="text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-xs"
                                 >
                                   Remove
@@ -331,6 +332,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
                             type="button"
                             onClick={() => handleRankingAdd(position, candidate.id)}
                             disabled={isRanked}
+                            aria-label={isRanked ? `${candidate.name} ranked #${(rankings[position] || []).indexOf(candidate.id) + 1}` : `Add ${candidate.name} to ranking`}
                             className={`w-full text-left p-4 rounded-lg border-2 transition-colors ${
                               isRanked
                                 ? 'border-blue-500 bg-blue-500/10 opacity-60'
@@ -354,7 +356,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
 
                   {/* Approval Voting: Checkboxes */}
                   {votingMethod === 'approval' && (
-                    <div className="space-y-2">
+                    <div className="space-y-2" role="group" aria-label={`Approval voting candidates${position !== '_default' ? ` for ${position}` : ''}`}>
                       {positionCandidates.map((candidate) => {
                         const isApproved = (approvals[position] || new Set()).has(candidate.id);
                         return (
@@ -362,6 +364,8 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
                             key={candidate.id}
                             type="button"
                             onClick={() => handleApprovalToggle(position, candidate.id)}
+                            aria-pressed={isApproved}
+                            aria-label={`${isApproved ? 'Remove approval for' : 'Approve'} ${candidate.name}`}
                             className={`w-full text-left p-4 rounded-lg border-2 transition-colors ${
                               isApproved
                                 ? 'border-green-500 bg-green-500/10'
@@ -399,7 +403,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
 
                   {/* Simple / Supermajority: Radio-style selection */}
                   {(votingMethod === 'simple_majority' || votingMethod === 'supermajority') && (
-                    <div className="space-y-2">
+                    <div className="space-y-2" role="group" aria-label={`Candidates${position !== '_default' ? ` for ${position}` : ''}`}>
                       {positionCandidates.map((candidate) => {
                         const isSelected = selectedCandidates[position] === candidate.id;
                         return (
@@ -407,6 +411,8 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
                             key={candidate.id}
                             type="button"
                             onClick={() => handleSimpleSelect(position, candidate.id)}
+                            aria-pressed={isSelected}
+                            aria-label={`Select ${candidate.name}`}
                             className={`w-full text-left p-4 rounded-lg border-2 transition-colors ${
                               isSelected
                                 ? 'border-blue-500 bg-blue-500/10'

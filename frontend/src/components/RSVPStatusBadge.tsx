@@ -20,11 +20,13 @@ const sizeClasses = {
 };
 
 export const RSVPStatusBadge: React.FC<RSVPStatusBadgeProps> = ({ status, size = 'md' }) => {
+  const label = getRSVPStatusLabel(status);
   return (
     <span
       className={`inline-flex items-center rounded-full font-medium ${getRSVPStatusColor(status)} ${sizeClasses[size]}`}
+      aria-label={`RSVP status: ${label}`}
     >
-      {getRSVPStatusLabel(status)}
+      {label}
     </span>
   );
 };

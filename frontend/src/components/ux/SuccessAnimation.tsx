@@ -37,7 +37,7 @@ export const SuccessAnimation: React.FC<SuccessAnimationProps> = ({
   if (!visible) return null;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center pointer-events-none">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center pointer-events-none" role="status" aria-live="polite">
       <div className="bg-theme-surface-modal/95 backdrop-blur-sm rounded-2xl p-8 shadow-2xl border border-theme-surface-border animate-success-pop">
         {/* Animated checkmark circle */}
         <div className="mx-auto w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mb-3">

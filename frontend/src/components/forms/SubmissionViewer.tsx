@@ -247,6 +247,8 @@ const SubmissionViewer = ({
               <button
                 type="button"
                 onClick={() => setExpandedId(isExpanded ? null : sub.id)}
+                aria-expanded={isExpanded}
+                aria-label={`Submission by ${sub.submitter_name || sub.submitted_by || 'Anonymous'}`}
                 className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-theme-surface-secondary transition-colors"
               >
                 {isExpanded ? (
@@ -303,6 +305,7 @@ const SubmissionViewer = ({
                         type="button"
                         onClick={() => { void handleDelete(sub.id); }}
                         disabled={deleting === sub.id}
+                        aria-label={`Delete submission by ${sub.submitter_name || sub.submitted_by || 'Anonymous'}`}
                         className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors disabled:opacity-50"
                       >
                         {deleting === sub.id ? (

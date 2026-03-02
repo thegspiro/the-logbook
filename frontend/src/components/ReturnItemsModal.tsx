@@ -445,6 +445,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
                               <select
                                 value={sel.returnCondition}
                                 onChange={(e) => updateCondition(item.recordId, e.target.value)}
+                                aria-label={`Return condition for ${item.itemName}`}
                                 className="px-2 py-1 border border-theme-border rounded text-xs bg-theme-surface text-theme-text-primary"
                               >
                                 {CONDITION_OPTIONS.map((c) => (
@@ -468,6 +469,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
                                       Math.min(item.quantityIssued ?? 1, Math.max(1, parseInt(e.target.value) || 1)),
                                     )
                                   }
+                                  aria-label={`Return quantity for ${item.itemName}`}
                                   className="w-16 px-2 py-1 border border-theme-border rounded text-xs text-center bg-theme-surface text-theme-text-primary"
                                 />
                                 <span className="text-xs text-theme-text-muted">
