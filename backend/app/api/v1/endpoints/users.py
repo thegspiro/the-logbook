@@ -15,6 +15,7 @@ from fastapi import (
     File,
     HTTPException,
     Query,
+    Request,
     UploadFile,
     status,
 )
@@ -46,6 +47,7 @@ from app.schemas.user import (
     UserUpdate,
     UserWithRolesResponse,
 )
+from app.core.security_middleware import check_rate_limit
 from app.core.utils import safe_error_detail
 from app.services.organization_service import OrganizationService
 from app.services.user_service import UserService
@@ -56,6 +58,11 @@ from app.services.user_service import UserService
 
 
 router = APIRouter()
+
+
+async def _rate_limit_admin_reset(request: Request) -> None:
+    """Rate limit admin password resets: 5 per 5 minutes."""
+    await check_rate_limit(request, max_requests=5, window_seconds=300, lockout_seconds=900)
 
 
 @router.get("", response_model=list[UserListResponse])
@@ -1089,7 +1096,11 @@ async def delete_user(
         )
 
 
-@router.post("/{user_id}/reset-password", status_code=status.HTTP_200_OK)
+@router.post(
+    "/{user_id}/reset-password",
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(_rate_limit_admin_reset)],
+)
 async def admin_reset_password(
     user_id: UUID,
     reset_data: AdminPasswordReset,

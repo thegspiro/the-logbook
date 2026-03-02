@@ -99,6 +99,7 @@ class Settings(BaseSettings):
 
     # Password Policy
     PASSWORD_MIN_LENGTH: int = 12
+    PASSWORD_MAX_LENGTH: int = 128  # Prevent Argon2 DoS with very long inputs
     PASSWORD_REQUIRE_UPPERCASE: bool = True
     PASSWORD_REQUIRE_LOWERCASE: bool = True
     PASSWORD_REQUIRE_NUMBERS: bool = True

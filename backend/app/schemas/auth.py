@@ -29,7 +29,7 @@ class UserLogin(BaseModel):
     """
 
     username: str = Field(..., min_length=3, max_length=100)
-    password: str = Field(..., min_length=8)
+    password: str = Field(..., min_length=8, max_length=128)
 
     @field_validator("username")
     @classmethod
@@ -61,7 +61,7 @@ class UserRegister(BaseModel):
 
     username: str = Field(..., min_length=3, max_length=100)
     email: EmailStr
-    password: str = Field(..., min_length=12)
+    password: str = Field(..., min_length=12, max_length=128)
     first_name: str = Field(..., min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
     membership_number: Optional[str] = Field(None, max_length=50)
@@ -147,8 +147,8 @@ class CurrentUser(BaseModel):
 class PasswordChange(BaseModel):
     """Schema for changing password"""
 
-    current_password: str
-    new_password: str = Field(..., min_length=12)
+    current_password: str = Field(..., max_length=128)
+    new_password: str = Field(..., min_length=12, max_length=128)
 
 
 class PasswordResetRequest(BaseModel):
@@ -161,7 +161,7 @@ class PasswordReset(BaseModel):
     """Schema for resetting password with token"""
 
     token: str
-    new_password: str = Field(..., min_length=12)
+    new_password: str = Field(..., min_length=12, max_length=128)
 
 
 class ValidateResetToken(BaseModel):
