@@ -138,17 +138,25 @@ PATCH  /api/v1/admin-hours/entries/{id}       # Edit pending entry (before appro
 ```
 frontend/src/modules/admin-hours/
 ├── index.ts                    # Barrel export
-├── routes.tsx                  # Route definitions
+├── routes.tsx                  # Route definitions (lazy-loaded)
 ├── types/                      # TypeScript types
 ├── services/                   # API service (axios)
-├── store/                      # Zustand store
+├── store/                      # Zustand store + tests
+│   └── adminHoursStore.test.ts # 661-line test suite
 ├── pages/
 │   ├── AdminHoursPage.tsx      # Personal hours view
-│   ├── AdminHoursManagePage.tsx # Admin management dashboard
+│   ├── AdminHoursManagePage.tsx # Admin management (thin orchestrator)
 │   ├── AdminHoursQRCodePage.tsx # QR code generation
 │   └── AdminHoursClockInPage.tsx # QR scan landing page
-└── components/                 # Shared components
+└── components/                 # Focused sub-components (decomposed 2026-03-02)
+    ├── ActiveSessionsTab.tsx   # Active clock-in sessions
+    ├── AllEntriesTab.tsx       # All entries with filters
+    ├── CategoriesTab.tsx       # Category management
+    ├── PendingReviewTab.tsx    # Approval queue
+    └── SummaryTab.tsx          # Summary dashboard
 ```
+
+The `AdminHoursManagePage` was decomposed from a 1,000+ line monolith into 5 focused tab components for better maintainability.
 
 ---
 

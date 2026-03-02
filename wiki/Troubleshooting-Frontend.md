@@ -373,4 +373,77 @@ A new `useMediaQuery` hook replaces inline `window.matchMedia` calls for respons
 
 ---
 
+## API Service Split (2026-03-02)
+
+### Problem: Import errors referencing `services/api`
+
+**Cause:** The monolithic `services/api.ts` (5,330 lines) was split into 13 domain-specific service files.
+
+**Fix:** Update imports to the new files:
+```typescript
+// Old
+import { eventService } from '@/services/api';
+// New
+import { eventService } from '@/services/eventServices';
+```
+
+The legacy `services/api.ts` re-exports for backward compatibility, but direct imports are preferred.
+
+---
+
+## exactOptionalPropertyTypes (2026-03-02)
+
+### Problem: TypeScript errors about `undefined` not assignable to optional properties
+
+**Cause:** `exactOptionalPropertyTypes` was enabled in `tsconfig.json`.
+
+**Fix:** Omit the property instead of assigning `undefined`:
+```typescript
+const x: { bar?: string } = {}; // ✅ OK (omitted)
+const x: { bar?: string } = { bar: undefined }; // ❌ Error
+```
+
+---
+
+## Route Module Extraction (2026-03-02)
+
+### Problem: Custom routes missing after update
+
+**Cause:** Inline routes were extracted from `App.tsx` into module `routes.tsx` files.
+
+**Fix:** Check `frontend/src/modules/<module>/routes.tsx` for your routes. New modules: `action-items`, `admin`, `documents`, `forms`, `integrations`, `notifications`, `settings`.
+
+---
+
+## Module Component Decomposition (2026-03-02)
+
+### Problem: Component not rendering or missing content after update
+
+**Cause:** Large page components were decomposed into focused sub-components:
+- `AdminHoursManagePage` → 5 tab components (`ActiveSessionsTab`, `AllEntriesTab`, `CategoriesTab`, `PendingReviewTab`, `SummaryTab`)
+- `ApparatusDetailPage` → 7 components (`ApparatusDetailHeader`, `ApparatusOverviewTab`, `DocumentsTab`, `EquipmentTab`, `FuelLogsTab`, `MaintenanceTab`, `OperatorsTab`)
+- `ShiftSettingsPanel` → 6 card components
+
+**Fix:** Clear browser cache. The UI behavior is unchanged — only the internal component structure was refactored.
+
+---
+
+## Mobile Member ID Scanner (2026-03-02)
+
+### Problem: Scan Member ID button not visible on mobile
+
+**Status (Fixed):** Mobile toolbar layout updated so the button is accessible. Clear browser cache and reload.
+
+### Problem: Camera not activating for member ID scan
+
+**Fix:** Grant camera permissions in your browser settings. Use Chrome or Safari for best BarcodeDetector support.
+
+---
+
+## ARIA Accessibility (2026-03-02)
+
+ARIA attributes have been added across the UI. If automated accessibility testing shows new warnings about duplicate IDs or conflicting ARIA roles, check that custom components don't add redundant ARIA attributes that conflict with the built-in ones.
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Backend Issues](Troubleshooting-Backend)
