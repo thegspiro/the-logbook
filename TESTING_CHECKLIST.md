@@ -760,40 +760,124 @@
 
 ## 30. Improvements & Future-Proofing Recommendations
 
+| ID | Area | Recommendation | Priority | Status |
+|---|---|---|---|---|
+| IMP-01 | **Security** | Implement token blacklist/revocation on logout (Redis-backed) — currently tokens remain valid until expiry | High | **Implemented** |
+| IMP-02 | **Security** | Move rate limiting from in-memory to Redis for multi-instance deployments | High | **Implemented** |
+| IMP-03 | **Security** | Remove `'unsafe-inline'` from CSP; migrate to nonce-based inline styles | High | **Partially — `unsafe-inline` still in `style-src`** |
+| IMP-04 | **Security** | Add antivirus/malware scanning on file uploads (ClamAV integration) | High | **Not Implemented** |
+| IMP-05 | **Security** | Enforce TOTP 2FA for all admin-role accounts | High | **Partially — TOTP exists but not enforced for admins** |
+| IMP-06 | **Security** | Implement automated audit log integrity verification as a scheduled task | Medium | **Implemented** |
+| IMP-07 | **Security** | Add request size limiting middleware to prevent oversized payloads | Medium | **Implemented** |
+| IMP-08 | **Security** | Add request ID headers (`X-Request-ID`) for distributed tracing | Medium | **Implemented** |
+| IMP-09 | **Accessibility** | Run automated axe-core or Lighthouse CI in CI/CD pipeline on every build | High | **Not Implemented** |
+| IMP-10 | **Accessibility** | Add `autocomplete` attributes to all form fields (login, profile, address) | High | **Partially — login and password fields done, address/profile fields missing** |
+| IMP-11 | **Accessibility** | Ensure all data tables have proper `<caption>` and `scope` attributes | Medium | **Partially — `<th>` used in 30+ files but no `<caption>` elements** |
+| IMP-12 | **Accessibility** | Add visible focus indicators to custom components (not just native elements) | High | **Implemented** |
+| IMP-13 | **Accessibility** | Implement error summary component: on form error, focus moves to summary at top | Medium | **Not Implemented** |
+| IMP-14 | **Accessibility** | Add `aria-current="page"` to active navigation item | Low | **Implemented** |
+| IMP-15 | **Accessibility** | Ensure all dynamic content updates announce via `aria-live` regions | Medium | **Implemented** |
+| IMP-16 | **Frontend** | Add client-side form state persistence (localStorage) to survive accidental refresh/timeout | Medium | **Not Implemented** |
+| IMP-17 | **Frontend** | Implement optimistic UI updates for common actions (RSVP, check-in) | Low | **Implemented** |
+| IMP-18 | **Frontend** | Add skeleton loading screens instead of spinners for better perceived performance | Low | **Partially — `Skeleton` components exist but limited adoption** |
+| IMP-19 | **Frontend** | Implement service worker caching strategy for static assets (PWA offline) | Medium | **Implemented** |
+| IMP-20 | **Backend** | Add database connection encryption (`DB_SSL=true`) as required in production config validation | High | **Partially — `DB_SSL` setting exists but defaults to `false` with no production enforcement** |
+| IMP-21 | **Backend** | Add container memory/CPU limits in docker-compose production profile | Medium | **Implemented** |
+| IMP-22 | **Backend** | Enable Elasticsearch security (`xpack.security.enabled=true`) in production | Medium | **Implemented** |
+| IMP-23 | **Backend** | Add automated GeoIP database update mechanism | Low | **Not Implemented** |
+| IMP-24 | **Backend** | Implement database-level row security or connection-per-tenant for stronger isolation | Low | **Not Implemented** |
+| IMP-25 | **Backend** | Add request timeout middleware (e.g. 30s max per request) | Medium | **Not Implemented** |
+| IMP-26 | **Email** | Add email bounce handling and delivery tracking | Medium | **Not Implemented** |
+| IMP-27 | **Email** | Add unsubscribe mechanism for non-critical notifications (CAN-SPAM compliance) | Medium | **Not Implemented** |
+| IMP-28 | **Testing** | Add end-to-end tests (Playwright/Cypress) covering critical flows: login, member create, event RSVP, training submit | High | **Partially — 3 E2E specs (auth, dashboard, navigation) but missing member create, event RSVP, training submit** |
+| IMP-29 | **Testing** | Add load testing (k6/Locust) to verify performance under expected concurrent user count | Medium | **Not Implemented** |
+| IMP-30 | **Monitoring** | Set up uptime monitoring and alerting (health endpoint checks) | High | **Partially — `/health` and `/health/detailed` endpoints exist; external monitoring/alerting not configured** |
+| IMP-31 | **Monitoring** | Configure Sentry for frontend + backend error tracking | High | **Partially — Backend Sentry configured; frontend Sentry not integrated** |
+| IMP-32 | **Infrastructure** | Document disaster recovery plan: database backup restoration, failover procedures | High | **Partially — deployment docs mention backups but no dedicated DR plan** |
+| IMP-33 | **Infrastructure** | Set up automated database backups with off-site storage | High | **Partially — backup script with cloud support exists but automation/scheduling not configured** |
+| IMP-34 | **Frontend** | Lazy-load heavy module pages (elections, facilities, apparatus) to reduce initial bundle size | Medium | **Implemented** |
+| IMP-35 | **Frontend** | Add `rel="noopener noreferrer"` to all external links for security | Low | **Implemented** |
+
+## 23. Implementation Status Review (2026-03-02)
+
+### Summary
+
+Of the 35 recommendations in Section 22:
+
+- **Fully Implemented:** 14 (IMP-01, IMP-02, IMP-06, IMP-07, IMP-08, IMP-12, IMP-14, IMP-15, IMP-17, IMP-19, IMP-21, IMP-22, IMP-34, IMP-35)
+- **Partially Implemented:** 11 (IMP-03, IMP-05, IMP-10, IMP-11, IMP-18, IMP-20, IMP-28, IMP-30, IMP-31, IMP-32, IMP-33)
+- **Not Implemented:** 10 (IMP-04, IMP-09, IMP-13, IMP-16, IMP-23, IMP-24, IMP-25, IMP-26, IMP-27, IMP-29)
+
+### Detailed Findings
+
+#### Fully Implemented
+
+| ID | Evidence |
+|---|---|
+| **IMP-01** | Token revocation on logout is implemented via session-based validation. `auth_service.py:554` checks for an active `UserSession` row on every request; logout deletes the session, immediately invalidating the token. Refresh token replay detection is also in place (`auth_service.py:236`). |
+| **IMP-02** | Rate limiting uses Redis sliding-window when available (`security_middleware.py:386`, `security.py:656`). Falls back to in-memory only when Redis is unreachable. |
+| **IMP-06** | Audit log integrity verification runs as a scheduled task (`scheduled_tasks.py:997`). Weekly archival includes chain verification, and a dedicated endpoint exists at `GET /security-monitoring/audit-log/integrity`. A startup integrity check also runs in `main.py:1184`. |
+| **IMP-08** | `X-Request-ID` headers are generated/propagated in `IPLoggingMiddleware` (`security_middleware.py:840`), bound to Loguru context for correlation (`logging.py:23`), and attached to all responses (`security_middleware.py:872`). |
+| **IMP-12** | Focus indicators are comprehensively implemented in `styles/index.css` with `focus-visible` rings on all interactive elements, high-contrast mode enhancements, and Tailwind `focus:ring-*` classes on buttons, inputs, selects, etc. |
+| **IMP-14** | `aria-current="page"` is used in `TopNavigation.tsx`, `SideNavigation.tsx`, `Breadcrumbs.tsx`, `SettingsPage.tsx`, `Pagination.tsx`, `ProgressSteps.tsx`, and multiple tab-based pages. |
+| **IMP-15** | `aria-live` regions are used extensively (~30+ locations) for loading states, error alerts, status messages, and toast notifications across pages and components. |
+| **IMP-17** | An `useOptimisticUpdate` hook exists at `hooks/useOptimisticUpdate.ts` providing a generic optimistic update pattern with rollback on failure. |
+| **IMP-19** | PWA service worker is configured in `vite.config.ts` with `workbox` settings. API routes use `NetworkOnly` strategy (HIPAA compliance), and static assets are precached. |
+| **IMP-21** | Both `docker-compose.yml` and `docker-compose.minimal.yml` include `deploy.resources.limits` and `deploy.resources.reservations` for memory on all services (MySQL, Redis, backend, frontend). |
+| **IMP-22** | `xpack.security.enabled=true` is set in `docker-compose.yml` for the Elasticsearch service. |
+| **IMP-34** | All heavy module routes use `lazyWithRetry()` for code-splitting within their route files (e.g., `elections/routes.tsx`, `facilities/routes.tsx`, `apparatus/routes.tsx`). Wrapped in `<Suspense>` for async loading. |
+| **IMP-35** | All external links (verified across 8 files including `HelpLink.tsx`, `FormsPage.tsx`, `TrainingProgramsPage.tsx`, onboarding pages) include `rel="noopener noreferrer"`. |
+| **IMP-07** | Request body size is limited at the Nginx layer (`client_max_body_size 50M` in `infrastructure/nginx/nginx.conf:105`). Individual endpoints enforce stricter limits: documents at 50MB, email templates at 10MB, images per type. |
+
+#### Partially Implemented
+
+| ID | What's Done | What's Missing |
+|---|---|---|
+| **IMP-03** | CSP header is set in `security_middleware.py:338-358` with `script-src 'self'` (no inline scripts). Nginx configs also apply matching CSP. | `'unsafe-inline'` remains in `style-src`, `style-src-elem`, and `style-src-attr` due to Tailwind CSS runtime injection. Migration to nonce-based styles requires changes to how Tailwind generates styles. |
+| **IMP-10** | Login form has `autoComplete="username"` and `autoComplete="current-password"`. Forgot password has `autoComplete="email"`. Reset password has `autoComplete="new-password"`. User settings password fields are also covered. | Address fields in member creation forms lack `autocomplete` attributes (e.g., `address-line1`, `address-level2`, `postal-code`). Profile edit forms should add `given-name`, `family-name`, `tel`, etc. |
+| **IMP-05** | TOTP 2FA infrastructure exists — models (`user.py` has `totp_secret`, `totp_enabled`), schemas (`auth.py`), and endpoints (`auth.py`) support TOTP setup/verification. | 2FA is opt-in, not enforced for admin accounts. No middleware or login-flow gate requires admins to enable TOTP. |
+| **IMP-11** | Tables across 30+ files use proper `<th>` elements for headers. | No `<caption>` elements found on any data table. No `scope` attributes on `<th>` elements. |
+| **IMP-18** | `Skeleton`, `SkeletonCard`, and `SkeletonPage` components exist in `components/ux/Skeleton.tsx`. Used in a handful of pages (`EventsPage`, `Members`, `NotificationsPage`, `EmailTemplatesPage`). | Most pages still use spinner-based loading. Skeleton components should be adopted more widely. |
+| **IMP-20** | `DB_SSL` config option exists in `config.py:43` (`DB_SSL: bool = False`). | Defaults to `false` and the database URL construction in `config.py:62` doesn't append SSL parameters when `DB_SSL=true`. No production startup validation warns if SSL is disabled. |
+| **IMP-28** | Playwright is configured with 5 browser/device targets. 3 E2E specs exist: `auth.spec.ts` (login page), `dashboard.spec.ts`, `navigation.spec.ts`. | Missing critical-flow E2E tests: member creation, event RSVP, training submission, and inventory operations. |
+| **IMP-30** | Comprehensive `/health` and `/health/detailed` endpoints exist in `main.py:1451` checking database, Redis, schema, security config, and startup status. Returns `503` on unhealthy. Docker healthcheck script exists at `database/healthcheck.sh`. | No external uptime monitoring or alerting service (PagerDuty, UptimeRobot, etc.) is configured to call these endpoints. |
+| **IMP-31** | Backend Sentry is fully configured: `sentry-sdk` in `requirements.txt`, `setup_sentry()` in `logging.py` with FastAPI, Loguru, and SQLAlchemy integrations, enabled via `SENTRY_ENABLED` + `SENTRY_DSN` env vars. | Frontend has no Sentry integration. No `@sentry/react` in `package.json`, no `Sentry.init()` call, no `ErrorBoundary` integration with Sentry. |
+| **IMP-32** | `scripts/backup.sh` includes restore functionality. Deployment docs (`docs/DEPLOYMENT.md`, wiki pages) mention backup procedures. | No dedicated disaster recovery plan document covering full failover procedures, RTO/RPO targets, or step-by-step recovery runbooks. |
+| **IMP-33** | `scripts/backup.sh` (397 lines) supports MySQL dump, file backups, compression with SHA256 checksums, and cloud upload to S3/Azure/GCS. Includes restore and list commands. | No automated scheduling configured (crontab entry documented but not set up). Off-site cloud storage requires manual env var configuration. |
+
+#### Not Implemented
+
+| ID | Notes |
+|---|---|
+| **IMP-04** | No ClamAV or antivirus integration found. File uploads have MIME type validation and image content verification (`image_validator.py`) but no malware scanning. Security docs mention this as a recommended enhancement. |
+| **IMP-09** | No axe-core, Lighthouse CI, or automated accessibility testing in the CI pipeline (`.github/workflows/ci.yml`). No `@axe-core/playwright` integration in E2E tests. |
+| **IMP-13** | No error summary component that aggregates form errors and shifts focus to the top of the form on validation failure. Individual field errors are shown inline only. |
+| **IMP-16** | No localStorage-based form draft persistence. Forms lose all data on page refresh or session timeout. |
+| **IMP-23** | GeoIP service exists (`geoip.py`, `ip_security_service.py`) but there is no automated mechanism to download/update the MaxMind GeoIP database. |
+| **IMP-24** | Multi-tenant isolation is handled at the application layer (queries filter by `organization_id`). No database-level row security policies or connection-per-tenant setup. |
+| **IMP-25** | No request timeout middleware. Long-running requests are not capped. Individual HTTP client calls (e.g., `email_test_helper.py`) have timeouts, but there's no global per-request timeout. |
+| **IMP-26** | No email bounce handling or delivery tracking. Email is sent via `fastapi-mail` with no webhook or feedback loop for bounces/complaints. |
+| **IMP-27** | No unsubscribe headers (`List-Unsubscribe`) or unsubscribe mechanism for notification emails. |
+| **IMP-29** | No load testing scripts (k6, Locust, or similar) found in the repository. |
+
+### Additional Recommendations
+
+Based on this review, here are newly identified areas for improvement beyond the original 35:
+
 | ID | Area | Recommendation | Priority |
 |---|---|---|---|
-| IMP-01 | **Security** | Implement token blacklist/revocation on logout (Redis-backed) — currently tokens remain valid until expiry | High |
-| IMP-02 | **Security** | Move rate limiting from in-memory to Redis for multi-instance deployments | High |
-| IMP-03 | **Security** | Remove `'unsafe-inline'` from CSP; migrate to nonce-based inline styles | High |
-| IMP-04 | **Security** | Add antivirus/malware scanning on file uploads (ClamAV integration) | High |
-| IMP-05 | **Security** | Enforce TOTP 2FA for all admin-role accounts | High |
-| IMP-06 | **Security** | Implement automated audit log integrity verification as a scheduled task | Medium |
-| IMP-07 | **Security** | Add request size limiting middleware to prevent oversized payloads | Medium |
-| IMP-08 | **Security** | Add request ID headers (`X-Request-ID`) for distributed tracing | Medium |
-| IMP-09 | **Accessibility** | Run automated axe-core or Lighthouse CI in CI/CD pipeline on every build | High |
-| IMP-10 | **Accessibility** | Add `autocomplete` attributes to all form fields (login, profile, address) | High |
-| IMP-11 | **Accessibility** | Ensure all data tables have proper `<caption>` and `scope` attributes | Medium |
-| IMP-12 | **Accessibility** | Add visible focus indicators to custom components (not just native elements) | High |
-| IMP-13 | **Accessibility** | Implement error summary component: on form error, focus moves to summary at top | Medium |
-| IMP-14 | **Accessibility** | Add `aria-current="page"` to active navigation item | Low |
-| IMP-15 | **Accessibility** | Ensure all dynamic content updates announce via `aria-live` regions | Medium |
-| IMP-16 | **Frontend** | Add client-side form state persistence (localStorage) to survive accidental refresh/timeout | Medium |
-| IMP-17 | **Frontend** | Implement optimistic UI updates for common actions (RSVP, check-in) | Low |
-| IMP-18 | **Frontend** | Add skeleton loading screens instead of spinners for better perceived performance | Low |
-| IMP-19 | **Frontend** | Implement service worker caching strategy for static assets (PWA offline) | Medium |
-| IMP-20 | **Backend** | Add database connection encryption (`DB_SSL=true`) as required in production config validation | High |
-| IMP-21 | **Backend** | Add container memory/CPU limits in docker-compose production profile | Medium |
-| IMP-22 | **Backend** | Enable Elasticsearch security (`xpack.security.enabled=true`) in production | Medium |
-| IMP-23 | **Backend** | Add automated GeoIP database update mechanism | Low |
-| IMP-24 | **Backend** | Implement database-level row security or connection-per-tenant for stronger isolation | Low |
-| IMP-25 | **Backend** | Add request timeout middleware (e.g. 30s max per request) | Medium |
-| IMP-26 | **Email** | Add email bounce handling and delivery tracking | Medium |
-| IMP-27 | **Email** | Add unsubscribe mechanism for non-critical notifications (CAN-SPAM compliance) | Medium |
-| IMP-28 | **Testing** | Add end-to-end tests (Playwright/Cypress) covering critical flows: login, member create, event RSVP, training submit | High |
-| IMP-29 | **Testing** | Add load testing (k6/Locust) to verify performance under expected concurrent user count | Medium |
-| IMP-30 | **Monitoring** | Set up uptime monitoring and alerting (health endpoint checks) | High |
-| IMP-31 | **Monitoring** | Configure Sentry for frontend + backend error tracking | High |
-| IMP-32 | **Infrastructure** | Document disaster recovery plan: database backup restoration, failover procedures | High |
-| IMP-33 | **Infrastructure** | Set up automated database backups with off-site storage | High |
-| IMP-34 | **Frontend** | Lazy-load heavy module pages (elections, facilities, apparatus) to reduce initial bundle size | Medium |
-| IMP-35 | **Frontend** | Add `rel="noopener noreferrer"` to all external links for security | Low |
+| IMP-36 | **Testing** | Add accessibility testing to E2E suite — integrate `@axe-core/playwright` to automatically check pages for WCAG violations during Playwright runs | High |
+| IMP-37 | **Testing** | Expand E2E coverage to at least 5 more critical flows: member creation, event RSVP, training record submission, inventory assignment, and role management | High |
+| IMP-38 | **Frontend** | Add `autocomplete` attributes to remaining profile/address forms (`given-name`, `family-name`, `tel`, `street-address`, `address-level2`, `postal-code`) per WCAG 1.3.5 — login and password forms already done | Medium |
+| IMP-39 | **Frontend** | Add `<caption>` elements to all data tables (or `aria-label` / `aria-labelledby` alternatives) for screen reader context | Medium |
+| IMP-40 | **Frontend** | Integrate `@sentry/react` for frontend error tracking with `Sentry.ErrorBoundary` wrapping the app root | High |
+| IMP-41 | **Frontend** | Implement form draft auto-save (localStorage) for long forms: event creation, training records, meeting minutes, and form builder | Medium |
+| IMP-42 | **Frontend** | Adopt `Skeleton` loading components in remaining high-traffic pages: Dashboard, MemberProfilePage, TrainingPages, InventoryPage | Low |
+| IMP-43 | **Infrastructure** | Configure automated backup scheduling (cron or Kubernetes CronJob) and integrate with the existing `scripts/backup.sh` for off-site cloud storage | Medium |
+| IMP-44 | **Backend** | Add `DB_SSL` enforcement in production — when `ENVIRONMENT=production`, validate that `DB_SSL=true` and append SSL parameters to the database URL | High |
+| IMP-45 | **Backend** | Add a global request timeout middleware (e.g., 30s) to prevent long-running requests from consuming server resources | Medium |
+| IMP-46 | **Monitoring** | Set up external uptime monitoring (e.g., UptimeRobot, Datadog) to poll `/health` endpoint with alerting on failures | Medium |
+| IMP-47 | **Security** | Enforce TOTP 2FA at the login flow for users with admin roles — add a middleware or login-gate that redirects admins to 2FA setup if not configured | High |
+| IMP-48 | **Security** | Plan CSP nonce migration — evaluate extracting Tailwind to build-time CSS to remove `'unsafe-inline'` from `style-src` | Medium |
+| IMP-49 | **Infrastructure** | Create a dedicated `DISASTER_RECOVERY.md` with RTO/RPO targets, step-by-step database restore procedures, and failover runbook | High |
+| IMP-50 | **Email** | Add `List-Unsubscribe` header to non-critical notification emails for CAN-SPAM compliance | Medium |
