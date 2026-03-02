@@ -18,6 +18,8 @@ import {
   Upload,
   CalendarClock,
   Plus,
+  Pencil,
+  Eye,
 } from 'lucide-react';
 import { Breadcrumbs, SkeletonPage } from '../../../components/ux';
 import { useEmailTemplatesStore } from '../store/emailTemplatesStore';
@@ -64,6 +66,7 @@ const EmailTemplatesPage: React.FC = () => {
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [, setIsDirty] = useState(false);
   const [activeTab, setActiveTab] = useState<'templates' | 'scheduled'>('templates');
+  const [editorView, setEditorView] = useState<'edit' | 'preview'>('edit');
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [members, setMembers] = useState<PreviewMember[]>([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
@@ -284,7 +287,7 @@ const EmailTemplatesPage: React.FC = () => {
           </div>
         )}
 
-        {/* Templates Tab: Main Layout: Template List | Editor | Preview */}
+        {/* Templates Tab: Main Layout: Sidebar + Main (tabbed editor/preview) */}
         {activeTab === 'templates' && <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Template list sidebar */}
           <div className="lg:col-span-3">
@@ -297,13 +300,13 @@ const EmailTemplatesPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Editor */}
-          <div className="lg:col-span-5">
+          {/* Main content area: editor / preview via tabs */}
+          <div className="lg:col-span-9">
             {selectedTemplate ? (
-              <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5">
+              <div className="bg-theme-surface border border-theme-surface-border rounded-xl">
                 {/* Template meta bar */}
-                <div className="flex items-center justify-between mb-4 pb-4 border-b border-theme-surface-border">
-                  <div>
+                <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-theme-surface-border">
+                  <div className="flex items-center gap-4">
                     <p className="text-theme-text-muted text-xs">
                       {selectedTemplate.description || 'No description'}
                     </p>
@@ -329,71 +332,117 @@ const EmailTemplatesPage: React.FC = () => {
                   </div>
                 </div>
 
-                <TemplateEditor
-                  template={selectedTemplate}
-                  isSaving={isSaving}
-                  onSave={(data) => { void handleSave(data); }}
-                  onDirtyChange={setIsDirty}
-                />
+                {/* Edit / Preview toggle */}
+                <div className="flex items-center gap-1 px-5 pt-3 pb-0">
+                  <button
+                    onClick={() => setEditorView('edit')}
+                    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${
+                      editorView === 'edit'
+                        ? 'border-orange-500 text-orange-600 dark:text-orange-400 bg-theme-surface-secondary'
+                        : 'border-transparent text-theme-text-secondary hover:text-theme-text-primary'
+                    }`}
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditorView('preview');
+                      if (!preview) {
+                        void previewTemplate(selectedTemplate.id, undefined, undefined, previewMemberId || undefined);
+                      }
+                    }}
+                    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${
+                      editorView === 'preview'
+                        ? 'border-orange-500 text-orange-600 dark:text-orange-400 bg-theme-surface-secondary'
+                        : 'border-transparent text-theme-text-secondary hover:text-theme-text-primary'
+                    }`}
+                  >
+                    <Eye className="h-4 w-4" />
+                    Preview
+                  </button>
+                </div>
 
-                {/* Attachments section */}
-                {selectedTemplate.allow_attachments && (
-                  <div className="mt-6 pt-4 border-t border-theme-surface-border">
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="text-theme-text-primary text-sm font-semibold flex items-center gap-2">
-                        <Paperclip className="w-4 h-4" />
-                        Attachments
-                      </h4>
-                      <label className="flex items-center space-x-1.5 px-3 py-1.5 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors cursor-pointer">
-                        {uploadingAttachment ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Upload className="w-3.5 h-3.5" />
-                        )}
-                        <span>Upload</span>
-                        <input
-                          type="file"
-                          className="hidden"
-                          onChange={(e) => { void handleUploadAttachment(e); }}
-                          disabled={uploadingAttachment}
-                        />
-                      </label>
-                    </div>
-                    {selectedTemplate.attachments.length > 0 ? (
-                      <div className="space-y-2">
-                        {selectedTemplate.attachments.map((att) => (
-                          <div
-                            key={att.id}
-                            className="flex items-center justify-between bg-theme-surface-secondary rounded-lg px-3 py-2"
-                          >
-                            <div className="flex items-center space-x-2 min-w-0">
-                              <Paperclip className="w-4 h-4 text-theme-text-muted flex-shrink-0" />
-                              <span className="text-theme-text-primary text-sm truncate">
-                                {att.filename}
-                              </span>
-                              {att.file_size && (
-                                <span className="text-theme-text-muted text-xs flex-shrink-0">
-                                  ({att.file_size})
-                                </span>
+                {/* Content area */}
+                <div className="p-5">
+                  {editorView === 'edit' ? (
+                    <>
+                      <TemplateEditor
+                        template={selectedTemplate}
+                        isSaving={isSaving}
+                        onSave={(data) => { void handleSave(data); }}
+                        onDirtyChange={setIsDirty}
+                      />
+
+                      {/* Attachments section */}
+                      {selectedTemplate.allow_attachments && (
+                        <div className="mt-6 pt-4 border-t border-theme-surface-border">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-theme-text-primary text-sm font-semibold flex items-center gap-2">
+                              <Paperclip className="w-4 h-4" />
+                              Attachments
+                            </h4>
+                            <label className="flex items-center space-x-1.5 px-3 py-1.5 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors cursor-pointer">
+                              {uploadingAttachment ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Upload className="w-3.5 h-3.5" />
                               )}
-                            </div>
-                            <button
-                              onClick={() => { void handleDeleteAttachment(att); }}
-                              className="text-red-400 hover:text-red-300 flex-shrink-0 ml-2"
-                              title="Delete attachment"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                              <span>Upload</span>
+                              <input
+                                type="file"
+                                className="hidden"
+                                onChange={(e) => { void handleUploadAttachment(e); }}
+                                disabled={uploadingAttachment}
+                              />
+                            </label>
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-theme-text-muted text-sm">
-                        No attachments. Files uploaded here will be included with every email sent using this template.
-                      </p>
-                    )}
-                  </div>
-                )}
+                          {selectedTemplate.attachments.length > 0 ? (
+                            <div className="space-y-2">
+                              {selectedTemplate.attachments.map((att) => (
+                                <div
+                                  key={att.id}
+                                  className="flex items-center justify-between bg-theme-surface-secondary rounded-lg px-3 py-2"
+                                >
+                                  <div className="flex items-center space-x-2 min-w-0">
+                                    <Paperclip className="w-4 h-4 text-theme-text-muted flex-shrink-0" />
+                                    <span className="text-theme-text-primary text-sm truncate">
+                                      {att.filename}
+                                    </span>
+                                    {att.file_size && (
+                                      <span className="text-theme-text-muted text-xs flex-shrink-0">
+                                        ({att.file_size})
+                                      </span>
+                                    )}
+                                  </div>
+                                  <button
+                                    onClick={() => { void handleDeleteAttachment(att); }}
+                                    className="text-red-400 hover:text-red-300 flex-shrink-0 ml-2"
+                                    title="Delete attachment"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-theme-text-muted text-sm">
+                              No attachments. Files uploaded here will be included with every email sent using this template.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <TemplatePreview
+                      preview={preview}
+                      isPreviewing={isPreviewing}
+                      onRefresh={handlePreview}
+                      members={members}
+                      isLoadingMembers={isLoadingMembers}
+                    />
+                  )}
+                </div>
               </div>
             ) : (
               <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-12 text-center">
@@ -406,19 +455,6 @@ const EmailTemplatesPage: React.FC = () => {
                 </p>
               </div>
             )}
-          </div>
-
-          {/* Preview */}
-          <div className="lg:col-span-4">
-            <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5 lg:sticky lg:top-6">
-              <TemplatePreview
-                preview={preview}
-                isPreviewing={isPreviewing}
-                onRefresh={handlePreview}
-                members={members}
-                isLoadingMembers={isLoadingMembers}
-              />
-            </div>
           </div>
         </div>}
       </main>

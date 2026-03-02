@@ -142,7 +142,7 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
         }`}
       >
         {isPreviewing && !preview ? (
-          <div className="flex items-center justify-center h-[500px]">
+          <div className="flex items-center justify-center h-[600px]">
             <div className="text-center">
               <Loader2 className="w-8 h-8 text-orange-500 animate-spin mx-auto mb-2" />
               <p className="text-slate-500 text-sm">Loading preview...</p>
@@ -153,11 +153,11 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
             ref={iframeRef}
             title="Email template preview"
             className="w-full border-0"
-            style={{ height: '500px' }}
+            style={{ height: '600px' }}
             sandbox="allow-same-origin"
           />
         ) : (
-          <div className="flex items-center justify-center h-[500px]">
+          <div className="flex items-center justify-center h-[600px]">
             <div className="text-center">
               <Eye className="w-12 h-12 text-slate-300 mx-auto mb-3" />
               <p className="text-slate-500 text-sm">
