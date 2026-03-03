@@ -6,10 +6,12 @@ import { MemberScanPage } from "./MemberScanPage";
 
 // Mock html5-qrcode
 vi.mock("html5-qrcode", () => ({
-  Html5Qrcode: vi.fn().mockImplementation(() => ({
-    start: vi.fn().mockResolvedValue(undefined),
-    stop: vi.fn().mockResolvedValue(undefined),
-  })),
+  Html5Qrcode: vi.fn().mockImplementation(function () {
+    return {
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 // Mock the API module
@@ -90,7 +92,7 @@ describe("MemberScanPage", () => {
     await user.click(startButton);
 
     expect(
-      screen.getByRole("button", { name: /stop scanning/i }),
+      await screen.findByRole("button", { name: /stop scanning/i }),
     ).toBeInTheDocument();
   });
 });
