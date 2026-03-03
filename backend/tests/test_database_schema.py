@@ -687,6 +687,67 @@ class TestEnumConsistency:
             f"Python enum / column enum mismatches:\n" + "\n".join(mismatches)
         )
 
+    def test_latest_migration_enum_matches_python_enum(self):
+        """
+        The latest Alembic migration that defines ALL_TYPES (or
+        ALL_TEMPLATE_TYPES) for the email_templates.template_type column
+        must include every value from the Python EmailTemplateType enum.
+
+        This catches the case where a new enum value is added to the Python
+        model but the migration is not updated, which causes a MySQL
+        DataError at runtime.
+        """
+        import importlib
+        import pathlib
+
+        from app.models.email_template import EmailTemplateType
+
+        py_values = {e.value for e in EmailTemplateType}
+
+        versions_dir = pathlib.Path(__file__).resolve().parent.parent / "alembic" / "versions"
+        assert versions_dir.is_dir(), f"Alembic versions dir not found: {versions_dir}"
+
+        # Find the latest migration file (sorted descending by filename)
+        migration_files = sorted(versions_dir.glob("*.py"), reverse=True)
+        assert migration_files, "No Alembic migration files found"
+
+        # Look for the most recent migration that defines ALL_TYPES or ALL_TEMPLATE_TYPES
+        migration_values = None
+        migration_name = None
+        for mf in migration_files:
+            text = mf.read_text()
+            if "ALL_TYPES" in text or "ALL_TEMPLATE_TYPES" in text:
+                # Import the module dynamically to read the tuple
+                spec = importlib.util.spec_from_file_location(mf.stem, mf)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                migration_values = set(
+                    getattr(mod, "ALL_TYPES", None)
+                    or getattr(mod, "ALL_TEMPLATE_TYPES", None)
+                    or ()
+                )
+                migration_name = mf.name
+                break
+
+        assert migration_values is not None, (
+            "No Alembic migration found with ALL_TYPES or ALL_TEMPLATE_TYPES"
+        )
+
+        missing = py_values - migration_values
+        extra = migration_values - py_values
+        errors = []
+        if missing:
+            errors.append(
+                f"Values in EmailTemplateType but missing from migration "
+                f"{migration_name}: {missing}"
+            )
+        if extra:
+            errors.append(
+                f"Values in migration {migration_name} but missing from "
+                f"EmailTemplateType: {extra}"
+            )
+        assert not errors, "\n".join(errors)
+
 
 # ===========================================================================
 # Multi-Tenancy Isolation Tests
