@@ -262,13 +262,74 @@ Public form submission requires no permissions or authentication.
 - **Form Cards**: Status badges, public URL with copy button, action buttons
 - **Create Modal**: Form name, description, category, public toggle, starter templates
 - **Share Modal**: Public access toggle, URL display, QR code with download
-- **Integration Modal**: View/add/delete cross-module integrations
+- **Integration Modal**: View/add/delete cross-module integrations with field mapping UI
 - **Submissions View**: Paginated list with public/integrated badges, submitter info
+- **Integration Health Dashboard**: Shows integration processing status per submission with reprocess support for failed integrations
+- **Survey Results Panel**: Per-field aggregation with distribution charts for select/radio/checkbox fields and response counts for text fields
+- **Form Dropdown Selector**: Dropdown-based form selection for integration configuration
 
 ### PublicFormPage
 
 - Standalone page at `/f/:slug` (outside authenticated routes)
 - Light theme for public visitors
 - Full field type rendering with HTML5 inputs
-- Optional contact info section
+- Optional contact info section (name/email no longer forced — add explicitly via form builder)
 - Loading/error/success states
+
+### FormBuilder
+
+- **Drag-and-drop reordering**: Fields can be reordered via `@dnd-kit` drag-and-drop
+- **Field duplication**: Duplicate existing fields with one click
+- **Incomplete field highlighting**: Fields with missing required configuration are visually highlighted
+- **Conditional visibility**: Fields can be shown/hidden based on other field values
+- **Calculated fields**: Fields that auto-compute values from other fields
+- **Hidden fields**: Metadata fields not shown to the form filler
+- **Novice UX**: Guided tooltips and simplified interface for first-time form builders
+
+### FormResultsPanel
+
+- **Per-field aggregation**: Aggregates submissions by field for survey-style analysis
+- **Distribution charts**: Visual breakdowns for select, radio, and checkbox fields
+- **Response counts**: Summary statistics for text and numeric fields
+- Requires at least one submission to display data
+
+---
+
+## Integration Health & Reprocessing
+
+### Integration Health Dashboard
+
+The FormsPage includes an integration health view that shows:
+- Processing status per submission (success, failed, pending)
+- Error details for failed integrations
+- **Reprocess** button to retry failed integration processing
+
+### API Endpoints
+
+| Method | Path | Permission | Description |
+|--------|------|------------|-------------|
+| `GET` | `/api/v1/forms/{id}/integrations/health` | `forms.manage` | Get integration health status |
+| `POST` | `/api/v1/forms/{id}/submissions/{sid}/reprocess` | `forms.manage` | Reprocess a failed integration |
+
+### Field Mapping UI
+
+Integration configuration includes a visual field mapping interface:
+1. Select the target module (Membership or Inventory)
+2. Choose the integration type
+3. Map form fields to target module fields using dropdown selectors
+4. Save the mapping — submissions are automatically processed against the mapping
+
+---
+
+## Recent Changes (March 2026)
+
+### March 3, 2026
+- **Integration health dashboard**: Added integration health view with result display and reprocess support
+- **Form dropdown selector**: New dropdown-based form selection for integration field mapping
+- **Survey results panel**: New `FormResultsPanel` with per-field aggregation
+- **Industry-standard form builder**: Drag-and-drop via `@dnd-kit`, field duplication, conditional visibility, calculated fields, hidden fields
+- **Incomplete field highlighting**: Visual indicators for fields missing required configuration
+- **Novice UX improvements**: Guided tooltips and simplified interface
+- **Public form fixes**: Fixed doubled `/v1` in API URL path; removed forced name/email section
+- **Permission fix**: Forms page now uses `forms.view` instead of `settings.manage`
+- **Theme compatibility**: Fixed form editor background and tab text for light/dark themes

@@ -1975,3 +1975,85 @@ docker-compose up -d
 - `ShiftSettingsPanel` → 6 card components
 
 **Fix:** Update CSS selectors to target the new component structure. Clear cache.
+
+---
+
+## Tailwind CSS v4 Migration (2026-03-03)
+
+### Problem: Styles broken or look different after update
+
+**Cause:** Tailwind CSS upgraded from v3.4 to v4.2. `tailwind.config.js` removed; configuration moved to CSS `@theme` directives in `index.css`. Over 200 component files updated with class name changes.
+
+**Fix:** Clear browser cache and hard refresh (`Ctrl+Shift+R`). If custom theme extensions were in `tailwind.config.js`, move them to `@theme` block in `frontend/src/styles/index.css`.
+
+---
+
+## React 19 Upgrade (2026-03-03)
+
+### Problem: `forwardRef` deprecation warnings or `ref` prop errors
+
+**Cause:** React upgraded from 18 to 19. `ref` is now a regular prop; `forwardRef` still works but is deprecated.
+
+**Fix:** Clear `node_modules` and reinstall. Update IDE React/TypeScript plugins. Tests may need updates for React 19 `act()` behavior changes.
+
+---
+
+## ESLint v9 Flat Config (2026-03-03)
+
+### Problem: ESLint configuration not found
+
+**Cause:** Migrated from `.eslintrc.json` to `eslint.config.js` (flat config format for ESLint v9). Update your IDE ESLint extension to support flat config.
+
+---
+
+## Vitest 4 & Zod 4 (2026-03-03)
+
+### Problem: Tests failing or schema validation errors after update
+
+**Cause:** Vitest upgraded 3 → 4 and Zod upgraded 3 → 4 with breaking changes.
+
+**Fix:** `cd frontend && rm -rf node_modules package-lock.json && npm install && npm test`
+
+---
+
+## Forms Module Issues (2026-03-02)
+
+### Problem: Form builder drag-and-drop not working
+
+**Cause:** Form builder upgraded to use `@dnd-kit`. Ensure dependencies installed: `cd frontend && npm install`
+
+### Problem: Public forms no longer collect name/email by default
+
+**Cause:** Forced name/email section removed. Add explicit text/email fields in form builder to collect contact info.
+
+### Problem: Integration health dashboard shows no data
+
+**Fix:** Backend must be latest version. New endpoints: `GET /forms/{id}/integrations/health` and `POST /forms/{id}/submissions/{sid}/reprocess`
+
+---
+
+## Pipeline Stage Issues (2026-03-02)
+
+### Problem: 500 error when reordering pipeline stages
+
+**Status (Fixed):** Race condition in sort order calculation fixed with database-level locking.
+
+### Problem: New stage types not visible
+
+**Cause:** New types (`automated_email`, `form_dropdown`, `meeting`) require latest frontend. Rebuild and clear cache.
+
+---
+
+## Inventory CSV Import (2026-03-02)
+
+### Problem: CSV import fails with validation errors
+
+**Fix:** Download sample template from import page. Required columns: `name`, `category`. Verify category names match existing categories.
+
+---
+
+## Events Settings (2026-03-02)
+
+### Problem: Events settings page returns 422 errors
+
+**Status (Fixed):** Endpoint refactored to fix validation handling. Pull latest and restart backend.

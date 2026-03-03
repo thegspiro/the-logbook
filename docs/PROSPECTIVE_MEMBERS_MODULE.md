@@ -8,7 +8,7 @@ The Prospective Members module provides a complete applicant tracking system for
 
 ### Key Capabilities
 
-- **Configurable Pipeline**: Drag-and-drop stage builder with four stage types (form submission, document upload, election/vote, manual approval)
+- **Configurable Pipeline**: Drag-and-drop stage builder with seven stage types (form submission, document upload, election/vote, manual approval, automated email, form dropdown, meeting)
 - **Dual View Modes**: Kanban board with drag-and-drop or sortable paginated table
 - **Inactivity Timeout System**: Automatic deactivation with configurable timeouts, per-stage overrides, two-phase warnings, and auto-purge
 - **Applicant Lifecycle**: Six statuses (active, on_hold, withdrawn, converted, rejected, inactive) with full audit trail
@@ -53,7 +53,7 @@ frontend/src/modules/prospective-members/
 | Type | Description |
 |------|-------------|
 | `ApplicantStatus` | `'active' \| 'on_hold' \| 'withdrawn' \| 'converted' \| 'rejected' \| 'inactive'` |
-| `PipelineStageType` | `'form_submission' \| 'document_upload' \| 'election_vote' \| 'manual_approval'` |
+| `PipelineStageType` | `'form_submission' \| 'document_upload' \| 'election_vote' \| 'manual_approval' \| 'automated_email' \| 'form_dropdown' \| 'meeting'` |
 | `InactivityTimeoutPreset` | `'3_months' \| '6_months' \| '1_year' \| 'never' \| 'custom'` |
 | `InactivityAlertLevel` | `'normal' \| 'warning' \| 'critical'` |
 | `PipelineTab` | `'active' \| 'inactive' \| 'withdrawn'` |
@@ -93,6 +93,9 @@ frontend/src/modules/prospective-members/
 | `document_upload` | Upload | Applicant uploads required documents | File storage |
 | `election_vote` | Vote | Membership votes on applicant | Links to Elections module via election packages |
 | `manual_approval` | CheckCircle | Coordinator manually approves | Internal action |
+| `automated_email` | Mail | Sends configurable email to applicant | Email template selection, variable interpolation, send delay |
+| `form_dropdown` | ListChecks | Links a form from Forms module for data collection | Links to Forms module via dropdown selector |
+| `meeting` | Calendar | Schedule interview or orientation meeting | Links to Events module |
 
 ### Pipeline Builder
 
@@ -110,6 +113,10 @@ Each stage can be configured with:
 - **Type**: One of the four stage types above
 - **Inactivity timeout override**: Optional custom timeout (in days) for this specific stage
 - **Election package fields** (election_vote only): Choose which applicant data to include in election packages (email, phone, address, DOB, documents, stage history, custom coordinator prompt)
+- **Email configuration** (automated_email only): Select email template, configure variable interpolation, set send delay
+- **Form selection** (form_dropdown only): Choose a form from the Forms module for applicant data collection
+- **Event linking** (meeting and others): Link a stage to a specific event for scheduling
+- **Status page visibility**: Toggle whether the stage appears on the public application status page
 
 ---
 

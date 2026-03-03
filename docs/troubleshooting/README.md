@@ -2998,6 +2998,81 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 
 ---
 
+## Tailwind CSS v4 Migration (2026-03-03)
+
+### Problem: Styles broken or different after update
+**Cause:** Tailwind CSS upgraded from v3.4 to v4.2. `tailwind.config.js` removed; CSS-first config via `@theme` in `index.css`. 200+ files updated.
+**Fix:** Clear browser cache, hard refresh. Move custom theme to `@theme` block in `index.css`.
+
+### Problem: `tailwind.config.js` changes not applied
+**Cause:** Tailwind v4 no longer reads `tailwind.config.js`. Config is in CSS `@theme` blocks.
+
+---
+
+## React 19 Upgrade (2026-03-03)
+
+### Problem: `ref` prop warnings or `forwardRef` deprecation
+**Cause:** React upgraded 18 → 19. `ref` is now a regular prop; `forwardRef` still works but is deprecated.
+**Fix:** Clear `node_modules`, reinstall. Update IDE React plugin.
+
+### Problem: Tests failing after React 19 upgrade
+**Fix:** `rm -rf node_modules package-lock.json && npm install && npm test`
+
+---
+
+## ESLint v9 Flat Config (2026-03-03)
+
+### Problem: ESLint config not found
+**Cause:** Migrated from `.eslintrc.json` to `eslint.config.js` (flat config). Update IDE ESLint plugin.
+
+---
+
+## Vitest 4 & Zod 4 (2026-03-03)
+
+### Problem: Test or schema validation errors after upgrade
+**Cause:** Vitest 3 → 4 and Zod 3 → 4 have breaking changes.
+**Fix:** `rm -rf node_modules package-lock.json && npm install`
+
+---
+
+## Forms Module Issues (2026-03-02)
+
+### Problem: Form builder drag-and-drop broken
+**Cause:** Builder upgraded to `@dnd-kit`. Ensure `@dnd-kit/core` and `@dnd-kit/sortable` installed.
+**Fix:** `cd frontend && npm install`
+
+### Problem: Public form no longer collects name/email automatically
+**Cause:** Forced name/email section removed. Now optional per form config. Add explicit fields in form builder.
+
+### Problem: Integration health dashboard shows no data
+**Fix:** Ensure backend is latest version. New endpoints: `GET /forms/{id}/integrations/health`, `POST /forms/{id}/submissions/{sid}/reprocess`.
+
+---
+
+## Pipeline Stage Reorder & New Types (2026-03-02)
+
+### Problem: 500 error when reordering pipeline stages
+**Status (Fixed):** Race condition in sort order calculation fixed with database-level locking.
+
+### Problem: New stage types not appearing
+**Cause:** New types (`automated_email`, `form_dropdown`, `meeting`) require latest frontend. Pull, rebuild, clear cache.
+
+---
+
+## Inventory CSV Import (2026-03-02)
+
+### Problem: CSV import fails
+**Fix:** Download sample template from import page. Required columns: `name`, `category`. Check for duplicate serials.
+
+---
+
+## Events Settings 422 (2026-03-02)
+
+### Problem: Events settings page fails to load
+**Status (Fixed):** API endpoint refactored to fix validation errors. Pull latest and restart backend.
+
+---
+
 **Most Common Fix:** 90% of issues are resolved by:
 1. Updating `frontend/.env` with correct `VITE_API_URL`
 2. Running `docker-compose build --no-cache frontend`

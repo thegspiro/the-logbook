@@ -3,7 +3,7 @@
 ![The Logbook](https://img.shields.io/badge/Version-1.0.0-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 ![Python](https://img.shields.io/badge/Python-3.13-blue.svg)
-![React](https://img.shields.io/badge/React-18.3-blue.svg)
+![React](https://img.shields.io/badge/React-19-blue.svg)
 
 An open-source, highly flexible, secure, and modular intranet platform designed for fire departments, emergency services, healthcare organizations, and other institutions requiring secure internal communication and management systems. Built with HIPAA requirements in mind.
 
@@ -109,7 +109,7 @@ docker-compose up -d
 | Component | Technology |
 |-----------|-----------|
 | **Backend** | Python 3.13, FastAPI, SQLAlchemy |
-| **Frontend** | React 18.3, TypeScript 5.9, Vite 7.3 |
+| **Frontend** | React 19, TypeScript 5.9, Vite 7.3 |
 | **Database** | MySQL 8.0+ (MariaDB 10.11+ for ARM) |
 | **Cache** | Redis 7+ |
 | **Authentication** | OAuth 2.0, SAML, LDAP, TOTP MFA |
@@ -119,6 +119,17 @@ docker-compose up -d
 ---
 
 ## 📊 Latest Updates
+
+### March 2026 (Mar 3) — React 19, ESLint 9, Tailwind v4, Vitest 4, Forms Overhaul, Pipeline Enhancements & Inventory Import
+
+- **Major toolchain upgrades**: React 18 → 19, Vitest 3 → 4, Zod 3 → 4, ESLint v8 → v9 (flat config), Tailwind CSS v3.4 → v4.2; 200+ component files updated
+- **Forms module enhancements**: Integration health dashboard with reprocess support; survey results panel with per-field aggregation; industry-standard form builder with drag-and-drop (@dnd-kit), field duplication, conditional visibility, calculated fields; improved novice UX; fixed public forms 404 and permission visibility
+- **Prospective members pipeline**: Automated email stage type; form dropdown stage; meeting stage; event linking; status page toggle; bulk pipeline management; fixed 500/422 reorder errors
+- **Inventory CSV import**: Bulk import with downloadable sample template, backend validation, and frontend test coverage
+- **Email template redesign**: 2-column tabbed layout replacing 3-column design for better usability
+- **Events settings fix**: Fixed 422 validation errors preventing events settings page from loading
+- **Bug fixes**: Circular chunk dependency fix (useLayoutEffect error); stale lockfile fix for @dnd-kit dependencies
+- **Testing checklist**: Comprehensive coverage audit for all modules with 35 recommendation status review
 
 ### March 2026 (Mar 2) — Mobile ID Scanner, 610 Tests, Architecture Overhaul, Security Hardening & Backend Modernization
 
