@@ -914,6 +914,30 @@ class FormsService:
                 created_by=None,  # System-created
             )
             prospect_id = str(prospect.id)
+
+            # create_prospect() may return an existing prospect if the
+            # email matches an active application (duplicate detection).
+            is_duplicate = (
+                prospect.form_submission_id
+                and prospect.form_submission_id != str(submission.id)
+            )
+            if is_duplicate:
+                logger.info(
+                    f"Duplicate application detected for "
+                    f"{mapped_data.get('email')} — existing prospect "
+                    f"{prospect_id} returned"
+                )
+                return {
+                    "success": True,
+                    "mapped_data": mapped_data,
+                    "prospect_id": prospect_id,
+                    "message": (
+                        "Duplicate application detected — an active "
+                        "application already exists for this email. "
+                        "Notification sent."
+                    ),
+                }
+
             logger.info(
                 f"Auto-created prospect {prospect_id} from "
                 f"form submission {submission.id}"

@@ -899,3 +899,89 @@ class EmailService:
         )
 
         return success_count > 0
+
+    async def send_duplicate_application_email(
+        self,
+        to_email: str,
+        applicant_name: str,
+        organization_name: str,
+        original_date: str,
+        bcc_emails: Optional[List[str]] = None,
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """
+        Notify an applicant that a duplicate application was detected.
+
+        The department's email is included as BCC so leadership is aware.
+
+        Args:
+            to_email: Applicant's email address
+            applicant_name: Applicant's full name
+            organization_name: Organization display name
+            original_date: Formatted date of the original application
+            bcc_emails: Department/org email(s) to BCC
+            db: Optional database session for loading templates
+            organization_id: Optional org ID for loading templates
+        """
+        context = {
+            "applicant_name": applicant_name,
+            "organization_name": organization_name,
+            "original_date": original_date,
+        }
+
+        subject = None
+        html_body = None
+        text_body = None
+
+        if db and organization_id:
+            try:
+                from app.models.email_template import EmailTemplateType
+                from app.services.email_template_service import EmailTemplateService
+
+                template_service = EmailTemplateService(db)
+                template = await template_service.get_template(
+                    organization_id, EmailTemplateType.DUPLICATE_APPLICATION
+                )
+                if template:
+                    subject, html_body, text_body = template_service.render(
+                        template, context, organization=self.organization
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to load duplicate application template, using default: {e}"
+                )
+
+        if not subject:
+            import re
+
+            from app.services.email_template_service import (
+                DEFAULT_CSS,
+                DEFAULT_DUPLICATE_APPLICATION_HTML,
+                DEFAULT_DUPLICATE_APPLICATION_SUBJECT,
+                DEFAULT_DUPLICATE_APPLICATION_TEXT,
+            )
+
+            subject = DEFAULT_DUPLICATE_APPLICATION_SUBJECT
+            rendered_html = DEFAULT_DUPLICATE_APPLICATION_HTML
+            rendered_text = DEFAULT_DUPLICATE_APPLICATION_TEXT
+            for key, val in context.items():
+                pattern = r"\{\{\s*" + re.escape(key) + r"\s*\}\}"
+                subject = re.sub(pattern, str(val), subject)
+                rendered_html = re.sub(pattern, str(val), rendered_html)
+                rendered_text = re.sub(pattern, str(val), rendered_text)
+            html_body = (
+                f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style>"
+                f"</head><body>{rendered_html}</body></html>"
+            )
+            text_body = rendered_text
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            bcc_emails=bcc_emails,
+        )
+
+        return success_count > 0
