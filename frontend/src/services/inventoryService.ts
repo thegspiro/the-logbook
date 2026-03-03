@@ -443,6 +443,7 @@ export interface FormDef {
   notification_emails?: string[];
   is_public: boolean;
   public_slug?: string;
+  integration_type?: string;
   version: number;
   is_template: boolean;
   field_count?: number;
@@ -467,6 +468,7 @@ export interface FormCreate {
   notify_on_submission?: boolean | undefined;
   notification_emails?: string[] | undefined;
   is_public?: boolean | undefined;
+  integration_type?: string | undefined;
   fields?: FormFieldCreate[] | undefined;
 }
 

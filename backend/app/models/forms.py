@@ -132,6 +132,11 @@ class Form(Base):
     public_slug = Column(String(12), unique=True, index=True, default=generate_slug)
     is_public = Column(Boolean, default=False)
 
+    # Cross-module integration — when set, submission processing uses
+    # label-based mapping directly instead of requiring a FormIntegration
+    # record with field_mappings.  Values come from IntegrationType.
+    integration_type = Column(String(50), nullable=True, index=True)
+
     # Metadata
     version = Column(Integer, default=1)
     is_template = Column(Boolean, default=False, index=True)  # System starter templates

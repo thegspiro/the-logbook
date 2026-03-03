@@ -142,9 +142,16 @@ class FormBase(BaseModel):
 
 
 class FormCreate(FormBase):
-    """Schema for creating a new form"""
+    """Schema for creating a new form.
+
+    When ``integration_type`` is provided the form is marked as a
+    cross-module integration form (e.g. ``membership_interest``).
+    Submission processing will use label-based mapping directly
+    instead of requiring a separate FormIntegration record.
+    """
 
     fields: Optional[List[FormFieldCreate]] = None
+    integration_type: Optional[str] = None
 
 
 class FormUpdate(BaseModel):
@@ -159,6 +166,7 @@ class FormUpdate(BaseModel):
     notify_on_submission: Optional[bool] = None
     notification_emails: Optional[List[str]] = None
     is_public: Optional[bool] = None
+    integration_type: Optional[str] = None
 
 
 class FormResponse(FormBase):
@@ -170,6 +178,7 @@ class FormResponse(FormBase):
     version: int
     is_template: bool
     public_slug: Optional[str] = None
+    integration_type: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     published_at: Optional[datetime] = None

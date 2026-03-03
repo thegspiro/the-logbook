@@ -1682,15 +1682,14 @@ class MembershipPipelineService:
     async def _ensure_membership_form_integration(
         self, form_id: str, organization_id: str
     ) -> None:
-        """Ensure a MEMBERSHIP_INTEREST FormIntegration exists for *form_id*.
+        """Mark *form_id* as a membership-interest form.
 
-        When a pipeline step of type ``form_submission`` references a form,
-        this method guarantees that the form has an active
-        ``FormIntegration`` so that public/internal form submissions
-        automatically create a ``ProspectiveMember`` record.
+        Preferred path: set ``form.integration_type`` directly so the
+        forms service uses label-based mapping at submission time
+        without needing a ``FormIntegration`` record.
 
-        The method is idempotent — it will not create a duplicate integration
-        if one already exists.
+        Legacy fallback: if the form already has a ``FormIntegration``
+        for membership, ensure its ``field_mappings`` are healthy.
         """
         from app.models.forms import (
             Form,
@@ -1700,7 +1699,29 @@ class MembershipPipelineService:
             IntegrationType,
         )
 
-        # Check if a MEMBERSHIP integration already exists for this form.
+        # ---- Direct path: stamp integration_type on the form ----
+        form_result = await self.db.execute(
+            select(Form).where(Form.id == str(form_id))
+        )
+        form = form_result.scalars().first()
+        if form is None:
+            logger.warning(
+                f"Cannot set integration_type for form {form_id}: form not found"
+            )
+            return
+
+        if not form.integration_type:
+            form.integration_type = IntegrationType.MEMBERSHIP_INTEREST
+            await self.db.commit()
+            logger.info(
+                f"Set integration_type=membership_interest on form {form_id}"
+            )
+            return
+
+        if form.integration_type == IntegrationType.MEMBERSHIP_INTEREST:
+            return  # Already configured — nothing to do.
+
+        # ---- Legacy fallback: repair FormIntegration if present ----
         existing_result = await self.db.execute(
             select(FormIntegration).where(
                 and_(
@@ -1711,7 +1732,6 @@ class MembershipPipelineService:
         )
         existing_integration = existing_result.scalars().first()
 
-        # Load the form's fields so we can auto-map them.
         fields_result = await self.db.execute(
             select(FormField).where(FormField.form_id == str(form_id))
         )
@@ -1723,7 +1743,6 @@ class MembershipPipelineService:
             )
             return
 
-        # Build field_mappings: {field_id -> prospect_field_name}
         field_mappings: Dict[str, str] = {}
         used_targets: set[str] = set()
 
@@ -1734,7 +1753,6 @@ class MembershipPipelineService:
                 field_mappings[str(field.id)] = target
                 used_targets.add(target)
 
-        # Second pass: use field_type for any still-unmapped required targets.
         for field in fields:
             if str(field.id) in field_mappings:
                 continue
@@ -1755,9 +1773,6 @@ class MembershipPipelineService:
 
         missing = {"first_name", "last_name", "email"} - used_targets
 
-        # If an integration already exists, check whether its field_mappings
-        # are empty or stale (don't cover the required fields with current
-        # field IDs).  Repair them when the newly built mappings are better.
         if existing_integration is not None:
             current_mappings = existing_integration.field_mappings or {}
             current_field_ids = set(current_mappings.keys())
@@ -1767,9 +1782,8 @@ class MembershipPipelineService:
             has_valid_ids = bool(current_field_ids) and current_field_ids <= form_field_ids
 
             if covers_required and has_valid_ids:
-                return  # Existing integration is healthy — nothing to do.
+                return
 
-            # Existing integration has empty or stale field_mappings — repair.
             existing_integration.field_mappings = field_mappings
             await self.db.commit()
             logger.info(

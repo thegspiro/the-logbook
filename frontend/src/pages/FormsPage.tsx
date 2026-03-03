@@ -335,6 +335,11 @@ const FormsPage: React.FC = () => {
         description: template.description,
         category: template.category,
         is_public: template.isPublic || false,
+        // When the template declares an integrationHint, set
+        // integration_type on the form so submission processing
+        // uses label-based mapping directly — no separate
+        // FormIntegration record needed.
+        integration_type: template.integrationHint || undefined,
         fields: template.fields.map((f, i) => ({
           label: f.label,
           field_type: f.field_type,
