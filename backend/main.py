@@ -489,14 +489,18 @@ def _cleanup_duplicate_revisions(versions_dir):
             f"{[f[1] for f in files]}"
         )
 
-        # Determine which file to keep: the one whose revision is in the
-        # referenced set (depended on by another migration).
+        # Determine which file to keep: the one that is depended on by
+        # another migration.  Check both exact revision ID references and
+        # slug-form references (e.g. down_revision =
+        # "20260303_0200_add_form_integration_type_column" instead of just
+        # "20260303_0200").
         # If none or multiple are referenced, keep the one that appears first
         # alphabetically (most likely the original).
         files_sorted = sorted(files, key=lambda f: f[1])
         keep = files_sorted[0]
         for fp, fn, dr in files_sorted:
-            if rev_id in referenced_revisions:
+            slug = fn.removesuffix(".py")
+            if slug in referenced_revisions or rev_id in referenced_revisions:
                 keep = (fp, fn, dr)
                 break
 
