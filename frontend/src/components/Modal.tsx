@@ -132,7 +132,7 @@ export const Modal: React.FC<ModalProps> = ({
       >
         {/* Background overlay */}
         <div
-          className="fixed inset-0 transition-opacity bg-black/50"
+          className="fixed inset-0 transition-opacity bg-black/50 pointer-events-none"
           aria-hidden="true"
         />
 

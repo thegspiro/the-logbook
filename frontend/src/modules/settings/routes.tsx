@@ -13,25 +13,20 @@ import { Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
-const SettingsPage = lazyWithRetry(() =>
-  import('../../pages/SettingsPage').then((m) => ({ default: m.SettingsPage })),
-);
+const SettingsPage = lazyWithRetry(() => import('../../pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const UserSettingsPage = lazyWithRetry(() =>
   import('../../pages/UserSettingsPage').then((m) => ({
     default: m.UserSettingsPage,
-  })),
+  }))
 );
 const RoleManagementPage = lazyWithRetry(() =>
   import('../../pages/RoleManagementPage').then((m) => ({
     default: m.RoleManagementPage,
-  })),
+  }))
 );
-const ReportsPage = lazyWithRetry(() =>
-  import('../../pages/ReportsPage').then((m) => ({ default: m.ReportsPage })),
-);
-const DepartmentSetupPage = lazyWithRetry(
-  () => import('../../pages/DepartmentSetupPage'),
-);
+// Reports route has been moved to the dedicated reports module.
+// See: frontend/src/modules/reports/routes.tsx
+const DepartmentSetupPage = lazyWithRetry(() => import('../../pages/DepartmentSetupPage'));
 
 export const getSettingsRoutes = () => {
   return (
@@ -81,20 +76,9 @@ export const getSettingsRoutes = () => {
           </Suspense>
         }
       />
-      <Route
-        path="/settings/account"
-        element={<Navigate to="/account" replace />}
-      />
+      <Route path="/settings/account" element={<Navigate to="/account" replace />} />
 
-      {/* Reports */}
-      <Route
-        path="/reports"
-        element={
-          <Suspense fallback={null}>
-            <ReportsPage />
-          </Suspense>
-        }
-      />
+      {/* Reports route moved to dedicated reports module */}
     </React.Fragment>
   );
 };

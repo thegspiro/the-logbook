@@ -243,19 +243,40 @@ function extractStatus(status: string | { value: string }): string {
 
 /** Map a backend prospect response to a frontend Applicant */
 function mapProspectToApplicant(data: BackendProspectResponse): Applicant {
-  const stageHistory: StageHistoryEntry[] = (data.step_progress || []).map((sp: BackendStepProgressResponse) => ({
-    id: sp.id,
-    stage_id: sp.step_id,
-    stage_name: sp.step?.name ?? '',
-    stage_type: sp.step?.step_type
+  const stageHistory: StageHistoryEntry[] = (data.step_progress || []).map((sp: BackendStepProgressResponse) => {
+    const stageType = sp.step?.step_type
       ? mapStepTypeToFrontend(sp.step.step_type, sp.step.action_type)
-      : ('manual_approval' as StageType),
-    entered_at: sp.created_at,
-    completed_at: sp.completed_at ?? undefined,
-    completed_by: sp.completed_by ?? undefined,
-    notes: sp.notes ?? undefined,
-    artifacts: [],
-  }));
+      : ('manual_approval' as StageType);
+
+    // Build artifacts from action_result when available
+    const artifacts: StageHistoryEntry['artifacts'] = [];
+    const actionResult = sp.action_result;
+    if (actionResult && typeof actionResult === 'object') {
+      const mappedData = actionResult['mapped_data'] as Record<string, unknown> | undefined;
+      if (mappedData && stageType === 'form_submission') {
+        artifacts.push({
+          id: `${sp.id}-form`,
+          type: 'form_submission',
+          name: 'Membership Interest Form',
+          data: mappedData,
+          created_at: sp.completed_at ?? sp.created_at,
+        });
+      }
+    }
+
+    return {
+      id: sp.id,
+      stage_id: sp.step_id,
+      stage_name: sp.step?.name ?? '',
+      stage_type: stageType,
+      entered_at: sp.created_at,
+      completed_at: sp.completed_at ?? undefined,
+      completed_by: sp.completed_by ?? undefined,
+      notes: sp.notes ?? undefined,
+      artifacts,
+      action_result: actionResult ?? undefined,
+    };
+  });
 
   return {
     id: data.id,

@@ -507,6 +507,10 @@ class TestMembershipInterestPipelineId:
         mps_mod.MembershipPipelineService.__init__ = lambda self, db: None
         mps_mod.MembershipPipelineService.create_prospect = mock_create_prospect
 
+        # Patch _complete_form_submission_step (added by main) to no-op
+        original_complete = FormsService._complete_form_submission_step
+        FormsService._complete_form_submission_step = AsyncMock()
+
         try:
             result = await forms_service._process_membership_interest(
                 submission, integration=None, form=form
@@ -518,6 +522,7 @@ class TestMembershipInterestPipelineId:
         finally:
             mps_mod.MembershipPipelineService.__init__ = original_init
             mps_mod.MembershipPipelineService.create_prospect = original_create
+            FormsService._complete_form_submission_step = original_complete
 
     async def test_omits_pipeline_id_when_no_step_references_form(
         self, forms_service, mock_db
@@ -561,6 +566,10 @@ class TestMembershipInterestPipelineId:
         mps_mod.MembershipPipelineService.__init__ = lambda self, db: None
         mps_mod.MembershipPipelineService.create_prospect = mock_create_prospect
 
+        # Patch _complete_form_submission_step (added by main) to no-op
+        original_complete = FormsService._complete_form_submission_step
+        FormsService._complete_form_submission_step = AsyncMock()
+
         try:
             result = await forms_service._process_membership_interest(
                 submission, integration=None, form=form
@@ -572,6 +581,7 @@ class TestMembershipInterestPipelineId:
         finally:
             mps_mod.MembershipPipelineService.__init__ = original_init
             mps_mod.MembershipPipelineService.create_prospect = original_create
+            FormsService._complete_form_submission_step = original_complete
 
 
 # ============================================

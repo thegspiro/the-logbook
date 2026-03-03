@@ -1505,6 +1505,19 @@ class FormsService:
                 f"Auto-created prospect {prospect_id} from "
                 f"form submission {submission.id}"
             )
+
+            # ---- Auto-complete the form_submission pipeline step ----
+            # The prospect was just created from this form, so mark the
+            # form_submission step as COMPLETED and store the mapped data
+            # in action_result so coordinators can review it.
+            await self._complete_form_submission_step(
+                pipeline_service,
+                prospect,
+                submission,
+                mapped_data,
+                logger,
+            )
+
             return {
                 "success": True,
                 "mapped_data": mapped_data,
@@ -1601,6 +1614,106 @@ class FormsService:
         )
 
         await self.db.flush()
+
+    async def _complete_form_submission_step(
+        self,
+        pipeline_service: Any,
+        prospect: Any,
+        submission: FormSubmission,
+        mapped_data: Dict[str, Any],
+        logger: Any,
+    ) -> None:
+        """Mark the form_submission pipeline step as COMPLETED.
+
+        After ``create_prospect()`` the prospect exists and its first
+        step is ``IN_PROGRESS``, but nobody told the pipeline that the
+        form was actually submitted.  This method:
+
+        1. Finds the ``form_submission`` step whose ``config.form_id``
+           matches this form.
+        2. Marks its ``ProspectStepProgress`` as COMPLETED.
+        3. Stores the mapped submission data in ``action_result`` so
+           coordinators can review the original answers.
+        4. Advances the prospect to the next step.
+        """
+        from app.models.membership_pipeline import (
+            MembershipPipelineStep,
+            PipelineStepType,
+            ProspectStepProgress,
+            StepProgressStatus,
+        )
+
+        if not prospect.pipeline_id:
+            return
+
+        form_id = str(submission.form_id)
+
+        # Find the form_submission step that references this form.
+        steps_result = await self.db.execute(
+            select(MembershipPipelineStep).where(
+                MembershipPipelineStep.pipeline_id == str(prospect.pipeline_id),
+                MembershipPipelineStep.step_type == PipelineStepType.FORM_SUBMISSION,
+            )
+        )
+        form_steps = steps_result.scalars().all()
+
+        target_step = None
+        for step in form_steps:
+            config = step.config or {}
+            if config.get("form_id") == form_id:
+                target_step = step
+                break
+
+        if not target_step:
+            logger.debug(
+                f"No form_submission step referencing form {form_id} in "
+                f"pipeline {prospect.pipeline_id} — skipping auto-complete"
+            )
+            return
+
+        # Find the progress record for this step.
+        progress_result = await self.db.execute(
+            select(ProspectStepProgress).where(
+                ProspectStepProgress.prospect_id == str(prospect.id),
+                ProspectStepProgress.step_id == str(target_step.id),
+            )
+        )
+        progress = progress_result.scalars().first()
+
+        if not progress:
+            logger.warning(
+                f"No progress record for prospect {prospect.id} / "
+                f"step {target_step.id} — cannot auto-complete"
+            )
+            return
+
+        if progress.status == StepProgressStatus.COMPLETED:
+            return  # Already done (e.g. reprocess).
+
+        progress.status = StepProgressStatus.COMPLETED
+        progress.completed_at = datetime.now(timezone.utc)
+        progress.notes = "Auto-completed: form submitted"
+        progress.action_result = {
+            "form_submission_id": str(submission.id),
+            "form_id": form_id,
+            "mapped_data": mapped_data,
+        }
+
+        # Advance the prospect to the next step.
+        try:
+            await pipeline_service._advance_current_step(
+                prospect, str(target_step.id)
+            )
+        except Exception as e:
+            logger.warning(
+                f"Failed to advance prospect {prospect.id} past "
+                f"step {target_step.id}: {e}"
+            )
+
+        logger.info(
+            f"Auto-completed form_submission step {target_step.id} for "
+            f"prospect {prospect.id} (submission {submission.id})"
+        )
 
     async def _process_equipment_assignment(
         self,

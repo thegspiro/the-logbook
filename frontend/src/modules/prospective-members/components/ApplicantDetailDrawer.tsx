@@ -915,27 +915,52 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                                 </p>
                               )}
                               {entry.artifacts.length > 0 && (
-                                <div className="mt-1 space-y-1">
-                                  {entry.artifacts.map((artifact) => (
-                                    <div
-                                      key={artifact.id}
-                                      className="flex items-center gap-1 text-xs text-blue-400"
-                                    >
-                                      <FileText className="w-3 h-3" />
-                                      {artifact.url && isSafeUrl(artifact.url) ? (
-                                        <a
-                                          href={artifact.url}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="hover:underline"
-                                        >
-                                          {artifact.name}
-                                        </a>
-                                      ) : (
-                                        <span>{artifact.name}</span>
-                                      )}
-                                    </div>
-                                  ))}
+                                <div className="mt-2 space-y-1">
+                                  {entry.artifacts.map((artifact) => {
+                                    if (artifact.type === 'form_submission' && artifact.data) {
+                                      const fields = artifact.data as Record<string, unknown>;
+                                      return (
+                                        <div key={artifact.id} className="bg-theme-surface-secondary rounded px-3 py-2">
+                                          <p className="text-xs font-medium text-theme-text-secondary mb-1.5 flex items-center gap-1">
+                                            <FileText className="w-3 h-3" />
+                                            {artifact.name}
+                                          </p>
+                                          <dl className="grid grid-cols-2 gap-x-3 gap-y-1">
+                                            {Object.entries(fields).map(([key, value]) => (
+                                              <div key={key} className="contents">
+                                                <dt className="text-xs text-theme-text-muted capitalize">
+                                                  {key.replace(/_/g, ' ')}
+                                                </dt>
+                                                <dd className="text-xs text-theme-text-primary">
+                                                  {String(value ?? '—')}
+                                                </dd>
+                                              </div>
+                                            ))}
+                                          </dl>
+                                        </div>
+                                      );
+                                    }
+                                    return (
+                                      <div
+                                        key={artifact.id}
+                                        className="flex items-center gap-1 text-xs text-blue-400"
+                                      >
+                                        <FileText className="w-3 h-3" />
+                                        {artifact.url && isSafeUrl(artifact.url) ? (
+                                          <a
+                                            href={artifact.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="hover:underline"
+                                          >
+                                            {artifact.name}
+                                          </a>
+                                        ) : (
+                                          <span>{artifact.name}</span>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               )}
                             </div>
