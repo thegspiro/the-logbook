@@ -50,6 +50,23 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
 import { ApplicantStatus, StageType as StageTypeEnum } from '../../../constants/enums';
 
+/** Maps snake_case backend field keys to human-readable labels. */
+const FORM_FIELD_LABELS: Record<string, string> = {
+  first_name: 'First Name',
+  last_name: 'Last Name',
+  email: 'Email Address',
+  phone: 'Phone Number',
+  mobile: 'Mobile Number',
+  date_of_birth: 'Date of Birth',
+  address_street: 'Address',
+  address_city: 'City',
+  address_state: 'State',
+  address_zip: 'Zip Code',
+  interest_reason: 'Interest Reason',
+  referral_source: 'Referral Source',
+  referred_by: 'Referred By',
+};
+
 interface ApplicantDetailDrawerProps {
   applicant: Applicant | null;
   isOpen: boolean;
@@ -928,8 +945,8 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                                           <dl className="grid grid-cols-2 gap-x-3 gap-y-1">
                                             {Object.entries(fields).map(([key, value]) => (
                                               <div key={key} className="contents">
-                                                <dt className="text-xs text-theme-text-muted capitalize">
-                                                  {key.replace(/_/g, ' ')}
+                                                <dt className="text-xs text-theme-text-muted">
+                                                  {FORM_FIELD_LABELS[key] ?? key.replace(/_/g, ' ')}
                                                 </dt>
                                                 <dd className="text-xs text-theme-text-primary">
                                                   {String(value ?? '—')}

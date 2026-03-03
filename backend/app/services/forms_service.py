@@ -1425,7 +1425,8 @@ class FormsService:
 
         # ---- Resolve the pipeline that references this form ----
         pipeline_id = await self._resolve_pipeline_for_form(
-            str(form.id) if form else str(submission.form_id)
+            str(form.id) if form else str(submission.form_id),
+            str(submission.organization_id),
         )
 
         # ---- Duplicate guard (idempotent for reprocess) ----
@@ -1443,6 +1444,18 @@ class FormsService:
                 await self._reassign_prospect_pipeline(
                     existing_prospect, pipeline_id
                 )
+
+            # Auto-complete the form_submission step so coordinators
+            # can see the original answers and the prospect advances.
+            pipeline_service = MembershipPipelineService(self.db)
+            await self._complete_form_submission_step(
+                pipeline_service,
+                existing_prospect,
+                submission,
+                mapped_data,
+                logger,
+            )
+
             return {
                 "success": True,
                 "mapped_data": mapped_data,
@@ -1489,6 +1502,15 @@ class FormsService:
                     f"Duplicate application detected for "
                     f"{mapped_data.get('email')} — existing prospect "
                     f"{prospect_id} returned"
+                )
+                # Still auto-complete the form step for the existing
+                # prospect so it advances and stores the form data.
+                await self._complete_form_submission_step(
+                    pipeline_service,
+                    prospect,
+                    submission,
+                    mapped_data,
+                    logger,
                 )
                 return {
                     "success": True,
@@ -1537,9 +1559,9 @@ class FormsService:
             }
 
     async def _resolve_pipeline_for_form(
-        self, form_id: str
+        self, form_id: str, organization_id: str
     ) -> Optional[str]:
-        """Find the pipeline whose step references *form_id* in its config.
+        """Find the active pipeline whose step references *form_id*.
 
         When a membership pipeline step is configured with a form as its
         starting point, the step's ``config`` JSON contains
@@ -1548,23 +1570,51 @@ class FormsService:
         form submissions are assigned to the correct pipeline — not just
         the organisation's default.
 
+        Only active pipelines belonging to *organization_id* are
+        considered.  When multiple steps reference the same form the
+        most recently created pipeline wins and a warning is logged.
+
         Returns ``None`` if no step references the form, in which case
         ``create_prospect`` will fall back to the default pipeline.
         """
-        from app.models.membership_pipeline import MembershipPipelineStep
+        from loguru import logger
+
+        from app.models.membership_pipeline import (
+            MembershipPipeline,
+            MembershipPipelineStep,
+        )
 
         result = await self.db.execute(
-            select(MembershipPipelineStep.pipeline_id).where(
+            select(MembershipPipelineStep.pipeline_id)
+            .join(
+                MembershipPipeline,
+                MembershipPipelineStep.pipeline_id == MembershipPipeline.id,
+            )
+            .where(
+                MembershipPipeline.organization_id == organization_id,
+                MembershipPipeline.is_active.is_(True),
                 func.json_unquote(
                     func.json_extract(
                         MembershipPipelineStep.config, "$.form_id"
                     )
                 )
-                == str(form_id)
+                == str(form_id),
             )
+            .order_by(MembershipPipeline.created_at.desc())
         )
-        pipeline_id = result.scalars().first()
-        return str(pipeline_id) if pipeline_id else None
+        rows = result.scalars().all()
+
+        if not rows:
+            return None
+
+        if len(rows) > 1:
+            logger.warning(
+                f"Form {form_id} is referenced by steps in "
+                f"{len(rows)} active pipelines — using the most "
+                f"recently created: {rows[0]}"
+            )
+
+        return str(rows[0])
 
     async def _reassign_prospect_pipeline(
         self, prospect: "ProspectiveMember", pipeline_id: str

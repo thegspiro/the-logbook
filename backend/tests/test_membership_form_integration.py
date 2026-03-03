@@ -400,11 +400,12 @@ class TestResolvePipelineForForm:
         self, forms_service, mock_db
     ):
         frm_id = str(uuid4())
+        org_id = str(uuid4())
         expected_pipeline_id = str(uuid4())
 
         mock_db.execute.return_value = _make_result_chain(expected_pipeline_id)
 
-        result = await forms_service._resolve_pipeline_for_form(frm_id)
+        result = await forms_service._resolve_pipeline_for_form(frm_id, org_id)
 
         assert result == expected_pipeline_id
         mock_db.execute.assert_called_once()
@@ -413,10 +414,11 @@ class TestResolvePipelineForForm:
         self, forms_service, mock_db
     ):
         frm_id = str(uuid4())
+        org_id = str(uuid4())
 
         mock_db.execute.return_value = _make_result_chain()  # No results
 
-        result = await forms_service._resolve_pipeline_for_form(frm_id)
+        result = await forms_service._resolve_pipeline_for_form(frm_id, org_id)
 
         assert result is None
 
@@ -642,6 +644,10 @@ class TestReprocessReassignment:
 
         FormsService._reassign_prospect_pipeline = mock_reassign
 
+        # Patch _complete_form_submission_step (called after reassignment)
+        original_complete = FormsService._complete_form_submission_step
+        FormsService._complete_form_submission_step = AsyncMock()
+
         try:
             result = await forms_service._process_membership_interest(
                 submission, integration=None, form=form
@@ -652,8 +658,11 @@ class TestReprocessReassignment:
             # Reassignment should have been called with correct pipeline
             assert len(reassign_calls) == 1
             assert reassign_calls[0] == (prospect_id, correct_pipeline_id)
+            # Form step should have been auto-completed
+            FormsService._complete_form_submission_step.assert_called_once()
         finally:
             FormsService._reassign_prospect_pipeline = original_reassign
+            FormsService._complete_form_submission_step = original_complete
 
     async def test_no_reassignment_when_pipeline_matches(
         self, forms_service, mock_db
@@ -695,6 +704,10 @@ class TestReprocessReassignment:
 
         FormsService._reassign_prospect_pipeline = mock_reassign
 
+        # Patch _complete_form_submission_step (called for existing prospects)
+        original_complete = FormsService._complete_form_submission_step
+        FormsService._complete_form_submission_step = AsyncMock()
+
         try:
             result = await forms_service._process_membership_interest(
                 submission, integration=None, form=form
@@ -706,6 +719,7 @@ class TestReprocessReassignment:
             assert len(reassign_calls) == 0
         finally:
             FormsService._reassign_prospect_pipeline = original_reassign
+            FormsService._complete_form_submission_step = original_complete
 
     async def test_no_reassignment_when_no_pipeline_resolved(
         self, forms_service, mock_db
@@ -747,6 +761,10 @@ class TestReprocessReassignment:
 
         FormsService._reassign_prospect_pipeline = mock_reassign
 
+        # Patch _complete_form_submission_step (called for existing prospects)
+        original_complete = FormsService._complete_form_submission_step
+        FormsService._complete_form_submission_step = AsyncMock()
+
         try:
             result = await forms_service._process_membership_interest(
                 submission, integration=None, form=form
@@ -757,3 +775,4 @@ class TestReprocessReassignment:
             assert len(reassign_calls) == 0
         finally:
             FormsService._reassign_prospect_pipeline = original_reassign
+            FormsService._complete_form_submission_step = original_complete
