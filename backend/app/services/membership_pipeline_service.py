@@ -526,7 +526,26 @@ class MembershipPipelineService:
         data: Dict[str, Any],
         created_by: Optional[str] = None,
     ) -> ProspectiveMember:
-        """Create a new prospective member"""
+        """Create a new prospective member.
+
+        If an active prospect with the same email already exists in this
+        organization, a duplicate notification email is sent to the
+        applicant (with the department BCC'd) and the existing prospect
+        is returned instead of creating a new record.
+        """
+        email = data.get("email", "").strip().lower()
+        if email:
+            existing = await self._find_active_prospect_by_email(organization_id, email)
+            if existing:
+                # Fire-and-forget: send duplicate notification email
+                await self._notify_duplicate_application(existing, organization_id)
+                logger.info(
+                    f"Duplicate prospect detected for email {email} "
+                    f"in org {organization_id} — returning existing "
+                    f"prospect {existing.id}"
+                )
+                return existing
+
         pipeline_id = data.get("pipeline_id")
 
         # Use org default pipeline if none specified
@@ -1433,6 +1452,90 @@ class MembershipPipelineService:
                 status=status,
             )
             self.db.add(progress)
+
+    # =========================================================================
+    # Duplicate Detection
+    # =========================================================================
+
+    async def _find_active_prospect_by_email(
+        self, organization_id: str, email: str
+    ) -> Optional[ProspectiveMember]:
+        """Return an existing active/pending prospect with the given email."""
+        result = await self.db.execute(
+            select(ProspectiveMember)
+            .where(
+                and_(
+                    ProspectiveMember.organization_id == organization_id,
+                    func.lower(ProspectiveMember.email) == email.lower(),
+                    ProspectiveMember.status.in_(
+                        [
+                            ProspectStatus.ACTIVE,
+                        ]
+                    ),
+                )
+            )
+            .order_by(ProspectiveMember.created_at)
+            .limit(1)
+        )
+        return result.scalars().first()
+
+    async def _notify_duplicate_application(
+        self, existing_prospect: ProspectiveMember, organization_id: str
+    ) -> None:
+        """Send a duplicate-application notification email to the applicant.
+
+        The organization's contact email is BCC'd so leadership is aware.
+        """
+        try:
+            org_result = await self.db.execute(
+                select(Organization).where(Organization.id == organization_id)
+            )
+            org = org_result.scalar_one_or_none()
+            if not org:
+                return
+
+            from app.services.email_service import EmailService
+
+            email_svc = EmailService(org)
+
+            # Format the original application date
+            original_date = "unknown"
+            if existing_prospect.created_at:
+                original_date = existing_prospect.created_at.strftime("%B %d, %Y")
+
+            applicant_name = (
+                f"{existing_prospect.first_name} {existing_prospect.last_name}"
+            )
+
+            # BCC the department's email so they know a duplicate came in
+            bcc = [org.email] if org.email else None
+
+            await email_svc.send_duplicate_application_email(
+                to_email=existing_prospect.email,
+                applicant_name=applicant_name,
+                organization_name=org.name or "the department",
+                original_date=original_date,
+                bcc_emails=bcc,
+                db=self.db,
+                organization_id=organization_id,
+            )
+
+            # Log the duplicate attempt on the existing prospect's activity
+            await self._log_activity(
+                prospect_id=existing_prospect.id,
+                action="duplicate_application_detected",
+                details={
+                    "notification_sent_to": existing_prospect.email,
+                    "department_bcc": bool(bcc),
+                },
+            )
+            await self.db.commit()
+
+        except Exception as e:
+            logger.warning(
+                f"Failed to send duplicate application notification for "
+                f"{existing_prospect.email}: {e}"
+            )
 
     # -- Label-to-prospect-field mapping for auto-generating field_mappings --
 

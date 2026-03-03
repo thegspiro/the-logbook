@@ -161,7 +161,10 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "ballot_url", "description": "Link to the voting page"},
         {"name": "voting_opens", "description": "Date and time voting opens"},
         {"name": "voting_closes", "description": "Date and time voting closes"},
-        {"name": "positions", "description": "Positions being voted on (comma-separated)"},
+        {
+            "name": "positions",
+            "description": "Positions being voted on (comma-separated)",
+        },
     ],
     "cert_expiration": [
         {"name": "recipient_name", "description": "Recipient's display name"},
@@ -243,11 +246,22 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "organization_name", "description": "Organization name"},
     ],
     "it_password_notification": [
-        {"name": "user_name", "description": "Name of the user who requested the reset"},
+        {
+            "name": "user_name",
+            "description": "Name of the user who requested the reset",
+        },
         {"name": "user_email", "description": "Email of the user"},
         {"name": "request_time", "description": "Time the request was made"},
         {"name": "ip_address", "description": "IP address of the request"},
         {"name": "organization_name", "description": "Organization name"},
+    ],
+    "duplicate_application": [
+        {"name": "applicant_name", "description": "Applicant's full name"},
+        {"name": "organization_name", "description": "Organization name"},
+        {
+            "name": "original_date",
+            "description": "Date the original application was received",
+        },
     ],
 }
 
@@ -602,6 +616,16 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "organization_phone": "(555) 555-1234",
         "organization_email": "info@samplefd.org",
     },
+    "duplicate_application": {
+        "applicant_name": "Alex Johnson",
+        "organization_name": "Sample Fire Department",
+        "original_date": "February 15, 2026",
+        "organization_logo": "https://example.com/logo.png",
+        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_phone": "(555) 555-1234",
+        "organization_email": "info@samplefd.org",
+    },
 }
 
 # Default welcome email HTML body
@@ -923,9 +947,7 @@ Validate attendance: {{validation_url}}
 This is an automated message from {{organization_name}}.
 Please do not reply to this email."""
 
-DEFAULT_POST_EVENT_VALIDATION_SUBJECT = (
-    "Attendance Validation Needed: {{event_title}}"
-)
+DEFAULT_POST_EVENT_VALIDATION_SUBJECT = "Attendance Validation Needed: {{event_title}}"
 
 
 # Default post-shift validation email
@@ -1120,9 +1142,7 @@ Please review the election details and coordinate with your team as needed.
 ---
 This is an automated message from {{organization_name}}."""
 
-DEFAULT_ELECTION_ROLLBACK_SUBJECT = (
-    "ALERT: Election Rolled Back — {{election_title}}"
-)
+DEFAULT_ELECTION_ROLLBACK_SUBJECT = "ALERT: Election Rolled Back — {{election_title}}"
 
 
 # Default election deleted alert email
@@ -1163,9 +1183,7 @@ All associated ballots and results have been removed.
 ---
 This is an automated message from {{organization_name}}."""
 
-DEFAULT_ELECTION_DELETED_SUBJECT = (
-    "CRITICAL: Election Deleted — {{election_title}}"
-)
+DEFAULT_ELECTION_DELETED_SUBJECT = "CRITICAL: Election Deleted — {{election_title}}"
 
 
 # Default member archived notification email
@@ -1237,9 +1255,7 @@ Thank you for your request.
 ---
 This is an automated message from {{organization_name}}."""
 
-DEFAULT_EVENT_REQUEST_STATUS_SUBJECT = (
-    "Event Request Update — {{status_label}}"
-)
+DEFAULT_EVENT_REQUEST_STATUS_SUBJECT = "Event Request Update — {{status_label}}"
 
 
 # Default IT password reset notification email
@@ -1280,6 +1296,53 @@ This is an automated IT security notice from {{organization_name}}."""
 
 DEFAULT_IT_PASSWORD_NOTIFICATION_SUBJECT = (
     "[IT Notice] Password Reset Requested — {{organization_name}}"
+)
+
+
+# Default duplicate application notification email
+DEFAULT_DUPLICATE_APPLICATION_HTML = """<div class="container">
+    <div class="header">
+        <h1>Application Already on File</h1>
+    </div>
+    <div class="content">
+        <p>Hello {{applicant_name}},</p>
+
+        <p>Thank you for your interest in joining {{organization_name}}.</p>
+
+        <p>Our records show that we already have an application on file for
+        this email address, originally received on <strong>{{original_date}}</strong>.
+        A duplicate application has not been created.</p>
+
+        <p>If you believe this is an error, or if you have questions about the
+        status of your application, please contact us directly.</p>
+    </div>
+    <div class="footer">
+        <p>{{organization_name}}</p>
+        <p>{{organization_phone}}</p>
+        <p>{{organization_email}}</p>
+    </div>
+</div>"""
+
+DEFAULT_DUPLICATE_APPLICATION_TEXT = """Application Already on File
+
+Hello {{applicant_name}},
+
+Thank you for your interest in joining {{organization_name}}.
+
+Our records show that we already have an application on file for this
+email address, originally received on {{original_date}}. A duplicate
+application has not been created.
+
+If you believe this is an error, or if you have questions about the
+status of your application, please contact us directly.
+
+---
+{{organization_name}}
+{{organization_phone}}
+{{organization_email}}"""
+
+DEFAULT_DUPLICATE_APPLICATION_SUBJECT = (
+    "Application Already on File — {{organization_name}}"
 )
 
 
@@ -1663,9 +1726,7 @@ class EmailTemplateService:
         await self.db.flush()
         # Refresh server-computed timestamps (server_default / onupdate)
         # to prevent MissingGreenlet when serializing in async mode.
-        await self.db.refresh(
-            template, attribute_names=["created_at", "updated_at"]
-        )
+        await self.db.refresh(template, attribute_names=["created_at", "updated_at"])
         return template
 
     async def update_template(
@@ -2317,6 +2378,30 @@ class EmailTemplateService:
                     "Sent to the IT team contacts when a user requests a password "
                     "reset. Informational only — includes the user's name, email, "
                     "and request IP address."
+                ),
+                allow_attachments=False,
+                created_by=created_by,
+            )
+            created.append(template)
+
+        # Check for duplicate application notification template
+        existing = await self.get_template(
+            organization_id,
+            EmailTemplateType.DUPLICATE_APPLICATION,
+            active_only=False,
+        )
+        if not existing:
+            template = await self.create_template(
+                organization_id=organization_id,
+                template_type=EmailTemplateType.DUPLICATE_APPLICATION,
+                name="Duplicate Application Notice",
+                subject=DEFAULT_DUPLICATE_APPLICATION_SUBJECT,
+                html_body=DEFAULT_DUPLICATE_APPLICATION_HTML,
+                text_body=DEFAULT_DUPLICATE_APPLICATION_TEXT,
+                description=(
+                    "Sent to the applicant when a duplicate membership application "
+                    "is detected for the same email address. The department is "
+                    "BCC'd automatically."
                 ),
                 allow_attachments=False,
                 created_by=created_by,
