@@ -350,11 +350,19 @@ class MembershipPipelineService:
 
         await self.db.flush()
 
-        # Expire stale ORM objects so the re-fetch gets fresh data
-        for step in pipeline.steps:
-            await self.db.refresh(step, ["sort_order"])
-
-        return sorted(pipeline.steps, key=lambda s: s.sort_order)
+        # Re-query steps from the database instead of refreshing individual
+        # attributes on existing ORM objects.  In async SQLAlchemy, Core
+        # UPDATE statements can leave other column attributes expired, and
+        # partial refresh (only sort_order) doesn't reload them.  Accessing
+        # those expired attributes during Pydantic response serialization
+        # then triggers a lazy load which is unsupported in async contexts,
+        # causing a MissingGreenlet / Internal Server Error.
+        result = await self.db.execute(
+            select(MembershipPipelineStep)
+            .where(MembershipPipelineStep.pipeline_id == pipeline_id)
+            .order_by(MembershipPipelineStep.sort_order)
+        )
+        return list(result.scalars().all())
 
     # =========================================================================
     # Prospect CRUD
