@@ -41,6 +41,9 @@ _STUB_MODULES = [
     "jwt", "redis", "redis.asyncio",
     "authlib", "authlib.integrations", "authlib.integrations.starlette_client",
     "celery", "celery.result", "stripe",
+    "fastapi", "fastapi.security", "fastapi.templating",
+    "fastapi.responses", "fastapi.routing",
+    "fastapi.middleware", "fastapi.middleware.cors",
     "fastapi_mail", "sentry_sdk",
     "twilio", "twilio.rest", "pyotp",
     "argon2", "argon2.exceptions", "bcrypt",
@@ -56,7 +59,9 @@ _STUB_MODULES = [
     "ldap3", "onelogin", "onelogin.saml2", "onelogin.saml2.auth",
     "cffi", "_cffi_backend",
     "aiomysql", "jinja2", "httpx",
-    "fastapi.templating",
+    "starlette", "starlette.requests", "starlette.responses",
+    "starlette.middleware", "starlette.middleware.base",
+    "starlette.types",
     "elasticsearch",
     "minio",
 ]
@@ -65,8 +70,9 @@ for _mod_name in _STUB_MODULES:
     if _mod_name not in sys.modules:
         sys.modules[_mod_name] = _stub(_mod_name)
 
-# Now safe to import the service under test.
+# Now safe to import the services under test.
 from app.services.membership_pipeline_service import MembershipPipelineService  # noqa: E402
+from app.services.forms_service import FormsService  # noqa: E402
 
 
 # ============================================
@@ -375,3 +381,194 @@ class TestLegacyPathRepairsExisting:
         targets = set(existing.field_mappings.values())
         assert {"first_name", "last_name", "email"} <= targets
         mock_db.commit.assert_called()
+
+
+# ============================================
+# Tests — _resolve_pipeline_for_form
+# ============================================
+
+
+class TestResolvePipelineForForm:
+    """FormsService._resolve_pipeline_for_form should find the pipeline
+    whose step references a given form_id in its config JSON."""
+
+    @pytest.fixture
+    def forms_service(self, mock_db):
+        return FormsService(mock_db)
+
+    async def test_returns_pipeline_id_when_step_references_form(
+        self, forms_service, mock_db
+    ):
+        frm_id = str(uuid4())
+        expected_pipeline_id = str(uuid4())
+
+        mock_db.execute.return_value = _make_result_chain(expected_pipeline_id)
+
+        result = await forms_service._resolve_pipeline_for_form(frm_id)
+
+        assert result == expected_pipeline_id
+        mock_db.execute.assert_called_once()
+
+    async def test_returns_none_when_no_step_references_form(
+        self, forms_service, mock_db
+    ):
+        frm_id = str(uuid4())
+
+        mock_db.execute.return_value = _make_result_chain()  # No results
+
+        result = await forms_service._resolve_pipeline_for_form(frm_id)
+
+        assert result is None
+
+
+# ============================================
+# Tests — pipeline_id propagation in
+# _process_membership_interest
+# ============================================
+
+
+def _make_submission(frm_id: str, org_id: str, data: dict):
+    """Create a mock FormSubmission."""
+    sub = MagicMock()
+    sub.id = str(uuid4())
+    sub.form_id = frm_id
+    sub.organization_id = org_id
+    sub.data = data
+    return sub
+
+
+def _make_form_with_fields(frm_id: str, fields: list, integration_type=None):
+    """Create a mock Form with fields and integration_type."""
+    form = MagicMock()
+    form.id = frm_id
+    form.fields = fields
+    form.integrations = []
+    form.integration_type = integration_type
+    return form
+
+
+def _make_prospect(prospect_id: str, form_submission_id: str | None = None):
+    """Create a mock ProspectiveMember."""
+    p = MagicMock()
+    p.id = prospect_id
+    p.form_submission_id = form_submission_id
+    return p
+
+
+class TestMembershipInterestPipelineId:
+    """_process_membership_interest should resolve the correct pipeline_id
+    from the form's linked pipeline step and pass it to create_prospect."""
+
+    @pytest.fixture
+    def forms_service(self, mock_db):
+        return FormsService(mock_db)
+
+    async def test_passes_resolved_pipeline_id_to_create_prospect(
+        self, forms_service, mock_db
+    ):
+        frm_id = str(uuid4())
+        org_id = str(uuid4())
+        pipeline_id = str(uuid4())
+        prospect_id = str(uuid4())
+
+        fields = [
+            _make_field("First Name"),
+            _make_field("Last Name"),
+            _make_field("Email", field_type="email"),
+        ]
+        form = _make_form_with_fields(frm_id, fields)
+
+        data = {
+            str(fields[0].id): "John",
+            str(fields[1].id): "Doe",
+            str(fields[2].id): "john@example.com",
+        }
+        submission = _make_submission(frm_id, org_id, data)
+
+        # Duplicate guard runs first, then _resolve_pipeline_for_form
+        mock_db.execute.side_effect = [
+            _make_result_chain(),              # duplicate guard (no existing)
+            _make_result_chain(pipeline_id),   # _resolve_pipeline_for_form
+        ]
+
+        prospect = _make_prospect(prospect_id, str(submission.id))
+
+        # Patch MembershipPipelineService.create_prospect
+        import app.services.membership_pipeline_service as mps_mod
+        original_init = mps_mod.MembershipPipelineService.__init__
+        original_create = mps_mod.MembershipPipelineService.create_prospect
+
+        captured_data = {}
+
+        async def mock_create_prospect(self, organization_id, data, created_by=None):
+            captured_data.update(data)
+            return prospect
+
+        mps_mod.MembershipPipelineService.__init__ = lambda self, db: None
+        mps_mod.MembershipPipelineService.create_prospect = mock_create_prospect
+
+        try:
+            result = await forms_service._process_membership_interest(
+                submission, integration=None, form=form
+            )
+
+            assert result["success"] is True
+            assert result["prospect_id"] == prospect_id
+            assert captured_data.get("pipeline_id") == pipeline_id
+        finally:
+            mps_mod.MembershipPipelineService.__init__ = original_init
+            mps_mod.MembershipPipelineService.create_prospect = original_create
+
+    async def test_omits_pipeline_id_when_no_step_references_form(
+        self, forms_service, mock_db
+    ):
+        frm_id = str(uuid4())
+        org_id = str(uuid4())
+        prospect_id = str(uuid4())
+
+        fields = [
+            _make_field("First Name"),
+            _make_field("Last Name"),
+            _make_field("Email", field_type="email"),
+        ]
+        form = _make_form_with_fields(frm_id, fields)
+
+        data = {
+            str(fields[0].id): "Jane",
+            str(fields[1].id): "Doe",
+            str(fields[2].id): "jane@example.com",
+        }
+        submission = _make_submission(frm_id, org_id, data)
+
+        # Duplicate guard runs first, then _resolve_pipeline_for_form
+        mock_db.execute.side_effect = [
+            _make_result_chain(),   # duplicate guard (no existing)
+            _make_result_chain(),   # _resolve_pipeline_for_form → None
+        ]
+
+        prospect = _make_prospect(prospect_id, str(submission.id))
+
+        import app.services.membership_pipeline_service as mps_mod
+        original_init = mps_mod.MembershipPipelineService.__init__
+        original_create = mps_mod.MembershipPipelineService.create_prospect
+
+        captured_data = {}
+
+        async def mock_create_prospect(self, organization_id, data, created_by=None):
+            captured_data.update(data)
+            return prospect
+
+        mps_mod.MembershipPipelineService.__init__ = lambda self, db: None
+        mps_mod.MembershipPipelineService.create_prospect = mock_create_prospect
+
+        try:
+            result = await forms_service._process_membership_interest(
+                submission, integration=None, form=form
+            )
+
+            assert result["success"] is True
+            # pipeline_id should NOT be in the data (falls back to default)
+            assert "pipeline_id" not in captured_data
+        finally:
+            mps_mod.MembershipPipelineService.__init__ = original_init
+            mps_mod.MembershipPipelineService.create_prospect = original_create

@@ -225,6 +225,8 @@ function mapStageUpdateToBackend(stage: PipelineStageUpdate): BackendStepUpdateP
   }
   if (stage.sort_order !== undefined) payload.sort_order = stage.sort_order;
   if (stage.is_required !== undefined) payload.required = stage.is_required;
+  if (stage.config !== undefined)
+    payload.config = stage.config as unknown as Record<string, unknown>;
   if (stage.notify_prospect_on_completion !== undefined)
     payload.notify_prospect_on_completion = stage.notify_prospect_on_completion;
   if (stage.public_visible !== undefined) payload.public_visible = stage.public_visible;

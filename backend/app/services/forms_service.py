@@ -1438,6 +1438,11 @@ class FormsService:
                 "message": "Prospect already exists for this submission",
             }
 
+        # ---- Resolve the pipeline that references this form ----
+        pipeline_id = await self._resolve_pipeline_for_form(
+            str(form.id) if form else str(submission.form_id)
+        )
+
         # ---- Create new prospect ----
         try:
             pipeline_service = MembershipPipelineService(self.db)
@@ -1457,6 +1462,8 @@ class FormsService:
                 "form_submission_id": str(submission.id),
                 "metadata_": mapped_data,
             }
+            if pipeline_id:
+                prospect_data["pipeline_id"] = pipeline_id
             prospect = await pipeline_service.create_prospect(
                 organization_id=str(submission.organization_id),
                 data=prospect_data,
@@ -1508,6 +1515,36 @@ class FormsService:
                 "prospect_id": None,
                 "message": f"Prospect creation failed: {e}",
             }
+
+    async def _resolve_pipeline_for_form(
+        self, form_id: str
+    ) -> Optional[str]:
+        """Find the pipeline whose step references *form_id* in its config.
+
+        When a membership pipeline step is configured with a form as its
+        starting point, the step's ``config`` JSON contains
+        ``{"form_id": "<uuid>"}``.  This method looks up that step and
+        returns the owning pipeline's ID so that prospects created from
+        form submissions are assigned to the correct pipeline — not just
+        the organisation's default.
+
+        Returns ``None`` if no step references the form, in which case
+        ``create_prospect`` will fall back to the default pipeline.
+        """
+        from app.models.membership_pipeline import MembershipPipelineStep
+
+        result = await self.db.execute(
+            select(MembershipPipelineStep.pipeline_id).where(
+                func.json_unquote(
+                    func.json_extract(
+                        MembershipPipelineStep.config, "$.form_id"
+                    )
+                )
+                == str(form_id)
+            )
+        )
+        pipeline_id = result.scalars().first()
+        return str(pipeline_id) if pipeline_id else None
 
     async def _process_equipment_assignment(
         self,
