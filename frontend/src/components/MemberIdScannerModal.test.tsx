@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemberIdScannerModal } from './MemberIdScannerModal';
 
@@ -7,10 +7,9 @@ import { MemberIdScannerModal } from './MemberIdScannerModal';
 const mockStart = vi.fn().mockResolvedValue(undefined);
 const mockStop = vi.fn().mockResolvedValue(undefined);
 vi.mock('html5-qrcode', () => ({
-  Html5Qrcode: vi.fn().mockImplementation(() => ({
-    start: mockStart,
-    stop: mockStop,
-  })),
+  Html5Qrcode: vi.fn().mockImplementation(function () {
+    return { start: mockStart, stop: mockStop };
+  }),
 }));
 
 // Mock the API module
@@ -114,13 +113,11 @@ describe('MemberIdScannerModal', () => {
   });
 
   it('should auto-start the scanner when opened', async () => {
-    vi.useFakeTimers();
     render(<MemberIdScannerModal {...defaultProps} />);
 
-    // The start is delayed by 100ms
-    await vi.advanceTimersByTimeAsync(150);
-
-    expect(mockStart).toHaveBeenCalled();
-    vi.useRealTimers();
+    // The start is delayed by 100ms via setTimeout in the component
+    await waitFor(() => {
+      expect(mockStart).toHaveBeenCalled();
+    });
   });
 });

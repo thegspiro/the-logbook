@@ -36,6 +36,7 @@ function TogglableThrowingChild({
 
 describe('ErrorBoundary', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.restoreAllMocks();
     // Re-apply the mock after restoreAllMocks clears it
     mockedLogError.mockReturnValue({

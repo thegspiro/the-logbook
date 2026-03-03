@@ -91,6 +91,7 @@ export function useInventoryWebSocket({ onEvent, enabled = true }: UseInventoryW
     }
 
     return () => {
+      enabledRef.current = false;
       clearTimeout(reconnectTimer.current);
       if (wsRef.current) {
         wsRef.current.close(1000);
