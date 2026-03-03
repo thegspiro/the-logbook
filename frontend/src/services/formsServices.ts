@@ -89,6 +89,11 @@ export const formsService = {
     await api.delete(`/forms/${formId}/submissions/${submissionId}`);
   },
 
+  async reprocessSubmission(formId: string, submissionId: string): Promise<FormSubmission> {
+    const response = await api.post<FormSubmission>(`/forms/${formId}/submissions/${submissionId}/reprocess`);
+    return response.data;
+  },
+
   // Integration methods
   async addIntegration(formId: string, data: FormIntegrationCreate): Promise<FormIntegration> {
     const response = await api.post<FormIntegration>(`/forms/${formId}/integrations`, data);

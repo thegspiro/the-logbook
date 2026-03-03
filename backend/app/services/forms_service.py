@@ -640,6 +640,41 @@ class FormsService:
         )
         return result.scalar_one_or_none()
 
+    async def reprocess_submission_integrations(
+        self, submission_id: UUID, organization_id: UUID
+    ) -> Tuple[Optional[FormSubmission], Optional[str]]:
+        """Re-run integrations for an existing submission."""
+        try:
+            # Load the submission with its form and integrations
+            result = await self.db.execute(
+                select(FormSubmission)
+                .where(FormSubmission.id == str(submission_id))
+                .where(FormSubmission.organization_id == str(organization_id))
+                .options(
+                    selectinload(FormSubmission.form).selectinload(
+                        Form.integrations
+                    ),
+                )
+            )
+            submission = result.scalar_one_or_none()
+            if not submission:
+                return None, "Submission not found"
+
+            if not submission.form:
+                return None, "Associated form not found"
+
+            # Reset integration state and re-process
+            submission.integration_processed = False
+            submission.integration_result = None
+            await self.db.flush()
+
+            await self._process_integrations(submission, submission.form)
+            await self.db.refresh(submission)
+            return submission, None
+        except Exception as e:
+            await self.db.rollback()
+            return None, str(e)
+
     async def delete_submission(
         self, submission_id: UUID, organization_id: UUID
     ) -> Tuple[bool, Optional[str]]:

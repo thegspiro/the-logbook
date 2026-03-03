@@ -15,7 +15,7 @@
 import { useState, useEffect } from 'react';
 import {
   RefreshCw, AlertCircle, ChevronDown, ChevronRight, Clock, User,
-  Globe, Trash2, Download,
+  Globe, Trash2, Download, CheckCircle2, XCircle, RotateCcw, Plug,
 } from 'lucide-react';
 import { formsService } from '../../services/api';
 import type { FormSubmission, FormField } from '../../services/api';
@@ -57,6 +57,7 @@ const SubmissionViewer = ({
   const [expandedId, setExpandedId] = useState<string | null>(directSubmission?.id || null);
   const [page, setPage] = useState(0);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [reprocessing, setReprocessing] = useState<string | null>(null);
 
   useEffect(() => {
     if (formId && !directSubmission) {
@@ -113,6 +114,19 @@ const SubmissionViewer = ({
       setError('Failed to delete submission.');
     } finally {
       setDeleting(null);
+    }
+  };
+
+  const handleReprocess = async (submissionId: string) => {
+    if (!formId) return;
+    try {
+      setReprocessing(submissionId);
+      const updated = await formsService.reprocessSubmission(formId, submissionId);
+      setSubmissions((prev) => prev.map((s) => (s.id === submissionId ? updated : s)));
+    } catch {
+      setError('Failed to reprocess integrations.');
+    } finally {
+      setReprocessing(null);
     }
   };
 
@@ -271,6 +285,23 @@ const SubmissionViewer = ({
                   )}
                 </div>
 
+                {sub.integration_processed && sub.integration_result && (() => {
+                  const results = Object.values(sub.integration_result as Record<string, Record<string, unknown>>);
+                  const allOk = results.every((r) => r.success === true);
+                  const anyFailed = results.some((r) => r.success === false);
+                  return anyFailed ? (
+                    <span className="flex items-center gap-1 text-[11px] text-red-700 dark:text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full shrink-0" title="Integration failed">
+                      <XCircle className="w-3 h-3" />
+                      Failed
+                    </span>
+                  ) : allOk ? (
+                    <span className="flex items-center gap-1 text-[11px] text-green-700 dark:text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full shrink-0" title="Integration succeeded">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Synced
+                    </span>
+                  ) : null;
+                })()}
+
                 <div className="flex items-center gap-1.5 text-xs text-theme-text-muted shrink-0">
                   <Clock className="w-3 h-3" />
                   {formatShortDateTime(sub.submitted_at, tz)}
@@ -289,34 +320,89 @@ const SubmissionViewer = ({
                     ))}
                   </div>
 
+                  {/* Integration Results */}
                   {sub.integration_processed && sub.integration_result && (
-                    <div className="mt-3 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                      <p className="text-xs text-green-700 dark:text-green-400 font-medium mb-1">Integration Result</p>
-                      <pre className="text-xs text-green-700 dark:text-green-300 overflow-x-auto">
-                        {JSON.stringify(sub.integration_result, null, 2)}
-                      </pre>
+                    <div className="mt-3 space-y-2">
+                      <p className="text-xs font-medium text-theme-text-secondary flex items-center gap-1.5">
+                        <Plug className="w-3.5 h-3.5" />
+                        Integration Results
+                      </p>
+                      {Object.entries(sub.integration_result as Record<string, Record<string, unknown>>).map(([key, result]) => {
+                        const succeeded = result.success === true;
+                        return (
+                          <div
+                            key={key}
+                            className={`p-3 rounded-lg border ${
+                              succeeded
+                                ? 'bg-green-500/10 border-green-500/20'
+                                : 'bg-red-500/10 border-red-500/20'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              {succeeded ? (
+                                <CheckCircle2 className="w-3.5 h-3.5 text-green-700 dark:text-green-400 shrink-0" />
+                              ) : (
+                                <XCircle className="w-3.5 h-3.5 text-red-700 dark:text-red-400 shrink-0" />
+                              )}
+                              <span className={`text-xs font-medium capitalize ${
+                                succeeded ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'
+                              }`}>
+                                {key.replace(/_/g, ' ')}
+                              </span>
+                            </div>
+                            {typeof result.message === 'string' && (
+                              <p className={`text-xs ml-5 ${
+                                succeeded ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
+                              }`}>
+                                {result.message}
+                              </p>
+                            )}
+                            {!succeeded && typeof result.error === 'string' && (
+                              <p className="text-xs text-red-700 dark:text-red-300 ml-5">
+                                {result.error}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
 
                   {/* Actions */}
-                  {allowDelete && formId && (
-                    <div className="mt-3 flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => { void handleDelete(sub.id); }}
-                        disabled={deleting === sub.id}
-                        aria-label={`Delete submission by ${sub.submitter_name || sub.submitted_by || 'Anonymous'}`}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors disabled:opacity-50"
-                      >
-                        {deleting === sub.id ? (
-                          <RefreshCw className="w-3 h-3 animate-spin" />
-                        ) : (
-                          <Trash2 className="w-3 h-3" />
-                        )}
-                        Delete
-                      </button>
-                    </div>
-                  )}
+                  <div className="mt-3 flex justify-end gap-2">
+                    {allowDelete && formId && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => { void handleReprocess(sub.id); }}
+                          disabled={reprocessing === sub.id}
+                          aria-label="Reprocess integrations for this submission"
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-orange-700 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 bg-orange-500/10 hover:bg-orange-500/20 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {reprocessing === sub.id ? (
+                            <RefreshCw className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <RotateCcw className="w-3 h-3" />
+                          )}
+                          Reprocess
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { void handleDelete(sub.id); }}
+                          disabled={deleting === sub.id}
+                          aria-label={`Delete submission by ${sub.submitter_name || sub.submitted_by || 'Anonymous'}`}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {deleting === sub.id ? (
+                            <RefreshCw className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3 h-3" />
+                          )}
+                          Delete
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
