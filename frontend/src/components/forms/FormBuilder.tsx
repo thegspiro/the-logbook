@@ -604,7 +604,7 @@ const FormBuilder = ({
 
       {/* Field list with drag-and-drop */}
       {sortedFields.length > 0 && !previewMode && (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => { void handleDragEnd(e); }}>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e: DragEndEvent) => { void handleDragEnd(e); }}>
           <SortableContext items={sortedFields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
             <div className="space-y-2">
               {sortedFields.map((field, idx) => (

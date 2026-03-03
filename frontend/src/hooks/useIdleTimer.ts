@@ -22,8 +22,8 @@ export function useIdleTimer() {
   const logout = useAuthStore((s) => s.logout);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
-  const warningRef = useRef<ReturnType<typeof setTimeout>>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const warningRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const timeoutMsRef = useRef(DEFAULT_TIMEOUT_MINUTES * 60 * 1000);
   const warningShownRef = useRef(false);
 

@@ -21,7 +21,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
   delay = 300,
 }) => {
   const [visible, setVisible] = useState(false);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const tooltipId = useRef(`tooltip-${Math.random().toString(36).slice(2, 9)}`);
 
   const show = () => {
