@@ -246,6 +246,8 @@ export interface EmailTemplate {
   css_styles?: string;
   allow_attachments: boolean;
   is_active: boolean;
+  default_cc?: string[];
+  default_bcc?: string[];
   available_variables: TemplateVariable[];
   created_at: string;
   updated_at: string;
@@ -270,6 +272,8 @@ export interface EmailTemplateUpdate {
   description?: string;
   is_active?: boolean;
   allow_attachments?: boolean;
+  default_cc?: string[] | null;
+  default_bcc?: string[] | null;
 }
 
 export interface EmailTemplatePreview {

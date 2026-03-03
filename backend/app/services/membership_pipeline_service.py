@@ -307,6 +307,11 @@ class MembershipPipelineService:
         if not step:
             return None
 
+        # Capture the old form_id before applying updates so we can clean up
+        # the integration if the step is being reassigned to a different form.
+        old_config = step.config if isinstance(step.config, dict) else {}
+        old_form_id = old_config.get("form_id")
+
         for key, value in data.items():
             if key in self._STEP_PROTECTED_FIELDS:
                 continue
@@ -318,10 +323,17 @@ class MembershipPipelineService:
 
         # If the updated config references a form, ensure a
         # MEMBERSHIP_INTEREST FormIntegration exists.
-        config = data.get("config") or (step.config if step.config else {})
-        form_id = config.get("form_id") if isinstance(config, dict) else None
-        if form_id:
-            await self._ensure_membership_form_integration(form_id, organization_id)
+        new_config = data.get("config") or (step.config if step.config else {})
+        new_form_id = (
+            new_config.get("form_id") if isinstance(new_config, dict) else None
+        )
+        if new_form_id:
+            await self._ensure_membership_form_integration(new_form_id, organization_id)
+
+        # If the form changed, clean up the old form's integration (if no
+        # other step still references it).
+        if old_form_id and old_form_id != new_form_id:
+            await self._cleanup_orphaned_form_integration(old_form_id)
 
         return step
 
@@ -1810,7 +1822,19 @@ class MembershipPipelineService:
             is_active=True,
         )
         self.db.add(integration)
-        await self.db.commit()
+        try:
+            await self.db.commit()
+        except Exception:
+            # A concurrent call may have created the integration between our
+            # existence check and this INSERT (the unique constraint on
+            # (form_id, target_module) prevents duplicates).  Roll back and
+            # let the other copy stand.
+            await self.db.rollback()
+            logger.info(
+                f"MEMBERSHIP_INTEREST integration for form {form_id} already "
+                "created by a concurrent request — skipping."
+            )
+            return
 
         logger.info(
             f"Auto-created MEMBERSHIP_INTEREST integration for form {form_id} "
@@ -1822,12 +1846,19 @@ class MembershipPipelineService:
         other pipeline step still references it in its config."""
         from app.models.forms import FormIntegration, IntegrationTarget
 
-        # Check if any remaining step still references this form_id.
-        all_steps = await self.db.execute(select(MembershipPipelineStep))
-        for step in all_steps.scalars().all():
-            cfg = step.config if isinstance(step.config, dict) else {}
-            if cfg.get("form_id") == str(form_id):
-                return  # Another step still uses this form — keep the integration.
+        # Check if any remaining step still references this form_id via a
+        # targeted JSON query (MySQL JSON_UNQUOTE(JSON_EXTRACT(...))).
+        str_form_id = str(form_id)
+        step_count_result = await self.db.execute(
+            select(func.count(MembershipPipelineStep.id)).where(
+                func.json_unquote(
+                    func.json_extract(MembershipPipelineStep.config, "$.form_id")
+                )
+                == str_form_id
+            )
+        )
+        if (step_count_result.scalar() or 0) > 0:
+            return  # Another step still uses this form — keep the integration.
 
         result = await self.db.execute(
             select(FormIntegration).where(

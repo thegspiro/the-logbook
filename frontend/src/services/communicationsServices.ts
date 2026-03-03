@@ -192,6 +192,7 @@ export interface ScheduledEmail {
   template_type: string;
   to_emails: string[];
   cc_emails?: string[];
+  bcc_emails?: string[];
   context: Record<string, unknown>;
   scheduled_at: string;
   status: 'pending' | 'sent' | 'failed' | 'cancelled';
@@ -207,6 +208,7 @@ export interface ScheduledEmailCreate {
   template_id?: string | undefined;
   to_emails: string[];
   cc_emails?: string[] | undefined;
+  bcc_emails?: string[] | undefined;
   context: Record<string, unknown>;
   scheduled_at: string;
 }

@@ -238,6 +238,30 @@ const STARTER_TEMPLATES: StarterTemplate[] = [
     icon: <FileText className="w-6 h-6" aria-hidden="true" />,
     color: 'text-purple-700 dark:text-purple-400',
   },
+  {
+    id: 'community-event-request',
+    name: 'Community Event Request',
+    description: 'Public form for community members to request fire department participation at events',
+    category: 'Administration',
+    fields: [
+      { label: 'Contact Name', field_type: 'text', required: true },
+      { label: 'Contact Email', field_type: 'email', required: true },
+      { label: 'Contact Phone', field_type: 'phone', required: false },
+      { label: 'Organization Name', field_type: 'text', required: false },
+      { label: 'Outreach Type', field_type: 'select', required: true },
+      { label: 'Description', field_type: 'textarea', required: true },
+      { label: 'Preferred Timeframe', field_type: 'text', required: false },
+      { label: 'Time of Day', field_type: 'select', required: false },
+      { label: 'Expected Attendees', field_type: 'number', required: false },
+      { label: 'Age Group', field_type: 'select', required: false },
+      { label: 'Venue Address', field_type: 'text', required: false },
+      { label: 'Special Requests', field_type: 'textarea', required: false },
+    ],
+    icon: <Send className="w-6 h-6" aria-hidden="true" />,
+    color: 'text-teal-700 dark:text-teal-400',
+    isPublic: true,
+    integrationHint: 'event_request',
+  },
 ];
 
 type FormCategory = 'all' | 'Safety' | 'Operations' | 'Administration' | 'Training';
@@ -339,7 +363,7 @@ const FormsPage: React.FC = () => {
         // integration_type on the form so submission processing
         // uses label-based mapping directly — no separate
         // FormIntegration record needed.
-        integration_type: template.integrationHint || undefined,
+        integration_type: template.integrationHint,
         fields: template.fields.map((f, i) => ({
           label: f.label,
           field_type: f.field_type,
