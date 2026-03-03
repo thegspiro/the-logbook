@@ -1,30 +1,23 @@
-"""Sync email_template_type enum with Python model
+"""Add duplicate_application to email template_type enum
 
-Revision ID: 20260301_0100
-Revises: 20260228_0100
-Create Date: 2026-03-01
+Revision ID: 20260303_0100
+Revises: 20260301_0200
+Create Date: 2026-03-03
 
-The EmailTemplateType Python enum was extended with 11 new values
-(inventory_change, cert_expiration, post_event_validation,
-post_shift_validation, property_return_reminder, inactivity_warning,
-election_rollback, election_deleted, member_archived,
-event_request_status, it_password_notification) but the MySQL ENUM
-column was never updated past the 20260214_0500 migration. This
-caused a DataError when ensure_default_templates tried to insert
-templates with the newer types.
+The duplicate_application value was added to the Python EmailTemplateType
+enum and used in ensure_default_templates, but was missing from the MySQL
+ENUM column definition, causing a DataError (1265) on insert.
 """
 
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "20260301_0100"
-down_revision = "20260228_0100"
+revision = "20260303_0100"
+down_revision = "20260301_0200"
 branch_labels = None
 depends_on = None
 
 # Complete list matching EmailTemplateType in models/email_template.py
-# NOTE: This was missing "duplicate_application" — fixed in migration
-# 20260303_0100. Keeping this list as-is to preserve migration history.
 ALL_TYPES = (
     "welcome",
     "password_reset",
@@ -44,10 +37,11 @@ ALL_TYPES = (
     "member_archived",
     "event_request_status",
     "it_password_notification",
+    "duplicate_application",
     "custom",
 )
 
-# Previous set (from migration 20260214_0500)
+# Previous set (from migration 20260301_0100, missing duplicate_application)
 OLD_TYPES = (
     "welcome",
     "password_reset",
@@ -56,6 +50,17 @@ OLD_TYPES = (
     "training_approval",
     "ballot_notification",
     "member_dropped",
+    "inventory_change",
+    "cert_expiration",
+    "post_event_validation",
+    "post_shift_validation",
+    "property_return_reminder",
+    "inactivity_warning",
+    "election_rollback",
+    "election_deleted",
+    "member_archived",
+    "event_request_status",
+    "it_password_notification",
     "custom",
 )
 
