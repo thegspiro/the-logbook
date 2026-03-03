@@ -29,6 +29,11 @@ from app.models.membership_pipeline import (
     StepProgressStatus,
 )
 from app.models.user import Organization, User, UserStatus, generate_uuid
+from app.utils.prospect_fields import (
+    FIELD_TYPE_MAP as _SHARED_FIELD_TYPE_MAP,
+    LABEL_MAP as _SHARED_LABEL_MAP,
+    REQUIRED_PROSPECT_FIELDS as _SHARED_REQUIRED_FIELDS,
+)
 
 
 class MembershipPipelineService:
@@ -167,10 +172,33 @@ class MembershipPipelineService:
         return await self.get_pipeline(pipeline_id, organization_id)
 
     async def delete_pipeline(self, pipeline_id: str, organization_id: str) -> bool:
-        """Delete a pipeline (cascades to steps, but not prospects — they become unassigned)"""
+        """Delete a pipeline.
+
+        Raises ``ValueError`` if active or on-hold prospects still
+        reference this pipeline.  Cascades to steps; prospects with
+        terminal statuses have their ``pipeline_id`` set to NULL.
+        """
         pipeline = await self.get_pipeline(pipeline_id, organization_id)
         if not pipeline:
             return False
+
+        # Guard: refuse to delete if active prospects are attached.
+        active_count_result = await self.db.execute(
+            select(func.count()).where(
+                ProspectiveMember.pipeline_id == pipeline_id,
+                ProspectiveMember.status.in_([
+                    ProspectStatus.ACTIVE,
+                    ProspectStatus.ON_HOLD,
+                ]),
+            )
+        )
+        active_count = active_count_result.scalar() or 0
+        if active_count > 0:
+            raise ValueError(
+                f"Cannot delete pipeline — {active_count} active/on-hold "
+                f"prospect(s) are still assigned to it. Move or resolve "
+                f"them before deleting."
+            )
 
         await self.db.delete(pipeline)
         await self.db.commit()
@@ -340,7 +368,13 @@ class MembershipPipelineService:
     async def delete_step(
         self, step_id: str, pipeline_id: str, organization_id: str
     ) -> bool:
-        """Remove a step from a pipeline"""
+        """Remove a step from a pipeline.
+
+        If any active/on-hold prospects have this step as their
+        ``current_step_id``, they are automatically advanced to the
+        next step (or to the previous step if this is the last one)
+        before the step is deleted.
+        """
         pipeline = await self.get_pipeline(pipeline_id, organization_id)
         if not pipeline:
             return False
@@ -348,6 +382,50 @@ class MembershipPipelineService:
         step = next((s for s in pipeline.steps if s.id == step_id), None)
         if not step:
             return False
+
+        # Auto-advance any prospects sitting on this step.
+        stranded_result = await self.db.execute(
+            select(ProspectiveMember).where(
+                ProspectiveMember.current_step_id == step_id,
+                ProspectiveMember.status.in_([
+                    ProspectStatus.ACTIVE,
+                    ProspectStatus.ON_HOLD,
+                ]),
+            )
+        )
+        stranded = list(stranded_result.scalars().all())
+
+        if stranded:
+            sorted_steps = sorted(pipeline.steps, key=lambda s: s.sort_order)
+            step_idx = next(
+                (i for i, s in enumerate(sorted_steps) if s.id == step_id),
+                -1,
+            )
+            # Pick the next step, or the previous one if we're last.
+            if step_idx >= 0 and step_idx < len(sorted_steps) - 1:
+                fallback_step = sorted_steps[step_idx + 1]
+            elif step_idx > 0:
+                fallback_step = sorted_steps[step_idx - 1]
+            else:
+                fallback_step = None
+
+            for prospect in stranded:
+                prospect.current_step_id = (
+                    fallback_step.id if fallback_step else None
+                )
+                await self._log_activity(
+                    prospect_id=prospect.id,
+                    action="step_deleted_auto_moved",
+                    details={
+                        "deleted_step_id": step_id,
+                        "deleted_step_name": step.name,
+                        "moved_to_step_id": (
+                            fallback_step.id if fallback_step else None
+                        ),
+                    },
+                )
+
+            await self.db.flush()
 
         # Capture form_id before deleting so we can clean up the integration.
         config = step.config if isinstance(step.config, dict) else {}
@@ -1549,61 +1627,12 @@ class MembershipPipelineService:
                 f"{existing_prospect.email}: {e}"
             )
 
-    # -- Label-to-prospect-field mapping for auto-generating field_mappings --
-
-    _LABEL_MAP: Dict[str, str] = {
-        "first name": "first_name",
-        "firstname": "first_name",
-        "first": "first_name",
-        "last name": "last_name",
-        "lastname": "last_name",
-        "last": "last_name",
-        "email": "email",
-        "email address": "email",
-        "e-mail": "email",
-        "phone": "phone",
-        "phone number": "phone",
-        "telephone": "phone",
-        "mobile": "mobile",
-        "cell": "mobile",
-        "cell phone": "mobile",
-        "mobile phone": "mobile",
-        "date of birth": "date_of_birth",
-        "birthday": "date_of_birth",
-        "dob": "date_of_birth",
-        "birth date": "date_of_birth",
-        "address": "address_street",
-        "street": "address_street",
-        "street address": "address_street",
-        "address line 1": "address_street",
-        "city": "address_city",
-        "town": "address_city",
-        "state": "address_state",
-        "province": "address_state",
-        "zip": "address_zip",
-        "zip code": "address_zip",
-        "postal code": "address_zip",
-        "zipcode": "address_zip",
-        "why are you interested": "interest_reason",
-        "interest reason": "interest_reason",
-        "reason for interest": "interest_reason",
-        "why do you want to join": "interest_reason",
-        "interest": "interest_reason",
-        "referral source": "referral_source",
-        "referral": "referral_source",
-        "how did you hear about us": "referral_source",
-        "how did you hear": "referral_source",
-    }
-
-    # Fallback: map by field_type when the label is ambiguous.
-    _FIELD_TYPE_MAP: Dict[str, str] = {
-        "email": "email",
-        "phone": "phone",
-        "date": "date_of_birth",
-    }
-
-    # Required prospect fields that a pipeline form must provide.
-    _REQUIRED_PROSPECT_FIELDS: set[str] = {"first_name", "last_name", "email"}
+    # -- Label-to-prospect-field mapping (shared source of truth) --
+    # Re-exported from app.utils.prospect_fields as class attrs so
+    # that existing references (e.g. FormsService._LABEL_MAP) still work.
+    _LABEL_MAP: Dict[str, str] = _SHARED_LABEL_MAP
+    _FIELD_TYPE_MAP: Dict[str, str] = _SHARED_FIELD_TYPE_MAP
+    _REQUIRED_PROSPECT_FIELDS: set[str] = _SHARED_REQUIRED_FIELDS
 
     async def validate_form_for_pipeline(self, form_id: str) -> Dict[str, Any]:
         """Check whether a form's fields can be mapped to prospect data.
@@ -2251,11 +2280,19 @@ class MembershipPipelineService:
     # Public Status Check
     # =========================================================================
 
+    # Status tokens expire after 30 days to limit exposure if leaked.
+    _STATUS_TOKEN_TTL_DAYS = 30
+
     async def get_prospect_by_token(self, token: str) -> Optional[Dict[str, Any]]:
         """Look up a prospect by their public status token. Returns limited public-safe fields.
 
-        Returns None if the pipeline has public_status_enabled=False.
+        Returns None if the pipeline has public_status_enabled=False,
+        if the token has expired, or if no match is found.
         Only steps with public_visible=True are included in the timeline.
+
+        On each successful lookup the token is rotated and the new
+        token is included in the response so the caller can update
+        their bookmark.
         """
         query = (
             select(ProspectiveMember)
@@ -2275,9 +2312,26 @@ class MembershipPipelineService:
         if not prospect:
             return None
 
+        # Check token expiration
+        from datetime import timedelta
+
+        if prospect.status_token_created_at:
+            age = datetime.now(timezone.utc) - prospect.status_token_created_at
+            if age > timedelta(days=self._STATUS_TOKEN_TTL_DAYS):
+                logger.info(
+                    f"Status token for prospect {prospect.id} expired "
+                    f"({age.days} days old)"
+                )
+                return None
+
         # Check if the pipeline has opted in to public status pages
         if not prospect.pipeline or not prospect.pipeline.public_status_enabled:
             return None
+
+        # Rotate the token so the old one becomes invalid.
+        new_token = secrets.token_urlsafe(32)
+        prospect.status_token = new_token
+        prospect.status_token_created_at = datetime.now(timezone.utc)
 
         # Collect IDs of steps marked as public_visible
         public_step_ids = set()
@@ -2313,6 +2367,8 @@ class MembershipPipelineService:
         if prospect.current_step and str(prospect.current_step.id) in public_step_ids:
             current_stage_name = prospect.current_step.name
 
+        await self.db.commit()
+
         return {
             "first_name": prospect.first_name,
             "last_name": prospect.last_name,
@@ -2328,6 +2384,8 @@ class MembershipPipelineService:
             "applied_at": (
                 prospect.created_at.isoformat() if prospect.created_at else None
             ),
+            # Rotated token — caller should update their bookmark.
+            "status_token": new_token,
         }
 
     # =========================================================================

@@ -194,9 +194,14 @@ async def delete_pipeline(
     **Requires permission: members.manage**
     """
     service = MembershipPipelineService(db)
-    deleted = await service.delete_pipeline(
-        str(pipeline_id), current_user.organization_id
-    )
+    try:
+        deleted = await service.delete_pipeline(
+            str(pipeline_id), current_user.organization_id
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(e)
+        )
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found"
