@@ -37,6 +37,7 @@ class PipelineStepType(str, enum.Enum):
     ACTION = "action"
     CHECKBOX = "checkbox"
     NOTE = "note"
+    FORM_SUBMISSION = "form_submission"
 
 
 class ActionType(str, enum.Enum):

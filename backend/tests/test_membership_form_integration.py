@@ -106,6 +106,13 @@ def _make_result_chain(*items):
     return mock_result
 
 
+def _make_count_result(n: int):
+    """Build a mock result for ``select(func.count())`` → ``.scalar()``."""
+    mock_result = MagicMock()
+    mock_result.scalar.return_value = n
+    return mock_result
+
+
 # ============================================
 # Fixtures
 # ============================================
@@ -776,3 +783,334 @@ class TestReprocessReassignment:
         finally:
             FormsService._reassign_prospect_pipeline = original_reassign
             FormsService._complete_form_submission_step = original_complete
+
+
+# ============================================
+# Tests — shared field map
+# ============================================
+
+
+class TestSharedFieldMap:
+    """The LABEL_MAP, FIELD_TYPE_MAP, and REQUIRED_PROSPECT_FIELDS from
+    app.utils.prospect_fields should be the single source of truth."""
+
+    def test_label_map_available_from_pipeline_service(self):
+        assert MembershipPipelineService._LABEL_MAP["first name"] == "first_name"
+        assert MembershipPipelineService._LABEL_MAP["email address"] == "email"
+
+    def test_field_type_map_available_from_pipeline_service(self):
+        assert MembershipPipelineService._FIELD_TYPE_MAP["email"] == "email"
+
+    def test_required_fields_available_from_pipeline_service(self):
+        assert "first_name" in MembershipPipelineService._REQUIRED_PROSPECT_FIELDS
+        assert "email" in MembershipPipelineService._REQUIRED_PROSPECT_FIELDS
+
+    def test_shared_module_matches_class_attrs(self):
+        from app.utils.prospect_fields import (
+            FIELD_TYPE_MAP,
+            LABEL_MAP,
+            REQUIRED_PROSPECT_FIELDS,
+        )
+
+        assert MembershipPipelineService._LABEL_MAP is LABEL_MAP
+        assert MembershipPipelineService._FIELD_TYPE_MAP is FIELD_TYPE_MAP
+        assert MembershipPipelineService._REQUIRED_PROSPECT_FIELDS is REQUIRED_PROSPECT_FIELDS
+
+    def test_display_labels_cover_all_required_fields(self):
+        from app.utils.prospect_fields import (
+            FIELD_DISPLAY_LABELS,
+            REQUIRED_PROSPECT_FIELDS,
+        )
+
+        for field in REQUIRED_PROSPECT_FIELDS:
+            assert field in FIELD_DISPLAY_LABELS, (
+                f"Required field '{field}' missing from FIELD_DISPLAY_LABELS"
+            )
+
+
+# ============================================
+# Tests — missing required fields surface error
+# ============================================
+
+
+class TestMissingRequiredFieldsError:
+    """When required fields can't be mapped, the result should contain
+    an ``error`` key with a human-readable message."""
+
+    @pytest.fixture
+    def forms_service(self, mock_db):
+        return FormsService(mock_db)
+
+    async def test_missing_email_returns_error(self, forms_service, mock_db):
+        frm_id = str(uuid4())
+        org_id = str(uuid4())
+
+        # Only first_name and last_name — no email
+        fields = [
+            _make_field("First Name"),
+            _make_field("Last Name"),
+        ]
+        form = _make_form_with_fields(frm_id, fields)
+        data = {
+            str(fields[0].id): "John",
+            str(fields[1].id): "Doe",
+        }
+        submission = _make_submission(frm_id, org_id, data)
+
+        # _resolve_pipeline_for_form
+        mock_db.execute.side_effect = [
+            _make_result_chain(),  # no pipeline
+        ]
+
+        result = await forms_service._process_membership_interest(
+            submission, integration=None, form=form
+        )
+
+        assert result["success"] is False
+        assert "error" in result
+        assert "Email" in result["error"]
+
+    async def test_missing_all_required_returns_descriptive_error(
+        self, forms_service, mock_db
+    ):
+        frm_id = str(uuid4())
+        org_id = str(uuid4())
+
+        # Only an unrecognized field
+        fields = [_make_field("Favorite Color")]
+        form = _make_form_with_fields(frm_id, fields)
+        data = {str(fields[0].id): "Blue"}
+        submission = _make_submission(frm_id, org_id, data)
+
+        mock_db.execute.side_effect = [_make_result_chain()]
+
+        result = await forms_service._process_membership_interest(
+            submission, integration=None, form=form
+        )
+
+        assert result["success"] is False
+        assert "error" in result
+        assert "First Name" in result["error"]
+        assert "Last Name" in result["error"]
+        assert "Email" in result["error"]
+
+
+# ============================================
+# Tests — metadata PII exclusion and size guard
+# ============================================
+
+
+class TestMetadataPIIExclusion:
+    """Metadata stored on the prospect should exclude PII columns
+    that are stored in dedicated (encrypted-capable) columns."""
+
+    @pytest.fixture
+    def forms_service(self, mock_db):
+        return FormsService(mock_db)
+
+    async def test_pii_excluded_from_metadata(self, forms_service, mock_db):
+        frm_id = str(uuid4())
+        org_id = str(uuid4())
+        prospect_id = str(uuid4())
+
+        fields = [
+            _make_field("First Name"),
+            _make_field("Last Name"),
+            _make_field("Email", field_type="email"),
+            _make_field("Interest Reason"),
+        ]
+        form = _make_form_with_fields(frm_id, fields)
+        data = {
+            str(fields[0].id): "John",
+            str(fields[1].id): "Doe",
+            str(fields[2].id): "john@example.com",
+            str(fields[3].id): "I love firefighting",
+        }
+        submission = _make_submission(frm_id, org_id, data)
+
+        # _resolve_pipeline_for_form, then duplicate guard
+        mock_db.execute.side_effect = [
+            _make_result_chain(),  # no pipeline
+            _make_result_chain(),  # no existing prospect
+        ]
+
+        prospect = _make_prospect(prospect_id, str(submission.id))
+
+        import app.services.membership_pipeline_service as mps_mod
+
+        original_init = mps_mod.MembershipPipelineService.__init__
+        original_create = mps_mod.MembershipPipelineService.create_prospect
+
+        captured_data = {}
+
+        async def mock_create_prospect(self, organization_id, data, created_by=None):
+            captured_data.update(data)
+            return prospect
+
+        mps_mod.MembershipPipelineService.__init__ = lambda self, db: None
+        mps_mod.MembershipPipelineService.create_prospect = mock_create_prospect
+
+        original_complete = FormsService._complete_form_submission_step
+        FormsService._complete_form_submission_step = AsyncMock()
+
+        try:
+            result = await forms_service._process_membership_interest(
+                submission, integration=None, form=form
+            )
+
+            assert result["success"] is True
+            metadata = captured_data.get("metadata_", {})
+            # PII columns should be EXCLUDED from metadata
+            assert "first_name" not in metadata
+            assert "last_name" not in metadata
+            assert "email" not in metadata
+            # Non-PII fields should still be in metadata
+            assert "interest_reason" in metadata
+        finally:
+            mps_mod.MembershipPipelineService.__init__ = original_init
+            mps_mod.MembershipPipelineService.create_prospect = original_create
+            FormsService._complete_form_submission_step = original_complete
+
+
+# ============================================
+# Tests — idempotent _complete_form_submission_step
+# ============================================
+
+
+class TestCompleteFormStepIdempotency:
+    """Calling _complete_form_submission_step when the step is already
+    COMPLETED should update action_result but not re-advance."""
+
+    @pytest.fixture
+    def forms_service(self, mock_db):
+        return FormsService(mock_db)
+
+    async def test_already_completed_updates_action_result_only(
+        self, forms_service, mock_db
+    ):
+        from app.models.membership_pipeline import (
+            StepProgressStatus,
+        )
+
+        prospect_id = str(uuid4())
+        step_id = str(uuid4())
+        pipeline_id = str(uuid4())
+        form_id = str(uuid4())
+
+        # Mock prospect
+        prospect = MagicMock()
+        prospect.id = prospect_id
+        prospect.pipeline_id = pipeline_id
+
+        # Mock pipeline step — config.form_id must match submission.form_id
+        step = MagicMock()
+        step.id = step_id
+        step.config = {"form_id": form_id}
+
+        # Mock progress record already COMPLETED
+        progress = MagicMock()
+        progress.status = StepProgressStatus.COMPLETED
+        progress.action_result = {"old": "data"}
+
+        # Mock submission
+        submission = MagicMock()
+        submission.id = str(uuid4())
+        submission.form_id = form_id
+
+        mapped_data = {"first_name": "John"}
+
+        # _complete_form_submission_step runs two queries:
+        #   1. Find form_submission steps for this pipeline → .scalars().all()
+        #   2. Find progress record → .scalars().first()
+        mock_db.execute.side_effect = [
+            _make_result_chain(step),     # step query → .all() returns [step]
+            _make_result_chain(progress), # progress query → .first() returns progress
+        ]
+
+        pipeline_service = MagicMock()
+
+        import logging
+        logger = logging.getLogger("test")
+
+        await forms_service._complete_form_submission_step(
+            pipeline_service, prospect, submission, mapped_data, logger
+        )
+
+        # action_result should be updated with the latest mapped_data
+        assert progress.action_result["mapped_data"] == mapped_data
+        assert progress.action_result["form_id"] == form_id
+        # pipeline_service._advance_current_step should NOT be called
+        pipeline_service._advance_current_step.assert_not_called()
+
+
+# ============================================
+# Tests — FORM_SUBMISSION enum value
+# ============================================
+
+
+class TestFormSubmissionEnumValue:
+    """The PipelineStepType enum should include FORM_SUBMISSION."""
+
+    def test_form_submission_in_enum(self):
+        from app.models.membership_pipeline import PipelineStepType
+
+        assert hasattr(PipelineStepType, "FORM_SUBMISSION")
+        assert PipelineStepType.FORM_SUBMISSION.value == "form_submission"
+
+    def test_all_step_types(self):
+        from app.models.membership_pipeline import PipelineStepType
+
+        values = [e.value for e in PipelineStepType]
+        assert "action" in values
+        assert "checkbox" in values
+        assert "note" in values
+        assert "form_submission" in values
+
+
+# ============================================
+# Tests — pipeline deletion guard
+# ============================================
+
+
+class TestPipelineDeletionGuard:
+    """delete_pipeline should raise ValueError when active prospects exist."""
+
+    async def test_blocks_deletion_with_active_prospects(self, mock_db):
+        from app.models.membership_pipeline import ProspectStatus
+
+        service = MembershipPipelineService(mock_db)
+        pipeline_id = str(uuid4())
+        org_id = str(uuid4())
+
+        # Mock pipeline lookup
+        pipeline = MagicMock()
+        pipeline.id = pipeline_id
+        pipeline.organization_id = org_id
+        pipeline.is_active = True
+        pipeline.steps = []
+
+        mock_db.execute.side_effect = [
+            _make_result_chain(pipeline),  # get_pipeline
+            _make_count_result(3),          # active prospect count
+        ]
+
+        with pytest.raises(ValueError, match="3 active/on-hold"):
+            await service.delete_pipeline(pipeline_id, org_id)
+
+    async def test_allows_deletion_when_no_active_prospects(self, mock_db):
+        service = MembershipPipelineService(mock_db)
+        pipeline_id = str(uuid4())
+        org_id = str(uuid4())
+
+        pipeline = MagicMock()
+        pipeline.id = pipeline_id
+        pipeline.organization_id = org_id
+
+        mock_db.execute.side_effect = [
+            _make_result_chain(pipeline),  # get_pipeline
+            _make_count_result(0),          # no active prospects
+        ]
+
+        result = await service.delete_pipeline(pipeline_id, org_id)
+        assert result is True
+        mock_db.delete.assert_called_once_with(pipeline)

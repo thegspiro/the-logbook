@@ -1413,14 +1413,27 @@ class FormsService:
                 for f in ("first_name", "last_name", "email")
                 if not mapped_data.get(f)
             ]
+            friendly = {
+                "first_name": "First Name",
+                "last_name": "Last Name",
+                "email": "Email",
+            }
+            missing_labels = [friendly.get(f, f) for f in missing]
+            error_msg = (
+                f"Prospect creation skipped — the form submission is "
+                f"missing required field(s): {', '.join(missing_labels)}. "
+                f"Add or rename form fields so they can be mapped."
+            )
+            logger.warning(
+                f"Membership interest form {submission.id} missing "
+                f"required fields: {missing}"
+            )
             return {
                 "success": False,
+                "error": error_msg,
                 "mapped_data": mapped_data,
                 "prospect_id": None,
-                "message": (
-                    f"Prospect creation skipped — missing required field(s): "
-                    f"{', '.join(missing)}"
-                ),
+                "message": error_msg,
             }
 
         # ---- Resolve the pipeline that references this form ----
@@ -1466,6 +1479,34 @@ class FormsService:
         # ---- Create new prospect ----
         try:
             pipeline_service = MembershipPipelineService(self.db)
+
+            # Build metadata from mapped_data but exclude fields that
+            # are already stored in dedicated (potentially encrypted)
+            # columns.  This avoids duplicating PII in the JSON blob
+            # and keeps metadata lean.
+            _PII_COLUMNS = {
+                "first_name", "last_name", "email", "phone", "mobile",
+                "date_of_birth", "address_street", "address_city",
+                "address_state", "address_zip",
+            }
+            metadata = {
+                k: v for k, v in mapped_data.items()
+                if k not in _PII_COLUMNS
+            }
+
+            # Guard against excessively large metadata (max 64 KB).
+            import json as _json
+
+            metadata_json = _json.dumps(metadata, default=str)
+            _MAX_METADATA_BYTES = 65_536
+            if len(metadata_json.encode()) > _MAX_METADATA_BYTES:
+                logger.warning(
+                    f"Metadata for submission {submission.id} exceeds "
+                    f"{_MAX_METADATA_BYTES} bytes — truncating to keys "
+                    f"only"
+                )
+                metadata = {k: "(truncated)" for k in metadata}
+
             prospect_data = {
                 "first_name": mapped_data.get("first_name", ""),
                 "last_name": mapped_data.get("last_name", ""),
@@ -1480,7 +1521,7 @@ class FormsService:
                 "interest_reason": mapped_data.get("interest_reason"),
                 "referral_source": mapped_data.get("referral_source"),
                 "form_submission_id": str(submission.id),
-                "metadata_": mapped_data,
+                "metadata_": metadata,
             }
             if pipeline_id:
                 prospect_data["pipeline_id"] = pipeline_id
@@ -1625,6 +1666,10 @@ class FormsService:
         was originally created in the wrong pipeline (e.g. because the
         pipeline_id resolution was missing).
 
+        The entire operation runs inside a SAVEPOINT so that a failure
+        in any step rolls back all changes atomically rather than
+        leaving the prospect in an inconsistent state.
+
         Steps:
         1. Delete old step-progress records
         2. Update the prospect's pipeline_id and current_step_id
@@ -1643,27 +1688,36 @@ class FormsService:
             f"{old_pipeline_id} to {pipeline_id}"
         )
 
-        # 1. Remove old step-progress records
-        await self.db.execute(
-            delete(ProspectStepProgress).where(
-                ProspectStepProgress.prospect_id == str(prospect.id)
+        async with self.db.begin_nested():
+            # 1. Remove old step-progress records
+            await self.db.execute(
+                delete(ProspectStepProgress).where(
+                    ProspectStepProgress.prospect_id == str(prospect.id)
+                )
             )
-        )
 
-        # 2. Resolve the first step of the new pipeline
-        pipeline_service = MembershipPipelineService(self.db)
-        first_step_id = await pipeline_service._get_first_step_id(pipeline_id)
+            # 2. Resolve the first step of the new pipeline
+            pipeline_service = MembershipPipelineService(self.db)
+            first_step_id = await pipeline_service._get_first_step_id(
+                pipeline_id
+            )
 
-        # 3. Update the prospect
-        prospect.pipeline_id = pipeline_id
-        prospect.current_step_id = first_step_id
+            if not first_step_id:
+                raise ValueError(
+                    f"Pipeline {pipeline_id} has no steps — cannot "
+                    f"reassign prospect {prospect.id}"
+                )
 
-        # 4. Initialize step progress for the new pipeline
-        await pipeline_service._initialize_step_progress(
-            prospect.id, pipeline_id, first_step_id
-        )
+            # 3. Update the prospect
+            prospect.pipeline_id = pipeline_id
+            prospect.current_step_id = first_step_id
 
-        await self.db.flush()
+            # 4. Initialize step progress for the new pipeline
+            await pipeline_service._initialize_step_progress(
+                prospect.id, pipeline_id, first_step_id
+            )
+
+            await self.db.flush()
 
     async def _complete_form_submission_step(
         self,
@@ -1738,7 +1792,18 @@ class FormsService:
             return
 
         if progress.status == StepProgressStatus.COMPLETED:
-            return  # Already done (e.g. reprocess).
+            # Already done (e.g. reprocess) — update action_result with
+            # the latest mapped_data but don't re-advance the prospect.
+            progress.action_result = {
+                "form_submission_id": str(submission.id),
+                "form_id": str(submission.form_id),
+                "mapped_data": mapped_data,
+            }
+            logger.debug(
+                f"Form step {target_step.id} already completed for "
+                f"prospect {prospect.id} — updated action_result only"
+            )
+            return
 
         progress.status = StepProgressStatus.COMPLETED
         progress.completed_at = datetime.now(timezone.utc)

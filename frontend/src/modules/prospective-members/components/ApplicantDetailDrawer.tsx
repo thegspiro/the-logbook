@@ -67,6 +67,33 @@ const FORM_FIELD_LABELS: Record<string, string> = {
   referred_by: 'Referred By',
 };
 
+/** Title-case fallback for keys not in FORM_FIELD_LABELS. */
+function fieldLabel(key: string): string {
+  return (
+    FORM_FIELD_LABELS[key] ??
+    key
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+  );
+}
+
+/** Render a field value as a human-readable string. */
+function formatFieldValue(value: unknown): string {
+  if (value == null) return '—';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'string') return value || '—';
+  if (Array.isArray(value)) return value.map(String).join(', ') || '—';
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return '—';
+    }
+  }
+  return String(value);
+}
+
 interface ApplicantDetailDrawerProps {
   applicant: Applicant | null;
   isOpen: boolean;
@@ -246,6 +273,19 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
     setActivityLog([]);
     setShowActivityLog(false);
   }, [applicant?.id]);
+
+  // Refresh applicant data when the drawer becomes visible (catches
+  // pipeline changes made by other coordinators or from settings page).
+  useEffect(() => {
+    if (isOpen && applicant?.id) {
+      const { fetchApplicant } = useProspectiveMembersStore.getState();
+      if (fetchApplicant) {
+        void fetchApplicant(applicant.id);
+      }
+    }
+    // Only re-run when drawer visibility changes, not on every applicant update.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -634,6 +674,31 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 )}
               </div>
 
+              {/* Application Data — always visible regardless of current step */}
+              {(() => {
+                const formArtifact = applicant.stage_history
+                  .flatMap((e) => e.artifacts)
+                  .find((a) => a.type === 'form_submission' && a.data);
+                if (!formArtifact?.data) return null;
+                const fields = formArtifact.data as Record<string, unknown>;
+                return (
+                  <div className="p-4 border-b border-theme-surface-border">
+                    <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5" />
+                      Application Data
+                    </h3>
+                    <dl className="grid grid-cols-2 gap-x-3 gap-y-1">
+                      {Object.entries(fields).map(([key, value]) => (
+                        <div key={key} className="contents">
+                          <dt className="text-xs text-theme-text-muted">{fieldLabel(key)}</dt>
+                          <dd className="text-xs text-theme-text-primary">{formatFieldValue(value)}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                );
+              })()}
+
               {/* Current Stage */}
               <div className="p-4 border-b border-theme-surface-border">
                 <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
@@ -946,10 +1011,10 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                                             {Object.entries(fields).map(([key, value]) => (
                                               <div key={key} className="contents">
                                                 <dt className="text-xs text-theme-text-muted">
-                                                  {FORM_FIELD_LABELS[key] ?? key.replace(/_/g, ' ')}
+                                                  {fieldLabel(key)}
                                                 </dt>
                                                 <dd className="text-xs text-theme-text-primary">
-                                                  {String(value ?? '—')}
+                                                  {formatFieldValue(value)}
                                                 </dd>
                                               </div>
                                             ))}
