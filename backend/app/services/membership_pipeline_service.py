@@ -274,6 +274,14 @@ class MembershipPipelineService:
         self.db.add(step)
         await self.db.commit()
         await self.db.refresh(step)
+
+        # If the step references a form, ensure a MEMBERSHIP_INTEREST
+        # FormIntegration exists so form submissions auto-create prospects.
+        config = data.get("config") or {}
+        form_id = config.get("form_id")
+        if form_id:
+            await self._ensure_membership_form_integration(form_id, organization_id)
+
         return step
 
     _STEP_PROTECTED_FIELDS = frozenset(
@@ -307,6 +315,14 @@ class MembershipPipelineService:
 
         await self.db.commit()
         await self.db.refresh(step)
+
+        # If the updated config references a form, ensure a
+        # MEMBERSHIP_INTEREST FormIntegration exists.
+        config = data.get("config") or (step.config if step.config else {})
+        form_id = config.get("form_id") if isinstance(config, dict) else None
+        if form_id:
+            await self._ensure_membership_form_integration(form_id, organization_id)
+
         return step
 
     async def delete_step(
@@ -1407,6 +1423,159 @@ class MembershipPipelineService:
                 status=status,
             )
             self.db.add(progress)
+
+    # -- Label-to-prospect-field mapping for auto-generating field_mappings --
+
+    _LABEL_MAP: Dict[str, str] = {
+        "first name": "first_name",
+        "firstname": "first_name",
+        "first": "first_name",
+        "last name": "last_name",
+        "lastname": "last_name",
+        "last": "last_name",
+        "email": "email",
+        "email address": "email",
+        "e-mail": "email",
+        "phone": "phone",
+        "phone number": "phone",
+        "telephone": "phone",
+        "mobile": "mobile",
+        "cell": "mobile",
+        "cell phone": "mobile",
+        "mobile phone": "mobile",
+        "date of birth": "date_of_birth",
+        "birthday": "date_of_birth",
+        "dob": "date_of_birth",
+        "birth date": "date_of_birth",
+        "address": "address_street",
+        "street": "address_street",
+        "street address": "address_street",
+        "address line 1": "address_street",
+        "city": "address_city",
+        "town": "address_city",
+        "state": "address_state",
+        "province": "address_state",
+        "zip": "address_zip",
+        "zip code": "address_zip",
+        "postal code": "address_zip",
+        "zipcode": "address_zip",
+        "why are you interested": "interest_reason",
+        "interest reason": "interest_reason",
+        "reason for interest": "interest_reason",
+        "why do you want to join": "interest_reason",
+        "interest": "interest_reason",
+        "referral source": "referral_source",
+        "referral": "referral_source",
+        "how did you hear about us": "referral_source",
+        "how did you hear": "referral_source",
+    }
+
+    # Fallback: map by field_type when the label is ambiguous.
+    _FIELD_TYPE_MAP: Dict[str, str] = {
+        "email": "email",
+        "phone": "phone",
+        "date": "date_of_birth",
+    }
+
+    async def _ensure_membership_form_integration(
+        self, form_id: str, organization_id: str
+    ) -> None:
+        """Ensure a MEMBERSHIP_INTEREST FormIntegration exists for *form_id*.
+
+        When a pipeline step of type ``form_submission`` references a form,
+        this method guarantees that the form has an active
+        ``FormIntegration`` so that public/internal form submissions
+        automatically create a ``ProspectiveMember`` record.
+
+        The method is idempotent — it will not create a duplicate integration
+        if one already exists.
+        """
+        from app.models.forms import (
+            Form,
+            FormField,
+            FormIntegration,
+            IntegrationTarget,
+            IntegrationType,
+        )
+
+        # Check if a MEMBERSHIP integration already exists for this form.
+        existing = await self.db.execute(
+            select(FormIntegration).where(
+                and_(
+                    FormIntegration.form_id == str(form_id),
+                    FormIntegration.target_module == IntegrationTarget.MEMBERSHIP,
+                )
+            )
+        )
+        if existing.scalars().first() is not None:
+            return  # Already configured — nothing to do.
+
+        # Load the form's fields so we can auto-map them.
+        fields_result = await self.db.execute(
+            select(FormField).where(FormField.form_id == str(form_id))
+        )
+        fields = list(fields_result.scalars().all())
+        if not fields:
+            logger.warning(
+                f"Cannot auto-create membership integration for form {form_id}: "
+                "form has no fields"
+            )
+            return
+
+        # Build field_mappings: {field_id -> prospect_field_name}
+        field_mappings: Dict[str, str] = {}
+        used_targets: set[str] = set()
+
+        for field in fields:
+            normalised = field.label.strip().lower()
+            target = self._LABEL_MAP.get(normalised)
+            if target and target not in used_targets:
+                field_mappings[str(field.id)] = target
+                used_targets.add(target)
+
+        # Second pass: use field_type for any still-unmapped required targets.
+        for field in fields:
+            if str(field.id) in field_mappings:
+                continue
+            ft = field.field_type
+            if hasattr(ft, "value"):
+                ft = ft.value
+            target = self._FIELD_TYPE_MAP.get(ft)
+            if target and target not in used_targets:
+                field_mappings[str(field.id)] = target
+                used_targets.add(target)
+
+        if not field_mappings:
+            logger.warning(
+                f"Cannot auto-create membership integration for form {form_id}: "
+                "could not map any fields to prospect fields"
+            )
+            return
+
+        missing = {"first_name", "last_name", "email"} - used_targets
+        if missing:
+            logger.warning(
+                f"Auto-created membership integration for form {form_id} is "
+                f"missing required mappings: {missing}. Prospects will not be "
+                "auto-created until the integration field_mappings are updated."
+            )
+
+        integration = FormIntegration(
+            id=generate_uuid(),
+            form_id=str(form_id),
+            organization_id=organization_id,
+            target_module=IntegrationTarget.MEMBERSHIP,
+            integration_type=IntegrationType.MEMBERSHIP_INTEREST,
+            field_mappings=field_mappings,
+            is_active=True,
+        )
+        self.db.add(integration)
+        await self.db.commit()
+
+        logger.info(
+            f"Auto-created MEMBERSHIP_INTEREST integration for form {form_id} "
+            f"with {len(field_mappings)} field mapping(s)"
+        )
 
     # =========================================================================
     # Pipeline Statistics
