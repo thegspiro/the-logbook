@@ -50,6 +50,7 @@ import type {
   BackendStepCreatePayload,
   BackendStepUpdatePayload,
   BackendStepProgressResponse,
+  FormPipelineValidation,
 } from '../types';
 import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS } from '../types';
 
@@ -81,7 +82,11 @@ function mapStageTypeToBackend(stageType: StageType): { step_type: string; actio
 }
 
 /** Map backend step_type + action_type to frontend stage_type */
-function mapStepTypeToFrontend(stepType: string, actionType?: string | null, config?: Record<string, unknown> | null): StageType {
+function mapStepTypeToFrontend(
+  stepType: string,
+  actionType?: string | null,
+  config?: Record<string, unknown> | null
+): StageType {
   if (stepType === 'action') {
     if (actionType === 'collect_document') return 'document_upload';
     if (actionType === 'schedule_meeting') return 'meeting';
@@ -142,7 +147,9 @@ function mapStepToStage(step: BackendStepResponse): PipelineStage {
     name: step.name,
     description: step.description ?? undefined,
     stage_type: stageType,
-    config: backendConfig ? { ...getDefaultStageConfig(stageType), ...backendConfig } : getDefaultStageConfig(stageType),
+    config: backendConfig
+      ? { ...getDefaultStageConfig(stageType), ...backendConfig }
+      : getDefaultStageConfig(stageType),
     sort_order: step.sort_order ?? 0,
     is_required: step.required ?? true,
     notify_prospect_on_completion: step.notify_prospect_on_completion ?? false,
@@ -154,9 +161,10 @@ function mapStepToStage(step: BackendStepResponse): PipelineStage {
 
 /** Map a backend pipeline response to a frontend Pipeline */
 function mapPipelineResponse(data: BackendPipelineResponse): Pipeline {
-  const inactivityConfig = data.inactivity_config && Object.keys(data.inactivity_config).length > 0
-    ? (data.inactivity_config as unknown as InactivityConfig)
-    : DEFAULT_INACTIVITY_CONFIG;
+  const inactivityConfig =
+    data.inactivity_config && Object.keys(data.inactivity_config).length > 0
+      ? (data.inactivity_config as unknown as InactivityConfig)
+      : DEFAULT_INACTIVITY_CONFIG;
   return {
     id: data.id,
     organization_id: data.organization_id,
@@ -217,7 +225,8 @@ function mapStageUpdateToBackend(stage: PipelineStageUpdate): BackendStepUpdateP
   }
   if (stage.sort_order !== undefined) payload.sort_order = stage.sort_order;
   if (stage.is_required !== undefined) payload.required = stage.is_required;
-  if (stage.notify_prospect_on_completion !== undefined) payload.notify_prospect_on_completion = stage.notify_prospect_on_completion;
+  if (stage.notify_prospect_on_completion !== undefined)
+    payload.notify_prospect_on_completion = stage.notify_prospect_on_completion;
   if (stage.public_visible !== undefined) payload.public_visible = stage.public_visible;
   return payload;
 }
@@ -232,21 +241,19 @@ function extractStatus(status: string | { value: string }): string {
 
 /** Map a backend prospect response to a frontend Applicant */
 function mapProspectToApplicant(data: BackendProspectResponse): Applicant {
-  const stageHistory: StageHistoryEntry[] = (data.step_progress || []).map(
-    (sp: BackendStepProgressResponse) => ({
-      id: sp.id,
-      stage_id: sp.step_id,
-      stage_name: sp.step?.name ?? '',
-      stage_type: sp.step?.step_type
-        ? mapStepTypeToFrontend(sp.step.step_type, sp.step.action_type)
-        : 'manual_approval' as StageType,
-      entered_at: sp.created_at,
-      completed_at: sp.completed_at ?? undefined,
-      completed_by: sp.completed_by ?? undefined,
-      notes: sp.notes ?? undefined,
-      artifacts: [],
-    }),
-  );
+  const stageHistory: StageHistoryEntry[] = (data.step_progress || []).map((sp: BackendStepProgressResponse) => ({
+    id: sp.id,
+    stage_id: sp.step_id,
+    stage_name: sp.step?.name ?? '',
+    stage_type: sp.step?.step_type
+      ? mapStepTypeToFrontend(sp.step.step_type, sp.step.action_type)
+      : ('manual_approval' as StageType),
+    entered_at: sp.created_at,
+    completed_at: sp.completed_at ?? undefined,
+    completed_by: sp.completed_by ?? undefined,
+    notes: sp.notes ?? undefined,
+    artifacts: [],
+  }));
 
   return {
     id: data.id,
@@ -417,10 +424,7 @@ export const pipelineService = {
     if (data.inactivity_config !== undefined) payload.inactivity_config = data.inactivity_config;
     if (data.public_status_enabled !== undefined) payload.public_status_enabled = data.public_status_enabled;
 
-    const response = await api.put<BackendPipelineResponse>(
-      `/prospective-members/pipelines/${pipelineId}`,
-      payload
-    );
+    const response = await api.put<BackendPipelineResponse>(`/prospective-members/pipelines/${pipelineId}`, payload);
     return mapPipelineResponse(response.data);
   },
 
@@ -448,21 +452,20 @@ export const pipelineService = {
     return mapPipelineStatsResponse(response.data);
   },
 
+  // Form validation for pipeline stages
+  async validateFormForPipeline(formId: string): Promise<FormPipelineValidation> {
+    const response = await api.get<FormPipelineValidation>(`/prospective-members/validate-form/${formId}`);
+    return response.data;
+  },
+
   // Stage management (backend calls these "steps")
   async addStage(pipelineId: string, data: PipelineStageCreate): Promise<PipelineStage> {
     const payload = mapStageCreateToBackend(data);
-    const response = await api.post<BackendStepResponse>(
-      `/prospective-members/pipelines/${pipelineId}/steps`,
-      payload
-    );
+    const response = await api.post<BackendStepResponse>(`/prospective-members/pipelines/${pipelineId}/steps`, payload);
     return mapStepToStage(response.data);
   },
 
-  async updateStage(
-    pipelineId: string,
-    stageId: string,
-    data: PipelineStageUpdate
-  ): Promise<PipelineStage> {
+  async updateStage(pipelineId: string, stageId: string, data: PipelineStageUpdate): Promise<PipelineStage> {
     const payload = mapStageUpdateToBackend(data);
     // Backend uses PUT, not PATCH
     const response = await api.put<BackendStepResponse>(
@@ -476,10 +479,7 @@ export const pipelineService = {
     await api.delete(`/prospective-members/pipelines/${pipelineId}/steps/${stageId}`);
   },
 
-  async reorderStages(
-    pipelineId: string,
-    stageIds: string[]
-  ): Promise<PipelineStage[]> {
+  async reorderStages(pipelineId: string, stageIds: string[]): Promise<PipelineStage[]> {
     // Backend uses PUT and expects step_ids, not stage_ids
     const response = await api.put<BackendStepResponse[]>(
       `/prospective-members/pipelines/${pipelineId}/steps/reorder`,
@@ -488,14 +488,10 @@ export const pipelineService = {
     return response.data.map(mapStepToStage);
   },
 
-  async updateInactivitySettings(
-    pipelineId: string,
-    config: InactivityConfig
-  ): Promise<Pipeline> {
-    const response = await api.put<BackendPipelineResponse>(
-      `/prospective-members/pipelines/${pipelineId}`,
-      { inactivity_config: config }
-    );
+  async updateInactivitySettings(pipelineId: string, config: InactivityConfig): Promise<Pipeline> {
+    const response = await api.put<BackendPipelineResponse>(`/prospective-members/pipelines/${pipelineId}`, {
+      inactivity_config: config,
+    });
     return mapPipelineResponse(response.data);
   },
 };
@@ -563,9 +559,7 @@ export const applicantService = {
   },
 
   async getApplicant(applicantId: string): Promise<Applicant> {
-    const response = await api.get<BackendProspectResponse>(
-      `/prospective-members/prospects/${applicantId}`
-    );
+    const response = await api.get<BackendProspectResponse>(`/prospective-members/prospects/${applicantId}`);
     return mapProspectToApplicant(response.data);
   },
 
@@ -586,17 +580,11 @@ export const applicantService = {
       payload.address_state = data.address.state;
       payload.address_zip = data.address.zip_code;
     }
-    const response = await api.post<BackendProspectResponse>(
-      '/prospective-members/prospects',
-      payload
-    );
+    const response = await api.post<BackendProspectResponse>('/prospective-members/prospects', payload);
     return mapProspectToApplicant(response.data);
   },
 
-  async updateApplicant(
-    applicantId: string,
-    data: ApplicantUpdate
-  ): Promise<Applicant> {
+  async updateApplicant(applicantId: string, data: ApplicantUpdate): Promise<Applicant> {
     // Map frontend field names to backend and use PUT
     const payload: Record<string, unknown> = {};
     if (data.first_name !== undefined) payload.first_name = data.first_name;
@@ -613,10 +601,7 @@ export const applicantService = {
       payload.address_zip = data.address.zip_code;
     }
     // Backend uses PUT, not PATCH
-    const response = await api.put<BackendProspectResponse>(
-      `/prospective-members/prospects/${applicantId}`,
-      payload
-    );
+    const response = await api.put<BackendProspectResponse>(`/prospective-members/prospects/${applicantId}`, payload);
     return mapProspectToApplicant(response.data);
   },
 
@@ -625,25 +610,49 @@ export const applicantService = {
     await api.delete(`/prospective-members/prospects/${applicantId}`);
   },
 
-  async checkExisting(email: string, firstName?: string, lastName?: string): Promise<{ has_matches: boolean; match_count: number; matches: Array<{ status: string; match_type: string }> }> {
+  async checkExisting(
+    email: string,
+    firstName?: string,
+    lastName?: string
+  ): Promise<{ has_matches: boolean; match_count: number; matches: Array<{ status: string; match_type: string }> }> {
     const params: Record<string, string> = { email };
     if (firstName) params.first_name = firstName;
     if (lastName) params.last_name = lastName;
-    const response = await api.post<{ has_matches: boolean; match_count: number; matches: Array<{ status: string; match_type: string }> }>(
-      '/prospective-members/prospects/check-existing',
-      null,
-      { params }
-    );
+    const response = await api.post<{
+      has_matches: boolean;
+      match_count: number;
+      matches: Array<{ status: string; match_type: string }>;
+    }>('/prospective-members/prospects/check-existing', null, { params });
     return response.data;
   },
 
-  async getActivity(applicantId: string, limit?: number): Promise<Array<{ id: string; prospect_id: string; action: string; details: Record<string, unknown>; performed_by: string; performer_name: string; created_at: string }>> {
+  async getActivity(
+    applicantId: string,
+    limit?: number
+  ): Promise<
+    Array<{
+      id: string;
+      prospect_id: string;
+      action: string;
+      details: Record<string, unknown>;
+      performed_by: string;
+      performer_name: string;
+      created_at: string;
+    }>
+  > {
     const params: Record<string, unknown> = {};
     if (limit) params.limit = limit;
-    const response = await api.get<Array<{ id: string; prospect_id: string; action: string; details: Record<string, unknown>; performed_by: string; performer_name: string; created_at: string }>>(
-      `/prospective-members/prospects/${applicantId}/activity`,
-      { params }
-    );
+    const response = await api.get<
+      Array<{
+        id: string;
+        prospect_id: string;
+        action: string;
+        details: Record<string, unknown>;
+        performed_by: string;
+        performer_name: string;
+        created_at: string;
+      }>
+    >(`/prospective-members/prospects/${applicantId}/activity`, { params });
     return response.data;
   },
 
@@ -655,10 +664,7 @@ export const applicantService = {
     return mapProspectToApplicant(response.data);
   },
 
-  async advanceStage(
-    applicantId: string,
-    data?: AdvanceStageRequest
-  ): Promise<Applicant> {
+  async advanceStage(applicantId: string, data?: AdvanceStageRequest): Promise<Applicant> {
     const response = await api.post<BackendProspectResponse>(
       `/prospective-members/prospects/${applicantId}/advance`,
       data ? { notes: data.notes } : {}
@@ -666,57 +672,44 @@ export const applicantService = {
     return mapProspectToApplicant(response.data);
   },
 
-  async rejectApplicant(
-    applicantId: string,
-    reason?: string
-  ): Promise<Applicant> {
+  async rejectApplicant(applicantId: string, reason?: string): Promise<Applicant> {
     // Backend doesn't have a dedicated reject endpoint; use update with status
-    const response = await api.put<BackendProspectResponse>(
-      `/prospective-members/prospects/${applicantId}`,
-      { status: 'rejected', notes: reason }
-    );
+    const response = await api.put<BackendProspectResponse>(`/prospective-members/prospects/${applicantId}`, {
+      status: 'rejected',
+      notes: reason,
+    });
     return mapProspectToApplicant(response.data);
   },
 
-  async putOnHold(
-    applicantId: string,
-    reason?: string
-  ): Promise<Applicant> {
-    const response = await api.put<BackendProspectResponse>(
-      `/prospective-members/prospects/${applicantId}`,
-      { status: 'on_hold', notes: reason }
-    );
+  async putOnHold(applicantId: string, reason?: string): Promise<Applicant> {
+    const response = await api.put<BackendProspectResponse>(`/prospective-members/prospects/${applicantId}`, {
+      status: 'on_hold',
+      notes: reason,
+    });
     return mapProspectToApplicant(response.data);
   },
 
-  async withdrawApplicant(
-    applicantId: string,
-    data?: WithdrawApplicantRequest
-  ): Promise<Applicant> {
-    const response = await api.put<BackendProspectResponse>(
-      `/prospective-members/prospects/${applicantId}`,
-      { status: 'withdrawn', notes: data?.reason }
-    );
+  async withdrawApplicant(applicantId: string, data?: WithdrawApplicantRequest): Promise<Applicant> {
+    const response = await api.put<BackendProspectResponse>(`/prospective-members/prospects/${applicantId}`, {
+      status: 'withdrawn',
+      notes: data?.reason,
+    });
     return mapProspectToApplicant(response.data);
   },
 
   async resumeApplicant(applicantId: string): Promise<Applicant> {
     // Resume by setting status back to active
-    const response = await api.put<BackendProspectResponse>(
-      `/prospective-members/prospects/${applicantId}`,
-      { status: 'active' }
-    );
+    const response = await api.put<BackendProspectResponse>(`/prospective-members/prospects/${applicantId}`, {
+      status: 'active',
+    });
     return mapProspectToApplicant(response.data);
   },
 
-  async reactivateApplicant(
-    applicantId: string,
-    data?: ReactivateApplicantRequest
-  ): Promise<Applicant> {
-    const response = await api.put<BackendProspectResponse>(
-      `/prospective-members/prospects/${applicantId}`,
-      { status: 'active', notes: data?.notes }
-    );
+  async reactivateApplicant(applicantId: string, data?: ReactivateApplicantRequest): Promise<Applicant> {
+    const response = await api.put<BackendProspectResponse>(`/prospective-members/prospects/${applicantId}`, {
+      status: 'active',
+      notes: data?.notes,
+    });
     return mapProspectToApplicant(response.data);
   },
 
@@ -754,10 +747,7 @@ export const applicantService = {
     });
   },
 
-  async purgeInactiveApplicants(
-    pipelineId: string,
-    data: PurgeInactiveRequest
-  ): Promise<PurgeInactiveResponse> {
+  async purgeInactiveApplicants(pipelineId: string, data: PurgeInactiveRequest): Promise<PurgeInactiveResponse> {
     const response = await api.post<{ purged_count: number; message: string }>(
       `/prospective-members/pipelines/${pipelineId}/purge-inactive`,
       {
@@ -771,10 +761,7 @@ export const applicantService = {
     };
   },
 
-  async convertToMember(
-    applicantId: string,
-    data: ConvertApplicantRequest
-  ): Promise<ConvertApplicantResponse> {
+  async convertToMember(applicantId: string, data: ConvertApplicantRequest): Promise<ConvertApplicantResponse> {
     // Backend uses /transfer endpoint with different payload shape
     const payload: Record<string, unknown> = {
       send_welcome_email: data.send_welcome_email,
@@ -842,13 +829,8 @@ export const applicantService = {
     return mapDocumentResponse(response.data, applicantId);
   },
 
-  async deleteDocument(
-    applicantId: string,
-    documentId: string
-  ): Promise<void> {
-    await api.delete(
-      `/prospective-members/prospects/${applicantId}/documents/${documentId}`
-    );
+  async deleteDocument(applicantId: string, documentId: string): Promise<void> {
+    await api.delete(`/prospective-members/prospects/${applicantId}/documents/${documentId}`);
   },
 
   async getElectionPackage(applicantId: string): Promise<ElectionPackage | null> {
@@ -863,10 +845,7 @@ export const applicantService = {
     }
   },
 
-  async createElectionPackage(
-    applicantId: string,
-    data: ElectionPackageCreate
-  ): Promise<ElectionPackage> {
+  async createElectionPackage(applicantId: string, data: ElectionPackageCreate): Promise<ElectionPackage> {
     const response = await api.post<BackendElectionPackageResponse>(
       `/prospective-members/prospects/${applicantId}/election-package`,
       {
@@ -882,10 +861,7 @@ export const applicantService = {
     return mapElectionPackageResponse(response.data);
   },
 
-  async updateElectionPackage(
-    applicantId: string,
-    data: ElectionPackageUpdate
-  ): Promise<ElectionPackage> {
+  async updateElectionPackage(applicantId: string, data: ElectionPackageUpdate): Promise<ElectionPackage> {
     const payload: Record<string, unknown> = {};
     if (data.status !== undefined) payload.status = data.status;
     if (data.coordinator_notes !== undefined) payload.coordinator_notes = data.coordinator_notes;
@@ -940,7 +916,9 @@ export const electionPackageService = {
   async getPendingPackages(pipelineId?: string): Promise<ElectionPackage[]> {
     const params: Record<string, string> = { status: 'ready' };
     if (pipelineId) params.pipeline_id = pipelineId;
-    const response = await api.get<BackendElectionPackageResponse[]>('/prospective-members/election-packages', { params });
+    const response = await api.get<BackendElectionPackageResponse[]>('/prospective-members/election-packages', {
+      params,
+    });
     return (response.data || []).map(mapElectionPackageResponse);
   },
 
