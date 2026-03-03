@@ -303,6 +303,8 @@ export interface StageHistoryEntry {
   completed_by_name?: string | undefined;
   notes?: string | undefined;
   artifacts: StageArtifact[];
+  /** Raw action_result from the backend step progress record */
+  action_result?: Record<string, unknown> | undefined;
 }
 
 // =============================================================================
