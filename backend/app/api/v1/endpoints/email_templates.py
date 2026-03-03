@@ -11,6 +11,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from loguru import logger
+from sqlalchemy.exc import DataError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission
@@ -53,11 +54,15 @@ async def list_email_templates(
     service = EmailTemplateService(db)
 
     # Ensure default templates exist
-    await service.ensure_default_templates(
-        organization_id=current_user.organization_id,
-        created_by=current_user.id,
-    )
-    await db.commit()
+    try:
+        await service.ensure_default_templates(
+            organization_id=current_user.organization_id,
+            created_by=current_user.id,
+        )
+        await db.commit()
+    except DataError as e:
+        logger.error(f"Failed to create default email templates: {e}")
+        await db.rollback()
 
     templates = await service.list_templates(current_user.organization_id)
     return templates
