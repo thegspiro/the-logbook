@@ -11,7 +11,7 @@ from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -1423,25 +1423,32 @@ class FormsService:
                 ),
             }
 
+        # ---- Resolve the pipeline that references this form ----
+        pipeline_id = await self._resolve_pipeline_for_form(
+            str(form.id) if form else str(submission.form_id)
+        )
+
         # ---- Duplicate guard (idempotent for reprocess) ----
         existing_result = await self.db.execute(
-            select(ProspectiveMember.id).where(
+            select(ProspectiveMember).where(
                 ProspectiveMember.form_submission_id == str(submission.id)
             )
         )
         existing_prospect = existing_result.scalars().first()
         if existing_prospect is not None:
+            # If the prospect landed in the wrong pipeline (or none),
+            # reassign it to the correct one so reprocessing actually
+            # fixes the problem for the user.
+            if pipeline_id and str(existing_prospect.pipeline_id or "") != pipeline_id:
+                await self._reassign_prospect_pipeline(
+                    existing_prospect, pipeline_id
+                )
             return {
                 "success": True,
                 "mapped_data": mapped_data,
-                "prospect_id": str(existing_prospect),
+                "prospect_id": str(existing_prospect.id),
                 "message": "Prospect already exists for this submission",
             }
-
-        # ---- Resolve the pipeline that references this form ----
-        pipeline_id = await self._resolve_pipeline_for_form(
-            str(form.id) if form else str(submission.form_id)
-        )
 
         # ---- Create new prospect ----
         try:
@@ -1545,6 +1552,55 @@ class FormsService:
         )
         pipeline_id = result.scalars().first()
         return str(pipeline_id) if pipeline_id else None
+
+    async def _reassign_prospect_pipeline(
+        self, prospect: "ProspectiveMember", pipeline_id: str
+    ) -> None:
+        """Move an existing prospect to a different pipeline.
+
+        This is used when reprocessing a form submission whose prospect
+        was originally created in the wrong pipeline (e.g. because the
+        pipeline_id resolution was missing).
+
+        Steps:
+        1. Delete old step-progress records
+        2. Update the prospect's pipeline_id and current_step_id
+        3. Initialize new step-progress records for the target pipeline
+        """
+        from loguru import logger
+
+        from app.models.membership_pipeline import ProspectStepProgress
+        from app.services.membership_pipeline_service import (
+            MembershipPipelineService,
+        )
+
+        old_pipeline_id = prospect.pipeline_id
+        logger.info(
+            f"Reassigning prospect {prospect.id} from pipeline "
+            f"{old_pipeline_id} to {pipeline_id}"
+        )
+
+        # 1. Remove old step-progress records
+        await self.db.execute(
+            delete(ProspectStepProgress).where(
+                ProspectStepProgress.prospect_id == str(prospect.id)
+            )
+        )
+
+        # 2. Resolve the first step of the new pipeline
+        pipeline_service = MembershipPipelineService(self.db)
+        first_step_id = await pipeline_service._get_first_step_id(pipeline_id)
+
+        # 3. Update the prospect
+        prospect.pipeline_id = pipeline_id
+        prospect.current_step_id = first_step_id
+
+        # 4. Initialize step progress for the new pipeline
+        await pipeline_service._initialize_step_progress(
+            prospect.id, pipeline_id, first_step_id
+        )
+
+        await self.db.flush()
 
     async def _process_equipment_assignment(
         self,

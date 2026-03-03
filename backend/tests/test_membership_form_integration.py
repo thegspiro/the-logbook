@@ -485,10 +485,10 @@ class TestMembershipInterestPipelineId:
         }
         submission = _make_submission(frm_id, org_id, data)
 
-        # Duplicate guard runs first, then _resolve_pipeline_for_form
+        # _resolve_pipeline_for_form runs first, then duplicate guard
         mock_db.execute.side_effect = [
-            _make_result_chain(),              # duplicate guard (no existing)
             _make_result_chain(pipeline_id),   # _resolve_pipeline_for_form
+            _make_result_chain(),              # duplicate guard (no existing)
         ]
 
         prospect = _make_prospect(prospect_id, str(submission.id))
@@ -540,10 +540,10 @@ class TestMembershipInterestPipelineId:
         }
         submission = _make_submission(frm_id, org_id, data)
 
-        # Duplicate guard runs first, then _resolve_pipeline_for_form
+        # _resolve_pipeline_for_form runs first, then duplicate guard
         mock_db.execute.side_effect = [
-            _make_result_chain(),   # duplicate guard (no existing)
             _make_result_chain(),   # _resolve_pipeline_for_form → None
+            _make_result_chain(),   # duplicate guard (no existing)
         ]
 
         prospect = _make_prospect(prospect_id, str(submission.id))
@@ -572,3 +572,178 @@ class TestMembershipInterestPipelineId:
         finally:
             mps_mod.MembershipPipelineService.__init__ = original_init
             mps_mod.MembershipPipelineService.create_prospect = original_create
+
+
+# ============================================
+# Tests — reprocess reassignment
+# When an existing prospect was created in the wrong pipeline,
+# reprocessing should move it to the correct one.
+# ============================================
+
+
+class TestReprocessReassignment:
+    """When reprocessing a submission whose prospect already exists
+    but is in the wrong pipeline, _process_membership_interest should
+    call _reassign_prospect_pipeline to move it."""
+
+    @pytest.fixture
+    def forms_service(self, mock_db):
+        return FormsService(mock_db)
+
+    async def test_reassigns_prospect_when_pipeline_differs(
+        self, forms_service, mock_db
+    ):
+        frm_id = str(uuid4())
+        org_id = str(uuid4())
+        correct_pipeline_id = str(uuid4())
+        wrong_pipeline_id = str(uuid4())
+        prospect_id = str(uuid4())
+
+        fields = [
+            _make_field("First Name"),
+            _make_field("Last Name"),
+            _make_field("Email", field_type="email"),
+        ]
+        form = _make_form_with_fields(frm_id, fields)
+
+        data = {
+            str(fields[0].id): "John",
+            str(fields[1].id): "Doe",
+            str(fields[2].id): "john@example.com",
+        }
+        submission = _make_submission(frm_id, org_id, data)
+
+        # Existing prospect in the wrong pipeline
+        existing_prospect = _make_prospect(prospect_id, str(submission.id))
+        existing_prospect.pipeline_id = wrong_pipeline_id
+
+        # _resolve_pipeline_for_form runs first, then duplicate guard
+        mock_db.execute.side_effect = [
+            _make_result_chain(correct_pipeline_id),  # _resolve_pipeline_for_form
+            _make_result_chain(existing_prospect),     # duplicate guard → found
+        ]
+
+        # Patch _reassign_prospect_pipeline to track calls
+        reassign_calls = []
+        original_reassign = FormsService._reassign_prospect_pipeline
+
+        async def mock_reassign(self, prospect, pipeline_id):
+            reassign_calls.append((str(prospect.id), pipeline_id))
+
+        FormsService._reassign_prospect_pipeline = mock_reassign
+
+        try:
+            result = await forms_service._process_membership_interest(
+                submission, integration=None, form=form
+            )
+
+            assert result["success"] is True
+            assert result["prospect_id"] == prospect_id
+            # Reassignment should have been called with correct pipeline
+            assert len(reassign_calls) == 1
+            assert reassign_calls[0] == (prospect_id, correct_pipeline_id)
+        finally:
+            FormsService._reassign_prospect_pipeline = original_reassign
+
+    async def test_no_reassignment_when_pipeline_matches(
+        self, forms_service, mock_db
+    ):
+        frm_id = str(uuid4())
+        org_id = str(uuid4())
+        pipeline_id = str(uuid4())
+        prospect_id = str(uuid4())
+
+        fields = [
+            _make_field("First Name"),
+            _make_field("Last Name"),
+            _make_field("Email", field_type="email"),
+        ]
+        form = _make_form_with_fields(frm_id, fields)
+
+        data = {
+            str(fields[0].id): "Jane",
+            str(fields[1].id): "Doe",
+            str(fields[2].id): "jane@example.com",
+        }
+        submission = _make_submission(frm_id, org_id, data)
+
+        # Existing prospect already in the correct pipeline
+        existing_prospect = _make_prospect(prospect_id, str(submission.id))
+        existing_prospect.pipeline_id = pipeline_id
+
+        # _resolve_pipeline_for_form runs first, then duplicate guard
+        mock_db.execute.side_effect = [
+            _make_result_chain(pipeline_id),        # _resolve_pipeline_for_form
+            _make_result_chain(existing_prospect),   # duplicate guard → found
+        ]
+
+        reassign_calls = []
+        original_reassign = FormsService._reassign_prospect_pipeline
+
+        async def mock_reassign(self, prospect, pipeline_id):
+            reassign_calls.append((str(prospect.id), pipeline_id))
+
+        FormsService._reassign_prospect_pipeline = mock_reassign
+
+        try:
+            result = await forms_service._process_membership_interest(
+                submission, integration=None, form=form
+            )
+
+            assert result["success"] is True
+            assert result["prospect_id"] == prospect_id
+            # No reassignment should happen — already in correct pipeline
+            assert len(reassign_calls) == 0
+        finally:
+            FormsService._reassign_prospect_pipeline = original_reassign
+
+    async def test_no_reassignment_when_no_pipeline_resolved(
+        self, forms_service, mock_db
+    ):
+        frm_id = str(uuid4())
+        org_id = str(uuid4())
+        wrong_pipeline_id = str(uuid4())
+        prospect_id = str(uuid4())
+
+        fields = [
+            _make_field("First Name"),
+            _make_field("Last Name"),
+            _make_field("Email", field_type="email"),
+        ]
+        form = _make_form_with_fields(frm_id, fields)
+
+        data = {
+            str(fields[0].id): "Bob",
+            str(fields[1].id): "Smith",
+            str(fields[2].id): "bob@example.com",
+        }
+        submission = _make_submission(frm_id, org_id, data)
+
+        # Existing prospect — no pipeline step references this form
+        existing_prospect = _make_prospect(prospect_id, str(submission.id))
+        existing_prospect.pipeline_id = wrong_pipeline_id
+
+        # _resolve_pipeline_for_form returns None, then duplicate guard finds existing
+        mock_db.execute.side_effect = [
+            _make_result_chain(),                    # _resolve_pipeline_for_form → None
+            _make_result_chain(existing_prospect),   # duplicate guard → found
+        ]
+
+        reassign_calls = []
+        original_reassign = FormsService._reassign_prospect_pipeline
+
+        async def mock_reassign(self, prospect, pipeline_id):
+            reassign_calls.append((str(prospect.id), pipeline_id))
+
+        FormsService._reassign_prospect_pipeline = mock_reassign
+
+        try:
+            result = await forms_service._process_membership_interest(
+                submission, integration=None, form=form
+            )
+
+            assert result["success"] is True
+            # No reassignment — we can't resolve a target pipeline
+            assert len(reassign_calls) == 0
+        finally:
+            FormsService._reassign_prospect_pipeline = original_reassign
