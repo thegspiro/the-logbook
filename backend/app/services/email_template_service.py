@@ -1758,6 +1758,8 @@ class EmailTemplateService:
             "description",
             "is_active",
             "allow_attachments",
+            "default_cc",
+            "default_bcc",
         }
         for key, value in fields.items():
             if key in allowed_fields and value is not None:

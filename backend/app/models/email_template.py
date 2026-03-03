@@ -78,6 +78,10 @@ class EmailTemplate(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     allow_attachments = Column(Boolean, default=False, nullable=False)
 
+    # Default recipients (JSON list of email addresses)
+    default_cc = Column(JSON, nullable=True)  # Optional List[str]
+    default_bcc = Column(JSON, nullable=True)  # Optional List[str]
+
     # Available template variables (JSON list of {name, description} objects)
     # e.g. [{"name": "first_name", "description": "Recipient's first name"}]
     available_variables = Column(JSON, default=list)
@@ -182,6 +186,7 @@ class ScheduledEmail(Base):
     # Recipients
     to_emails = Column(JSON, nullable=False)  # List[str]
     cc_emails = Column(JSON, nullable=True)  # Optional List[str]
+    bcc_emails = Column(JSON, nullable=True)  # Optional List[str]
 
     # Template variables to render with
     context = Column(JSON, nullable=False, default=dict)

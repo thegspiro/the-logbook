@@ -428,6 +428,7 @@ async def schedule_email(
         template_type=ttype,
         to_emails=body.to_emails,
         cc_emails=body.cc_emails,
+        bcc_emails=body.bcc_emails,
         context=body.context,
         scheduled_at=body.scheduled_at,
         status=ScheduledEmailStatus.PENDING,

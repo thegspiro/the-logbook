@@ -43,6 +43,8 @@ class EmailTemplateResponse(BaseModel):
     css_styles: Optional[str] = None
     is_active: bool
     allow_attachments: bool
+    default_cc: Optional[List[str]] = None
+    default_bcc: Optional[List[str]] = None
     available_variables: List[TemplateVariable] = []
     attachments: List[EmailAttachmentResponse] = []
     created_at: datetime
@@ -64,6 +66,8 @@ class EmailTemplateUpdate(BaseModel):
     description: Optional[str] = None
     is_active: Optional[bool] = None
     allow_attachments: Optional[bool] = None
+    default_cc: Optional[List[str]] = None
+    default_bcc: Optional[List[str]] = None
 
 
 class EmailTemplatePreviewRequest(BaseModel):
@@ -107,6 +111,7 @@ class ScheduledEmailCreate(BaseModel):
     )
     to_emails: List[str] = Field(..., min_length=1)
     cc_emails: Optional[List[str]] = None
+    bcc_emails: Optional[List[str]] = None
     context: Dict[str, Any] = Field(default_factory=dict)
     scheduled_at: datetime = Field(
         ..., description="When to send the email (UTC datetime)"
@@ -131,6 +136,7 @@ class ScheduledEmailResponse(BaseModel):
     template_type: str
     to_emails: List[str]
     cc_emails: Optional[List[str]] = None
+    bcc_emails: Optional[List[str]] = None
     context: Dict[str, Any] = {}
     scheduled_at: datetime
     status: str
