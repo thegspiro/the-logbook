@@ -260,6 +260,26 @@ async def seed_templates(
 # ============================================
 
 
+@router.get("/validate-form/{form_id}")
+async def validate_form_for_pipeline(
+    form_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("prospective_members.manage")),
+):
+    """
+    Check whether a form has the fields required by the membership
+    pipeline (first name, last name, email).
+
+    Returns mapped fields, any missing required fields, and
+    suggestions for fixing gaps.  Called by the stage config modal
+    when the user selects a form.
+
+    **Requires permission: prospective_members.manage**
+    """
+    service = MembershipPipelineService(db)
+    return await service.validate_form_for_pipeline(str(form_id))
+
+
 @router.get("/pipelines/{pipeline_id}/steps", response_model=list[PipelineStepResponse])
 async def list_steps(
     pipeline_id: UUID,

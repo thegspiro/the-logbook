@@ -1590,6 +1590,95 @@ class MembershipPipelineService:
         "date": "date_of_birth",
     }
 
+    # Required prospect fields that a pipeline form must provide.
+    _REQUIRED_PROSPECT_FIELDS: set[str] = {"first_name", "last_name", "email"}
+
+    async def validate_form_for_pipeline(self, form_id: str) -> Dict[str, Any]:
+        """Check whether a form's fields can be mapped to prospect data.
+
+        Returns a dict describing which prospect fields are mapped,
+        which required ones are missing, and suggestions for fixing any
+        gaps.  The frontend calls this when the user picks a form in the
+        pipeline-stage config modal so they get immediate feedback.
+        """
+        from app.models.forms import FormField
+
+        fields_result = await self.db.execute(
+            select(FormField).where(FormField.form_id == str(form_id))
+        )
+        fields = list(fields_result.scalars().all())
+
+        if not fields:
+            return {
+                "valid": False,
+                "mapped_fields": {},
+                "missing_required": sorted(self._REQUIRED_PROSPECT_FIELDS),
+                "suggestions": [
+                    "This form has no fields. Add fields for First Name, "
+                    "Last Name, and Email before using it in a pipeline."
+                ],
+            }
+
+        # Build mapping using the same logic as _ensure_membership_form_integration.
+        mapped: Dict[str, Dict[str, str]] = {}  # target -> {field_id, label, method}
+        used_targets: set[str] = set()
+
+        # Pass 1 — match by label.
+        for field in fields:
+            normalised = field.label.strip().lower()
+            target = self._LABEL_MAP.get(normalised)
+            if target and target not in used_targets:
+                mapped[target] = {
+                    "field_id": str(field.id),
+                    "label": field.label,
+                    "method": "label",
+                }
+                used_targets.add(target)
+
+        # Pass 2 — match by field_type.
+        for field in fields:
+            if str(field.id) in {m["field_id"] for m in mapped.values()}:
+                continue
+            ft = field.field_type
+            if hasattr(ft, "value"):
+                ft = ft.value
+            target = self._FIELD_TYPE_MAP.get(ft)
+            if target and target not in used_targets:
+                mapped[target] = {
+                    "field_id": str(field.id),
+                    "label": field.label,
+                    "method": "field_type",
+                }
+                used_targets.add(target)
+
+        missing = sorted(self._REQUIRED_PROSPECT_FIELDS - used_targets)
+        suggestions: list[str] = []
+        if missing:
+            friendly = {
+                "first_name": "First Name",
+                "last_name": "Last Name",
+                "email": "Email",
+            }
+            names = [friendly.get(f, f) for f in missing]
+            suggestions.append(
+                f"Add or rename fields so the form includes: "
+                f"{', '.join(names)}. "
+                f"Recognized labels include: "
+                + ", ".join(
+                    f'"{lbl}"'
+                    for lbl, tgt in sorted(self._LABEL_MAP.items())
+                    if tgt in missing
+                )
+                + "."
+            )
+
+        return {
+            "valid": len(missing) == 0,
+            "mapped_fields": mapped,
+            "missing_required": missing,
+            "suggestions": suggestions,
+        }
+
     async def _ensure_membership_form_integration(
         self, form_id: str, organization_id: str
     ) -> None:

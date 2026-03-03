@@ -17,13 +17,7 @@ export type StageType =
   | 'status_page_toggle'
   | 'automated_email';
 
-export type ApplicantStatus =
-  | 'active'
-  | 'on_hold'
-  | 'withdrawn'
-  | 'converted'
-  | 'rejected'
-  | 'inactive';
+export type ApplicantStatus = 'active' | 'on_hold' | 'withdrawn' | 'converted' | 'rejected' | 'inactive';
 
 export type InactivityTimeoutPreset = '3_months' | '6_months' | '1_year' | 'never' | 'custom';
 
@@ -33,16 +27,16 @@ export const TIMEOUT_PRESET_DAYS: Record<InactivityTimeoutPreset, number | null>
   '3_months': 90,
   '6_months': 180,
   '1_year': 365,
-  'never': null,
-  'custom': null,
+  never: null,
+  custom: null,
 };
 
 export const TIMEOUT_PRESET_LABELS: Record<InactivityTimeoutPreset, string> = {
   '3_months': '3 Months',
   '6_months': '6 Months',
   '1_year': '1 Year',
-  'never': 'Never',
-  'custom': 'Custom',
+  never: 'Never',
+  custom: 'Custom',
 };
 
 export type TargetMembershipType = 'administrative' | 'probationary';
@@ -94,6 +88,13 @@ export const FILE_UPLOAD_LIMITS = {
 export interface FormStageConfig {
   form_id: string;
   form_name?: string | undefined;
+}
+
+export interface FormPipelineValidation {
+  valid: boolean;
+  mapped_fields: Record<string, { field_id: string; label: string; method: string }>;
+  missing_required: string[];
+  suggestions: string[];
 }
 
 export interface DocumentStageConfig {
@@ -317,12 +318,14 @@ export interface Applicant {
   email: string;
   phone?: string | undefined;
   date_of_birth?: string | undefined;
-  address?: {
-    street?: string | undefined;
-    city?: string | undefined;
-    state?: string | undefined;
-    zip_code?: string | undefined;
-  } | undefined;
+  address?:
+    | {
+        street?: string | undefined;
+        city?: string | undefined;
+        state?: string | undefined;
+        zip_code?: string | undefined;
+      }
+    | undefined;
   current_stage_id: string;
   current_stage_name?: string | undefined;
   current_stage_type?: StageType | undefined;
@@ -378,12 +381,14 @@ export interface ApplicantCreate {
   email: string;
   phone?: string | undefined;
   date_of_birth?: string | undefined;
-  address?: {
-    street?: string | undefined;
-    city?: string | undefined;
-    state?: string | undefined;
-    zip_code?: string | undefined;
-  } | undefined;
+  address?:
+    | {
+        street?: string | undefined;
+        city?: string | undefined;
+        state?: string | undefined;
+        zip_code?: string | undefined;
+      }
+    | undefined;
   target_membership_type: TargetMembershipType;
   target_role_id?: string | undefined;
   form_submission_id?: string | undefined;
@@ -396,12 +401,14 @@ export interface ApplicantUpdate {
   email?: string | undefined;
   phone?: string | undefined;
   date_of_birth?: string | undefined;
-  address?: {
-    street?: string | undefined;
-    city?: string | undefined;
-    state?: string | undefined;
-    zip_code?: string | undefined;
-  } | undefined;
+  address?:
+    | {
+        street?: string | undefined;
+        city?: string | undefined;
+        state?: string | undefined;
+        zip_code?: string | undefined;
+      }
+    | undefined;
   target_membership_type?: TargetMembershipType | undefined;
   target_role_id?: string | undefined;
   status?: ApplicantStatus | undefined;
@@ -414,12 +421,14 @@ export interface ApplicantUpdate {
 
 export interface AdvanceStageRequest {
   notes?: string | undefined;
-  artifacts?: {
-    type: StageArtifact['type'];
-    name: string;
-    url?: string | undefined;
-    data?: Record<string, unknown> | undefined;
-  }[] | undefined;
+  artifacts?:
+    | {
+        type: StageArtifact['type'];
+        name: string;
+        url?: string | undefined;
+        data?: Record<string, unknown> | undefined;
+      }[]
+    | undefined;
 }
 
 export interface ConvertApplicantRequest {
@@ -584,17 +593,19 @@ export interface ElectionPackage {
   custom_fields?: Record<string, string> | undefined;
 
   // Recommended ballot item configuration (from stage config)
-  recommended_ballot_item?: {
-    type: 'membership_approval';
-    title: string;
-    description: string;
-    eligible_voter_types: string[];
-    vote_type: 'approval';
-    voting_method: string;
-    victory_condition: string;
-    victory_percentage?: number | undefined;
-    anonymous_voting: boolean;
-  } | undefined;
+  recommended_ballot_item?:
+    | {
+        type: 'membership_approval';
+        title: string;
+        description: string;
+        eligible_voter_types: string[];
+        vote_type: 'approval';
+        voting_method: string;
+        victory_condition: string;
+        victory_percentage?: number | undefined;
+        anonymous_voting: boolean;
+      }
+    | undefined;
 
   // Status tracking
   status: ElectionPackageStatus;
