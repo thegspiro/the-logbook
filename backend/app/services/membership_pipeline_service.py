@@ -1701,7 +1701,7 @@ class MembershipPipelineService:
         )
 
         # Check if a MEMBERSHIP integration already exists for this form.
-        existing = await self.db.execute(
+        existing_result = await self.db.execute(
             select(FormIntegration).where(
                 and_(
                     FormIntegration.form_id == str(form_id),
@@ -1709,8 +1709,7 @@ class MembershipPipelineService:
                 )
             )
         )
-        if existing.scalars().first() is not None:
-            return  # Already configured — nothing to do.
+        existing_integration = existing_result.scalars().first()
 
         # Load the form's fields so we can auto-map them.
         fields_result = await self.db.execute(
@@ -1755,6 +1754,31 @@ class MembershipPipelineService:
             return
 
         missing = {"first_name", "last_name", "email"} - used_targets
+
+        # If an integration already exists, check whether its field_mappings
+        # are empty or stale (don't cover the required fields with current
+        # field IDs).  Repair them when the newly built mappings are better.
+        if existing_integration is not None:
+            current_mappings = existing_integration.field_mappings or {}
+            current_field_ids = set(current_mappings.keys())
+            form_field_ids = {str(f.id) for f in fields}
+            current_targets = set(current_mappings.values())
+            covers_required = self._REQUIRED_PROSPECT_FIELDS <= current_targets
+            has_valid_ids = bool(current_field_ids) and current_field_ids <= form_field_ids
+
+            if covers_required and has_valid_ids:
+                return  # Existing integration is healthy — nothing to do.
+
+            # Existing integration has empty or stale field_mappings — repair.
+            existing_integration.field_mappings = field_mappings
+            await self.db.commit()
+            logger.info(
+                f"Repaired MEMBERSHIP_INTEREST integration for form {form_id}: "
+                f"updated field_mappings ({len(current_mappings)} → "
+                f"{len(field_mappings)} mapping(s))"
+            )
+            return
+
         if missing:
             logger.warning(
                 f"Auto-created membership integration for form {form_id} is "
