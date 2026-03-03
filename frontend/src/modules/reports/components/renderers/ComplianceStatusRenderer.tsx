@@ -74,7 +74,7 @@ export const ComplianceStatusRenderer: React.FC<Props> = ({ data }) => {
         </div>
       </div>
       <ReportTable
-        rows={data.entries as Array<Record<string, unknown>>}
+        rows={data.entries as unknown as Array<Record<string, unknown>>}
         columns={columns}
         emptyMessage="No compliance data found."
       />
@@ -91,5 +91,5 @@ export function getComplianceStatusExportData(data: ComplianceStatusReport) {
     { key: 'compliance_percentage', header: 'Compliance %' },
     { key: 'overdue_items', header: 'Overdue Items' },
   ];
-  return { rows: data.entries as Array<Record<string, unknown>>, columns };
+  return { rows: data.entries as unknown as Array<Record<string, unknown>>, columns };
 }

@@ -72,7 +72,7 @@ export const ApparatusStatusRenderer: React.FC<Props> = ({ data }) => {
         <StatCard label="Maintenance Due" value={data.maintenance_due_count} />
       </div>
       <ReportTable
-        rows={data.entries as Array<Record<string, unknown>>}
+        rows={data.entries as unknown as Array<Record<string, unknown>>}
         columns={columns}
         emptyMessage="No apparatus records found."
       />
@@ -92,5 +92,5 @@ export function getApparatusStatusExportData(data: ApparatusStatusReport) {
     { key: 'next_inspection_due', header: 'Next Inspection' },
     { key: 'open_work_orders', header: 'Open Work Orders' },
   ];
-  return { rows: data.entries as Array<Record<string, unknown>>, columns };
+  return { rows: data.entries as unknown as Array<Record<string, unknown>>, columns };
 }

@@ -44,7 +44,7 @@ export const MemberRosterRenderer: React.FC<Props> = ({ data }) => {
         <StatCard label="Inactive" value={data.inactive_members} />
       </div>
       <ReportTable
-        rows={data.members as Array<Record<string, unknown>>}
+        rows={data.members as unknown as Array<Record<string, unknown>>}
         columns={columns}
         emptyMessage="No member records found."
       />
@@ -65,5 +65,5 @@ export function getMemberRosterExportData(data: MemberRosterReport) {
     { key: 'roles', header: 'Roles' },
     { key: 'joined_date', header: 'Joined' },
   ];
-  return { rows: data.members as Array<Record<string, unknown>>, columns };
+  return { rows: data.members as unknown as Array<Record<string, unknown>>, columns };
 }

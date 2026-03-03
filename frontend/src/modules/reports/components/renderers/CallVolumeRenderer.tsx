@@ -60,7 +60,7 @@ export const CallVolumeRenderer: React.FC<Props> = ({ data }) => {
       )}
 
       <ReportTable
-        rows={data.entries as Array<Record<string, unknown>>}
+        rows={data.entries as unknown as Array<Record<string, unknown>>}
         columns={columns}
         emptyMessage="No call volume data found for this period."
       />

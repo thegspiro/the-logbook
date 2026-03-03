@@ -34,7 +34,7 @@ export const EventAttendanceRenderer: React.FC<Props> = ({ data }) => {
         <StatCard label="Total Attended" value={data.events.reduce((sum, e) => sum + e.attended, 0)} />
       </div>
       <ReportTable
-        rows={data.events as Array<Record<string, unknown>>}
+        rows={data.events as unknown as Array<Record<string, unknown>>}
         columns={columns}
         emptyMessage="No event attendance records found."
       />
@@ -50,5 +50,5 @@ export function getEventAttendanceExportData(data: EventAttendanceReport) {
     { key: 'attended', header: 'Attended' },
     { key: 'attendance_rate', header: 'Attendance Rate %' },
   ];
-  return { rows: data.events as Array<Record<string, unknown>>, columns };
+  return { rows: data.events as unknown as Array<Record<string, unknown>>, columns };
 }

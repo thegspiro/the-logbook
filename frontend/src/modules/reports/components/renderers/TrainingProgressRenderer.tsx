@@ -81,7 +81,7 @@ export const TrainingProgressRenderer: React.FC<Props> = ({ data }) => {
       )}
 
       <ReportTable
-        rows={data.entries as Array<Record<string, unknown>>}
+        rows={data.entries as unknown as Array<Record<string, unknown>>}
         columns={columns}
         emptyMessage="No pipeline enrollments found."
       />
@@ -100,5 +100,5 @@ export function getTrainingProgressExportData(data: TrainingProgressReport) {
     { key: 'enrolled_at', header: 'Enrolled At' },
     { key: 'target_completion', header: 'Target Date' },
   ];
-  return { rows: data.entries as Array<Record<string, unknown>>, columns };
+  return { rows: data.entries as unknown as Array<Record<string, unknown>>, columns };
 }

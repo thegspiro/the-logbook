@@ -114,7 +114,7 @@ export const ReportTable: React.FC<ReportTableProps> = ({
 
       {totalPages > 1 && (
         <div className="mt-3">
-          <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+          <Pagination currentPage={page} totalItems={sortedRows.length} pageSize={pageSize} onPageChange={setPage} />
         </div>
       )}
 

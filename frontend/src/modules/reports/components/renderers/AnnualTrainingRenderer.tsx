@@ -69,7 +69,7 @@ export const AnnualTrainingRenderer: React.FC<Props> = ({ data, formatRank }) =>
       )}
 
       <ReportTable
-        rows={data.entries as Array<Record<string, unknown>>}
+        rows={data.entries as unknown as Array<Record<string, unknown>>}
         columns={columns}
         emptyMessage="No training data found for this period."
       />
@@ -88,5 +88,5 @@ export function getAnnualTrainingExportData(data: AnnualTrainingReport) {
     { key: 'calls_responded', header: 'Calls Responded' },
     { key: 'avg_performance_rating', header: 'Avg Rating' },
   ];
-  return { rows: data.entries as Array<Record<string, unknown>>, columns };
+  return { rows: data.entries as unknown as Array<Record<string, unknown>>, columns };
 }

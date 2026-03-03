@@ -74,7 +74,7 @@ export const CertExpirationRenderer: React.FC<Props> = ({ data }) => {
         <StatCard label="Valid" value={data.valid_count} />
       </div>
       <ReportTable
-        rows={data.entries as Array<Record<string, unknown>>}
+        rows={data.entries as unknown as Array<Record<string, unknown>>}
         columns={columns}
         emptyMessage="No certification records found."
       />
@@ -94,5 +94,5 @@ export function getCertExpirationExportData(data: CertExpirationReport) {
     { key: 'days_until_expiry', header: 'Days Until Expiry' },
     { key: 'expiry_status', header: 'Status' },
   ];
-  return { rows: data.entries as Array<Record<string, unknown>>, columns };
+  return { rows: data.entries as unknown as Array<Record<string, unknown>>, columns };
 }

@@ -59,7 +59,7 @@ export const AdminHoursRenderer: React.FC<Props> = ({ data }) => {
       )}
 
       <ReportTable
-        rows={data.entries as Array<Record<string, unknown>>}
+        rows={data.entries as unknown as Array<Record<string, unknown>>}
         columns={columns}
         emptyMessage="No admin hours entries found for this period."
       />
@@ -76,5 +76,5 @@ export function getAdminHoursExportData(data: AdminHoursReport) {
     { key: 'entry_method', header: 'Method' },
     { key: 'status', header: 'Status' },
   ];
-  return { rows: data.entries as Array<Record<string, unknown>>, columns };
+  return { rows: data.entries as unknown as Array<Record<string, unknown>>, columns };
 }

@@ -92,5 +92,5 @@ export function getDepartmentOverviewExportData(data: DepartmentOverviewReport) 
     { key: 'metric', header: 'Metric' },
     { key: 'value', header: 'Value' },
   ];
-  return { rows: rows as Array<Record<string, unknown>>, columns };
+  return { rows: rows as unknown as Array<Record<string, unknown>>, columns };
 }

@@ -85,21 +85,21 @@ export const TrainingSummaryRenderer: React.FC<Props> = ({ data }) => {
 
       {tab === 'members' && (
         <ReportTable
-          rows={data.entries as Array<Record<string, unknown>>}
+          rows={data.entries as unknown as Array<Record<string, unknown>>}
           columns={memberColumns}
           emptyMessage="No training entries found."
         />
       )}
       {tab === 'courses' && (
         <ReportTable
-          rows={(data.course_breakdown ?? []) as Array<Record<string, unknown>>}
+          rows={(data.course_breakdown ?? []) as unknown as Array<Record<string, unknown>>}
           columns={courseColumns}
           emptyMessage="No course data found."
         />
       )}
       {tab === 'requirements' && (
         <ReportTable
-          rows={(data.requirement_breakdown ?? []) as Array<Record<string, unknown>>}
+          rows={(data.requirement_breakdown ?? []) as unknown as Array<Record<string, unknown>>}
           columns={reqColumns}
           emptyMessage="No requirement data found."
         />
@@ -116,5 +116,5 @@ export function getTrainingSummaryExportData(data: TrainingSummaryReport) {
     { key: 'total_hours', header: 'Hours' },
     { key: 'compliance_percentage', header: 'Compliance %' },
   ];
-  return { rows: data.entries as Array<Record<string, unknown>>, columns };
+  return { rows: data.entries as unknown as Array<Record<string, unknown>>, columns };
 }

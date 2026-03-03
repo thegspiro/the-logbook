@@ -52,7 +52,7 @@ export const InventoryStatusRenderer: React.FC<Props> = ({ data }) => {
         {data.total_value != null && <StatCard label="Total Value" value={`$${data.total_value.toLocaleString()}`} />}
       </div>
       <ReportTable
-        rows={data.entries as Array<Record<string, unknown>>}
+        rows={data.entries as unknown as Array<Record<string, unknown>>}
         columns={columns}
         emptyMessage="No inventory items found."
       />
@@ -72,5 +72,5 @@ export function getInventoryStatusExportData(data: InventoryStatusReport) {
     { key: 'is_low_stock', header: 'Low Stock' },
     { key: 'last_audit_date', header: 'Last Audit' },
   ];
-  return { rows: data.entries as Array<Record<string, unknown>>, columns };
+  return { rows: data.entries as unknown as Array<Record<string, unknown>>, columns };
 }
