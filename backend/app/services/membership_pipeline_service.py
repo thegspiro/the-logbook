@@ -337,8 +337,18 @@ class MembershipPipelineService:
         if not step:
             return False
 
+        # Capture form_id before deleting so we can clean up the integration.
+        config = step.config if isinstance(step.config, dict) else {}
+        form_id = config.get("form_id")
+
         await self.db.delete(step)
         await self.db.commit()
+
+        # If the deleted step referenced a form, remove the auto-created
+        # MEMBERSHIP integration — but only if no other step still uses it.
+        if form_id:
+            await self._cleanup_orphaned_form_integration(form_id)
+
         return True
 
     async def reorder_steps(
@@ -1576,6 +1586,34 @@ class MembershipPipelineService:
             f"Auto-created MEMBERSHIP_INTEREST integration for form {form_id} "
             f"with {len(field_mappings)} field mapping(s)"
         )
+
+    async def _cleanup_orphaned_form_integration(self, form_id: str) -> None:
+        """Remove the MEMBERSHIP_INTEREST FormIntegration for *form_id* if no
+        other pipeline step still references it in its config."""
+        from app.models.forms import FormIntegration, IntegrationTarget
+
+        # Check if any remaining step still references this form_id.
+        all_steps = await self.db.execute(select(MembershipPipelineStep))
+        for step in all_steps.scalars().all():
+            cfg = step.config if isinstance(step.config, dict) else {}
+            if cfg.get("form_id") == str(form_id):
+                return  # Another step still uses this form — keep the integration.
+
+        result = await self.db.execute(
+            select(FormIntegration).where(
+                and_(
+                    FormIntegration.form_id == str(form_id),
+                    FormIntegration.target_module == IntegrationTarget.MEMBERSHIP,
+                )
+            )
+        )
+        integration = result.scalars().first()
+        if integration is not None:
+            await self.db.delete(integration)
+            await self.db.commit()
+            logger.info(
+                f"Removed orphaned MEMBERSHIP_INTEREST integration for form {form_id}"
+            )
 
     # =========================================================================
     # Pipeline Statistics
