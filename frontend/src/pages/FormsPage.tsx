@@ -69,11 +69,14 @@ const INTEGRATION_TARGET_FIELDS: Record<string, { key: string; label: string; re
   event_request: [
     { key: 'contact_name', label: 'Contact Name', required: true },
     { key: 'contact_email', label: 'Contact Email', required: true },
-    { key: 'event_title', label: 'Event Title', required: false },
-    { key: 'event_date', label: 'Event Date', required: false },
-    { key: 'event_description', label: 'Description', required: false },
-    { key: 'event_location', label: 'Location', required: false },
-    { key: 'expected_attendees', label: 'Expected Attendees', required: false },
+    { key: 'contact_phone', label: 'Contact Phone', required: false },
+    { key: 'organization_name', label: 'Organization Name', required: false },
+    { key: 'outreach_type', label: 'Outreach Type', required: false },
+    { key: 'description', label: 'Description', required: false },
+    { key: 'preferred_timeframe', label: 'Preferred Date / Timeframe', required: false },
+    { key: 'audience_size', label: 'Expected Attendees', required: false },
+    { key: 'venue_address', label: 'Venue / Location', required: false },
+    { key: 'special_requests', label: 'Special Requests / Notes', required: false },
   ],
 };
 
