@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter, mockQRCheckInData, createMockApiError } from '../test/utils';
 import EventQRCodePage from './EventQRCodePage';
@@ -295,14 +295,14 @@ describe('EventQRCodePage', () => {
 
       renderWithRouter(<EventQRCodePage />);
 
-      // Wait for initial load
-      await vi.advanceTimersByTimeAsync(0);
+      // Flush initial load and React state updates
+      await act(() => vi.advanceTimersByTimeAsync(0));
 
       // Initially valid
       expect(screen.getByText('Check-in is Active')).toBeInTheDocument();
 
       // After 30 seconds, should be invalid
-      await vi.advanceTimersByTimeAsync(30000);
+      await act(() => vi.advanceTimersByTimeAsync(30000));
 
       expect(screen.getByText('Check-in Not Available')).toBeInTheDocument();
     });
@@ -319,14 +319,14 @@ describe('EventQRCodePage', () => {
 
       renderWithRouter(<EventQRCodePage />);
 
-      // Wait for initial load
-      await vi.advanceTimersByTimeAsync(0);
+      // Flush initial load and React state updates
+      await act(() => vi.advanceTimersByTimeAsync(0));
 
       // Initially successful
       expect(screen.getByText('Test Event')).toBeInTheDocument();
 
       // After 30 seconds, error occurs but existing data is preserved
-      await vi.advanceTimersByTimeAsync(30000);
+      await act(() => vi.advanceTimersByTimeAsync(30000));
 
       // The page should still show the event data since refresh errors
       // don't replace existing data (hasDataRef.current is true)

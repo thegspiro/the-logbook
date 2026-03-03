@@ -11,7 +11,7 @@ import { useLocation } from 'react-router-dom';
 export const TopProgressBar: React.FC = () => {
   const [progress, setProgress] = useState(0);
   const [visible, setVisible] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setInterval>>();
+  const timerRef = useRef<ReturnType<typeof setInterval>>(undefined);
   const location = useLocation();
 
   const start = useCallback(() => {

@@ -26,7 +26,7 @@ interface UseInventoryWebSocketOptions {
 
 export function useInventoryWebSocket({ onEvent, enabled = true }: UseInventoryWebSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout>>();
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const retriesRef = useRef(0);
   const enabledRef = useRef(enabled);
   const onEventRef = useRef(onEvent);
