@@ -1,0 +1,304 @@
+"""
+Membership Form Integration Tests
+
+Tests for the _ensure_membership_form_integration method on
+MembershipPipelineService, covering creation of new integrations and
+repair of existing integrations with empty or stale field_mappings.
+
+These tests mock the database layer and verify the service logic
+for auto-generating and repairing field_mappings.
+"""
+
+import sys
+from types import ModuleType
+from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
+
+import pytest
+
+# ---------------------------------------------------------------------------
+# Module-level shims — ensure the transitive import chain resolves even when
+# optional backend dependencies (jwt, redis, authlib, …) are not installed.
+# We only need MembershipPipelineService + its model constants, so we stub
+# everything else.
+# ---------------------------------------------------------------------------
+
+def _stub(name: str) -> ModuleType:
+    """Create a stub module that returns MagicMock for any attribute access."""
+    mod = ModuleType(name)
+    mod.__dict__.setdefault("__all__", [])
+    mod.__dict__.setdefault("__path__", [])
+    # Allow arbitrary attribute access (e.g. argon2.PasswordHasher)
+    mod.__class__ = type(
+        "StubModule",
+        (ModuleType,),
+        {"__getattr__": lambda self, attr: MagicMock()},
+    )
+    return mod
+
+
+_STUB_MODULES = [
+    "jwt", "redis", "redis.asyncio",
+    "authlib", "authlib.integrations", "authlib.integrations.starlette_client",
+    "celery", "celery.result", "stripe",
+    "fastapi_mail", "sentry_sdk",
+    "twilio", "twilio.rest", "pyotp",
+    "argon2", "argon2.exceptions", "bcrypt",
+    "cryptography", "cryptography.hazmat", "cryptography.hazmat._oid",
+    "cryptography.hazmat.primitives", "cryptography.hazmat.primitives.asymmetric",
+    "cryptography.hazmat.primitives.asymmetric.ec",
+    "cryptography.hazmat.primitives.ciphers",
+    "cryptography.hazmat.primitives.ciphers.algorithms",
+    "cryptography.hazmat.primitives.ciphers.modes",
+    "cryptography.hazmat.primitives.kdf", "cryptography.hazmat.primitives.kdf.pbkdf2",
+    "cryptography.hazmat.primitives.padding", "cryptography.hazmat.primitives.hashes",
+    "cryptography.hazmat.backends", "cryptography.fernet",
+    "ldap3", "onelogin", "onelogin.saml2", "onelogin.saml2.auth",
+    "cffi", "_cffi_backend",
+    "aiomysql", "jinja2", "httpx",
+    "fastapi.templating",
+    "elasticsearch",
+    "minio",
+]
+
+for _mod_name in _STUB_MODULES:
+    if _mod_name not in sys.modules:
+        sys.modules[_mod_name] = _stub(_mod_name)
+
+# Now safe to import the service under test.
+from app.services.membership_pipeline_service import MembershipPipelineService  # noqa: E402
+
+
+# ============================================
+# Helpers
+# ============================================
+
+
+def _make_field(label: str, field_type: str = "text", field_id: str | None = None):
+    """Create a mock FormField with the given label and type."""
+    field = MagicMock()
+    field.id = field_id or str(uuid4())
+    field.label = label
+    field.field_type = field_type
+    return field
+
+
+def _make_result_chain(*items):
+    """Build a mock result supporting .scalars().first() / .scalars().all()."""
+    mock_result = MagicMock()
+    scalars = MagicMock()
+    scalars.first.return_value = items[0] if items else None
+    scalars.all.return_value = list(items)
+    mock_result.scalars.return_value = scalars
+    return mock_result
+
+
+# ============================================
+# Fixtures
+# ============================================
+
+
+@pytest.fixture
+def mock_db():
+    db = AsyncMock()
+    db.add = MagicMock()
+    db.commit = AsyncMock()
+    db.rollback = AsyncMock()
+    db.refresh = AsyncMock()
+    db.execute = AsyncMock()
+    return db
+
+
+@pytest.fixture
+def service(mock_db):
+    return MembershipPipelineService(mock_db)
+
+
+@pytest.fixture
+def form_id():
+    return str(uuid4())
+
+
+@pytest.fixture
+def org_id():
+    return str(uuid4())
+
+
+# ============================================
+# Tests — new integration creation
+# ============================================
+
+
+class TestEnsureIntegrationCreatesNew:
+    """When no integration exists, a new one should be created."""
+
+    async def test_creates_integration_with_matching_labels(
+        self, service, mock_db, form_id, org_id
+    ):
+        fields = [
+            _make_field("First Name"),
+            _make_field("Last Name"),
+            _make_field("Email Address"),
+            _make_field("Phone Number"),
+        ]
+        mock_db.execute.side_effect = [
+            _make_result_chain(),  # no existing integration
+            _make_result_chain(*fields),
+        ]
+
+        await service._ensure_membership_form_integration(form_id, org_id)
+
+        assert mock_db.add.called
+        integration = mock_db.add.call_args[0][0]
+        mappings = integration.field_mappings
+        assert mappings[str(fields[0].id)] == "first_name"
+        assert mappings[str(fields[1].id)] == "last_name"
+        assert mappings[str(fields[2].id)] == "email"
+        assert mappings[str(fields[3].id)] == "phone"
+
+    async def test_skips_when_no_fields(self, service, mock_db, form_id, org_id):
+        mock_db.execute.side_effect = [
+            _make_result_chain(),
+            _make_result_chain(),
+        ]
+
+        await service._ensure_membership_form_integration(form_id, org_id)
+
+        assert not mock_db.add.called
+
+    async def test_skips_when_no_mappable_fields(self, service, mock_db, form_id, org_id):
+        fields = [_make_field("Favorite Color"), _make_field("Preferred Shift")]
+        mock_db.execute.side_effect = [
+            _make_result_chain(),
+            _make_result_chain(*fields),
+        ]
+
+        await service._ensure_membership_form_integration(form_id, org_id)
+
+        assert not mock_db.add.called
+
+
+# ============================================
+# Tests — repair of existing integration
+# ============================================
+
+
+class TestEnsureIntegrationRepairsExisting:
+    """Existing integration with bad field_mappings should be repaired."""
+
+    async def test_repairs_empty_field_mappings(
+        self, service, mock_db, form_id, org_id
+    ):
+        fields = [
+            _make_field("First Name"),
+            _make_field("Last Name"),
+            _make_field("Email"),
+        ]
+        existing = MagicMock()
+        existing.field_mappings = {}
+
+        mock_db.execute.side_effect = [
+            _make_result_chain(existing),
+            _make_result_chain(*fields),
+        ]
+
+        await service._ensure_membership_form_integration(form_id, org_id)
+
+        assert not mock_db.add.called
+        assert existing.field_mappings != {}
+        targets = set(existing.field_mappings.values())
+        assert {"first_name", "last_name", "email"} <= targets
+        mock_db.commit.assert_called()
+
+    async def test_repairs_none_field_mappings(
+        self, service, mock_db, form_id, org_id
+    ):
+        fields = [
+            _make_field("First Name"),
+            _make_field("Last Name"),
+            _make_field("Email"),
+        ]
+        existing = MagicMock()
+        existing.field_mappings = None
+
+        mock_db.execute.side_effect = [
+            _make_result_chain(existing),
+            _make_result_chain(*fields),
+        ]
+
+        await service._ensure_membership_form_integration(form_id, org_id)
+
+        assert not mock_db.add.called
+        assert existing.field_mappings is not None
+        assert "first_name" in existing.field_mappings.values()
+
+    async def test_repairs_stale_field_ids(self, service, mock_db, form_id, org_id):
+        old_id = str(uuid4())
+        fields = [
+            _make_field("First Name"),
+            _make_field("Last Name"),
+            _make_field("Email"),
+        ]
+        existing = MagicMock()
+        existing.field_mappings = {old_id: "first_name"}
+
+        mock_db.execute.side_effect = [
+            _make_result_chain(existing),
+            _make_result_chain(*fields),
+        ]
+
+        await service._ensure_membership_form_integration(form_id, org_id)
+
+        assert not mock_db.add.called
+        assert old_id not in existing.field_mappings
+        targets = set(existing.field_mappings.values())
+        assert {"first_name", "last_name", "email"} <= targets
+
+    async def test_leaves_healthy_integration_alone(
+        self, service, mock_db, form_id, org_id
+    ):
+        field_fn = _make_field("First Name")
+        field_ln = _make_field("Last Name")
+        field_em = _make_field("Email")
+        fields = [field_fn, field_ln, field_em]
+
+        existing = MagicMock()
+        existing.field_mappings = {
+            str(field_fn.id): "first_name",
+            str(field_ln.id): "last_name",
+            str(field_em.id): "email",
+        }
+
+        mock_db.execute.side_effect = [
+            _make_result_chain(existing),
+            _make_result_chain(*fields),
+        ]
+
+        await service._ensure_membership_form_integration(form_id, org_id)
+
+        assert not mock_db.add.called
+        mock_db.commit.assert_not_called()
+
+    async def test_repairs_when_missing_required_targets(
+        self, service, mock_db, form_id, org_id
+    ):
+        field_fn = _make_field("First Name")
+        field_ln = _make_field("Last Name")
+        field_em = _make_field("Email")
+        field_ph = _make_field("Phone")
+        fields = [field_fn, field_ln, field_em, field_ph]
+
+        existing = MagicMock()
+        existing.field_mappings = {str(field_ph.id): "phone"}
+
+        mock_db.execute.side_effect = [
+            _make_result_chain(existing),
+            _make_result_chain(*fields),
+        ]
+
+        await service._ensure_membership_form_integration(form_id, org_id)
+
+        assert not mock_db.add.called
+        targets = set(existing.field_mappings.values())
+        assert {"first_name", "last_name", "email"} <= targets
+        mock_db.commit.assert_called()
