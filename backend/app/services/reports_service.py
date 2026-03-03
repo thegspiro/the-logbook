@@ -56,6 +56,11 @@ class ReportsService:
             "annual_training": self._generate_annual_training,
             "department_overview": self._generate_department_overview,
             "admin_hours": self._generate_admin_hours,
+            "certification_expiration": self._generate_certification_expiration,
+            "apparatus_status": self._generate_apparatus_status,
+            "inventory_status": self._generate_inventory_status,
+            "compliance_status": self._generate_compliance_status,
+            "call_volume": self._generate_call_volume,
         }
 
         generator = generators.get(report_type)
@@ -702,6 +707,495 @@ class ReportsService:
         }
 
     # ============================================
+    # Certification Expiration Report
+    # ============================================
+
+    async def _generate_certification_expiration(
+        self,
+        organization_id: UUID,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Generate a certification expiration report showing overdue and upcoming expirations."""
+        records_query = (
+            select(TrainingRecord)
+            .where(
+                TrainingRecord.organization_id == str(organization_id),
+                TrainingRecord.status == TrainingStatus.COMPLETED,
+            )
+            .order_by(TrainingRecord.expiration_date.asc().nullslast())
+        )
+        records_result = await self.db.execute(records_query)
+        records = records_result.scalars().all()
+
+        users_result = await self.db.execute(
+            select(User).where(
+                User.organization_id == str(organization_id),
+                User.status == UserStatus.ACTIVE,
+                User.deleted_at.is_(None),
+            )
+        )
+        users = users_result.scalars().all()
+        member_map = {
+            str(u.id): {
+                "name": f"{u.first_name or ''} {u.last_name or ''}".strip()
+                or u.username,
+                "rank": u.rank,
+            }
+            for u in users
+        }
+
+        today = date.today()
+        soon_threshold = int((filters or {}).get("expiring_soon_days", 90))
+
+        entries = []
+        expired_count = 0
+        expiring_soon_count = 0
+        valid_count = 0
+        no_expiry_count = 0
+
+        for record in records:
+            uid = str(record.user_id)
+            member_info = member_map.get(uid)
+            if not member_info:
+                continue
+
+            exp_date = record.expiration_date
+            if exp_date:
+                days_until = (exp_date - today).days
+                if days_until < 0:
+                    status = "expired"
+                    expired_count += 1
+                elif days_until <= soon_threshold:
+                    status = "expiring_soon"
+                    expiring_soon_count += 1
+                else:
+                    status = "valid"
+                    valid_count += 1
+            else:
+                days_until = None
+                status = "no_expiry"
+                no_expiry_count += 1
+
+            entries.append(
+                {
+                    "member_id": uid,
+                    "member_name": member_info["name"],
+                    "rank": member_info["rank"],
+                    "course_name": record.course_name or "",
+                    "certification_number": getattr(
+                        record, "certification_number", None
+                    ),
+                    "issuing_agency": getattr(record, "issuing_agency", None),
+                    "completion_date": (
+                        str(record.completion_date) if record.completion_date else None
+                    ),
+                    "expiration_date": str(exp_date) if exp_date else None,
+                    "days_until_expiry": days_until,
+                    "expiry_status": status,
+                }
+            )
+
+        return {
+            "report_type": "certification_expiration",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "total_certifications": len(entries),
+            "expired_count": expired_count,
+            "expiring_soon_count": expiring_soon_count,
+            "valid_count": valid_count,
+            "no_expiry_count": no_expiry_count,
+            "entries": entries,
+        }
+
+    # ============================================
+    # Apparatus / Fleet Status Report
+    # ============================================
+
+    async def _generate_apparatus_status(
+        self,
+        organization_id: UUID,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Generate a fleet status report with vehicle condition, maintenance, and mileage."""
+        from app.models.apparatus import (
+            Apparatus,
+            ApparatusMaintenance,
+        )
+
+        apparatus_query = (
+            select(Apparatus)
+            .options(
+                selectinload(Apparatus.apparatus_type),
+                selectinload(Apparatus.status_record),
+                selectinload(Apparatus.primary_station),
+            )
+            .where(
+                Apparatus.organization_id == str(organization_id),
+                Apparatus.is_archived == False,  # noqa: E712
+            )
+            .order_by(Apparatus.unit_number)
+        )
+        result = await self.db.execute(apparatus_query)
+        apparatus_list = result.scalars().unique().all()
+
+        apparatus_ids = [a.id for a in apparatus_list]
+        wo_counts: Dict[str, int] = {}
+        if apparatus_ids:
+            wo_result = await self.db.execute(
+                select(
+                    ApparatusMaintenance.apparatus_id,
+                    func.count(ApparatusMaintenance.id),
+                )
+                .where(
+                    ApparatusMaintenance.apparatus_id.in_(apparatus_ids),
+                    ApparatusMaintenance.status != "completed",
+                )
+                .group_by(ApparatusMaintenance.apparatus_id)
+            )
+            for row in wo_result.all():
+                wo_counts[str(row[0])] = row[1]
+
+        today = date.today()
+        in_service = 0
+        out_of_service = 0
+        maint_due = 0
+        report_entries = []
+
+        for a in apparatus_list:
+            status_name = a.status_record.name if a.status_record else "unknown"
+            status_code = a.status_record.code if a.status_record else "unknown"
+            type_name = a.apparatus_type.name if a.apparatus_type else "unknown"
+            station_name = a.primary_station.name if a.primary_station else None
+            open_wos = wo_counts.get(str(a.id), 0)
+
+            inspection_exp = a.inspection_expiration
+            days_until = (inspection_exp - today).days if inspection_exp else None
+
+            if status_code in ("in_service", "available"):
+                in_service += 1
+            else:
+                out_of_service += 1
+
+            if days_until is not None and days_until <= 30:
+                maint_due += 1
+
+            report_entries.append(
+                {
+                    "apparatus_id": str(a.id),
+                    "name": a.unit_number or a.name or "",
+                    "apparatus_type": type_name,
+                    "status": status_name,
+                    "station": station_name,
+                    "year": a.year,
+                    "mileage": a.current_mileage,
+                    "last_inspection_date": None,
+                    "next_inspection_due": (
+                        str(inspection_exp) if inspection_exp else None
+                    ),
+                    "days_until_inspection": days_until,
+                    "open_work_orders": open_wos,
+                }
+            )
+
+        return {
+            "report_type": "apparatus_status",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "total_apparatus": len(report_entries),
+            "in_service_count": in_service,
+            "out_of_service_count": out_of_service,
+            "maintenance_due_count": maint_due,
+            "entries": report_entries,
+        }
+
+    # ============================================
+    # Inventory Status Report
+    # ============================================
+
+    async def _generate_inventory_status(
+        self,
+        organization_id: UUID,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Generate an inventory status report with stock levels and assignments."""
+        from app.models.inventory import InventoryCategory, InventoryItem
+
+        items_query = (
+            select(InventoryItem)
+            .options(selectinload(InventoryItem.category))
+            .where(InventoryItem.organization_id == str(organization_id))
+            .order_by(InventoryItem.name)
+        )
+
+        type_filter = (filters or {}).get("item_type")
+        if type_filter:
+            items_query = items_query.where(
+                InventoryItem.category.has(InventoryCategory.item_type == type_filter)
+            )
+
+        result = await self.db.execute(items_query)
+        items = result.scalars().unique().all()
+
+        report_entries = []
+        low_stock_count = 0
+        assigned_count = 0
+        total_value = 0.0
+
+        for item in items:
+            cat_name = item.category.name if item.category else None
+            low_threshold = item.category.low_stock_threshold if item.category else None
+
+            total_qty = item.quantity or 1
+            issued_qty = item.quantity_issued or 0
+            available_qty = total_qty - issued_qty
+
+            is_low = low_threshold is not None and available_qty < low_threshold
+            if is_low:
+                low_stock_count += 1
+
+            if item.assigned_to_user_id:
+                assigned_count += 1
+
+            if item.current_value:
+                total_value += float(item.current_value)
+
+            condition_val = (
+                item.condition.value
+                if hasattr(item.condition, "value")
+                else str(item.condition)
+            )
+            item_type_val = ""
+            if item.category and hasattr(item.category, "item_type"):
+                item_type_val = (
+                    item.category.item_type.value
+                    if hasattr(item.category.item_type, "value")
+                    else str(item.category.item_type)
+                )
+
+            report_entries.append(
+                {
+                    "item_id": str(item.id),
+                    "name": item.name or "",
+                    "item_type": item_type_val,
+                    "category_name": cat_name,
+                    "total_quantity": total_qty,
+                    "assigned_quantity": issued_qty,
+                    "available_quantity": available_qty,
+                    "condition": condition_val,
+                    "minimum_stock": low_threshold,
+                    "is_low_stock": is_low,
+                    "last_audit_date": (
+                        str(item.last_inspection_date)
+                        if item.last_inspection_date
+                        else None
+                    ),
+                }
+            )
+
+        return {
+            "report_type": "inventory_status",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "total_items": len(report_entries),
+            "total_value": (round(total_value, 2) if total_value > 0 else None),
+            "low_stock_count": low_stock_count,
+            "assigned_count": assigned_count,
+            "entries": report_entries,
+        }
+
+    # ============================================
+    # Compliance Status Report
+    # ============================================
+
+    async def _generate_compliance_status(
+        self,
+        organization_id: UUID,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Generate member-by-member compliance against training requirements."""
+        req_result = await self.db.execute(
+            select(TrainingRequirement).where(
+                TrainingRequirement.organization_id == str(organization_id),
+                TrainingRequirement.active == True,  # noqa: E712
+            )
+        )
+        requirements = req_result.scalars().all()
+        req_map = {str(r.id): r for r in requirements}
+
+        users_result = await self.db.execute(
+            select(User).where(
+                User.organization_id == str(organization_id),
+                User.status == UserStatus.ACTIVE,
+                User.deleted_at.is_(None),
+            )
+        )
+        users = users_result.scalars().all()
+
+        enrollments_result = await self.db.execute(
+            select(ProgramEnrollment)
+            .options(selectinload(ProgramEnrollment.requirement_progress))
+            .where(
+                ProgramEnrollment.organization_id == str(organization_id),
+                ProgramEnrollment.status.in_(
+                    [EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED]
+                ),
+            )
+        )
+        enrollments = enrollments_result.scalars().unique().all()
+
+        user_completed: Dict[str, set] = {}
+        for enrollment in enrollments:
+            uid = str(enrollment.user_id)
+            if uid not in user_completed:
+                user_completed[uid] = set()
+            for rp in enrollment.requirement_progress or []:
+                if rp.status in (
+                    RequirementProgressStatus.COMPLETED,
+                    RequirementProgressStatus.VERIFIED,
+                ):
+                    user_completed[uid].add(str(rp.requirement_id))
+
+        total_reqs = len(requirements)
+        report_entries = []
+        fully_compliant = 0
+        partially_compliant = 0
+        non_compliant = 0
+
+        for user in users:
+            uid = str(user.id)
+            completed_ids = user_completed.get(uid, set())
+            completed_count = sum(1 for rid in req_map if rid in completed_ids)
+            pct = (
+                round(completed_count / total_reqs * 100, 1) if total_reqs > 0 else 100
+            )
+
+            overdue_items = [
+                req_map[rid].name for rid in req_map if rid not in completed_ids
+            ]
+
+            if pct >= 100:
+                fully_compliant += 1
+            elif pct > 0:
+                partially_compliant += 1
+            else:
+                non_compliant += 1
+
+            report_entries.append(
+                {
+                    "member_id": uid,
+                    "member_name": f"{user.first_name or ''} {user.last_name or ''}".strip()
+                    or user.username,
+                    "rank": user.rank,
+                    "total_requirements": total_reqs,
+                    "completed_requirements": completed_count,
+                    "compliance_percentage": pct,
+                    "overdue_items": overdue_items,
+                    "upcoming_deadlines": [],
+                }
+            )
+
+        report_entries.sort(key=lambda e: e["compliance_percentage"])
+
+        overall_rate = (
+            round(
+                sum(e["compliance_percentage"] for e in report_entries)
+                / len(report_entries),
+                1,
+            )
+            if report_entries
+            else 0
+        )
+
+        return {
+            "report_type": "compliance_status",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "total_members": len(report_entries),
+            "fully_compliant_count": fully_compliant,
+            "partially_compliant_count": partially_compliant,
+            "non_compliant_count": non_compliant,
+            "overall_compliance_rate": overall_rate,
+            "entries": report_entries,
+        }
+
+    # ============================================
+    # Call Volume / Incident Report
+    # ============================================
+
+    async def _generate_call_volume(
+        self,
+        organization_id: UUID,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Generate call volume report from shift completion reports."""
+        period_start = start_date or date(date.today().year, 1, 1)
+        period_end = end_date or date.today()
+
+        reports_result = await self.db.execute(
+            select(ShiftCompletionReport).where(
+                ShiftCompletionReport.organization_id == str(organization_id),
+                ShiftCompletionReport.shift_date >= period_start,
+                ShiftCompletionReport.shift_date <= period_end,
+            )
+        )
+        shift_reports = reports_result.scalars().all()
+
+        daily_data: Dict[str, Dict[str, Any]] = {}
+        total_calls = 0
+        type_totals: Dict[str, int] = {}
+
+        for sr in shift_reports:
+            day = str(sr.shift_date)
+            if day not in daily_data:
+                daily_data[day] = {
+                    "date": day,
+                    "total_calls": 0,
+                    "by_type": {},
+                }
+
+            calls = int(sr.calls_responded or 0)
+            daily_data[day]["total_calls"] += calls
+            total_calls += calls
+
+            for ct in sr.call_types or []:
+                daily_data[day]["by_type"][ct] = (
+                    daily_data[day]["by_type"].get(ct, 0) + 1
+                )
+                type_totals[ct] = type_totals.get(ct, 0) + 1
+
+        report_entries = sorted(daily_data.values(), key=lambda e: e["date"])
+
+        num_days = max(1, (period_end - period_start).days + 1)
+        avg_per_day = round(total_calls / num_days, 1)
+
+        busiest = (
+            max(report_entries, key=lambda e: e["total_calls"])
+            if report_entries
+            else None
+        )
+
+        return {
+            "report_type": "call_volume",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "period_start": str(period_start),
+            "period_end": str(period_end),
+            "summary": {
+                "total_calls": total_calls,
+                "avg_calls_per_day": avg_per_day,
+                "busiest_day": busiest["date"] if busiest else "",
+                "busiest_day_count": (busiest["total_calls"] if busiest else 0),
+                "by_type_totals": type_totals,
+            },
+            "entries": report_entries,
+        }
+
+    # ============================================
     # Available Reports
     # ============================================
 
@@ -753,11 +1247,40 @@ class ReportsService:
                     "usesDateRange": True,
                 },
                 {
+                    "id": "certification_expiration",
+                    "title": "Certification Expiration",
+                    "description": "Track expiring and overdue certifications across all members.",
+                    "category": "compliance",
+                    "available": True,
+                },
+                {
                     "id": "compliance_status",
                     "title": "Compliance Status",
-                    "description": "Organization-wide compliance tracking against requirements and certifications.",
+                    "description": "Member-by-member compliance tracking against training requirements with gap analysis.",
                     "category": "compliance",
-                    "available": False,
+                    "available": True,
+                },
+                {
+                    "id": "apparatus_status",
+                    "title": "Fleet / Apparatus Status",
+                    "description": "Vehicle status, maintenance due dates, mileage, and open work orders.",
+                    "category": "operations",
+                    "available": True,
+                },
+                {
+                    "id": "inventory_status",
+                    "title": "Inventory Status",
+                    "description": "Stock levels, assigned equipment, low-stock alerts, and inventory valuation.",
+                    "category": "operations",
+                    "available": True,
+                },
+                {
+                    "id": "call_volume",
+                    "title": "Incident / Call Volume",
+                    "description": "Call volume trends, incident type breakdown, and peak activity analysis.",
+                    "category": "operations",
+                    "available": True,
+                    "usesDateRange": True,
                 },
             ]
         }
