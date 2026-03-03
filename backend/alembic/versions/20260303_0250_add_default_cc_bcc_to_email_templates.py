@@ -1,7 +1,7 @@
 """Add default_cc/default_bcc to email_templates and bcc_emails to scheduled_emails
 
-Revision ID: 20260303_0200
-Revises: 20260303_0100
+Revision ID: 20260303_0250
+Revises: 20260303_0200
 Create Date: 2026-03-03
 
 Adds per-template default CC and BCC recipient lists so admins can
@@ -14,8 +14,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "20260303_0200"
-down_revision = "20260303_0100"
+revision = "20260303_0250"
+down_revision = "20260303_0200"
 branch_labels = None
 depends_on = None
 

@@ -1,7 +1,7 @@
 """Add form_submission to PipelineStepType enum and unique constraint on prospective_members
 
 Revision ID: 20260303_0300
-Revises: 20260303_0200_add_form_integration_type_column
+Revises: 20260303_0250
 Create Date: 2026-03-03
 
 Adds:
@@ -13,7 +13,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260303_0300"
-down_revision = "20260303_0200_add_form_integration_type_column"
+down_revision = "20260303_0250"
 branch_labels = None
 depends_on = None
 
