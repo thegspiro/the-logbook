@@ -651,9 +651,7 @@ class FormsService:
                 .where(FormSubmission.id == str(submission_id))
                 .where(FormSubmission.organization_id == str(organization_id))
                 .options(
-                    selectinload(FormSubmission.form).selectinload(
-                        Form.integrations
-                    ),
+                    selectinload(FormSubmission.form).selectinload(Form.integrations),
                 )
             )
             submission = result.scalar_one_or_none()
@@ -836,9 +834,14 @@ class FormsService:
         Process a membership interest form submission.
         Maps form fields to prospect fields and auto-creates a
         ProspectiveMember record in the org's default pipeline.
+
+        Safe to call multiple times for the same submission (e.g. via
+        reprocess): if a prospect already exists for this submission it
+        is returned without creating a duplicate.
         """
         from loguru import logger
 
+        from app.models.membership_pipeline import ProspectiveMember
         from app.services.membership_pipeline_service import MembershipPipelineService
 
         mappings = integration.field_mappings or {}
@@ -848,55 +851,90 @@ class FormsService:
             if field_id in submission.data:
                 mapped_data[target_field] = submission.data[field_id]
 
-        # Auto-create a prospect if we have at least first_name, last_name, email
-        prospect_id = None
-        if (
+        # Check required fields up-front so the caller gets an accurate message.
+        has_required = (
             mapped_data.get("first_name")
             and mapped_data.get("last_name")
             and mapped_data.get("email")
-        ):
-            try:
-                pipeline_service = MembershipPipelineService(self.db)
-                prospect_data = {
-                    "first_name": mapped_data.get("first_name", ""),
-                    "last_name": mapped_data.get("last_name", ""),
-                    "email": mapped_data.get("email", ""),
-                    "phone": mapped_data.get("phone"),
-                    "mobile": mapped_data.get("mobile"),
-                    "date_of_birth": mapped_data.get("date_of_birth"),
-                    "address_street": mapped_data.get("address_street"),
-                    "address_city": mapped_data.get("address_city"),
-                    "address_state": mapped_data.get("address_state"),
-                    "address_zip": mapped_data.get("address_zip"),
-                    "interest_reason": mapped_data.get("interest_reason"),
-                    "referral_source": mapped_data.get("referral_source"),
-                    "form_submission_id": str(submission.id),
-                    "metadata_": mapped_data,
-                }
-                prospect = await pipeline_service.create_prospect(
-                    organization_id=str(submission.organization_id),
-                    data=prospect_data,
-                    created_by=None,  # System-created
-                )
-                prospect_id = str(prospect.id)
-                logger.info(
-                    f"Auto-created prospect {prospect_id} from form submission {submission.id}"
-                )
-            except Exception as e:
-                logger.error(
-                    f"Failed to auto-create prospect from form submission {submission.id}: {e}"
-                )
+        )
 
-        return {
-            "success": True,
-            "mapped_data": mapped_data,
-            "prospect_id": prospect_id,
-            "message": (
-                "Prospect auto-created from membership interest form"
-                if prospect_id
-                else "Membership interest recorded (prospect creation skipped — missing required fields)"
-            ),
-        }
+        if not has_required:
+            missing = [
+                f
+                for f in ("first_name", "last_name", "email")
+                if not mapped_data.get(f)
+            ]
+            return {
+                "success": False,
+                "mapped_data": mapped_data,
+                "prospect_id": None,
+                "message": (
+                    f"Prospect creation skipped — missing required field(s): "
+                    f"{', '.join(missing)}"
+                ),
+            }
+
+        # ---- Duplicate guard (idempotent for reprocess) ----
+        existing_result = await self.db.execute(
+            select(ProspectiveMember.id).where(
+                ProspectiveMember.form_submission_id == str(submission.id)
+            )
+        )
+        existing_prospect = existing_result.scalars().first()
+        if existing_prospect is not None:
+            return {
+                "success": True,
+                "mapped_data": mapped_data,
+                "prospect_id": str(existing_prospect),
+                "message": "Prospect already exists for this submission",
+            }
+
+        # ---- Create new prospect ----
+        try:
+            pipeline_service = MembershipPipelineService(self.db)
+            prospect_data = {
+                "first_name": mapped_data.get("first_name", ""),
+                "last_name": mapped_data.get("last_name", ""),
+                "email": mapped_data.get("email", ""),
+                "phone": mapped_data.get("phone"),
+                "mobile": mapped_data.get("mobile"),
+                "date_of_birth": mapped_data.get("date_of_birth"),
+                "address_street": mapped_data.get("address_street"),
+                "address_city": mapped_data.get("address_city"),
+                "address_state": mapped_data.get("address_state"),
+                "address_zip": mapped_data.get("address_zip"),
+                "interest_reason": mapped_data.get("interest_reason"),
+                "referral_source": mapped_data.get("referral_source"),
+                "form_submission_id": str(submission.id),
+                "metadata_": mapped_data,
+            }
+            prospect = await pipeline_service.create_prospect(
+                organization_id=str(submission.organization_id),
+                data=prospect_data,
+                created_by=None,  # System-created
+            )
+            prospect_id = str(prospect.id)
+            logger.info(
+                f"Auto-created prospect {prospect_id} from "
+                f"form submission {submission.id}"
+            )
+            return {
+                "success": True,
+                "mapped_data": mapped_data,
+                "prospect_id": prospect_id,
+                "message": "Prospect auto-created from membership interest form",
+            }
+        except Exception as e:
+            logger.error(
+                f"Failed to auto-create prospect from "
+                f"form submission {submission.id}: {e}"
+            )
+            return {
+                "success": False,
+                "mapped_data": mapped_data,
+                "prospect_id": None,
+                "message": f"Prospect creation failed: {e}",
+            }
 
     async def _process_equipment_assignment(
         self, submission: FormSubmission, integration: FormIntegration
