@@ -33,18 +33,31 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
   const [htmlBody, setHtmlBody] = useState(template.html_body);
   const [textBody, setTextBody] = useState(template.text_body ?? '');
   const [cssStyles, setCssStyles] = useState(template.css_styles ?? '');
+  const [defaultCc, setDefaultCc] = useState((template.default_cc ?? []).join(', '));
+  const [defaultBcc, setDefaultBcc] = useState((template.default_bcc ?? []).join(', '));
   const [showCss, setShowCss] = useState(false);
   const [showTextBody, setShowTextBody] = useState(false);
   const [showVariables, setShowVariables] = useState(false);
+  const [showRecipients, setShowRecipients] = useState(
+    () => (template.default_cc?.length ?? 0) > 0 || (template.default_bcc?.length ?? 0) > 0,
+  );
   const htmlRef = useRef<HTMLTextAreaElement>(null);
   const subjectRef = useRef<HTMLInputElement>(null);
+
+  // Parse comma-separated emails into arrays (empty string → empty array)
+  const parsedCc = defaultCc.split(',').map((e) => e.trim()).filter(Boolean);
+  const parsedBcc = defaultBcc.split(',').map((e) => e.trim()).filter(Boolean);
+  const origCc = (template.default_cc ?? []).join(', ');
+  const origBcc = (template.default_bcc ?? []).join(', ');
 
   // Track dirty state
   const isDirty =
     subject !== template.subject ||
     htmlBody !== template.html_body ||
     textBody !== (template.text_body ?? '') ||
-    cssStyles !== (template.css_styles ?? '');
+    cssStyles !== (template.css_styles ?? '') ||
+    defaultCc !== origCc ||
+    defaultBcc !== origBcc;
 
   React.useEffect(() => {
     onDirtyChange?.(isDirty);
@@ -56,7 +69,12 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
     setHtmlBody(template.html_body);
     setTextBody(template.text_body ?? '');
     setCssStyles(template.css_styles ?? '');
-  }, [template.id, template.subject, template.html_body, template.text_body, template.css_styles]);
+    setDefaultCc((template.default_cc ?? []).join(', '));
+    setDefaultBcc((template.default_bcc ?? []).join(', '));
+    setShowRecipients(
+      (template.default_cc?.length ?? 0) > 0 || (template.default_bcc?.length ?? 0) > 0,
+    );
+  }, [template.id, template.subject, template.html_body, template.text_body, template.css_styles, template.default_cc, template.default_bcc]);
 
   const handleSave = () => {
     const data: EmailTemplateUpdate = {};
@@ -64,6 +82,8 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
     if (htmlBody !== template.html_body) data.html_body = htmlBody;
     if (textBody !== (template.text_body ?? '')) data.text_body = textBody;
     if (cssStyles !== (template.css_styles ?? '')) data.css_styles = cssStyles;
+    if (defaultCc !== origCc) data.default_cc = parsedCc.length > 0 ? parsedCc : null;
+    if (defaultBcc !== origBcc) data.default_bcc = parsedBcc.length > 0 ? parsedBcc : null;
     onSave(data);
   };
 
@@ -126,6 +146,57 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
           className={inputClass.replace('font-mono', '')}
           placeholder="Email subject..."
         />
+      </div>
+
+      {/* Default CC / BCC (collapsible) */}
+      <div>
+        <button
+          onClick={() => setShowRecipients(!showRecipients)}
+          className="flex items-center space-x-2 text-sm text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+        >
+          {showRecipients ? (
+            <ChevronUp className="w-4 h-4" />
+          ) : (
+            <ChevronDown className="w-4 h-4" />
+          )}
+          <span>Default CC / BCC Recipients</span>
+        </button>
+        {showRecipients && (
+          <div className="mt-2 space-y-3">
+            <div>
+              <label htmlFor="template-default-cc" className={labelClass}>
+                Default CC (comma-separated)
+              </label>
+              <input
+                id="template-default-cc"
+                type="text"
+                value={defaultCc}
+                onChange={(e) => setDefaultCc(e.target.value)}
+                className={inputClass.replace('font-mono', '')}
+                placeholder="chief@dept.org, admin@dept.org"
+              />
+              <p className="mt-1 text-xs text-theme-text-muted">
+                These addresses will be CC'd on every email sent with this template.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="template-default-bcc" className={labelClass}>
+                Default BCC (comma-separated)
+              </label>
+              <input
+                id="template-default-bcc"
+                type="text"
+                value={defaultBcc}
+                onChange={(e) => setDefaultBcc(e.target.value)}
+                className={inputClass.replace('font-mono', '')}
+                placeholder="records@dept.org"
+              />
+              <p className="mt-1 text-xs text-theme-text-muted">
+                These addresses will be BCC'd (hidden from other recipients) on every email sent with this template.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Variable helper */}

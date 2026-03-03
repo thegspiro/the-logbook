@@ -99,6 +99,16 @@ const ScheduledEmailList: React.FC = () => {
                 <div className="mt-0.5 text-xs text-theme-text-secondary">
                   To: {email.to_emails.join(', ')}
                 </div>
+                {email.cc_emails && email.cc_emails.length > 0 && (
+                  <div className="mt-0.5 text-xs text-theme-text-secondary">
+                    CC: {email.cc_emails.join(', ')}
+                  </div>
+                )}
+                {email.bcc_emails && email.bcc_emails.length > 0 && (
+                  <div className="mt-0.5 text-xs text-theme-text-secondary">
+                    BCC: {email.bcc_emails.join(', ')}
+                  </div>
+                )}
                 <div className="mt-0.5 text-xs text-theme-text-secondary">
                   <CalendarClock className="mr-1 inline h-3 w-3" />
                   {formatDate(email.scheduled_at)}

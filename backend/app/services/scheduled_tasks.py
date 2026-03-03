@@ -1179,12 +1179,21 @@ async def run_scheduled_emails(db: AsyncSession) -> Dict[str, Any]:
                 template, item.context or {}, organization=org
             )
 
+            # Merge template default CC/BCC with per-email overrides
+            cc = list(set(
+                (template.default_cc or []) + (item.cc_emails or [])
+            )) or None
+            bcc = list(set(
+                (template.default_bcc or []) + (item.bcc_emails or [])
+            )) or None
+
             success_count, _ = await email_svc.send_email(
                 to_emails=item.to_emails,
                 subject=subject,
                 html_body=html_body,
                 text_body=text_body,
-                cc_emails=item.cc_emails,
+                cc_emails=cc,
+                bcc_emails=bcc,
             )
 
             if success_count > 0:

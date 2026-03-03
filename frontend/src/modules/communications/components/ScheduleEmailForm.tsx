@@ -28,6 +28,7 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({
   const [templateType, setTemplateType] = useState('');
   const [toEmails, setToEmails] = useState('');
   const [ccEmails, setCcEmails] = useState('');
+  const [bccEmails, setBccEmails] = useState('');
   const [scheduledDate, setScheduledDate] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
 
@@ -47,6 +48,10 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({
       .split(',')
       .map((e) => e.trim())
       .filter(Boolean);
+    const bcc = bccEmails
+      .split(',')
+      .map((e) => e.trim())
+      .filter(Boolean);
 
     const scheduledAt = new Date(
       `${scheduledDate}T${scheduledTime}:00`,
@@ -61,6 +66,7 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({
       template_type: templateType,
       to_emails: recipients,
       cc_emails: cc.length > 0 ? cc : undefined,
+      bcc_emails: bcc.length > 0 ? bcc : undefined,
       context: {},
       scheduled_at: scheduledAt,
     };
@@ -134,6 +140,17 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({
             onChange={(e) => setCcEmails(e.target.value)}
             className={inputClass}
             placeholder="cc@example.com"
+          />
+        </div>
+
+        <div>
+          <label className={labelClass}>BCC (optional, comma-separated)</label>
+          <input
+            type="text"
+            value={bccEmails}
+            onChange={(e) => setBccEmails(e.target.value)}
+            className={inputClass}
+            placeholder="bcc@example.com"
           />
         </div>
 
