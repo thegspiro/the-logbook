@@ -69,11 +69,14 @@ const INTEGRATION_TARGET_FIELDS: Record<string, { key: string; label: string; re
   event_request: [
     { key: 'contact_name', label: 'Contact Name', required: true },
     { key: 'contact_email', label: 'Contact Email', required: true },
-    { key: 'event_title', label: 'Event Title', required: false },
-    { key: 'event_date', label: 'Event Date', required: false },
-    { key: 'event_description', label: 'Description', required: false },
-    { key: 'event_location', label: 'Location', required: false },
-    { key: 'expected_attendees', label: 'Expected Attendees', required: false },
+    { key: 'contact_phone', label: 'Contact Phone', required: false },
+    { key: 'organization_name', label: 'Organization Name', required: false },
+    { key: 'outreach_type', label: 'Outreach Type', required: false },
+    { key: 'description', label: 'Description', required: false },
+    { key: 'preferred_timeframe', label: 'Preferred Date / Timeframe', required: false },
+    { key: 'audience_size', label: 'Expected Attendees', required: false },
+    { key: 'venue_address', label: 'Venue / Location', required: false },
+    { key: 'special_requests', label: 'Special Requests / Notes', required: false },
   ],
 };
 
@@ -235,6 +238,30 @@ const STARTER_TEMPLATES: StarterTemplate[] = [
     icon: <FileText className="w-6 h-6" aria-hidden="true" />,
     color: 'text-purple-700 dark:text-purple-400',
   },
+  {
+    id: 'community-event-request',
+    name: 'Community Event Request',
+    description: 'Public form for community members to request fire department participation at events',
+    category: 'Administration',
+    fields: [
+      { label: 'Contact Name', field_type: 'text', required: true },
+      { label: 'Contact Email', field_type: 'email', required: true },
+      { label: 'Contact Phone', field_type: 'phone', required: false },
+      { label: 'Organization Name', field_type: 'text', required: false },
+      { label: 'Outreach Type', field_type: 'select', required: true },
+      { label: 'Description', field_type: 'textarea', required: true },
+      { label: 'Preferred Timeframe', field_type: 'text', required: false },
+      { label: 'Time of Day', field_type: 'select', required: false },
+      { label: 'Expected Attendees', field_type: 'number', required: false },
+      { label: 'Age Group', field_type: 'select', required: false },
+      { label: 'Venue Address', field_type: 'text', required: false },
+      { label: 'Special Requests', field_type: 'textarea', required: false },
+    ],
+    icon: <Send className="w-6 h-6" aria-hidden="true" />,
+    color: 'text-teal-700 dark:text-teal-400',
+    isPublic: true,
+    integrationHint: 'event_request',
+  },
 ];
 
 type FormCategory = 'all' | 'Safety' | 'Operations' | 'Administration' | 'Training';
@@ -327,7 +354,7 @@ const FormsPage: React.FC = () => {
   const handleUseTemplate = async (template: StarterTemplate) => {
     setCreating(true);
     try {
-      const createData: FormCreate = {
+      const createData: FormCreate & { integration_type?: string } = {
         name: template.name,
         description: template.description,
         category: template.category,
@@ -339,6 +366,12 @@ const FormsPage: React.FC = () => {
           sort_order: i,
         })),
       };
+      // When the template declares an integrationHint, pass it so the
+      // backend auto-creates the FormIntegration with label-based
+      // field-mappings — no manual integration setup needed.
+      if (template.integrationHint) {
+        createData.integration_type = template.integrationHint;
+      }
       await formsService.createForm(createData);
       setActiveTab('forms');
       await loadData();

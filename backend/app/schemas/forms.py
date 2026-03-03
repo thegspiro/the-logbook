@@ -142,9 +142,17 @@ class FormBase(BaseModel):
 
 
 class FormCreate(FormBase):
-    """Schema for creating a new form"""
+    """Schema for creating a new form.
+
+    When ``integration_type`` is provided the backend will automatically
+    create the corresponding ``FormIntegration`` with field-mappings
+    derived from the form's fields (label-based auto-mapping).  This
+    removes the need for a separate manual integration setup step after
+    using a starter template.
+    """
 
     fields: Optional[List[FormFieldCreate]] = None
+    integration_type: Optional[str] = None
 
 
 class FormUpdate(BaseModel):

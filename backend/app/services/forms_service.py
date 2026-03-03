@@ -39,6 +39,97 @@ class FormsService:
     MAX_NAME_LENGTH = 255
     MAX_EMAIL_LENGTH = 254
 
+    # ------------------------------------------------------------------
+    # Required target fields and label-based fallback maps per
+    # integration type.  These are used for:
+    #   1. Server-side validation when creating/updating integrations
+    #   2. Fallback mapping when field_mappings are stale or empty
+    # ------------------------------------------------------------------
+    _REQUIRED_FIELDS: Dict[str, set] = {
+        IntegrationType.EQUIPMENT_ASSIGNMENT: {"member_id", "item_id"},
+        IntegrationType.EVENT_REGISTRATION: {"event_id"},
+        IntegrationType.EVENT_REQUEST: {"contact_name", "contact_email"},
+    }
+
+    _EQUIPMENT_LABEL_MAP: Dict[str, str] = {
+        "member": "member_id",
+        "member id": "member_id",
+        "assigned to": "member_id",
+        "assignee": "member_id",
+        "item": "item_id",
+        "item id": "item_id",
+        "equipment": "item_id",
+        "equipment id": "item_id",
+        "reason": "reason",
+        "notes": "reason",
+        "reason / notes": "reason",
+    }
+
+    _EVENT_REGISTRATION_LABEL_MAP: Dict[str, str] = {
+        "event": "event_id",
+        "event id": "event_id",
+        "notes": "notes",
+        "comments": "notes",
+    }
+
+    _EVENT_REQUEST_LABEL_MAP: Dict[str, str] = {
+        "contact name": "contact_name",
+        "name": "contact_name",
+        "full name": "contact_name",
+        "your name": "contact_name",
+        "contact email": "contact_email",
+        "email": "contact_email",
+        "email address": "contact_email",
+        "phone": "contact_phone",
+        "phone number": "contact_phone",
+        "contact phone": "contact_phone",
+        "telephone": "contact_phone",
+        "organization": "organization_name",
+        "organization name": "organization_name",
+        "org name": "organization_name",
+        "company": "organization_name",
+        "outreach type": "outreach_type",
+        "type": "outreach_type",
+        "request type": "outreach_type",
+        "description": "description",
+        "event description": "description",
+        "details": "description",
+        "date flexibility": "date_flexibility",
+        "preferred timeframe": "preferred_timeframe",
+        "timeframe": "preferred_timeframe",
+        "preferred date": "preferred_timeframe",
+        "time of day": "preferred_time_of_day",
+        "preferred time": "preferred_time_of_day",
+        "audience size": "audience_size",
+        "expected attendees": "audience_size",
+        "number of attendees": "audience_size",
+        "attendees": "audience_size",
+        "age group": "age_group",
+        "age range": "age_group",
+        "venue preference": "venue_preference",
+        "venue": "venue_preference",
+        "venue address": "venue_address",
+        "location": "venue_address",
+        "address": "venue_address",
+        "special requests": "special_requests",
+        "additional notes": "special_requests",
+        "special needs": "special_requests",
+    }
+
+    _LABEL_MAPS: Dict[str, Dict[str, str]] = {
+        IntegrationType.EQUIPMENT_ASSIGNMENT: _EQUIPMENT_LABEL_MAP,
+        IntegrationType.EVENT_REGISTRATION: _EVENT_REGISTRATION_LABEL_MAP,
+        IntegrationType.EVENT_REQUEST: _EVENT_REQUEST_LABEL_MAP,
+    }
+
+    # Field-type fallback (used when labels are ambiguous).
+    _INTEGRATION_FIELD_TYPE_MAP: Dict[str, Dict[str, str]] = {
+        IntegrationType.EVENT_REQUEST: {
+            "email": "contact_email",
+            "phone": "contact_phone",
+        },
+    }
+
     def __init__(self, db: AsyncSession):
         self.db = db
 
@@ -212,12 +303,31 @@ class FormsService:
     # Form Management
     # ============================================
 
+    # Maps IntegrationType → IntegrationTarget so the caller only needs
+    # to specify the integration_type (e.g. "membership_interest") and the
+    # correct target_module is derived automatically.
+    _INTEGRATION_TYPE_TO_TARGET: Dict[str, str] = {
+        IntegrationType.MEMBERSHIP_INTEREST: IntegrationTarget.MEMBERSHIP,
+        IntegrationType.EQUIPMENT_ASSIGNMENT: IntegrationTarget.INVENTORY,
+        IntegrationType.EVENT_REGISTRATION: IntegrationTarget.EVENTS,
+        IntegrationType.EVENT_REQUEST: IntegrationTarget.EVENTS,
+    }
+
     async def create_form(
         self, organization_id: UUID, form_data: Dict[str, Any], created_by: UUID
     ) -> Tuple[Optional[Form], Optional[str]]:
-        """Create a new form with optional fields"""
+        """Create a new form with optional fields.
+
+        When *integration_type* is included in *form_data* the method
+        will auto-create a ``FormIntegration`` with label-based
+        field-mappings so the form is immediately usable by the target
+        module (pipeline, inventory, events, etc.).
+        """
+        from loguru import logger
+
         try:
             fields_data = form_data.pop("fields", None) or []
+            integration_type_str = form_data.pop("integration_type", None)
 
             form = Form(
                 organization_id=organization_id, created_by=created_by, **form_data
@@ -226,11 +336,23 @@ class FormsService:
             await self.db.flush()  # Get form.id before adding fields
 
             # Add fields if provided
+            created_fields: List[FormField] = []
             for i, field_data in enumerate(fields_data):
                 if isinstance(field_data, dict):
                     field_data["sort_order"] = field_data.get("sort_order", i)
                     field = FormField(form_id=form.id, **field_data)
                     self.db.add(field)
+                    created_fields.append(field)
+
+            # Flush so we have field IDs for the integration mapping.
+            if created_fields:
+                await self.db.flush()
+
+            # Auto-create integration when a type hint is provided.
+            if integration_type_str and created_fields:
+                self._auto_create_integration(
+                    form, created_fields, integration_type_str, organization_id, logger
+                )
 
             await self.db.commit()
             await self.db.refresh(form)
@@ -245,6 +367,95 @@ class FormsService:
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
+
+    def _auto_create_integration(
+        self,
+        form: Form,
+        fields: List[FormField],
+        integration_type_str: str,
+        organization_id: UUID,
+        logger: Any,
+    ) -> None:
+        """Build field-mappings from labels and create a FormIntegration.
+
+        Called during ``create_form`` when the caller supplies an
+        ``integration_type`` (e.g. from a starter template).  Uses the
+        same label maps defined on this class for consistency with the
+        submission-time fallback logic.
+        """
+        from app.models.user import generate_uuid
+
+        try:
+            integration_type = IntegrationType(integration_type_str)
+        except ValueError:
+            logger.warning(
+                f"Unknown integration_type '{integration_type_str}' — "
+                "skipping auto-integration."
+            )
+            return
+
+        target_module = self._INTEGRATION_TYPE_TO_TARGET.get(integration_type)
+        if not target_module:
+            return
+
+        # Use the membership pipeline service label map for membership,
+        # otherwise use FormsService label maps.
+        if integration_type == IntegrationType.MEMBERSHIP_INTEREST:
+            from app.services.membership_pipeline_service import (
+                MembershipPipelineService,
+            )
+
+            label_map = MembershipPipelineService._LABEL_MAP
+            ft_map = MembershipPipelineService._FIELD_TYPE_MAP
+        else:
+            label_map = self._LABEL_MAPS.get(integration_type, {})
+            ft_map = self._INTEGRATION_FIELD_TYPE_MAP.get(integration_type, {})
+
+        field_mappings: Dict[str, str] = {}
+        used_targets: set = set()
+
+        # Pass 1: match by label.
+        for field in fields:
+            normalised = field.label.strip().lower()
+            target = label_map.get(normalised)
+            if target and target not in used_targets:
+                field_mappings[str(field.id)] = target
+                used_targets.add(target)
+
+        # Pass 2: match by field_type for any remaining targets.
+        for field in fields:
+            if str(field.id) in field_mappings:
+                continue
+            ft = field.field_type
+            if hasattr(ft, "value"):
+                ft = ft.value
+            target = ft_map.get(ft)
+            if target and target not in used_targets:
+                field_mappings[str(field.id)] = target
+                used_targets.add(target)
+
+        if not field_mappings:
+            logger.warning(
+                f"Could not auto-map any fields for integration "
+                f"{integration_type_str} on form {form.id}"
+            )
+            return
+
+        integration = FormIntegration(
+            id=generate_uuid(),
+            form_id=form.id,
+            organization_id=str(organization_id),
+            target_module=target_module,
+            integration_type=integration_type,
+            field_mappings=field_mappings,
+            is_active=True,
+        )
+        self.db.add(integration)
+
+        logger.info(
+            f"Auto-created {integration_type_str} integration for form "
+            f"{form.id} with {len(field_mappings)} field mapping(s)"
+        )
 
     async def get_forms(
         self,
@@ -350,11 +561,43 @@ class FormsService:
     async def delete_form(
         self, form_id: UUID, organization_id: UUID
     ) -> Tuple[bool, Optional[str]]:
-        """Delete a form and all its fields/submissions"""
+        """Delete a form and all its fields/submissions.
+
+        Blocks deletion if the form is actively referenced by a
+        membership pipeline step — deleting it would silently break
+        the pipeline.
+        """
         try:
+            from app.models.membership_pipeline import MembershipPipelineStep
+
             form = await self.get_form_by_id(form_id, organization_id)
             if not form:
                 return False, "Form not found"
+
+            # Check whether any pipeline step references this form.
+            step_result = await self.db.execute(
+                select(
+                    MembershipPipelineStep.id,
+                    MembershipPipelineStep.name,
+                ).where(
+                    func.json_unquote(
+                        func.json_extract(
+                            MembershipPipelineStep.config, "$.form_id"
+                        )
+                    )
+                    == str(form_id)
+                )
+            )
+            referencing_steps = step_result.all()
+            if referencing_steps:
+                step_names = ", ".join(
+                    s.name or s.id for s in referencing_steps
+                )
+                return False, (
+                    f"This form cannot be deleted because it is used by "
+                    f"pipeline step(s): {step_names}. Remove the form "
+                    f"reference from those steps first."
+                )
 
             await self.db.delete(form)
             await self.db.commit()
@@ -379,6 +622,78 @@ class FormsService:
     # Field Management
     # ============================================
 
+    async def _refresh_integration_mappings(self, form: Form) -> None:
+        """Re-map field_mappings on every active integration for *form*.
+
+        Called after field add / rename / delete so that integrations
+        stay in sync with the current set of form fields.  Uses the
+        same label-based mapping logic as ``_auto_create_integration``
+        and the submission-time fallback.
+        """
+        from loguru import logger
+
+        from app.services.membership_pipeline_service import MembershipPipelineService
+
+        if not form.integrations:
+            return
+
+        # Reload fields to get the latest set (including any just-added
+        # field or excluding any just-deleted field).
+        fields_result = await self.db.execute(
+            select(FormField).where(FormField.form_id == str(form.id))
+        )
+        fields = list(fields_result.scalars().all())
+        if not fields:
+            return
+
+        for integration in form.integrations:
+            if not integration.is_active:
+                continue
+
+            int_type = integration.integration_type
+            if hasattr(int_type, "value"):
+                int_type = int_type.value
+
+            # Pick the right label + field-type maps.
+            if int_type == IntegrationType.MEMBERSHIP_INTEREST:
+                label_map = MembershipPipelineService._LABEL_MAP
+                ft_map = MembershipPipelineService._FIELD_TYPE_MAP
+            else:
+                label_map = self._LABEL_MAPS.get(int_type, {})
+                ft_map = self._INTEGRATION_FIELD_TYPE_MAP.get(int_type, {})
+
+            if not label_map:
+                continue
+
+            new_mappings: Dict[str, str] = {}
+            used_targets: set = set()
+
+            for field in fields:
+                normalised = field.label.strip().lower()
+                target = label_map.get(normalised)
+                if target and target not in used_targets:
+                    new_mappings[str(field.id)] = target
+                    used_targets.add(target)
+
+            for field in fields:
+                if str(field.id) in new_mappings:
+                    continue
+                ft = field.field_type
+                if hasattr(ft, "value"):
+                    ft = ft.value
+                target = ft_map.get(ft)
+                if target and target not in used_targets:
+                    new_mappings[str(field.id)] = target
+                    used_targets.add(target)
+
+            if new_mappings != (integration.field_mappings or {}):
+                old_count = len(integration.field_mappings or {})
+                integration.field_mappings = new_mappings
+                logger.info(
+                    f"Refreshed {int_type} integration for form {form.id}: "
+                    f"{old_count} → {len(new_mappings)} mapping(s)"
+                )
+
     async def add_field(
         self, form_id: UUID, organization_id: UUID, field_data: Dict[str, Any]
     ) -> Tuple[Optional[FormField], Optional[str]]:
@@ -395,6 +710,11 @@ class FormsService:
 
             field = FormField(form_id=form_id, **field_data)
             self.db.add(field)
+            await self.db.flush()
+
+            # Refresh integration mappings so new field is picked up.
+            await self._refresh_integration_mappings(form)
+
             await self.db.commit()
             await self.db.refresh(field)
             return field, None
@@ -428,6 +748,13 @@ class FormsService:
             for key, value in update_data.items():
                 setattr(field, key, value)
 
+            await self.db.flush()
+
+            # If the label or field_type changed, refresh integration
+            # mappings so they stay in sync.
+            if "label" in update_data or "field_type" in update_data:
+                await self._refresh_integration_mappings(form)
+
             await self.db.commit()
             await self.db.refresh(field)
             return field, None
@@ -454,6 +781,11 @@ class FormsService:
                 return False, "Field not found"
 
             await self.db.delete(field)
+            await self.db.flush()
+
+            # Refresh integration mappings to remove the deleted field.
+            await self._refresh_integration_mappings(form)
+
             await self.db.commit()
             return True, None
         except Exception as e:
@@ -694,6 +1026,46 @@ class FormsService:
     # Integration Management
     # ============================================
 
+    def _validate_field_mappings(
+        self,
+        integration_type: str,
+        field_mappings: Dict[str, str],
+        form: Form,
+    ) -> Optional[str]:
+        """Validate that field_mappings references valid form field IDs and
+        covers all required target fields for the integration type.
+
+        Returns an error string, or ``None`` when valid.
+        """
+        required = self._REQUIRED_FIELDS.get(integration_type)
+        if required is None:
+            # Membership interest validation is handled by its own service.
+            return None
+
+        if not field_mappings:
+            return (
+                f"field_mappings cannot be empty — the following target fields "
+                f"are required: {', '.join(sorted(required))}"
+            )
+
+        form_field_ids = {str(f.id) for f in (form.fields or [])}
+        bad_ids = [fid for fid in field_mappings if fid not in form_field_ids]
+        if bad_ids:
+            return (
+                f"field_mappings references field IDs that do not exist on "
+                f"this form: {', '.join(bad_ids)}"
+            )
+
+        mapped_targets = set(field_mappings.values())
+        missing = required - mapped_targets
+        if missing:
+            return (
+                f"field_mappings is missing required target field(s): "
+                f"{', '.join(sorted(missing))}"
+            )
+
+        return None
+
     async def add_integration(
         self,
         form_id: UUID,
@@ -713,9 +1085,19 @@ class FormsService:
                 return None, "Invalid target module"
 
             try:
-                IntegrationType(integration_data["integration_type"])
+                integration_type = IntegrationType(
+                    integration_data["integration_type"]
+                )
             except (ValueError, KeyError):
                 return None, "Invalid integration type"
+
+            # Validate field_mappings covers required target fields
+            field_mappings = integration_data.get("field_mappings") or {}
+            mapping_error = self._validate_field_mappings(
+                integration_type, field_mappings, form
+            )
+            if mapping_error:
+                return None, mapping_error
 
             integration = FormIntegration(
                 form_id=form_id,
@@ -748,6 +1130,19 @@ class FormsService:
             integration = result.scalar_one_or_none()
             if not integration:
                 return None, "Integration not found"
+
+            # Validate field_mappings when they are being changed
+            if "field_mappings" in update_data:
+                form = await self.get_form_by_id(form_id, organization_id)
+                if form:
+                    int_type = update_data.get(
+                        "integration_type", integration.integration_type
+                    )
+                    mapping_error = self._validate_field_mappings(
+                        int_type, update_data["field_mappings"] or {}, form
+                    )
+                    if mapping_error:
+                        return None, mapping_error
 
             for key, value in update_data.items():
                 setattr(integration, key, value)
@@ -806,16 +1201,18 @@ class FormsService:
                     integration.integration_type == IntegrationType.EQUIPMENT_ASSIGNMENT
                 ):
                     result = await self._process_equipment_assignment(
-                        submission, integration
+                        submission, integration, form=form
                     )
                     results["equipment_assignment"] = result
                 elif integration.integration_type == IntegrationType.EVENT_REGISTRATION:
                     result = await self._process_event_registration(
-                        submission, integration
+                        submission, integration, form=form
                     )
                     results["event_registration"] = result
                 elif integration.integration_type == IntegrationType.EVENT_REQUEST:
-                    result = await self._process_event_request(submission, integration)
+                    result = await self._process_event_request(
+                        submission, integration, form=form
+                    )
                     results["event_request"] = result
             except Exception as e:
                 results[integration.integration_type] = {
@@ -827,6 +1224,57 @@ class FormsService:
             submission.integration_processed = True
             submission.integration_result = results
             await self.db.commit()
+
+    def _apply_label_fallback(
+        self,
+        integration_type: str,
+        mapped_data: Dict[str, Any],
+        sub_data: Dict[str, Any],
+        form: Optional[Form],
+    ) -> Dict[str, Any]:
+        """Try to fill missing target fields by matching form-field labels.
+
+        Uses the integration-specific ``_LABEL_MAPS`` and
+        ``_INTEGRATION_FIELD_TYPE_MAP`` tables defined on the class.
+        Returns the (potentially augmented) *mapped_data* dict.
+        """
+        from loguru import logger
+
+        label_map = self._LABEL_MAPS.get(integration_type)
+        if label_map is None or not form:
+            return mapped_data
+
+        form_fields = getattr(form, "fields", None)
+        if not form_fields:
+            return mapped_data
+
+        logger.debug(
+            f"Label-based fallback triggered for {integration_type} — "
+            f"mapped={list(mapped_data.keys())}"
+        )
+
+        field_lookup = {str(f.id): f for f in form_fields}
+        used_targets = set(mapped_data.keys())
+        ft_map = self._INTEGRATION_FIELD_TYPE_MAP.get(integration_type, {})
+
+        for fid, value in sub_data.items():
+            if not value:
+                continue
+            field_def = field_lookup.get(fid)
+            if not field_def:
+                continue
+            normalised_label = field_def.label.strip().lower()
+            target = label_map.get(normalised_label)
+            if not target and ft_map:
+                ft = field_def.field_type
+                if hasattr(ft, "value"):
+                    ft = ft.value
+                target = ft_map.get(ft)
+            if target and target not in used_targets:
+                mapped_data[target] = value
+                used_targets.add(target)
+
+        return mapped_data
 
     async def _process_membership_interest(
         self,
@@ -1006,30 +1454,44 @@ class FormsService:
             }
 
     async def _process_equipment_assignment(
-        self, submission: FormSubmission, integration: FormIntegration
+        self,
+        submission: FormSubmission,
+        integration: FormIntegration,
+        form: Optional[Form] = None,
     ) -> Dict[str, Any]:
         """
         Process an equipment assignment form submission.
         Maps form data to inventory assignment fields for processing.
         """
         mappings = integration.field_mappings or {}
-        mapped_data = {}
+        sub_data: Dict[str, Any] = (
+            submission.data if isinstance(submission.data, dict) else {}
+        )
+        mapped_data: Dict[str, Any] = {}
 
         for field_id, target_field in mappings.items():
-            if field_id in submission.data:
-                mapped_data[target_field] = submission.data[field_id]
+            if field_id in sub_data:
+                mapped_data[target_field] = sub_data[field_id]
+
+        # Fallback: rebuild from form-field labels when mappings are stale.
+        if not (mapped_data.get("member_id") and mapped_data.get("item_id")):
+            mapped_data = self._apply_label_fallback(
+                IntegrationType.EQUIPMENT_ASSIGNMENT, mapped_data, sub_data, form
+            )
 
         # Validate required fields for equipment assignment
-        if "member_id" not in mapped_data:
+        missing = [
+            f
+            for f in ("member_id", "item_id")
+            if not mapped_data.get(f)
+        ]
+        if missing:
             return {
                 "success": False,
-                "error": "Member ID mapping is required for equipment assignment",
-            }
-
-        if "item_id" not in mapped_data:
-            return {
-                "success": False,
-                "error": "Item ID mapping is required for equipment assignment",
+                "error": (
+                    f"Equipment assignment missing required mapping(s): "
+                    f"{', '.join(missing)}"
+                ),
             }
 
         # Try to perform the assignment via the inventory service
@@ -1062,7 +1524,10 @@ class FormsService:
             return {"success": False, "error": str(e)}
 
     async def _process_event_registration(
-        self, submission: FormSubmission, integration: FormIntegration
+        self,
+        submission: FormSubmission,
+        integration: FormIntegration,
+        form: Optional[Form] = None,
     ) -> Dict[str, Any]:
         """
         Process a public event registration form submission.
@@ -1070,11 +1535,20 @@ class FormsService:
         registration data for admin review.
         """
         mappings = integration.field_mappings or {}
-        mapped_data = {}
+        sub_data: Dict[str, Any] = (
+            submission.data if isinstance(submission.data, dict) else {}
+        )
+        mapped_data: Dict[str, Any] = {}
 
         for field_id, target_field in mappings.items():
-            if field_id in submission.data:
-                mapped_data[target_field] = submission.data[field_id]
+            if field_id in sub_data:
+                mapped_data[target_field] = sub_data[field_id]
+
+        # Fallback: rebuild from form-field labels when mappings are stale.
+        if not mapped_data.get("event_id"):
+            mapped_data = self._apply_label_fallback(
+                IntegrationType.EVENT_REGISTRATION, mapped_data, sub_data, form
+            )
 
         event_id = mapped_data.get("event_id")
         if not event_id:
@@ -1115,7 +1589,10 @@ class FormsService:
             }
 
     async def _process_event_request(
-        self, submission: FormSubmission, integration: FormIntegration
+        self,
+        submission: FormSubmission,
+        integration: FormIntegration,
+        form: Optional[Form] = None,
     ) -> Dict[str, Any]:
         """
         Process an event request form submission.
@@ -1128,18 +1605,35 @@ class FormsService:
         )
 
         mappings = integration.field_mappings or {}
+        sub_data: Dict[str, Any] = (
+            submission.data if isinstance(submission.data, dict) else {}
+        )
         mapped_data: Dict[str, Any] = {}
 
         for field_id, target_field in mappings.items():
-            if field_id in submission.data:
-                mapped_data[target_field] = submission.data[field_id]
+            if field_id in sub_data:
+                mapped_data[target_field] = sub_data[field_id]
+
+        # Fallback: rebuild from form-field labels when mappings are stale.
+        if not (mapped_data.get("contact_name") and mapped_data.get("contact_email")):
+            mapped_data = self._apply_label_fallback(
+                IntegrationType.EVENT_REQUEST, mapped_data, sub_data, form
+            )
 
         contact_name = mapped_data.get("contact_name", "")
         contact_email = mapped_data.get("contact_email", "")
         if not contact_name or not contact_email:
+            missing = [
+                f
+                for f in ("contact_name", "contact_email")
+                if not mapped_data.get(f)
+            ]
             return {
                 "success": False,
-                "error": "contact_name and contact_email mappings are required",
+                "error": (
+                    f"Event request missing required mapping(s): "
+                    f"{', '.join(missing)}"
+                ),
             }
 
         try:
