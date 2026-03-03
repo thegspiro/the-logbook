@@ -652,6 +652,7 @@ class FormsService:
                 .where(FormSubmission.organization_id == str(organization_id))
                 .options(
                     selectinload(FormSubmission.form).selectinload(Form.integrations),
+                    selectinload(FormSubmission.form).selectinload(Form.fields),
                 )
             )
             submission = result.scalar_one_or_none()
@@ -798,7 +799,7 @@ class FormsService:
             try:
                 if integration.integration_type == IntegrationType.MEMBERSHIP_INTEREST:
                     result = await self._process_membership_interest(
-                        submission, integration
+                        submission, integration, form=form
                     )
                     results["membership_interest"] = result
                 elif (
@@ -828,7 +829,10 @@ class FormsService:
             await self.db.commit()
 
     async def _process_membership_interest(
-        self, submission: FormSubmission, integration: FormIntegration
+        self,
+        submission: FormSubmission,
+        integration: FormIntegration,
+        form: Optional[Form] = None,
     ) -> Dict[str, Any]:
         """
         Process a membership interest form submission.
@@ -845,11 +849,14 @@ class FormsService:
         from app.services.membership_pipeline_service import MembershipPipelineService
 
         mappings = integration.field_mappings or {}
-        mapped_data = {}
+        sub_data: Dict[str, Any] = (
+            submission.data if isinstance(submission.data, dict) else {}
+        )
+        mapped_data: Dict[str, Any] = {}
 
         for field_id, target_field in mappings.items():
-            if field_id in submission.data:
-                mapped_data[target_field] = submission.data[field_id]
+            if field_id in sub_data:
+                mapped_data[target_field] = sub_data[field_id]
 
         # Check required fields up-front so the caller gets an accurate message.
         has_required = (
@@ -857,6 +864,44 @@ class FormsService:
             and mapped_data.get("last_name")
             and mapped_data.get("email")
         )
+
+        # Fallback: when field_mappings don't match the submission's data
+        # keys (e.g. stale integration, missing mappings, or field IDs
+        # changed), rebuild the mapping from form-field labels.
+        form_fields = getattr(form, "fields", None) if form else None
+        if not has_required and form_fields:
+            logger.debug(
+                f"Field-ID mapping incomplete for submission {submission.id} — "
+                f"mapped={list(mapped_data.keys())}, "
+                f"mapping_keys={list(mappings.keys())}, "
+                f"data_keys={list(sub_data.keys())}. "
+                f"Attempting label-based fallback."
+            )
+            field_lookup = {str(f.id): f for f in form_fields}
+            used_targets = set(mapped_data.keys())
+
+            for fid, value in sub_data.items():
+                if not value:
+                    continue
+                field_def = field_lookup.get(fid)
+                if not field_def:
+                    continue
+                normalised_label = field_def.label.strip().lower()
+                target = MembershipPipelineService._LABEL_MAP.get(normalised_label)
+                if not target:
+                    ft = field_def.field_type
+                    if hasattr(ft, "value"):
+                        ft = ft.value
+                    target = MembershipPipelineService._FIELD_TYPE_MAP.get(ft)
+                if target and target not in used_targets:
+                    mapped_data[target] = value
+                    used_targets.add(target)
+
+            has_required = (
+                mapped_data.get("first_name")
+                and mapped_data.get("last_name")
+                and mapped_data.get("email")
+            )
 
         if not has_required:
             missing = [
