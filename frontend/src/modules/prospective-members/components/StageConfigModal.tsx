@@ -679,6 +679,25 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                 )}
                 {errors.form_id && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.form_id}</p>}
 
+                {/* Integration type status */}
+                {(config as FormStageConfig).form_id && (() => {
+                  const selected = availableForms.find((f) => f.id === (config as FormStageConfig).form_id);
+                  if (!selected) return null;
+                  if (selected.integration_type === 'membership_interest') {
+                    return (
+                      <p className="mt-2 flex items-center gap-1.5 text-xs text-green-700 dark:text-green-400">
+                        <CheckCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                        Configured for membership pipeline (label-based mapping)
+                      </p>
+                    );
+                  }
+                  return (
+                    <p className="text-theme-text-muted mt-2 text-xs">
+                      This form will be auto-configured for the membership pipeline when you save.
+                    </p>
+                  );
+                })()}
+
                 {/* Form-to-pipeline field validation */}
                 {formValidationLoading && (
                   <div className="text-theme-text-muted mt-3 flex items-center gap-2 text-sm">

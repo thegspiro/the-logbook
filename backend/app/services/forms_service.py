@@ -1182,40 +1182,89 @@ class FormsService:
     async def _process_integrations(
         self, submission: FormSubmission, form: Form
     ) -> None:
-        """Process integrations after a form submission"""
-        if not form.integrations:
-            return
+        """Process integrations after a form submission.
 
-        results = {}
-        for integration in form.integrations:
+        Two paths are supported:
+
+        1. **Direct** (preferred) — ``form.integration_type`` is set on
+           the form itself.  Label-based mapping is used inline; no
+           ``FormIntegration`` record is needed.
+        2. **Legacy** — one or more ``FormIntegration`` rows linked to
+           the form provide explicit ``field_mappings``.
+
+        Both paths can coexist during migration: if a form has
+        ``integration_type`` set *and* legacy ``FormIntegration`` rows
+        for the same type, only the direct path runs to avoid
+        duplicate processing.
+        """
+        results: Dict[str, Any] = {}
+        handled_types: set[str] = set()
+
+        # ---- Direct path: form.integration_type ----
+        int_type = getattr(form, "integration_type", None)
+        if int_type:
+            try:
+                if int_type == IntegrationType.MEMBERSHIP_INTEREST:
+                    result = await self._process_membership_interest(
+                        submission, integration=None, form=form
+                    )
+                    results["membership_interest"] = result
+                elif int_type == IntegrationType.EQUIPMENT_ASSIGNMENT:
+                    result = await self._process_equipment_assignment(
+                        submission, integration=None, form=form
+                    )
+                    results["equipment_assignment"] = result
+                elif int_type == IntegrationType.EVENT_REGISTRATION:
+                    result = await self._process_event_registration(
+                        submission, integration=None, form=form
+                    )
+                    results["event_registration"] = result
+                elif int_type == IntegrationType.EVENT_REQUEST:
+                    result = await self._process_event_request(
+                        submission, integration=None, form=form
+                    )
+                    results["event_request"] = result
+                handled_types.add(int_type)
+            except Exception as e:
+                results[int_type] = {
+                    "success": False,
+                    "error": str(e),
+                }
+                handled_types.add(int_type)
+
+        # ---- Legacy path: FormIntegration records ----
+        for integration in form.integrations or []:
             if not integration.is_active:
                 continue
+            it = integration.integration_type
+            if hasattr(it, "value"):
+                it = it.value
+            if it in handled_types:
+                continue  # Already processed via direct path
 
             try:
-                if integration.integration_type == IntegrationType.MEMBERSHIP_INTEREST:
+                if it == IntegrationType.MEMBERSHIP_INTEREST:
                     result = await self._process_membership_interest(
                         submission, integration, form=form
                     )
                     results["membership_interest"] = result
-                elif (
-                    integration.integration_type == IntegrationType.EQUIPMENT_ASSIGNMENT
-                ):
+                elif it == IntegrationType.EQUIPMENT_ASSIGNMENT:
                     result = await self._process_equipment_assignment(
                         submission, integration, form=form
                     )
                     results["equipment_assignment"] = result
-                elif integration.integration_type == IntegrationType.EVENT_REGISTRATION:
+                elif it == IntegrationType.EVENT_REGISTRATION:
                     result = await self._process_event_registration(
                         submission, integration, form=form
                     )
                     results["event_registration"] = result
-                elif integration.integration_type == IntegrationType.EVENT_REQUEST:
+                elif it == IntegrationType.EVENT_REQUEST:
                     result = await self._process_event_request(
                         submission, integration, form=form
                     )
                     results["event_request"] = result
             except Exception as e:
-                results[integration.integration_type] = {
+                results[it] = {
                     "success": False,
                     "error": str(e),
                 }
@@ -1279,13 +1328,21 @@ class FormsService:
     async def _process_membership_interest(
         self,
         submission: FormSubmission,
-        integration: FormIntegration,
+        integration: Optional[FormIntegration] = None,
         form: Optional[Form] = None,
     ) -> Dict[str, Any]:
         """
         Process a membership interest form submission.
         Maps form fields to prospect fields and auto-creates a
         ProspectiveMember record in the org's default pipeline.
+
+        When *integration* is ``None`` (the direct path via
+        ``form.integration_type``), label-based mapping is used as the
+        primary strategy — no ``field_mappings`` dict is needed.
+
+        When *integration* is provided (legacy path), its
+        ``field_mappings`` are tried first and label-based mapping is
+        used as a fallback for any missing required fields.
 
         Safe to call multiple times for the same submission (e.g. via
         reprocess): if a prospect already exists for this submission it
@@ -1296,35 +1353,34 @@ class FormsService:
         from app.models.membership_pipeline import ProspectiveMember
         from app.services.membership_pipeline_service import MembershipPipelineService
 
-        mappings = integration.field_mappings or {}
         sub_data: Dict[str, Any] = (
             submission.data if isinstance(submission.data, dict) else {}
         )
         mapped_data: Dict[str, Any] = {}
 
-        for field_id, target_field in mappings.items():
-            if field_id in sub_data:
-                mapped_data[target_field] = sub_data[field_id]
+        # --- Phase 1: field_mappings (legacy path only) ---
+        if integration is not None:
+            mappings = integration.field_mappings or {}
+            for field_id, target_field in mappings.items():
+                if field_id in sub_data:
+                    mapped_data[target_field] = sub_data[field_id]
 
-        # Check required fields up-front so the caller gets an accurate message.
+        # --- Phase 2: label-based mapping (always runs) ---
+        # For the direct path this is the *only* mapping strategy.
+        # For the legacy path it fills in anything field_mappings missed.
+        form_fields = getattr(form, "fields", None) if form else None
         has_required = (
             mapped_data.get("first_name")
             and mapped_data.get("last_name")
             and mapped_data.get("email")
         )
-
-        # Fallback: when field_mappings don't match the submission's data
-        # keys (e.g. stale integration, missing mappings, or field IDs
-        # changed), rebuild the mapping from form-field labels.
-        form_fields = getattr(form, "fields", None) if form else None
         if not has_required and form_fields:
-            logger.debug(
-                f"Field-ID mapping incomplete for submission {submission.id} — "
-                f"mapped={list(mapped_data.keys())}, "
-                f"mapping_keys={list(mappings.keys())}, "
-                f"data_keys={list(sub_data.keys())}. "
-                f"Attempting label-based fallback."
-            )
+            if integration is not None:
+                logger.debug(
+                    f"Field-ID mapping incomplete for submission {submission.id} — "
+                    f"mapped={list(mapped_data.keys())}. "
+                    f"Augmenting with label-based mapping."
+                )
             field_lookup = {str(f.id): f for f in form_fields}
             used_targets = set(mapped_data.keys())
 
@@ -1456,24 +1512,26 @@ class FormsService:
     async def _process_equipment_assignment(
         self,
         submission: FormSubmission,
-        integration: FormIntegration,
+        integration: Optional[FormIntegration] = None,
         form: Optional[Form] = None,
     ) -> Dict[str, Any]:
         """
         Process an equipment assignment form submission.
         Maps form data to inventory assignment fields for processing.
         """
-        mappings = integration.field_mappings or {}
         sub_data: Dict[str, Any] = (
             submission.data if isinstance(submission.data, dict) else {}
         )
         mapped_data: Dict[str, Any] = {}
 
-        for field_id, target_field in mappings.items():
-            if field_id in sub_data:
-                mapped_data[target_field] = sub_data[field_id]
+        if integration is not None:
+            mappings = integration.field_mappings or {}
+            for field_id, target_field in mappings.items():
+                if field_id in sub_data:
+                    mapped_data[target_field] = sub_data[field_id]
 
-        # Fallback: rebuild from form-field labels when mappings are stale.
+        # Label-based mapping — primary path when integration is None,
+        # fallback when field_mappings are stale.
         if not (mapped_data.get("member_id") and mapped_data.get("item_id")):
             mapped_data = self._apply_label_fallback(
                 IntegrationType.EQUIPMENT_ASSIGNMENT, mapped_data, sub_data, form
@@ -1526,7 +1584,7 @@ class FormsService:
     async def _process_event_registration(
         self,
         submission: FormSubmission,
-        integration: FormIntegration,
+        integration: Optional[FormIntegration] = None,
         form: Optional[Form] = None,
     ) -> Dict[str, Any]:
         """
@@ -1534,17 +1592,19 @@ class FormsService:
         Creates an EventRSVP (if the submitter is a member) or stores
         registration data for admin review.
         """
-        mappings = integration.field_mappings or {}
         sub_data: Dict[str, Any] = (
             submission.data if isinstance(submission.data, dict) else {}
         )
         mapped_data: Dict[str, Any] = {}
 
-        for field_id, target_field in mappings.items():
-            if field_id in sub_data:
-                mapped_data[target_field] = sub_data[field_id]
+        if integration is not None:
+            mappings = integration.field_mappings or {}
+            for field_id, target_field in mappings.items():
+                if field_id in sub_data:
+                    mapped_data[target_field] = sub_data[field_id]
 
-        # Fallback: rebuild from form-field labels when mappings are stale.
+        # Label-based mapping — primary path when integration is None,
+        # fallback when field_mappings are stale.
         if not mapped_data.get("event_id"):
             mapped_data = self._apply_label_fallback(
                 IntegrationType.EVENT_REGISTRATION, mapped_data, sub_data, form
@@ -1591,7 +1651,7 @@ class FormsService:
     async def _process_event_request(
         self,
         submission: FormSubmission,
-        integration: FormIntegration,
+        integration: Optional[FormIntegration] = None,
         form: Optional[Form] = None,
     ) -> Dict[str, Any]:
         """
@@ -1604,17 +1664,19 @@ class FormsService:
             EventRequestStatus,
         )
 
-        mappings = integration.field_mappings or {}
         sub_data: Dict[str, Any] = (
             submission.data if isinstance(submission.data, dict) else {}
         )
         mapped_data: Dict[str, Any] = {}
 
-        for field_id, target_field in mappings.items():
-            if field_id in sub_data:
-                mapped_data[target_field] = sub_data[field_id]
+        if integration is not None:
+            mappings = integration.field_mappings or {}
+            for field_id, target_field in mappings.items():
+                if field_id in sub_data:
+                    mapped_data[target_field] = sub_data[field_id]
 
-        # Fallback: rebuild from form-field labels when mappings are stale.
+        # Label-based mapping — primary path when integration is None,
+        # fallback when field_mappings are stale.
         if not (mapped_data.get("contact_name") and mapped_data.get("contact_email")):
             mapped_data = self._apply_label_fallback(
                 IntegrationType.EVENT_REQUEST, mapped_data, sub_data, form

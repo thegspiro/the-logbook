@@ -354,11 +354,16 @@ const FormsPage: React.FC = () => {
   const handleUseTemplate = async (template: StarterTemplate) => {
     setCreating(true);
     try {
-      const createData: FormCreate & { integration_type?: string } = {
+      const createData: FormCreate = {
         name: template.name,
         description: template.description,
         category: template.category,
         is_public: template.isPublic || false,
+        // When the template declares an integrationHint, set
+        // integration_type on the form so submission processing
+        // uses label-based mapping directly — no separate
+        // FormIntegration record needed.
+        integration_type: template.integrationHint,
         fields: template.fields.map((f, i) => ({
           label: f.label,
           field_type: f.field_type,
@@ -366,12 +371,6 @@ const FormsPage: React.FC = () => {
           sort_order: i,
         })),
       };
-      // When the template declares an integrationHint, pass it so the
-      // backend auto-creates the FormIntegration with label-based
-      // field-mappings — no manual integration setup needed.
-      if (template.integrationHint) {
-        createData.integration_type = template.integrationHint;
-      }
       await formsService.createForm(createData);
       setActiveTab('forms');
       await loadData();

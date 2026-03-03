@@ -2,11 +2,11 @@
 Membership Form Integration Tests
 
 Tests for the _ensure_membership_form_integration method on
-MembershipPipelineService, covering creation of new integrations and
-repair of existing integrations with empty or stale field_mappings.
+MembershipPipelineService, covering:
+ - Direct path: setting integration_type on the Form itself
+ - Legacy path: creating/repairing FormIntegration records
 
-These tests mock the database layer and verify the service logic
-for auto-generating and repairing field_mappings.
+These tests mock the database layer and verify the service logic.
 """
 
 import sys
@@ -83,6 +83,13 @@ def _make_field(label: str, field_type: str = "text", field_id: str | None = Non
     return field
 
 
+def _make_form(integration_type=None):
+    """Create a mock Form with an optional integration_type."""
+    form = MagicMock()
+    form.integration_type = integration_type
+    return form
+
+
 def _make_result_chain(*items):
     """Build a mock result supporting .scalars().first() / .scalars().all()."""
     mock_result = MagicMock()
@@ -125,16 +132,70 @@ def org_id():
 
 
 # ============================================
-# Tests — new integration creation
+# Tests — direct path (form.integration_type)
 # ============================================
 
 
-class TestEnsureIntegrationCreatesNew:
+class TestDirectPath:
+    """When a Form exists without integration_type, the method should
+    set it directly instead of creating a FormIntegration record."""
+
+    async def test_sets_integration_type_on_form(
+        self, service, mock_db, form_id, org_id
+    ):
+        form = _make_form(integration_type=None)
+        mock_db.execute.side_effect = [
+            _make_result_chain(form),  # Form query
+        ]
+
+        await service._ensure_membership_form_integration(form_id, org_id)
+
+        assert form.integration_type == "membership_interest"
+        mock_db.commit.assert_called_once()
+        # No FormIntegration should be created
+        assert not mock_db.add.called
+
+    async def test_noop_when_already_membership_interest(
+        self, service, mock_db, form_id, org_id
+    ):
+        form = _make_form(integration_type="membership_interest")
+        mock_db.execute.side_effect = [
+            _make_result_chain(form),  # Form query
+        ]
+
+        await service._ensure_membership_form_integration(form_id, org_id)
+
+        mock_db.commit.assert_not_called()
+        assert not mock_db.add.called
+
+    async def test_warns_when_form_not_found(
+        self, service, mock_db, form_id, org_id
+    ):
+        mock_db.execute.side_effect = [
+            _make_result_chain(),  # Form query — not found
+        ]
+
+        await service._ensure_membership_form_integration(form_id, org_id)
+
+        mock_db.commit.assert_not_called()
+        assert not mock_db.add.called
+
+
+# ============================================
+# Tests — legacy path (FormIntegration records)
+# When form.integration_type is set to something *other* than
+# membership_interest, the method falls through to the legacy
+# FormIntegration-based path.
+# ============================================
+
+
+class TestLegacyPathCreatesNew:
     """When no integration exists, a new one should be created."""
 
     async def test_creates_integration_with_matching_labels(
         self, service, mock_db, form_id, org_id
     ):
+        form = _make_form(integration_type="equipment_assignment")
         fields = [
             _make_field("First Name"),
             _make_field("Last Name"),
@@ -142,8 +203,9 @@ class TestEnsureIntegrationCreatesNew:
             _make_field("Phone Number"),
         ]
         mock_db.execute.side_effect = [
-            _make_result_chain(),  # no existing integration
-            _make_result_chain(*fields),
+            _make_result_chain(form),       # Form query
+            _make_result_chain(),            # no existing integration
+            _make_result_chain(*fields),     # form fields
         ]
 
         await service._ensure_membership_form_integration(form_id, org_id)
@@ -157,9 +219,11 @@ class TestEnsureIntegrationCreatesNew:
         assert mappings[str(fields[3].id)] == "phone"
 
     async def test_skips_when_no_fields(self, service, mock_db, form_id, org_id):
+        form = _make_form(integration_type="equipment_assignment")
         mock_db.execute.side_effect = [
-            _make_result_chain(),
-            _make_result_chain(),
+            _make_result_chain(form),   # Form query
+            _make_result_chain(),       # no existing integration
+            _make_result_chain(),       # no fields
         ]
 
         await service._ensure_membership_form_integration(form_id, org_id)
@@ -167,10 +231,12 @@ class TestEnsureIntegrationCreatesNew:
         assert not mock_db.add.called
 
     async def test_skips_when_no_mappable_fields(self, service, mock_db, form_id, org_id):
+        form = _make_form(integration_type="equipment_assignment")
         fields = [_make_field("Favorite Color"), _make_field("Preferred Shift")]
         mock_db.execute.side_effect = [
-            _make_result_chain(),
-            _make_result_chain(*fields),
+            _make_result_chain(form),        # Form query
+            _make_result_chain(),             # no existing integration
+            _make_result_chain(*fields),      # unmappable fields
         ]
 
         await service._ensure_membership_form_integration(form_id, org_id)
@@ -178,17 +244,13 @@ class TestEnsureIntegrationCreatesNew:
         assert not mock_db.add.called
 
 
-# ============================================
-# Tests — repair of existing integration
-# ============================================
-
-
-class TestEnsureIntegrationRepairsExisting:
+class TestLegacyPathRepairsExisting:
     """Existing integration with bad field_mappings should be repaired."""
 
     async def test_repairs_empty_field_mappings(
         self, service, mock_db, form_id, org_id
     ):
+        form = _make_form(integration_type="equipment_assignment")
         fields = [
             _make_field("First Name"),
             _make_field("Last Name"),
@@ -198,8 +260,9 @@ class TestEnsureIntegrationRepairsExisting:
         existing.field_mappings = {}
 
         mock_db.execute.side_effect = [
-            _make_result_chain(existing),
-            _make_result_chain(*fields),
+            _make_result_chain(form),          # Form query
+            _make_result_chain(existing),       # existing integration
+            _make_result_chain(*fields),        # form fields
         ]
 
         await service._ensure_membership_form_integration(form_id, org_id)
@@ -213,6 +276,7 @@ class TestEnsureIntegrationRepairsExisting:
     async def test_repairs_none_field_mappings(
         self, service, mock_db, form_id, org_id
     ):
+        form = _make_form(integration_type="equipment_assignment")
         fields = [
             _make_field("First Name"),
             _make_field("Last Name"),
@@ -222,8 +286,9 @@ class TestEnsureIntegrationRepairsExisting:
         existing.field_mappings = None
 
         mock_db.execute.side_effect = [
-            _make_result_chain(existing),
-            _make_result_chain(*fields),
+            _make_result_chain(form),         # Form query
+            _make_result_chain(existing),      # existing integration
+            _make_result_chain(*fields),       # form fields
         ]
 
         await service._ensure_membership_form_integration(form_id, org_id)
@@ -233,6 +298,7 @@ class TestEnsureIntegrationRepairsExisting:
         assert "first_name" in existing.field_mappings.values()
 
     async def test_repairs_stale_field_ids(self, service, mock_db, form_id, org_id):
+        form = _make_form(integration_type="equipment_assignment")
         old_id = str(uuid4())
         fields = [
             _make_field("First Name"),
@@ -243,8 +309,9 @@ class TestEnsureIntegrationRepairsExisting:
         existing.field_mappings = {old_id: "first_name"}
 
         mock_db.execute.side_effect = [
-            _make_result_chain(existing),
-            _make_result_chain(*fields),
+            _make_result_chain(form),           # Form query
+            _make_result_chain(existing),        # existing integration
+            _make_result_chain(*fields),         # form fields
         ]
 
         await service._ensure_membership_form_integration(form_id, org_id)
@@ -257,6 +324,7 @@ class TestEnsureIntegrationRepairsExisting:
     async def test_leaves_healthy_integration_alone(
         self, service, mock_db, form_id, org_id
     ):
+        form = _make_form(integration_type="equipment_assignment")
         field_fn = _make_field("First Name")
         field_ln = _make_field("Last Name")
         field_em = _make_field("Email")
@@ -270,18 +338,22 @@ class TestEnsureIntegrationRepairsExisting:
         }
 
         mock_db.execute.side_effect = [
-            _make_result_chain(existing),
-            _make_result_chain(*fields),
+            _make_result_chain(form),           # Form query
+            _make_result_chain(existing),        # existing integration
+            _make_result_chain(*fields),         # form fields
         ]
 
         await service._ensure_membership_form_integration(form_id, org_id)
 
         assert not mock_db.add.called
-        mock_db.commit.assert_not_called()
+        # commit once for form lookup, but field_mappings unchanged
+        # so repair path should NOT commit again
+        assert mock_db.commit.call_count == 0
 
     async def test_repairs_when_missing_required_targets(
         self, service, mock_db, form_id, org_id
     ):
+        form = _make_form(integration_type="equipment_assignment")
         field_fn = _make_field("First Name")
         field_ln = _make_field("Last Name")
         field_em = _make_field("Email")
@@ -292,8 +364,9 @@ class TestEnsureIntegrationRepairsExisting:
         existing.field_mappings = {str(field_ph.id): "phone"}
 
         mock_db.execute.side_effect = [
-            _make_result_chain(existing),
-            _make_result_chain(*fields),
+            _make_result_chain(form),            # Form query
+            _make_result_chain(existing),         # existing integration
+            _make_result_chain(*fields),          # form fields
         ]
 
         await service._ensure_membership_form_integration(form_id, org_id)
