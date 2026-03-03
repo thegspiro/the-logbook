@@ -676,10 +676,50 @@ This complete history is available for audit, insurance claims, and NFPA complia
 
 ---
 
+## CSV Import
+
+You can bulk import inventory items from a CSV file instead of adding them individually.
+
+### Importing Items
+
+**Required Permission:** `inventory.manage`
+
+1. Navigate to **Inventory**.
+2. Click **Import** in the toolbar (or navigate to `/inventory/import`).
+3. **Download the sample template** to see the expected CSV format.
+4. Prepare your CSV file with the required columns:
+   - **name** (required) — Item name
+   - **category** (required) — Must match an existing category name
+   - **description** — Item description
+   - **serial_number** — Must be unique within your organization
+   - **asset_tag** — Asset tag identifier
+   - **condition** — Item condition (excellent, good, fair, poor)
+   - **status** — Item status (available, assigned, in_maintenance, retired)
+   - **storage_location** — Where the item is stored
+   - Additional fields for purchase info, warranty, notes, etc.
+5. Upload the CSV file.
+6. Review the preview showing parsed items and any validation errors.
+7. Click **Import** to create all valid items.
+
+### Validation
+
+The import validates:
+- Required columns are present (`name`, `category`)
+- Category names match existing categories
+- Serial numbers are unique (no duplicates in file or existing inventory)
+- Data types are correct (numbers, dates, enum values)
+
+Items that fail validation are skipped with error details. Successfully validated items are imported.
+
+> **Hint:** Start with a small test import (5–10 items) to verify your CSV format before importing a large batch. The sample template includes all supported columns with example data.
+
+---
+
 ## Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
+| CSV import fails | Download the sample template and verify your CSV matches the format. Check that category names match existing categories. Serial numbers must be unique. |
 | Item not found when scanning | Verify the barcode/QR code matches the item's serial number or asset tag. The item must exist in the system. A "not found" message means no match; a "network error" message means connectivity issues. |
 | Cannot assign item - "already assigned" | An item can only be assigned to one member at a time. Return or unassign it from the current member first. |
 | Checkout button not available | The item may already be checked out or in maintenance status. Check the item's current status. |

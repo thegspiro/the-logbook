@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-03-02 (added mobile member ID scanner, 610 new tests, ARIA accessibility, exactOptionalPropertyTypes, API service split into 13 files, route module extraction, Python typing modernization, IP spoofing vulnerability fix, module component decomposition, MissingGreenlet fixes across remaining services, email template enhancements, PWA shortcuts; plus all previous updates)
+**Last Updated**: 2026-03-03 (added React 19 upgrade, Vitest 4/Zod 4 upgrade, ESLint v9 flat config migration, Tailwind CSS v4.2 upgrade, forms module enhancements with integration health dashboard/survey results/industry-standard builder, prospective members pipeline improvements with automated email/form dropdown/meeting stage types, inventory CSV import, email template 2-column redesign, events settings 422 fix, circular chunk dependency fix; plus all previous updates)
 
 ---
 
@@ -64,7 +64,15 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 50. [Python Typing Modernization Issues](#python-typing-modernization-issues)
 51. [IP Spoofing & Security Middleware](#ip-spoofing--security-middleware)
 52. [Module Component Decomposition Issues](#module-component-decomposition-issues)
-53. [Getting Help](#getting-help)
+53. [Tailwind CSS v4 Migration Issues](#tailwind-css-v4-migration-issues)
+54. [React 19 Upgrade Issues](#react-19-upgrade-issues)
+55. [ESLint v9 Flat Config Issues](#eslint-v9-flat-config-issues)
+56. [Vitest 4 & Zod 4 Upgrade Issues](#vitest-4--zod-4-upgrade-issues)
+57. [Forms Module — Integration & Builder Issues](#forms-module--integration--builder-issues)
+58. [Pipeline Stage Reorder & New Stage Types](#pipeline-stage-reorder--new-stage-types)
+59. [Inventory CSV Import Issues](#inventory-csv-import-issues)
+60. [Events Settings 422 Errors](#events-settings-422-errors)
+61. [Getting Help](#getting-help)
 
 ---
 
@@ -5584,5 +5592,167 @@ This affects 57 files across types, services, and components. If you see these e
 If you had CSS targeting the old monolithic component structure, selectors may need updating.
 
 **Fix:** Inspect the new component structure using browser DevTools. The tab components use the same CSS classes as before, but the DOM hierarchy has changed.
+
+---
+
+## Tailwind CSS v4 Migration Issues
+
+### Problem: Styles look different or broken after update
+
+**Cause (2026-03-03):** Tailwind CSS was upgraded from v3.4 to v4.2. The migration involved:
+- Removing `tailwind.config.js` — Tailwind v4 uses CSS-first configuration via `@theme` directives in `index.css`
+- Updating 200+ component files with class name changes (e.g., `rounded-lg` → `rounded-lg`, `shadow-lg` specificity changes)
+- Rebuilding `index.css` with `@theme` directives for CSS variables
+- Removing `postcss-import` plugin (Tailwind v4 handles imports natively)
+
+**Fix:** Clear browser cache and hard refresh (`Ctrl+Shift+R`). If a specific component has style issues, check that any custom Tailwind classes are valid in v4 syntax. See the [Tailwind CSS v3 → v4 migration guide](https://tailwindcss.com/docs/upgrade-guide).
+
+### Problem: Custom Tailwind config not applied
+
+**Cause:** Tailwind v4 no longer uses `tailwind.config.js`. Configuration is now in CSS via `@theme` blocks in `frontend/src/styles/index.css`.
+
+**Fix:** Move any custom theme extensions to the `@theme` block in `index.css`:
+```css
+@theme {
+  --color-custom: #123456;
+}
+```
+
+---
+
+## React 19 Upgrade Issues
+
+### Problem: `ref` prop warnings or errors after update
+
+**Cause (2026-03-03):** React was upgraded from 18.3 to 19. React 19 changes how `ref` is handled — `forwardRef` is no longer required as `ref` is now a regular prop.
+
+**Fix:** Update components that use `forwardRef` to accept `ref` as a regular prop. The existing `forwardRef` pattern still works but may trigger deprecation warnings in development.
+
+### Problem: Test failures after React 19 upgrade
+
+**Cause:** Some testing patterns changed between React 18 and 19 (e.g., `act()` behavior, cleanup timing).
+
+**Fix:** Update test files to use the new `@testing-library/react` patterns compatible with React 19. Clear `node_modules` and reinstall:
+```bash
+cd frontend
+rm -rf node_modules package-lock.json
+npm install
+```
+
+---
+
+## ESLint v9 Flat Config Issues
+
+### Problem: ESLint not finding config file
+
+**Cause (2026-03-03):** ESLint was upgraded from v8 to v9. The configuration was migrated from `.eslintrc.json` to `eslint.config.js` (flat config format).
+
+**Fix:** Ensure your IDE/editor ESLint plugin supports flat config. Update VS Code ESLint extension to the latest version. The old `.eslintrc.json` has been removed.
+
+### Problem: New ESLint errors after upgrade
+
+**Cause:** The `@typescript-eslint` plugins were updated alongside the ESLint v9 migration, which may enable new rules or change rule defaults.
+
+**Fix:** Run `npx eslint --fix frontend/src/` to auto-fix simple issues. For persistent errors, check `frontend/eslint.config.js` for the rule configuration.
+
+---
+
+## Vitest 4 & Zod 4 Upgrade Issues
+
+### Problem: Test import errors after Vitest upgrade
+
+**Cause (2026-03-03):** Vitest was upgraded from v3 to v4, and Zod from v3 to v4.
+
+**Fix:** Clear test cache and reinstall:
+```bash
+cd frontend
+rm -rf node_modules package-lock.json
+npm install
+npm test
+```
+
+### Problem: Zod schema validation errors
+
+**Cause:** Zod v4 has breaking changes in some validation behaviors (stricter parsing, different error formats).
+
+**Fix:** Review any custom Zod schemas for v4 compatibility. See the [Zod v4 migration guide](https://zod.dev) for details.
+
+---
+
+## Forms Module — Integration & Builder Issues
+
+### Problem: Integration health dashboard shows stale data
+
+**Cause (2026-03-02):** The integration health dashboard is new and relies on backend endpoints for integration status.
+
+**Fix:** Ensure the backend is running the latest version. The new endpoints are:
+- `GET /api/v1/forms/{id}/integrations/health` — Integration processing status
+- `POST /api/v1/forms/{id}/submissions/{sid}/reprocess` — Reprocess failed integrations
+
+### Problem: Form builder drag-and-drop not working
+
+**Cause (2026-03-02):** The form builder was upgraded to use `@dnd-kit` for drag-and-drop. If the `@dnd-kit` dependencies are missing, drag-and-drop will silently fail.
+
+**Fix:** Ensure dependencies are installed:
+```bash
+cd frontend
+npm install
+```
+Check that `@dnd-kit/core` and `@dnd-kit/sortable` are in `package.json`.
+
+### Problem: Survey results panel not showing aggregated data
+
+**Cause:** The `FormResultsPanel` component requires at least one submission to display aggregation. Empty forms show a placeholder.
+
+**Fix:** Submit at least one test response. For select/radio/checkbox fields, the panel shows distribution charts. For text fields, it shows response counts.
+
+### Problem: Public form no longer shows name/email fields
+
+**Cause (2026-03-02):** The forced name/email section was removed from public forms. Contact info collection is now optional and configured per form.
+
+**Fix:** To collect name/email on public forms, add explicit text/email fields to the form in the form builder.
+
+---
+
+## Pipeline Stage Reorder & New Stage Types
+
+### Problem: 500 error when reordering pipeline stages
+
+**Status (Fixed 2026-03-02):** Fixed race condition in sort order calculation on the pipeline stage reorder endpoint. The endpoint now uses database-level locking to prevent concurrent reorder conflicts.
+
+### Problem: 422 error when reordering pipeline steps
+
+**Status (Fixed 2026-03-02):** Fixed validation error in step reorder endpoint caused by incorrect request body schema.
+
+### Problem: New stage types (automated_email, form_dropdown, meeting) not appearing
+
+**Cause:** The new stage types require the latest frontend code. The `PipelineStageType` enum was expanded with `automated_email`, `form_dropdown`, and `meeting` types.
+
+**Fix:** Pull latest changes, rebuild frontend, and clear browser cache. The new types appear in the stage type selector in the Pipeline Builder.
+
+---
+
+## Inventory CSV Import Issues
+
+### Problem: CSV import fails with validation errors
+
+**Cause (2026-03-02):** The inventory CSV import validates headers, data types, and references before processing.
+
+**Fix:** Download the sample CSV template from the import page and ensure your CSV matches the expected format. Common issues:
+- Missing required columns (`name`, `category`)
+- Category names not matching existing categories
+- Duplicate serial numbers
+
+### Problem: Import page not accessible
+
+**Fix:** Ensure you have `inventory.manage` permission. The import page is at `/inventory/import` and is linked from the main Inventory page.
+
+---
+
+## Events Settings 422 Errors
+
+### Problem: Events settings page fails to load with 422 errors
+
+**Status (Fixed 2026-03-02):** The events settings API endpoint was refactored to fix validation errors caused by incorrect request/response handling. Pull latest and restart the backend.
 
 ---

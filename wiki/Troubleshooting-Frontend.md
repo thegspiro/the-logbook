@@ -169,9 +169,9 @@ npm install
 
 ## Circular Chunk Dependency
 
-**Symptom:** `React.memo` is undefined at runtime, causing crashes.
+**Symptom:** `React.memo` is undefined at runtime, or `useLayoutEffect` error at startup.
 
-**Status:** Fixed in February 2026. The Vite manual chunk splitting was reordered to eliminate circular dependencies between vendor chunk groups.
+**Status:** Fixed in March 2026. The Vite manual chunk configuration was updated to eliminate circular dependencies between vendor chunk groups that caused runtime errors.
 
 ---
 
@@ -443,6 +443,107 @@ const x: { bar?: string } = { bar: undefined }; // ❌ Error
 ## ARIA Accessibility (2026-03-02)
 
 ARIA attributes have been added across the UI. If automated accessibility testing shows new warnings about duplicate IDs or conflicting ARIA roles, check that custom components don't add redundant ARIA attributes that conflict with the built-in ones.
+
+---
+
+## Tailwind CSS v4 Migration (2026-03-03)
+
+### Problem: Styles broken or different after update
+
+**Cause:** Tailwind CSS upgraded from v3.4 to v4.2. The `tailwind.config.js` file was removed — Tailwind v4 uses CSS-first configuration via `@theme` directives in `frontend/src/styles/index.css`. Over 200 component files were updated with v3→v4 class name changes.
+
+**Fix:** Clear browser cache and hard refresh (`Ctrl+Shift+R`). If you have custom Tailwind configuration in `tailwind.config.js`, migrate it to `@theme` blocks in CSS:
+```css
+@theme {
+  --color-custom: #123456;
+}
+```
+
+### Problem: PostCSS plugin errors
+
+**Cause:** Tailwind v4 handles imports natively. The `postcss-import` plugin was removed from `postcss.config.js`.
+
+**Fix:** Remove `postcss-import` from your PostCSS config if you have a custom one.
+
+---
+
+## React 19 Upgrade (2026-03-03)
+
+### Problem: `forwardRef` deprecation warnings
+
+**Cause:** React upgraded from 18.3 to 19. In React 19, `ref` is a regular prop and `forwardRef` is deprecated (though still functional).
+
+**Fix:** No immediate action required — `forwardRef` still works. To remove warnings, convert components to accept `ref` as a regular prop.
+
+### Problem: Test failures after React 19 upgrade
+
+**Cause:** React 19 changes `act()` behavior and cleanup timing.
+
+**Fix:**
+```bash
+cd frontend
+rm -rf node_modules package-lock.json
+npm install
+npm test
+```
+
+---
+
+## ESLint v9 Flat Config Migration (2026-03-03)
+
+### Problem: ESLint not finding configuration
+
+**Cause:** ESLint was upgraded from v8 to v9. Configuration migrated from `.eslintrc.json` to `eslint.config.js` (flat config format).
+
+**Fix:** Update your IDE ESLint extension to the latest version that supports flat config. The old `.eslintrc.json` has been removed.
+
+### Problem: New lint errors after ESLint v9 upgrade
+
+**Fix:** Run `npx eslint --fix frontend/src/` to auto-fix. For persistent errors, check `frontend/eslint.config.js`.
+
+---
+
+## Vitest 4 & Zod 4 Upgrade (2026-03-03)
+
+### Problem: Test import errors or schema validation changes
+
+**Cause:** Vitest upgraded from v3 to v4 and Zod from v3 to v4, both with breaking changes.
+
+**Fix:**
+```bash
+cd frontend
+rm -rf node_modules package-lock.json
+npm install
+npm test
+```
+
+---
+
+## Form Builder Issues (2026-03-02)
+
+### Problem: Form builder drag-and-drop not working
+
+**Cause:** Form builder upgraded to use `@dnd-kit` for drag-and-drop reordering. If dependencies are missing, drag-and-drop silently fails.
+
+**Fix:** `cd frontend && npm install` — verify `@dnd-kit/core` and `@dnd-kit/sortable` are installed.
+
+### Problem: Public form no longer shows name/email section
+
+**Cause:** The forced name/email section was removed from public forms. Contact info is now optional per form.
+
+**Fix:** Add explicit text/email fields in the form builder to collect contact information on public forms.
+
+### Problem: Forms page not accessible to non-admin users
+
+**Status (Fixed 2026-03-02):** Forms page now uses `forms.view` permission instead of `settings.manage`. Users with the `forms.view` permission can now see the Forms page.
+
+---
+
+## Form Editor Theme Issues (2026-03-02)
+
+### Problem: Form editor background or tab text invisible in light/dark theme
+
+**Status (Fixed 2026-03-02):** Fixed form editor background and tab text colors to be compatible with both light and dark themes.
 
 ---
 

@@ -139,6 +139,8 @@ The form builder supports these field types:
 | **Section Header** | Visual divider with heading |
 | **Hidden** | Hidden field for metadata |
 | **Calculated** | Auto-calculated from other fields |
+| **DateTime** | Combined date and time picker |
+| **Member Lookup** | Search and select existing members |
 
 For each field, configure:
 - Label and help text
@@ -146,6 +148,16 @@ For each field, configure:
 - Validation rules (min/max, pattern)
 - Default value
 - Conditional visibility (show/hide based on other field values)
+
+### Form Builder Features
+
+The form builder includes advanced capabilities:
+- **Drag-and-drop reordering**: Rearrange fields by dragging them to new positions
+- **Field duplication**: Click the duplicate button on any field to create a copy
+- **Incomplete field highlighting**: Fields with missing required configuration (e.g., no label, no options for select fields) are visually highlighted so you can fix them before publishing
+- **Guided tooltips**: First-time form builders see helpful tooltips explaining each feature
+
+> **Hint:** If a field is highlighted in yellow or red, it means the field configuration is incomplete. Click on the field to see what's missing.
 
 > **Screenshot placeholder:**
 > _[Screenshot of the form builder showing a form being designed with a drag-and-drop field list on the left, the form preview in the center with several fields already placed, and the field configuration panel on the right showing label, type, required toggle, and validation options]_
@@ -198,6 +210,23 @@ Public forms can be accessed without a login:
 
 > **Screenshot placeholder:**
 > _[Screenshot of the form submissions table showing rows of responses with timestamps, key field values as columns, and export/filter controls at the top]_
+
+### Survey Results Panel
+
+For survey-style forms (forms with multiple select, radio, or checkbox fields), a **Results** panel provides aggregated analysis:
+
+- **Distribution charts** for select, radio, and checkbox fields showing response breakdowns
+- **Response counts** and statistics for text and numeric fields
+- **Per-field aggregation** so you can see trends across all submissions at a glance
+
+This is useful for feedback surveys, polls, and any form where you want to see aggregated patterns rather than individual responses.
+
+### Integration Health
+
+If your form has cross-module integrations (Membership or Inventory), the submissions view shows integration processing status for each submission:
+- **Success** — Integration processed correctly
+- **Failed** — Integration encountered an error (click **Reprocess** to retry)
+- **Pending** — Integration is queued for processing
 
 ---
 
@@ -441,7 +470,11 @@ She clicks **Export CSV** to download the data for the monthly operations report
 |-------|----------|
 | Cannot upload a document | Check file size limits (configured by your department). Verify you have permission to upload to the selected folder. |
 | Form not accepting submissions | Ensure the form status is **Active**. Draft forms cannot receive submissions. |
-| Public form URL not working | Verify that Public Access is enabled on the form. The form must be in Active status. |
+| Public form URL not working | Verify that Public Access is enabled on the form. The form must be in Active status. Ensure the URL uses the correct format: `/f/{slug}`. |
+| Form builder drag-and-drop not working | The builder uses `@dnd-kit` for reordering. Clear browser cache and reload. If the issue persists, run `cd frontend && npm install` to ensure dependencies are installed. |
+| Public form shows 404 error | Fixed in March 2026 — a doubled `/v1` in the API URL path has been corrected. Pull latest code and rebuild. |
+| Forms page not visible in navigation | The Forms page now requires `forms.view` permission (changed from `settings.manage` in March 2026). Ask your administrator to grant `forms.view` to your role. |
+| Integration reprocessing fails | Check that the target module (Membership or Inventory) is enabled and the field mapping is correct. Review the error details on the failed submission. |
 | Not receiving email notifications | Check your notification preferences in My Account > Notifications. Verify your email address is correct. Check your spam folder. |
 | Slack integration not posting | Verify the webhook URL is correct and the Slack channel exists. Check the integration logs for errors. |
 | Calendar events not syncing | Ensure the calendar integration is connected. Some calendar apps cache iCal feeds and may take up to 24 hours to refresh. |

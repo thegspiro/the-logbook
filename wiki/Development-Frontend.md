@@ -8,11 +8,13 @@ Guide to developing the React/TypeScript frontend for The Logbook.
 
 | Technology | Version | Purpose |
 |-----------|---------|---------|
-| React | 18.3 | UI framework |
+| React | 19 | UI framework |
 | TypeScript | 5.9 | Type-safe JavaScript |
 | Vite | 7.3 | Build tool and dev server |
-| Vitest | 3.2 | Unit/integration testing |
-| Tailwind CSS | 3.x | Utility-first CSS |
+| Vitest | 4 | Unit/integration testing |
+| Tailwind CSS | 4.2 | Utility-first CSS |
+| Zod | 4 | Schema validation |
+| ESLint | 9 | Linting (flat config) |
 | React Router | 6.x | Client-side routing |
 | React Hook Form | 7.71 | Form management |
 | Lucide React | 0.575+ | Icons |
@@ -158,10 +160,16 @@ modules/<module>/
 
 ### CSS
 
-- **Tailwind CSS** — Use utility classes for styling
+- **Tailwind CSS v4** — Use utility classes for styling; configuration via `@theme` directives in CSS (not `tailwind.config.js`)
 - **CSS Variables** — Use `--theme-*` variables for theming
 - **Dark mode** — Use `bg-theme-surface-modal` for modal backgrounds
 - **Responsive** — Mobile-first responsive design
+
+### ESLint
+
+- **ESLint v9** with flat config (`eslint.config.js`, not `.eslintrc.json`)
+- **@typescript-eslint** plugins for TypeScript-specific rules
+- Run `npx eslint --fix frontend/src/` to auto-fix issues
 
 ---
 

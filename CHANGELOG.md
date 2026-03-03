@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Major Toolchain Upgrades (2026-03-03)
+
+- **React 18 → 19**: Upgraded React and react-dom to version 19; updated refs to use callback-based patterns where needed; fixed test utilities for React 19 compatibility
+- **Vitest 3 → 4**: Upgraded Vitest to version 4 and Zod to version 4; updated test patterns for new Vitest APIs
+- **ESLint v8 → v9 with flat config**: Migrated from `.eslintrc.json` to `eslint.config.js` (flat config format); updated all `@typescript-eslint` packages for ESLint 9 compatibility
+- **Tailwind CSS v3.4 → v4.2**: Migrated from Tailwind v3 to v4 with CSS-first configuration; removed `tailwind.config.js`; updated 200+ component files with v3→v4 class name changes; rebuilt `index.css` with `@theme` directives
+- **Safe patch dependency updates**: Updated 20+ frontend dependencies to latest safe patch versions
+
+### Forms Module Enhancements (2026-03-02)
+
+- **Integration health dashboard**: New dashboard showing integration processing status, result display per submission, and ability to reprocess failed integrations
+- **Form dropdown selector and field mapping UI**: Redesigned integration configuration with dropdown-based form selection and visual field mapping interface
+- **Survey results panel**: New `FormResultsPanel` component with per-field aggregation for survey-style forms (charts, counts, response summaries)
+- **Form builder UX improvements**: Highlight incomplete fields with visual indicators; improved novice user experience with guided tooltips and simplified interface
+- **Industry-standard form builder**: Upgraded FormBuilder and FormRenderer with drag-and-drop reordering (@dnd-kit), field duplication, conditional visibility, calculated fields, and hidden fields
+- **Public form fixes**: Fixed doubled `/v1` in public form API URL causing 404 errors; removed forced name/email section from public forms (now optional per form configuration)
+- **Forms permission fix**: Fixed Forms page visibility — now uses `forms.view` permission instead of `settings.manage`, making forms accessible to non-admin users with proper permissions
+- **Theme compatibility**: Fixed form editor background and tab text colors for light/dark theme compatibility
+
+### Prospective Members Pipeline Improvements (2026-03-02)
+
+- **Comprehensive pipeline management**: Added bulk stage operations, stage duplication, inline stage editing, pipeline export/import, and analytics dashboard to PipelineSettingsPage
+- **Event linking to pipeline stages**: Stages can now link to specific events; applicant detail drawer shows linked event information
+- **Automated email stage type**: New `automated_email` stage type sends configurable email templates to applicants when they reach a stage; includes email template selection, variable interpolation, and send delay configuration
+- **Form dropdown stage type**: New `form_dropdown` stage type links a form from the Forms module to a pipeline stage for applicant data collection
+- **Meeting stage type**: New `meeting` stage type for scheduling interviews or orientation meetings with applicants
+- **Status page toggle**: Pipeline stages can now optionally appear on the public application status page
+- **Stage reorder fix**: Fixed intermittent 500 error on pipeline stage reorder endpoint caused by race condition in sort order calculation; also fixed 422 error on step reorder
+
+### Inventory CSV Import (2026-03-02)
+
+- **CSV import with template**: New ImportInventory page for bulk importing inventory items via CSV upload; includes downloadable sample CSV template with all supported fields
+- **Backend validation**: Import endpoint validates CSV headers, data types, category references, and duplicate serial numbers before processing
+- **Frontend tests**: Added comprehensive test coverage for the import flow
+
+### Email Template Redesign (2026-03-02)
+
+- **2-column tabbed layout**: Redesigned email template page from 3-column layout to 2-column tabbed layout for improved usability on smaller screens
+
+### Events Module Fix (2026-03-02)
+
+- **Events settings page fix**: Fixed events settings page not loading due to 422 validation errors in the API endpoint; refactored endpoint request/response handling
+
+### Bug Fixes (2026-03-02)
+
+- **Circular chunk dependency**: Fixed Vite manual chunk configuration that caused circular dependency between vendor chunks, resulting in `useLayoutEffect` runtime error
+- **Stale lockfile**: Fixed stale frontend `package-lock.json` missing `@dnd-kit` dependencies after form builder upgrade
+
+### Testing Checklist (2026-03-02)
+
+- **Comprehensive testing coverage audit**: Updated TESTING_CHECKLIST.md with detailed coverage for all modules including forms, pipeline, inventory, scheduling, and elections
+- **35 recommendation audit**: Reviewed and documented implementation status of all 35 testing recommendations with specific file references and action items
+
 ### Mobile Member ID Scanner (2026-03-02)
 
 - **Camera-based member ID scanning**: New `MemberIdScannerModal` component lets admins scan a member's QR/barcode ID card to instantly look up and select them during inventory checkout, replacing manual name search

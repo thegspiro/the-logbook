@@ -443,4 +443,38 @@ Black formatting has been applied to 9 additional backend files. If you see form
 
 ---
 
+## Pipeline Stage Reorder 500 Error (2026-03-02)
+
+### Problem: Intermittent 500 error when reordering pipeline stages
+
+**Cause:** Race condition in sort order calculation — concurrent requests could produce duplicate sort order values.
+
+**Status (Fixed):** Endpoint now uses database-level locking to prevent concurrent reorder conflicts. The 422 error on step reorder was also fixed by correcting the request body schema.
+
+---
+
+## Events Settings 422 Error (2026-03-02)
+
+### Problem: Events settings page fails to load with 422 validation errors
+
+**Cause:** Incorrect request/response handling in the events settings API endpoint.
+
+**Status (Fixed):** Endpoint refactored to fix validation handling. Pull latest changes and restart backend.
+
+---
+
+## Inventory CSV Import Validation (2026-03-02)
+
+### Problem: CSV import endpoint returns validation errors
+
+**Cause:** The new inventory CSV import endpoint (`POST /api/v1/inventory/import`) validates headers, data types, category references, and duplicate serial numbers.
+
+**Fix:** Ensure your CSV follows the expected format:
+- Required columns: `name`, `category`
+- Category names must match existing categories in your organization
+- Serial numbers must be unique within the organization
+- Download the sample template from the import page for reference
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Database Issues](Troubleshooting-Database)
