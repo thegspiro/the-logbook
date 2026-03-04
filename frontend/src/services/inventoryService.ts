@@ -11,6 +11,7 @@ import type {
   InventoryCategoryCreate, ScanLookupResponse, BatchCheckoutRequest, BatchCheckoutResponse,
   BatchReturnRequest, BatchReturnResponse, LabelFormat, NFPACompliance, NFPAExposureRecord,
   NFPASummary, NFPARetirementDueItem, MembersInventoryListResponse, InventoryImportResult,
+  SizeVariantCreate, BulkIssuanceTarget, BulkIssuanceResponse, IssuanceAllowance, AllowanceCheck,
 } from './eventServices';
 
 export const inventoryService = {
@@ -193,6 +194,52 @@ export const inventoryService = {
   async getItemIssuances(itemId: string, activeOnly: boolean = true): Promise<ItemIssuance[]> {
     const response = await api.get<ItemIssuance[]>(`/inventory/items/${itemId}/issuances`, {
       params: { active_only: activeOnly },
+    });
+    return response.data;
+  },
+
+  // Size variant quick-create
+  async createSizeVariants(data: SizeVariantCreate): Promise<{ created_count: number; items: InventoryItem[] }> {
+    const response = await api.post<{ created_count: number; items: InventoryItem[] }>('/inventory/items/create-variants', data);
+    return response.data;
+  },
+
+  // Bulk issuance
+  async bulkIssueFromPool(itemId: string, targets: BulkIssuanceTarget[]): Promise<BulkIssuanceResponse> {
+    const response = await api.post<BulkIssuanceResponse>(`/inventory/items/${itemId}/bulk-issue`, { targets });
+    return response.data;
+  },
+
+  // Issuance allowances
+  async getAllowances(): Promise<IssuanceAllowance[]> {
+    const response = await api.get<IssuanceAllowance[]>('/inventory/allowances');
+    return response.data;
+  },
+
+  async createAllowance(data: { category_id: string; role_id?: string; max_quantity: number; period_type?: string }): Promise<IssuanceAllowance> {
+    const response = await api.post<IssuanceAllowance>('/inventory/allowances', data);
+    return response.data;
+  },
+
+  async updateAllowance(id: string, data: { max_quantity?: number; period_type?: string; is_active?: boolean }): Promise<IssuanceAllowance> {
+    const response = await api.put<IssuanceAllowance>(`/inventory/allowances/${id}`, data);
+    return response.data;
+  },
+
+  async deleteAllowance(id: string): Promise<void> {
+    await api.delete(`/inventory/allowances/${id}`);
+  },
+
+  async checkAllowance(userId: string, categoryId: string): Promise<AllowanceCheck> {
+    const response = await api.get<AllowanceCheck>(`/inventory/allowances/check/${userId}/${categoryId}`);
+    return response.data;
+  },
+
+  // Cost recovery
+  async updateIssuanceCharge(issuanceId: string, chargeStatus: string, chargeAmount?: number): Promise<ItemIssuance> {
+    const response = await api.put<ItemIssuance>(`/inventory/issuances/${issuanceId}/charge`, {
+      charge_status: chargeStatus,
+      charge_amount: chargeAmount,
     });
     return response.data;
   },

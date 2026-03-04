@@ -243,6 +243,7 @@ class InventoryItem(Base):
     # Depreciation
     expected_lifetime_years = Column(Integer)
     current_value = Column(Numeric(10, 2))
+    replacement_cost = Column(Numeric(10, 2))  # Cost to charge member for lost/damaged item
 
     # Physical Details
     size = Column(String(50))  # Small, Medium, Large, or specific measurements
@@ -492,6 +493,15 @@ class ItemIssuance(Base):
     # Status
     is_returned = Column(Boolean, default=False, index=True)
 
+    # Cost snapshot — records replacement_cost at the time of issuance
+    unit_cost_at_issuance = Column(Numeric(10, 2))
+
+    # Cost recovery for lost/damaged items
+    charge_status = Column(
+        String(20), default="none"
+    )  # "none", "pending", "charged", "waived"
+    charge_amount = Column(Numeric(10, 2))  # Amount charged to member
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
@@ -508,6 +518,63 @@ class ItemIssuance(Base):
         Index("idx_item_issuances_org_item", "organization_id", "item_id"),
         Index("idx_item_issuances_org_user", "organization_id", "user_id"),
         Index("idx_item_issuances_org_returned", "organization_id", "is_returned"),
+    )
+
+
+class IssuanceAllowance(Base):
+    """
+    Issuance Allowance model
+
+    Defines how many units of a given category each member (by role or rank)
+    can be issued per period.  E.g. "Each firefighter gets 3 polo shirts per year."
+    """
+
+    __tablename__ = "issuance_allowances"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # What category this allowance applies to
+    category_id = Column(
+        String(36),
+        ForeignKey("inventory_categories.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # Who this applies to — NULL means all members
+    role_id = Column(String(36), ForeignKey("roles.id", ondelete="CASCADE"))
+
+    # Limits
+    max_quantity = Column(Integer, nullable=False)  # Max units per period
+    period_type = Column(
+        String(20), default="annual"
+    )  # "annual", "career", "one_time"
+    is_active = Column(Boolean, default=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    created_by = Column(String(36), ForeignKey("users.id"))
+
+    # Relationships
+    category = relationship("InventoryCategory", foreign_keys=[category_id])
+
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "category_id",
+            "role_id",
+            name="uq_allowance_org_cat_role",
+        ),
+        Index("idx_allowances_org", "organization_id"),
     )
 
 

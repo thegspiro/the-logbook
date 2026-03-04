@@ -49,6 +49,8 @@ export type {
   MemberInventorySummary, MembersInventoryListResponse, LabelFormat,
   NFPACompliance, NFPAExposureRecord, NFPASummary, NFPARetirementDueItem,
   InventoryImportResult,
+  SizeVariantCreate, BulkIssuanceTarget, BulkIssuanceResponse,
+  IssuanceAllowance, AllowanceCheck,
 } from './eventServices';
 
 // Elections

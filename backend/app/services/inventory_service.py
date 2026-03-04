@@ -22,6 +22,7 @@ from app.models.inventory import (
     InventoryActionType,
     InventoryCategory,
     InventoryItem,
+    IssuanceAllowance,
     ItemAssignment,
     ItemCondition,
     ItemIssuance,
@@ -816,6 +817,13 @@ class InventoryService:
             item.quantity -= quantity
             item.quantity_issued = (item.quantity_issued or 0) + quantity
 
+            # Snapshot the replacement cost at issuance time for cost recovery
+            unit_cost = (
+                item.replacement_cost
+                if item.replacement_cost is not None
+                else item.purchase_price
+            )
+
             # Create issuance record
             issuance = ItemIssuance(
                 organization_id=organization_id,
@@ -825,6 +833,7 @@ class InventoryService:
                 issued_by=issued_by,
                 issue_reason=reason,
                 is_returned=False,
+                unit_cost_at_issuance=unit_cost,
             )
             self.db.add(issuance)
 
@@ -2998,3 +3007,230 @@ class InventoryService:
         # Sort all events by date descending
         events.sort(key=lambda e: e["date"], reverse=True)
         return events
+
+    # ------------------------------------------------------------------
+    # Issuance Allowances
+    # ------------------------------------------------------------------
+
+    async def check_allowance(
+        self,
+        user_id: UUID,
+        category_id: UUID,
+        organization_id: UUID,
+        role_id: Optional[UUID] = None,
+    ) -> Dict[str, Any]:
+        """Check how many more units a member can receive for a category."""
+        # Find applicable allowance — role-specific first, then org-wide
+        q = (
+            select(IssuanceAllowance)
+            .where(IssuanceAllowance.organization_id == str(organization_id))
+            .where(IssuanceAllowance.category_id == str(category_id))
+            .where(IssuanceAllowance.is_active.is_(True))
+        )
+        result = await self.db.execute(q)
+        allowances = result.scalars().all()
+
+        if not allowances:
+            return {
+                "max_quantity": -1,  # -1 means unlimited
+                "issued_this_period": 0,
+                "remaining": -1,
+                "period_type": "none",
+            }
+
+        # Pick the most specific allowance (role match first)
+        allowance = None
+        for a in allowances:
+            if role_id and a.role_id == str(role_id):
+                allowance = a
+                break
+        if not allowance:
+            for a in allowances:
+                if not a.role_id:
+                    allowance = a
+                    break
+        if not allowance:
+            return {
+                "max_quantity": -1,
+                "issued_this_period": 0,
+                "remaining": -1,
+                "period_type": "none",
+            }
+
+        # Count issued this period
+        period_start = None
+        if allowance.period_type == "annual":
+            now = datetime.now(timezone.utc)
+            period_start = datetime(now.year, 1, 1, tzinfo=timezone.utc)
+        # "career" and "one_time" count all time
+
+        # Get items in this category
+        cat_items = await self.db.execute(
+            select(InventoryItem.id).where(
+                InventoryItem.organization_id == str(organization_id),
+                InventoryItem.category_id == str(category_id),
+                InventoryItem.tracking_type == TrackingType.POOL,
+            )
+        )
+        item_ids = [r[0] for r in cat_items.fetchall()]
+
+        if not item_ids:
+            return {
+                "max_quantity": allowance.max_quantity,
+                "issued_this_period": 0,
+                "remaining": allowance.max_quantity,
+                "period_type": allowance.period_type,
+            }
+
+        issued_q = select(func.coalesce(func.sum(ItemIssuance.quantity_issued), 0)).where(
+            ItemIssuance.organization_id == str(organization_id),
+            ItemIssuance.user_id == str(user_id),
+            ItemIssuance.item_id.in_(item_ids),
+        )
+        if period_start:
+            issued_q = issued_q.where(ItemIssuance.issued_at >= period_start)
+
+        issued_result = await self.db.execute(issued_q)
+        issued_count = int(issued_result.scalar() or 0)
+
+        remaining = max(0, allowance.max_quantity - issued_count)
+        return {
+            "max_quantity": allowance.max_quantity,
+            "issued_this_period": issued_count,
+            "remaining": remaining,
+            "period_type": allowance.period_type,
+        }
+
+    # ------------------------------------------------------------------
+    # Bulk Issuance
+    # ------------------------------------------------------------------
+
+    async def bulk_issue_from_pool(
+        self,
+        item_id: UUID,
+        targets: List[Dict[str, Any]],
+        organization_id: UUID,
+        issued_by: UUID,
+    ) -> List[Dict[str, Any]]:
+        """Issue a pool item to multiple members at once."""
+        results = []
+        for target in targets:
+            user_id = target["user_id"]
+            qty = target.get("quantity", 1)
+            reason = target.get("issue_reason")
+
+            issuance, error = await self.issue_from_pool(
+                item_id=item_id,
+                user_id=user_id,
+                organization_id=organization_id,
+                issued_by=issued_by,
+                quantity=qty,
+                reason=reason,
+            )
+            if error:
+                results.append(
+                    {"user_id": user_id, "success": False, "error": error}
+                )
+            else:
+                results.append(
+                    {
+                        "user_id": user_id,
+                        "success": True,
+                        "issuance_id": issuance.id if issuance else None,
+                    }
+                )
+        return results
+
+    # ------------------------------------------------------------------
+    # Size Variant Quick-Create
+    # ------------------------------------------------------------------
+
+    async def create_size_variants(
+        self,
+        organization_id: UUID,
+        created_by: UUID,
+        base_name: str,
+        sizes: List[str],
+        colors: Optional[List[str]] = None,
+        **kwargs: Any,
+    ) -> List["InventoryItem"]:
+        """Create multiple pool items from a base name × sizes × colors matrix."""
+        items_created = []
+        combos: List[Tuple[str, Optional[str]]] = []
+
+        if colors:
+            for size in sizes:
+                for color in colors:
+                    combos.append((size, color))
+        else:
+            for size in sizes:
+                combos.append((size, None))
+
+        for size, color in combos:
+            name_parts = [base_name, size]
+            if color:
+                name_parts.append(color)
+            item_name = " — ".join(name_parts)
+
+            item = InventoryItem(
+                organization_id=str(organization_id),
+                name=item_name,
+                size=size,
+                color=color,
+                tracking_type=TrackingType.POOL,
+                quantity=kwargs.get("quantity_per_variant", 0),
+                quantity_issued=0,
+                condition=ItemCondition.GOOD,
+                status=ItemStatus.AVAILABLE,
+                category_id=str(kwargs["category_id"]) if kwargs.get("category_id") else None,
+                replacement_cost=kwargs.get("replacement_cost"),
+                purchase_price=kwargs.get("purchase_price"),
+                unit_of_measure=kwargs.get("unit_of_measure"),
+                location_id=str(kwargs["location_id"]) if kwargs.get("location_id") else None,
+                storage_area_id=str(kwargs["storage_area_id"]) if kwargs.get("storage_area_id") else None,
+                station=kwargs.get("station"),
+                notes=kwargs.get("notes"),
+                created_by=str(created_by),
+                active=True,
+            )
+            self.db.add(item)
+            items_created.append(item)
+
+        await self.db.commit()
+        for item in items_created:
+            await self.db.refresh(item)
+
+        return items_created
+
+    # ------------------------------------------------------------------
+    # Cost Recovery
+    # ------------------------------------------------------------------
+
+    async def update_issuance_charge(
+        self,
+        issuance_id: UUID,
+        organization_id: UUID,
+        charge_status: str,
+        charge_amount: Optional[Decimal] = None,
+    ) -> Tuple[bool, Optional[str]]:
+        """Update the charge status and amount on an issuance record."""
+        result = await self.db.execute(
+            select(ItemIssuance)
+            .where(ItemIssuance.id == str(issuance_id))
+            .where(ItemIssuance.organization_id == str(organization_id))
+        )
+        issuance = result.scalar_one_or_none()
+        if not issuance:
+            return False, "Issuance record not found"
+
+        issuance.charge_status = charge_status
+        if charge_amount is not None:
+            issuance.charge_amount = charge_amount
+        elif charge_status == "charged" and issuance.unit_cost_at_issuance:
+            # Default to the cost snapshot × quantity
+            issuance.charge_amount = (
+                issuance.unit_cost_at_issuance * issuance.quantity_issued
+            )
+
+        await self.db.commit()
+        return True, None

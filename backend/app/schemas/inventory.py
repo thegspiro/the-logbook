@@ -186,6 +186,9 @@ class InventoryItemBase(BaseModel):
     warranty_expiration: Optional[date] = None
     expected_lifetime_years: Optional[int] = Field(None, ge=0)
     current_value: Optional[Decimal] = Field(None, ge=0)
+    replacement_cost: Optional[Decimal] = Field(
+        None, ge=0, description="Cost to charge for lost/damaged item"
+    )
     size: Optional[str] = Field(None, max_length=50)
     color: Optional[str] = Field(None, max_length=50)
     weight: Optional[float] = Field(None, ge=0)
@@ -229,6 +232,7 @@ class InventoryItemUpdate(BaseModel):
     warranty_expiration: Optional[date] = None
     expected_lifetime_years: Optional[int] = Field(None, ge=0)
     current_value: Optional[Decimal] = Field(None, ge=0)
+    replacement_cost: Optional[Decimal] = Field(None, ge=0)
     size: Optional[str] = Field(None, max_length=50)
     color: Optional[str] = Field(None, max_length=50)
     weight: Optional[float] = Field(None, ge=0)
@@ -352,6 +356,10 @@ class ItemIssuanceReturnRequest(BaseModel):
     )
 
 
+ChargeStatusLiteral = Literal["none", "pending", "charged", "waived"]
+AllowancePeriodLiteral = Literal["annual", "career", "one_time"]
+
+
 class ItemIssuanceResponse(BaseModel):
     """Schema for issuance record response"""
 
@@ -368,6 +376,9 @@ class ItemIssuanceResponse(BaseModel):
     return_condition: Optional[ItemConditionLiteral] = None
     return_notes: Optional[str] = None
     is_returned: bool
+    unit_cost_at_issuance: Optional[Decimal] = None
+    charge_status: Optional[str] = "none"
+    charge_amount: Optional[Decimal] = None
     created_at: datetime
     updated_at: datetime
 
@@ -1152,3 +1163,161 @@ class NFPASummaryResponse(BaseModel):
     overdue_inspection: int = 0
     pending_decon: int = 0
     ensembles_count: int = 0
+
+
+# ============================================
+# Size Variant Quick-Create Schemas
+# ============================================
+
+
+class SizeVariantCreate(BaseModel):
+    """Create multiple pool items from a base item with different sizes/colors."""
+
+    base_name: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="Base name, e.g. 'Dept Polo'. Size appended automatically.",
+    )
+    sizes: List[str] = Field(
+        ...,
+        min_length=1,
+        description='Sizes to create, e.g. ["S", "M", "L", "XL", "2XL"]',
+    )
+    colors: Optional[List[str]] = Field(
+        None,
+        description='Colors to create variants for (creates size×color matrix). '
+        'If empty, only size variants are created.',
+    )
+    category_id: Optional[UUID] = None
+    quantity_per_variant: int = Field(
+        default=0, ge=0, description="Starting quantity for each variant"
+    )
+    replacement_cost: Optional[Decimal] = Field(None, ge=0)
+    purchase_price: Optional[Decimal] = Field(None, ge=0)
+    tracking_type: TrackingTypeLiteral = "pool"
+    unit_of_measure: Optional[str] = Field(None, max_length=50)
+    location_id: Optional[UUID] = None
+    storage_area_id: Optional[UUID] = None
+    station: Optional[str] = Field(None, max_length=100)
+    notes: Optional[str] = None
+
+
+class SizeVariantCreateResponse(BaseModel):
+    """Response from creating size variants."""
+
+    created_count: int
+    items: List[InventoryItemResponse]
+
+
+# ============================================
+# Bulk Issuance Schemas
+# ============================================
+
+
+class BulkIssuanceTarget(BaseModel):
+    """A single member + quantity in a bulk issuance."""
+
+    user_id: UUID
+    quantity: int = Field(default=1, ge=1)
+    issue_reason: Optional[str] = None
+
+
+class BulkIssuanceRequest(BaseModel):
+    """Issue a pool item to multiple members at once."""
+
+    targets: List[BulkIssuanceTarget] = Field(
+        ...,
+        min_length=1,
+        description="Members to issue to",
+    )
+
+
+class BulkIssuanceResultItem(BaseModel):
+    """Result for one member in a bulk issuance."""
+
+    user_id: UUID
+    success: bool
+    issuance_id: Optional[UUID] = None
+    error: Optional[str] = None
+
+
+class BulkIssuanceResponse(BaseModel):
+    """Response from a bulk issuance operation."""
+
+    item_id: UUID
+    total: int
+    successful: int
+    failed: int
+    results: List[BulkIssuanceResultItem]
+
+
+# ============================================
+# Issuance Allowance Schemas
+# ============================================
+
+
+class IssuanceAllowanceCreate(BaseModel):
+    """Create an issuance allowance for a category."""
+
+    category_id: UUID
+    role_id: Optional[UUID] = Field(
+        None, description="Role this applies to. NULL = all members."
+    )
+    max_quantity: int = Field(..., ge=1, description="Max units per period")
+    period_type: AllowancePeriodLiteral = "annual"
+
+
+class IssuanceAllowanceUpdate(BaseModel):
+    """Update an issuance allowance."""
+
+    max_quantity: Optional[int] = Field(None, ge=1)
+    period_type: Optional[AllowancePeriodLiteral] = None
+    is_active: Optional[bool] = None
+
+
+class IssuanceAllowanceResponse(BaseModel):
+    """Issuance allowance response."""
+
+    id: UUID
+    organization_id: UUID
+    category_id: UUID
+    role_id: Optional[UUID] = None
+    max_quantity: int
+    period_type: str
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    created_by: Optional[UUID] = None
+    # Enriched by API
+    category_name: Optional[str] = None
+    role_name: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AllowanceCheckResponse(BaseModel):
+    """Check a member's remaining allowance for a category."""
+
+    category_id: UUID
+    category_name: Optional[str] = None
+    max_quantity: int
+    issued_this_period: int
+    remaining: int
+    period_type: str
+
+
+# ============================================
+# Cost Recovery Schemas
+# ============================================
+
+
+class IssuanceChargeRequest(BaseModel):
+    """Record a cost-recovery charge for a lost/damaged issued item."""
+
+    charge_status: ChargeStatusLiteral = Field(
+        ..., description="Set to 'charged' or 'waived'"
+    )
+    charge_amount: Optional[Decimal] = Field(
+        None, ge=0, description="Amount to charge (defaults to unit_cost_at_issuance)"
+    )
