@@ -67,7 +67,8 @@ const CATEGORY_COLOR_OPTIONS = [
   { value: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400', label: 'Orange', preview: 'bg-orange-500' },
 ] as const;
 
-const DEFAULT_CATEGORY_COLOR = CATEGORY_COLOR_OPTIONS[0].value;
+type CategoryColor = (typeof CATEGORY_COLOR_OPTIONS)[number]['value'];
+const DEFAULT_CATEGORY_COLOR: CategoryColor = CATEGORY_COLOR_OPTIONS[0].value;
 
 interface OrgMember {
   id: string;
