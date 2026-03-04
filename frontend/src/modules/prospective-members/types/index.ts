@@ -340,6 +340,7 @@ export interface Applicant {
   status: ApplicantStatus;
   notes?: string | undefined;
   stage_history: StageHistoryEntry[];
+  total_stages: number;
   last_activity_at: string;
   deactivated_at?: string | undefined;
   deactivated_reason?: string | undefined;

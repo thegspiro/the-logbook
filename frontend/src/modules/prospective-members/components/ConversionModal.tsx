@@ -88,7 +88,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
   if (!isOpen || !applicant) return null;
 
   const completedStages = applicant.stage_history.filter(s => s.completed_at).length;
-  const totalStages = applicant.stage_history.length;
+  const totalStages = applicant.total_stages;
 
   const handleConvert = async () => {
     setIsConverting(true);
