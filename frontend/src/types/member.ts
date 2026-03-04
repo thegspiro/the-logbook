@@ -10,7 +10,7 @@ export interface EmergencyContact {
   relationship: string;
   phone: string;
   email?: string;
-  isPrimary: boolean;
+  is_primary: boolean;
 }
 
 export interface Address {

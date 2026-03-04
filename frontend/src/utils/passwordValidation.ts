@@ -35,7 +35,7 @@ const COMMON_PASSWORDS = [
   'password', '12345678', '123456789', '1234567890', 'qwerty', 'admin',
   'letmein', 'welcome', 'monkey', 'dragon', 'master', 'password123',
   'password1', 'password!', 'iloveyou', 'sunshine', 'princess', 'admin123',
-  'qwerty123', 'login', 'passw0rd', 'baseball', 'football', 'shadow-sm',
+  'qwerty123', 'login', 'passw0rd', 'baseball', 'football', 'shadow',
   'firefighter', 'firehouse', 'firedepart', 'rescue', 'engine', 'ladder',
   'station', 'department', 'emergency', 'medic', 'ems', 'ambulance'
 ];

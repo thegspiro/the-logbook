@@ -5,7 +5,7 @@
  * server-side pagination, and bulk actions.
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -101,7 +101,8 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
     useProspectiveMembersStore();
   const [internalSelected, setInternalSelected] = useState<Set<string>>(new Set());
   const selected = externalSelected ?? internalSelected;
-  const setSelected = externalSelected ? () => {} : setInternalSelected;
+  const noop = useCallback(() => {}, []);
+  const setSelected = externalSelected ? noop : setInternalSelected;
   const [actionMenuId, setActionMenuId] = useState<string | null>(null);
   const [showBulkRejectConfirm, setShowBulkRejectConfirm] = useState(false);
   const [rejectConfirmId, setRejectConfirmId] = useState<string | null>(null);
@@ -164,7 +165,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
   useEffect(() => {
     setSelected(new Set());
     setActionMenuId(null);
-  }, [currentPage]);
+  }, [currentPage, setSelected]);
 
   const allSelected =
     applicants.length > 0 && selected.size === applicants.length;

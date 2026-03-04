@@ -186,11 +186,10 @@ test.describe('Authentication', () => {
 
   test.describe('Logout', () => {
     test('should return to login page after logout', async ({ page }) => {
-      // Set up authentication state by injecting tokens into localStorage
+      // Set session flag for authenticated state (httpOnly cookie auth)
       await page.goto('/login');
       await page.evaluate(() => {
-        localStorage.setItem('access_token', 'mock-access-token');
-        localStorage.setItem('refresh_token', 'mock-refresh-token');
+        localStorage.setItem('has_session', '1');
       });
 
       // Mock the current user endpoint

@@ -52,7 +52,7 @@ export interface FormResultsPanelProps {
 function median(sorted: number[]): number {
   if (sorted.length === 0) return 0;
   const mid = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 !== 0) return sorted[mid]!;
+  if (sorted.length % 2 !== 0) return sorted[mid] ?? 0;
   return ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2;
 }
 
@@ -149,8 +149,8 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
             nums.sort((a, b) => a - b);
             const sum = nums.reduce((s, n) => s + n, 0);
             summary.numStats = {
-              min: nums[0]!,
-              max: nums[nums.length - 1]!,
+              min: nums[0] ?? 0,
+              max: nums[nums.length - 1] ?? 0,
               avg: Math.round((sum / nums.length) * 100) / 100,
               median: median(nums),
               sum,
@@ -160,8 +160,8 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
           if (values.length > 0) {
             const sorted = [...values].sort();
             summary.dateRange = {
-              earliest: sorted[0]!,
-              latest: sorted[sorted.length - 1]!,
+              earliest: sorted[0] ?? '',
+              latest: sorted[sorted.length - 1] ?? '',
             };
           }
         } else if (TEXT_TYPES.has(field.field_type)) {

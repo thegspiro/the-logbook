@@ -279,10 +279,10 @@ export const GrantDetailPage: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   const application = currentApplication;
-  const budgetItems = application?.budgetItems ?? [];
-  const expenditures = application?.expenditures ?? [];
-  const complianceTasks = application?.complianceTasks ?? [];
-  const grantNotes = application?.grantNotes ?? [];
+  const budgetItems = useMemo(() => application?.budgetItems ?? [], [application?.budgetItems]);
+  const expenditures = useMemo(() => application?.expenditures ?? [], [application?.expenditures]);
+  const complianceTasks = useMemo(() => application?.complianceTasks ?? [], [application?.complianceTasks]);
+  const grantNotes = useMemo(() => application?.grantNotes ?? [], [application?.grantNotes]);
 
   const budgetTotal = useMemo(
     () => budgetItems.reduce((sum, item) => sum + item.amountBudgeted, 0),

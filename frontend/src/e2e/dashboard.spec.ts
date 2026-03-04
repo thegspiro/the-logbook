@@ -9,10 +9,11 @@ import { test, expect, type Page } from '@playwright/test';
 
 /** Shared mock API route setup for an authenticated session with dashboard data. */
 async function setupAuthenticatedDashboard(page: Page) {
-  // Inject tokens into localStorage
+  // Set session flag so ProtectedRoute considers the user authenticated.
+  // Auth uses httpOnly cookies (not localStorage tokens); this flag only
+  // signals that a session may exist and loadUser should call /auth/me.
   await page.evaluate(() => {
-    localStorage.setItem('access_token', 'mock-access-token');
-    localStorage.setItem('refresh_token', 'mock-refresh-token');
+    localStorage.setItem('has_session', '1');
   });
 
   // Mock current user endpoint
@@ -424,10 +425,9 @@ test.describe('Dashboard', () => {
     test('should show empty state messages when no data is available', async ({ page }) => {
       await page.goto('/login');
 
-      // Set up authentication but with empty data responses
+      // Set session flag for authenticated state (httpOnly cookie auth)
       await page.evaluate(() => {
-        localStorage.setItem('access_token', 'mock-access-token');
-        localStorage.setItem('refresh_token', 'mock-refresh-token');
+        localStorage.setItem('has_session', '1');
       });
 
       await page.route('**/api/v1/auth/me', (route) => {
