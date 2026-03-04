@@ -242,8 +242,14 @@ function extractStatus(status: string | { value: string }): string {
 }
 
 /** Map a backend prospect response to a frontend Applicant */
-function mapProspectToApplicant(data: BackendProspectResponse): Applicant {
-  const stageHistory: StageHistoryEntry[] = (data.step_progress || []).map((sp: BackendStepProgressResponse) => {
+export function mapProspectToApplicant(data: BackendProspectResponse): Applicant {
+  // Only include steps the prospect has actually reached (not PENDING future steps).
+  // When a prospect is created, the backend initializes progress records for ALL
+  // pipeline steps — first step as IN_PROGRESS, the rest as PENDING. We filter out
+  // PENDING steps so the stage history only shows stages the prospect has entered.
+  const stageHistory: StageHistoryEntry[] = (data.step_progress || [])
+    .filter((sp: BackendStepProgressResponse) => sp.status !== 'pending')
+    .map((sp: BackendStepProgressResponse) => {
     const stageType = sp.step?.step_type
       ? mapStepTypeToFrontend(sp.step.step_type, sp.step.action_type)
       : ('manual_approval' as StageType);
@@ -301,6 +307,7 @@ function mapProspectToApplicant(data: BackendProspectResponse): Applicant {
       ? mapStepTypeToFrontend(data.current_step.step_type, data.current_step.action_type)
       : undefined,
     stage_history: stageHistory,
+    total_stages: (data.step_progress || []).length,
     stage_entered_at: data.created_at,
     target_membership_type: 'probationary',
     form_submission_id: data.form_submission_id ?? undefined,

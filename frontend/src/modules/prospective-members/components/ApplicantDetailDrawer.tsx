@@ -937,7 +937,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   </div>
                   {/* Time in pipeline summary */}
                   <p className="text-xs text-theme-text-muted mt-2">
-                    {applicant.stage_history.filter((e) => !!e.completed_at).length} of {applicant.stage_history.length} stages completed
+                    {applicant.stage_history.filter((e) => !!e.completed_at).length} of {applicant.total_stages} stages completed
                     {applicant.stage_history.length > 0 && (
                       <> &middot; In pipeline since {formatDate(applicant.created_at, tz)}</>
                     )}
