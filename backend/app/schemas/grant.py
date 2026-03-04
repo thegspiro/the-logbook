@@ -11,6 +11,12 @@ from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic.alias_generators import to_camel
+
+# Shared config for response schemas that need camelCase serialization
+_response_config = ConfigDict(
+    from_attributes=True, alias_generator=to_camel, populate_by_name=True
+)
 
 # ============================================
 # Enum Literal Types
@@ -246,7 +252,7 @@ class GrantOpportunityResponse(GrantOpportunityBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -338,7 +344,7 @@ class GrantApplicationResponse(GrantApplicationBase):
     compliance_tasks: List["GrantComplianceTaskResponse"] = []
     grant_notes: List["GrantNoteResponse"] = []
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class GrantApplicationListResponse(BaseModel):
@@ -357,7 +363,7 @@ class GrantApplicationListResponse(BaseModel):
     assigned_to: Optional[UUID] = None
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -404,7 +410,7 @@ class GrantBudgetItemResponse(GrantBudgetItemBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -458,7 +464,7 @@ class GrantExpenditureResponse(GrantExpenditureBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -517,7 +523,7 @@ class GrantComplianceTaskResponse(GrantComplianceTaskBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -551,7 +557,7 @@ class GrantNoteResponse(BaseModel):
     created_by: Optional[UUID] = None
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -612,7 +618,7 @@ class CampaignResponse(CampaignBase):
     updated_at: datetime
     donation_count: Optional[int] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -680,7 +686,7 @@ class DonorResponse(DonorBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -750,7 +756,7 @@ class DonationResponse(DonationBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -805,7 +811,7 @@ class PledgeResponse(PledgeBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -873,7 +879,7 @@ class FundraisingEventResponse(FundraisingEventBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================

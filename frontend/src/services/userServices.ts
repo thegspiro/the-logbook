@@ -489,7 +489,7 @@ export const roleService = {
   },
 
   async getUserPermissions(userId: string): Promise<{ user_id: string; permissions: string[]; roles: string[] }> {
-    const response = await api.get<{ user_id: string; permissions: string[]; roles: string[] }>(`/users/${userId}/permissions`);
+    const response = await api.get<{ user_id: string; permissions: string[]; roles: string[] }>(`/roles/user/${userId}/permissions`);
     return response.data;
   },
 

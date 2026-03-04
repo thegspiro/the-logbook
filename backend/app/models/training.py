@@ -807,6 +807,7 @@ class ProgramPhase(Base):
             "phase_number",
             name="uq_program_phases_program_id_phase_number",
         ),
+        Index("idx_phase_program", "program_id", "phase_number"),
     )
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -847,8 +848,6 @@ class ProgramPhase(Base):
     milestones = relationship(
         "ProgramMilestone", back_populates="phase", cascade="all, delete-orphan"
     )
-
-    __table_args__ = (Index("idx_phase_program", "program_id", "phase_number"),)
 
     def __repr__(self):
         return f"<ProgramPhase(program_id={self.program_id}, number={self.phase_number}, name={self.name})>"

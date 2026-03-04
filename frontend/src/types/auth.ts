@@ -36,7 +36,7 @@ export interface CurrentUser {
   roles: string[];
   positions: string[];
   rank: string | null;
-  membership_type: string;
+  membership_type: string | null;
   permissions: string[];
   is_active: boolean;
   email_verified: boolean;

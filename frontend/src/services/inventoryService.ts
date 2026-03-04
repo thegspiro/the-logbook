@@ -146,8 +146,8 @@ export const inventoryService = {
     return response.data;
   },
 
-  async updateMaintenanceRecord(recordId: string, data: Partial<MaintenanceRecordCreate>): Promise<MaintenanceRecord> {
-    const response = await api.put<MaintenanceRecord>(`/inventory/maintenance/${recordId}`, data);
+  async updateMaintenanceRecord(itemId: string, recordId: string, data: Partial<MaintenanceRecordCreate>): Promise<MaintenanceRecord> {
+    const response = await api.patch<MaintenanceRecord>(`/inventory/items/${itemId}/maintenance/${recordId}`, data);
     return response.data;
   },
 

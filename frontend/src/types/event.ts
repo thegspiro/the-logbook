@@ -346,7 +346,7 @@ export interface EventDocumentFolder {
   id: string;
   organization_id: string;
   name: string;
-  parent_folder_id?: string;
+  parent_id?: string;
   description: string;
   created_at: string;
   updated_at: string;

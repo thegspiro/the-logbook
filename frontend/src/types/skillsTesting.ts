@@ -239,6 +239,6 @@ export interface SkillTestingSummary {
   published_templates: number;
   total_tests: number;
   tests_this_month: number;
-  pass_rate: number;
-  average_score: number;
+  pass_rate: number | null;
+  average_score: number | null;
 }

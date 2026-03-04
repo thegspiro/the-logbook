@@ -184,13 +184,13 @@ const SkillsTestingTemplatesTab: React.FC = () => {
           />
           <SummaryCard
             label="Pass Rate"
-            value={`${Math.round(summary.pass_rate)}%`}
+            value={`${Math.round(summary.pass_rate ?? 0)}%`}
             icon={<TrendingUp className="w-5 h-5 text-green-600" />}
             color="bg-green-100 dark:bg-green-900/30"
           />
           <SummaryCard
             label="Avg Score"
-            value={`${Math.round(summary.average_score)}%`}
+            value={`${Math.round(summary.average_score ?? 0)}%`}
             icon={<BarChart3 className="w-5 h-5 text-orange-600" />}
             color="bg-orange-100 dark:bg-orange-900/30"
           />
