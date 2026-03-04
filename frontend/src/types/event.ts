@@ -351,6 +351,13 @@ export interface EventDocumentFolder {
   document_count: number;
 }
 
+// Custom event category (organization-defined)
+export interface EventCategoryConfig {
+  value: string;
+  label: string;
+  color: string;
+}
+
 // Event Module Settings (organization-level)
 export interface EventModuleSettings {
   // Which event types are enabled for this organization
@@ -359,6 +366,8 @@ export interface EventModuleSettings {
   visible_event_types: EventType[];
   // Custom labels for event types (overrides defaults)
   event_type_labels: Partial<Record<EventType, string>>;
+  // Organization-defined custom event categories
+  custom_event_categories: EventCategoryConfig[];
   // Defaults applied when creating a new event
   defaults: {
     event_type: EventType;

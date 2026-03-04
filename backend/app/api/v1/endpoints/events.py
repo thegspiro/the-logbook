@@ -249,6 +249,7 @@ EVENT_SETTINGS_DEFAULTS = {
         "other",
     ],
     "event_type_labels": {},
+    "custom_event_categories": [],
     "outreach_event_types": [
         {"value": "fire_safety_demo", "label": "Fire Safety Demo"},
         {"value": "station_tour", "label": "Station Tour"},
