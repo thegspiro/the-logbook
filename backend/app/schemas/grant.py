@@ -531,7 +531,11 @@ class GrantNoteCreate(BaseModel):
     application_id: UUID
     note_type: GrantNoteTypeLiteral = "general"
     content: str = Field(..., min_length=1)
-    metadata: Optional[Dict[str, Any]] = None
+    note_metadata: Optional[Dict[str, Any]] = Field(
+        default=None, validation_alias="metadata"
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class GrantNoteResponse(BaseModel):
@@ -541,7 +545,9 @@ class GrantNoteResponse(BaseModel):
     application_id: UUID
     note_type: GrantNoteTypeLiteral
     content: str
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[Dict[str, Any]] = Field(
+        default=None, validation_alias="note_metadata"
+    )
     created_by: Optional[UUID] = None
     created_at: datetime
 
