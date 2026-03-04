@@ -122,10 +122,10 @@ const CampaignsPage: React.FC = () => {
   const loadCampaigns = useCallback(async () => {
     try {
       setIsLoading(true);
-      const data = await fundraisingService.listCampaigns({
-        status: statusFilter || undefined,
-        campaignType: typeFilter || undefined,
-      });
+      const params: { status?: string; campaignType?: string } = {};
+      if (statusFilter) params.status = statusFilter;
+      if (typeFilter) params.campaignType = typeFilter;
+      const data = await fundraisingService.listCampaigns(params);
       setCampaigns(data);
     } catch {
       toast.error('Failed to load campaigns');

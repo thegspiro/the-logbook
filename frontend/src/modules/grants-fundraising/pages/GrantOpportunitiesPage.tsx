@@ -157,11 +157,10 @@ export const GrantOpportunitiesPage: React.FC = () => {
     const loadOpportunities = async () => {
       try {
         setIsLoading(true);
-        const data = await grantsService.listOpportunities({
-          isActive: true,
-          search: search || undefined,
-          category: categoryFilter || undefined,
-        });
+        const params: { isActive: true; search?: string; category?: string } = { isActive: true };
+        if (search) params.search = search;
+        if (categoryFilter) params.category = categoryFilter;
+        const data = await grantsService.listOpportunities(params);
         setOpportunities(data);
       } catch {
         setError('Failed to load grant opportunities.');

@@ -23,7 +23,6 @@ import {
 import type {
   GrantApplication,
   ApplicationStatus,
-  GrantPriority,
 } from '../types';
 import {
   ApplicationStatus as ApplicationStatusEnum,

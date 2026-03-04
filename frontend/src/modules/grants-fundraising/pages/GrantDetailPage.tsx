@@ -36,11 +36,6 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import type {
-  GrantApplication,
-  GrantBudgetItem,
-  GrantExpenditure,
-  GrantComplianceTask,
-  GrantNote,
   ComplianceTaskType,
   ComplianceTaskStatus,
   GrantPriority,
