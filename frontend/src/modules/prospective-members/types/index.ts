@@ -19,6 +19,15 @@ export type StageType =
 
 export type ApplicantStatus = 'active' | 'on_hold' | 'withdrawn' | 'converted' | 'rejected' | 'inactive';
 
+/** Backend step progress status values (mirrors StepProgressStatus enum). */
+export const StepProgressStatus = {
+  PENDING: 'pending',
+  IN_PROGRESS: 'in_progress',
+  COMPLETED: 'completed',
+  SKIPPED: 'skipped',
+} as const;
+export type StepProgressStatus = (typeof StepProgressStatus)[keyof typeof StepProgressStatus];
+
 export type InactivityTimeoutPreset = '3_months' | '6_months' | '1_year' | 'never' | 'custom';
 
 export type InactivityAlertLevel = 'normal' | 'warning' | 'critical';
@@ -703,7 +712,7 @@ export interface BackendStepProgressResponse {
   id: string;
   prospect_id: string;
   step_id: string;
-  status: string;
+  status: StepProgressStatus;
   completed_at: string | null;
   completed_by: string | null;
   notes: string | null;
