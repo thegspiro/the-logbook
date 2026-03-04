@@ -37,6 +37,7 @@ interface SchedulingState {
 
   summary: SchedulingSummary | null;
   summaryLoading: boolean;
+  summaryError: string | null;
 
   // ─── Calendar state ─────────────────────────────────────────────────────
   shifts: ShiftRecord[];
@@ -69,6 +70,7 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
 
   summary: null,
   summaryLoading: false,
+  summaryError: null,
 
   shifts: [],
   shiftsLoading: false,
@@ -124,12 +126,13 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
 
   loadSummary: async () => {
     if (get().summaryLoading) return;
-    set({ summaryLoading: true });
+    set({ summaryLoading: true, summaryError: null });
     try {
       const summary = await schedulingService.getSummary();
       set({ summary });
     } catch (err) {
-      console.warn("Failed to load scheduling summary:", getErrorMessage(err));
+      const message = getErrorMessage(err, "Failed to load scheduling summary");
+      set({ summaryError: message });
     } finally {
       set({ summaryLoading: false });
     }

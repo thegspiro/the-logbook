@@ -37,6 +37,7 @@ describe('schedulingStore', () => {
       apparatusLoaded: false,
       summary: null,
       summaryLoading: false,
+      summaryError: null,
       shifts: [],
       shiftsLoading: false,
       shiftsError: null,
@@ -157,8 +158,22 @@ describe('schedulingStore', () => {
 
       await useSchedulingStore.getState().loadSummary();
 
-      expect(useSchedulingStore.getState().summary).toBeNull();
-      expect(useSchedulingStore.getState().summaryLoading).toBe(false);
+      const state = useSchedulingStore.getState();
+      expect(state.summary).toBeNull();
+      expect(state.summaryLoading).toBe(false);
+      expect(state.summaryError).toBe('fail');
+    });
+
+    it('should clear error on successful reload', async () => {
+      useSchedulingStore.setState({ summaryError: 'previous error' });
+      const summary = { total_shifts: 5, shifts_this_week: 2, shifts_this_month: 8, total_hours_this_month: 96 };
+      mockGetSummary.mockResolvedValue(summary);
+
+      await useSchedulingStore.getState().loadSummary();
+
+      const state = useSchedulingStore.getState();
+      expect(state.summaryError).toBeNull();
+      expect(state.summary).toEqual(summary);
     });
   });
 

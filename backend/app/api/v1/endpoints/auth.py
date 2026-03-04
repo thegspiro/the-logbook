@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.dependencies import get_current_active_user, get_current_user
+from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.permissions import get_rank_default_permissions
@@ -44,6 +45,7 @@ from app.schemas.auth import (
     UserRegister,
     ValidateResetToken,
 )
+from app.schemas.organization import AuthSettings
 from app.services.auth_service import RESET_TOKEN_EXPIRY_MINUTES, AuthService
 
 router = APIRouter()
@@ -106,8 +108,6 @@ async def get_login_branding(
     them without requiring authentication. Returns empty values if no
     organization exists yet (pre-onboarding).
     """
-    from sqlalchemy import select
-
     try:
         result = await db.execute(
             select(Organization.name, Organization.logo)
@@ -197,8 +197,6 @@ async def register(
 
     # Look up the organization from the database
     # This is a single-org system — onboarding creates exactly one organization
-    from sqlalchemy import select
-
     org_result = await db.execute(
         select(Organization)
         .where(Organization.active == True)  # noqa: E712
@@ -566,12 +564,6 @@ async def forgot_password(
 
     Rate limited to prevent abuse. Always returns 200 to avoid email enumeration.
     """
-    from loguru import logger
-    from sqlalchemy import select
-
-    from app.core.audit import log_audit_event
-    from app.schemas.organization import AuthSettings
-
     ip_address = request.client.host if request.client else None
 
     # Look up the organization (single-org system)
@@ -699,8 +691,6 @@ async def reset_password(
     The token was sent via email from the forgot-password endpoint.
     Requires a new password that meets strength requirements (12+ chars).
     """
-    from app.core.audit import log_audit_event
-
     ip_address = request.client.host if request.client else None
     auth_service = AuthService(db)
 

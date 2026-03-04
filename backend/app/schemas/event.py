@@ -10,6 +10,80 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+# ============================================================
+# Event Module Settings
+# ============================================================
+
+
+class RequestPipelineTask(BaseModel):
+    """A single task in the event request pipeline."""
+
+    id: str = Field(..., min_length=1, max_length=100)
+    label: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=500)
+
+
+class EmailTriggerConfig(BaseModel):
+    """Configuration for a single email trigger."""
+
+    enabled: Optional[bool] = None
+    notify_assignee: Optional[bool] = None
+    notify_requester: Optional[bool] = None
+    days: Optional[List[int]] = None
+
+
+class RequestPipelineUpdate(BaseModel):
+    """Settings for the event request pipeline."""
+
+    min_lead_time_days: Optional[int] = Field(None, ge=0)
+    default_assignee_id: Optional[str] = None
+    public_progress_visible: Optional[bool] = None
+    tasks: Optional[List[RequestPipelineTask]] = None
+    email_triggers: Optional[Dict[str, EmailTriggerConfig]] = None
+
+
+class EventDefaultsUpdate(BaseModel):
+    """Default settings for new events."""
+
+    event_type: Optional[str] = Field(None, max_length=100)
+    check_in_window_type: Optional[str] = Field(None, max_length=50)
+    check_in_minutes_before: Optional[int] = Field(None, ge=0)
+    check_in_minutes_after: Optional[int] = Field(None, ge=0)
+    require_checkout: Optional[bool] = None
+    requires_rsvp: Optional[bool] = None
+    allowed_rsvp_statuses: Optional[List[str]] = None
+    allow_guests: Optional[bool] = None
+    is_mandatory: Optional[bool] = None
+    send_reminders: Optional[bool] = None
+    reminder_schedule: Optional[List[int]] = None
+    default_reminder_time: Optional[str] = Field(None, max_length=10)
+    default_duration_minutes: Optional[int] = Field(None, ge=1)
+
+
+class OutreachEventType(BaseModel):
+    """An outreach event type option."""
+
+    value: str = Field(..., min_length=1, max_length=100)
+    label: str = Field(..., min_length=1, max_length=200)
+
+
+class EventSettingsUpdate(BaseModel):
+    """
+    Schema for updating event module settings.
+
+    Only keys present in EVENT_SETTINGS_DEFAULTS are accepted.
+    All fields are optional for partial updates.
+    """
+
+    enabled_event_types: Optional[List[str]] = None
+    visible_event_types: Optional[List[str]] = None
+    event_type_labels: Optional[Dict[str, str]] = None
+    custom_event_categories: Optional[List[str]] = None
+    visible_custom_categories: Optional[List[str]] = None
+    outreach_event_types: Optional[List[OutreachEventType]] = None
+    request_pipeline: Optional[RequestPipelineUpdate] = None
+    defaults: Optional[EventDefaultsUpdate] = None
+
 # Event Schemas
 
 
