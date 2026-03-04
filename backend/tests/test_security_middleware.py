@@ -470,6 +470,15 @@ class TestVerifyCSRFTokenDependency:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
+    async def test_websocket_connections_skip_csrf(self):
+        """WebSocket connections should skip CSRF validation entirely."""
+        request = MagicMock()
+        request.scope = {"type": "websocket"}
+        # Should not raise — CSRF doesn't apply to WebSocket
+        await verify_csrf_token(request)
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
     async def test_safe_methods_skip_csrf(self):
         """GET, HEAD, OPTIONS requests should skip CSRF validation."""
         for method in ["GET", "HEAD", "OPTIONS"]:
