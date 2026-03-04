@@ -138,9 +138,9 @@ export default function FacilitiesPage() {
 
   const filtered = facilities.filter((f) =>
     f.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    f.address_line1?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    f.addressLine1?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     f.city?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    f.facility_number?.toLowerCase().includes(searchQuery.toLowerCase())
+    f.facilityNumber?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
@@ -239,9 +239,9 @@ export default function FacilitiesPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filtered.map((facility) => {
-                const statusName = facility.status?.name?.toLowerCase() ?? '';
+                const statusName = facility.statusRecord?.name?.toLowerCase() ?? '';
                 const StatusIcon = STATUS_ICONS[statusName] ?? Building2;
-                const address = [facility.address_line1, facility.city, facility.state].filter(Boolean).join(', ');
+                const address = [facility.addressLine1, facility.city, facility.state].filter(Boolean).join(', ');
                 return (
                   <button
                     key={facility.id}
@@ -250,19 +250,19 @@ export default function FacilitiesPage() {
                       selectedFacility?.id === facility.id
                         ? 'border-red-500 bg-red-500/5'
                         : 'border-theme-surface-border bg-theme-surface hover:border-theme-surface-border'
-                    } ${facility.is_archived ? 'opacity-60' : ''}`}
+                    } ${facility.isArchived ? 'opacity-60' : ''}`}
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <Building2 className="w-5 h-5 text-theme-text-muted" />
                         <div>
                           <h3 className="font-semibold text-theme-text-primary">{facility.name}</h3>
-                          {facility.facility_number && (
-                            <p className="text-xs text-theme-text-muted">{facility.facility_number}</p>
+                          {facility.facilityNumber && (
+                            <p className="text-xs text-theme-text-muted">{facility.facilityNumber}</p>
                           )}
                         </div>
                       </div>
-                      {facility.is_archived && (
+                      {facility.isArchived && (
                         <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400">
                           Archived
                         </span>
@@ -275,15 +275,15 @@ export default function FacilitiesPage() {
                       </div>
                     )}
                     <div className="flex items-center justify-between mt-3">
-                      {facility.facility_type && (
+                      {facility.facilityType && (
                         <span className="text-xs px-2 py-1 rounded-full bg-theme-surface-hover text-theme-text-muted">
-                          {facility.facility_type.name}
+                          {facility.facilityType.name}
                         </span>
                       )}
-                      {facility.status && (
+                      {facility.statusRecord && (
                         <div className="flex items-center gap-1 text-xs text-theme-text-muted">
                           <StatusIcon className="w-3 h-3" />
-                          {facility.status.name}
+                          {facility.statusRecord.name}
                         </div>
                       )}
                     </div>

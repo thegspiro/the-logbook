@@ -55,12 +55,12 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
   useEffect(() => { void loadRecords(); }, [loadRecords]);
 
   const filtered = records.filter(r => {
-    if (statusFilter === 'completed' && !r.is_completed) return false;
-    if (statusFilter === 'pending' && r.is_completed) return false;
-    if (statusFilter === 'overdue' && !r.is_overdue) return false;
+    if (statusFilter === 'completed' && !r.isCompleted) return false;
+    if (statusFilter === 'pending' && r.isCompleted) return false;
+    if (statusFilter === 'overdue' && !r.isOverdue) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      return (r.description?.toLowerCase().includes(q) || r.vendor?.toLowerCase().includes(q) || r.work_order_number?.toLowerCase().includes(q) || r.performed_by?.toLowerCase().includes(q));
+      return (r.description?.toLowerCase().includes(q) || r.vendor?.toLowerCase().includes(q) || r.workOrderNumber?.toLowerCase().includes(q) || r.performedBy?.toLowerCase().includes(q));
     }
     return true;
   });
@@ -78,15 +78,15 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
   const openEdit = (record: MaintenanceRecord) => {
     setEditingRecord(record);
     setFormData({
-      facility_id: record.facility_id,
-      maintenance_type_id: record.maintenance_type_id || '',
+      facility_id: record.facilityId,
+      maintenance_type_id: record.maintenanceTypeId || '',
       description: record.description || '',
-      scheduled_date: record.scheduled_date || '',
-      due_date: record.due_date || '',
-      performed_by: record.performed_by || '',
+      scheduled_date: record.scheduledDate || '',
+      due_date: record.dueDate || '',
+      performed_by: record.performedBy || '',
       cost: record.cost?.toString() || '',
       vendor: record.vendor || '',
-      work_order_number: record.work_order_number || '',
+      work_order_number: record.workOrderNumber || '',
       notes: record.notes || '',
     });
     setShowModal(true);
@@ -205,35 +205,35 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
             <div key={record.id} className="flex items-center gap-4 p-4 bg-theme-surface border border-theme-surface-border rounded-lg hover:border-theme-surface-border transition-all group">
               {/* Status Icon */}
               <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                record.is_completed ? 'bg-emerald-500/10 text-emerald-500' :
-                record.is_overdue ? 'bg-red-500/10 text-red-500' :
+                record.isCompleted ? 'bg-emerald-500/10 text-emerald-500' :
+                record.isOverdue ? 'bg-red-500/10 text-red-500' :
                 'bg-amber-500/10 text-amber-500'
               }`}>
-                {record.is_completed ? <CheckCircle2 className="w-4 h-4" /> :
-                 record.is_overdue ? <AlertTriangle className="w-4 h-4" /> :
+                {record.isCompleted ? <CheckCircle2 className="w-4 h-4" /> :
+                 record.isOverdue ? <AlertTriangle className="w-4 h-4" /> :
                  <Clock className="w-4 h-4" />}
               </div>
               {/* Content */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5">
                   <p className="text-sm font-medium text-theme-text-primary truncate">{record.description || 'Untitled'}</p>
-                  {record.maintenance_type && (
+                  {record.maintenanceType && (
                     <span className="text-xs px-2 py-0.5 rounded-full bg-theme-surface-hover text-theme-text-muted shrink-0">
-                      {record.maintenance_type.name}
+                      {record.maintenanceType.name}
                     </span>
                   )}
                 </div>
                 <div className="flex items-center gap-3 text-xs text-theme-text-muted">
-                  <span>{getFacilityName(record.facility_id)}</span>
-                  {record.scheduled_date && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{record.scheduled_date}</span>}
+                  <span>{getFacilityName(record.facilityId)}</span>
+                  {record.scheduledDate && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{record.scheduledDate}</span>}
                   {record.vendor && <span>{record.vendor}</span>}
                   {record.cost != null && record.cost > 0 && <span className="flex items-center gap-1"><DollarSign className="w-3 h-3" />{record.cost.toLocaleString()}</span>}
-                  {record.work_order_number && <span>WO# {record.work_order_number}</span>}
+                  {record.workOrderNumber && <span>WO# {record.workOrderNumber}</span>}
                 </div>
               </div>
               {/* Actions */}
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                {!record.is_completed && (
+                {!record.isCompleted && (
                   <button onClick={() => { void handleComplete(record); }} title="Mark completed" aria-label="Mark completed"
                     className="p-1.5 text-emerald-600 hover:bg-emerald-500/10 rounded-lg transition-colors"
                   >
@@ -273,7 +273,7 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
                 <label className={labelCls}>Facility *</label>
                 <select value={formData.facility_id} onChange={e => setFormData(p => ({...p, facility_id: e.target.value}))} className={inputCls}>
                   <option value="">Select facility...</option>
-                  {facilities.filter(f => !f.is_archived).map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                  {facilities.filter(f => !f.isArchived).map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                 </select>
               </div>
               <div>

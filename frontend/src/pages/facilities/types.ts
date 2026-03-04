@@ -1,6 +1,10 @@
 /**
  * Facilities module TypeScript interfaces
  * Maps to the backend database models in app/models/facilities.py
+ *
+ * Property names use camelCase to match the API response format.
+ * The backend Pydantic schemas use alias_generator=to_camel, so JSON
+ * fields are serialized as camelCase (e.g., addressLine1, zipCode).
  */
 
 export interface FacilityType {
@@ -8,8 +12,8 @@ export interface FacilityType {
   name: string;
   description?: string;
   category?: string;
-  is_system?: boolean;
-  is_active?: boolean;
+  isSystem?: boolean;
+  isActive?: boolean;
 }
 
 export interface FacilityStatus {
@@ -17,43 +21,43 @@ export interface FacilityStatus {
   name: string;
   description?: string;
   color?: string;
-  is_operational?: boolean;
-  is_system?: boolean;
-  is_active?: boolean;
+  isOperational?: boolean;
+  isSystem?: boolean;
+  isActive?: boolean;
 }
 
 export interface Facility {
   id: string;
   name: string;
-  facility_number?: string;
-  facility_type_id?: string;
-  facility_type?: FacilityType;
-  status_id?: string;
-  status?: FacilityStatus;
+  facilityNumber?: string;
+  facilityTypeId?: string;
+  facilityType?: FacilityType;
+  statusId?: string;
+  statusRecord?: FacilityStatus;
   // Address
-  address_line1?: string;
-  address_line2?: string;
+  addressLine1?: string;
+  addressLine2?: string;
   city?: string;
   state?: string;
-  zip_code?: string;
+  zipCode?: string;
   county?: string;
   // Coordinates
   latitude?: number;
   longitude?: number;
   // Building Info
-  year_built?: number;
-  year_renovated?: number;
-  square_footage?: number;
-  num_floors?: number;
-  num_bays?: number;
-  lot_size_acres?: number;
+  yearBuilt?: number;
+  yearRenovated?: number;
+  squareFootage?: number;
+  numFloors?: number;
+  numBays?: number;
+  lotSizeAcres?: number;
   // Ownership
-  is_owned?: boolean;
-  lease_expiration?: string;
-  property_tax_id?: string;
+  isOwned?: boolean;
+  leaseExpiration?: string;
+  propertyTaxId?: string;
   // Capacity
-  max_occupancy?: number;
-  sleeping_quarters?: number;
+  maxOccupancy?: number;
+  sleepingQuarters?: number;
   // Contact
   phone?: string;
   fax?: string;
@@ -62,10 +66,10 @@ export interface Facility {
   description?: string;
   notes?: string;
   // Status
-  is_archived: boolean;
-  archived_at?: string;
-  created_at: string;
-  updated_at: string;
+  isArchived: boolean;
+  archivedAt?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface MaintenanceType {
@@ -73,77 +77,77 @@ export interface MaintenanceType {
   name: string;
   description?: string;
   category?: string;
-  default_interval_value?: number;
-  default_interval_unit?: string;
-  is_system?: boolean;
-  is_active?: boolean;
+  defaultIntervalValue?: number;
+  defaultIntervalUnit?: string;
+  isSystem?: boolean;
+  isActive?: boolean;
 }
 
 export interface MaintenanceRecord {
   id: string;
-  facility_id: string;
+  facilityId: string;
   facility?: Facility;
-  maintenance_type_id?: string;
-  maintenance_type?: MaintenanceType;
-  system_id?: string;
-  scheduled_date?: string;
-  due_date?: string;
-  completed_date?: string;
-  performed_by?: string;
-  is_completed: boolean;
-  is_overdue?: boolean;
+  maintenanceTypeId?: string;
+  maintenanceType?: MaintenanceType;
+  systemId?: string;
+  scheduledDate?: string;
+  dueDate?: string;
+  completedDate?: string;
+  performedBy?: string;
+  isCompleted: boolean;
+  isOverdue?: boolean;
   description?: string;
-  work_performed?: string;
+  workPerformed?: string;
   findings?: string;
   cost?: number;
   vendor?: string;
-  invoice_number?: string;
-  work_order_number?: string;
-  next_due_date?: string;
+  invoiceNumber?: string;
+  workOrderNumber?: string;
+  nextDueDate?: string;
   notes?: string;
-  is_historic?: boolean;
-  occurred_date?: string;
-  historic_source?: string;
-  created_at: string;
-  updated_at: string;
+  isHistoric?: boolean;
+  occurredDate?: string;
+  historicSource?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Inspection {
   id: string;
-  facility_id: string;
+  facilityId: string;
   facility?: Facility;
-  inspection_type: string;
+  inspectionType: string;
   title: string;
   description?: string;
-  inspection_date: string;
-  next_inspection_date?: string;
+  inspectionDate: string;
+  nextInspectionDate?: string;
   passed?: boolean | null;
-  inspector_name?: string;
-  inspector_organization?: string;
-  certificate_number?: string;
+  inspectorName?: string;
+  inspectorOrganization?: string;
+  certificateNumber?: string;
   findings?: string;
-  corrective_actions?: string;
-  corrective_action_deadline?: string;
-  corrective_action_completed?: boolean;
+  correctiveActions?: string;
+  correctiveActionDeadline?: string;
+  correctiveActionCompleted?: boolean;
   notes?: string;
-  created_at: string;
-  updated_at: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Room {
   id: string;
-  facility_id: string;
+  facilityId: string;
   name: string;
-  room_number?: string;
+  roomNumber?: string;
   floor?: number;
-  room_type?: string;
-  square_footage?: number;
+  roomType?: string;
+  squareFootage?: number;
   capacity?: number;
   description?: string;
   equipment?: string;
-  is_active?: boolean;
-  created_at: string;
-  updated_at: string;
+  isActive?: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type TabId = 'facilities' | 'maintenance' | 'inspections';
