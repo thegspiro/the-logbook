@@ -7,6 +7,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Onboarding Auth Cookie Fix (2026-03-04)
+
+- **httpOnly auth cookies on system owner creation**: The onboarding system owner creation endpoint (Step 7) now sets httpOnly auth cookies via `_set_auth_cookies()`, matching the login endpoint pattern. Previously, tokens were returned in the response body but cookies were never set, causing `loadUser()` → 401 → cleared `has_session` → auth state lost for remaining onboarding steps (8–10) and the final redirect to `/dashboard` failed via `ProtectedRoute → /login`
+
+### Organization Profile — Physical Address (2026-03-04)
+
+- **Physical address in organization profile API and settings UI**: The organization model already had physical address columns (populated during onboarding), but they were never exposed in the profile API or displayed in Organization Settings. Added `PhysicalAddressUpdate` schema, physical address fields to `OrganizationProfileUpdate`, and a new Physical Address section in the Settings General tab with a "Same as mailing address" toggle
+
+### Custom Event Categories (2026-03-04)
+
+- **Custom event categories — full-stack integration**: Organizations can now define custom event categories with name and color badge. Backend: new `custom_category` column on events table with index + migration, visibility settings via `visible_custom_categories`, and category filtering in `list_events`. Frontend: category dropdown in EventForm, category filter tabs on EventsPage, and toggle controls in Events Settings visibility section
+- **Event Administration settings redesign**: Replaced collapsible sections with sidebar + content panel layout to match Organization Settings page. Desktop sidebar navigation with section descriptions; mobile horizontal scrollable tabs. Each section rendered in themed card panel with consistent header styling
+- **Outreach types auto-ID**: Outreach Event Types form now auto-generates the ID from the label, removing the separate ID input field. Email Notifications and Email Templates consolidated into a single Email Configuration section
+
+### Admin Hours camelCase Fix (2026-03-04)
+
+- **AdminHoursSummary.byCategory snake_case → camelCase**: The backend schema uses `alias_generator=to_camel`, so the API returns camelCase. Updated the `AdminHoursSummary` type definition and all 3 consuming components (`SummaryTab`, `AdminHoursPage`, `MemberProfilePage`) to use camelCase property names (`categoryId`, `categoryName`, `totalHours`, etc.)
+
+### Facility Address Display Fix (2026-03-04)
+
+- **Facility address fields not displaying**: Frontend `Facility` interface and all component code used snake_case (`address_line1`, `zip_code`, `facility_number`), but the backend Pydantic schema's `alias_generator=to_camel` returns camelCase. All multi-word fields resolved to `undefined` at runtime. Updated all frontend facility types to camelCase and added missing `address_line1`/`zip_code` to `FacilityListItem` backend schema
+
+### Theme & Styling Fixes (2026-03-04)
+
+- **EventRequestStatusPage theme compliance**: Replaced all hardcoded gray/color classes with manual `dark:` prefixes to theme-aware CSS variable classes (`bg-theme-surface`, `text-theme-text-primary`, `border-theme-surface-border`), so the page respects light, dark, and high-contrast modes
+- **Apparatus list page gradient fix**: Replaced hardcoded `via-red-900` with theme-aware `via-theme-bg-via` CSS variable class. The hardcoded dark red gradient was always rendering `#7f1d1d` regardless of theme, making the apparatus page look different in light mode
+
+### TypeScript Build Fix (2026-03-04)
+
+- **TS2345 category color state**: `useState` for `newCategoryColor` was initialized with `DEFAULT_CATEGORY_COLOR`, which had a narrow literal type of only the first color option. Added `CategoryColor` union type and annotated the constant to widen the inferred state type
+
+### WebSocket CSRF Fix (2026-03-04)
+
+- **WebSocket CSRF dependency error on `/api/v1/inventory/ws`**: The `verify_csrf_token` dependency was applied globally to the API router but failed on WebSocket connections because it expected a `Request` object. Changed parameter type to `HTTPConnection` (base class of both `Request` and `WebSocket`) and added early return for WebSocket scope, since CSRF protection is HTTP-specific and the WebSocket endpoint already uses JWT authentication
+
+### ResponseValidationError Fix (2026-03-04)
+
+- **ProspectResponse metadata field returning SQLAlchemy MetaData object**: The schema used `alias="metadata"` which caused Pydantic's `from_attributes` to read `obj.metadata` (SQLAlchemy's MetaData object) instead of `obj.metadata_` (the actual JSON column). Switched to `serialization_alias` so Pydantic reads the correct attribute but still outputs `"metadata"` in JSON
+
+### Docker Build Fixes (2026-03-04)
+
+- **Frontend Docker build failure**: Fixed `vite-plugin-pwa` peer dependency conflict with Vite 7. Root cause: no `package-lock.json` existed in the frontend Docker context, causing npm to resolve dependencies from scratch each build
+- **Resilient Dockerfile**: Frontend Dockerfile now uses `npm install --legacy-peer-deps` to handle both version mismatches and peer dependency conflicts. Lock file made optional via glob pattern
+- **Backend `.dockerignore`**: Added `backend/.dockerignore` to reduce Docker build context from 343MB
+
+### Alembic Migration Fixes (2026-03-04)
+
+- **Duplicate revision ID causing graph walk failure**: Fixed Alembic migration graph walk failure caused by duplicate revision IDs. Added `.stale` file recovery to migration cleanup and fixed regex deprecation warnings
+- **Type-annotated migration format support**: 11 migration files used Alembic's newer `revision: str = "..."` format which the regex patterns didn't match, making those files invisible and causing 4 apparent broken chain references
+- **SQLAlchemy relationship overlap warnings**: Fixed `back_populates` on `Event.recurrence_children`/`recurrence_parent` and `StorageArea.parent`/`children` self-referential relationships that caused `SAWarning` at startup
+
+### Form-to-Pipeline Integration Hardening (2026-03-04)
+
+- **13 form-to-pipeline improvements**: Complete form-to-pipeline integration hardening including server-side validation, label-based fallback for all integration types, O(N) cleanup query fix, form validation before save, step update lifecycle fix, and field compatibility checks
+- **Form data not flowing to prospective member pipeline**: Fixed multiple issues where form submissions were not appearing in the prospective members pipeline — including field mapping failures on reprocessed submissions
+- **Duplicate prospect detection**: Added duplicate prospect detection with email notification when a prospect with the same email already exists
+- **Pipeline form validation**: Added field compatibility checks before save — warns when form fields don't match expected pipeline field mappings
+- **Form deletion protection**: Forms linked to active pipelines are now protected from deletion with clear error messaging
+- **form.integration_type**: Added direct label-mapping path for pipeline integrations, simplifying form-to-pipeline configuration
+
+### Reports Module Expansion (2026-03-04)
+
+- **12 report types in dedicated feature module**: Expanded the Reports module from inline views into a dedicated feature module with 12 report types covering training, attendance, membership, apparatus, inventory, compliance, and more
+
+### Email Template Enhancements (2026-03-04)
+
+- **Configurable default CC/BCC per email template**: Each email template now supports default CC and BCC addresses. BCC support added for scheduled emails
+- **Email template enum sync test**: Added sync test to prevent drift between code-defined and DB-defined email template type enums. Fixed missing `duplicate_application` enum value in the database
+- **Email template 500 error fix**: Fixed 500 error on email templates endpoint caused by missing `duplicate_application` value in DB enum
+
+### Modal Click-Through Fix (2026-03-04)
+
+- **Modal backdrop intercepting clicks on dialog buttons**: Fixed the `Modal` component backdrop intercepting click events that should reach dialog buttons, causing delete confirmations and other actions to be unresponsive
+
 ### Major Toolchain Upgrades (2026-03-03)
 
 - **React 18 → 19**: Upgraded React and react-dom to version 19; updated refs to use callback-based patterns where needed; fixed test utilities for React 19 compatibility

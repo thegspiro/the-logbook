@@ -323,6 +323,15 @@ Integration configuration includes a visual field mapping interface:
 
 ## Recent Changes (March 2026)
 
+### March 4, 2026
+- **Form-to-pipeline integration hardening (13 improvements)**: Server-side validation, label-based fallback for all integration types, O(N) cleanup query optimization, field compatibility checks before save, step update lifecycle fix
+- **Form data flow fix**: Fixed multiple issues where form submissions were not appearing in the prospective members pipeline — including field mapping failures on reprocessed submissions
+- **Duplicate prospect detection**: Email-based duplicate detection with coordinator notification when a prospect with the same email already exists
+- **Pipeline form validation**: Pre-save field compatibility check warns when form fields don't match expected pipeline field mappings
+- **Form deletion protection**: Forms linked to active pipelines are protected from deletion with clear error messaging
+- **form.integration_type**: Added direct label-mapping path for pipeline integrations, simplifying form-to-pipeline configuration
+- **Modal click-through fix**: Modal backdrop no longer intercepts click events intended for dialog buttons (affected delete confirmations)
+
 ### March 3, 2026
 - **Integration health dashboard**: Added integration health view with result display and reprocess support
 - **Form dropdown selector**: New dropdown-based form selection for integration field mapping

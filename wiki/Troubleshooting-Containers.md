@@ -179,4 +179,24 @@ If containers are being OOM-killed, increase limits in `docker-compose.override.
 
 ---
 
+## Frontend Docker Build Failures (2026-03-04)
+
+### Problem: Frontend build fails with peer dependency conflict
+
+**Status (Fixed):** `vite-plugin-pwa` peer dep conflict with Vite 7. Dockerfile now uses `npm install --legacy-peer-deps`. Lock file made optional.
+
+**Edge Case:** Build works locally but fails in Docker. Local npm uses cached `node_modules`; Docker resolves fresh. The `--legacy-peer-deps` flag resolves this.
+
+### Problem: Docker build context too large (343MB+)
+
+**Status (Fixed):** `backend/.dockerignore` added to exclude tests, virtual environments, and other non-essential files.
+
+**Fix:**
+```bash
+docker-compose build --no-cache frontend
+docker-compose up -d frontend
+```
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Backend Issues](Troubleshooting-Backend) | [Quick Reference](Quick-Reference)

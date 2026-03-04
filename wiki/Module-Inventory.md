@@ -266,4 +266,11 @@ Frontend tests in `src/pages/InventoryMembersTab.test.tsx` and `src/constants/en
 
 ---
 
+## Recent Changes (2026-03-04)
+
+- **WebSocket CSRF Fix** — The inventory WebSocket endpoint (`/api/v1/inventory/ws`) no longer fails with a 500 error. The global CSRF middleware now correctly handles WebSocket connections by using `HTTPConnection` instead of `Request` and returning early for WebSocket scope
+- **StorageArea Relationship Fix** — Self-referential `parent`/`children` relationship on `StorageArea` now has proper `back_populates`, eliminating SQLAlchemy warnings at startup
+
+---
+
 **See also:** [Apparatus Module](Module-Apparatus) | [Training Module](Module-Training)
