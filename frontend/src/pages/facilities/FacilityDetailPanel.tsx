@@ -72,6 +72,10 @@ export default function FacilityDetailPanel({
   };
 
   const handleSave = async () => {
+    if (!(editData.name as string)?.trim()) {
+      toast.error('Facility name is required');
+      return;
+    }
     setIsSaving(true);
     try {
       const payload: Record<string, unknown> = {};

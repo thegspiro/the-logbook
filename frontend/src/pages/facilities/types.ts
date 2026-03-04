@@ -152,12 +152,16 @@ export interface Room {
 
 export type TabId = 'facilities' | 'maintenance' | 'inspections';
 
+/** Words that should stay fully uppercased when formatting enum labels */
+const ACRONYMS = new Set(['ada', 'hvac', 'id']);
+
 /** Convert a snake_case enum value to a human-readable label (e.g. "building_code" → "Building Code") */
 export function enumLabel(value: string | undefined | null): string {
   if (!value) return '';
   return value
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+    .split('_')
+    .map((w) => (ACRONYMS.has(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))
+    .join(' ');
 }
 
 export const INSPECTION_TYPES = [
