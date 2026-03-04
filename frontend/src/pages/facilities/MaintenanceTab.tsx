@@ -100,14 +100,14 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
       const payload: Record<string, unknown> = {
         facility_id: formData.facility_id,
         description: formData.description.trim(),
-        maintenance_type_id: formData.maintenance_type_id ?? undefined,
-        scheduled_date: formData.scheduled_date ?? undefined,
-        due_date: formData.due_date ?? undefined,
-        performed_by: formData.performed_by.trim() ?? undefined,
+        maintenance_type_id: formData.maintenance_type_id || undefined,
+        scheduled_date: formData.scheduled_date || undefined,
+        due_date: formData.due_date || undefined,
+        performed_by: formData.performed_by.trim() || undefined,
         cost: formData.cost ? Number(formData.cost) : undefined,
-        vendor: formData.vendor.trim() ?? undefined,
-        work_order_number: formData.work_order_number.trim() ?? undefined,
-        notes: formData.notes.trim() ?? undefined,
+        vendor: formData.vendor.trim() || undefined,
+        work_order_number: formData.work_order_number.trim() || undefined,
+        notes: formData.notes.trim() || undefined,
       };
       if (editingRecord) {
         await facilitiesService.updateMaintenanceRecord(editingRecord.id, payload);

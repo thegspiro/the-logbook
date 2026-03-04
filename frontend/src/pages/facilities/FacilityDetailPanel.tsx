@@ -11,11 +11,12 @@ import {
 import toast from 'react-hot-toast';
 import { facilitiesService } from '../../services/api';
 import type { Facility, FacilityType, FacilityStatus, Room, ROOM_TYPES } from './types';
+import { enumLabel } from './types';
 
 const ROOM_TYPE_OPTIONS: Array<typeof ROOM_TYPES[number]> = [
-  'APPARATUS_BAY', 'BUNK_ROOM', 'KITCHEN', 'BATHROOM', 'OFFICE',
-  'TRAINING_ROOM', 'STORAGE', 'MECHANICAL', 'LOBBY', 'COMMON_AREA',
-  'LAUNDRY', 'GYM', 'DECONTAMINATION', 'DISPATCH', 'OTHER',
+  'apparatus_bay', 'bunk_room', 'kitchen', 'bathroom', 'office',
+  'training_room', 'storage', 'mechanical', 'lobby', 'common_area',
+  'laundry', 'gym', 'decontamination', 'dispatch', 'other',
 ];
 
 interface Props {
@@ -41,7 +42,7 @@ export default function FacilityDetailPanel({
   const [rooms, setRooms] = useState<Room[]>([]);
   const [isLoadingRooms, setIsLoadingRooms] = useState(false);
   const [showAddRoom, setShowAddRoom] = useState(false);
-  const [newRoom, setNewRoom] = useState({ name: '', room_number: '', floor: '', room_type: 'OTHER', capacity: '', square_footage: '', description: '' });
+  const [newRoom, setNewRoom] = useState({ name: '', room_number: '', floor: '', room_type: 'other', capacity: '', square_footage: '', description: '' });
 
   const startEditing = () => {
     // Keys are snake_case (matching the backend FacilityUpdate schema).
@@ -119,15 +120,15 @@ export default function FacilityDetailPanel({
       await facilitiesService.createRoom({
         facility_id: facility.id,
         name: newRoom.name.trim(),
-        room_number: newRoom.room_number.trim() ?? undefined,
+        room_number: newRoom.room_number.trim() || undefined,
         floor: newRoom.floor ? Number(newRoom.floor) : undefined,
         room_type: newRoom.room_type,
         capacity: newRoom.capacity ? Number(newRoom.capacity) : undefined,
         square_footage: newRoom.square_footage ? Number(newRoom.square_footage) : undefined,
-        description: newRoom.description.trim() ?? undefined,
+        description: newRoom.description.trim() || undefined,
       });
       toast.success('Room added');
-      setNewRoom({ name: '', room_number: '', floor: '', room_type: 'OTHER', capacity: '', square_footage: '', description: '' });
+      setNewRoom({ name: '', room_number: '', floor: '', room_type: 'other', capacity: '', square_footage: '', description: '' });
       setShowAddRoom(false);
       void loadRooms();
     } catch {
@@ -337,7 +338,7 @@ export default function FacilityDetailPanel({
                 <input type="text" value={newRoom.name} onChange={e => setNewRoom(p => ({...p, name: e.target.value}))} placeholder="Room name *" className={inputCls} />
                 <input type="text" value={newRoom.room_number} onChange={e => setNewRoom(p => ({...p, room_number: e.target.value}))} placeholder="Room #" className={inputCls} />
                 <select value={newRoom.room_type} onChange={e => setNewRoom(p => ({...p, room_type: e.target.value}))} className={inputCls}>
-                  {ROOM_TYPE_OPTIONS.map(rt => <option key={rt} value={rt}>{rt.replace(/_/g, ' ')}</option>)}
+                  {ROOM_TYPE_OPTIONS.map(rt => <option key={rt} value={rt}>{enumLabel(rt)}</option>)}
                 </select>
                 <input type="number" value={newRoom.floor} onChange={e => setNewRoom(p => ({...p, floor: e.target.value}))} placeholder="Floor" className={inputCls} />
                 <input type="number" value={newRoom.capacity} onChange={e => setNewRoom(p => ({...p, capacity: e.target.value}))} placeholder="Capacity" className={inputCls} />
@@ -364,7 +365,7 @@ export default function FacilityDetailPanel({
                         {room.name}{room.roomNumber ? ` (#${room.roomNumber})` : ''}
                       </p>
                       <p className="text-xs text-theme-text-muted">
-                        {room.roomType?.replace(/_/g, ' ')}{room.floor != null ? ` · Floor ${room.floor}` : ''}{room.capacity ? ` · Cap: ${room.capacity}` : ''}
+                        {enumLabel(room.roomType)}{room.floor != null ? ` · Floor ${room.floor}` : ''}{room.capacity ? ` · Cap: ${room.capacity}` : ''}
                       </p>
                     </div>
                   </div>

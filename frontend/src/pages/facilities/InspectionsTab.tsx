@@ -10,12 +10,13 @@ import {
 import toast from 'react-hot-toast';
 import { facilitiesService } from '../../services/api';
 import type { Inspection, Facility, INSPECTION_TYPES } from './types';
+import { enumLabel } from './types';
 import { useTimezone } from '../../hooks/useTimezone';
 import { getTodayLocalDate } from '../../utils/dateFormatting';
 
 const INSPECTION_TYPE_OPTIONS: Array<typeof INSPECTION_TYPES[number]> = [
-  'FIRE', 'BUILDING_CODE', 'HEALTH', 'ADA', 'ENVIRONMENTAL',
-  'INSURANCE', 'ROUTINE', 'OTHER',
+  'fire', 'building_code', 'health', 'ada', 'environmental',
+  'insurance', 'routine', 'other',
 ];
 
 interface Props {
@@ -34,7 +35,7 @@ export default function InspectionsTab({ facilities, filterFacilityId, onClearFi
   const [editingInspection, setEditingInspection] = useState<Inspection | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
-    facility_id: '', inspection_type: 'ROUTINE', title: '', description: '',
+    facility_id: '', inspection_type: 'routine', title: '', description: '',
     inspection_date: '', next_inspection_date: '', inspector_name: '',
     inspector_organization: '', passed: '', findings: '', corrective_actions: '',
     corrective_action_deadline: '', notes: '',
@@ -70,7 +71,7 @@ export default function InspectionsTab({ facilities, filterFacilityId, onClearFi
   const openCreate = () => {
     setEditingInspection(null);
     setFormData({
-      facility_id: filterFacilityId || '', inspection_type: 'ROUTINE', title: '',
+      facility_id: filterFacilityId || '', inspection_type: 'routine', title: '',
       description: '', inspection_date: getTodayLocalDate(tz),
       next_inspection_date: '', inspector_name: '', inspector_organization: '',
       passed: '', findings: '', corrective_actions: '', corrective_action_deadline: '', notes: '',
@@ -108,16 +109,16 @@ export default function InspectionsTab({ facilities, filterFacilityId, onClearFi
         facility_id: formData.facility_id,
         inspection_type: formData.inspection_type,
         title: formData.title.trim(),
-        description: formData.description.trim() ?? undefined,
+        description: formData.description.trim() || undefined,
         inspection_date: formData.inspection_date,
-        next_inspection_date: formData.next_inspection_date ?? undefined,
-        inspector_name: formData.inspector_name.trim() ?? undefined,
-        inspector_organization: formData.inspector_organization.trim() ?? undefined,
+        next_inspection_date: formData.next_inspection_date || undefined,
+        inspector_name: formData.inspector_name.trim() || undefined,
+        inspector_organization: formData.inspector_organization.trim() || undefined,
         passed: formData.passed === 'true' ? true : formData.passed === 'false' ? false : null,
-        findings: formData.findings.trim() ?? undefined,
-        corrective_actions: formData.corrective_actions.trim() ?? undefined,
-        corrective_action_deadline: formData.corrective_action_deadline ?? undefined,
-        notes: formData.notes.trim() ?? undefined,
+        findings: formData.findings.trim() || undefined,
+        corrective_actions: formData.corrective_actions.trim() || undefined,
+        corrective_action_deadline: formData.corrective_action_deadline || undefined,
+        notes: formData.notes.trim() || undefined,
       };
       if (editingInspection) {
         await facilitiesService.updateInspection(editingInspection.id, payload);
@@ -215,7 +216,7 @@ export default function InspectionsTab({ facilities, filterFacilityId, onClearFi
                 <div className="flex items-center gap-2 mb-0.5">
                   <p className="text-sm font-medium text-theme-text-primary truncate">{insp.title}</p>
                   <span className="text-xs px-2 py-0.5 rounded-full bg-theme-surface-hover text-theme-text-muted shrink-0">
-                    {insp.inspectionType?.replace(/_/g, ' ')}
+                    {enumLabel(insp.inspectionType)}
                   </span>
                 </div>
                 <div className="flex items-center gap-3 text-xs text-theme-text-muted">
@@ -276,7 +277,7 @@ export default function InspectionsTab({ facilities, filterFacilityId, onClearFi
                 <div>
                   <label className={labelCls}>Inspection Type</label>
                   <select value={formData.inspection_type} onChange={e => setFormData(p => ({...p, inspection_type: e.target.value}))} className={inputCls}>
-                    {INSPECTION_TYPE_OPTIONS.map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
+                    {INSPECTION_TYPE_OPTIONS.map(t => <option key={t} value={t}>{enumLabel(t)}</option>)}
                   </select>
                 </div>
                 <div>
