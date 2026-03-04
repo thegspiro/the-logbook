@@ -126,7 +126,7 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
             {/* Warning Message */}
             <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-6">
               <p className="text-red-700 dark:text-red-200 text-sm text-center">
-                <strong className="text-red-700 dark:text-red-400">Warning:</strong> This action will:
+                <strong className="text-red-800 dark:text-red-400 font-semibold">Warning:</strong> This action will:
               </p>
               <ul className="mt-2 space-y-1 text-sm text-red-700 dark:text-red-200">
                 <li className="flex items-start">

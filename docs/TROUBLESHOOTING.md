@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-03-03 (added React 19 upgrade, Vitest 4/Zod 4 upgrade, ESLint v9 flat config migration, Tailwind CSS v4.2 upgrade, forms module enhancements with integration health dashboard/survey results/industry-standard builder, prospective members pipeline improvements with automated email/form dropdown/meeting stage types, inventory CSV import, email template 2-column redesign, events settings 422 fix, circular chunk dependency fix; plus all previous updates)
+**Last Updated**: 2026-03-04 (added onboarding auth cookie fix, physical address in org profile, custom event categories, admin hours camelCase fix, facility address display fix, theme/styling fixes, WebSocket CSRF fix, ResponseValidationError fix, Docker build fixes, Alembic migration fixes, form-to-pipeline integration hardening, reports module expansion, email template CC/BCC and enum sync, modal click-through fix; plus all previous updates)
 
 ---
 
@@ -72,7 +72,19 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 58. [Pipeline Stage Reorder & New Stage Types](#pipeline-stage-reorder--new-stage-types)
 59. [Inventory CSV Import Issues](#inventory-csv-import-issues)
 60. [Events Settings 422 Errors](#events-settings-422-errors)
-61. [Getting Help](#getting-help)
+61. [Onboarding Auth Cookie Issues](#onboarding-auth-cookie-issues)
+62. [Docker Frontend Build Issues](#docker-frontend-build-issues)
+63. [Alembic Migration Graph Walk Failures](#alembic-migration-graph-walk-failures)
+64. [WebSocket CSRF Dependency Errors](#websocket-csrf-dependency-errors)
+65. [Form-to-Pipeline Integration Issues](#form-to-pipeline-integration-issues)
+66. [Facility Address Display Issues](#facility-address-display-issues)
+67. [Admin Hours camelCase Mismatch](#admin-hours-camelcase-mismatch)
+68. [Custom Event Categories Issues](#custom-event-categories-issues)
+69. [ProspectResponse Metadata Serialization](#prospectresponse-metadata-serialization)
+70. [Modal Click-Through Issues](#modal-click-through-issues)
+71. [Theme Variable Compliance Issues](#theme-variable-compliance-issues)
+72. [Email Template Enum Drift](#email-template-enum-drift)
+73. [Getting Help](#getting-help)
 
 ---
 
@@ -5754,5 +5766,268 @@ Check that `@dnd-kit/core` and `@dnd-kit/sortable` are in `package.json`.
 ### Problem: Events settings page fails to load with 422 errors
 
 **Status (Fixed 2026-03-02):** The events settings API endpoint was refactored to fix validation errors caused by incorrect request/response handling. Pull latest and restart the backend.
+
+---
+
+## Onboarding Auth Cookie Issues
+
+### Problem: Onboarding redirects to /login after creating system owner (Step 7)
+
+**Status (Fixed 2026-03-04):** The system owner creation endpoint created auth tokens and returned them in the response body but never set httpOnly cookies.
+
+**Symptoms:**
+- After completing Step 7 (system owner creation), the app redirects to `/login` instead of continuing to Step 8
+- `loadUser()` → `/auth/me` → 401 (no cookies) → clears `has_session`
+- Auth state not established for remaining onboarding steps (8–10)
+- Browser DevTools shows no `Set-Cookie` headers on the Step 7 response
+
+**Root Cause:** The endpoint returned tokens in the JSON body but didn't call `_set_auth_cookies()` to set httpOnly cookies. Since the frontend relies on cookies (not Authorization headers), the session was never established.
+
+**Fix:** Updated `backend/app/api/v1/onboarding.py` to return a `JSONResponse` with `_set_auth_cookies()`, matching the login endpoint pattern. Pull latest and restart the backend.
+
+**Edge Case — Existing installations:** If you previously completed onboarding before this fix, your system is not affected (the cookies are set properly on subsequent logins). This only affected the initial onboarding flow.
+
+---
+
+## Docker Frontend Build Issues
+
+### Problem: Frontend Docker build fails with peer dependency conflict
+
+**Status (Fixed 2026-03-04):** The `vite-plugin-pwa` package has a peer dependency conflict with Vite 7.
+
+**Symptoms:**
+- `npm ci` fails during Docker build with `ERESOLVE unable to resolve dependency tree`
+- Error mentions `vite-plugin-pwa` and `vite@7`
+- Build works locally but fails in Docker
+
+**Root Cause:** No `package-lock.json` existed in the frontend Docker context, causing npm to resolve dependencies from scratch each build. This led to unpredictable version resolution and peer dependency conflicts.
+
+**Fix:** The Dockerfile now uses `npm install --legacy-peer-deps` instead of `npm ci`. A `backend/.dockerignore` was also added to reduce the Docker build context from 343MB.
+
+```bash
+# Rebuild after pulling latest
+docker-compose build --no-cache frontend
+docker-compose up -d frontend
+```
+
+### Problem: Docker build context is very large (343MB+)
+
+**Status (Fixed 2026-03-04):** Added `backend/.dockerignore` to exclude test files, virtual environments, and other non-essential files from the Docker build context.
+
+---
+
+## Alembic Migration Graph Walk Failures
+
+### Problem: Alembic fails with "Can't locate revision" or duplicate revision errors
+
+**Status (Fixed 2026-03-04):** Multiple migration graph issues were resolved.
+
+**Symptoms:**
+- `alembic upgrade head` fails with "Can't locate revision identified by..."
+- Startup logs show "Multiple heads detected"
+- Warnings about duplicate revision IDs
+
+**Root Causes & Fixes:**
+
+1. **Duplicate revision IDs**: A migration cleanup script now detects and renames `.stale` files that were incorrectly retained alongside their replacements
+2. **Type-annotated migration format**: 11 migration files used Alembic's newer `revision: str = "..."` format, which the regex patterns didn't match. Updated regex to handle both plain (`revision = "..."`) and annotated (`revision: str = "..."`) formats
+3. **Regex deprecation**: Fixed `re` module deprecation warnings in the migration cleanup script
+
+**Diagnostic:**
+```bash
+# Check for multiple heads
+docker exec logbook-backend alembic heads
+
+# Check for broken chain
+docker exec logbook-backend alembic history --verbose
+```
+
+### Problem: SQLAlchemy relationship overlap warnings at startup
+
+**Status (Fixed 2026-03-04):** Two model relationships had missing `back_populates`:
+- `Event.recurrence_children` / `recurrence_parent` — the reciprocal relationship was missing `back_populates`
+- `StorageArea.parent` / `children` — self-referential relationship not linked
+
+These warnings don't cause data issues but pollute startup logs. Pull latest and restart the backend to eliminate the warnings.
+
+---
+
+## WebSocket CSRF Dependency Errors
+
+### Problem: WebSocket connection to /api/v1/inventory/ws fails with 500 error
+
+**Status (Fixed 2026-03-04):** The `verify_csrf_token` middleware was applied globally to the API router but failed on WebSocket connections.
+
+**Symptoms:**
+- Inventory real-time updates not working
+- Browser console shows WebSocket connection error (500)
+- Backend logs show `AttributeError` in `verify_csrf_token` (expects `Request` object, receives `WebSocket`)
+
+**Root Cause:** The CSRF dependency parameter was typed as `Request`, but WebSocket endpoints receive a `WebSocket` object instead. Changed to `HTTPConnection` (base class of both) with early return for WebSocket scope.
+
+**Fix:** Pull latest and restart the backend. CSRF protection is HTTP-specific; the WebSocket endpoint already authenticates via JWT.
+
+---
+
+## Form-to-Pipeline Integration Issues
+
+### Problem: Form submissions not appearing in the prospective members pipeline
+
+**Status (Fixed 2026-03-04):** Multiple issues prevented form data from flowing into pipelines.
+
+**Symptoms:**
+- Form submission succeeds (200 OK) but no prospect is created
+- Reprocessing a submission doesn't update the prospect
+- Prospect created but all fields are empty/null
+- "Field mapping failed" warnings in backend logs
+
+**Root Causes & Fixes:**
+
+1. **Field mapping failures**: Label-based fallback was missing for some integration types. Added server-side validation and label-based fallback for all integration types
+2. **Reprocessed submissions not reassigning**: Reprocessing logic wasn't re-evaluating the pipeline stage assignment. Fixed to reassign prospects to the correct pipeline stage
+3. **O(N) cleanup query**: The pipeline service cleanup query was scanning all prospects instead of filtering by organization. Optimized with proper WHERE clause
+4. **Missing field compatibility check**: Added pre-save validation to warn when form fields don't match expected pipeline field mappings
+
+### Problem: Cannot delete a form that is linked to a pipeline
+
+**Cause (2026-03-04):** Forms linked to active pipelines are now protected from deletion. This prevents orphaned pipeline stages that reference a deleted form.
+
+**Fix:** Remove the pipeline integration first (Pipeline Settings → edit the stage → remove the form link), then delete the form. Alternatively, archive the form instead of deleting it.
+
+### Problem: Duplicate prospect detected but no notification sent
+
+**Status (Fixed 2026-03-04):** Added email notification when a prospect with the same email already exists. The notification is sent to the pipeline coordinator and includes a link to the existing prospect.
+
+---
+
+## Facility Address Display Issues
+
+### Problem: Facility addresses showing as blank/undefined
+
+**Status (Fixed 2026-03-04):** Frontend facility types used snake_case (`address_line1`, `zip_code`, `facility_number`) but the backend API returns camelCase.
+
+**Symptoms:**
+- Facility detail page shows blank address fields
+- Facility list shows no address information
+- Data exists in the database but doesn't appear in the UI
+
+**Root Cause:** The backend Pydantic schemas use `alias_generator=to_camel`, so API responses return camelCase field names (`addressLine1`, `zipCode`, `facilityNumber`). The frontend was reading snake_case properties, which resolved to `undefined`.
+
+**Fix:** Pull latest frontend code. All facility types and components now use camelCase matching the API response. The `FacilityListItem` backend schema also now includes `address_line1` and `zip_code` fields.
+
+**Edge Case — Custom facility integrations:** If you have custom code reading facility data from the API, update your property access to use camelCase (`addressLine1`, `zipCode`, `facilityNumber`).
+
+---
+
+## Admin Hours camelCase Mismatch
+
+### Problem: Admin hours summary category data showing as undefined
+
+**Status (Fixed 2026-03-04):** The `AdminHoursSummary.byCategory` array items used snake_case properties in the frontend but the API returns camelCase.
+
+**Symptoms:**
+- Admin hours summary tab shows categories with "undefined" values
+- Category names, total hours, or member counts appear as blank
+- Affects SummaryTab, AdminHoursPage, and MemberProfilePage
+
+**Fix:** Pull latest frontend code. Updated the type definition and all 3 consuming components to use camelCase (`categoryId`, `categoryName`, `totalHours`, etc.).
+
+**Edge Case — Other camelCase mismatches:** This pattern (backend uses `alias_generator=to_camel`, frontend types use snake_case) has appeared in multiple modules. If you see `undefined` values in summary/analytics components, check that frontend types match the camelCase API response. Known fixed modules: admin hours, facilities, apparatus.
+
+---
+
+## Custom Event Categories Issues
+
+### Problem: Custom event categories not showing in event form
+
+**Cause (2026-03-04):** Custom categories must be configured in Events Settings before they appear in the event form.
+
+**Fix:**
+1. Go to **Administration > Events Settings**
+2. Expand the **Custom Event Categories** section
+3. Add categories with name and color
+4. Save settings
+5. The Category dropdown now appears in the Event Create/Edit form
+
+### Problem: Custom categories not visible on the Events page filter tabs
+
+**Cause:** Custom category visibility must be enabled separately from creating them.
+
+**Fix:** In Events Settings → Event Type & Category Visibility section, toggle on the custom categories you want visible on the Events page.
+
+### Problem: Events Settings page shows TS2345 type error (development only)
+
+**Status (Fixed 2026-03-04):** The `useState` for category color was initialized with a narrow literal type. Added a `CategoryColor` union type to widen the state type.
+
+---
+
+## ProspectResponse Metadata Serialization
+
+### Problem: ProspectResponse returns SQLAlchemy MetaData object instead of JSON data
+
+**Status (Fixed 2026-03-04):** The schema used `alias="metadata"` which read the wrong attribute.
+
+**Symptoms:**
+- API response for prospects includes a complex object in the `metadata` field instead of simple JSON
+- Frontend may crash parsing the response
+- `ResponseValidationError` in backend logs
+
+**Root Cause:** Pydantic's `from_attributes` mode reads `obj.metadata`, which in SQLAlchemy returns the table's `MetaData` object. The actual JSON column is `metadata_` (trailing underscore to avoid the name collision). Switched to `serialization_alias` so Pydantic reads the correct attribute.
+
+**Edge Case — Custom queries:** If you access `Prospect.metadata` directly in custom queries, be aware that the SQLAlchemy attribute is `metadata_`. Use `prospect.metadata_` to access the JSON data column.
+
+---
+
+## Modal Click-Through Issues
+
+### Problem: Modal backdrop intercepts clicks on dialog buttons
+
+**Status (Fixed 2026-03-04):** The Modal component's backdrop overlay was intercepting click events that should reach dialog buttons.
+
+**Symptoms:**
+- Delete confirmation dialogs don't respond to button clicks
+- Pipeline delete operations require multiple clicks
+- Any modal with action buttons at the bottom may be unresponsive
+
+**Fix:** Pull latest frontend code. The Modal component backdrop now correctly passes through click events to dialog children.
+
+---
+
+## Theme Variable Compliance Issues
+
+### Problem: Pages display incorrect colors in light mode or high-contrast mode
+
+**Status (Fixed 2026-03-04):** Several pages used hardcoded Tailwind color classes instead of theme-aware CSS variable classes.
+
+**Affected Pages:**
+- EventRequestStatusPage — used hardcoded grays with manual `dark:` prefixes
+- ApparatusListPage — used hardcoded `via-red-900` in gradient
+
+**Fix:** Pull latest frontend code. Pages now use `bg-theme-surface`, `text-theme-text-primary`, `border-theme-surface-border`, and gradient theme variables (`from-theme-bg-from`, `via-theme-bg-via`, `to-theme-bg-to`).
+
+**Edge Case — Custom themes:** If you have custom CSS themes, ensure your `:root` and `.dark` selectors define all `--theme-*` CSS variables. Missing variables will cause these components to render with no background/border.
+
+---
+
+## Email Template Enum Drift
+
+### Problem: Email templates endpoint returns 500 error
+
+**Status (Fixed 2026-03-04):** The `duplicate_application` email template type was defined in code but missing from the database enum.
+
+**Symptoms:**
+- Creating or listing email templates fails with 500
+- Backend logs show database constraint violation on template type
+
+**Root Cause:** New email template types were added to the Python enum but the database column's enum constraint wasn't updated. A sync test was added to prevent future drift.
+
+**Fix:** Run the latest Alembic migration to add the missing enum value:
+```bash
+docker exec logbook-backend alembic upgrade head
+```
+
+### Problem: Email templates missing CC/BCC fields
+
+**Status (2026-03-04):** Each email template now supports configurable default CC and BCC addresses. BCC is also supported for scheduled emails. Pull latest and run migrations.
 
 ---

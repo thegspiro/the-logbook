@@ -49,6 +49,18 @@ This guide covers common issues and their solutions for The Logbook deployment.
 43. [Python Typing Modernization](#python-typing-modernization-2026-03-02)
 44. [IP Spoofing & Security](#ip-spoofing--security-2026-03-02)
 45. [Module Component Decomposition](#module-component-decomposition-2026-03-02)
+46. [Onboarding Auth Cookies](#onboarding-auth-cookies-2026-03-04)
+47. [Docker Frontend Build](#docker-frontend-build-2026-03-04)
+48. [Alembic Migration Issues](#alembic-migration-issues-2026-03-04)
+49. [WebSocket CSRF](#websocket-csrf-2026-03-04)
+50. [Form-to-Pipeline Integration](#form-to-pipeline-integration-2026-03-04)
+51. [Facility Address Display](#facility-address-display-2026-03-04)
+52. [Admin Hours camelCase](#admin-hours-camelcase-2026-03-04)
+53. [Custom Event Categories](#custom-event-categories-2026-03-04)
+54. [ProspectResponse Metadata](#prospectresponse-metadata-2026-03-04)
+55. [Modal Click-Through](#modal-click-through-2026-03-04)
+56. [Theme Variable Compliance](#theme-variable-compliance-2026-03-04)
+57. [Email Template Enum Drift](#email-template-enum-drift-2026-03-04)
 
 ---
 
@@ -2057,3 +2069,126 @@ docker-compose up -d
 ### Problem: Events settings page returns 422 errors
 
 **Status (Fixed):** Endpoint refactored to fix validation handling. Pull latest and restart backend.
+
+---
+
+## Onboarding Auth Cookies (2026-03-04)
+
+### Problem: Onboarding redirects to /login after system owner creation (Step 7)
+
+**Status (Fixed):** Step 7 endpoint now sets httpOnly auth cookies via `_set_auth_cookies()`. Previously tokens were returned in response body only — no cookies set, so `loadUser()` → 401 → `has_session` cleared → auth lost for steps 8–10 → redirect to `/login`.
+
+**Edge Case:** Existing installations that completed onboarding before this fix are unaffected. This only affected the initial onboarding flow.
+
+---
+
+## Docker Frontend Build (2026-03-04)
+
+### Problem: Frontend Docker build fails with peer dependency conflict
+
+**Status (Fixed):** `vite-plugin-pwa` peer dep conflict with Vite 7. Dockerfile now uses `npm install --legacy-peer-deps`. Lock file made optional.
+
+### Problem: Docker build context too large (343MB+)
+
+**Status (Fixed):** `backend/.dockerignore` added to exclude tests, venvs, etc.
+
+**Edge Case:** Build succeeds locally but fails in Docker because local npm uses cached `node_modules`, while Docker resolves fresh. The `--legacy-peer-deps` flag handles this.
+
+---
+
+## Alembic Migration Issues (2026-03-04)
+
+### Problem: Alembic graph walk fails with duplicate revision or broken chain
+
+**Status (Fixed):** Three issues resolved:
+1. Duplicate revision IDs — cleanup script handles `.stale` file recovery
+2. Type-annotated migration format (`revision: str = "..."`) — regex updated to match both formats
+3. Regex deprecation warnings fixed
+
+### Problem: SQLAlchemy relationship overlap warnings at startup
+
+**Status (Fixed):** Missing `back_populates` added on `Event.recurrence_children`/`recurrence_parent` and `StorageArea.parent`/`children`.
+
+---
+
+## WebSocket CSRF (2026-03-04)
+
+### Problem: Inventory WebSocket fails with 500 error
+
+**Status (Fixed):** `verify_csrf_token` changed to accept `HTTPConnection` (base of both `Request` and `WebSocket`) with early return for WebSocket scope. CSRF is HTTP-specific; WebSocket uses JWT auth.
+
+---
+
+## Form-to-Pipeline Integration (2026-03-04)
+
+### Problem: Form submissions not creating prospects in pipeline
+
+**Status (Fixed):** 13 improvements including label-based field mapping fallback, server-side validation, reprocessing fixes, O(N) query optimization, and field compatibility checks.
+
+### Problem: Cannot delete form linked to a pipeline
+
+**Cause:** Deletion protection added. Remove the pipeline integration first, then delete the form.
+
+### Problem: Duplicate prospects not detected
+
+**Status (Fixed):** Duplicate detection by email with coordinator notification.
+
+---
+
+## Facility Address Display (2026-03-04)
+
+### Problem: Facility addresses showing as blank/undefined
+
+**Status (Fixed):** Frontend types updated from snake_case to camelCase to match API response (`addressLine1`, `zipCode`).
+
+---
+
+## Admin Hours camelCase (2026-03-04)
+
+### Problem: Admin hours category summary shows undefined values
+
+**Status (Fixed):** `byCategory` type + 3 components updated to camelCase (`categoryId`, `categoryName`, `totalHours`).
+
+---
+
+## Custom Event Categories (2026-03-04)
+
+### Problem: Custom categories not appearing in event form
+
+**Fix:** Configure in Events Settings → Custom Event Categories → add name + color. Toggle visibility in Event Type & Category Visibility section.
+
+---
+
+## ProspectResponse Metadata (2026-03-04)
+
+### Problem: Prospect API returns SQLAlchemy MetaData instead of JSON data
+
+**Status (Fixed):** Schema changed from `alias="metadata"` to `serialization_alias="metadata"` to read `metadata_` attribute correctly.
+
+---
+
+## Modal Click-Through (2026-03-04)
+
+### Problem: Modal dialog buttons unresponsive (delete confirmations, actions)
+
+**Status (Fixed):** Backdrop no longer intercepts clicks on dialog children.
+
+---
+
+## Theme Variable Compliance (2026-03-04)
+
+### Problem: Pages show wrong colors in light/high-contrast modes
+
+**Status (Fixed):** EventRequestStatusPage and ApparatusListPage updated to theme-aware CSS variables.
+
+---
+
+## Email Template Enum Drift (2026-03-04)
+
+### Problem: Email templates 500 error
+
+**Status (Fixed):** Missing `duplicate_application` DB enum value. Run `alembic upgrade head`. Sync test prevents future drift.
+
+### Problem: CC/BCC not available on email templates
+
+**Status (2026-03-04):** CC/BCC fields now available per template, including for scheduled emails. Run latest migration.

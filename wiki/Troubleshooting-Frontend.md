@@ -547,4 +547,60 @@ npm test
 
 ---
 
+## Facility Address Blank Fields (2026-03-04)
+
+### Problem: Facility addresses show as blank/undefined
+
+**Status (Fixed):** Frontend types updated from snake_case to camelCase to match API (`addressLine1`, `zipCode`, `facilityNumber`). `FacilityListItem` backend schema also updated.
+
+**Edge Case:** Custom code reading facility API data must use camelCase property names.
+
+---
+
+## Admin Hours Category Summary Undefined (2026-03-04)
+
+### Problem: Admin hours summary shows "undefined" for categories
+
+**Status (Fixed):** `AdminHoursSummary.byCategory` type + SummaryTab, AdminHoursPage, MemberProfilePage updated to camelCase (`categoryId`, `categoryName`, `totalHours`).
+
+---
+
+## Custom Event Categories (2026-03-04)
+
+### Problem: Custom categories not appearing in event form
+
+**Fix:** Configure in Events Settings → Custom Event Categories section. Toggle visibility separately in Event Type & Category Visibility section.
+
+### Problem: TS2345 type error on category color (dev only)
+
+**Status (Fixed):** `CategoryColor` union type widens `useState` generic for all color options.
+
+---
+
+## Theme Compliance — Hardcoded Colors (2026-03-04)
+
+### Problem: EventRequestStatusPage and ApparatusListPage show wrong colors in light/high-contrast mode
+
+**Status (Fixed):** Replaced hardcoded colors with theme-aware CSS variables (`bg-theme-surface`, gradient theme vars, etc.).
+
+**Edge Case — Custom themes:** Ensure `:root` and `.dark` selectors define all `--theme-*` CSS variables.
+
+---
+
+## Modal Click-Through (2026-03-04)
+
+### Problem: Modal dialog buttons unresponsive
+
+**Status (Fixed):** Backdrop overlay no longer intercepts clicks intended for dialog children. Fixes delete confirmations, pipeline actions, etc.
+
+---
+
+## Events Settings Redesign (2026-03-04)
+
+### Sidebar + Content Panel Layout
+
+Events Settings tab now uses sidebar + content panel layout (matching Organization Settings) instead of collapsible sections. Desktop: sidebar navigation with section descriptions. Mobile: horizontal scrollable tabs.
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Backend Issues](Troubleshooting-Backend)

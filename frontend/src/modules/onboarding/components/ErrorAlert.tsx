@@ -75,7 +75,7 @@ export const ErrorAlert: React.FC<ErrorAlertProps> = ({
               {onDismiss && (
                 <button
                   onClick={onDismiss}
-                  className="inline-flex items-center px-3 py-1.5 text-red-700 dark:text-red-300 hover:text-red-100 text-sm font-medium transition-colors"
+                  className="inline-flex items-center px-3 py-1.5 text-red-700 dark:text-red-300 hover:text-red-800 dark:hover:text-red-100 text-sm font-medium transition-colors"
                   aria-label="Dismiss error"
                 >
                   Dismiss

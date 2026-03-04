@@ -478,6 +478,12 @@ She clicks **Export CSV** to download the data for the monthly operations report
 | Not receiving email notifications | Check your notification preferences in My Account > Notifications. Verify your email address is correct. Check your spam folder. |
 | Slack integration not posting | Verify the webhook URL is correct and the Slack channel exists. Check the integration logs for errors. |
 | Calendar events not syncing | Ensure the calendar integration is connected. Some calendar apps cache iCal feeds and may take up to 24 hours to refresh. |
+| Form submissions not appearing in pipeline | Fixed in March 2026 — multiple field mapping issues resolved. Pull latest backend code. Check backend logs for "Field mapping" warnings if issues persist. |
+| Cannot delete a form linked to a pipeline | As of 2026-03-04, forms linked to active pipelines are protected from deletion. Remove the pipeline integration first (Pipeline Settings → edit stage → remove form link), then delete the form. |
+| Reprocessing submission doesn't update prospect | Fixed in March 2026 — reprocessing now re-evaluates pipeline stage assignment. Pull latest backend code. |
+| Duplicate prospect not detected on form submission | As of 2026-03-04, duplicate detection by email is active. The pipeline coordinator receives a notification with a link to the existing prospect. |
+| Form field compatibility warning on save | This is a new validation (2026-03-04) that checks if form fields match expected pipeline field mappings. Review the warning and update field names to match. |
+| Modal dialog buttons unresponsive (delete, confirm) | Fixed in March 2026 — backdrop overlay no longer intercepts button clicks. Pull latest and rebuild. |
 
 ---
 

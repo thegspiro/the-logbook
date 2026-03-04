@@ -477,4 +477,68 @@ Black formatting has been applied to 9 additional backend files. If you see form
 
 ---
 
+## Onboarding Auth Cookie Missing (2026-03-04)
+
+### Problem: Onboarding Step 7 returns tokens in body but no httpOnly cookies
+
+**Status (Fixed):** `backend/app/api/v1/onboarding.py` now returns `JSONResponse` with `_set_auth_cookies()`, matching the login endpoint pattern.
+
+**Symptoms:** Steps 8–10 fail with 401; redirect to `/login` instead of continuing onboarding.
+
+---
+
+## WebSocket CSRF Dependency Error (2026-03-04)
+
+### Problem: 500 error on `/api/v1/inventory/ws` WebSocket endpoint
+
+**Status (Fixed):** `verify_csrf_token` changed to accept `HTTPConnection` (base class of `Request` and `WebSocket`). Early return for WebSocket scope — CSRF is HTTP-specific; WebSocket already uses JWT.
+
+---
+
+## ProspectResponse Metadata Serialization (2026-03-04)
+
+### Problem: ResponseValidationError — metadata field returns SQLAlchemy MetaData object
+
+**Status (Fixed):** Changed from `alias="metadata"` to `serialization_alias="metadata"` in `ProspectResponse` schema. Pydantic now reads `metadata_` attribute (JSON column) instead of `metadata` (SQLAlchemy MetaData).
+
+**Edge Case:** Custom queries accessing `Prospect.metadata` directly should use `prospect.metadata_`.
+
+---
+
+## SQLAlchemy Relationship Overlap Warnings (2026-03-04)
+
+### Problem: SAWarning about overlapping column writes at startup
+
+**Status (Fixed):** Added missing `back_populates` on:
+- `Event.recurrence_children` / `recurrence_parent`
+- `StorageArea.parent` / `children` (self-referential)
+
+---
+
+## Email Template Enum Drift (2026-03-04)
+
+### Problem: 500 error on email templates — missing `duplicate_application` enum value
+
+**Status (Fixed):** DB ALEMBIC migration adds missing enum value. Sync test prevents future drift.
+
+**Fix:** `docker exec logbook-backend alembic upgrade head`
+
+### CC/BCC support added
+
+Each email template now supports default CC/BCC. BCC also available for scheduled emails.
+
+---
+
+## Form-to-Pipeline Integration Hardening (2026-03-04)
+
+### Problem: Form submissions not flowing to prospective members pipeline
+
+**Status (Fixed):** 13 improvements — label-based fallback, server-side validation, reprocessing fix, O(N) cleanup query optimization, field compatibility checks.
+
+### Problem: Duplicate prospects not detected
+
+**Status (Fixed):** Duplicate detection by email with coordinator notification added.
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Database Issues](Troubleshooting-Database)

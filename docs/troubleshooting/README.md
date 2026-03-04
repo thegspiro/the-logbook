@@ -44,6 +44,18 @@ This guide covers common issues and their solutions for The Logbook deployment.
 38. [Python Typing Modernization](#python-typing-modernization-2026-03-02)
 39. [IP Spoofing & Security Middleware](#ip-spoofing--security-middleware-2026-03-02)
 40. [Module Component Decomposition](#module-component-decomposition-2026-03-02)
+41. [Onboarding Auth Cookies](#onboarding-auth-cookies-2026-03-04)
+42. [Docker Frontend Build](#docker-frontend-build-2026-03-04)
+43. [Alembic Migration Graph Walk](#alembic-migration-graph-walk-2026-03-04)
+44. [WebSocket CSRF](#websocket-csrf-2026-03-04)
+45. [Form-to-Pipeline Integration](#form-to-pipeline-integration-2026-03-04)
+46. [Facility Address Display](#facility-address-display-2026-03-04)
+47. [Admin Hours camelCase](#admin-hours-camelcase-2026-03-04)
+48. [Custom Event Categories](#custom-event-categories-2026-03-04)
+49. [ProspectResponse Metadata](#prospectresponse-metadata-2026-03-04)
+50. [Modal Click-Through](#modal-click-through-2026-03-04)
+51. [Theme Variable Compliance](#theme-variable-compliance-2026-03-04)
+52. [Email Template Enum Drift](#email-template-enum-drift-2026-03-04)
 
 ---
 
@@ -3070,6 +3082,142 @@ docker-compose exec backend python -c "import sentry_sdk; print(sentry_sdk.is_in
 
 ### Problem: Events settings page fails to load
 **Status (Fixed):** API endpoint refactored to fix validation errors. Pull latest and restart backend.
+
+---
+
+## Onboarding Auth Cookies (2026-03-04)
+
+### Problem: Onboarding redirects to /login after system owner creation
+**Status (Fixed):** Step 7 endpoint now sets httpOnly auth cookies via `_set_auth_cookies()`. Previously tokens were in response body only — cookies were never set, so `loadUser()` → 401 → session cleared.
+
+### Edge Case: Steps 8–10 lose auth state
+**Cause:** Same root cause — without cookies, each subsequent step's API call fails with 401. Fix resolves the entire chain.
+
+---
+
+## Docker Frontend Build (2026-03-04)
+
+### Problem: Frontend Docker build fails with peer dependency conflict
+**Status (Fixed):** Dockerfile now uses `npm install --legacy-peer-deps`. Lock file made optional via glob pattern.
+
+### Problem: Docker build context is 343MB+
+**Status (Fixed):** Added `backend/.dockerignore` to exclude test files, venvs, etc.
+
+### Edge Case: Build succeeds locally but fails in Docker
+**Cause:** Local npm uses existing `node_modules` and cached resolution. Docker starts fresh. The `--legacy-peer-deps` flag handles this discrepancy.
+
+---
+
+## Alembic Migration Graph Walk (2026-03-04)
+
+### Problem: Alembic fails with duplicate revision or broken chain
+**Status (Fixed):** Three issues resolved:
+1. Duplicate revision IDs — cleanup script now handles `.stale` file recovery
+2. Type-annotated migration format (`revision: str = "..."`) — regex updated to match both formats
+3. Regex deprecation warnings fixed
+
+### Problem: SQLAlchemy relationship overlap warnings at startup
+**Status (Fixed):** Added missing `back_populates` on `Event.recurrence_children`/`recurrence_parent` and `StorageArea.parent`/`children`.
+
+### Edge Case: Custom migrations using type-annotated format
+If your custom migrations use `revision: str = "..."` format, they are now correctly detected by the cleanup script.
+
+---
+
+## WebSocket CSRF (2026-03-04)
+
+### Problem: Inventory WebSocket connection fails with 500
+**Status (Fixed):** `verify_csrf_token` middleware changed from `Request` to `HTTPConnection` parameter type, with early return for WebSocket scope.
+
+### Edge Case: Custom WebSocket endpoints
+If you add custom WebSocket endpoints under the API router, they automatically benefit from this fix. No CSRF token needed for WebSocket connections (already authenticated via JWT).
+
+---
+
+## Form-to-Pipeline Integration (2026-03-04)
+
+### Problem: Form submissions not creating prospects
+**Status (Fixed):** Label-based field mapping fallback added for all integration types. Server-side validation now catches mapping errors.
+
+### Problem: Reprocessed submissions don't update prospects
+**Status (Fixed):** Reprocessing now re-evaluates pipeline stage assignment.
+
+### Problem: Cannot delete form linked to pipeline
+**Cause:** Deletion protection added for forms linked to active pipelines. Remove pipeline integration first, then delete form.
+
+### Problem: Duplicate prospect not detected
+**Status (Fixed):** Duplicate detection by email with coordinator notification.
+
+### Edge Case: Field mapping fails silently
+If form fields don't match pipeline field expectations, a compatibility check now runs before save and warns about mismatches. Check backend logs for "Field mapping" warnings.
+
+---
+
+## Facility Address Display (2026-03-04)
+
+### Problem: Facility addresses showing as blank
+**Status (Fixed):** Frontend types updated from snake_case to camelCase to match API response (`addressLine1`, `zipCode`, `facilityNumber`).
+
+### Edge Case: Custom facility integrations
+If custom code reads facility API data, update property access to camelCase.
+
+---
+
+## Admin Hours camelCase (2026-03-04)
+
+### Problem: Admin hours summary categories show undefined
+**Status (Fixed):** `AdminHoursSummary.byCategory` type and 3 components updated to camelCase (`categoryId`, `categoryName`, `totalHours`).
+
+### Edge Case: Other snake_case/camelCase mismatches
+Pattern: backend `alias_generator=to_camel` → API returns camelCase → frontend types must match. Check fixed modules: admin hours, facilities, apparatus.
+
+---
+
+## Custom Event Categories (2026-03-04)
+
+### Problem: Custom categories not appearing in event form
+**Fix:** Configure categories in Events Settings → Custom Event Categories section. Toggle visibility in Event Type & Category Visibility section.
+
+### Problem: TS2345 type error in category color (dev only)
+**Status (Fixed):** `CategoryColor` union type added to widen `useState` generic.
+
+---
+
+## ProspectResponse Metadata (2026-03-04)
+
+### Problem: Prospect metadata returns complex SQLAlchemy object
+**Status (Fixed):** Changed from `alias="metadata"` to `serialization_alias="metadata"` so Pydantic reads `metadata_` attribute (the actual JSON column) instead of `metadata` (SQLAlchemy MetaData object).
+
+### Edge Case: Direct metadata_ access
+Access the JSON column via `prospect.metadata_` in custom queries, not `prospect.metadata`.
+
+---
+
+## Modal Click-Through (2026-03-04)
+
+### Problem: Modal dialog buttons unresponsive
+**Status (Fixed):** Backdrop overlay no longer intercepts click events intended for dialog children.
+
+---
+
+## Theme Variable Compliance (2026-03-04)
+
+### Problem: Pages display wrong colors in light/high-contrast mode
+**Status (Fixed):** EventRequestStatusPage and ApparatusListPage updated from hardcoded colors to theme-aware CSS variables.
+
+### Edge Case: Custom themes missing variables
+Ensure `:root` and `.dark` selectors define all `--theme-*` CSS variables. Missing variables cause transparent backgrounds/borders.
+
+---
+
+## Email Template Enum Drift (2026-03-04)
+
+### Problem: Email templates 500 error
+**Status (Fixed):** Missing `duplicate_application` enum value added to DB. Sync test prevents future drift.
+**Fix:** `docker exec logbook-backend alembic upgrade head`
+
+### Problem: Email templates missing CC/BCC
+**Status (2026-03-04):** CC/BCC fields now available per template. BCC supported for scheduled emails. Run latest migration.
 
 ---
 

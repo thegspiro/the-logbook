@@ -512,6 +512,9 @@ Over time, these readings build a usage trend that helps identify anomalies (e.g
 | Cannot see Facilities module | Facilities is an optional module. Your administrator must enable it in Settings > Modules. You may see the simplified Locations page instead. |
 | Inspection past due but no alert | Inspection alerts depend on notification rules being configured. Check Settings > Notifications. |
 | Room not showing on facility | Rooms must be added individually to each facility from the Rooms section of the facility detail page. |
+| Facility address fields showing as blank | Fixed in March 2026 — frontend types were using snake_case (`address_line1`, `zip_code`) but the API returns camelCase (`addressLine1`, `zipCode`). Pull latest and rebuild. |
+| Apparatus list page gradient looks wrong in light mode | Fixed in March 2026 — hardcoded `via-red-900` gradient replaced with theme-aware CSS variables. Pull latest and rebuild. |
+| Physical address not showing in Organization Settings | As of 2026-03-04, a Physical Address section is now available in Organization Settings > General with a "Same as mailing address" toggle. |
 
 ---
 
