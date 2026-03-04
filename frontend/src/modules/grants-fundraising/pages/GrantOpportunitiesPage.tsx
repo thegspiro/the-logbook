@@ -159,8 +159,8 @@ export const GrantOpportunitiesPage: React.FC = () => {
         setIsLoading(true);
         const data = await grantsService.listOpportunities({
           isActive: true,
-          search: search || undefined,
-          category: categoryFilter || undefined,
+          ...(search && { search }),
+          ...(categoryFilter && { category: categoryFilter }),
         });
         setOpportunities(data);
       } catch {

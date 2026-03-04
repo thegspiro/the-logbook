@@ -119,8 +119,8 @@ export const DonorsPage: React.FC = () => {
     try {
       setIsLoading(true);
       const data = await fundraisingService.listDonors({
-        donorType: typeFilter || undefined,
-        search: search || undefined,
+        ...(typeFilter && { donorType: typeFilter }),
+        ...(search && { search }),
       });
       setDonors(data);
     } catch {

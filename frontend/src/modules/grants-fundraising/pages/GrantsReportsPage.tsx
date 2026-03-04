@@ -163,8 +163,8 @@ const GrantsReportsPage: React.FC = () => {
 
     try {
       const gr = await grantsService.getGrantReport({
-        startDate: startDate || undefined,
-        endDate: endDate || undefined,
+        ...(startDate && { startDate }),
+        ...(endDate && { endDate }),
       });
       setGrantReport(gr);
     } catch {
@@ -175,8 +175,8 @@ const GrantsReportsPage: React.FC = () => {
 
     try {
       const fr = await grantsService.getFundraisingReport({
-        startDate: startDate || undefined,
-        endDate: endDate || undefined,
+        ...(startDate && { startDate }),
+        ...(endDate && { endDate }),
       });
       setFundraisingReport(fr);
     } catch {

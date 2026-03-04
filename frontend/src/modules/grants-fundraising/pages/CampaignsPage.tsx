@@ -123,8 +123,8 @@ const CampaignsPage: React.FC = () => {
     try {
       setIsLoading(true);
       const data = await fundraisingService.listCampaigns({
-        status: statusFilter || undefined,
-        campaignType: typeFilter || undefined,
+        ...(statusFilter && { status: statusFilter }),
+        ...(typeFilter && { campaignType: typeFilter }),
       });
       setCampaigns(data);
     } catch {
