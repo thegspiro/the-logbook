@@ -261,4 +261,41 @@ docker-compose up -d
 
 ---
 
+## Alembic Migration Graph Walk Failures (2026-03-04)
+
+### Problem: Alembic fails with duplicate revision or broken chain
+
+**Status (Fixed):** Three issues resolved:
+1. **Duplicate revision IDs** — cleanup script handles `.stale` file recovery
+2. **Type-annotated migration format** — regex updated to match both `revision = "..."` and `revision: str = "..."` formats (11 files were invisible)
+3. **Regex deprecation warnings** fixed in migration cleanup script
+
+**Diagnostic:**
+```bash
+# Check for multiple heads
+docker exec logbook-backend alembic heads
+
+# Check for broken chain
+docker exec logbook-backend alembic history --verbose
+```
+
+### Problem: SQLAlchemy relationship overlap warnings
+
+**Status (Fixed):** Missing `back_populates` added on `Event.recurrence_children`/`recurrence_parent` and `StorageArea.parent`/`children`.
+
+---
+
+## Email Template ENUM Drift (2026-03-04)
+
+### Problem: 500 error on email templates — `duplicate_application` missing from DB ENUM
+
+**Status (Fixed):** Migration adds the missing value. Sync test prevents future drift.
+
+```bash
+docker exec logbook-backend alembic upgrade head
+docker-compose restart backend
+```
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Backend Issues](Troubleshooting-Backend)

@@ -32,8 +32,9 @@ Events are categorized by type:
 - **Community** - Community outreach
 - **Work Detail** - Work parties and maintenance
 - **Other** - Miscellaneous events
+- **Custom Categories** - Your department can define additional custom event categories with color-coded badges in **Events Settings > Custom Event Categories**
 
-You can filter events by type and date range using the controls at the top of the page.
+You can filter events by type and date range using the controls at the top of the page. If custom categories have been configured and enabled, they appear as additional filter tabs alongside the built-in types.
 
 **Past Events:** Officers and managers see a **Past Events** tab to browse historical events with the same filtering and search capabilities.
 
@@ -586,6 +587,11 @@ Thank you for working with Riverside Fire-Rescue!
 | Email template variables showing as `{{variable}}` | Use double curly braces with no spaces: `{{contact_name}}`. Check supported variable names in email template docs. |
 | Cannot cancel from public status page | Only requests in active states (submitted, in_progress, scheduled) can be cancelled. Terminal states cannot be changed. |
 | Pipeline tasks not visible to requester | Public progress visibility is off by default. Enable it in **Events > Settings > Request Pipeline > Public Progress Visibility**. |
+| Custom event categories not appearing in form | Configure categories in **Events Settings > Custom Event Categories**. Then toggle visibility in **Event Type & Category Visibility** section. |
+| Custom categories not showing as filter tabs | Category visibility must be enabled separately — go to Events Settings and enable each custom category under the visibility section. |
+| Events Settings page layout changed | As of 2026-03-04, the Events Settings page uses a sidebar + content panel layout (matching Organization Settings) instead of collapsible sections. Desktop shows a sidebar with section descriptions; mobile uses horizontal scrollable tabs. |
+| EventRequestStatusPage colors look wrong in light mode | Fixed in March 2026 — hardcoded colors replaced with theme-aware CSS variables. Pull latest and rebuild. |
+| Email templates missing CC/BCC fields | As of 2026-03-04, each email template now supports configurable CC/BCC addresses. Run the latest migration and restart. |
 
 ---
 

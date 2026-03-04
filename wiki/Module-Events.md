@@ -18,6 +18,7 @@ The Events module manages department events with QR code check-in, recurring eve
 - **Past Events Tab** — Managers can browse historical events (hidden from regular members by default)
 - **Attendee Management** — Add/remove attendees directly from event detail page
 - **Training Integration** — Events can generate training sessions for attendance credit
+- **Custom Event Categories** — *(2026-03-04)* Define organization-specific event categories with color badges, filterable on the Events page and selectable in the Event form. Configured in Events Settings > Custom Event Categories
 
 ---
 
@@ -113,6 +114,24 @@ POST   /api/v1/event-requests/email-templates              # Create template
 PATCH  /api/v1/event-requests/email-templates/{id}         # Update template
 DELETE /api/v1/event-requests/email-templates/{id}         # Delete template
 ```
+
+---
+
+## Recent Changes (2026-03-04)
+
+- **Custom Event Categories** — Full-stack integration: `custom_category` column on events table, visibility settings, category filter tabs on Events page, category dropdown in Event form
+- **Events Settings Redesign** — Sidebar + content panel layout (matching Organization Settings) replaces collapsible sections. Desktop sidebar navigation with section descriptions; mobile horizontal scrollable tabs
+- **Outreach Types Auto-ID** — Outreach Event Types form auto-generates ID from label (removed separate ID input)
+- **Email Configuration Consolidation** — Email Notifications and Email Templates merged into a single "Email Configuration" section
+- **Theme Compliance** — EventRequestStatusPage and ApparatusListPage updated from hardcoded colors to theme-aware CSS variables
+
+### API Endpoints — Custom Categories
+
+```
+GET    /api/v1/events/visible-event-types       # Returns visible types + custom categories
+```
+
+The `custom_category` field is available on all event create/update/list endpoints.
 
 ---
 

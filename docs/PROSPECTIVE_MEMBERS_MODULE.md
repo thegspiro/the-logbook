@@ -470,9 +470,26 @@ See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#prospective-members-module-issues)
 - Withdraw/archive not appearing
 - Election package not auto-created
 - Election package stuck in draft
+- Form submissions not appearing in pipeline *(fixed 2026-03-04)*
+- Reprocessed submissions not updating prospects *(fixed 2026-03-04)*
+- Duplicate prospects not detected *(fixed 2026-03-04)*
+- ProspectResponse metadata returning SQLAlchemy MetaData object *(fixed 2026-03-04)*
 
 ---
 
-**Document Version**: 1.1
-**Last Updated**: 2026-02-12
+## Recent Changes (March 2026)
+
+### March 4, 2026
+- **Form-to-pipeline integration hardening (13 improvements)**: Label-based field mapping fallback, server-side validation, reprocessing fix, O(N) cleanup query optimization, field compatibility checks, step update lifecycle fix
+- **Duplicate prospect detection**: Email-based duplicate detection with coordinator email notification
+- **Pipeline form validation**: Pre-save field compatibility check warns about form field / pipeline mapping mismatches
+- **Form deletion protection**: Forms linked to active pipelines protected from deletion
+- **form.integration_type**: Direct label-mapping path for pipeline integrations
+- **ProspectResponse metadata fix**: Changed from `alias="metadata"` to `serialization_alias="metadata"` — Pydantic now reads `metadata_` (JSON column) instead of `metadata` (SQLAlchemy MetaData object)
+- **Modal click-through fix**: Modal backdrop no longer intercepts clicks on dialog buttons
+
+---
+
+**Document Version**: 1.2
+**Last Updated**: 2026-03-04
 **Maintainer**: Development Team

@@ -593,6 +593,13 @@ The setup checklist shows all steps complete. The system is ready for use.
 | Email scheduling not available | Email scheduling was added 2026-03-02. Ensure you are on the latest version. |
 | Standard modules missing after fresh install | Standard modules now default to enabled. If missing, check **Settings > Modules** and enable them. The Settings UI has been redesigned with module cards. |
 | OrganizationSettings page crashes | Update to the latest version. A crash in the `redacted()` method and an auth secret leak have been fixed. |
+| Physical Address not visible in Organization Settings | As of 2026-03-04, Organization Settings > General includes a Physical Address section with a "Same as mailing address" toggle. Physical address data entered during onboarding is now displayed here. |
+| Admin hours summary categories showing "undefined" | Fixed in March 2026 — type mismatch between snake_case frontend types and camelCase API response. Pull latest and rebuild. |
+| Email templates return 500 error | Fixed in March 2026 — missing `duplicate_application` enum value in database. Run `alembic upgrade head` and restart. |
+| Email templates missing CC/BCC fields | As of 2026-03-04, each template supports default CC/BCC. BCC also available for scheduled emails. Run latest migration. |
+| Onboarding redirects to /login after Step 7 | Fixed in March 2026 — system owner creation now sets httpOnly auth cookies. Pull latest backend code and restart. |
+| Events Settings page layout changed | As of 2026-03-04, the Events Settings page uses a sidebar + content panel layout matching Organization Settings, replacing the previous collapsible sections. |
+| Reports page only shows basic views | As of 2026-03-04, the Reports module has been expanded into a dedicated feature module with 12 report types. Pull latest to access the full reports experience. |
 
 ---
 
