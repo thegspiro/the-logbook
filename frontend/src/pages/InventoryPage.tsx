@@ -845,19 +845,18 @@ const InventoryPage: React.FC = () => {
               {selectedItemIds.size > 0 && (
                 <div className="relative">
                   <div className="flex items-center">
-                    <button
-                      onClick={() => { void handlePrintLabels(); }}
-                      disabled={printingLabels}
-                      className="flex items-center space-x-2 px-3 sm:px-4 py-2 bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary rounded-l-lg border border-theme-surface-border transition-colors text-sm disabled:opacity-50"
+                    <Link
+                      to={`/inventory/print-labels?ids=${Array.from(selectedItemIds).join(',')}`}
+                      className="flex items-center space-x-2 px-3 sm:px-4 py-2 bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary rounded-l-lg border border-theme-surface-border transition-colors text-sm"
                     >
-                      <Printer className="w-4 h-4" aria-hidden="true" />
-                      <span className="hidden sm:inline">Print Labels ({selectedItemIds.size})</span>
-                      <span className="sm:hidden">Labels ({selectedItemIds.size})</span>
-                    </button>
+                      <Barcode className="w-4 h-4" aria-hidden="true" />
+                      <span className="hidden sm:inline">Print Barcodes ({selectedItemIds.size})</span>
+                      <span className="sm:hidden">Barcodes ({selectedItemIds.size})</span>
+                    </Link>
                     <button
                       onClick={(e) => { e.stopPropagation(); setShowLabelMenu(!showLabelMenu); }}
                       className="px-2 py-2 bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary rounded-r-lg border border-l-0 border-theme-surface-border transition-colors"
-                      aria-label="Select label format"
+                      aria-label="More print options"
                     >
                       <ChevronDown className="w-4 h-4" aria-hidden="true" />
                     </button>
@@ -865,15 +864,29 @@ const InventoryPage: React.FC = () => {
                   {showLabelMenu && (
                     <div className="absolute right-0 top-full mt-1 w-72 bg-theme-surface-modal rounded-lg shadow-xl border border-theme-surface-border z-50 py-1">
                       <div className="px-3 py-2 border-b border-theme-surface-border">
-                        <p className="text-xs font-medium text-theme-text-muted uppercase">Label Format</p>
+                        <p className="text-xs font-medium text-theme-text-muted uppercase">Print Options</p>
+                      </div>
+                      <Link
+                        to={`/inventory/print-labels?ids=${Array.from(selectedItemIds).join(',')}`}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-theme-surface-hover flex items-center gap-2 text-theme-text-primary"
+                        onClick={() => setShowLabelMenu(false)}
+                      >
+                        <Barcode className="w-4 h-4 shrink-0" aria-hidden="true" />
+                        <div>
+                          <span className="block">Print from Browser</span>
+                          <span className="text-xs text-theme-text-muted">Dymo, Rollo, or standard printer</span>
+                        </div>
+                      </Link>
+                      <div className="border-t border-theme-surface-border my-1" />
+                      <div className="px-3 py-1.5">
+                        <p className="text-xs font-medium text-theme-text-muted uppercase">Generate PDF</p>
                       </div>
                       {labelFormats.map((fmt) => (
                         <button
                           key={fmt.id}
-                          onClick={() => { setLabelFormat(fmt.id); setShowLabelMenu(false); }}
-                          className={`w-full text-left px-3 py-2 text-sm hover:bg-theme-surface-hover flex items-center justify-between ${
-                            labelFormat === fmt.id ? 'text-blue-600 dark:text-blue-400 bg-blue-500/5' : 'text-theme-text-primary'
-                          }`}
+                          onClick={() => { setLabelFormat(fmt.id); setShowLabelMenu(false); void handlePrintLabels(); }}
+                          disabled={printingLabels}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-theme-surface-hover flex items-center justify-between text-theme-text-primary disabled:opacity-50"
                         >
                           <div>
                             <span className="block">{fmt.description}</span>
@@ -884,9 +897,7 @@ const InventoryPage: React.FC = () => {
                               <span className="text-xs text-theme-text-muted">8.5" x 11" — Standard printer</span>
                             )}
                           </div>
-                          {labelFormat === fmt.id && (
-                            <span className="text-blue-600 dark:text-blue-400 text-xs font-medium">Selected</span>
-                          )}
+                          <Printer className="w-3 h-3 text-theme-text-muted shrink-0" aria-hidden="true" />
                         </button>
                       ))}
                     </div>
