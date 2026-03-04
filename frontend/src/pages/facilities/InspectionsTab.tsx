@@ -62,7 +62,7 @@ export default function InspectionsTab({ facilities, filterFacilityId, onClearFi
     if (resultFilter === 'pending' && i.passed !== null && i.passed !== undefined) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      return (i.title?.toLowerCase().includes(q) || i.inspector_name?.toLowerCase().includes(q) || i.inspector_organization?.toLowerCase().includes(q));
+      return (i.title?.toLowerCase().includes(q) || i.inspectorName?.toLowerCase().includes(q) || i.inspectorOrganization?.toLowerCase().includes(q));
     }
     return true;
   });
@@ -81,18 +81,18 @@ export default function InspectionsTab({ facilities, filterFacilityId, onClearFi
   const openEdit = (insp: Inspection) => {
     setEditingInspection(insp);
     setFormData({
-      facility_id: insp.facility_id,
-      inspection_type: insp.inspection_type || 'ROUTINE',
+      facility_id: insp.facilityId,
+      inspection_type: insp.inspectionType || 'ROUTINE',
       title: insp.title || '',
       description: insp.description || '',
-      inspection_date: insp.inspection_date || '',
-      next_inspection_date: insp.next_inspection_date || '',
-      inspector_name: insp.inspector_name || '',
-      inspector_organization: insp.inspector_organization || '',
+      inspection_date: insp.inspectionDate || '',
+      next_inspection_date: insp.nextInspectionDate || '',
+      inspector_name: insp.inspectorName || '',
+      inspector_organization: insp.inspectorOrganization || '',
       passed: insp.passed === true ? 'true' : insp.passed === false ? 'false' : '',
       findings: insp.findings || '',
-      corrective_actions: insp.corrective_actions || '',
-      corrective_action_deadline: insp.corrective_action_deadline || '',
+      corrective_actions: insp.correctiveActions || '',
+      corrective_action_deadline: insp.correctiveActionDeadline || '',
       notes: insp.notes || '',
     });
     setShowModal(true);
@@ -215,15 +215,15 @@ export default function InspectionsTab({ facilities, filterFacilityId, onClearFi
                 <div className="flex items-center gap-2 mb-0.5">
                   <p className="text-sm font-medium text-theme-text-primary truncate">{insp.title}</p>
                   <span className="text-xs px-2 py-0.5 rounded-full bg-theme-surface-hover text-theme-text-muted shrink-0">
-                    {insp.inspection_type?.replace(/_/g, ' ')}
+                    {insp.inspectionType?.replace(/_/g, ' ')}
                   </span>
                 </div>
                 <div className="flex items-center gap-3 text-xs text-theme-text-muted">
-                  <span>{getFacilityName(insp.facility_id)}</span>
-                  <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{insp.inspection_date}</span>
-                  {insp.inspector_name && <span>{insp.inspector_name}</span>}
-                  {insp.next_inspection_date && <span>Next: {insp.next_inspection_date}</span>}
-                  {insp.corrective_actions && !insp.corrective_action_completed && (
+                  <span>{getFacilityName(insp.facilityId)}</span>
+                  <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{insp.inspectionDate}</span>
+                  {insp.inspectorName && <span>{insp.inspectorName}</span>}
+                  {insp.nextInspectionDate && <span>Next: {insp.nextInspectionDate}</span>}
+                  {insp.correctiveActions && !insp.correctiveActionCompleted && (
                     <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
                       <AlertTriangle className="w-3 h-3" /> Corrective action needed
                     </span>
@@ -265,7 +265,7 @@ export default function InspectionsTab({ facilities, filterFacilityId, onClearFi
                 <label className={labelCls}>Facility *</label>
                 <select value={formData.facility_id} onChange={e => setFormData(p => ({...p, facility_id: e.target.value}))} className={inputCls}>
                   <option value="">Select facility...</option>
-                  {facilities.filter(f => !f.is_archived).map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                  {facilities.filter(f => !f.isArchived).map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                 </select>
               </div>
               <div>

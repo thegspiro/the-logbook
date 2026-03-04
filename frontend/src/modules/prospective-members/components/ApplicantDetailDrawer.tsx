@@ -91,7 +91,7 @@ function formatFieldValue(value: unknown): string {
       return '—';
     }
   }
-  return String(value);
+  return String(value as string | number);
 }
 
 interface ApplicantDetailDrawerProps {
@@ -680,7 +680,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   .flatMap((e) => e.artifacts)
                   .find((a) => a.type === 'form_submission' && a.data);
                 if (!formArtifact?.data) return null;
-                const fields = formArtifact.data as Record<string, unknown>;
+                const fields = formArtifact.data;
                 return (
                   <div className="p-4 border-b border-theme-surface-border">
                     <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-2 flex items-center gap-1.5">
@@ -1000,7 +1000,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                                 <div className="mt-2 space-y-1">
                                   {entry.artifacts.map((artifact) => {
                                     if (artifact.type === 'form_submission' && artifact.data) {
-                                      const fields = artifact.data as Record<string, unknown>;
+                                      const fields = artifact.data;
                                       return (
                                         <div key={artifact.id} className="bg-theme-surface-secondary rounded px-3 py-2">
                                           <p className="text-xs font-medium text-theme-text-secondary mb-1.5 flex items-center gap-1">

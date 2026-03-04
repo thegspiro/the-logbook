@@ -44,24 +44,26 @@ export default function FacilityDetailPanel({
   const [newRoom, setNewRoom] = useState({ name: '', room_number: '', floor: '', room_type: 'OTHER', capacity: '', square_footage: '', description: '' });
 
   const startEditing = () => {
+    // Keys are snake_case (matching the backend FacilityUpdate schema).
+    // Values are read from the camelCase API response via the Facility interface.
     setEditData({
       name: facility.name || '',
-      facility_number: facility.facility_number || '',
-      address_line1: facility.address_line1 || '',
-      address_line2: facility.address_line2 || '',
+      facility_number: facility.facilityNumber || '',
+      address_line1: facility.addressLine1 || '',
+      address_line2: facility.addressLine2 || '',
       city: facility.city || '',
       state: facility.state || '',
-      zip_code: facility.zip_code || '',
-      facility_type_id: facility.facility_type_id || '',
-      status_id: facility.status_id || '',
+      zip_code: facility.zipCode || '',
+      facility_type_id: facility.facilityTypeId || '',
+      status_id: facility.statusId || '',
       phone: facility.phone || '',
       email: facility.email || '',
-      year_built: facility.year_built || '',
-      square_footage: facility.square_footage || '',
-      num_floors: facility.num_floors || '',
-      num_bays: facility.num_bays || '',
-      max_occupancy: facility.max_occupancy || '',
-      sleeping_quarters: facility.sleeping_quarters || '',
+      year_built: facility.yearBuilt || '',
+      square_footage: facility.squareFootage || '',
+      num_floors: facility.numFloors || '',
+      num_bays: facility.numBays || '',
+      max_occupancy: facility.maxOccupancy || '',
+      sleeping_quarters: facility.sleepingQuarters || '',
       notes: facility.notes || '',
       description: facility.description || '',
     });
@@ -143,7 +145,7 @@ export default function FacilityDetailPanel({
     }
   };
 
-  const address = [facility.address_line1, facility.city, facility.state, facility.zip_code].filter(Boolean).join(', ');
+  const address = [facility.addressLine1, facility.city, facility.state, facility.zipCode].filter(Boolean).join(', ');
 
   const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
   const labelCls = 'block text-xs font-medium text-theme-text-muted mb-1';
@@ -158,8 +160,8 @@ export default function FacilityDetailPanel({
           </div>
           <div>
             <h2 className="text-xl font-bold text-theme-text-primary">{facility.name}</h2>
-            {facility.facility_number && (
-              <p className="text-sm text-theme-text-muted">{facility.facility_number}</p>
+            {facility.facilityNumber && (
+              <p className="text-sm text-theme-text-muted">{facility.facilityNumber}</p>
             )}
           </div>
         </div>
@@ -171,7 +173,7 @@ export default function FacilityDetailPanel({
               <Pencil className="w-3.5 h-3.5" /> Edit
             </button>
           )}
-          {facility.is_archived ? (
+          {facility.isArchived ? (
             <button onClick={() => onRestore(facility)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/10 transition-colors"
             >
@@ -192,19 +194,19 @@ export default function FacilityDetailPanel({
 
       {/* Status & Type badges */}
       <div className="flex items-center gap-2 flex-wrap">
-        {facility.facility_type && (
+        {facility.facilityType && (
           <span className="text-xs px-2.5 py-1 rounded-full bg-theme-surface-hover text-theme-text-muted">
-            {facility.facility_type.name}
+            {facility.facilityType.name}
           </span>
         )}
-        {facility.status && (
+        {facility.statusRecord && (
           <span className="text-xs px-2.5 py-1 rounded-full text-theme-text-primary"
-            style={{ backgroundColor: facility.status.color ? `${facility.status.color}20` : undefined, color: facility.status.color || undefined }}
+            style={{ backgroundColor: facility.statusRecord.color ? `${facility.statusRecord.color}20` : undefined, color: facility.statusRecord.color || undefined }}
           >
-            {facility.status.name}
+            {facility.statusRecord.name}
           </span>
         )}
-        {facility.is_archived && (
+        {facility.isArchived && (
           <span className="text-xs px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400">
             Archived
           </span>
@@ -217,7 +219,7 @@ export default function FacilityDetailPanel({
           {address && (
             <div className="flex items-start gap-2 text-sm text-theme-text-secondary">
               <MapPin className="w-4 h-4 mt-0.5 shrink-0" />
-              <span>{address}{facility.address_line2 ? `, ${facility.address_line2}` : ''}</span>
+              <span>{address}{facility.addressLine2 ? `, ${facility.addressLine2}` : ''}</span>
             </div>
           )}
           {(facility.phone || facility.email) && (
@@ -227,14 +229,14 @@ export default function FacilityDetailPanel({
             </div>
           )}
           {/* Building Info */}
-          {(facility.year_built || facility.square_footage || facility.num_floors || facility.num_bays) && (
+          {(facility.yearBuilt || facility.squareFootage || facility.numFloors || facility.numBays) && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 bg-theme-surface-hover/50 rounded-lg">
-              {facility.year_built && <div><p className="text-xs text-theme-text-muted">Year Built</p><p className="text-sm font-medium text-theme-text-primary">{facility.year_built}</p></div>}
-              {facility.square_footage && <div><p className="text-xs text-theme-text-muted">Sq. Footage</p><p className="text-sm font-medium text-theme-text-primary">{facility.square_footage.toLocaleString()}</p></div>}
-              {facility.num_floors && <div><p className="text-xs text-theme-text-muted">Floors</p><p className="text-sm font-medium text-theme-text-primary">{facility.num_floors}</p></div>}
-              {facility.num_bays && <div><p className="text-xs text-theme-text-muted">Bays</p><p className="text-sm font-medium text-theme-text-primary">{facility.num_bays}</p></div>}
-              {facility.max_occupancy && <div><p className="text-xs text-theme-text-muted">Max Occupancy</p><p className="text-sm font-medium text-theme-text-primary">{facility.max_occupancy}</p></div>}
-              {facility.sleeping_quarters && <div><p className="text-xs text-theme-text-muted">Sleeping Qtrs</p><p className="text-sm font-medium text-theme-text-primary">{facility.sleeping_quarters}</p></div>}
+              {facility.yearBuilt && <div><p className="text-xs text-theme-text-muted">Year Built</p><p className="text-sm font-medium text-theme-text-primary">{facility.yearBuilt}</p></div>}
+              {facility.squareFootage && <div><p className="text-xs text-theme-text-muted">Sq. Footage</p><p className="text-sm font-medium text-theme-text-primary">{facility.squareFootage.toLocaleString()}</p></div>}
+              {facility.numFloors && <div><p className="text-xs text-theme-text-muted">Floors</p><p className="text-sm font-medium text-theme-text-primary">{facility.numFloors}</p></div>}
+              {facility.numBays && <div><p className="text-xs text-theme-text-muted">Bays</p><p className="text-sm font-medium text-theme-text-primary">{facility.numBays}</p></div>}
+              {facility.maxOccupancy && <div><p className="text-xs text-theme-text-muted">Max Occupancy</p><p className="text-sm font-medium text-theme-text-primary">{facility.maxOccupancy}</p></div>}
+              {facility.sleepingQuarters && <div><p className="text-xs text-theme-text-muted">Sleeping Qtrs</p><p className="text-sm font-medium text-theme-text-primary">{facility.sleepingQuarters}</p></div>}
             </div>
           )}
           {facility.description && <p className="text-sm text-theme-text-secondary">{facility.description}</p>}
@@ -358,10 +360,10 @@ export default function FacilityDetailPanel({
                     <DoorOpen className="w-4 h-4 text-theme-text-muted" />
                     <div>
                       <p className="text-sm font-medium text-theme-text-primary">
-                        {room.name}{room.room_number ? ` (#${room.room_number})` : ''}
+                        {room.name}{room.roomNumber ? ` (#${room.roomNumber})` : ''}
                       </p>
                       <p className="text-xs text-theme-text-muted">
-                        {room.room_type?.replace(/_/g, ' ')}{room.floor != null ? ` · Floor ${room.floor}` : ''}{room.capacity ? ` · Cap: ${room.capacity}` : ''}
+                        {room.roomType?.replace(/_/g, ' ')}{room.floor != null ? ` · Floor ${room.floor}` : ''}{room.capacity ? ` · Cap: ${room.capacity}` : ''}
                       </p>
                     </div>
                   </div>

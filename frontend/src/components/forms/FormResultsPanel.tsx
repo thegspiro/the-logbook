@@ -108,7 +108,7 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
         const values: string[] = [];
         for (const sub of submissions) {
           const raw = sub.data[field.id];
-          const val = typeof raw === 'string' ? raw.trim() : raw != null ? String(raw).trim() : '';
+          const val = typeof raw === 'string' ? raw.trim() : raw != null ? String(raw as string | number | boolean).trim() : '';
           if (val) values.push(val);
         }
 
