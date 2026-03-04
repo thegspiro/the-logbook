@@ -201,7 +201,7 @@ class GrantService:
             application_id=application.id,
             note_type=GrantNoteType.STATUS_CHANGE,
             content=f"Application created with status: {application.application_status.value}",
-            metadata={"new_status": application.application_status.value},
+            note_metadata={"new_status": application.application_status.value},
             created_by=user_id,
         )
         self.db.add(note)
@@ -240,7 +240,7 @@ class GrantService:
                 application_id=application.id,
                 note_type=GrantNoteType.STATUS_CHANGE,
                 content=f"Status changed from {old_status.value} to {new_status.value}",
-                metadata={
+                note_metadata={
                     "old_status": old_status.value,
                     "new_status": new_status.value,
                 },
@@ -625,7 +625,7 @@ class GrantService:
                 application_id=task.application_id,
                 note_type=GrantNoteType.COMPLIANCE,
                 content=f"Compliance task completed: {task.title}",
-                metadata={"task_id": task.id, "task_type": task.task_type.value},
+                note_metadata={"task_id": task.id, "task_type": task.task_type.value},
                 created_by=user_id,
             )
             self.db.add(note)

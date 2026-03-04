@@ -715,7 +715,8 @@ class GrantNote(Base):
     content = Column(Text, nullable=False)
 
     # Structured metadata (e.g. old_status, new_status for status changes)
-    metadata = Column(JSON, nullable=True)
+    # "metadata" is reserved by SQLAlchemy Declarative; map via Column("metadata")
+    note_metadata = Column("metadata", JSON, nullable=True)
 
     # Metadata
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
