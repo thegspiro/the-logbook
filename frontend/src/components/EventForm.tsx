@@ -16,7 +16,7 @@ import {
   QrCode,
   Bell,
 } from 'lucide-react';
-import type { EventCreate, EventType, RSVPStatus } from '../types/event';
+import type { EventCreate, EventType, EventCategoryConfig, RSVPStatus } from '../types/event';
 import { eventService, locationsService } from '../services/api';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum, CheckInWindowType } from '../constants/enums';
 import type { Location } from '../services/api';
@@ -46,6 +46,7 @@ const DEFAULT_FORM_DATA: EventCreate = {
   title: '',
   description: '',
   event_type: 'business_meeting',
+  custom_category: undefined,
   location_id: undefined,
   location: '',
   location_details: '',
@@ -113,11 +114,17 @@ export const EventForm: React.FC<EventFormProps> = ({
     initialData?.location ? 'other' : 'select'
   );
   const [visibleTypes, setVisibleTypes] = useState<EventType[]>(EVENT_TYPES);
+  const [customCategories, setCustomCategories] = useState<EventCategoryConfig[]>([]);
+  const [visibleCustomCategories, setVisibleCustomCategories] = useState<string[]>([]);
 
   useEffect(() => {
     void loadLocations();
-    eventService.getVisibleEventTypes()
-      .then(setVisibleTypes)
+    eventService.getVisibleEventTypesWithCategories()
+      .then((data) => {
+        setVisibleTypes(data.visible_event_types);
+        setCustomCategories(data.custom_event_categories || []);
+        setVisibleCustomCategories(data.visible_custom_categories || []);
+      })
       .catch(() => { /* fall back to showing all types */ });
   }, []);
 
@@ -341,6 +348,37 @@ export const EventForm: React.FC<EventFormProps> = ({
             </div>
           )}
         </div>
+
+        {/* Custom Category (optional) */}
+        {customCategories.length > 0 && (
+          <div>
+            <label htmlFor="custom-category" className={labelClass}>
+              Category
+            </label>
+            <select
+              id="custom-category"
+              value={formData.custom_category || ''}
+              onChange={(e) => update({ custom_category: e.target.value || undefined })}
+              className={selectClass}
+            >
+              <option value="">None</option>
+              {customCategories.filter((c) => visibleCustomCategories.includes(c.value)).map((cat) => (
+                <option key={cat.value} value={cat.value}>
+                  {cat.label}
+                </option>
+              ))}
+              {customCategories.some((c) => !visibleCustomCategories.includes(c.value)) && (
+                <optgroup label="Other">
+                  {customCategories.filter((c) => !visibleCustomCategories.includes(c.value)).map((cat) => (
+                    <option key={cat.value} value={cat.value}>
+                      {cat.label}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          </div>
+        )}
       </section>
 
       <hr className="border-theme-surface-border" />

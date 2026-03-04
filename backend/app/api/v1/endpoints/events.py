@@ -109,6 +109,7 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
 @router.get("", response_model=list[EventListItem])
 async def list_events(
     event_type: str | None = None,
+    custom_category: str | None = None,
     exclude_event_types: str | None = None,
     start_after: datetime | None = None,
     start_before: datetime | None = None,
@@ -141,6 +142,7 @@ async def list_events(
     events = await service.list_events(
         organization_id=current_user.organization_id,
         event_type=event_type,
+        custom_category=custom_category,
         exclude_event_types=exclude_list,
         start_after=start_after,
         start_before=start_before,
@@ -170,6 +172,7 @@ async def list_events(
                 id=event.id,
                 title=event.title,
                 event_type=event.event_type.value if event.event_type else "other",
+                custom_category=event.custom_category,
                 start_datetime=event.start_datetime,
                 end_datetime=event.end_datetime,
                 location_id=event.location_id,
@@ -250,6 +253,7 @@ EVENT_SETTINGS_DEFAULTS = {
     ],
     "event_type_labels": {},
     "custom_event_categories": [],
+    "visible_custom_categories": [],
     "outreach_event_types": [
         {"value": "fire_safety_demo", "label": "Fire Safety Demo"},
         {"value": "station_tour", "label": "Station Tour"},
@@ -436,7 +440,19 @@ async def get_visible_event_types(
         "visible_event_types",
         EVENT_SETTINGS_DEFAULTS["visible_event_types"],
     )
-    return {"visible_event_types": visible}
+    custom_categories = settings.get(
+        "custom_event_categories",
+        EVENT_SETTINGS_DEFAULTS["custom_event_categories"],
+    )
+    visible_custom = settings.get(
+        "visible_custom_categories",
+        EVENT_SETTINGS_DEFAULTS["visible_custom_categories"],
+    )
+    return {
+        "visible_event_types": visible,
+        "custom_event_categories": custom_categories,
+        "visible_custom_categories": visible_custom,
+    }
 
 
 @router.get("/templates", response_model=list[EventTemplateResponse])

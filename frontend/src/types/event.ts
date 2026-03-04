@@ -19,6 +19,7 @@ export interface Event {
   title: string;
   description?: string;
   event_type: EventType;
+  custom_category?: string;
   location_id?: string;
   location?: string;
   location_name?: string;
@@ -64,6 +65,7 @@ export interface EventListItem {
   id: string;
   title: string;
   event_type: EventType;
+  custom_category?: string;
   start_datetime: string;
   end_datetime: string;
   location_id?: string;
@@ -80,6 +82,7 @@ export interface EventCreate {
   title: string;
   description?: string | undefined;
   event_type: EventType;
+  custom_category?: string | undefined;
   location_id?: string | undefined;
   location?: string | undefined;
   location_details?: string | undefined;
@@ -106,6 +109,7 @@ export interface EventUpdate {
   title?: string | undefined;
   description?: string | undefined;
   event_type?: EventType | undefined;
+  custom_category?: string | undefined;
   location_id?: string | undefined;
   location?: string | undefined;
   location_details?: string | undefined;
@@ -368,6 +372,8 @@ export interface EventModuleSettings {
   event_type_labels: Partial<Record<EventType, string>>;
   // Organization-defined custom event categories
   custom_event_categories: EventCategoryConfig[];
+  // Which custom categories appear as primary filter tabs
+  visible_custom_categories: string[];
   // Defaults applied when creating a new event
   defaults: {
     event_type: EventType;

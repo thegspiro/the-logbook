@@ -390,6 +390,22 @@ describe('eventService', () => {
     });
   });
 
+  describe('getVisibleEventTypesWithCategories', () => {
+    it('should GET full visibility data from /events/visible-event-types', async () => {
+      const data = {
+        visible_event_types: ['training', 'meeting'],
+        custom_event_categories: [{ value: 'drill', label: 'Drill', color: 'bg-blue-100 text-blue-800' }],
+        visible_custom_categories: ['drill'],
+      };
+      mockGet.mockResolvedValueOnce({ data });
+
+      const result = await eventService.getVisibleEventTypesWithCategories();
+
+      expect(mockGet).toHaveBeenCalledWith('/events/visible-event-types');
+      expect(result).toEqual(data);
+    });
+  });
+
   // --- External Attendees ---
   describe('getExternalAttendees', () => {
     it('should GET /events/:id/external-attendees', async () => {

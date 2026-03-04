@@ -206,6 +206,35 @@ const EventsSettingsTab: React.FC = () => {
     }
   };
 
+  const toggleCategoryVisibility = async (categoryValue: string) => {
+    if (!settings) return;
+
+    const current = settings.visible_custom_categories || [];
+    const isVisible = current.includes(categoryValue);
+    const updated = isVisible
+      ? current.filter((v) => v !== categoryValue)
+      : [...current, categoryValue];
+
+    try {
+      setSaving(true);
+      const result = await eventService.updateModuleSettings({
+        visible_custom_categories: updated,
+      });
+      setSettings(result);
+      const cat = (settings.custom_event_categories || []).find((c) => c.value === categoryValue);
+      const name = cat?.label || categoryValue;
+      toast.success(
+        isVisible
+          ? `"${name}" hidden from primary filters`
+          : `"${name}" is now a primary filter`
+      );
+    } catch {
+      toast.error('Failed to update setting.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // ─── Custom Event Categories ────────────────────────────────────────────────
 
   const addCustomCategory = async () => {
@@ -651,6 +680,61 @@ const EventsSettingsTab: React.FC = () => {
                       </button>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* Custom Categories visibility */}
+            {customCategories.length > 0 && (
+              <div className="border-t border-theme-surface-border pt-4">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-theme-text-muted mb-2">
+                  Custom Categories
+                </h4>
+                <p className="text-xs text-theme-text-muted mb-3">
+                  Toggle visibility of organization-defined categories as primary filter tabs.
+                </p>
+                <div className="space-y-2">
+                  {customCategories.map((cat) => {
+                    const isVisible = (settings.visible_custom_categories || []).includes(cat.value);
+                    return (
+                      <div
+                        key={cat.value}
+                        className={`flex items-center justify-between p-3 rounded-lg border ${
+                          isVisible
+                            ? 'border-theme-surface-border'
+                            : 'border-theme-surface-border bg-theme-surface-secondary/30'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          {isVisible ? (
+                            <Eye className="w-4 h-4 text-green-600 dark:text-green-400" />
+                          ) : (
+                            <EyeOff className="w-4 h-4 text-theme-text-muted" />
+                          )}
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${cat.color} ${
+                              isVisible ? '' : 'opacity-60'
+                            }`}
+                          >
+                            {cat.label}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void toggleCategoryVisibility(cat.value)}
+                          disabled={saving}
+                          className={`text-sm disabled:opacity-50 transition-colors ${
+                            isVisible
+                              ? 'text-theme-text-muted hover:text-theme-text-primary'
+                              : 'text-theme-text-muted hover:text-green-600 dark:hover:text-green-400'
+                          }`}
+                          title={isVisible ? `Hide "${cat.label}"` : `Show "${cat.label}" as primary filter`}
+                        >
+                          {isVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

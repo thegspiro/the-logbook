@@ -134,6 +134,7 @@ class EventService:
         self,
         organization_id: UUID,
         event_type: Optional[str] = None,
+        custom_category: Optional[str] = None,
         exclude_event_types: Optional[List[str]] = None,
         start_after: Optional[datetime] = None,
         start_before: Optional[datetime] = None,
@@ -152,6 +153,9 @@ class EventService:
 
         if event_type:
             query = query.where(Event.event_type == event_type)
+
+        if custom_category:
+            query = query.where(Event.custom_category == custom_category)
 
         if exclude_event_types:
             query = query.where(Event.event_type.notin_(exclude_event_types))

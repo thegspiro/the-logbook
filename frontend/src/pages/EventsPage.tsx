@@ -9,7 +9,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Calendar, Plus, Download } from 'lucide-react';
 import { eventService } from '../services/api';
-import type { EventListItem, EventType } from '../types/event';
+import type { EventListItem, EventType, EventCategoryConfig } from '../types/event';
 import { getEventTypeLabel, getEventTypeBadgeColor } from '../utils/eventHelpers';
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
@@ -33,6 +33,8 @@ export const EventsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [visibleTypes, setVisibleTypes] = useState<EventType[]>(ALL_EVENT_TYPES);
+  const [customCategories, setCustomCategories] = useState<EventCategoryConfig[]>([]);
+  const [visibleCustomCategories, setVisibleCustomCategories] = useState<string[]>([]);
 
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('events.manage');
@@ -40,8 +42,12 @@ export const EventsPage: React.FC = () => {
 
   useEffect(() => {
     void fetchEvents();
-    eventService.getVisibleEventTypes()
-      .then(setVisibleTypes)
+    eventService.getVisibleEventTypesWithCategories()
+      .then((data) => {
+        setVisibleTypes(data.visible_event_types);
+        setCustomCategories(data.custom_event_categories || []);
+        setVisibleCustomCategories(data.visible_custom_categories || []);
+      })
       .catch(() => { /* fall back to showing all types */ });
   }, []);
 
@@ -51,17 +57,26 @@ export const EventsPage: React.FC = () => {
     [visibleTypes]
   );
 
-  // Build filter tab keys: "all" + visible types (ensuring "other" always present)
+  // Build filter tab keys: "all" + visible types + visible custom categories + "other"
   const filterTabs = useMemo(() => {
     const tabs: string[] = ['all', ...visibleTypes.filter((t) => t !== 'other')];
+    // Add visible custom categories as tabs (prefixed with "cat:" to distinguish from event types)
+    for (const catValue of visibleCustomCategories) {
+      tabs.push(`cat:${catValue}`);
+    }
     // Always include "other" at the end
     tabs.push('other');
     return tabs;
-  }, [visibleTypes]);
+  }, [visibleTypes, visibleCustomCategories]);
 
   // #77: Memoize filtered events instead of storing in separate state
   const filteredEvents = useMemo(() => {
     if (typeFilter === 'all') return events;
+    // Custom category filter (prefixed with "cat:")
+    if (typeFilter.startsWith('cat:')) {
+      const catValue = typeFilter.slice(4);
+      return events.filter((e) => e.custom_category === catValue);
+    }
     if (typeFilter === 'other') {
       // "Other" tab shows events typed "other" plus any hidden event types
       return events.filter(
@@ -197,7 +212,11 @@ export const EventsPage: React.FC = () => {
                   : 'border-transparent text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border'
               } whitespace-nowrap py-3 sm:py-4 px-1 border-b-2 font-medium text-sm shrink-0`}
             >
-              {filter === 'all' ? 'All Events' : getEventTypeLabel(filter as EventType)}
+              {filter === 'all'
+                ? 'All Events'
+                : filter.startsWith('cat:')
+                  ? customCategories.find((c) => c.value === filter.slice(4))?.label || filter.slice(4)
+                  : getEventTypeLabel(filter as EventType)}
             </button>
           ))}
         </nav>
@@ -211,7 +230,9 @@ export const EventsPage: React.FC = () => {
           description={
             typeFilter === 'all'
               ? 'Get started by creating a new event.'
-              : `No ${getEventTypeLabel(typeFilter as EventType).toLowerCase()} events found.`
+              : typeFilter.startsWith('cat:')
+                ? `No events in "${customCategories.find((c) => c.value === typeFilter.slice(4))?.label || typeFilter.slice(4)}" category.`
+                : `No ${getEventTypeLabel(typeFilter as EventType).toLowerCase()} events found.`
           }
           actions={canManage ? [
             { label: 'Create Event', onClick: () => window.location.href = '/events/new', icon: Plus },
