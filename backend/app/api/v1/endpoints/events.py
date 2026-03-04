@@ -405,6 +405,15 @@ async def update_event_settings(
     await db.commit()
     await db.refresh(org)
 
+    await log_audit_event(
+        db=db,
+        event_type="events.settings_updated",
+        severity="info",
+        event_data={"updated_keys": list(updates.keys())},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     # Return merged result
     merged = {**EVENT_SETTINGS_DEFAULTS}
     for key, default_val in EVENT_SETTINGS_DEFAULTS.items():
@@ -752,10 +761,27 @@ async def cancel_event(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
             )
 
+        await log_audit_event(
+            db=db,
+            event_type="event.cancelled",
+            severity="warning",
+            event_data={
+                "event_id": str(event_id),
+                "reason": cancel_data.cancellation_reason,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
         return _build_event_response(event)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
         )
 
 

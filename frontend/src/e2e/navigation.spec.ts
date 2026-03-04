@@ -9,10 +9,11 @@ import { test, expect, type Page } from '@playwright/test';
 
 /** Shared mock API route setup for an authenticated session. */
 async function setupAuthenticatedSession(page: Page) {
-  // Inject tokens into localStorage so ProtectedRoute considers the user authenticated
+  // Set session flag so ProtectedRoute considers the user authenticated.
+  // Auth uses httpOnly cookies (not localStorage tokens); this flag only
+  // signals that a session may exist and loadUser should call /auth/me.
   await page.evaluate(() => {
-    localStorage.setItem('access_token', 'mock-access-token');
-    localStorage.setItem('refresh_token', 'mock-refresh-token');
+    localStorage.setItem('has_session', '1');
   });
 
   // Mock current user endpoint (called by ProtectedRoute's loadUser)

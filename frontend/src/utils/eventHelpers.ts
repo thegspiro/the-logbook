@@ -71,6 +71,9 @@ export const getExpirationStatus = (
 ): { status: string; color: string } => {
   const today = new Date();
   const expDate = new Date(expirationDate);
+  if (isNaN(expDate.getTime())) {
+    return { status: 'Unknown', color: 'text-gray-600 bg-gray-50' };
+  }
   const daysUntilExpiry = Math.floor(
     (expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
   );

@@ -123,7 +123,7 @@ async def update_organization_settings(
         return response.redacted().model_dump()
     except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
 

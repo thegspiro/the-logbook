@@ -73,7 +73,7 @@ export function createApiClient(baseURL = '/api/v1'): AxiosInstance {
         try {
           if (!refreshPromise) {
             refreshPromise = axios
-              .post('/api/v1/auth/refresh', {}, { withCredentials: true })
+              .post(`${baseURL}/auth/refresh`, {}, { withCredentials: true })
               .then(() => {})
               .finally(() => {
                 refreshPromise = null;

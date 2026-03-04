@@ -218,7 +218,7 @@ export const userService = {
    */
   async getMemberAuditHistory(userId: string, page: number = 1, eventType?: string): Promise<import('../types/user').MemberAuditLogEntry[]> {
     const response = await api.get<import('../types/user').MemberAuditLogEntry[]>(`/users/${userId}/audit-history`, {
-      params: { page, page_size: 50, event_type: eventType ?? undefined },
+      params: { page, page_size: 50, event_type: eventType || undefined },
     });
     return response.data;
   },

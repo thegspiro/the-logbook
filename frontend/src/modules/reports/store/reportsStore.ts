@@ -214,22 +214,37 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
   },
 
   createSavedReport: async (data: SavedReportCreate) => {
-    const result = await savedReportsService.create(data);
-    set({ savedReports: [...get().savedReports, result] });
-    return result;
+    try {
+      const result = await savedReportsService.create(data);
+      set({ savedReports: [...get().savedReports, result] });
+      return result;
+    } catch (err: unknown) {
+      set({ error: getErrorMessage(err, 'Failed to create saved report') });
+      throw err;
+    }
   },
 
   updateSavedReport: async (id: string, data: SavedReportUpdate) => {
-    const result = await savedReportsService.update(id, data);
-    set({
-      savedReports: get().savedReports.map((r) => (r.id === id ? result : r)),
-    });
-    return result;
+    try {
+      const result = await savedReportsService.update(id, data);
+      set({
+        savedReports: get().savedReports.map((r) => (r.id === id ? result : r)),
+      });
+      return result;
+    } catch (err: unknown) {
+      set({ error: getErrorMessage(err, 'Failed to update saved report') });
+      throw err;
+    }
   },
 
   deleteSavedReport: async (id: string) => {
-    await savedReportsService.delete(id);
-    set({ savedReports: get().savedReports.filter((r) => r.id !== id) });
+    try {
+      await savedReportsService.delete(id);
+      set({ savedReports: get().savedReports.filter((r) => r.id !== id) });
+    } catch (err: unknown) {
+      set({ error: getErrorMessage(err, 'Failed to delete saved report') });
+      throw err;
+    }
   },
 
   generateComparisonReport: async (request: ReportRequest) => {

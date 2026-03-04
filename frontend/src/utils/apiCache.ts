@@ -49,6 +49,9 @@ const UNCACHEABLE_PREFIXES = [
   '/elections/',      // voter lists, ballots, election results
   '/minutes-records/', // meeting minutes with potentially sensitive discussions
   '/forms/',          // form submissions may contain PII
+  '/inventory/users/',     // user-specific inventory assignments (PII)
+  '/inventory/checkouts/', // user checkout history (PII)
+  '/documents/',           // private organizational documents
 ] as const;
 
 interface CacheEntry {
