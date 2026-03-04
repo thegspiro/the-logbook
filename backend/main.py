@@ -420,11 +420,18 @@ SEED_DATA_FILE = "20260203_0023_seed_apparatus_data.py"
 
 def _cleanup_duplicate_revisions(versions_dir):
     """
-    Detect and remove migration files with duplicate revision IDs.
+    Detect and remove migration files with duplicate revision IDs, and
+    restore previously-staled files that are now needed.
 
     Stale migration files can appear when Docker images cache old COPY layers,
     or from incomplete git operations. Duplicate revision IDs crash Alembic's
     revision graph walker with "overlaps with other requested revisions".
+
+    After resolving duplicates, any ``.stale`` files whose revision ID is no
+    longer present among active ``.py`` files — but *is* referenced as a
+    ``down_revision`` by another migration — are restored.  This handles the
+    case where a previous startup incorrectly staled a file that a later code
+    change (e.g. renaming the duplicate) has made unique again.
 
     Also removes stale __pycache__ bytecode in the versions directory.  When
     the host Python version differs from the container version (e.g. 3.11 vs
@@ -519,6 +526,66 @@ def _cleanup_duplicate_revisions(versions_dir):
                     )
                 except Exception as rename_err:
                     logger.error(f"Failed to rename {fn}: {rename_err}")
+
+    # -----------------------------------------------------------------
+    # Restore .stale files whose revision is no longer duplicated but is
+    # needed by the migration chain.  This can happen when a previous
+    # startup staled a file, and a subsequent code change resolved the
+    # duplicate (e.g. the conflicting migration was renamed to a new
+    # revision ID).
+    # -----------------------------------------------------------------
+    # Rebuild the active revision set after any duplicate cleanup above.
+    active_revisions = set()
+    active_down_revisions = set()
+    for filename in os.listdir(versions_dir):
+        if not filename.endswith(".py") or filename.startswith("__"):
+            continue
+        filepath = os.path.join(versions_dir, filename)
+        try:
+            with open(filepath, "r") as f:
+                content = f.read(2048)
+            rev_match = revision_re.search(content)
+            down_match = down_revision_re.search(content)
+            if rev_match:
+                active_revisions.add(rev_match.group(1))
+            if down_match:
+                active_down_revisions.add(down_match.group(1))
+        except (OSError, ValueError):
+            continue
+
+    for filename in os.listdir(versions_dir):
+        if not filename.endswith(".py.stale"):
+            continue
+        filepath = os.path.join(versions_dir, filename)
+        try:
+            with open(filepath, "r") as f:
+                content = f.read(2048)
+            rev_match = revision_re.search(content)
+            if not rev_match:
+                continue
+            stale_rev = rev_match.group(1)
+            stale_slug = filename.removesuffix(".py.stale")
+            # Only restore if: (a) this revision is not already provided by
+            # an active .py file, and (b) some other migration depends on it
+            # (either by exact revision ID or by filename slug).
+            is_needed = (
+                stale_rev in active_down_revisions
+                or stale_slug in active_down_revisions
+            )
+            if stale_rev not in active_revisions and is_needed:
+                restored = filepath.removesuffix(".stale")
+                logger.info(
+                    f"Restoring previously-staled migration {filename} "
+                    f"(revision {stale_rev} needed by chain)"
+                )
+                try:
+                    os.rename(filepath, restored)
+                except Exception as restore_err:
+                    logger.error(
+                        f"Failed to restore {filename}: {restore_err}"
+                    )
+        except (OSError, ValueError):
+            continue
 
 
 def _import_all_models():

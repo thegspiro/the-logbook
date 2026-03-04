@@ -275,7 +275,7 @@ async def list_items(
     search: str | None = None,
     active_only: bool = True,
     sort_by: str | None = None,
-    sort_order: str | None = Query(None, regex="^(asc|desc)$"),
+    sort_order: str | None = Query(None, pattern="^(asc|desc)$"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
