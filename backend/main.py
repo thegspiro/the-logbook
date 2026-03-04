@@ -454,8 +454,10 @@ def _cleanup_duplicate_revisions(versions_dir):
         except Exception as e:
             logger.debug(f"Could not remove versions __pycache__: {e}")
 
-    revision_re = re.compile(r"^revision\s*=\s*['\"](.+?)['\"]", re.MULTILINE)
-    down_revision_re = re.compile(r"^down_revision\s*=\s*['\"](.+?)['\"]", re.MULTILINE)
+    revision_re = re.compile(r"^revision\b.*?=\s*['\"](.+?)['\"]", re.MULTILINE)
+    down_revision_re = re.compile(
+        r"^down_revision\b.*?=\s*['\"](.+?)['\"]", re.MULTILINE
+    )
 
     # Map revision ID -> list of (filepath, down_revision)
     rev_to_files = {}
@@ -871,9 +873,9 @@ def run_migrations():
         # that no other revision depends on.
         import re as _re2
 
-        _rev_pat = _re2.compile(r"^revision\s*[:=]\s*['\"](.+?)['\"]", _re2.MULTILINE)
+        _rev_pat = _re2.compile(r"^revision\b.*?=\s*['\"](.+?)['\"]", _re2.MULTILINE)
         _down_pat = _re2.compile(
-            r"^down_revision\s*[:=]\s*['\"](.+?)['\"]", _re2.MULTILINE
+            r"^down_revision\b.*?=\s*['\"](.+?)['\"]", _re2.MULTILINE
         )
         _all_revs = {}  # revision -> down_revision
         _all_down = set()
