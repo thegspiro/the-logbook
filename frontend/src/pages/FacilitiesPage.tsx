@@ -105,6 +105,18 @@ export default function FacilitiesPage() {
     }
   };
 
+  const handleSelectFacility = async (facility: Facility) => {
+    // Set immediately with list data for fast UI feedback
+    setSelectedFacility(facility);
+    // Fetch full record (list endpoint returns limited fields)
+    try {
+      const full = await facilitiesService.getFacility(facility.id);
+      setSelectedFacility(full as unknown as Facility);
+    } catch {
+      // Keep the partial data rather than clearing
+    }
+  };
+
   const handleArchive = async (facility: Facility) => {
     try {
       await facilitiesService.archiveFacility(facility.id);
@@ -245,7 +257,7 @@ export default function FacilitiesPage() {
                 return (
                   <button
                     key={facility.id}
-                    onClick={() => setSelectedFacility(facility)}
+                    onClick={() => { void handleSelectFacility(facility); }}
                     className={`text-left p-5 rounded-xl border transition-all hover:shadow-md ${
                       selectedFacility?.id === facility.id
                         ? 'border-red-500 bg-red-500/5'

@@ -489,25 +489,31 @@ class FacilitiesService:
                     f"Facility with number '{facility_data.facility_number}' already exists"
                 )
 
-        # Verify type exists
-        facility_type = await self.get_facility_type(
-            facility_data.facility_type_id, organization_id
-        )
-        if not facility_type:
-            raise ValueError("Invalid facility type")
+        # Verify type exists (if provided)
+        if facility_data.facility_type_id:
+            facility_type = await self.get_facility_type(
+                facility_data.facility_type_id, organization_id
+            )
+            if not facility_type:
+                raise ValueError("Invalid facility type")
 
-        # Verify status exists
-        status = await self.get_facility_status(
-            facility_data.status_id, organization_id
-        )
-        if not status:
-            raise ValueError("Invalid facility status")
+        # Verify status exists (if provided)
+        if facility_data.status_id:
+            status = await self.get_facility_status(
+                facility_data.status_id, organization_id
+            )
+            if not status:
+                raise ValueError("Invalid facility status")
+
+        extra = {}
+        if facility_data.status_id:
+            extra["status_changed_at"] = datetime.now(tz=timezone.utc)
+            extra["status_changed_by"] = created_by
 
         facility = Facility(
             organization_id=organization_id,
             created_by=created_by,
-            status_changed_at=datetime.now(tz=timezone.utc),
-            status_changed_by=created_by,
+            **extra,
             **facility_data.model_dump(),
         )
 
@@ -1041,12 +1047,13 @@ class FacilitiesService:
         if not facility:
             raise ValueError("Invalid facility")
 
-        # Verify maintenance type
-        maint_type = await self.get_maintenance_type(
-            maintenance_data.maintenance_type_id, organization_id
-        )
-        if not maint_type:
-            raise ValueError("Invalid maintenance type")
+        # Verify maintenance type (if provided)
+        if maintenance_data.maintenance_type_id:
+            maint_type = await self.get_maintenance_type(
+                maintenance_data.maintenance_type_id, organization_id
+            )
+            if not maint_type:
+                raise ValueError("Invalid maintenance type")
 
         # Validate historic entries
         if maintenance_data.is_historic and not maintenance_data.occurred_date:

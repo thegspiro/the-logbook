@@ -152,18 +152,26 @@ export interface Room {
 
 export type TabId = 'facilities' | 'maintenance' | 'inspections';
 
+/** Convert a snake_case enum value to a human-readable label (e.g. "building_code" → "Building Code") */
+export function enumLabel(value: string | undefined | null): string {
+  if (!value) return '';
+  return value
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export const INSPECTION_TYPES = [
-  'FIRE', 'BUILDING_CODE', 'HEALTH', 'ADA', 'ENVIRONMENTAL',
-  'INSURANCE', 'ROUTINE', 'OTHER',
+  'fire', 'building_code', 'health', 'ada', 'environmental',
+  'insurance', 'routine', 'other',
 ] as const;
 
 export const MAINTENANCE_CATEGORIES = [
-  'PREVENTIVE', 'REPAIR', 'INSPECTION', 'RENOVATION',
-  'CLEANING', 'SAFETY', 'OTHER',
+  'preventive', 'repair', 'inspection', 'renovation',
+  'cleaning', 'safety', 'other',
 ] as const;
 
 export const ROOM_TYPES = [
-  'APPARATUS_BAY', 'BUNK_ROOM', 'KITCHEN', 'BATHROOM', 'OFFICE',
-  'TRAINING_ROOM', 'STORAGE', 'MECHANICAL', 'LOBBY', 'COMMON_AREA',
-  'LAUNDRY', 'GYM', 'DECONTAMINATION', 'DISPATCH', 'OTHER',
+  'apparatus_bay', 'bunk_room', 'kitchen', 'bathroom', 'office',
+  'training_room', 'storage', 'mechanical', 'lobby', 'common_area',
+  'laundry', 'gym', 'decontamination', 'dispatch', 'other',
 ] as const;

@@ -311,8 +311,8 @@ class FacilityStatusListItem(BaseModel):
 class FacilityBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     facility_number: Optional[str] = Field(None, max_length=50)
-    facility_type_id: str = Field(..., description="Facility type ID")
-    status_id: str = Field(..., description="Facility status ID")
+    facility_type_id: Optional[str] = Field(None, description="Facility type ID")
+    status_id: Optional[str] = Field(None, description="Facility status ID")
 
     # Address
     address_line1: Optional[str] = Field(None, max_length=200)
@@ -522,7 +522,9 @@ class FacilityMaintenanceTypeResponse(FacilityMaintenanceTypeBase):
 
 class FacilityMaintenanceBase(BaseModel):
     facility_id: str = Field(..., description="Facility ID")
-    maintenance_type_id: str = Field(..., description="Maintenance type ID")
+    maintenance_type_id: Optional[str] = Field(
+        None, description="Maintenance type ID"
+    )
     system_id: Optional[str] = Field(
         None, description="Building system this maintenance targets"
     )
