@@ -261,6 +261,14 @@ export interface OrganizationProfile {
     state: string;
     zip: string;
   };
+  physical_address_same: boolean;
+  physical_address: {
+    line1: string;
+    line2: string;
+    city: string;
+    state: string;
+    zip: string;
+  };
 }
 
 export interface EnabledModulesResponse {
