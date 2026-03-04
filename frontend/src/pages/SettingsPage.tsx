@@ -286,6 +286,15 @@ export const SettingsPage: React.FC = () => {
     setProfileDirty(true);
   };
 
+  const updatePhysicalAddressField = (field: string, value: string) => {
+    if (!profile) return;
+    setProfile({
+      ...profile,
+      physical_address: { ...profile.physical_address, [field]: value },
+    });
+    setProfileDirty(true);
+  };
+
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -642,6 +651,63 @@ export const SettingsPage: React.FC = () => {
                   />
                 </div>
               </div>
+            </div>
+
+            {/* Physical Address */}
+            <div>
+              <p className="text-sm font-medium text-theme-text-primary mb-3 flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-theme-text-muted" /> Physical Address
+              </p>
+              <label className="flex items-center gap-2 mb-3 text-sm text-theme-text-secondary cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={profile?.physical_address_same ?? true}
+                  onChange={(e) => updateProfileField('physical_address_same', e.target.checked)}
+                  className="rounded border-theme-input-border text-red-600 focus:ring-red-500"
+                />
+                Same as mailing address
+              </label>
+              {!profile?.physical_address_same && (
+                <div className="grid grid-cols-1 gap-3">
+                  <input
+                    type="text"
+                    value={profile?.physical_address?.line1 || ''}
+                    onChange={(e) => updatePhysicalAddressField('line1', e.target.value)}
+                    placeholder="Address line 1"
+                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                  />
+                  <input
+                    type="text"
+                    value={profile?.physical_address?.line2 || ''}
+                    onChange={(e) => updatePhysicalAddressField('line2', e.target.value)}
+                    placeholder="Address line 2 (optional)"
+                    className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                  />
+                  <div className="grid grid-cols-3 gap-3">
+                    <input
+                      type="text"
+                      value={profile?.physical_address?.city || ''}
+                      onChange={(e) => updatePhysicalAddressField('city', e.target.value)}
+                      placeholder="City"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                    />
+                    <input
+                      type="text"
+                      value={profile?.physical_address?.state || ''}
+                      onChange={(e) => updatePhysicalAddressField('state', e.target.value)}
+                      placeholder="State"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                    />
+                    <input
+                      type="text"
+                      value={profile?.physical_address?.zip || ''}
+                      onChange={(e) => updatePhysicalAddressField('zip', e.target.value)}
+                      placeholder="ZIP"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Save */}

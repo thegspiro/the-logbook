@@ -882,6 +882,16 @@ async def get_organization_profile(
             "state": org.mailing_state or "",
             "zip": org.mailing_zip or "",
         },
+        "physical_address_same": org.physical_address_same
+        if org.physical_address_same is not None
+        else True,
+        "physical_address": {
+            "line1": org.physical_address_line1 or "",
+            "line2": org.physical_address_line2 or "",
+            "city": org.physical_city or "",
+            "state": org.physical_state or "",
+            "zip": org.physical_zip or "",
+        },
     }
 
 
@@ -906,7 +916,9 @@ async def update_organization_profile(
         raise HTTPException(status_code=404, detail="Organization not found")
 
     # Apply validated scalar fields (only those explicitly provided)
-    update_data = updates.model_dump(exclude_unset=True, exclude={"mailing_address"})
+    update_data = updates.model_dump(
+        exclude_unset=True, exclude={"mailing_address", "physical_address"}
+    )
     for field, value in update_data.items():
         setattr(org, field, value)
 
@@ -919,6 +931,19 @@ async def update_organization_profile(
             "city": "mailing_city",
             "state": "mailing_state",
             "zip": "mailing_zip",
+        }
+        for key, value in addr.items():
+            setattr(org, field_map[key], value)
+
+    # Handle physical address
+    if updates.physical_address is not None:
+        addr = updates.physical_address.model_dump(exclude_unset=True)
+        field_map = {
+            "line1": "physical_address_line1",
+            "line2": "physical_address_line2",
+            "city": "physical_city",
+            "state": "physical_state",
+            "zip": "physical_zip",
         }
         for key, value in addr.items():
             setattr(org, field_map[key], value)
@@ -954,5 +979,15 @@ async def update_organization_profile(
             "city": org.mailing_city or "",
             "state": org.mailing_state or "",
             "zip": org.mailing_zip or "",
+        },
+        "physical_address_same": org.physical_address_same
+        if org.physical_address_same is not None
+        else True,
+        "physical_address": {
+            "line1": org.physical_address_line1 or "",
+            "line2": org.physical_address_line2 or "",
+            "city": org.physical_city or "",
+            "state": org.physical_state or "",
+            "zip": org.physical_zip or "",
         },
     }

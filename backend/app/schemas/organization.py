@@ -696,6 +696,16 @@ class MailingAddressUpdate(BaseModel):
     zip: Optional[str] = Field(None, max_length=20)
 
 
+class PhysicalAddressUpdate(BaseModel):
+    """Schema for updating organization physical address"""
+
+    line1: Optional[str] = Field(None, max_length=255)
+    line2: Optional[str] = Field(None, max_length=255)
+    city: Optional[str] = Field(None, max_length=100)
+    state: Optional[str] = Field(None, max_length=100)
+    zip: Optional[str] = Field(None, max_length=20)
+
+
 class OrganizationProfileUpdate(BaseModel):
     """Schema for updating organization profile details (name, contact, branding)"""
 
@@ -708,6 +718,8 @@ class OrganizationProfileUpdate(BaseModel):
     founded_year: Optional[int] = Field(None, ge=1600, le=2100)
     logo: Optional[str] = None
     mailing_address: Optional[MailingAddressUpdate] = None
+    physical_address_same: Optional[bool] = None
+    physical_address: Optional[PhysicalAddressUpdate] = None
 
 
 class OrganizationResponse(OrganizationBase):
