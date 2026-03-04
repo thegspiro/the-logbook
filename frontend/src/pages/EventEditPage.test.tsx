@@ -21,6 +21,11 @@ vi.mock('../services/api', () => ({
     getEvent: vi.fn(),
     updateEvent: vi.fn(),
     getVisibleEventTypes: vi.fn().mockResolvedValue([]),
+    getVisibleEventTypesWithCategories: vi.fn().mockResolvedValue({
+      visible_event_types: [],
+      custom_event_categories: [],
+      visible_custom_categories: [],
+    }),
   },
   roleService: {
     getRoles: vi.fn().mockResolvedValue([]),

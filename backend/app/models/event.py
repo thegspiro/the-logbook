@@ -77,6 +77,9 @@ class Event(Base):
         nullable=False,
         default=EventType.OTHER,
     )
+    custom_category = Column(
+        String(100), nullable=True
+    )  # Organization-defined custom category (from custom_event_categories settings)
 
     # Location (new system with location_id FK, or legacy free-text location for "Other")
     location_id = Column(
@@ -196,6 +199,7 @@ class Event(Base):
         Index("ix_events_organization_id", "organization_id"),
         Index("ix_events_start_datetime", "start_datetime"),
         Index("ix_events_event_type", "event_type"),
+        Index("ix_events_custom_category", "custom_category"),
         Index("ix_events_location_id", "location_id"),
         Index("ix_events_recurrence_parent_id", "recurrence_parent_id"),
     )

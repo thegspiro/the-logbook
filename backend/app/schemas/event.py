@@ -59,6 +59,11 @@ class EventBase(BaseModel):
     require_checkout: bool = Field(
         default=False, description="Require manual check-out"
     )
+    custom_category: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="Organization-defined custom event category",
+    )
     custom_fields: Optional[Dict[str, Any]] = None
     attachments: Optional[List[Dict[str, str]]] = None
 
@@ -104,6 +109,11 @@ class EventUpdate(BaseModel):
     check_in_minutes_before: Optional[int] = None
     check_in_minutes_after: Optional[int] = None
     require_checkout: Optional[bool] = None
+    custom_category: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="Organization-defined custom event category",
+    )
     custom_fields: Optional[Dict[str, Any]] = None
     attachments: Optional[List[Dict[str, str]]] = None
 
@@ -163,6 +173,7 @@ class EventListItem(BaseModel):
     id: UUID
     title: str
     event_type: str
+    custom_category: Optional[str] = None
     start_datetime: datetime
     end_datetime: datetime
     location_id: Optional[UUID] = None

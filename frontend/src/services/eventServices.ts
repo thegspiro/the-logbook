@@ -215,6 +215,18 @@ export const eventService = {
     const response = await api.get<{ visible_event_types: import('../types/event').EventType[] }>('/events/visible-event-types');
     return response.data.visible_event_types;
   },
+  async getVisibleEventTypesWithCategories(): Promise<{
+    visible_event_types: import('../types/event').EventType[];
+    custom_event_categories: import('../types/event').EventCategoryConfig[];
+    visible_custom_categories: string[];
+  }> {
+    const response = await api.get<{
+      visible_event_types: import('../types/event').EventType[];
+      custom_event_categories: import('../types/event').EventCategoryConfig[];
+      visible_custom_categories: string[];
+    }>('/events/visible-event-types');
+    return response.data;
+  },
 
   async getEventFolder(eventId: string): Promise<DocumentFolder> {
     const response = await api.get<DocumentFolder>(`/events/${eventId}/folder`);

@@ -23,6 +23,19 @@ vi.mock('../services/api', () => ({
       'ceremony',
       'other',
     ]),
+    getVisibleEventTypesWithCategories: vi.fn().mockResolvedValue({
+      visible_event_types: [
+        'business_meeting',
+        'public_education',
+        'training',
+        'social',
+        'fundraiser',
+        'ceremony',
+        'other',
+      ],
+      custom_event_categories: [],
+      visible_custom_categories: [],
+    }),
   },
   locationsService: {
     getLocations: vi.fn(),
