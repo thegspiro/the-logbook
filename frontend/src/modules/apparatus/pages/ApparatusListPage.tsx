@@ -100,7 +100,7 @@ export const ApparatusListPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-theme-bg via-red-900 to-theme-bg">
+    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to">
       {/* Header */}
       <header className="bg-theme-input-bg backdrop-blur-xs border-b border-theme-surface-border px-4 sm:px-6 py-4">
         <div className="max-w-7xl mx-auto">
