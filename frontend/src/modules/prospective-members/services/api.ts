@@ -52,7 +52,7 @@ import type {
   BackendStepProgressResponse,
   FormPipelineValidation,
 } from '../types';
-import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS } from '../types';
+import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS, StepProgressStatus } from '../types';
 
 const api = createApiClient();
 
@@ -248,7 +248,7 @@ export function mapProspectToApplicant(data: BackendProspectResponse): Applicant
   // pipeline steps — first step as IN_PROGRESS, the rest as PENDING. We filter out
   // PENDING steps so the stage history only shows stages the prospect has entered.
   const stageHistory: StageHistoryEntry[] = (data.step_progress || [])
-    .filter((sp: BackendStepProgressResponse) => sp.status !== 'pending')
+    .filter((sp: BackendStepProgressResponse) => sp.status !== StepProgressStatus.PENDING)
     .map((sp: BackendStepProgressResponse) => {
     const stageType = sp.step?.step_type
       ? mapStepTypeToFrontend(sp.step.step_type, sp.step.action_type)

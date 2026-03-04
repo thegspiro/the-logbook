@@ -899,7 +899,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
               )}
 
               {/* Visual Stage Progress */}
-              {applicant.stage_history.length > 0 && (
+              {applicant.total_stages > 0 && (
                 <div className="p-4 border-b border-theme-surface-border">
                   <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
                     Progress
@@ -934,13 +934,23 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         </React.Fragment>
                       );
                     })}
+                    {/* Placeholder bubbles for unreached pipeline stages */}
+                    {Array.from({ length: applicant.total_stages - applicant.stage_history.length }).map((_, idx) => (
+                      <React.Fragment key={`pending-${idx}`}>
+                        <div className="shrink-0 w-4 h-0.5 bg-theme-surface-border" />
+                        <div
+                          className="flex items-center gap-1 px-2 py-1 rounded text-xs shrink-0 bg-theme-surface-hover text-theme-text-muted opacity-50"
+                          title="Upcoming"
+                        >
+                          <Circle className="w-3 h-3" />
+                        </div>
+                      </React.Fragment>
+                    ))}
                   </div>
                   {/* Time in pipeline summary */}
                   <p className="text-xs text-theme-text-muted mt-2">
-                    {applicant.stage_history.filter((e) => !!e.completed_at).length} of {applicant.total_stages} stages completed
-                    {applicant.stage_history.length > 0 && (
-                      <> &middot; In pipeline since {formatDate(applicant.created_at, tz)}</>
-                    )}
+                    {applicant.stage_history.filter((e) => e.completed_at).length} of {applicant.total_stages} stages completed
+                    &middot; In pipeline since {formatDate(applicant.created_at, tz)}
                   </p>
                 </div>
               )}
