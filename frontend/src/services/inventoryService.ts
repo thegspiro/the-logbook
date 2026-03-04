@@ -12,6 +12,7 @@ import type {
   BatchReturnRequest, BatchReturnResponse, LabelFormat, NFPACompliance, NFPAExposureRecord,
   NFPASummary, NFPARetirementDueItem, MembersInventoryListResponse, InventoryImportResult,
   SizeVariantCreate, BulkIssuanceTarget, BulkIssuanceResponse, IssuanceAllowance, AllowanceCheck,
+  ChargeManagementResponse, ReturnRequestItem,
 } from './eventServices';
 
 export const inventoryService = {
@@ -385,6 +386,45 @@ export const inventoryService = {
 
   async getNFPARetirementDue(daysAhead = 180): Promise<{ items: NFPARetirementDueItem[]; total: number }> {
     const response = await api.get<{ items: NFPARetirementDueItem[]; total: number }>('/inventory/nfpa/retirement-due', { params: { days_ahead: daysAhead } });
+    return response.data;
+  },
+
+  // Charge management
+  async getCharges(chargeStatus?: string): Promise<ChargeManagementResponse> {
+    const response = await api.get<ChargeManagementResponse>('/inventory/charges', {
+      params: chargeStatus ? { charge_status: chargeStatus } : undefined,
+    });
+    return response.data;
+  },
+
+  // Return requests
+  async createReturnRequest(data: {
+    return_type: 'assignment' | 'issuance' | 'checkout';
+    item_id: string;
+    assignment_id?: string | undefined;
+    issuance_id?: string | undefined;
+    checkout_id?: string | undefined;
+    quantity_returning?: number | undefined;
+    reported_condition?: string | undefined;
+    member_notes?: string | undefined;
+  }): Promise<ReturnRequestItem> {
+    const response = await api.post<ReturnRequestItem>('/inventory/return-requests', data);
+    return response.data;
+  },
+
+  async getReturnRequests(params?: { status?: string | undefined; mine_only?: boolean | undefined }): Promise<ReturnRequestItem[]> {
+    const response = await api.get<ReturnRequestItem[]>('/inventory/return-requests', { params });
+    return response.data;
+  },
+
+  async reviewReturnRequest(requestId: string, data: { status: string; review_notes?: string | undefined; override_condition?: string | undefined }): Promise<{ id: string; status: string; message: string }> {
+    const response = await api.put<{ id: string; status: string; message: string }>(`/inventory/return-requests/${requestId}/review`, data);
+    return response.data;
+  },
+
+  // Issuance history (all records, active + returned)
+  async getUserIssuanceHistory(userId: string): Promise<ItemIssuance[]> {
+    const response = await api.get<ItemIssuance[]>(`/inventory/users/${userId}/issuance-history`);
     return response.data;
   },
 };

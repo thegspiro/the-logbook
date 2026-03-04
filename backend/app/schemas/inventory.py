@@ -77,7 +77,7 @@ ResolveDispositionLiteral = Literal[
     "returned", "returned_damaged", "written_off", "waived"
 ]
 
-RequestTypeLiteral = Literal["checkout", "issuance", "purchase"]
+RequestTypeLiteral = Literal["checkout", "issuance", "purchase", "return"]
 RequestStatusLiteral = Literal["pending", "approved", "denied", "fulfilled"]
 RequestPriorityLiteral = Literal["low", "normal", "high"]
 ReviewStatusLiteral = Literal["approved", "denied"]
@@ -1321,3 +1321,92 @@ class IssuanceChargeRequest(BaseModel):
     charge_amount: Optional[Decimal] = Field(
         None, ge=0, description="Amount to charge (defaults to unit_cost_at_issuance)"
     )
+
+
+class IssuanceChargeListItem(BaseModel):
+    """Summary of an issuance with charge info for the admin charge management view."""
+
+    issuance_id: UUID
+    item_id: UUID
+    item_name: str
+    user_id: UUID
+    user_name: str
+    quantity_issued: int
+    issued_at: datetime
+    returned_at: Optional[datetime] = None
+    is_returned: bool
+    return_condition: Optional[str] = None
+    unit_cost_at_issuance: Optional[Decimal] = None
+    charge_status: str = "none"
+    charge_amount: Optional[Decimal] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ChargeManagementResponse(BaseModel):
+    """Response for the charge management listing."""
+
+    items: List[IssuanceChargeListItem]
+    total: int
+    total_pending: Decimal = Decimal("0.00")
+    total_charged: Decimal = Decimal("0.00")
+    total_waived: int = 0
+
+
+# ============================================
+# Return Request Schemas
+# ============================================
+
+ReturnRequestTypeLiteral = Literal["assignment", "issuance", "checkout"]
+ReturnRequestStatusLiteral = Literal["pending", "approved", "denied", "completed"]
+ReturnReviewStatusLiteral = Literal["approved", "denied"]
+
+
+class ReturnRequestCreate(BaseModel):
+    """Member creates a return request."""
+
+    return_type: ReturnRequestTypeLiteral
+    item_id: UUID
+    assignment_id: Optional[UUID] = None
+    issuance_id: Optional[UUID] = None
+    checkout_id: Optional[UUID] = None
+    quantity_returning: int = Field(default=1, ge=1)
+    reported_condition: ReturnConditionLiteral = "good"
+    member_notes: Optional[str] = None
+
+
+class ReturnRequestReview(BaseModel):
+    """Quartermaster reviews a return request."""
+
+    status: ReturnReviewStatusLiteral = Field(..., description="approved or denied")
+    review_notes: Optional[str] = None
+    override_condition: Optional[ReturnConditionLiteral] = Field(
+        None, description="Override the condition reported by the member"
+    )
+
+
+class ReturnRequestResponse(BaseModel):
+    """Response for a return request."""
+
+    id: UUID
+    organization_id: UUID
+    requester_id: UUID
+    requester_name: Optional[str] = None
+    return_type: ReturnRequestTypeLiteral
+    item_id: UUID
+    item_name: str
+    assignment_id: Optional[UUID] = None
+    issuance_id: Optional[UUID] = None
+    checkout_id: Optional[UUID] = None
+    quantity_returning: int
+    reported_condition: str
+    member_notes: Optional[str] = None
+    status: ReturnRequestStatusLiteral
+    reviewed_by: Optional[UUID] = None
+    reviewer_name: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    review_notes: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

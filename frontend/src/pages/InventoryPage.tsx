@@ -60,6 +60,9 @@ import { MobileItemCard } from '../components/ux/MobileItemCard';
 import { FloatingActionButton } from '../components/ux/FloatingActionButton';
 import toast from 'react-hot-toast';
 
+const ChargeManagementPanel = React.lazy(() => import('../components/ChargeManagementPanel'));
+const ReturnRequestsPanel = React.lazy(() => import('../components/ReturnRequestsPanel'));
+
 const ITEM_TYPES = [
   { value: 'uniform', label: 'Uniform' },
   { value: 'ppe', label: 'PPE' },
@@ -100,7 +103,7 @@ const getConditionColor = (condition: string) => {
   }
 };
 
-type Tab = 'items' | 'categories' | 'maintenance';
+type Tab = 'items' | 'categories' | 'maintenance' | 'charges' | 'return-requests';
 
 const InventoryPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
@@ -1347,6 +1350,34 @@ const InventoryPage: React.FC = () => {
               </span>
             )}
           </button>
+          {canManage && (
+            <>
+              <button
+                onClick={() => setActiveTab('charges')}
+                role="tab"
+                aria-selected={activeTab === 'charges'}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === 'charges'
+                    ? 'bg-emerald-600 text-white'
+                    : 'text-theme-text-muted hover:text-theme-text-primary'
+                }`}
+              >
+                Charges
+              </button>
+              <button
+                onClick={() => setActiveTab('return-requests')}
+                role="tab"
+                aria-selected={activeTab === 'return-requests'}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === 'return-requests'
+                    ? 'bg-emerald-600 text-white'
+                    : 'text-theme-text-muted hover:text-theme-text-primary'
+                }`}
+              >
+                Return Requests
+              </button>
+            </>
+          )}
         </div>
 
         {/* Items Tab */}
@@ -1888,6 +1919,20 @@ const InventoryPage: React.FC = () => {
               </div>
             )}
           </>
+        )}
+
+        {/* Charges Tab */}
+        {activeTab === 'charges' && canManage && (
+          <React.Suspense fallback={<div className="bg-theme-surface rounded-lg p-8 border border-theme-surface-border text-center"><Loader2 className="w-8 h-8 text-emerald-500 animate-spin mx-auto" /></div>}>
+            <ChargeManagementPanel />
+          </React.Suspense>
+        )}
+
+        {/* Return Requests Tab */}
+        {activeTab === 'return-requests' && canManage && (
+          <React.Suspense fallback={<div className="bg-theme-surface rounded-lg p-8 border border-theme-surface-border text-center"><Loader2 className="w-8 h-8 text-emerald-500 animate-spin mx-auto" /></div>}>
+            <ReturnRequestsPanel />
+          </React.Suspense>
         )}
 
         {/* Log Maintenance Modal */}

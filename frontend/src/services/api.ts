@@ -51,6 +51,7 @@ export type {
   InventoryImportResult,
   SizeVariantCreate, BulkIssuanceTarget, BulkIssuanceResponse,
   IssuanceAllowance, AllowanceCheck,
+  ChargeManagementResponse, IssuanceChargeListItem, ReturnRequestItem,
 } from './eventServices';
 
 // Elections

@@ -869,3 +869,58 @@ export interface NFPARetirementDueItem {
   days_remaining?: number;
   ensemble_id?: string;
 }
+
+// ============================================
+// Charge Management Types
+// ============================================
+
+export interface IssuanceChargeListItem {
+  issuance_id: string;
+  item_id: string;
+  item_name: string;
+  user_id: string;
+  user_name: string;
+  quantity_issued: number;
+  issued_at: string;
+  returned_at?: string;
+  is_returned: boolean;
+  return_condition?: string;
+  unit_cost_at_issuance?: number;
+  charge_status: string;
+  charge_amount?: number;
+}
+
+export interface ChargeManagementResponse {
+  items: IssuanceChargeListItem[];
+  total: number;
+  total_pending: number;
+  total_charged: number;
+  total_waived: number;
+}
+
+// ============================================
+// Return Request Types
+// ============================================
+
+export interface ReturnRequestItem {
+  id: string;
+  organization_id: string;
+  requester_id: string;
+  requester_name?: string;
+  return_type: 'assignment' | 'issuance' | 'checkout';
+  item_id: string;
+  item_name: string;
+  assignment_id?: string;
+  issuance_id?: string;
+  checkout_id?: string;
+  quantity_returning: number;
+  reported_condition: string;
+  member_notes?: string;
+  status: 'pending' | 'approved' | 'denied' | 'completed';
+  reviewed_by?: string;
+  reviewer_name?: string;
+  reviewed_at?: string;
+  review_notes?: string;
+  created_at: string;
+  updated_at: string;
+}

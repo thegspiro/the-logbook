@@ -1013,6 +1013,7 @@ class RequestType(str, enum.Enum):
     CHECKOUT = "checkout"  # Temporary checkout
     ISSUANCE = "issuance"  # Pool item issuance
     PURCHASE = "purchase"  # Request to purchase new item
+    RETURN = "return"  # Member-initiated return request (requires QM approval)
 
 
 class RequestStatus(str, enum.Enum):
@@ -1497,4 +1498,103 @@ class NFPAExposureRecord(Base):
     __table_args__ = (
         Index("idx_nfpa_exposure_org_item", "organization_id", "item_id"),
         Index("idx_nfpa_exposure_org_date", "organization_id", "exposure_date"),
+    )
+
+
+class ReturnRequestStatus(str, enum.Enum):
+    """Status of a member-initiated return request"""
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    DENIED = "denied"
+    COMPLETED = "completed"  # Approved and physically returned
+
+
+class ReturnRequestType(str, enum.Enum):
+    """What type of hold is being returned"""
+
+    ASSIGNMENT = "assignment"  # Permanently assigned item
+    ISSUANCE = "issuance"  # Pool-issued item
+    CHECKOUT = "checkout"  # Temporarily checked-out item
+
+
+class ReturnRequest(Base):
+    """
+    Member-initiated return request.
+
+    Members can declare they want to return equipment.  A quartermaster
+    reviews and either approves (triggering the actual return) or denies
+    the request.  This prevents members from simply claiming they returned
+    an item without physical validation.
+    """
+
+    __tablename__ = "return_requests"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # Who is requesting the return
+    requester_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # What they want to return
+    return_type = Column(
+        Enum(ReturnRequestType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+    item_id = Column(
+        String(36),
+        ForeignKey("inventory_items.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    item_name = Column(String(255), nullable=False)  # Snapshot for display
+
+    # Link to specific record being returned
+    assignment_id = Column(String(36), ForeignKey("item_assignments.id", ondelete="SET NULL"))
+    issuance_id = Column(String(36), ForeignKey("item_issuances.id", ondelete="SET NULL"))
+    checkout_id = Column(String(36), ForeignKey("checkout_records.id", ondelete="SET NULL"))
+
+    # Member-reported details
+    quantity_returning = Column(Integer, nullable=False, default=1)
+    reported_condition = Column(
+        Enum(ItemCondition, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=ItemCondition.GOOD,
+    )
+    member_notes = Column(Text)
+
+    # Review
+    status = Column(
+        Enum(ReturnRequestStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=ReturnRequestStatus.PENDING,
+        index=True,
+    )
+    reviewed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+    reviewed_at = Column(DateTime(timezone=True))
+    review_notes = Column(Text)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    requester = relationship("User", foreign_keys=[requester_id])
+    reviewer = relationship("User", foreign_keys=[reviewed_by])
+    item = relationship("InventoryItem", foreign_keys=[item_id])
+
+    __table_args__ = (
+        Index("idx_return_requests_org_status", "organization_id", "status"),
+        Index("idx_return_requests_requester", "requester_id", "status"),
     )
