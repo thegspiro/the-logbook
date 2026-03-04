@@ -898,22 +898,22 @@ export const MemberProfilePage: React.FC = () => {
                     </p>
                     {adminHoursSummary.byCategory.map((cat) => (
                       <div
-                        key={cat.category_id}
+                        key={cat.categoryId}
                         className="flex items-center justify-between text-sm"
                       >
                         <div className="flex items-center gap-2">
-                          {cat.category_color && (
+                          {cat.categoryColor && (
                             <span
                               className="w-2.5 h-2.5 rounded-full"
-                              style={{ backgroundColor: cat.category_color }}
+                              style={{ backgroundColor: cat.categoryColor }}
                             />
                           )}
                           <span className="text-theme-text-secondary">
-                            {cat.category_name}
+                            {cat.categoryName}
                           </span>
                         </div>
                         <span className="font-medium text-theme-text-primary">
-                          {cat.total_hours.toFixed(1)} hrs
+                          {cat.totalHours.toFixed(1)} hrs
                         </span>
                       </div>
                     ))}

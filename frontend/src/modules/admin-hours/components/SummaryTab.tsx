@@ -47,11 +47,11 @@ const SummaryTab: React.FC = () => {
               <h3 className="font-semibold text-theme-text-primary mb-4">By Category</h3>
               <div className="space-y-3">
                 {summary.byCategory.map((cat) => (
-                  <div key={cat.category_id} className="flex items-center gap-3">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.category_color ?? '#6B7280' }} />
-                    <span className="flex-1 text-theme-text-primary">{cat.category_name}</span>
-                    <span className="text-theme-text-secondary">{cat.total_hours}h</span>
-                    <span className="text-theme-text-muted text-sm">({cat.entry_count} entries)</span>
+                  <div key={cat.categoryId} className="flex items-center gap-3">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.categoryColor ?? '#6B7280' }} />
+                    <span className="flex-1 text-theme-text-primary">{cat.categoryName}</span>
+                    <span className="text-theme-text-secondary">{cat.totalHours}h</span>
+                    <span className="text-theme-text-muted text-sm">({cat.entryCount} entries)</span>
                   </div>
                 ))}
               </div>

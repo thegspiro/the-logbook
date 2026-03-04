@@ -253,10 +253,10 @@ const AdminHoursPage: React.FC = () => {
             <p className="text-2xl font-bold text-theme-text-primary">{summary.totalEntries}</p>
           </div>
           {summary.byCategory.map((cat) => (
-            <div key={cat.category_id} className="bg-theme-surface rounded-lg shadow-md p-4">
-              <p className="text-xs text-theme-text-muted uppercase truncate">{cat.category_name}</p>
-              <p className="text-2xl font-bold text-theme-text-primary">{cat.total_hours}h</p>
-              <p className="text-xs text-theme-text-muted">{cat.entry_count} entries</p>
+            <div key={cat.categoryId} className="bg-theme-surface rounded-lg shadow-md p-4">
+              <p className="text-xs text-theme-text-muted uppercase truncate">{cat.categoryName}</p>
+              <p className="text-2xl font-bold text-theme-text-primary">{cat.totalHours}h</p>
+              <p className="text-xs text-theme-text-muted">{cat.entryCount} entries</p>
             </div>
           ))}
         </div>
