@@ -11,6 +11,15 @@ from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic.alias_generators import to_camel
+
+_response_config = ConfigDict(
+    from_attributes=True, alias_generator=to_camel, populate_by_name=True
+)
+
+_request_config = ConfigDict(
+    alias_generator=to_camel, populate_by_name=True
+)
 
 # ============================================
 # Enum Literal Types
@@ -184,6 +193,8 @@ FundraisingEventStatusLiteral = Literal[
 class GrantOpportunityBase(BaseModel):
     """Base grant opportunity schema"""
 
+    model_config = _request_config
+
     name: str = Field(..., min_length=1, max_length=255)
     agency: Optional[str] = Field(None, max_length=255)
     description: Optional[str] = None
@@ -212,6 +223,8 @@ class GrantOpportunityCreate(GrantOpportunityBase):
 
 class GrantOpportunityUpdate(BaseModel):
     """Schema for updating a grant opportunity"""
+
+    model_config = _request_config
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     agency: Optional[str] = Field(None, max_length=255)
@@ -246,7 +259,7 @@ class GrantOpportunityResponse(GrantOpportunityBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -256,6 +269,8 @@ class GrantOpportunityResponse(GrantOpportunityBase):
 
 class GrantApplicationBase(BaseModel):
     """Base grant application schema"""
+
+    model_config = _request_config
 
     grant_program_name: Optional[str] = Field(None, max_length=255)
     grant_agency: Optional[str] = Field(None, max_length=255)
@@ -291,6 +306,8 @@ class GrantApplicationCreate(GrantApplicationBase):
 
 class GrantApplicationUpdate(BaseModel):
     """Schema for updating a grant application"""
+
+    model_config = _request_config
 
     grant_program_name: Optional[str] = Field(None, max_length=255)
     grant_agency: Optional[str] = Field(None, max_length=255)
@@ -338,7 +355,7 @@ class GrantApplicationResponse(GrantApplicationBase):
     compliance_tasks: List["GrantComplianceTaskResponse"] = []
     grant_notes: List["GrantNoteResponse"] = []
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class GrantApplicationListResponse(BaseModel):
@@ -357,7 +374,7 @@ class GrantApplicationListResponse(BaseModel):
     assigned_to: Optional[UUID] = None
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -367,6 +384,8 @@ class GrantApplicationListResponse(BaseModel):
 
 class GrantBudgetItemBase(BaseModel):
     """Base grant budget item schema"""
+
+    model_config = _request_config
 
     category: BudgetItemCategoryLiteral
     description: Optional[str] = Field(None, max_length=500)
@@ -386,6 +405,8 @@ class GrantBudgetItemCreate(GrantBudgetItemBase):
 class GrantBudgetItemUpdate(BaseModel):
     """Schema for updating a grant budget item"""
 
+    model_config = _request_config
+
     category: Optional[BudgetItemCategoryLiteral] = None
     description: Optional[str] = Field(None, max_length=500)
     amount_budgeted: Optional[Decimal] = Field(None, ge=0)
@@ -401,10 +422,11 @@ class GrantBudgetItemResponse(GrantBudgetItemBase):
     id: UUID
     application_id: UUID
     amount_spent: Decimal = Decimal("0")
+    amount_remaining: Optional[Decimal] = None
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -414,6 +436,8 @@ class GrantBudgetItemResponse(GrantBudgetItemBase):
 
 class GrantExpenditureBase(BaseModel):
     """Base grant expenditure schema"""
+
+    model_config = _request_config
 
     description: str = Field(..., min_length=1, max_length=500)
     amount: Decimal = Field(..., ge=0)
@@ -434,6 +458,8 @@ class GrantExpenditureCreate(GrantExpenditureBase):
 
 class GrantExpenditureUpdate(BaseModel):
     """Schema for updating a grant expenditure"""
+
+    model_config = _request_config
 
     description: Optional[str] = Field(None, min_length=1, max_length=500)
     amount: Optional[Decimal] = Field(None, ge=0)
@@ -458,7 +484,7 @@ class GrantExpenditureResponse(GrantExpenditureBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -468,6 +494,8 @@ class GrantExpenditureResponse(GrantExpenditureBase):
 
 class GrantComplianceTaskBase(BaseModel):
     """Base grant compliance task schema"""
+
+    model_config = _request_config
 
     task_type: ComplianceTaskTypeLiteral
     title: str = Field(..., min_length=1, max_length=255)
@@ -488,6 +516,8 @@ class GrantComplianceTaskCreate(GrantComplianceTaskBase):
 
 class GrantComplianceTaskUpdate(BaseModel):
     """Schema for updating a grant compliance task"""
+
+    model_config = _request_config
 
     task_type: Optional[ComplianceTaskTypeLiteral] = None
     title: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -517,7 +547,7 @@ class GrantComplianceTaskResponse(GrantComplianceTaskBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -535,7 +565,9 @@ class GrantNoteCreate(BaseModel):
         default=None, validation_alias="metadata"
     )
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(
+        alias_generator=to_camel, populate_by_name=True
+    )
 
 
 class GrantNoteResponse(BaseModel):
@@ -545,13 +577,13 @@ class GrantNoteResponse(BaseModel):
     application_id: UUID
     note_type: GrantNoteTypeLiteral
     content: str
-    metadata: Optional[Dict[str, Any]] = Field(
-        default=None, validation_alias="note_metadata"
+    note_metadata: Optional[Dict[str, Any]] = Field(
+        default=None, serialization_alias="metadata"
     )
     created_by: Optional[UUID] = None
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -561,6 +593,8 @@ class GrantNoteResponse(BaseModel):
 
 class CampaignBase(BaseModel):
     """Base fundraising campaign schema"""
+
+    model_config = _request_config
 
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
@@ -582,6 +616,8 @@ class CampaignCreate(CampaignBase):
 
 class CampaignUpdate(BaseModel):
     """Schema for updating a fundraising campaign"""
+
+    model_config = _request_config
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
@@ -610,9 +646,8 @@ class CampaignResponse(CampaignBase):
     created_by: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
-    donation_count: Optional[int] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -622,6 +657,8 @@ class CampaignResponse(CampaignBase):
 
 class DonorBase(BaseModel):
     """Base donor schema"""
+
+    model_config = _request_config
 
     first_name: str = Field(..., min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
@@ -647,6 +684,8 @@ class DonorCreate(DonorBase):
 
 class DonorUpdate(BaseModel):
     """Schema for updating a donor"""
+
+    model_config = _request_config
 
     first_name: Optional[str] = Field(None, min_length=1, max_length=100)
     last_name: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -680,7 +719,7 @@ class DonorResponse(DonorBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -690,6 +729,8 @@ class DonorResponse(DonorBase):
 
 class DonationBase(BaseModel):
     """Base donation schema"""
+
+    model_config = _request_config
 
     amount: Decimal = Field(..., ge=0)
     donation_date: datetime
@@ -715,6 +756,8 @@ class DonationCreate(DonationBase):
 
 class DonationUpdate(BaseModel):
     """Schema for updating a donation"""
+
+    model_config = _request_config
 
     amount: Optional[Decimal] = Field(None, ge=0)
     donation_date: Optional[datetime] = None
@@ -750,7 +793,7 @@ class DonationResponse(DonationBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -760,6 +803,8 @@ class DonationResponse(DonationBase):
 
 class PledgeBase(BaseModel):
     """Base pledge schema"""
+
+    model_config = _request_config
 
     pledged_amount: Decimal = Field(..., ge=0)
     pledge_date: date
@@ -778,6 +823,8 @@ class PledgeCreate(PledgeBase):
 
 class PledgeUpdate(BaseModel):
     """Schema for updating a pledge"""
+
+    model_config = _request_config
 
     pledged_amount: Optional[Decimal] = Field(None, ge=0)
     fulfilled_amount: Optional[Decimal] = Field(None, ge=0)
@@ -805,7 +852,7 @@ class PledgeResponse(PledgeBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -815,6 +862,8 @@ class PledgeResponse(PledgeBase):
 
 class FundraisingEventBase(BaseModel):
     """Base fundraising event schema"""
+
+    model_config = _request_config
 
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
@@ -838,6 +887,8 @@ class FundraisingEventCreate(FundraisingEventBase):
 
 class FundraisingEventUpdate(BaseModel):
     """Schema for updating a fundraising event"""
+
+    model_config = _request_config
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
@@ -873,7 +924,7 @@ class FundraisingEventResponse(FundraisingEventBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -898,6 +949,10 @@ class GrantsDashboardResponse(BaseModel):
     outstanding_pledges: Decimal = Decimal("0")
     pipeline_summary: List[Dict[str, Any]] = []
 
+    model_config = ConfigDict(
+        alias_generator=to_camel, populate_by_name=True
+    )
+
 
 class GrantReportFilters(BaseModel):
     """Filters for grant and fundraising reports"""
@@ -908,16 +963,50 @@ class GrantReportFilters(BaseModel):
     status: Optional[str] = None
 
 
+class ComplianceSummary(BaseModel):
+    """Compliance summary for grant report"""
+
+    total_tasks: int = 0
+    completed: int = 0
+    overdue: int = 0
+    pending: int = 0
+
+    model_config = ConfigDict(
+        alias_generator=to_camel, populate_by_name=True
+    )
+
+
+class GrantReportResponse(BaseModel):
+    """Grant report summary"""
+
+    total_applications: int = 0
+    total_requested: Decimal = Decimal("0")
+    total_awarded: Decimal = Decimal("0")
+    total_spent: Decimal = Decimal("0")
+    success_rate: Decimal = Decimal("0")
+    awarded_count: int = 0
+    denied_count: int = 0
+    compliance_summary: ComplianceSummary = ComplianceSummary()
+    spending_by_category: Dict[str, Decimal] = {}
+
+    model_config = ConfigDict(
+        alias_generator=to_camel, populate_by_name=True
+    )
+
+
 class FundraisingReportResponse(BaseModel):
     """Fundraising report summary"""
 
     total_donations: Decimal = Decimal("0")
-    total_donors: int = 0
+    donation_count: int = 0
+    unique_donors: int = 0
     average_gift: Decimal = Decimal("0")
-    donor_retention_rate: Decimal = Decimal("0")
     donations_by_method: Dict[str, Decimal] = {}
-    donations_by_campaign: List[Dict[str, Any]] = []
     monthly_totals: List[Dict[str, Any]] = []
+
+    model_config = ConfigDict(
+        alias_generator=to_camel, populate_by_name=True
+    )
 
 
 # Rebuild models that use forward references
