@@ -118,10 +118,10 @@ export const DonorsPage: React.FC = () => {
   const loadDonors = useCallback(async () => {
     try {
       setIsLoading(true);
-      const data = await fundraisingService.listDonors({
-        donorType: typeFilter || undefined,
-        search: search || undefined,
-      });
+      const params: { donorType?: string; search?: string } = {};
+      if (typeFilter) params.donorType = typeFilter;
+      if (search) params.search = search;
+      const data = await fundraisingService.listDonors(params);
       setDonors(data);
     } catch {
       toast.error('Failed to load donors');

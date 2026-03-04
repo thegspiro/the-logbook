@@ -162,10 +162,10 @@ const GrantsReportsPage: React.FC = () => {
     setIsLoadingFundraising(true);
 
     try {
-      const gr = await grantsService.getGrantReport({
-        startDate: startDate || undefined,
-        endDate: endDate || undefined,
-      });
+      const dateParams: { startDate?: string; endDate?: string } = {};
+      if (startDate) dateParams.startDate = startDate;
+      if (endDate) dateParams.endDate = endDate;
+      const gr = await grantsService.getGrantReport(dateParams);
       setGrantReport(gr);
     } catch {
       toast.error('Failed to load grant report data.');
@@ -174,10 +174,10 @@ const GrantsReportsPage: React.FC = () => {
     }
 
     try {
-      const fr = await grantsService.getFundraisingReport({
-        startDate: startDate || undefined,
-        endDate: endDate || undefined,
-      });
+      const frParams: { startDate?: string; endDate?: string } = {};
+      if (startDate) frParams.startDate = startDate;
+      if (endDate) frParams.endDate = endDate;
+      const fr = await grantsService.getFundraisingReport(frParams);
       setFundraisingReport(fr);
     } catch {
       toast.error('Failed to load fundraising report data.');
