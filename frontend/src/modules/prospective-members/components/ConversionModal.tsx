@@ -102,11 +102,11 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
         target_membership_type: membershipType,
         target_role_id: applicant.target_role_id,
         send_welcome_email: sendWelcomeEmail,
-        notes: notes || undefined,
-        middle_name: middleName || undefined,
-        hire_date: hireDate || undefined,
-        rank: rank || undefined,
-        station: station || undefined,
+        notes: notes ?? undefined,
+        middle_name: middleName ?? undefined,
+        hire_date: hireDate ?? undefined,
+        rank: rank ?? undefined,
+        station: station ?? undefined,
         emergency_contacts: emergencyContacts.length > 0 ? emergencyContacts : undefined,
       });
       setConversionResult(result);

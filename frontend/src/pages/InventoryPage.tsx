@@ -290,12 +290,12 @@ const InventoryPage: React.FC = () => {
     setFilterLoading(true);
     try {
       const data = await inventoryService.getItems({
-        search: searchQuery || undefined,
-        status: statusFilter || undefined,
-        category_id: categoryFilter || undefined,
-        condition: conditionFilter || undefined,
-        item_type: itemTypeFilter || undefined,
-        sort_by: sortBy || undefined,
+        search: searchQuery ?? undefined,
+        status: statusFilter ?? undefined,
+        category_id: categoryFilter ?? undefined,
+        condition: conditionFilter ?? undefined,
+        item_type: itemTypeFilter ?? undefined,
+        sort_by: sortBy ?? undefined,
         sort_order: sortOrder,
         limit: 50,
       });
@@ -371,12 +371,12 @@ const InventoryPage: React.FC = () => {
       await inventoryService.createMaintenanceRecord({
         item_id: maintenanceItem.id,
         maintenance_type: maintenanceForm.maintenance_type || 'inspection',
-        description: maintenanceForm.description || undefined,
-        notes: maintenanceForm.notes || undefined,
+        description: maintenanceForm.description ?? undefined,
+        notes: maintenanceForm.notes ?? undefined,
         completed_date: maintenanceForm.is_completed ? new Date().toISOString().split('T')[0] : undefined,
-        is_completed: maintenanceForm.is_completed || false,
-        condition_after: maintenanceForm.condition_after || undefined,
-        next_due_date: maintenanceForm.next_due_date || undefined,
+        is_completed: maintenanceForm.is_completed ?? false,
+        condition_after: maintenanceForm.condition_after ?? undefined,
+        next_due_date: maintenanceForm.next_due_date ?? undefined,
       } as MaintenanceRecordCreate);
       toast.success('Maintenance record created');
       setShowMaintenanceModal(false);
@@ -394,12 +394,12 @@ const InventoryPage: React.FC = () => {
     setLoadingMore(true);
     try {
       const data = await inventoryService.getItems({
-        search: searchQuery || undefined,
-        status: statusFilter || undefined,
-        category_id: categoryFilter || undefined,
-        condition: conditionFilter || undefined,
-        item_type: itemTypeFilter || undefined,
-        sort_by: sortBy || undefined,
+        search: searchQuery ?? undefined,
+        status: statusFilter ?? undefined,
+        category_id: categoryFilter ?? undefined,
+        condition: conditionFilter ?? undefined,
+        item_type: itemTypeFilter ?? undefined,
+        sort_by: sortBy ?? undefined,
         sort_order: sortOrder,
         skip: items.length,
         limit: 50,
@@ -553,7 +553,7 @@ const InventoryPage: React.FC = () => {
     if (!showRetireConfirm) return;
     setSubmitting(true);
     try {
-      await inventoryService.retireItem(showRetireConfirm.id, retireNotes || undefined);
+      await inventoryService.retireItem(showRetireConfirm.id, retireNotes ?? undefined);
       setShowRetireConfirm(null);
       setRetireNotes('');
       void loadData();
@@ -704,9 +704,9 @@ const InventoryPage: React.FC = () => {
   const handleExportCsv = async () => {
     try {
       const blob = await inventoryService.exportItemsCsv({
-        category_id: categoryFilter || undefined,
-        status: statusFilter || undefined,
-        search: searchQuery || undefined,
+        category_id: categoryFilter ?? undefined,
+        status: statusFilter ?? undefined,
+        search: searchQuery ?? undefined,
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -731,7 +731,7 @@ const InventoryPage: React.FC = () => {
     if (!poolIssueItem || !poolIssueForm.member_id) return;
     setSubmitting(true);
     try {
-      await inventoryService.issueFromPool(poolIssueItem.id, poolIssueForm.member_id, poolIssueForm.quantity, poolIssueForm.reason || undefined);
+      await inventoryService.issueFromPool(poolIssueItem.id, poolIssueForm.member_id, poolIssueForm.quantity, poolIssueForm.reason ?? undefined);
       toast.success(`Issued ${poolIssueForm.quantity} ${poolIssueItem.name} successfully`);
       setShowPoolIssueModal(false);
       setPoolIssueItem(null);
@@ -747,7 +747,7 @@ const InventoryPage: React.FC = () => {
   const handleReviewRequest = async (requestId: string, decision: 'approved' | 'denied') => {
     setSubmitting(true);
     try {
-      await inventoryService.reviewEquipmentRequest(requestId, { status: decision, review_notes: reviewNotes || undefined });
+      await inventoryService.reviewEquipmentRequest(requestId, { status: decision, review_notes: reviewNotes ?? undefined });
       toast.success(`Request ${decision}`);
       setPendingRequests(prev => prev.filter(r => r.id !== requestId));
       setReviewingRequest(null);
@@ -797,7 +797,7 @@ const InventoryPage: React.FC = () => {
     try {
       await inventoryService.reviewWriteOff(writeOffId, {
         status: decision,
-        review_notes: writeOffReviewNotes || undefined,
+        review_notes: writeOffReviewNotes ?? undefined,
       });
       toast.success(`Write-off ${decision}`);
       setWriteOffRequests(prev => prev.filter(w => w.id !== writeOffId));

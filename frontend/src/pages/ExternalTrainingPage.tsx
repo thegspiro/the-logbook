@@ -239,7 +239,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                   value={formData.config?.site_id || ''}
                   onChange={(e) => setFormData(prev => ({
                     ...prev,
-                    config: { ...prev.config, site_id: e.target.value || undefined }
+                    config: { ...prev.config, site_id: e.target.value ?? undefined }
                   }))}
                   className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:border-theme-focus-ring"
                   placeholder="Enter your TargetSolutions Site ID"
@@ -556,7 +556,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
     try {
       const updates: Record<string, unknown> = {
         name: formData.name,
-        description: formData.description || undefined,
+        description: formData.description ?? undefined,
         api_base_url: formData.api_base_url,
         auth_type: formData.auth_type,
         auto_sync_enabled: formData.auto_sync_enabled,

@@ -213,8 +213,8 @@ export const ElectionDetailPage: React.FC = () => {
       setSendEmailError(null);
 
       const response = await electionService.sendBallotEmail(electionId, {
-        subject: emailSubject || undefined,
-        message: emailMessage || undefined,
+        subject: emailSubject ?? undefined,
+        message: emailMessage ?? undefined,
         include_ballot_link: true,
       });
 

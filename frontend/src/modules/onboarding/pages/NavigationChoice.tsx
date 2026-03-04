@@ -38,7 +38,7 @@ const NavigationChoice: React.FC = () => {
       async () => {
         const response = await apiClient.saveDepartmentInfo({
           name: departmentName,
-          logo: logoPreview || undefined,
+          logo: logoPreview ?? undefined,
           navigation_layout: navigationLayout,
         });
 

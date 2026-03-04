@@ -287,12 +287,12 @@ export const PatternsTab: React.FC = () => {
 
       await schedulingService.createPattern({
         name: createForm.name,
-        description: createForm.description || undefined,
+        description: createForm.description ?? undefined,
         pattern_type: patternType,
         template_id:
-          createForm.template_id || createForm.day_template_id || undefined,
+          (createForm.template_id || createForm.day_template_id) ?? undefined,
         start_date: createForm.start_date,
-        end_date: createForm.end_date || undefined,
+        end_date: createForm.end_date ?? undefined,
         days_on: daysOn,
         days_off: daysOff,
         rotation_days: rotationDays,

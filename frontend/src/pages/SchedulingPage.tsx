@@ -398,10 +398,10 @@ const SchedulingPage: React.FC = () => {
         shift_date: shiftForm.startDate,
         start_time: startDateTime,
         end_time: endDateTime,
-        notes: shiftForm.notes || undefined,
-        apparatus_id: shiftForm.apparatus_id || undefined,
-        shift_officer_id: shiftForm.shift_officer_id || undefined,
-        color: template.color || undefined,
+        ...(shiftForm.notes ? { notes: shiftForm.notes } : {}),
+        ...(shiftForm.apparatus_id ? { apparatus_id: shiftForm.apparatus_id } : {}),
+        ...(shiftForm.shift_officer_id ? { shift_officer_id: shiftForm.shift_officer_id } : {}),
+        ...(template.color ? { color: template.color } : {}),
       });
 
       // Refresh shifts and summary

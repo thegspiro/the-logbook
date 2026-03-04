@@ -312,9 +312,9 @@ export const MemberProfilePage: React.FC = () => {
 
       // Strip empty strings to undefined so Pydantic doesn't reject '' as an invalid EmailStr
       const payload: ContactInfoUpdate = {
-        email: editForm.email?.trim() || undefined,
-        phone: editForm.phone?.trim() || undefined,
-        mobile: editForm.mobile?.trim() || undefined,
+        email: editForm.email?.trim() ?? undefined,
+        phone: editForm.phone?.trim() ?? undefined,
+        mobile: editForm.mobile?.trim() ?? undefined,
         notification_preferences: editForm.notification_preferences,
       };
 
@@ -429,12 +429,12 @@ export const MemberProfilePage: React.FC = () => {
       setSavingAddress(true);
       setError(null);
       const updateData: UserProfileUpdate = {
-        address_street: addressForm.address_street || undefined,
-        address_city: addressForm.address_city || undefined,
-        address_state: addressForm.address_state || undefined,
-        address_zip: addressForm.address_zip || undefined,
-        address_country: addressForm.address_country || undefined,
-        personal_email: addressForm.personal_email || undefined,
+        address_street: addressForm.address_street ?? undefined,
+        address_city: addressForm.address_city ?? undefined,
+        address_state: addressForm.address_state ?? undefined,
+        address_zip: addressForm.address_zip ?? undefined,
+        address_country: addressForm.address_country ?? undefined,
+        personal_email: addressForm.personal_email ?? undefined,
       };
       const updated = await userService.updateUserProfile(userId, updateData);
       setUser(updated);

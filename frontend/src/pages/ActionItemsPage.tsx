@@ -53,8 +53,8 @@ const ActionItemsPage: React.FC = () => {
     try {
       setLoading(true);
       const data = await dashboardService.getActionItems({
-        status_filter: statusFilter || undefined,
-        assigned_to_me: assignedToMe || undefined,
+        ...(statusFilter ? { status_filter: statusFilter } : {}),
+        ...(assignedToMe ? { assigned_to_me: assignedToMe } : {}),
       });
       setItems(data);
     } catch (err) {

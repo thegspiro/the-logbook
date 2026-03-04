@@ -70,7 +70,7 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
     const updateData: AdminHoursCategoryUpdate = {
       name: formData.name,
       description: formData.description || null,
-      color: formData.color || undefined,
+      color: formData.color ?? undefined,
       require_approval: formData.require_approval,
       auto_approve_under_hours: formData.auto_approve_under_hours,
       max_hours_per_session: formData.max_hours_per_session,

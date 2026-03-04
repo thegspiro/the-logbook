@@ -168,7 +168,7 @@ const SystemOwnerCreation: React.FC = () => {
           password_confirm: formData.confirmPassword,
           first_name: formData.firstName,
           last_name: formData.lastName,
-          membership_number: formData.membershipNumber || undefined,
+          membership_number: formData.membershipNumber ?? undefined,
         });
 
         if (response.error) {

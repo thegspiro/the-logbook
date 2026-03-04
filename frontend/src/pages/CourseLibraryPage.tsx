@@ -104,12 +104,12 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
 
     const payload = {
       name: formData.name,
-      code: formData.code || undefined,
-      description: formData.description || undefined,
+      ...(formData.code ? { code: formData.code } : {}),
+      ...(formData.description ? { description: formData.description } : {}),
       training_type: formData.training_type,
       duration_hours: formData.duration_hours ? parseFloat(formData.duration_hours) : undefined,
       credit_hours: formData.credit_hours ? parseFloat(formData.credit_hours) : undefined,
-      instructor: formData.instructor || undefined,
+      ...(formData.instructor ? { instructor: formData.instructor } : {}),
       max_participants: formData.max_participants ? parseInt(formData.max_participants) : undefined,
       expiration_months: formData.expiration_months ? parseInt(formData.expiration_months) : undefined,
       category_ids: formData.category_ids.length > 0 ? formData.category_ids : undefined,

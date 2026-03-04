@@ -178,7 +178,7 @@ const ITTeamBackupAccess: React.FC = () => {
       backup_access: {
         email: backupEmail,
         phone: backupPhone,
-        secondary_admin_email: secondaryAdminEmail || undefined,
+        secondary_admin_email: secondaryAdminEmail ?? undefined,
       },
     };
 

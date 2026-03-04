@@ -460,7 +460,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
 
     const stageData: PipelineStageCreate = {
       name: name.trim(),
-      description: description.trim() || undefined,
+      description: description.trim() ?? undefined,
       stage_type: stageType,
       config,
       sort_order: editingStage ? editingStage.sort_order : existingStageCount,
@@ -853,7 +853,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     id="stage-meeting-event-type"
                     value={meetingConfig.linked_event_type ?? ''}
                     onChange={(e) => {
-                      const eventType = e.target.value || undefined;
+                      const eventType = e.target.value ?? undefined;
                       const nextEvent = eventType ? getNextEventForType(eventType) : undefined;
                       setConfig({
                         ...meetingConfig,
@@ -1211,7 +1211,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                           id="email-meeting-event-type"
                           value={emailConfig.next_meeting_event_type ?? ''}
                           onChange={(e) => {
-                            const eventType = e.target.value || undefined;
+                            const eventType = e.target.value ?? undefined;
                             const nextEvent = eventType ? getNextEventForType(eventType) : undefined;
                             setConfig({
                               ...emailConfig,

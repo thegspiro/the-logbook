@@ -289,7 +289,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const handleSaveAssignmentNotes = async (assignmentId: string) => {
     setSavingNotes(true);
     try {
-      await schedulingService.updateAssignment(assignmentId, { notes: editingNotesValue || undefined });
+      await schedulingService.updateAssignment(assignmentId, { notes: editingNotesValue ?? undefined });
       toast.success('Notes updated');
       setEditingNotesId(null);
       await refreshAssignments();

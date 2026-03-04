@@ -131,7 +131,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
     try {
       await schedulingService.createSwapRequest({
         offering_shift_id: swapAssignment.shift_id,
-        requesting_shift_id: swapForm.target_shift_id || undefined,
+        requesting_shift_id: swapForm.target_shift_id ?? undefined,
         reason: swapForm.reason,
       });
       toast.success('Swap request submitted — check Requests tab for status');

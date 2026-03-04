@@ -358,7 +358,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             <select
               id="custom-category"
               value={formData.custom_category || ''}
-              onChange={(e) => update({ custom_category: e.target.value || undefined })}
+              onChange={(e) => update(e.target.value ? { custom_category: e.target.value } : { custom_category: undefined })}
               className={selectClass}
             >
               <option value="">None</option>

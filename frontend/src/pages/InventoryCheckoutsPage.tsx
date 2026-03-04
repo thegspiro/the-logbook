@@ -68,7 +68,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
     if (!checkInModal.checkoutId) return;
     setSubmitting(true);
     try {
-      await inventoryService.checkInItem(checkInModal.checkoutId, returnCondition, damageNotes || undefined);
+      await inventoryService.checkInItem(checkInModal.checkoutId, returnCondition, damageNotes ?? undefined);
       toast.success(`${checkInModal.itemName} checked in successfully`);
       setCheckInModal({ open: false, checkoutId: '', itemName: '' });
       setReturnCondition('good');

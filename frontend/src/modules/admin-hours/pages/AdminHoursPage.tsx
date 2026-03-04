@@ -49,8 +49,8 @@ const AdminHoursPage: React.FC = () => {
   const loadData = useCallback(() => {
     void fetchCategories();
     void fetchMyEntries({
-      status: statusFilter || undefined,
-      categoryId: categoryFilter || undefined,
+      status: statusFilter ?? undefined,
+      categoryId: categoryFilter ?? undefined,
       skip: page * PAGE_SIZE,
       limit: PAGE_SIZE,
     });
@@ -108,8 +108,8 @@ const AdminHoursPage: React.FC = () => {
       setShowManualForm(false);
       setManualData({ category_id: '', clock_in_at: '', clock_out_at: '', description: '' });
       void fetchMyEntries({
-        status: statusFilter || undefined,
-        categoryId: categoryFilter || undefined,
+        status: statusFilter ?? undefined,
+        categoryId: categoryFilter ?? undefined,
         skip: page * PAGE_SIZE,
         limit: PAGE_SIZE,
       });
@@ -313,7 +313,7 @@ const AdminHoursPage: React.FC = () => {
                   value={manualData.clock_out_at}
                   onChange={(e) => setManualData({ ...manualData, clock_out_at: e.target.value })}
                   max={maxDatetime}
-                  min={manualData.clock_in_at || undefined}
+                  min={manualData.clock_in_at ?? undefined}
                   required
                   className="card-secondary focus:ring-2 focus:ring-theme-focus-ring px-3 py-2 text-theme-text-primary w-full"
                 />

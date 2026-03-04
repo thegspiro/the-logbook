@@ -132,7 +132,7 @@ const MyEquipmentPage: React.FC = () => {
     if (!checkInModal.checkoutId) return;
     setSubmitting(true);
     try {
-      await inventoryService.checkInItem(checkInModal.checkoutId, returnCondition, damageNotes || undefined);
+      await inventoryService.checkInItem(checkInModal.checkoutId, returnCondition, damageNotes ?? undefined);
       toast.success(`${checkInModal.itemName} returned successfully`);
       setCheckInModal({ open: false, checkoutId: '', itemName: '' });
       setReturnCondition('good');
@@ -167,12 +167,12 @@ const MyEquipmentPage: React.FC = () => {
     try {
       await inventoryService.createEquipmentRequest({
         item_name: requestForm.item_name,
-        item_id: requestForm.item_id || undefined,
-        category_id: requestForm.category_id || undefined,
+        item_id: requestForm.item_id ?? undefined,
+        category_id: requestForm.category_id ?? undefined,
         request_type: requestForm.request_type,
         priority: requestForm.priority,
         quantity: requestForm.quantity,
-        reason: requestForm.reason || undefined,
+        reason: requestForm.reason ?? undefined,
       });
       toast.success('Equipment request submitted');
       setShowRequestModal(false);

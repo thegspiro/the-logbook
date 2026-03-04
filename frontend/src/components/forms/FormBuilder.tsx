@@ -309,17 +309,17 @@ const FormBuilder = ({
     setEditingField({
       label: field.label,
       field_type: field.field_type,
-      placeholder: field.placeholder || undefined,
-      help_text: field.help_text || undefined,
-      default_value: field.default_value || undefined,
+      placeholder: field.placeholder ?? undefined,
+      help_text: field.help_text ?? undefined,
+      default_value: field.default_value ?? undefined,
       required: field.required,
-      min_length: field.min_length || undefined,
-      max_length: field.max_length || undefined,
-      validation_pattern: field.validation_pattern || undefined,
-      options: field.options || undefined,
-      condition_field_id: field.condition_field_id || undefined,
-      condition_operator: field.condition_operator || undefined,
-      condition_value: field.condition_value || undefined,
+      min_length: field.min_length ?? undefined,
+      max_length: field.max_length ?? undefined,
+      validation_pattern: field.validation_pattern ?? undefined,
+      options: field.options ?? undefined,
+      condition_field_id: field.condition_field_id ?? undefined,
+      condition_operator: field.condition_operator ?? undefined,
+      condition_value: field.condition_value ?? undefined,
       sort_order: field.sort_order,
       width: field.width,
     });
@@ -331,13 +331,13 @@ const FormBuilder = ({
     const fieldData: FormFieldCreate = {
       label: `${field.label} (copy)`,
       field_type: field.field_type,
-      placeholder: field.placeholder || undefined,
-      help_text: field.help_text || undefined,
-      default_value: field.default_value || undefined,
+      placeholder: field.placeholder ?? undefined,
+      help_text: field.help_text ?? undefined,
+      default_value: field.default_value ?? undefined,
       required: field.required,
-      min_length: field.min_length || undefined,
-      max_length: field.max_length || undefined,
-      validation_pattern: field.validation_pattern || undefined,
+      min_length: field.min_length ?? undefined,
+      max_length: field.max_length ?? undefined,
+      validation_pattern: field.validation_pattern ?? undefined,
       options: field.options ? [...field.options] : undefined,
       width: field.width,
       sort_order: field.sort_order + 1,
@@ -671,9 +671,9 @@ const FormBuilder = ({
             id: f.id,
             label: f.label,
             field_type: f.field_type,
-            options: f.options || undefined,
+            options: f.options ?? undefined,
           } as SiblingField))}
-          editingFieldId={editingFieldId || undefined}
+          editingFieldId={editingFieldId ?? undefined}
         />
       )}
     </div>

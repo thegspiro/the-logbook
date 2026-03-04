@@ -70,7 +70,7 @@ const PublicFormPage = () => {
       const result = await publicFormsService.submitForm(
         slug ?? '',
         formData,
-        honeypotRef.current?.value || undefined
+        honeypotRef.current?.value ?? undefined
       );
       setSubmitted(true);
       setSubmitMessage(result.message);
@@ -123,8 +123,8 @@ const PublicFormPage = () => {
             value={value}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
             required={field.required}
-            minLength={field.min_length || undefined}
-            maxLength={field.max_length || undefined}
+            minLength={field.min_length ?? undefined}
+            maxLength={field.max_length ?? undefined}
           />
         );
 
@@ -137,8 +137,8 @@ const PublicFormPage = () => {
             value={value}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
             required={field.required}
-            min={field.min_value || undefined}
-            max={field.max_value || undefined}
+            min={field.min_value ?? undefined}
+            max={field.max_value ?? undefined}
           />
         );
 
@@ -150,8 +150,8 @@ const PublicFormPage = () => {
             value={value}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
             required={field.required}
-            minLength={field.min_length || undefined}
-            maxLength={field.max_length || undefined}
+            minLength={field.min_length ?? undefined}
+            maxLength={field.max_length ?? undefined}
           />
         );
 

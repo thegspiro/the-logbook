@@ -106,7 +106,7 @@ const EventRequestStatusPage: React.FC = () => {
     setCancelling(true);
     try {
       await eventRequestService.publicCancelRequest(token, {
-        reason: cancelReason || undefined,
+        reason: cancelReason ?? undefined,
       });
       // Refresh status
       const result = await eventRequestService.checkPublicStatus(token);

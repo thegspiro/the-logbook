@@ -264,7 +264,7 @@ export const WaiverManagementPage: React.FC = () => {
         await memberStatusService.createTrainingWaiver({
           user_id: formData.user_id,
           waiver_type: formData.waiver_type,
-          reason: formData.reason || undefined,
+          ...(formData.reason ? { reason: formData.reason } : {}),
           start_date: formData.start_date,
           end_date: endDate,
         });
@@ -274,7 +274,7 @@ export const WaiverManagementPage: React.FC = () => {
         await memberStatusService.createLeaveOfAbsence({
           user_id: formData.user_id,
           leave_type: formData.waiver_type,
-          reason: formData.reason || undefined,
+          ...(formData.reason ? { reason: formData.reason } : {}),
           start_date: formData.start_date,
           end_date: endDate,
           exempt_from_training_waiver: !hasTraining || formData.exempt_from_training_waiver,
