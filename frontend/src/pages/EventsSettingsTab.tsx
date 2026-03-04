@@ -9,7 +9,8 @@
  * - Email trigger configuration + template management
  * - Public event request form generation
  *
- * Sections are organized into collapsible panels for a cleaner UI.
+ * Sections are organized into a sidebar + content panel layout matching
+ * the Organization Settings page.
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -43,7 +44,6 @@ import type {
   EmailTemplate,
 } from '../types/event';
 import { getEventTypeLabel, getEventTypeBadgeColor } from '../utils/eventHelpers';
-import { Collapsible } from '../components/ux/Collapsible';
 
 const ALL_EVENT_TYPES: EventType[] = [
   'business_meeting',
@@ -88,29 +88,24 @@ const TRIGGER_LABELS: Record<string, string> = {
   days_before_event: 'Days before event reminder',
 };
 
-// ─── Section Header ────────────────────────────────────────────────────────────
+// ─── Section Definitions ───────────────────────────────────────────────────────
 
-interface SectionHeaderProps {
-  icon: React.ReactNode;
-  title: string;
-  description?: string;
-}
+type SectionKey = 'visibility' | 'categories' | 'outreach' | 'pipeline' | 'email' | 'form';
 
-const SectionHeader: React.FC<SectionHeaderProps> = ({ icon, title, description }) => (
-  <div className="flex items-start gap-3">
-    <div className="mt-0.5 text-red-700 shrink-0">{icon}</div>
-    <div>
-      <h2 className="text-base font-bold text-theme-text-primary">{title}</h2>
-      {description && (
-        <p className="text-sm text-theme-text-muted mt-0.5">{description}</p>
-      )}
-    </div>
-  </div>
-);
+const SECTIONS: { key: SectionKey; label: string; icon: React.ElementType; description: string }[] = [
+  { key: 'visibility', label: 'Visibility', icon: Settings, description: 'Primary filter categories' },
+  { key: 'categories', label: 'Categories', icon: Tag, description: 'Custom event categories' },
+  { key: 'outreach', label: 'Outreach Types', icon: FileText, description: 'Public outreach event types' },
+  { key: 'pipeline', label: 'Pipeline', icon: ClipboardList, description: 'Request processing config' },
+  { key: 'email', label: 'Email', icon: Mail, description: 'Triggers and email templates' },
+  { key: 'form', label: 'Public Form', icon: ExternalLink, description: 'Public event request form' },
+];
+
 
 // ─── Main Component ─────────────────────────────────────────────────────────────
 
 const EventsSettingsTab: React.FC = () => {
+  const [activeSection, setActiveSection] = useState<SectionKey>('visibility');
   const [settings, setSettings] = useState<EventModuleSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -124,7 +119,7 @@ const EventsSettingsTab: React.FC = () => {
 
   // Custom event category editing
   const [newCategoryLabel, setNewCategoryLabel] = useState('');
-  const [newCategoryColor, setNewCategoryColor] = useState(DEFAULT_CATEGORY_COLOR);
+  const [newCategoryColor, setNewCategoryColor] = useState<CategoryColor>(DEFAULT_CATEGORY_COLOR);
 
   // Pipeline task editing
   const [newTaskLabel, setNewTaskLabel] = useState('');
@@ -543,17 +538,15 @@ const EventsSettingsTab: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" />
-        </div>
+      <div className="min-h-[50vh] flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" />
       </div>
     );
   }
 
   if (error || !settings) {
     return (
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
           <p className="text-red-700 dark:text-red-300">{error || 'Failed to load settings.'}</p>
           <button
@@ -577,32 +570,32 @@ const EventsSettingsTab: React.FC = () => {
   );
   const customCategories = settings.custom_event_categories || [];
 
-  // ─── Render ───────────────────────────────────────────────────────────────
+  // ─── Section Content ──────────────────────────────────────────────────────
 
-  return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="space-y-4">
-        {/* ── Section 1: Event Type Visibility ────────────────────────────── */}
-        <Collapsible
-          defaultOpen
-          title={
-            <SectionHeader
-              icon={<Settings className="w-5 h-5" />}
-              title="Event Type Visibility"
-              description="Choose which event types appear as primary filter categories"
-            />
-          }
-        >
-          <div className="space-y-5">
+  const renderContent = () => {
+    switch (activeSection) {
+      // ════════════════════════════════════════════
+      // VISIBILITY
+      // ════════════════════════════════════════════
+      case 'visibility':
+        return (
+          <div className="space-y-6">
             <div>
-              <h3 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider mb-3">
+              <h3 className="text-lg font-semibold text-theme-text-primary">Event Type Visibility</h3>
+              <p className="text-sm text-theme-text-muted mt-1">
+                Choose which event types appear as primary filter categories.
+              </p>
+            </div>
+
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-theme-text-muted mb-2">
                 Visible Categories
-              </h3>
+              </h4>
               <div className="space-y-2">
                 {visibleTypes.map((eventType) => (
                   <div
                     key={eventType}
-                    className="flex items-center justify-between p-3 bg-theme-surface rounded-lg border border-theme-surface-border"
+                    className="flex items-center justify-between p-3 rounded-lg border border-theme-surface-border"
                   >
                     <div className="flex items-center gap-3">
                       <Eye className="w-4 h-4 text-green-600 dark:text-green-400" />
@@ -630,14 +623,14 @@ const EventsSettingsTab: React.FC = () => {
 
             {hiddenTypes.length > 0 && (
               <div>
-                <h3 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider mb-3">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-theme-text-muted mb-2">
                   Grouped Under &ldquo;Other&rdquo;
-                </h3>
+                </h4>
                 <div className="space-y-2">
                   {hiddenTypes.map((eventType) => (
                     <div
                       key={eventType}
-                      className="card-secondary flex items-center justify-between p-3"
+                      className="flex items-center justify-between p-3 rounded-lg border border-theme-surface-border bg-theme-surface-secondary/30"
                     >
                       <div className="flex items-center gap-3">
                         <EyeOff className="w-4 h-4 text-theme-text-muted" />
@@ -662,26 +655,27 @@ const EventsSettingsTab: React.FC = () => {
               </div>
             )}
           </div>
-        </Collapsible>
+        );
 
-        {/* ── Section 2: Custom Event Categories ─────────────────────────── */}
-        <Collapsible
-          defaultOpen
-          title={
-            <SectionHeader
-              icon={<Tag className="w-5 h-5" />}
-              title="Custom Event Categories"
-              description="Create organization-specific event categories beyond the built-in types"
-            />
-          }
-        >
-          <div className="space-y-4">
+      // ════════════════════════════════════════════
+      // CATEGORIES
+      // ════════════════════════════════════════════
+      case 'categories':
+        return (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-semibold text-theme-text-primary">Custom Event Categories</h3>
+              <p className="text-sm text-theme-text-muted mt-1">
+                Create organization-specific event categories beyond the built-in types.
+              </p>
+            </div>
+
             {customCategories.length > 0 ? (
               <div className="space-y-2">
                 {customCategories.map((cat: EventCategoryConfig) => (
                   <div
                     key={cat.value}
-                    className="flex items-center justify-between p-3 bg-theme-surface rounded-lg border border-theme-surface-border"
+                    className="flex items-center justify-between p-3 rounded-lg border border-theme-surface-border"
                   >
                     <div className="flex items-center gap-3">
                       <span
@@ -756,24 +750,26 @@ const EventsSettingsTab: React.FC = () => {
               </button>
             </div>
           </div>
-        </Collapsible>
+        );
 
-        {/* ── Section 3: Outreach Event Types ────────────────────────────── */}
-        <Collapsible
-          title={
-            <SectionHeader
-              icon={<FileText className="w-5 h-5" />}
-              title="Outreach Event Types"
-              description="Types of public outreach events shown on the request form"
-            />
-          }
-        >
-          <div className="space-y-4">
+      // ════════════════════════════════════════════
+      // OUTREACH TYPES
+      // ════════════════════════════════════════════
+      case 'outreach':
+        return (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-semibold text-theme-text-primary">Outreach Event Types</h3>
+              <p className="text-sm text-theme-text-muted mt-1">
+                Types of public outreach events shown on the request form.
+              </p>
+            </div>
+
             <div className="space-y-2">
               {settings.outreach_event_types.map((ot: OutreachEventTypeConfig) => (
                 <div
                   key={ot.value}
-                  className="flex items-center justify-between p-3 bg-theme-surface rounded-lg border border-theme-surface-border"
+                  className="flex items-center justify-between p-3 rounded-lg border border-theme-surface-border"
                 >
                   <div className="flex items-center gap-3">
                     <span className="text-sm font-medium text-theme-text-primary">{ot.label}</span>
@@ -819,26 +815,26 @@ const EventsSettingsTab: React.FC = () => {
               </button>
             </div>
           </div>
-        </Collapsible>
+        );
 
-        {/* ── Section 4: Request Pipeline ─────────────────────────────────── */}
-        <Collapsible
-          title={
-            <SectionHeader
-              icon={<ClipboardList className="w-5 h-5" />}
-              title="Request Pipeline"
-              description="Configure how event requests are processed"
-            />
-          }
-        >
+      // ════════════════════════════════════════════
+      // PIPELINE
+      // ════════════════════════════════════════════
+      case 'pipeline':
+        return (
           <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-semibold text-theme-text-primary">Request Pipeline</h3>
+              <p className="text-sm text-theme-text-muted mt-1">
+                Configure how event requests are processed.
+              </p>
+            </div>
+
             {/* Default assignee */}
             <div>
-              <div className="flex items-center gap-3 mb-2">
+              <div className="flex items-center gap-2 mb-2">
                 <UserCheck className="w-4 h-4 text-theme-text-muted" />
-                <h3 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider">
-                  Default Coordinator
-                </h3>
+                <p className="text-sm font-medium text-theme-text-primary">Default Coordinator</p>
               </div>
               <p className="text-xs text-theme-text-muted mb-3">
                 All new requests will be auto-assigned to this person.
@@ -847,7 +843,7 @@ const EventsSettingsTab: React.FC = () => {
                 value={settings.request_pipeline.default_assignee_id || ''}
                 onChange={(e) => void updateDefaultAssignee(e.target.value || null)}
                 disabled={saving}
-                className="form-input max-w-md text-sm"
+                className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring max-w-md"
               >
                 <option value="">No default (manually assign)</option>
                 {members.map((m) => (
@@ -859,43 +855,42 @@ const EventsSettingsTab: React.FC = () => {
             </div>
 
             {/* Public progress visibility */}
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <Globe className="w-4 h-4 text-theme-text-muted" />
-                <h3 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider">
-                  Public Progress Visibility
-                </h3>
-              </div>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <button
-                  type="button"
-                  onClick={() => void togglePublicVisibility()}
-                  disabled={saving}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    settings.request_pipeline.public_progress_visible
-                      ? 'bg-green-500'
-                      : 'bg-gray-300 dark:bg-gray-600'
-                  }`}
-                >
-                  <span
-                    className={`toggle-knob-sm ${
-                      settings.request_pipeline.public_progress_visible ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-                <span className="text-sm text-theme-text-primary">
+            <div className="flex items-center justify-between py-3 border-t border-theme-surface-border">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-theme-text-muted" />
+                  <p className="text-sm font-medium text-theme-text-primary">Public Progress Visibility</p>
+                </div>
+                <p className="text-xs text-theme-text-muted mt-0.5 ml-6">
                   Show pipeline task progress on the public status page
-                </span>
-              </label>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void togglePublicVisibility()}
+                disabled={saving}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:cursor-not-allowed ${
+                  settings.request_pipeline.public_progress_visible
+                    ? 'bg-green-500'
+                    : 'bg-gray-300 dark:bg-gray-600'
+                }`}
+                role="switch"
+                aria-checked={settings.request_pipeline.public_progress_visible}
+                aria-label="Public progress visibility"
+              >
+                <span
+                  className={`toggle-knob-sm ${
+                    settings.request_pipeline.public_progress_visible ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
             </div>
 
             {/* Lead time */}
-            <div>
-              <div className="flex items-center gap-3 mb-2">
+            <div className="border-t border-theme-surface-border pt-4">
+              <div className="flex items-center gap-2 mb-2">
                 <Calendar className="w-4 h-4 text-theme-text-muted" />
-                <h3 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider">
-                  Minimum Lead Time
-                </h3>
+                <p className="text-sm font-medium text-theme-text-primary">Minimum Lead Time</p>
               </div>
               <p className="text-xs text-theme-text-muted mb-3">
                 How far in advance must requests be submitted?
@@ -912,7 +907,7 @@ const EventsSettingsTab: React.FC = () => {
                       void updateLeadTime(val);
                     }
                   }}
-                  className="w-20 px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                  className="w-20 px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                 />
                 <span className="text-sm text-theme-text-muted">
                   days ({Math.floor(settings.request_pipeline.min_lead_time_days / 7)} weeks)
@@ -921,10 +916,10 @@ const EventsSettingsTab: React.FC = () => {
             </div>
 
             {/* Pipeline tasks with reorder */}
-            <div>
-              <h3 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider mb-3">
+            <div className="border-t border-theme-surface-border pt-4">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-theme-text-muted mb-2">
                 Pipeline Tasks
-              </h3>
+              </h4>
               <p className="text-xs text-theme-text-muted mb-3">
                 Checklist items your team uses when processing requests. Use arrows to reorder.
               </p>
@@ -932,7 +927,7 @@ const EventsSettingsTab: React.FC = () => {
                 {settings.request_pipeline.tasks.map((task: PipelineTaskConfig, idx: number) => (
                   <div
                     key={task.id}
-                    className="flex items-center justify-between p-3 bg-theme-surface rounded-lg border border-theme-surface-border"
+                    className="flex items-center justify-between p-3 rounded-lg border border-theme-surface-border"
                   >
                     <div className="flex items-center gap-3">
                       <div className="flex flex-col">
@@ -1017,40 +1012,45 @@ const EventsSettingsTab: React.FC = () => {
               </div>
             </div>
           </div>
-        </Collapsible>
+        );
 
-        {/* ── Section 5: Email Configuration ──────────────────────────────── */}
-        <Collapsible
-          title={
-            <SectionHeader
-              icon={<Mail className="w-5 h-5" />}
-              title="Email Configuration"
-              description="Notification triggers and reusable email templates"
-            />
-          }
-        >
+      // ════════════════════════════════════════════
+      // EMAIL
+      // ════════════════════════════════════════════
+      case 'email':
+        return (
           <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-semibold text-theme-text-primary">Email Configuration</h3>
+              <p className="text-sm text-theme-text-muted mt-1">
+                Notification triggers and reusable email templates.
+              </p>
+            </div>
+
             {/* Email Triggers */}
             <div>
-              <h3 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider mb-3">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-theme-text-muted mb-2">
                 Notification Triggers
-              </h3>
+              </h4>
               <div className="space-y-2">
                 {Object.entries(TRIGGER_LABELS).map(([key, label]) => {
                   const config = settings.request_pipeline.email_triggers[key] || { enabled: false };
                   return (
                     <div
                       key={key}
-                      className="flex items-center justify-between p-3 bg-theme-surface rounded-lg border border-theme-surface-border"
+                      className="flex items-center justify-between p-3 rounded-lg border border-theme-surface-border"
                     >
                       <span className="text-sm font-medium text-theme-text-primary">{label}</span>
                       <button
                         type="button"
                         onClick={() => void toggleEmailTrigger(key)}
                         disabled={saving}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:cursor-not-allowed ${
                           config.enabled ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
                         }`}
+                        role="switch"
+                        aria-checked={config.enabled}
+                        aria-label={label}
                       >
                         <span
                           className={`toggle-knob-sm ${
@@ -1065,11 +1065,11 @@ const EventsSettingsTab: React.FC = () => {
             </div>
 
             {/* Email Templates */}
-            <div>
+            <div className="border-t border-theme-surface-border pt-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-theme-text-muted">
                   Email Templates
-                </h3>
+                </h4>
                 <button
                   type="button"
                   onClick={() => setShowTemplateForm(!showTemplateForm)}
@@ -1084,7 +1084,7 @@ const EventsSettingsTab: React.FC = () => {
               </p>
 
               {showTemplateForm && (
-                <div className="card-secondary mb-4 p-4 space-y-3">
+                <div className="mb-4 p-4 space-y-3 rounded-lg border border-theme-surface-border bg-theme-surface-secondary/30">
                   <input
                     type="text"
                     value={newTemplateName}
@@ -1110,7 +1110,7 @@ const EventsSettingsTab: React.FC = () => {
                     <select
                       value={newTemplateTrigger}
                       onChange={(e) => setNewTemplateTrigger(e.target.value)}
-                      className="px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                      className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                     >
                       <option value="">Manual send only</option>
                       {Object.entries(TRIGGER_LABELS).map(([key, triggerLabel]) => (
@@ -1140,7 +1140,7 @@ const EventsSettingsTab: React.FC = () => {
                 {emailTemplates.map((tpl) => (
                   <div
                     key={tpl.id}
-                    className="flex items-center justify-between p-3 bg-theme-surface rounded-lg border border-theme-surface-border"
+                    className="flex items-center justify-between p-3 rounded-lg border border-theme-surface-border"
                   >
                     <div>
                       <span className="text-sm font-medium text-theme-text-primary">{tpl.name}</span>
@@ -1171,43 +1171,114 @@ const EventsSettingsTab: React.FC = () => {
               </div>
             </div>
           </div>
-        </Collapsible>
+        );
 
-        {/* ── Section 6: Public Event Request Form ────────────────────────── */}
-        <Collapsible
-          title={
-            <SectionHeader
-              icon={<ExternalLink className="w-5 h-5" />}
-              title="Public Event Request Form"
-              description="Generate a public form for community members to request outreach events"
-            />
-          }
-        >
-          <div>
-            <button
-              type="button"
-              onClick={() => void handleGenerateForm()}
-              disabled={generatingForm}
-              className="btn-primary flex font-medium gap-2 items-center text-sm"
-            >
-              {generatingForm ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <FileText className="w-4 h-4" />
-                  Generate Event Request Form
-                </>
-              )}
-            </button>
-            <p className="text-xs text-theme-text-muted mt-2">
-              The form will be created in Draft status. Publish it from the Forms module when ready.
-              You can customize fields and styling before publishing.
-            </p>
+      // ════════════════════════════════════════════
+      // PUBLIC FORM
+      // ════════════════════════════════════════════
+      case 'form':
+        return (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-semibold text-theme-text-primary">Public Event Request Form</h3>
+              <p className="text-sm text-theme-text-muted mt-1">
+                Generate a public form for community members to request outreach events.
+              </p>
+            </div>
+
+            <div>
+              <button
+                type="button"
+                onClick={() => void handleGenerateForm()}
+                disabled={generatingForm}
+                className="btn-primary flex font-medium gap-2 items-center text-sm"
+              >
+                {generatingForm ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <FileText className="w-4 h-4" />
+                    Generate Event Request Form
+                  </>
+                )}
+              </button>
+              <p className="text-xs text-theme-text-muted mt-2">
+                The form will be created in Draft status. Publish it from the Forms module when ready.
+                You can customize fields and styling before publishing.
+              </p>
+            </div>
           </div>
-        </Collapsible>
+        );
+    }
+  };
+
+  // ─── Render ───────────────────────────────────────────────────────────────
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="flex flex-col md:flex-row gap-6">
+        {/* Mobile: horizontal scrollable tabs */}
+        <nav className="md:hidden -mx-4 px-4 border-b border-theme-surface-border" aria-label="Event settings sections">
+          <div className="flex overflow-x-auto scrollbar-thin scroll-smooth gap-1 pb-2">
+            {SECTIONS.map(({ key, label, icon: Icon }) => {
+              const isActive = activeSection === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setActiveSection(key)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg whitespace-nowrap text-sm font-medium transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                    isActive
+                      ? 'bg-theme-accent-blue-muted text-theme-accent-blue'
+                      : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
+                  }`}
+                  aria-current={isActive ? 'page' : undefined}
+                >
+                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? '' : 'text-theme-text-muted'}`} />
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+
+        {/* Desktop: sidebar */}
+        <nav className="hidden md:block md:w-56 shrink-0" aria-label="Event settings sections">
+          <div className="md:sticky md:top-24 space-y-1">
+            {SECTIONS.map(({ key, label, icon: Icon, description }) => {
+              const isActive = activeSection === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setActiveSection(key)}
+                  className={`w-full flex items-start gap-3 px-3 py-3 rounded-lg text-left transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                    isActive
+                      ? 'bg-theme-accent-blue-muted text-theme-accent-blue'
+                      : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
+                  }`}
+                  aria-current={isActive ? 'page' : undefined}
+                >
+                  <Icon className={`w-5 h-5 mt-0.5 shrink-0 ${isActive ? '' : 'text-theme-text-muted'}`} />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{label}</p>
+                    <p className={`text-xs ${isActive ? 'text-theme-accent-blue/70' : 'text-theme-text-muted'}`}>
+                      {description}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+
+        {/* Content panel */}
+        <main className="flex-1 min-w-0">
+          <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-4 sm:p-6">
+            {renderContent()}
+          </div>
+        </main>
       </div>
     </div>
   );
