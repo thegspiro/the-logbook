@@ -56,7 +56,7 @@ export const ErrorAlert: React.FC<ErrorAlertProps> = ({
         {/* Content */}
         <div className="flex-1 min-w-0">
           <h4 className="text-red-700 dark:text-red-300 font-semibold mb-1">Error</h4>
-          <p className="text-red-200 text-sm">{message}</p>
+          <p className="text-red-700 dark:text-red-200 text-sm">{message}</p>
 
           {/* Actions */}
           {(canRetry || onDismiss) && (
@@ -75,7 +75,7 @@ export const ErrorAlert: React.FC<ErrorAlertProps> = ({
               {onDismiss && (
                 <button
                   onClick={onDismiss}
-                  className="inline-flex items-center px-3 py-1.5 text-red-700 dark:text-red-300 hover:text-red-100 text-sm font-medium transition-colors"
+                  className="inline-flex items-center px-3 py-1.5 text-red-700 dark:text-red-300 hover:text-red-800 dark:hover:text-red-100 text-sm font-medium transition-colors"
                   aria-label="Dismiss error"
                 >
                   Dismiss
