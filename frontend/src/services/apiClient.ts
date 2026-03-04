@@ -179,9 +179,15 @@ api.interceptors.response.use(
         await refreshPromise;
         return api(originalRequest);
       } catch (refreshError) {
-        // Refresh failed — clear session flag and redirect to login
+        // Refresh failed — clear session flag and redirect to login.
+        // Skip the hard redirect during onboarding: the onboarding flow
+        // manages its own session and auth cookies may not be fully
+        // established yet. A hard redirect here would kick the user out
+        // of onboarding and lose their progress.
         localStorage.removeItem('has_session');
-        window.location.href = '/login';
+        if (!window.location.pathname.startsWith('/onboarding')) {
+          window.location.href = '/login';
+        }
         return Promise.reject(refreshError instanceof Error ? refreshError : new Error(String(refreshError)));
       }
     }
