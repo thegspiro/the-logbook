@@ -6,7 +6,6 @@
  */
 
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { RotateCcw, AlertTriangle, X } from 'lucide-react';
 import { apiClient } from '../services/api-client';
 import { useOnboardingStore } from '../store';
@@ -21,7 +20,6 @@ interface ResetProgressButtonProps {
 export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
   className = ''
 }) => {
-  const navigate = useNavigate();
   const resetOnboarding = useOnboardingStore((state) => state.resetOnboarding);
   const [showModal, setShowModal] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -61,12 +59,11 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
       // Clear API client session
       apiClient.clearSession();
 
-      // Close modal and redirect to start
+      // Close modal and navigate with a full page load to ensure clean state.
+      // Using window.location.href instead of navigate() + reload() because
+      // navigate() is async and reload() would fire before it completes.
       setShowModal(false);
-      navigate('/onboarding/start');
-
-      // Force page reload to ensure clean state
-      window.location.reload();
+      window.location.href = '/onboarding/start';
     } catch (_err) {
       setError('Failed to reset onboarding. Please try again.');
       setIsResetting(false);

@@ -478,7 +478,7 @@ const ITTeamBackupAccess: React.FC = () => {
             <div className="max-w-md mx-auto">
               {error && (
                 <div className="mb-6">
-                  <ErrorAlert message={error} canRetry={canRetry} onRetry={handleSubmit} onDismiss={clearError} />
+                  <ErrorAlert message={error} canRetry={canRetry} onRetry={() => { void handleSubmit({ preventDefault: () => {} } as React.FormEvent); }} onDismiss={clearError} />
                 </div>
               )}
 

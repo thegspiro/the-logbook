@@ -25,6 +25,13 @@ const ModuleOverview: React.FC = () => {
   const setModuleStatuses = useOnboardingStore(state => state.setModuleStatuses);
   const { execute, isLoading: isSaving, error, canRetry, clearError } = useApiRequest();
 
+  // Guard: redirect to start if org setup hasn't been completed
+  React.useEffect(() => {
+    if (!departmentName) {
+      navigate('/onboarding/start');
+    }
+  }, [departmentName, navigate]);
+
   // Get modules from the central registry (excludes system modules)
   const modules: ModuleDefinition[] = useMemo(() => getUserFacingModules(), []);
 

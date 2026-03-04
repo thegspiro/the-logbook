@@ -554,6 +554,13 @@ const PositionSetup: React.FC = () => {
 
   const [isSaving, setIsSaving] = useState(false);
 
+  // Guard: redirect to start if org setup hasn't been completed
+  useEffect(() => {
+    if (!departmentName) {
+      navigate('/onboarding/start');
+    }
+  }, [departmentName, navigate]);
+
   // Persist position changes to Zustand store (survives navigation)
   useEffect(() => {
     const serializable: Record<string, {

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Eye, Edit3, Shield, Users, CheckCircle, Info } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -22,6 +22,16 @@ const ModuleConfigTemplate: React.FC = () => {
   const normalizedModuleId = moduleId?.replace(/-/g, '_');
   const config = useMemo(() => (normalizedModuleId ? getModuleById(normalizedModuleId) : undefined), [normalizedModuleId]);
   const moduleName = config?.name || 'Module';
+  const departmentName = useOnboardingStore(state => state.departmentName);
+
+  // Guard: redirect if org setup hasn't been completed or module ID is invalid
+  useEffect(() => {
+    if (!departmentName) {
+      navigate('/onboarding/start');
+    } else if (!config) {
+      navigate('/onboarding/modules');
+    }
+  }, [departmentName, config, navigate]);
 
   // Read positions from the onboarding store (set during PositionSetup step)
   const positionsConfig = useOnboardingStore(state => state.positionsConfig);
