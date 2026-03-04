@@ -835,7 +835,7 @@ async def create_organization(
         )
 
 
-@router.post("/system-owner", response_model=SystemOwnerResponse)
+@router.post("/system-owner")
 async def create_system_owner(
     request: Request, user_data: SystemOwnerCreate, db: AsyncSession = Depends(get_db)
 ):
@@ -911,7 +911,13 @@ async def create_system_owner(
             user_agent=request.headers.get("user-agent"),
         )
 
-        return SystemOwnerResponse(
+        # Build JSON body and set httpOnly auth cookies so the frontend
+        # session persists through the remaining onboarding steps.
+        # Without cookies, loadUser() → /auth/me would 401.
+        from fastapi.responses import JSONResponse
+        from app.api.v1.endpoints.auth import _set_auth_cookies
+
+        body = SystemOwnerResponse(
             id=str(user.id),
             username=user.username,
             email=user.email,
@@ -921,7 +927,11 @@ async def create_system_owner(
             status=user.status.value,
             access_token=access_token,
             refresh_token=refresh_token,
-        )
+        ).model_dump()
+
+        response = JSONResponse(content=body)
+        _set_auth_cookies(response, access_token, refresh_token)
+        return response
     except ValueError as e:
         logger.error(f"Admin user creation failed with ValueError: {e}")
         raise HTTPException(
