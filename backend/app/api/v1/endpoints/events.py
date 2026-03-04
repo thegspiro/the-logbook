@@ -32,6 +32,7 @@ from app.schemas.event import (
     EventCreate,
     EventListItem,
     EventResponse,
+    EventSettingsUpdate,
     EventStats,
     EventTemplateCreate,
     EventTemplateResponse,
@@ -372,7 +373,7 @@ async def get_event_settings(
 
 @router.patch("/settings")
 async def update_event_settings(
-    updates: dict,
+    updates: EventSettingsUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("events.manage")),
 ):
@@ -392,8 +393,9 @@ async def update_event_settings(
     current_settings = dict(org.settings or {})
     current_events = current_settings.get("events", {})
 
-    # Deep merge the updates into existing event settings
-    for key, value in updates.items():
+    # Deep merge the validated updates into existing event settings
+    updates_dict = updates.model_dump(exclude_unset=True)
+    for key, value in updates_dict.items():
         if key in EVENT_SETTINGS_DEFAULTS:
             if isinstance(value, dict) and isinstance(current_events.get(key), dict):
                 current_events[key] = {**current_events.get(key, {}), **value}
@@ -409,7 +411,7 @@ async def update_event_settings(
         db=db,
         event_type="events.settings_updated",
         severity="info",
-        event_data={"updated_keys": list(updates.keys())},
+        event_data={"updated_keys": list(updates_dict.keys())},
         user_id=str(current_user.id),
         username=current_user.username,
     )
