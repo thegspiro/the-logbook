@@ -1,18 +1,18 @@
 # Multi-stage build for React frontend
 
 # Development stage
-FROM node:22-alpine as development
+FROM node:22-alpine AS development
 
 # Upgrade to npm 11.9.0 (latest stable)
 RUN npm install -g npm@11.9.0
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy package files (including lock file for reproducible installs)
+COPY package.json package-lock.json ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies using lock file
+RUN npm ci
 
 # Copy source code
 COPY . .
@@ -24,7 +24,7 @@ EXPOSE 3000
 CMD ["npm", "run", "dev", "--", "--host"]
 
 # Build stage
-FROM node:22-alpine as build
+FROM node:22-alpine AS build
 
 # Upgrade to npm 11.9.0 (latest stable)
 RUN npm install -g npm@11.9.0
@@ -34,11 +34,11 @@ ARG VITE_API_URL=/api/v1
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy package files (including lock file for reproducible installs)
+COPY package.json package-lock.json ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies using lock file
+RUN npm ci
 
 # Copy source code
 COPY . .
@@ -48,7 +48,7 @@ ENV VITE_API_URL=${VITE_API_URL}
 RUN npm run build
 
 # Production stage
-FROM nginx:alpine as production
+FROM nginx:alpine AS production
 
 # Copy custom nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf

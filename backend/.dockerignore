@@ -1,0 +1,52 @@
+# Python
+__pycache__
+**/__pycache__
+*.py[cod]
+*$py.class
+*.so
+*.egg-info
+*.egg
+dist
+build
+
+# Virtual environments
+.venv
+venv
+env
+
+# Testing
+.pytest_cache
+**/.pytest_cache
+.coverage
+htmlcov
+coverage.xml
+.mypy_cache
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.*
+
+# Git
+.git
+.gitignore
+
+# Logs
+*.log
+logs/
+
+# Documentation
+*.md
+
+# Scripts not needed in container
+run_onboarding_tests.sh
