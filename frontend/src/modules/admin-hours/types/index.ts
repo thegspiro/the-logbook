@@ -132,12 +132,12 @@ export interface AdminHoursSummary {
   pendingHours: number;
   pendingEntries: number;
   byCategory: Array<{
-    category_id: string;
-    category_name: string;
-    category_color: string | null;
-    total_minutes: number;
-    total_hours: number;
-    entry_count: number;
+    categoryId: string;
+    categoryName: string;
+    categoryColor: string | null;
+    totalMinutes: number;
+    totalHours: number;
+    entryCount: number;
   }>;
   periodStart: string | null;
   periodEnd: string | null;
