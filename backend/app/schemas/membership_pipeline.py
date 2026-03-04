@@ -276,7 +276,9 @@ class ProspectResponse(ProspectBase):
     pipeline_id: Optional[UUID] = None
     current_step_id: Optional[UUID] = None
     status: str
-    metadata_: Optional[Dict[str, Any]] = Field(None, alias="metadata")
+    metadata_: Optional[Dict[str, Any]] = Field(
+        None, serialization_alias="metadata"
+    )
     form_submission_id: Optional[UUID] = None
     status_token: Optional[str] = None
     transferred_user_id: Optional[UUID] = None
@@ -289,7 +291,9 @@ class ProspectResponse(ProspectBase):
     step_progress: Optional[List[StepProgressResponse]] = None
     pipeline_name: Optional[str] = None
 
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+    model_config = ConfigDict(
+        from_attributes=True, populate_by_name=True, serialize_by_alias=True
+    )
 
 
 class ProspectListResponse(BaseModel):
