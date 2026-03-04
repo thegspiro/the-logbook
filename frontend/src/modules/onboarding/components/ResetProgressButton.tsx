@@ -6,7 +6,6 @@
  */
 
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { RotateCcw, AlertTriangle, X } from 'lucide-react';
 import { apiClient } from '../services/api-client';
 import { useOnboardingStore } from '../store';
@@ -21,7 +20,6 @@ interface ResetProgressButtonProps {
 export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
   className = ''
 }) => {
-  const navigate = useNavigate();
   const resetOnboarding = useOnboardingStore((state) => state.resetOnboarding);
   const [showModal, setShowModal] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -130,7 +128,7 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
               <p className="text-red-700 dark:text-red-200 text-sm text-center">
                 <strong className="text-red-700 dark:text-red-400">Warning:</strong> This action will:
               </p>
-              <ul className="mt-2 space-y-1 text-sm text-red-200">
+              <ul className="mt-2 space-y-1 text-sm text-red-700 dark:text-red-200">
                 <li className="flex items-start">
                   <span className="mr-2">•</span>
                   Delete all onboarding progress
