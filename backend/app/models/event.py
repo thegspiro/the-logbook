@@ -185,7 +185,10 @@ class Event(Base):
         "Event", foreign_keys=[recurrence_parent_id], back_populates="recurrence_parent"
     )
     recurrence_parent = relationship(
-        "Event", foreign_keys=[recurrence_parent_id], remote_side=[id]
+        "Event",
+        foreign_keys=[recurrence_parent_id],
+        remote_side=[id],
+        back_populates="recurrence_children",
     )
     template = relationship("EventTemplate", foreign_keys=[template_id])
 
