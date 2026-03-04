@@ -8,11 +8,11 @@ RUN npm install -g npm@11.9.0
 
 WORKDIR /app
 
-# Copy package files (including lock file for reproducible installs)
-COPY package.json package-lock.json ./
+# Copy package files (lock file is optional for backwards compatibility)
+COPY package.json package-lock.jso[n] ./
 
-# Install dependencies using lock file
-RUN npm ci
+# Install dependencies (use ci with lock file, install without)
+RUN if [ -f package-lock.json ]; then npm ci --legacy-peer-deps; else npm install --legacy-peer-deps; fi
 
 # Copy source code
 COPY . .
@@ -34,11 +34,11 @@ ARG VITE_API_URL=/api/v1
 
 WORKDIR /app
 
-# Copy package files (including lock file for reproducible installs)
-COPY package.json package-lock.json ./
+# Copy package files (lock file is optional for backwards compatibility)
+COPY package.json package-lock.jso[n] ./
 
-# Install dependencies using lock file
-RUN npm ci
+# Install dependencies (use ci with lock file, install without)
+RUN if [ -f package-lock.json ]; then npm ci --legacy-peer-deps; else npm install --legacy-peer-deps; fi
 
 # Copy source code
 COPY . .
