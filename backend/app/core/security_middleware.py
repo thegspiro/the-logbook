@@ -16,6 +16,7 @@ from typing import Any
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.responses import Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.requests import HTTPConnection
 from starlette.types import ASGIApp
 
 # ============================================
@@ -472,7 +473,7 @@ def rate_limit_token_refresh():
 # ============================================
 
 
-async def verify_csrf_token(request: Request) -> None:
+async def verify_csrf_token(request: HTTPConnection) -> None:
     """
     Dependency to verify CSRF token on state-changing requests.
 
@@ -488,6 +489,12 @@ async def verify_csrf_token(request: Request) -> None:
     Usage:
         @router.post("/endpoint", dependencies=[Depends(verify_csrf_token)])
     """
+    # Skip CSRF for WebSocket connections — CSRF attacks exploit automatic
+    # cookie sending on cross-origin HTTP requests; WebSocket endpoints use
+    # their own JWT-based authentication during the handshake.
+    if request.scope["type"] == "websocket":
+        return
+
     # Skip CSRF for safe methods
     if request.method in ["GET", "HEAD", "OPTIONS"]:
         return
