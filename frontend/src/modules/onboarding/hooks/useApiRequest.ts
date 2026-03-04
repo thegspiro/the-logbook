@@ -40,6 +40,10 @@ export const useApiRequest = () => {
   const [error, setError] = useState<string | null>(null);
   const [canRetry, setCanRetry] = useState(false);
 
+  // Track in-flight status via ref so the double-click guard works
+  // within the same render cycle (useState is async and the second
+  // click would still see isLoading=false from the stale closure).
+  const isLoadingRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const logError = useOnboardingStore((state) => state.logError);
 
@@ -52,8 +56,8 @@ export const useApiRequest = () => {
       apiCall: (signal: AbortSignal) => Promise<T>,
       options: ApiRequestOptions
     ): Promise<{ data: T | null; error: string | null }> => {
-      // Prevent double-click: if already loading, ignore
-      if (isLoading) {
+      // Prevent double-click: use ref for synchronous guard
+      if (isLoadingRef.current) {
         console.warn('Request already in progress, ignoring duplicate click');
         return { data: null, error: 'Request already in progress' };
       }
@@ -67,7 +71,8 @@ export const useApiRequest = () => {
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
 
-      // Set loading immediately (before state update)
+      // Set loading immediately (ref for sync guard, state for UI)
+      isLoadingRef.current = true;
       setIsLoading(true);
       setError(null);
       setCanRetry(false);
@@ -125,13 +130,14 @@ export const useApiRequest = () => {
 
         return { data: null, error: errorMessage };
       } finally {
+        isLoadingRef.current = false;
         // Clean up abort controller
         if (abortControllerRef.current === abortController) {
           abortControllerRef.current = null;
         }
       }
     },
-    [isLoading, logError]
+    [logError]
   );
 
   /**
@@ -141,6 +147,7 @@ export const useApiRequest = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
+      isLoadingRef.current = false;
       setIsLoading(false);
       setCanRetry(false);
     }

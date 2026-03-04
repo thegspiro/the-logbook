@@ -513,8 +513,8 @@ class SecureApiClient {
     first_name: string;
     last_name: string;
     membership_number?: string | undefined;
-  }): Promise<ApiResponse<{ access_token?: string | undefined; refresh_token?: string | undefined }>> {
-    const response = await this.request<{ access_token?: string | undefined; refresh_token?: string | undefined }>('POST', '/onboarding/system-owner', data, true);
+  }): Promise<ApiResponse<{ authenticated?: boolean | undefined }>> {
+    const response = await this.request<{ authenticated?: boolean | undefined }>('POST', '/onboarding/system-owner', data, true);
 
     // SECURITY: Clear password from memory immediately
     data.password = '';
@@ -523,7 +523,7 @@ class SecureApiClient {
     // Auth tokens are stored in httpOnly cookies by the backend response.
     // We only set the lightweight `has_session` flag so the frontend knows
     // to attempt session validation on next page load.
-    if (response.data?.access_token) {
+    if (response.data?.authenticated) {
       localStorage.setItem('has_session', '1');
     }
 
@@ -539,7 +539,7 @@ class SecureApiClient {
     first_name: string;
     last_name: string;
     membership_number?: string | undefined;
-  }): Promise<ApiResponse<{ access_token?: string | undefined; refresh_token?: string | undefined }>> {
+  }): Promise<ApiResponse<{ authenticated?: boolean | undefined }>> {
     return this.createSystemOwner(data);
   }
 

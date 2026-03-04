@@ -22,7 +22,9 @@ from app.api.v1.email_test_helper import (
     test_microsoft_oauth,
     test_smtp_connection,
 )
+from app.api.dependencies import get_current_user
 from app.core.database import get_db
+from app.models.user import User
 from app.core.security_middleware import check_rate_limit
 from app.core.utils import safe_error_detail
 from app.models.onboarding import (
@@ -156,7 +158,12 @@ class UserResponse(BaseModel):
 
 
 class SystemOwnerResponse(BaseModel):
-    """Response model for System Owner creation with access token"""
+    """Response model for System Owner creation.
+
+    Auth tokens are set exclusively as httpOnly cookies by _set_auth_cookies().
+    The ``authenticated`` flag tells the frontend to set ``has_session`` so that
+    loadUser() attempts cookie-based auth on the next request.
+    """
 
     id: str
     username: str
@@ -165,9 +172,7 @@ class SystemOwnerResponse(BaseModel):
     last_name: str
     membership_number: str | None
     status: str
-    access_token: str
-    refresh_token: str | None = None
-    token_type: str = "bearer"
+    authenticated: bool = True
 
     class Config:
         from_attributes = True
@@ -726,12 +731,16 @@ async def start_onboarding(
     response_model=SystemInfoResponse,
     dependencies=[Depends(check_rate_limit)],
 )
-async def get_system_info(db: AsyncSession = Depends(get_db)):
+async def get_system_info(
+    request: Request, db: AsyncSession = Depends(get_db)
+):
     """
     Get system information for display during onboarding
 
     Returns app version, security features, and configuration.
+    Requires a valid onboarding session to prevent information disclosure.
     """
+    await validate_session(request, db, require_csrf=False)
     service = OnboardingService(db)
     return await service.get_system_info()
 
@@ -741,7 +750,9 @@ async def get_system_info(db: AsyncSession = Depends(get_db)):
     response_model=SecurityCheckResponse,
     dependencies=[Depends(check_rate_limit)],
 )
-async def verify_security(db: AsyncSession = Depends(get_db)):
+async def verify_security(
+    request: Request, db: AsyncSession = Depends(get_db)
+):
     """
     Verify security configuration
 
@@ -752,7 +763,9 @@ async def verify_security(db: AsyncSession = Depends(get_db)):
     - Other security settings
 
     Returns issues and warnings that need to be addressed.
+    Requires a valid onboarding session to prevent information disclosure.
     """
+    await validate_session(request, db, require_csrf=False)
     service = OnboardingService(db)
     result = await service.verify_security_configuration()
 
@@ -771,12 +784,16 @@ async def verify_security(db: AsyncSession = Depends(get_db)):
     response_model=DatabaseCheckResponse,
     dependencies=[Depends(check_rate_limit)],
 )
-async def verify_database(db: AsyncSession = Depends(get_db)):
+async def verify_database(
+    request: Request, db: AsyncSession = Depends(get_db)
+):
     """
     Verify database connectivity and configuration
 
     Tests database connection and returns connection info.
+    Requires a valid onboarding session to prevent information disclosure.
     """
+    await validate_session(request, db, require_csrf=False)
     service = OnboardingService(db)
     result = await service.verify_database_connection()
 
@@ -925,8 +942,6 @@ async def create_system_owner(
             last_name=user.last_name,
             membership_number=user.membership_number,
             status=user.status.value,
-            access_token=access_token,
-            refresh_token=refresh_token,
         ).model_dump()
 
         response = JSONResponse(content=body)
@@ -1046,11 +1061,15 @@ async def complete_onboarding(
 
 
 @router.get("/checklist", response_model=list[ChecklistItemResponse])
-async def get_post_onboarding_checklist(db: AsyncSession = Depends(get_db)):
+async def get_post_onboarding_checklist(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """
     Get post-onboarding checklist
 
     Returns list of recommended tasks to complete after onboarding.
+    Requires authentication (post-onboarding endpoint).
     """
     service = OnboardingService(db)
     items = await service.get_post_onboarding_checklist()
@@ -1073,12 +1092,15 @@ async def get_post_onboarding_checklist(db: AsyncSession = Depends(get_db)):
 
 @router.patch("/checklist/{item_id}/complete")
 async def mark_checklist_item_complete(
-    item_id: str, db: AsyncSession = Depends(get_db)
+    item_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Mark a checklist item as completed
 
     Updates the completion status of a post-onboarding checklist item.
+    Requires authentication (post-onboarding endpoint).
     """
     from datetime import datetime
 

@@ -56,7 +56,7 @@ export const ErrorAlert: React.FC<ErrorAlertProps> = ({
         {/* Content */}
         <div className="flex-1 min-w-0">
           <h4 className="text-red-700 dark:text-red-300 font-semibold mb-1">Error</h4>
-          <p className="text-red-200 text-sm">{message}</p>
+          <p className="text-red-700 dark:text-red-200 text-sm">{message}</p>
 
           {/* Actions */}
           {(canRetry || onDismiss) && (
