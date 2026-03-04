@@ -210,9 +210,16 @@ const SystemOwnerCreation: React.FC = () => {
         });
 
         // Load user into auth store so the session persists through
-        // the remaining onboarding steps.
-        const { useAuthStore } = await import('../../../stores/authStore');
-        await useAuthStore.getState().loadUser();
+        // the remaining onboarding steps. This is non-fatal: the auth
+        // cookies are already set by the backend response, and loadUser
+        // can be retried on the next page load. We must not let a
+        // transient /auth/me failure block onboarding navigation.
+        try {
+          const { useAuthStore } = await import('../../../stores/authStore');
+          await useAuthStore.getState().loadUser();
+        } catch {
+          // Non-fatal — cookies are set, auth will resolve on next load
+        }
 
         // Continue to IT Team & Backup Access step
         navigate('/onboarding/it-team');
