@@ -1114,9 +1114,17 @@ class StorageArea(Base):
     created_by = Column(String(36), ForeignKey("users.id"))
 
     # Relationships
-    parent = relationship("StorageArea", remote_side=[id], foreign_keys=[parent_id])
+    parent = relationship(
+        "StorageArea",
+        remote_side=[id],
+        foreign_keys=[parent_id],
+        back_populates="children",
+    )
     children = relationship(
-        "StorageArea", foreign_keys=[parent_id], cascade="all, delete-orphan"
+        "StorageArea",
+        foreign_keys=[parent_id],
+        cascade="all, delete-orphan",
+        back_populates="parent",
     )
     location = relationship("Location", foreign_keys=[location_id])
 
