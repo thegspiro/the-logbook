@@ -179,7 +179,7 @@ const AddMember: React.FC = () => {
           name: formData.emergencyName1,
           relationship: formData.emergencyRelationship1,
           phone: formData.emergencyPhone1,
-          email: formData.emergencyEmail1 || undefined,
+          ...(formData.emergencyEmail1 ? { email: formData.emergencyEmail1 } : {}),
           is_primary: true,
         });
       }
@@ -190,35 +190,37 @@ const AddMember: React.FC = () => {
           name: formData.emergencyName2,
           relationship: formData.emergencyRelationship2,
           phone: formData.emergencyPhone2,
-          email: formData.emergencyEmail2 || undefined,
+          ...(formData.emergencyEmail2 ? { email: formData.emergencyEmail2 } : {}),
           is_primary: false,
         });
       }
 
       // Call the API
-      await userService.createMember({
+      const memberPayload: Parameters<typeof userService.createMember>[0] = {
         username,
         email: formData.email,
         first_name: formData.firstName,
-        middle_name: formData.middleName || undefined,
         last_name: formData.lastName,
-        membership_number: membershipIdOverride || formData.membershipNumber || undefined,
-        phone: formData.primaryPhone || undefined,
-        mobile: formData.secondaryPhone || undefined,
-        date_of_birth: formData.dateOfBirth || undefined,
-        hire_date: formData.joinDate || undefined,
-        rank: formData.rank || undefined,
-        station: formData.station || undefined,
-        address_street: formData.street || undefined,
-        address_city: formData.city || undefined,
-        address_state: formData.state || undefined,
-        address_zip: formData.zipCode || undefined,
         address_country: 'USA',
         emergency_contacts: emergencyContacts,
-        password: useCustomPassword && initialPassword ? initialPassword : undefined,
-        role_ids: formData.role ? [formData.role] : undefined,
         send_welcome_email: !useCustomPassword,
-      });
+        ...(formData.middleName ? { middle_name: formData.middleName } : {}),
+        ...((membershipIdOverride || formData.membershipNumber) ? { membership_number: membershipIdOverride || formData.membershipNumber } : {}),
+        ...(formData.primaryPhone ? { phone: formData.primaryPhone } : {}),
+        ...(formData.secondaryPhone ? { mobile: formData.secondaryPhone } : {}),
+        ...(formData.dateOfBirth ? { date_of_birth: formData.dateOfBirth } : {}),
+        ...(formData.joinDate ? { hire_date: formData.joinDate } : {}),
+        ...(formData.rank ? { rank: formData.rank } : {}),
+        ...(formData.station ? { station: formData.station } : {}),
+        ...(formData.street ? { address_street: formData.street } : {}),
+        ...(formData.city ? { address_city: formData.city } : {}),
+        ...(formData.state ? { address_state: formData.state } : {}),
+        ...(formData.zipCode ? { address_zip: formData.zipCode } : {}),
+        ...(useCustomPassword && initialPassword ? { password: initialPassword } : {}),
+        ...(formData.role ? { role_ids: [formData.role] } : {}),
+      };
+
+      await userService.createMember(memberPayload);
 
       toast.success('Member added successfully!');
       navigate('/members');

@@ -405,7 +405,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                     <input
                       type="number"
                       value={formData.max_attendees || ''}
-                      onChange={(e) => updateField('max_attendees', parseInt(e.target.value) || undefined)}
+                      onChange={(e) => { const n = parseInt(e.target.value); updateField('max_attendees', Number.isNaN(n) ? undefined : n); }}
                       placeholder="Unlimited"
                       className="form-input placeholder-theme-text-muted py-3"
                     />
@@ -625,7 +625,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                       <input
                         type="number"
                         value={formData.expiration_months || ''}
-                        onChange={(e) => updateField('expiration_months', parseInt(e.target.value) || undefined)}
+                        onChange={(e) => { const n = parseInt(e.target.value); updateField('expiration_months', Number.isNaN(n) ? undefined : n); }}
                         placeholder="e.g., 24 (for 2 years)"
                         className="form-input placeholder-theme-text-muted py-3"
                       />

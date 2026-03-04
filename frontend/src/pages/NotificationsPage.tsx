@@ -185,7 +185,7 @@ const NotificationsPage: React.FC = () => {
       const newRule = await notificationsService.createRule({
         name: createName.trim(),
         trigger: createTrigger,
-        description: createDescription.trim() || undefined,
+        ...(createDescription.trim() ? { description: createDescription.trim() } : {}),
         category,
         channel: 'in_app',
       });

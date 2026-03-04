@@ -206,13 +206,13 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
         first_name: editFields.first_name,
         last_name: editFields.last_name,
         email: editFields.email,
-        phone: editFields.phone || undefined,
-        date_of_birth: editFields.date_of_birth || undefined,
+        phone: editFields.phone ?? undefined,
+        date_of_birth: editFields.date_of_birth ?? undefined,
         address: {
-          street: editFields.address_street || undefined,
-          city: editFields.address_city || undefined,
-          state: editFields.address_state || undefined,
-          zip_code: editFields.address_zip || undefined,
+          street: editFields.address_street ?? undefined,
+          city: editFields.address_city ?? undefined,
+          state: editFields.address_state ?? undefined,
+          zip_code: editFields.address_zip ?? undefined,
         },
       });
       toast.success('Contact info updated');
@@ -300,7 +300,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
     }
 
     try {
-      await advanceApplicant(applicant.id, actionNotes || undefined);
+      await advanceApplicant(applicant.id, actionNotes ?? undefined);
       toast.success('Applicant advanced to next stage');
       setActionNotes('');
       setShowNotesInput(false);
@@ -335,7 +335,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   const handleReject = async () => {
     if (!applicant) return;
     try {
-      await rejectApplicant(applicant.id, actionNotes || undefined);
+      await rejectApplicant(applicant.id, actionNotes ?? undefined);
       toast.success('Applicant rejected');
       setActionNotes('');
       setShowNotesInput(false);
@@ -348,7 +348,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   const handleHold = async () => {
     if (!applicant) return;
     try {
-      await holdApplicant(applicant.id, actionNotes || undefined);
+      await holdApplicant(applicant.id, actionNotes ?? undefined);
       toast.success('Applicant put on hold');
       setActionNotes('');
       setShowNotesInput(false);
@@ -370,7 +370,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   const handleReactivate = async () => {
     if (!applicant) return;
     try {
-      await reactivateApplicant(applicant.id, actionNotes || undefined);
+      await reactivateApplicant(applicant.id, actionNotes ?? undefined);
       toast.success('Application reactivated');
       setActionNotes('');
       setShowNotesInput(false);
@@ -382,7 +382,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   const handleWithdraw = async () => {
     if (!applicant) return;
     try {
-      await withdrawApplicant(applicant.id, actionNotes || undefined);
+      await withdrawApplicant(applicant.id, actionNotes ?? undefined);
       toast.success(`${applicant.first_name}'s application withdrawn`);
       setActionNotes('');
       setShowNotesInput(false);
@@ -396,8 +396,8 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
     if (!applicant || !currentElectionPackage) return;
     try {
       await updateElectionPackage(applicant.id, {
-        coordinator_notes: pkgNotes || undefined,
-        supporting_statement: pkgStatement || undefined,
+        coordinator_notes: pkgNotes ?? undefined,
+        supporting_statement: pkgStatement ?? undefined,
       });
       toast.success('Election package saved');
     } catch {
@@ -412,8 +412,8 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
       // Save any pending edits first
       if (currentElectionPackage) {
         await updateElectionPackage(applicant.id, {
-          coordinator_notes: pkgNotes || undefined,
-          supporting_statement: pkgStatement || undefined,
+          coordinator_notes: pkgNotes ?? undefined,
+          supporting_statement: pkgStatement ?? undefined,
         });
       }
       await submitElectionPackage(applicant.id);

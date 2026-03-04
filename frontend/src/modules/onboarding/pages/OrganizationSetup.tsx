@@ -627,16 +627,16 @@ const OrganizationSetup: React.FC = () => {
       // Prepare API payload
       const payload = {
         name: formData.name.trim(),
-        slug: formData.slug || undefined,
+        slug: formData.slug ?? undefined,
         organization_type: formData.organizationType,
         timezone: formData.timezone,
-        phone: formData.phone || undefined,
-        fax: formData.fax || undefined,
-        email: formData.email || undefined,
-        website: formData.website || undefined,
+        phone: formData.phone ?? undefined,
+        fax: formData.fax ?? undefined,
+        email: formData.email ?? undefined,
+        website: formData.website ?? undefined,
         mailing_address: {
           line1: formData.mailingAddress.line1.trim(),
-          line2: formData.mailingAddress.line2 || undefined,
+          line2: formData.mailingAddress.line2 ?? undefined,
           city: formData.mailingAddress.city.trim(),
           state: formData.mailingAddress.state,
           zip_code: formData.mailingAddress.zipCode.trim(),
@@ -647,17 +647,17 @@ const OrganizationSetup: React.FC = () => {
           ? undefined
           : {
               line1: formData.physicalAddress.line1.trim(),
-              line2: formData.physicalAddress.line2 || undefined,
+              line2: formData.physicalAddress.line2 ?? undefined,
               city: formData.physicalAddress.city.trim(),
               state: formData.physicalAddress.state,
               zip_code: formData.physicalAddress.zipCode.trim(),
               country: formData.physicalAddress.country || 'USA',
             },
         identifier_type: formData.identifierType,
-        fdid: formData.fdid || undefined,
-        state_id: formData.stateId || undefined,
-        department_id: formData.departmentId || undefined,
-        logo: formData.logo || undefined,
+        fdid: formData.fdid ?? undefined,
+        state_id: formData.stateId ?? undefined,
+        department_id: formData.departmentId ?? undefined,
+        logo: formData.logo ?? undefined,
       };
 
       // Save to API

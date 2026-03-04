@@ -143,7 +143,7 @@ export const PipelineSettingsPage: React.FC = () => {
     try {
       const newPipeline = await pipelineService.createPipeline({
         name: pipelineName.trim(),
-        description: pipelineDescription.trim() || undefined,
+        description: pipelineDescription.trim() ?? undefined,
         is_active: true,
       });
       await fetchPipelines();
@@ -165,7 +165,7 @@ export const PipelineSettingsPage: React.FC = () => {
     try {
       const updated = await pipelineService.updatePipeline(currentPipeline.id, {
         name: pipelineName.trim(),
-        description: pipelineDescription.trim() || undefined,
+        description: pipelineDescription.trim() ?? undefined,
       });
       setCurrentPipeline(updated);
       setEditingPipelineName(false);

@@ -207,7 +207,7 @@ const ImportMembers: React.FC = () => {
               name: rowData.emergencyName1,
               relationship: rowData.emergencyRelationship1,
               phone: rowData.emergencyPhone1,
-              email: rowData.emergencyEmail1 || undefined,
+              ...(rowData.emergencyEmail1 ? { email: rowData.emergencyEmail1 } : {}),
               is_primary: true,
             });
           }
@@ -217,7 +217,7 @@ const ImportMembers: React.FC = () => {
               name: rowData.emergencyName2,
               relationship: rowData.emergencyRelationship2 || '',
               phone: rowData.emergencyPhone2 || '',
-              email: rowData.emergencyEmail2 || undefined,
+              ...(rowData.emergencyEmail2 ? { email: rowData.emergencyEmail2 } : {}),
               is_primary: false,
             });
           }
@@ -227,22 +227,22 @@ const ImportMembers: React.FC = () => {
             username,
             email: rowData.email,
             first_name: rowData.firstName,
-            middle_name: rowData.middleName || undefined,
             last_name: rowData.lastName,
-            membership_number: rowData.membershipNumber || undefined,
-            phone: rowData.primaryPhone || undefined,
-            mobile: rowData.secondaryPhone || undefined,
-            date_of_birth: rowData.dateOfBirth || undefined,
-            hire_date: rowData.joinDate || undefined,
-            rank: rowData.rank || undefined,
-            station: rowData.station || undefined,
-            address_street: rowData.street || undefined,
-            address_city: rowData.city || undefined,
-            address_state: rowData.state || undefined,
-            address_zip: rowData.zipCode || undefined,
             address_country: 'USA',
             emergency_contacts: emergencyContacts,
             send_welcome_email: true,
+            ...(rowData.middleName ? { middle_name: rowData.middleName } : {}),
+            ...(rowData.membershipNumber ? { membership_number: rowData.membershipNumber } : {}),
+            ...(rowData.primaryPhone ? { phone: rowData.primaryPhone } : {}),
+            ...(rowData.secondaryPhone ? { mobile: rowData.secondaryPhone } : {}),
+            ...(rowData.dateOfBirth ? { date_of_birth: rowData.dateOfBirth } : {}),
+            ...(rowData.joinDate ? { hire_date: rowData.joinDate } : {}),
+            ...(rowData.rank ? { rank: rowData.rank } : {}),
+            ...(rowData.station ? { station: rowData.station } : {}),
+            ...(rowData.street ? { address_street: rowData.street } : {}),
+            ...(rowData.city ? { address_city: rowData.city } : {}),
+            ...(rowData.state ? { address_state: rowData.state } : {}),
+            ...(rowData.zipCode ? { address_zip: rowData.zipCode } : {}),
           });
 
           result.success++;

@@ -194,7 +194,7 @@ function NFPAComplianceTab({
               className={inputClass}
               value={form.manufacture_date ?? ''}
               onChange={(e) =>
-                setForm({ ...form, manufacture_date: e.target.value || undefined })
+                setForm({ ...form, manufacture_date: e.target.value ?? undefined })
               }
             />
           </div>
@@ -209,7 +209,7 @@ function NFPAComplianceTab({
               onChange={(e) =>
                 setForm({
                   ...form,
-                  first_in_service_date: e.target.value || undefined,
+                  first_in_service_date: e.target.value ?? undefined,
                 })
               }
             />
@@ -225,7 +225,7 @@ function NFPAComplianceTab({
               onChange={(e) =>
                 setForm({
                   ...form,
-                  expected_retirement_date: e.target.value || undefined,
+                  expected_retirement_date: e.target.value ?? undefined,
                 })
               }
             />
@@ -246,7 +246,7 @@ function NFPAComplianceTab({
               placeholder="e.g. ENS-001"
               value={form.ensemble_id ?? ''}
               onChange={(e) =>
-                setForm({ ...form, ensemble_id: e.target.value || undefined })
+                setForm({ ...form, ensemble_id: e.target.value ?? undefined })
               }
             />
           </div>
@@ -258,7 +258,7 @@ function NFPAComplianceTab({
               className={inputClass}
               value={form.ensemble_role ?? ''}
               onChange={(e) =>
-                setForm({ ...form, ensemble_role: e.target.value || undefined })
+                setForm({ ...form, ensemble_role: e.target.value ?? undefined })
               }
             >
               <option value="">— Select —</option>
@@ -286,7 +286,7 @@ function NFPAComplianceTab({
               onChange={(e) =>
                 setForm({
                   ...form,
-                  cylinder_manufacture_date: e.target.value || undefined,
+                  cylinder_manufacture_date: e.target.value ?? undefined,
                 })
               }
             />
@@ -302,7 +302,7 @@ function NFPAComplianceTab({
               onChange={(e) =>
                 setForm({
                   ...form,
-                  cylinder_expiration_date: e.target.value || undefined,
+                  cylinder_expiration_date: e.target.value ?? undefined,
                 })
               }
             />
@@ -318,7 +318,7 @@ function NFPAComplianceTab({
               onChange={(e) =>
                 setForm({
                   ...form,
-                  hydrostatic_test_date: e.target.value || undefined,
+                  hydrostatic_test_date: e.target.value ?? undefined,
                 })
               }
             />
@@ -334,7 +334,7 @@ function NFPAComplianceTab({
               onChange={(e) =>
                 setForm({
                   ...form,
-                  hydrostatic_test_due: e.target.value || undefined,
+                  hydrostatic_test_due: e.target.value ?? undefined,
                 })
               }
             />
@@ -350,7 +350,7 @@ function NFPAComplianceTab({
               onChange={(e) =>
                 setForm({
                   ...form,
-                  flow_test_date: e.target.value || undefined,
+                  flow_test_date: e.target.value ?? undefined,
                 })
               }
             />
@@ -366,7 +366,7 @@ function NFPAComplianceTab({
               onChange={(e) =>
                 setForm({
                   ...form,
-                  flow_test_due: e.target.value || undefined,
+                  flow_test_due: e.target.value ?? undefined,
                 })
               }
             />
@@ -730,8 +730,8 @@ function ExposuresTab({
       await inventoryService.createExposureRecord(item.id, {
         exposure_type: form.exposure_type,
         exposure_date: form.exposure_date,
-        incident_number: form.incident_number || undefined,
-        description: form.description || undefined,
+        incident_number: form.incident_number ?? undefined,
+        description: form.description ?? undefined,
         decon_required: form.decon_required,
         decon_completed: false,
       });

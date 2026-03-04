@@ -253,9 +253,9 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
               onBlur={handleBlur}
               required={field.required}
               disabled={disabled}
-              minLength={field.min_length || undefined}
-              maxLength={field.max_length || undefined}
-              pattern={field.validation_pattern || undefined}
+              minLength={field.min_length ?? undefined}
+              maxLength={field.max_length ?? undefined}
+              pattern={field.validation_pattern ?? undefined}
               {...ariaProps}
             />
             {field.max_length && (
@@ -276,8 +276,8 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
             onBlur={handleBlur}
             required={field.required}
             disabled={disabled}
-            min={field.min_value || undefined}
-            max={field.max_value || undefined}
+            min={field.min_value ?? undefined}
+            max={field.max_value ?? undefined}
             {...ariaProps}
           />
         );
@@ -294,8 +294,8 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
               onBlur={handleBlur}
               required={field.required}
               disabled={disabled}
-              minLength={field.min_length || undefined}
-              maxLength={field.max_length || undefined}
+              minLength={field.min_length ?? undefined}
+              maxLength={field.max_length ?? undefined}
               {...ariaProps}
             />
             {field.max_length && (

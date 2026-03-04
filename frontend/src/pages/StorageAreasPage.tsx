@@ -300,7 +300,7 @@ export const StorageAreasPage: React.FC = () => {
       description: '',
       storage_type: defaultType,
       parent_id: parent?.id,
-      location_id: parent?.location_id || undefined,
+      location_id: parent?.location_id ?? undefined,
       sort_order: 0,
     });
     setShowModal(true);
@@ -314,8 +314,8 @@ export const StorageAreasPage: React.FC = () => {
       label: area.label || '',
       description: area.description || '',
       storage_type: area.storage_type,
-      parent_id: area.parent_id || undefined,
-      location_id: area.location_id || undefined,
+      parent_id: area.parent_id ?? undefined,
+      location_id: area.location_id ?? undefined,
       sort_order: area.sort_order,
     });
     setShowModal(true);
@@ -505,7 +505,7 @@ export const StorageAreasPage: React.FC = () => {
               </div>
               <div>
                 <label htmlFor="sa-room" className="block text-sm font-medium text-theme-text-secondary mb-1">Room</label>
-                <select id="sa-room" value={form.location_id || ''} onChange={(e) => setForm({ ...form, location_id: e.target.value || undefined })} className="form-input focus:ring-emerald-500">
+                <select id="sa-room" value={form.location_id || ''} onChange={(e) => setForm({ ...form, location_id: e.target.value ?? undefined })} className="form-input focus:ring-emerald-500">
                   <option value="">No room</option>
                   {rooms.map(r => <option key={r.id} value={r.id}>{r.building ? `${r.building} — ` : ''}{r.name}{r.room_number ? ` (${r.room_number})` : ''}</option>)}
                 </select>
@@ -514,7 +514,7 @@ export const StorageAreasPage: React.FC = () => {
 
             <div>
               <label htmlFor="sa-parent" className="block text-sm font-medium text-theme-text-secondary mb-1">Parent Storage Area</label>
-              <select id="sa-parent" value={form.parent_id || ''} onChange={(e) => setForm({ ...form, parent_id: e.target.value || undefined })} className="form-input focus:ring-emerald-500">
+              <select id="sa-parent" value={form.parent_id || ''} onChange={(e) => setForm({ ...form, parent_id: e.target.value ?? undefined })} className="form-input focus:ring-emerald-500">
                 <option value="">None (top-level)</option>
                 {flatAreas.filter(a => a.id !== editingArea?.id).map(a => (
                   <option key={a.id} value={a.id}>{'—'.repeat(a.depth)} {a.name}</option>

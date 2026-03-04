@@ -961,7 +961,7 @@ export const MinutesDetailPage: React.FC = () => {
                   id="action-due-date"
                   type="date"
                   value={actionForm.due_date || ''}
-                  onChange={(e) => setActionForm({ ...actionForm, due_date: e.target.value || undefined })}
+                  onChange={(e) => setActionForm({ ...actionForm, due_date: e.target.value ?? undefined })}
                   aria-label="Due date"
                   className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                 />

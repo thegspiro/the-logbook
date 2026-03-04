@@ -136,7 +136,7 @@ export const ProspectiveMembersPage: React.FC = () => {
   useEffect(() => {
     const timer = setTimeout(() => {
       if (searchQuery !== (filters.search ?? '')) {
-        setFilters({ search: searchQuery || undefined });
+        setFilters({ search: searchQuery ?? undefined });
       }
     }, 300);
     return () => clearTimeout(timer);
@@ -144,7 +144,7 @@ export const ProspectiveMembersPage: React.FC = () => {
 
   // Handle status filter
   useEffect(() => {
-    setFilters({ status: statusFilter || undefined });
+    setFilters(statusFilter ? { status: statusFilter } : { status: undefined });
   }, [statusFilter, setFilters]);
 
   const handleApplicantClick = (applicantItem: ApplicantListItem) => {

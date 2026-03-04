@@ -125,7 +125,7 @@ const DocumentsPage: React.FC = () => {
     try {
       await documentsService.createFolder({
         name: folderForm.name.trim(),
-        description: folderForm.description.trim() || undefined,
+        ...(folderForm.description.trim() ? { description: folderForm.description.trim() } : {}),
       });
       setShowCreateFolder(false);
       setFolderForm({ name: '', description: '' });

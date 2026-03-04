@@ -202,10 +202,10 @@ function LocationSetupWizard({
         if (!s.saved) {
           const created = await locationsService.createLocation({
             name: s.name.trim(),
-            address: s.address.trim() || undefined,
-            city: s.city.trim() || undefined,
-            state: s.state.trim() || undefined,
-            zip: s.zip.trim() || undefined,
+            ...(s.address.trim() ? { address: s.address.trim() } : {}),
+            ...(s.city.trim() ? { city: s.city.trim() } : {}),
+            ...(s.state.trim() ? { state: s.state.trim() } : {}),
+            ...(s.zip.trim() ? { zip: s.zip.trim() } : {}),
           });
           newStations[i] = { ...s, saved: true, savedId: created.id } as WizardStation;
         }
@@ -264,9 +264,9 @@ function LocationSetupWizard({
           await locationsService.createLocation({
             name: room.name.trim(),
             building: station.name.trim(),
-            room_number: room.room_number.trim() || undefined,
-            floor: room.floor.trim() || undefined,
-            capacity: room.capacity ? Number(room.capacity) : undefined,
+            ...(room.room_number.trim() ? { room_number: room.room_number.trim() } : {}),
+            ...(room.floor.trim() ? { floor: room.floor.trim() } : {}),
+            ...(room.capacity ? { capacity: Number(room.capacity) } : {}),
           });
         }
       }
@@ -906,11 +906,11 @@ export default function LocationsPage() {
     try {
       const payload: LocationCreate = {
         name: stationForm.name.trim(),
-        address: stationForm.address.trim() || undefined,
-        city: stationForm.city.trim() || undefined,
-        state: stationForm.state.trim() || undefined,
-        zip: stationForm.zip.trim() || undefined,
-        description: stationForm.description.trim() || undefined,
+        ...(stationForm.address.trim() ? { address: stationForm.address.trim() } : {}),
+        ...(stationForm.city.trim() ? { city: stationForm.city.trim() } : {}),
+        ...(stationForm.state.trim() ? { state: stationForm.state.trim() } : {}),
+        ...(stationForm.zip.trim() ? { zip: stationForm.zip.trim() } : {}),
+        ...(stationForm.description.trim() ? { description: stationForm.description.trim() } : {}),
       };
       if (editingStation) {
         const oldName = editingStation.name;
@@ -981,11 +981,11 @@ export default function LocationsPage() {
     try {
       const payload: LocationCreate = {
         name: roomForm.name.trim(),
-        building: roomParentStation || undefined,
-        room_number: roomForm.room_number.trim() || undefined,
-        floor: roomForm.floor.trim() || undefined,
-        capacity: roomForm.capacity ? Number(roomForm.capacity) : undefined,
-        description: roomForm.description.trim() || undefined,
+        ...(roomParentStation ? { building: roomParentStation } : {}),
+        ...(roomForm.room_number.trim() ? { room_number: roomForm.room_number.trim() } : {}),
+        ...(roomForm.floor.trim() ? { floor: roomForm.floor.trim() } : {}),
+        ...(roomForm.capacity ? { capacity: Number(roomForm.capacity) } : {}),
+        ...(roomForm.description.trim() ? { description: roomForm.description.trim() } : {}),
       };
       if (editingRoom) {
         await locationsService.updateLocation(editingRoom.id, payload);

@@ -99,7 +99,7 @@ export const StartSkillTestPage: React.FC = () => {
       const test = await createTest({
         template_id: selectedTemplateId,
         candidate_id: selectedCandidateId,
-        notes: notes.trim() || undefined,
+        ...(notes.trim() ? { notes: notes.trim() } : {}),
         is_practice: isPractice,
       });
       toast.success(isPractice ? 'Practice session started' : 'Test session started');

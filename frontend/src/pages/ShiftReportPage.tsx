@@ -290,12 +290,12 @@ const ShiftReportPage: React.FC = () => {
         calls_responded: callsResponded,
         call_types: callTypes.length > 0 ? callTypes : undefined,
         performance_rating: rating > 0 ? rating : undefined,
-        areas_of_strength: strengths || undefined,
-        areas_for_improvement: improvements || undefined,
-        officer_narrative: narrative || undefined,
+        ...(strengths ? { areas_of_strength: strengths } : {}),
+        ...(improvements ? { areas_for_improvement: improvements } : {}),
+        ...(narrative ? { officer_narrative: narrative } : {}),
         skills_observed: skills.filter((s) => s.skill_name.trim()).length > 0 ? skills.filter((s) => s.skill_name.trim()) : undefined,
         tasks_performed: tasks.filter((t) => t.task.trim()).length > 0 ? tasks.filter((t) => t.task.trim()) : undefined,
-        enrollment_id: enrollmentId || undefined,
+        ...(enrollmentId ? { enrollment_id: enrollmentId } : {}),
       };
 
       const result = await shiftCompletionService.createReport(data);
@@ -638,7 +638,7 @@ const ShiftReportPage: React.FC = () => {
                   <input
                     type="text"
                     value={task.description || ''}
-                    onChange={(e) => updateTask(i, { description: e.target.value || undefined })}
+                    onChange={(e) => updateTask(i, { description: e.target.value ?? undefined })}
                     placeholder="Notes (optional)"
                     className="form-input flex-1"
                   />

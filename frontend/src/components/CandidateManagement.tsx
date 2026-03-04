@@ -109,9 +109,9 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
       const candidateData: CandidateCreate = {
         election_id: electionId,
         name: formData.name.trim(),
-        position: formData.position || undefined,
-        statement: formData.statement || undefined,
-        user_id: formData.user_id || undefined,
+        ...(formData.position ? { position: formData.position } : {}),
+        ...(formData.statement ? { statement: formData.statement } : {}),
+        ...(formData.user_id ? { user_id: formData.user_id } : {}),
         is_write_in: formData.is_write_in,
         display_order: candidates.length,
       };
@@ -135,9 +135,9 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
       setError(null);
 
       const updateData: CandidateUpdate = {
-        name: formData.name.trim() || undefined,
-        position: formData.position || undefined,
-        statement: formData.statement || undefined,
+        ...(formData.name.trim() ? { name: formData.name.trim() } : {}),
+        ...(formData.position ? { position: formData.position } : {}),
+        ...(formData.statement ? { statement: formData.statement } : {}),
       };
 
       const updated = await electionService.updateCandidate(electionId, candidateId, updateData);

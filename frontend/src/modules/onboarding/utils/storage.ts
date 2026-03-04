@@ -60,10 +60,10 @@ export const getOnboardingData = (): Partial<OnboardingData> => {
   return {
     departmentName: departmentName || '',
     hasLogo,
-    logoData: logoData || undefined,
+    logoData: logoData ?? undefined,
     navigationLayout,
     emailPlatform,
-    emailConfigMethod: emailConfigMethod || undefined,
+    emailConfigMethod: emailConfigMethod ?? undefined,
     fileStoragePlatform,
     authenticationPlatform,
     // Sensitive data is NOT returned - fetch from backend if needed

@@ -87,7 +87,7 @@ const InventoryMembersTab: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await inventoryService.getMembersSummary(searchDebounce || undefined);
+      const data = await inventoryService.getMembersSummary(searchDebounce ?? undefined);
       setMembers(data.members);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Unable to load members inventory data.'));

@@ -86,13 +86,13 @@ export default function FacilitiesPage() {
     try {
       await facilitiesService.createFacility({
         name: newFacility.name.trim(),
-        facility_number: newFacility.facility_number.trim() || undefined,
-        address_line1: newFacility.address_line1.trim() || undefined,
-        city: newFacility.city.trim() || undefined,
-        state: newFacility.state.trim() || undefined,
-        zip_code: newFacility.zip_code.trim() || undefined,
-        facility_type_id: newFacility.facility_type_id || undefined,
-        notes: newFacility.notes.trim() || undefined,
+        ...(newFacility.facility_number.trim() ? { facility_number: newFacility.facility_number.trim() } : {}),
+        ...(newFacility.address_line1.trim() ? { address_line1: newFacility.address_line1.trim() } : {}),
+        ...(newFacility.city.trim() ? { city: newFacility.city.trim() } : {}),
+        ...(newFacility.state.trim() ? { state: newFacility.state.trim() } : {}),
+        ...(newFacility.zip_code.trim() ? { zip_code: newFacility.zip_code.trim() } : {}),
+        ...(newFacility.facility_type_id ? { facility_type_id: newFacility.facility_type_id } : {}),
+        ...(newFacility.notes.trim() ? { notes: newFacility.notes.trim() } : {}),
       });
       toast.success('Facility created');
       setShowCreateModal(false);

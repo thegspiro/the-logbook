@@ -92,8 +92,8 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
   const [helpText, setHelpText] = useState(field?.help_text || '');
   const [defaultValue, setDefaultValue] = useState(field?.default_value || '');
   const [required, setRequired] = useState(field?.required ?? false);
-  const [minLength, setMinLength] = useState<number | undefined>(field?.min_length || undefined);
-  const [maxLength, setMaxLength] = useState<number | undefined>(field?.max_length || undefined);
+  const [minLength, setMinLength] = useState<number | undefined>(field?.min_length ?? undefined);
+  const [maxLength, setMaxLength] = useState<number | undefined>(field?.max_length ?? undefined);
   const [minValue, setMinValue] = useState<number | undefined>(field?.min_value ?? undefined);
   const [maxValue, setMaxValue] = useState<number | undefined>(field?.max_value ?? undefined);
   const [validationPattern, setValidationPattern] = useState(field?.validation_pattern || '');
@@ -121,8 +121,8 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
       setHelpText(field.help_text || '');
       setDefaultValue(field.default_value || '');
       setRequired(field.required ?? false);
-      setMinLength(field.min_length || undefined);
-      setMaxLength(field.max_length || undefined);
+      setMinLength(field.min_length ?? undefined);
+      setMaxLength(field.max_length ?? undefined);
       setMinValue(field.min_value ?? undefined);
       setMaxValue(field.max_value ?? undefined);
       setValidationPattern(field.validation_pattern || '');

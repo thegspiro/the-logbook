@@ -77,7 +77,8 @@ export default function FacilityDetailPanel({
       for (const [key, value] of Object.entries(editData)) {
         if (value !== '' && value !== undefined) {
           if (['year_built', 'square_footage', 'num_floors', 'num_bays', 'max_occupancy', 'sleeping_quarters'].includes(key)) {
-            payload[key] = Number(value) || undefined;
+            const num = Number(value);
+            payload[key] = Number.isNaN(num) ? undefined : num;
           } else {
             payload[key] = value;
           }
@@ -118,12 +119,12 @@ export default function FacilityDetailPanel({
       await facilitiesService.createRoom({
         facility_id: facility.id,
         name: newRoom.name.trim(),
-        room_number: newRoom.room_number.trim() || undefined,
+        room_number: newRoom.room_number.trim() ?? undefined,
         floor: newRoom.floor ? Number(newRoom.floor) : undefined,
         room_type: newRoom.room_type,
         capacity: newRoom.capacity ? Number(newRoom.capacity) : undefined,
         square_footage: newRoom.square_footage ? Number(newRoom.square_footage) : undefined,
-        description: newRoom.description.trim() || undefined,
+        description: newRoom.description.trim() ?? undefined,
       });
       toast.success('Room added');
       setNewRoom({ name: '', room_number: '', floor: '', room_type: 'OTHER', capacity: '', square_footage: '', description: '' });
@@ -201,7 +202,7 @@ export default function FacilityDetailPanel({
         )}
         {facility.statusRecord && (
           <span className="text-xs px-2.5 py-1 rounded-full text-theme-text-primary"
-            style={{ backgroundColor: facility.statusRecord.color ? `${facility.statusRecord.color}20` : undefined, color: facility.statusRecord.color || undefined }}
+            style={{ backgroundColor: facility.statusRecord.color ? `${facility.statusRecord.color}20` : undefined, color: facility.statusRecord.color ?? undefined }}
           >
             {facility.statusRecord.name}
           </span>
