@@ -55,6 +55,8 @@ import { ITEM_CONDITION_OPTIONS } from '../constants/enums';
 import { useInventoryWebSocket } from '../hooks/useInventoryWebSocket';
 import { useRanks } from '../hooks/useRanks';
 import ItemDetailModal from './inventory/ItemDetailModal';
+import { MobileItemCard } from '../components/ux/MobileItemCard';
+import { FloatingActionButton } from '../components/ux/FloatingActionButton';
 import toast from 'react-hot-toast';
 
 const ITEM_TYPES = [
@@ -1376,7 +1378,48 @@ const InventoryPage: React.FC = () => {
                 )}
               </div>
             ) : (
-              <div className="card overflow-hidden">
+              <div>
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-3 mb-4" role="list" aria-label="Inventory items">
+                  {items.map((item) => {
+                    const room = item.location_id ? rooms.find(r => r.id === item.location_id) : null;
+                    const roomLabel = room ? room.name : null;
+                    const area = item.storage_location;
+                    const locationStr = roomLabel && area ? `${roomLabel} — ${area}` : roomLabel ?? area ?? item.station ?? undefined;
+                    return (
+                      <MobileItemCard
+                        key={item.id}
+                        name={item.name}
+                        status={item.status}
+                        statusStyle={getStatusStyle(item.status)}
+                        condition={item.condition}
+                        conditionColor={getConditionColor(item.condition)}
+                        category={getCategoryName(item.category_id)}
+                        serialNumber={item.serial_number}
+                        assetTag={item.asset_tag}
+                        size={item.size}
+                        color={item.color}
+                        location={locationStr}
+                        manufacturer={item.manufacturer ? `${item.manufacturer}${item.model_number ? ` ${item.model_number}` : ''}` : undefined}
+                        quantity={item.quantity}
+                        selected={selectedItemIds.has(item.id)}
+                        onSelect={canManage ? () => toggleItemSelection(item.id) : undefined}
+                        onTap={() => setDetailItem(item)}
+                        showActions={canManage}
+                        onEdit={canManage ? () => openEditModal(item) : undefined}
+                        onDuplicate={canManage ? () => handleDuplicateItem(item) : undefined}
+                        onIssue={canManage ? () => openPoolIssueModal(item) : undefined}
+                        onWriteOff={canManage ? () => openWriteOffModal(item) : undefined}
+                        onRetire={canManage ? () => setShowRetireConfirm(item) : undefined}
+                        canIssue={item.tracking_type === 'pool' && item.status !== 'retired'}
+                        canRetire={item.status !== 'retired'}
+                      />
+                    );
+                  })}
+                </div>
+
+                {/* Desktop Table View */}
+                <div className="card overflow-hidden hidden md:block">
                 <div className="overflow-x-auto">
                   <table className="w-full" aria-label="Inventory items list">
                     <thead className="bg-theme-input-bg border-b border-theme-surface-border">
@@ -1530,6 +1573,29 @@ const InventoryPage: React.FC = () => {
                 </div>
                 {items.length < totalItems && (
                   <div className="flex justify-center py-4">
+                    <button
+                      onClick={() => { void loadMoreItems(); }}
+                      disabled={loadingMore}
+                      className="flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-theme-text-primary border border-theme-surface-border rounded-lg hover:bg-theme-surface-secondary transition-colors disabled:opacity-50"
+                    >
+                      {loadingMore ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        `Load More (${totalItems - items.length} remaining)`
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+                {/* Shared count + load more for mobile */}
+                <div className="text-center py-2 text-xs text-theme-text-muted md:hidden">
+                  Showing {items.length} of {totalItems} items
+                </div>
+                {items.length < totalItems && (
+                  <div className="flex justify-center py-4 md:hidden">
                     <button
                       onClick={() => { void loadMoreItems(); }}
                       disabled={loadingMore}
@@ -2869,6 +2935,35 @@ const InventoryPage: React.FC = () => {
           </div>
         )}
       </main>
+
+      {/* Mobile FAB for quick actions */}
+      {canManage && (
+        <FloatingActionButton
+          actions={[
+            {
+              id: 'add-item',
+              label: 'Add Item',
+              icon: <Plus className="w-5 h-5" />,
+              onClick: () => setShowAddItem(true),
+              color: 'bg-emerald-600',
+            },
+            {
+              id: 'add-category',
+              label: 'Add Category',
+              icon: <Tag className="w-5 h-5" />,
+              onClick: () => setShowAddCategory(true),
+              color: 'bg-blue-600',
+            },
+            {
+              id: 'import',
+              label: 'Import CSV',
+              icon: <Upload className="w-5 h-5" />,
+              onClick: () => { window.location.href = '/inventory/import'; },
+              color: 'bg-purple-600',
+            },
+          ]}
+        />
+      )}
     </div>
   );
 };

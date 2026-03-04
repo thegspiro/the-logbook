@@ -12,6 +12,7 @@ import {
 import { useAuthStore } from '../stores/authStore';
 import { useRanks } from '../hooks/useRanks';
 import { getErrorMessage } from '../utils/errorHandling';
+import { MobileCheckoutCard } from '../components/ux/MobileCheckoutCard';
 import toast from 'react-hot-toast';
 
 const CONDITION_COLORS: Record<string, string> = {
@@ -307,7 +308,22 @@ const MyEquipmentPage: React.FC = () => {
                   <Clock className="w-5 h-5 text-yellow-500" />
                   Checked Out ({data?.active_checkouts.length ?? 0})
                 </h2>
-                <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden overflow-x-auto">
+                {/* Mobile card view */}
+                <div className="sm:hidden space-y-3">
+                  {data?.active_checkouts.map((co: UserCheckoutItem) => (
+                    <MobileCheckoutCard
+                      key={co.checkout_id}
+                      itemName={co.item_name}
+                      checkoutDate={formatDate(co.checked_out_at)}
+                      dueDate={co.expected_return_at ? formatDate(co.expected_return_at) : undefined}
+                      isOverdue={co.is_overdue}
+                      onCheckIn={() => setCheckInModal({ open: true, checkoutId: co.checkout_id, itemName: co.item_name })}
+                      onExtend={() => { setExtendModal({ open: true, checkoutId: co.checkout_id, itemName: co.item_name, currentDue: co.expected_return_at || '' }); setExtendDate(''); }}
+                    />
+                  ))}
+                </div>
+                {/* Desktop table view */}
+                <div className="hidden sm:block bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-theme-surface-border bg-theme-surface-secondary">
@@ -364,7 +380,24 @@ const MyEquipmentPage: React.FC = () => {
                   <Package className="w-5 h-5 text-purple-500" />
                   Issued Items ({data?.issued_items.length ?? 0})
                 </h2>
-                <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden overflow-x-auto">
+                {/* Mobile card view for issued items */}
+                <div className="sm:hidden space-y-3">
+                  {data?.issued_items.map((iss: UserIssuedItem) => (
+                    <div key={iss.issuance_id} className="bg-theme-surface rounded-lg border border-theme-surface-border p-4">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <h3 className="text-theme-text-primary font-medium text-sm">{iss.item_name}</h3>
+                        <span className="text-theme-text-primary text-sm font-medium shrink-0">x{iss.quantity_issued}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-theme-text-muted">
+                        {iss.category_name && <span>{iss.category_name}</span>}
+                        {iss.size && <span>Size: {iss.size}</span>}
+                        <span>Issued {formatDate(iss.issued_at)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {/* Desktop table view for issued items */}
+                <div className="hidden sm:block bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-theme-surface-border bg-theme-surface-secondary">
@@ -405,7 +438,38 @@ const MyEquipmentPage: React.FC = () => {
                 <p className="text-theme-text-secondary text-sm">No requests submitted yet.</p>
               </div>
             ) : (
-              <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden overflow-x-auto">
+              <>
+              {/* Mobile card view for requests */}
+              <div className="sm:hidden space-y-3">
+                {myRequests.map(req => (
+                  <div key={req.id} className="bg-theme-surface rounded-lg border border-theme-surface-border p-4">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <div className="min-w-0">
+                        <h3 className="text-theme-text-primary font-medium text-sm">
+                          {req.item_name}
+                          {req.quantity > 1 && <span className="text-theme-text-muted text-xs ml-1">x{req.quantity}</span>}
+                        </h3>
+                        {req.reason && <p className="text-theme-text-muted text-xs mt-0.5 truncate">{req.reason}</p>}
+                      </div>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${
+                        req.status === 'pending' ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400' :
+                        req.status === 'approved' ? 'bg-green-500/10 text-green-700 dark:text-green-400' :
+                        req.status === 'denied' ? 'bg-red-500/10 text-red-700 dark:text-red-400' :
+                        'bg-blue-500/10 text-blue-700 dark:text-blue-400'
+                      }`}>
+                        {req.status}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-theme-text-muted">
+                      <span className="capitalize">{req.request_type}</span>
+                      <span>{new Date(req.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                    </div>
+                    {req.review_notes && <p className="text-theme-text-muted text-xs mt-1 truncate">{req.review_notes}</p>}
+                  </div>
+                ))}
+              </div>
+              {/* Desktop table view for requests */}
+              <div className="hidden sm:block bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-theme-surface-border bg-theme-surface-secondary">
@@ -443,6 +507,7 @@ const MyEquipmentPage: React.FC = () => {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </div>
         )}
