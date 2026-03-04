@@ -17,16 +17,16 @@ from pydantic import BaseModel, EmailStr, Field, validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.dependencies import get_current_user
 from app.api.v1.email_test_helper import (
     test_gmail_oauth,
     test_microsoft_oauth,
     test_smtp_connection,
 )
-from app.api.dependencies import get_current_user
 from app.core.database import get_db
-from app.models.user import User
 from app.core.security_middleware import check_rate_limit
 from app.core.utils import safe_error_detail
+from app.models.user import User
 from app.models.onboarding import (
     OnboardingChecklistItem,
     OnboardingSessionModel,
