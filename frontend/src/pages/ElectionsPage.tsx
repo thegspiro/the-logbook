@@ -6,8 +6,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { electionService, meetingsService } from '../services/api';
-import type { MeetingRecord } from '../services/api';
+import { electionService, meetingsService, ranksService } from '../services/api';
+import type { MeetingRecord, OperationalRankResponse } from '../services/api';
 import type { ElectionListItem, ElectionCreate, VotingMethod, VictoryCondition } from '../types/election';
 import { useAuthStore } from '../stores/authStore';
 import { ElectionStatus } from '../constants/enums';
@@ -42,7 +42,9 @@ export const ElectionsPage: React.FC = () => {
     max_runoff_rounds: 3,
   });
   const [positionInput, setPositionInput] = useState('');
+  const [showPositionDropdown, setShowPositionDropdown] = useState(false);
   const [meetings, setMeetings] = useState<MeetingRecord[]>([]);
+  const [availableRanks, setAvailableRanks] = useState<OperationalRankResponse[]>([]);
 
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('elections.manage');
@@ -51,6 +53,7 @@ export const ElectionsPage: React.FC = () => {
   useEffect(() => {
     void fetchElections();
     void fetchMeetings();
+    void fetchRanks();
   }, []);
 
   useEffect(() => {
@@ -80,6 +83,15 @@ export const ElectionsPage: React.FC = () => {
       setMeetings(data.meetings);
     } catch {
       // Non-critical — meeting selector will just be empty
+    }
+  };
+
+  const fetchRanks = async () => {
+    try {
+      const data = await ranksService.getRanks({ is_active: true });
+      setAvailableRanks(data);
+    } catch {
+      // Non-critical — position dropdown will just allow free text
     }
   };
 
@@ -493,25 +505,100 @@ export const ElectionsPage: React.FC = () => {
                   <label htmlFor="election-position-input" className="block text-sm font-medium text-theme-text-primary mb-2">
                     Positions
                   </label>
-                  <div className="flex space-x-2">
-                    <input
-                      type="text"
-                      id="election-position-input"
-                      value={positionInput}
-                      onChange={(e) => setPositionInput(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addPosition())}
-                      placeholder="e.g., Chief, President"
-                      aria-label="Position name"
-                      className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
-                    />
-                    <button
-                      type="button"
-                      onClick={addPosition}
-                      className="px-4 py-2 bg-theme-surface-hover text-theme-text-primary rounded-md hover:bg-theme-surface-hover"
-                    >
-                      Add
-                    </button>
+                  <div className="relative">
+                    <div className="flex space-x-2">
+                      <div className="relative flex-1">
+                        <input
+                          type="text"
+                          id="election-position-input"
+                          value={positionInput}
+                          onChange={(e) => {
+                            setPositionInput(e.target.value);
+                            setShowPositionDropdown(true);
+                          }}
+                          onFocus={() => setShowPositionDropdown(true)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              addPosition();
+                              setShowPositionDropdown(false);
+                            } else if (e.key === 'Escape') {
+                              setShowPositionDropdown(false);
+                            }
+                          }}
+                          placeholder="Select or type a position..."
+                          aria-label="Position name"
+                          autoComplete="off"
+                          className="w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+                        />
+                        {showPositionDropdown && (() => {
+                          const alreadyAdded = formData.positions || [];
+                          const filtered = availableRanks
+                            .filter(r => !alreadyAdded.includes(r.display_name))
+                            .filter(r =>
+                              !positionInput.trim() ||
+                              r.display_name.toLowerCase().includes(positionInput.toLowerCase()) ||
+                              r.rank_code.toLowerCase().includes(positionInput.toLowerCase())
+                            );
+                          if (filtered.length === 0) return null;
+                          return (
+                            <ul
+                              className="absolute z-20 mt-1 w-full max-h-48 overflow-auto bg-theme-surface border border-theme-input-border rounded-md shadow-lg"
+                              role="listbox"
+                              aria-label="Available positions"
+                            >
+                              {filtered.map((rank) => (
+                                <li key={rank.id}>
+                                  <button
+                                    type="button"
+                                    role="option"
+                                    className="w-full text-left px-3 py-2 hover:bg-theme-surface-hover text-sm text-theme-text-primary cursor-pointer"
+                                    onMouseDown={(e) => {
+                                      e.preventDefault(); // Prevent input blur before click
+                                      setPositionInput('');
+                                      setShowPositionDropdown(false);
+                                      if (!alreadyAdded.includes(rank.display_name)) {
+                                        setFormData({
+                                          ...formData,
+                                          positions: [...alreadyAdded, rank.display_name],
+                                        });
+                                      }
+                                    }}
+                                  >
+                                    <span className="font-medium">{rank.display_name}</span>
+                                    {rank.description && (
+                                      <span className="ml-2 text-theme-text-muted text-xs">— {rank.description}</span>
+                                    )}
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          );
+                        })()}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          addPosition();
+                          setShowPositionDropdown(false);
+                        }}
+                        className="px-4 py-2 bg-theme-surface-hover text-theme-text-primary rounded-md hover:bg-theme-surface-hover"
+                      >
+                        Add
+                      </button>
+                    </div>
+                    {/* Click-away listener */}
+                    {showPositionDropdown && (
+                      <div
+                        className="fixed inset-0 z-10"
+                        aria-hidden="true"
+                        onClick={() => setShowPositionDropdown(false)}
+                      />
+                    )}
                   </div>
+                  <p className="mt-1 text-xs text-theme-text-muted">
+                    Select from existing ranks or type a custom position name.
+                  </p>
                   {formData.positions && formData.positions.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-2">
                       {formData.positions.map((position) => (
