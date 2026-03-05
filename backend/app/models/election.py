@@ -149,6 +149,15 @@ class Election(Base):
     #           "authorized_at": "2026-02-14T10:00:00", "revoked_at": null}]
     proxy_authorizations = Column(JSON, nullable=True)
 
+    # Quorum configuration — minimum voter turnout for valid results
+    quorum_type = Column(
+        String(20), nullable=False, default="none"
+    )  # none, percentage, count
+    quorum_value = Column(Integer, nullable=True)  # e.g., 51 (percent) or 20 (count)
+
+    # Sequential vote chain hash — last hash in the chain for integrity verification
+    last_chain_hash = Column(String(64), nullable=True)
+
     # Rollback audit trail
     rollback_history = Column(JSON, nullable=True)
     # Format: [{"timestamp": "2024-01-19T10:00:00", "performed_by": "user_id",
@@ -335,8 +344,23 @@ class Vote(Base):
     )
 
     # Cryptographic signature for tampering detection
-    # HMAC-SHA256(election_id:candidate_id:voter_hash:voted_at, VOTE_SIGNING_KEY)
+    # HMAC-SHA256(id:election_id:candidate_id:voter_hash:position:vote_rank:is_proxy:proxy_delegating:voted_at)
     vote_signature = Column(String(128), nullable=True)
+
+    # MySQL-compatible dedup hash — SHA256(election_id:voter_id_or_hash:position)
+    # Unique constraint on this column prevents double-voting at DB level.
+    vote_dedup_hash = Column(String(64), nullable=True, unique=True)
+
+    # Sequential chain hash — SHA256(previous_chain_hash + vote_signature)
+    # Links votes in an immutable chain; a missing or reordered vote breaks the chain.
+    chain_hash = Column(String(64), nullable=True)
+
+    # Voter receipt — SHA256(vote_id + vote_signature + nonce) returned to the voter
+    # so they can verify their vote was recorded (without revealing content).
+    receipt_hash = Column(String(64), nullable=True)
+
+    # Test ballot flag — test votes are excluded from real results/stats
+    is_test = Column(Boolean, nullable=False, default=False)
 
     # Proxy voting — tracks when a vote is cast on behalf of another member
     is_proxy_vote = Column(Boolean, nullable=False, default=False)

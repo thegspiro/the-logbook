@@ -120,6 +120,11 @@ class Settings(BaseSettings):
     )
     HIPAA_AUDIT_RETENTION_DAYS: int = 2555  # 7-year audit log retention (§164.312(b))
 
+    # Vote signing key — used for HMAC-SHA256 vote integrity signatures.
+    # Falls back to SECRET_KEY if not set.  A dedicated key is recommended so
+    # that rotating SECRET_KEY does not invalidate existing vote signatures.
+    VOTE_SIGNING_KEY: str = ""
+
     # Encryption - CRITICAL: Must be set via ENCRYPTION_KEY env var
     ENCRYPTION_KEY: str = "INSECURE_DEFAULT_KEY_CHANGE_ME"
 

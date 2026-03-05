@@ -291,4 +291,38 @@ export const electionService = {
     const response = await api.post<import('../types/election').Vote>(`/elections/${electionId}/proxy-vote`, data);
     return response.data;
   },
+
+  /**
+   * Get organization-level election settings
+   */
+  async getSettings(): Promise<import('../types/election').ElectionSettings> {
+    const response = await api.get<import('../types/election').ElectionSettings>('/elections/settings');
+    return response.data;
+  },
+
+  /**
+   * Update organization-level election settings
+   */
+  async updateSettings(data: Partial<import('../types/election').ElectionSettings>): Promise<import('../types/election').ElectionSettings> {
+    const response = await api.patch<import('../types/election').ElectionSettings>('/elections/settings', data);
+    return response.data;
+  },
+
+  /**
+   * Send a test ballot to the current user
+   */
+  async sendTestBallot(electionId: string): Promise<{ success: boolean; message: string }> {
+    const response = await api.post<{ success: boolean; message: string }>(`/elections/${electionId}/send-test-ballot`);
+    return response.data;
+  },
+
+  /**
+   * Preview a ballot for a specific user (secretary view)
+   */
+  async previewBallot(electionId: string, userId: string): Promise<import('../types/election').BallotPreview> {
+    const response = await api.get<import('../types/election').BallotPreview>(`/elections/${electionId}/preview-ballot`, {
+      params: { user_id: userId },
+    });
+    return response.data;
+  },
 };

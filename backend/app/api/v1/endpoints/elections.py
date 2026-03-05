@@ -48,9 +48,25 @@ from app.schemas.election import (
     VoterEligibility,
     VoteResponse,
 )
+from app.core.security_middleware import check_rate_limit
 from app.services.election_service import ElectionService
 
 router = APIRouter()
+
+
+# Rate-limit factories for public ballot endpoints (no auth required)
+def _ballot_read_rate_limit(
+    request: Request,
+) -> None:
+    """10 requests/minute per IP for ballot reads."""
+    return check_rate_limit(request, max_requests=10, window_seconds=60, lockout_seconds=300)
+
+
+def _ballot_vote_rate_limit(
+    request: Request,
+) -> None:
+    """5 requests/minute per IP for vote submissions."""
+    return check_rate_limit(request, max_requests=5, window_seconds=60, lockout_seconds=600)
 
 
 # ============================================
@@ -213,6 +229,7 @@ async def get_ballot_templates(
 async def get_ballot_by_token(
     token: str,
     db: AsyncSession = Depends(get_db),
+    _rate: None = Depends(_ballot_read_rate_limit),
 ):
     """
     Get ballot information using a voting token
@@ -235,6 +252,7 @@ async def get_ballot_by_token(
 async def get_ballot_candidates(
     token: str,
     db: AsyncSession = Depends(get_db),
+    _rate: None = Depends(_ballot_read_rate_limit),
 ):
     """
     Get candidates for a ballot using voting token
@@ -271,6 +289,7 @@ async def cast_vote_with_token(
     vote_data: VoteWithToken,
     request: Request,
     db: AsyncSession = Depends(get_db),
+    _rate: None = Depends(_ballot_vote_rate_limit),
 ):
     """
     Cast a vote using a voting token
@@ -322,6 +341,7 @@ async def submit_ballot_with_token(
     ballot: BallotSubmissionWithToken,
     request: Request,
     db: AsyncSession = Depends(get_db),
+    _rate: None = Depends(_ballot_vote_rate_limit),
 ):
     """
     Submit an entire ballot using a voting token
@@ -347,6 +367,157 @@ async def submit_ballot_with_token(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     return BallotSubmissionResponse(**result)
+
+
+# ============================================
+# Election Settings Endpoints
+# IMPORTANT: Must be defined BEFORE /{election_id} wildcard
+# ============================================
+
+
+class ElectionSettingsUpdate(BaseModel):
+    """Org-level election default settings."""
+
+    default_voting_method: Optional[str] = None
+    default_victory_condition: Optional[str] = None
+    default_victory_percentage: Optional[int] = None
+    default_anonymous_voting: Optional[bool] = None
+    default_allow_write_ins: Optional[bool] = None
+    default_quorum_type: Optional[str] = None
+    default_quorum_value: Optional[int] = None
+    max_proxies_per_person: Optional[int] = None
+
+
+@router.get("/settings", response_model=None)
+async def get_election_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Get organization-level election settings and defaults.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    from app.models.user import Organization
+
+    org_result = await db.execute(
+        select(Organization).where(
+            Organization.id == str(current_user.organization_id)
+        )
+    )
+    org = org_result.scalar_one_or_none()
+
+    if not org:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organization not found",
+        )
+
+    org_settings = org.settings or {}
+    election_defaults = org_settings.get("election_defaults", {})
+    proxy_config = org_settings.get("proxy_voting", {})
+
+    from app.core.config import settings as app_settings
+
+    signing_key_configured = bool(app_settings.VOTE_SIGNING_KEY)
+
+    return {
+        "defaults": {
+            "voting_method": election_defaults.get(
+                "voting_method", "simple_majority"
+            ),
+            "victory_condition": election_defaults.get(
+                "victory_condition", "most_votes"
+            ),
+            "victory_percentage": election_defaults.get("victory_percentage"),
+            "anonymous_voting": election_defaults.get("anonymous_voting", True),
+            "allow_write_ins": election_defaults.get("allow_write_ins", False),
+            "quorum_type": election_defaults.get("quorum_type", "none"),
+            "quorum_value": election_defaults.get("quorum_value"),
+        },
+        "proxy_voting": {
+            "enabled": proxy_config.get("enabled", False),
+            "max_proxies_per_person": proxy_config.get(
+                "max_proxies_per_person", 1
+            ),
+        },
+        "security": {
+            "vote_signing_key_configured": signing_key_configured,
+            "anonymity_salt_auto_destroy": True,
+            "vote_chain_hashing": True,
+        },
+    }
+
+
+@router.patch("/settings")
+async def update_election_settings(
+    settings_update: ElectionSettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Update organization-level election settings.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    from app.models.user import Organization
+
+    org_result = await db.execute(
+        select(Organization).where(
+            Organization.id == str(current_user.organization_id)
+        )
+    )
+    org = org_result.scalar_one_or_none()
+
+    if not org:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organization not found",
+        )
+
+    org_settings = org.settings or {}
+    election_defaults = org_settings.get("election_defaults", {})
+    proxy_config = org_settings.get("proxy_voting", {})
+
+    update_data = settings_update.model_dump(exclude_unset=True)
+
+    default_fields = {
+        "default_voting_method": "voting_method",
+        "default_victory_condition": "victory_condition",
+        "default_victory_percentage": "victory_percentage",
+        "default_anonymous_voting": "anonymous_voting",
+        "default_allow_write_ins": "allow_write_ins",
+        "default_quorum_type": "quorum_type",
+        "default_quorum_value": "quorum_value",
+    }
+
+    for api_field, settings_field in default_fields.items():
+        if api_field in update_data:
+            election_defaults[settings_field] = update_data[api_field]
+
+    if "max_proxies_per_person" in update_data:
+        proxy_config["max_proxies_per_person"] = update_data[
+            "max_proxies_per_person"
+        ]
+
+    org_settings["election_defaults"] = election_defaults
+    org_settings["proxy_voting"] = proxy_config
+    org.settings = org_settings
+
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="election_settings_updated",
+        event_category="elections",
+        severity="info",
+        event_data={"updated_fields": list(update_data.keys())},
+        user_id=str(current_user.id),
+    )
+
+    return {"success": True, "message": "Election settings updated"}
 
 
 # ============================================
@@ -522,6 +693,8 @@ async def update_election(
         "enable_runoffs",
         "runoff_type",
         "max_runoff_rounds",
+        "quorum_type",
+        "quorum_value",
     }
     for field, value in update_data.items():
         if field in ALLOWED_ELECTION_UPDATE_FIELDS:
@@ -1152,7 +1325,7 @@ async def send_ballot_emails(
     )
 
     service = ElectionService(db)
-    recipients_count, failed_count = await service.send_ballot_emails(
+    recipients_count, failed_count, skipped_count = await service.send_ballot_emails(
         election_id=election_id,
         organization_id=current_user.organization_id,
         recipient_user_ids=email_data.recipient_user_ids,
@@ -1161,15 +1334,18 @@ async def send_ballot_emails(
         base_ballot_url=base_ballot_url,
     )
 
+    parts = [f"Ballot emails sent to {recipients_count} recipient(s)"]
+    if failed_count > 0:
+        parts.append(f"{failed_count} failed")
+    if skipped_count > 0:
+        parts.append(f"{skipped_count} skipped (no eligible ballot items)")
+
     return EmailBallotResponse(
         success=failed_count == 0,
         recipients_count=recipients_count,
         failed_count=failed_count,
-        message=(
-            f"Ballot emails sent to {recipients_count} recipient(s)"
-            if failed_count == 0
-            else f"Sent to {recipients_count} recipients with {failed_count} failures"
-        ),
+        skipped_count=skipped_count,
+        message=". ".join(parts),
     )
 
 
@@ -1223,7 +1399,9 @@ async def soft_delete_vote(
     **Requires permission: elections.manage**
     """
     service = ElectionService(db)
-    vote = await service.soft_delete_vote(vote_id, current_user.id, reason)
+    vote = await service.soft_delete_vote(
+        vote_id, current_user.id, reason, current_user.organization_id
+    )
 
     if not vote:
         raise HTTPException(
@@ -1826,3 +2004,226 @@ async def cast_proxy_vote(
         )
 
     return new_vote
+
+
+# ============================================
+# Test Ballot & Ballot Preview Endpoints
+# ============================================
+
+
+@router.post("/{election_id}/send-test-ballot")
+async def send_test_ballot(
+    election_id: UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Send a test ballot to the current user.
+
+    Generates a voting token and sends the ballot email to the requesting user only.
+    Test votes are recorded with is_test=True and excluded from real results.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    # Verify election exists
+    result = await db.execute(
+        select(Election)
+        .where(Election.id == str(election_id))
+        .where(Election.organization_id == current_user.organization_id)
+    )
+    election = result.scalar_one_or_none()
+
+    if not election:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
+        )
+
+    # Build base ballot URL
+    base_url = str(request.base_url).rstrip("/")
+    frontend_origin = base_url.replace("/api/v1", "").replace("/api", "")
+    base_ballot_url = f"{frontend_origin}/ballot"
+
+    service = ElectionService(db)
+    recipients_count, failed_count, skipped_count = await service.send_ballot_emails(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+        recipient_user_ids=[current_user.id],
+        subject=f"[TEST] Ballot: {election.title}",
+        message="This is a TEST ballot. Votes cast will not count toward real results.",
+        base_ballot_url=base_ballot_url,
+    )
+
+    return {
+        "success": failed_count == 0 and skipped_count == 0,
+        "message": (
+            "Test ballot sent to your email"
+            if failed_count == 0 and skipped_count == 0
+            else "Failed to send test ballot"
+            if failed_count > 0
+            else "No eligible ballot items for your account"
+        ),
+    }
+
+
+@router.get("/{election_id}/preview-ballot")
+async def preview_ballot_for_user(
+    election_id: UUID,
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Preview what a specific user's ballot would look like.
+
+    Returns all ballot items with eligibility annotations per item.
+    Eligible items are shown normally; ineligible items include the reason
+    for exclusion (e.g., "Probationary — not eligible for bylaw votes").
+
+    On the real ballot, ineligible items are silently filtered out.
+    This preview shows them grayed out with reasons for the secretary's review.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    # Verify election
+    result = await db.execute(
+        select(Election)
+        .where(Election.id == str(election_id))
+        .where(Election.organization_id == current_user.organization_id)
+    )
+    election = result.scalar_one_or_none()
+
+    if not election:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
+        )
+
+    # Verify target user exists in same org
+    user_result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == current_user.organization_id)
+    )
+    target_user = user_result.scalar_one_or_none()
+
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+
+    # Check overall eligibility
+    service = ElectionService(db)
+    eligibility = await service.check_voter_eligibility(
+        user_id, election_id, current_user.organization_id
+    )
+
+    # Get candidates
+    candidates_result = await db.execute(
+        select(Candidate)
+        .where(Candidate.election_id == str(election_id))
+        .where(Candidate.accepted == True)  # noqa: E712
+        .order_by(Candidate.position, Candidate.display_order)
+    )
+    candidates = candidates_result.scalars().all()
+
+    # Annotate each ballot item with eligibility
+    ballot_items = election.ballot_items or []
+    annotated_items = []
+    eligible_count = 0
+
+    for item in ballot_items:
+        item_eligible = True
+        reason = None
+
+        # Check item-specific eligibility (eligible_voter_types)
+        eligible_types = item.get("eligible_voter_types", ["all"])
+        if "all" not in eligible_types:
+            user_type = getattr(target_user, "membership_type", None) or "regular"
+            if user_type not in eligible_types:
+                item_eligible = False
+                reason = f"{user_type.capitalize()} members are not eligible for this item"
+
+        # Check attendance requirement
+        if item.get("require_attendance") and election.attendees:
+            attendee_ids = [a.get("user_id") for a in (election.attendees or [])]
+            if str(user_id) not in attendee_ids:
+                item_eligible = False
+                reason = "Member must be checked in as present at the meeting"
+
+        if item_eligible:
+            eligible_count += 1
+
+        annotated_items.append({
+            **item,
+            "eligibility": {
+                "eligible": item_eligible,
+                "reason": reason,
+            },
+        })
+
+    return {
+        "election_id": str(election_id),
+        "election_title": election.title,
+        "user_id": str(user_id),
+        "user_name": target_user.full_name,
+        "overall_eligibility": {
+            "is_eligible": eligibility.is_eligible,
+            "reason": eligibility.reason,
+        },
+        "ballot_items": annotated_items,
+        "candidates": [
+            {
+                "id": str(c.id),
+                "name": c.name,
+                "position": c.position,
+                "statement": c.statement,
+            }
+            for c in candidates
+        ],
+        "eligible_item_count": eligible_count,
+        "total_item_count": len(ballot_items),
+        "would_receive_ballot": eligible_count > 0 and eligibility.is_eligible,
+    }
+
+
+# ============================================
+# Vote Receipt Verification
+# ============================================
+
+
+@router.get("/{election_id}/verify-receipt")
+async def verify_vote_receipt(
+    election_id: UUID,
+    receipt: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Verify a vote receipt hash.
+
+    This is a public endpoint — voters can check that their vote was recorded
+    without revealing the vote content.
+
+    **No authentication required**
+    """
+    result = await db.execute(
+        select(Vote)
+        .where(Vote.election_id == str(election_id))
+        .where(Vote.receipt_hash == receipt)
+        .where(Vote.deleted_at.is_(None))
+    )
+    vote = result.scalar_one_or_none()
+
+    if not vote:
+        return {
+            "verified": False,
+            "message": "No matching vote found for this receipt",
+        }
+
+    return {
+        "verified": True,
+        "message": "Your vote has been recorded and is counted",
+        "voted_at": vote.voted_at.isoformat(),
+        "position": vote.position,
+    }

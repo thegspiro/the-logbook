@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.audit import log_audit_event
+from app.core.config import settings
 from app.core.constants import (
     ADMINISTRATIVE_ROLE_SLUGS,
     LEADERSHIP_ROLE_SLUGS,
@@ -127,6 +128,74 @@ class ElectionService:
         if not election.attendees:
             return False
         return any(a.get("user_id") == str(user_id) for a in election.attendees)
+
+    async def _get_eligible_ballot_items_for_user(
+        self,
+        user: "User",
+        election: Election,
+        organization_id: str,
+    ) -> List[Dict]:
+        """
+        Return the subset of election.ballot_items that the user is eligible
+        to vote on, based on their member class, role, and attendance.
+
+        Each returned dict is the original ballot item with an added
+        ``_eligible`` flag and ``_reason`` (only set when ineligible).
+        Items where the user is eligible are returned as-is.
+        """
+        ballot_items = election.ballot_items or []
+        if not ballot_items:
+            # If there are no ballot items but there are positions/candidates,
+            # the election uses the positional voting path — always eligible.
+            return []
+
+        # Pre-load org tier config once for the whole check
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == organization_id)
+        )
+        org = org_result.scalar_one_or_none()
+        tier_config = ((org.settings or {}).get("membership_tiers", {}) if org else {})
+        tiers = tier_config.get("tiers", [])
+        member_tier_id = getattr(user, "membership_type", None) or "active"
+        tier_def = next((t for t in tiers if t.get("id") == member_tier_id), None)
+
+        # Check if tier is voting-eligible at all
+        tier_voting_eligible = True
+        if tier_def:
+            benefits = tier_def.get("benefits", {})
+            tier_voting_eligible = benefits.get("voting_eligible", True)
+
+        # Secretary override check
+        has_override = False
+        if election.voter_overrides:
+            has_override = any(
+                o.get("user_id") == str(user.id) for o in election.voter_overrides
+            )
+
+        eligible_items: List[Dict] = []
+        for item in ballot_items:
+            # If user has secretary override, skip eligibility checks
+            if has_override:
+                eligible_items.append(item)
+                continue
+
+            # Check tier voting eligibility
+            if not tier_voting_eligible:
+                continue
+
+            # Check per-item voter type eligibility
+            eligible_types = item.get("eligible_voter_types", ["all"])
+            if not await self._user_has_role_type(user, eligible_types):
+                continue
+
+            # Check attendance requirement for this item
+            if item.get("require_attendance", False):
+                if not self._is_user_attending(str(user.id), election):
+                    continue
+
+            eligible_items.append(item)
+
+        return eligible_items
 
     # ------------------------------------------------------------------
     # Meeting attendance management
@@ -631,6 +700,12 @@ class ElectionService:
         if not election:
             return None, "Election not found"
 
+        # Validate vote_rank matches voting method
+        if election.voting_method == "ranked_choice" and vote_rank is None:
+            return None, "vote_rank is required for ranked-choice voting"
+        if election.voting_method != "ranked_choice" and vote_rank is not None:
+            return None, "vote_rank is not applicable for this voting method"
+
         # Check if specific position has been voted for
         if position and position in eligibility.positions_voted:
             return None, f"You have already voted for {position}"
@@ -668,32 +743,53 @@ class ElectionService:
             if len(position_votes) >= election.max_votes_per_position:
                 return None, f"Maximum votes for {position} reached"
 
+        # Compute voter identity for hashing
+        voter_hash = (
+            self._generate_voter_hash(
+                user_id, election_id, election.voter_anonymity_salt or ""
+            )
+            if election.anonymous_voting
+            else None
+        )
+        voter_id_or_hash = voter_hash or str(user_id)
+
         # Create the vote
         vote = Vote(
             election_id=election_id,
             candidate_id=candidate_id,
             voter_id=user_id if not election.anonymous_voting else None,
-            voter_hash=(
-                self._generate_voter_hash(
-                    user_id, election_id, election.voter_anonymity_salt or ""
-                )
-                if election.anonymous_voting
-                else None
-            ),
+            voter_hash=voter_hash,
             position=position,
             vote_rank=vote_rank,
             ip_address=ip_address,
             user_agent=user_agent,
             voted_at=datetime.now(timezone.utc),
+            # MySQL-compatible dedup hash for DB-level double-vote prevention
+            vote_dedup_hash=self._compute_vote_dedup_hash(
+                election_id, voter_id_or_hash, position
+            ),
         )
 
         # Sign the vote for tampering detection
         vote.vote_signature = self._sign_vote(vote)
 
+        # Sequential chain hash — links this vote to the previous one
+        vote.chain_hash = self._compute_chain_hash(
+            election.last_chain_hash, vote.vote_signature
+        )
+
+        # Voter receipt — returned so the voter can verify their vote was recorded
+        vote.receipt_hash = self._compute_receipt_hash(
+            str(vote.id), vote.vote_signature
+        )
+
         self.db.add(vote)
 
-        # SECURITY: Database-level constraint prevents double-voting
-        # even if race condition bypasses application-level checks
+        # Update election's chain hash pointer
+        election.last_chain_hash = vote.chain_hash
+
+        # SECURITY: Database-level unique constraint on vote_dedup_hash
+        # prevents double-voting even if race condition bypasses application checks
         try:
             await self.db.commit()
             await self.db.refresh(vote)
@@ -785,15 +881,76 @@ class ElectionService:
             digestmod=hashlib.sha256,
         ).hexdigest()
 
+    # ------------------------------------------------------------------
+    # Vote security helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _compute_vote_dedup_hash(
+        election_id: UUID, voter_id_or_hash: str, position: Optional[str]
+    ) -> str:
+        """Compute a MySQL-compatible dedup hash for double-vote prevention.
+
+        Returns SHA256(election_id:voter_id_or_hash:position) which is stored
+        in a UNIQUE column to enforce one-vote-per-voter-per-position at the
+        database level.
+        """
+        pos_key = position or "__NO_POS__"
+        data = f"{election_id}:{voter_id_or_hash}:{pos_key}"
+        return hashlib.sha256(data.encode()).hexdigest()
+
+    def _compute_chain_hash(
+        self, previous_chain_hash: Optional[str], vote_signature: str
+    ) -> str:
+        """Compute the next hash in the sequential vote chain.
+
+        chain_hash = SHA256(previous_chain_hash + vote_signature)
+        An unbroken chain proves no votes have been deleted or reordered.
+        """
+        prev = previous_chain_hash or "GENESIS"
+        data = f"{prev}:{vote_signature}"
+        return hashlib.sha256(data.encode()).hexdigest()
+
+    @staticmethod
+    def _compute_receipt_hash(vote_id: str, vote_signature: str) -> str:
+        """Generate a receipt hash the voter can use to verify their vote exists.
+
+        receipt = SHA256(vote_id + vote_signature + random_nonce)
+        The nonce is embedded so the receipt cannot be reverse-engineered.
+        """
+        nonce = secrets.token_hex(16)
+        data = f"{vote_id}:{vote_signature}:{nonce}"
+        return hashlib.sha256(data.encode()).hexdigest()
+
+    def _get_vote_signing_key(self) -> str:
+        """Return the vote signing key, falling back to SECRET_KEY.
+
+        A dedicated VOTE_SIGNING_KEY is recommended so that rotating
+        SECRET_KEY does not invalidate existing vote signatures.
+        """
+        key = settings.VOTE_SIGNING_KEY or settings.SECRET_KEY
+        if key == settings.SECRET_KEY and not settings.VOTE_SIGNING_KEY:
+            logger.warning(
+                "VOTE_SIGNING_KEY not configured — falling back to SECRET_KEY. "
+                "Set VOTE_SIGNING_KEY for independent key rotation."
+            )
+        return key
+
     def _sign_vote(self, vote: Vote) -> str:
         """Generate a cryptographic signature for a vote to detect tampering.
 
         The signature covers all immutable vote fields so any modification
-        (changing candidate, deleting and re-inserting, etc.) will produce
-        a different signature.
+        (changing candidate, deleting and re-inserting, altering rank, or
+        converting a proxy vote) will produce a different signature.
         """
-        signing_key = os.environ.get("VOTE_SIGNING_KEY", "default-signing-key")
-        data = f"{vote.id}:{vote.election_id}:{vote.candidate_id}:{vote.voter_hash or vote.voter_id}:{vote.position}:{vote.voted_at.isoformat()}"
+        signing_key = self._get_vote_signing_key()
+        # Include vote_rank for ranked-choice integrity and proxy fields
+        data = (
+            f"{vote.id}:{vote.election_id}:{vote.candidate_id}"
+            f":{vote.voter_hash or vote.voter_id}:{vote.position}"
+            f":{vote.vote_rank}:{vote.is_proxy_vote}"
+            f":{vote.proxy_delegating_user_id}:{vote.voted_at.isoformat()}"
+        )
         return hmac.new(
             key=signing_key.encode(),
             msg=data.encode(),
@@ -839,12 +996,37 @@ class ElectionService:
             else:
                 tampered.append(str(vote.id))
 
-        integrity_status = "PASS" if len(tampered) == 0 else "FAIL"
+        # Verify the sequential vote chain (ordered by voted_at)
+        chain_broken = False
+        chain_break_at = None
+        sorted_votes = sorted(
+            [v for v in all_votes if v.chain_hash],
+            key=lambda v: v.voted_at,
+        )
+        prev_chain = "GENESIS"
+        for vote in sorted_votes:
+            expected_chain = self._compute_chain_hash(prev_chain, vote.vote_signature or "")
+            if vote.chain_hash != expected_chain:
+                chain_broken = True
+                chain_break_at = str(vote.id)
+                break
+            prev_chain = vote.chain_hash
+
+        integrity_status = "PASS"
+        if tampered:
+            integrity_status = "FAIL"
+        elif chain_broken:
+            integrity_status = "CHAIN_BROKEN"
 
         if tampered:
             logger.critical(
                 f"VOTE INTEGRITY FAILURE | election={election_id} "
                 f"tampered={len(tampered)} ids={tampered}"
+            )
+        elif chain_broken:
+            logger.critical(
+                f"VOTE CHAIN BROKEN | election={election_id} "
+                f"break_at={chain_break_at}"
             )
         else:
             logger.info(
@@ -858,9 +1040,11 @@ class ElectionService:
                 "total_votes": total,
                 "valid_signatures": valid,
                 "tampered_votes": len(tampered),
+                "chain_verified": not chain_broken,
+                "chain_break_at": chain_break_at,
                 "integrity_status": integrity_status,
             },
-            severity="critical" if tampered else "info",
+            severity="critical" if (tampered or chain_broken) else "info",
         )
 
         return {
@@ -870,16 +1054,24 @@ class ElectionService:
             "unsigned_votes": unsigned,
             "tampered_votes": len(tampered),
             "tampered_vote_ids": tampered,
+            "chain_verified": not chain_broken,
+            "chain_break_at": chain_break_at,
             "integrity_status": integrity_status,
         }
 
     async def soft_delete_vote(
-        self, vote_id: UUID, deleted_by: UUID, reason: str
+        self, vote_id: UUID, deleted_by: UUID, reason: str, organization_id: Optional[UUID] = None
     ) -> Optional[Vote]:
         """Soft-delete a vote with audit trail instead of hard-deleting."""
-        result = await self.db.execute(
-            select(Vote).where(Vote.id == str(vote_id)).where(Vote.deleted_at.is_(None))
+        query = (
+            select(Vote)
+            .join(Election, Vote.election_id == Election.id)
+            .where(Vote.id == str(vote_id))
+            .where(Vote.deleted_at.is_(None))
         )
+        if organization_id:
+            query = query.where(Election.organization_id == str(organization_id))
+        result = await self.db.execute(query)
         vote = result.scalar_one_or_none()
         if not vote:
             return None
@@ -1142,6 +1334,7 @@ class ElectionService:
             select(Vote)
             .where(Vote.election_id == str(election_id))
             .where(Vote.deleted_at.is_(None))
+            .where(Vote.is_test == False)  # noqa: E712
         )
         all_votes = votes_result.scalars().all()
 
@@ -1198,6 +1391,37 @@ class ElectionService:
             candidates, all_votes, election, total_eligible
         )
 
+        # Check quorum
+        quorum_met = True
+        quorum_detail = None
+        if election.quorum_type == "percentage" and election.quorum_value:
+            quorum_met = voter_turnout >= election.quorum_value
+            quorum_detail = (
+                f"Quorum requires {election.quorum_value}% turnout. "
+                f"Actual: {round(voter_turnout, 1)}% ({unique_voters}/{total_eligible})."
+            )
+            if not quorum_met:
+                quorum_detail += " Quorum NOT met — results are advisory only."
+                # Clear winners if quorum not met
+                for r in overall_results:
+                    r.is_winner = False
+                for pr in results_by_position:
+                    for r in pr.candidates:
+                        r.is_winner = False
+        elif election.quorum_type == "count" and election.quorum_value:
+            quorum_met = unique_voters >= election.quorum_value
+            quorum_detail = (
+                f"Quorum requires {election.quorum_value} voters. "
+                f"Actual: {unique_voters}."
+            )
+            if not quorum_met:
+                quorum_detail += " Quorum NOT met — results are advisory only."
+                for r in overall_results:
+                    r.is_winner = False
+                for pr in results_by_position:
+                    for r in pr.candidates:
+                        r.is_winner = False
+
         return ElectionResults(
             election_id=election.id,
             election_title=election.title,
@@ -1207,6 +1431,8 @@ class ElectionService:
             voter_turnout_percentage=round(voter_turnout, 2),
             results_by_position=results_by_position,
             overall_results=overall_results,
+            quorum_met=quorum_met,
+            quorum_detail=quorum_detail,
         )
 
     async def _calculate_candidate_results(
@@ -1641,17 +1867,22 @@ class ElectionService:
             )
 
         election.status = ElectionStatus.CLOSED
+        # SEC: Destroy the per-election anonymity salt so voter hashes can
+        # never be reversed back to user IDs, even with full DB access.
+        election.voter_anonymity_salt = None
         await self.db.commit()
         await self.db.refresh(election)
 
         logger.info(
-            f"Election closed | election={election_id} title={election.title!r}"
+            f"Election closed | election={election_id} title={election.title!r} "
+            f"anonymity_salt_destroyed=True"
         )
         await self._audit(
             "election_closed",
             {
                 "election_id": str(election_id),
                 "title": election.title,
+                "anonymity_salt_destroyed": True,
             },
         )
 
@@ -2521,18 +2752,22 @@ Best regards,
         if position and candidate.position != position:
             return None, "Candidate is not running for this position"
 
+        # Compute voter identity for hashing
+        voter_hash = (
+            self._generate_voter_hash(
+                delegating_user_id, election_id, election.voter_anonymity_salt or ""
+            )
+            if election.anonymous_voting
+            else None
+        )
+        voter_id_or_hash = voter_hash or str(delegating_user_id)
+
         # Create the vote as the delegating member, with proxy metadata
         vote = Vote(
             election_id=election_id,
             candidate_id=candidate_id,
             voter_id=delegating_user_id if not election.anonymous_voting else None,
-            voter_hash=(
-                self._generate_voter_hash(
-                    delegating_user_id, election_id, election.voter_anonymity_salt or ""
-                )
-                if election.anonymous_voting
-                else None
-            ),
+            voter_hash=voter_hash,
             position=position,
             vote_rank=vote_rank,
             ip_address=ip_address,
@@ -2542,9 +2777,19 @@ Best regards,
             proxy_voter_id=str(proxy_user_id),
             proxy_authorization_id=proxy_authorization_id,
             proxy_delegating_user_id=str(delegating_user_id),
+            vote_dedup_hash=self._compute_vote_dedup_hash(
+                election_id, voter_id_or_hash, position
+            ),
         )
         vote.vote_signature = self._sign_vote(vote)
+        vote.chain_hash = self._compute_chain_hash(
+            election.last_chain_hash, vote.vote_signature
+        )
+        vote.receipt_hash = self._compute_receipt_hash(
+            str(vote.id), vote.vote_signature
+        )
         self.db.add(vote)
+        election.last_chain_hash = vote.chain_hash
 
         try:
             await self.db.commit()
@@ -2603,11 +2848,14 @@ Best regards,
         subject: Optional[str] = None,
         message: Optional[str] = None,
         base_ballot_url: Optional[str] = None,
-    ) -> Tuple[int, int]:
+    ) -> Tuple[int, int, int]:
         """
-        Send ballot notification emails to eligible voters with unique hashed links
+        Send ballot notification emails to eligible voters with unique hashed links.
 
-        Returns: (recipients_count, failed_count)
+        Members with zero eligible ballot items are silently skipped to
+        prevent sending empty ballots.
+
+        Returns: (recipients_count, failed_count, skipped_count)
         """
         # Get election with organization
         result = await self.db.execute(
@@ -2623,13 +2871,14 @@ Best regards,
 
         election, organization = row
 
-        # Determine recipients
+        # Determine recipients (eagerly load roles for eligibility checks)
         if recipient_user_ids:
             # Use specified recipients
             users_result = await self.db.execute(
                 select(User)
                 .where(User.id.in_([str(uid) for uid in recipient_user_ids]))
                 .where(User.organization_id == str(organization_id))
+                .options(selectinload(User.roles))
             )
             recipients = users_result.scalars().all()
         elif election.eligible_voters:
@@ -2638,6 +2887,7 @@ Best regards,
                 select(User)
                 .where(User.id.in_([str(v) for v in election.eligible_voters]))
                 .where(User.organization_id == str(organization_id))
+                .options(selectinload(User.roles))
             )
             recipients = users_result.scalars().all()
         else:
@@ -2646,11 +2896,12 @@ Best regards,
                 select(User)
                 .where(User.organization_id == str(organization_id))
                 .where(User.is_active == True)  # noqa: E712
+                .options(selectinload(User.roles))
             )
             recipients = users_result.scalars().all()
 
         if not recipients:
-            return 0, 0
+            return 0, 0, 0
 
         # Initialize email service with organization settings
         email_service = EmailService(organization)
@@ -2673,8 +2924,25 @@ Best regards,
         # Send individual ballot emails with unique tokens
         success_count = 0
         failed_count = 0
+        skipped_count = 0
 
         for recipient in recipients:
+            # Empty ballot prevention: skip members who have zero eligible
+            # ballot items so they don't receive a confusing empty ballot.
+            if election.ballot_items:
+                eligible_items = await self._get_eligible_ballot_items_for_user(
+                    user=recipient,
+                    election=election,
+                    organization_id=str(organization_id),
+                )
+                if not eligible_items:
+                    skipped_count += 1
+                    logger.info(
+                        f"Skipping ballot email for user={recipient.id} "
+                        f"(no eligible ballot items) | election={election_id}"
+                    )
+                    continue
+
             # Generate unique voting token for this voter
             voting_token = await self._generate_voting_token(
                 user_id=recipient.id,
@@ -2725,7 +2993,8 @@ Best regards,
 
         logger.info(
             f"Ballot emails sent | election={election_id} "
-            f"success={success_count} failed={failed_count}"
+            f"success={success_count} failed={failed_count} "
+            f"skipped_empty={skipped_count}"
         )
         await self._audit(
             "ballot_emails_sent",
@@ -2734,10 +3003,11 @@ Best regards,
                 "title": election.title,
                 "recipients": success_count,
                 "failed": failed_count,
+                "skipped_empty_ballot": skipped_count,
             },
         )
 
-        return success_count, failed_count
+        return success_count, failed_count, skipped_count
 
     async def has_user_voted(
         self, user_id: UUID, election_id: UUID, election: Optional[Election] = None
@@ -2892,7 +3162,7 @@ Best regards,
             if len(position_votes) >= election.max_votes_per_position:
                 return None, f"Maximum votes for {position} reached"
 
-        # Create the vote
+        # Create the vote with security hashes
         vote = Vote(
             election_id=election.id,
             candidate_id=candidate_id,
@@ -2902,12 +3172,26 @@ Best regards,
             ip_address=ip_address,
             user_agent=user_agent,
             voted_at=datetime.now(timezone.utc),
+            vote_dedup_hash=self._compute_vote_dedup_hash(
+                election.id, voting_token.voter_hash, position
+            ),
         )
 
         # Sign the vote for tampering detection
         vote.vote_signature = self._sign_vote(vote)
 
+        # Sequential chain hash and voter receipt
+        vote.chain_hash = self._compute_chain_hash(
+            election.last_chain_hash, vote.vote_signature
+        )
+        vote.receipt_hash = self._compute_receipt_hash(
+            str(vote.id), vote.vote_signature
+        )
+
         self.db.add(vote)
+
+        # Update election chain pointer
+        election.last_chain_hash = vote.chain_hash
 
         # Track which positions have been voted on via this token
         positions_voted = voting_token.positions_voted or []
@@ -2929,8 +3213,8 @@ Best regards,
                 voting_token.used = True
                 voting_token.used_at = datetime.now(timezone.utc)
 
-        # SECURITY: Database-level constraint prevents double-voting
-        # even if race condition bypasses application-level checks
+        # SECURITY: Database-level unique constraint on vote_dedup_hash
+        # prevents double-voting even if race condition bypasses application checks
         try:
             await self.db.commit()
             await self.db.refresh(vote)
@@ -3133,7 +3417,11 @@ Best regards,
                     )
                 candidate_id = UUID(choice)
 
-            # Create the vote
+            # Sanitize write-in name to prevent XSS
+            if write_in_name and choice == "write_in":
+                write_in_candidate.name = html.escape(write_in_name.strip())
+
+            # Create the vote with security hashes
             vote = Vote(
                 election_id=election.id,
                 candidate_id=candidate_id,
@@ -3143,8 +3431,18 @@ Best regards,
                 ip_address=ip_address,
                 user_agent=user_agent,
                 voted_at=datetime.now(timezone.utc),
+                vote_dedup_hash=self._compute_vote_dedup_hash(
+                    election.id, voting_token.voter_hash, position
+                ),
             )
             vote.vote_signature = self._sign_vote(vote)
+            vote.chain_hash = self._compute_chain_hash(
+                election.last_chain_hash, vote.vote_signature
+            )
+            vote.receipt_hash = self._compute_receipt_hash(
+                str(vote.id), vote.vote_signature
+            )
+            election.last_chain_hash = vote.chain_hash
             self.db.add(vote)
             created_votes.append(vote)
 

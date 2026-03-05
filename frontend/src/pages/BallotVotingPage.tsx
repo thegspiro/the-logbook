@@ -213,6 +213,19 @@ export const BallotVotingPage: React.FC = () => {
           <p className="text-theme-text-secondary mb-4">{submitResult.message}</p>
           <div className="bg-theme-surface-secondary rounded-lg p-4 text-sm text-theme-text-muted">
             <p>Your ballot has been recorded securely and anonymously.</p>
+            {submitResult.receipt_hashes && submitResult.receipt_hashes.length > 0 && (
+              <div className="mt-3 border-t border-theme-surface-border pt-3">
+                <p className="font-medium text-theme-text-secondary mb-1">Vote Receipt</p>
+                <p className="text-xs mb-2">
+                  Save this receipt to verify your vote was counted. It cannot reveal how you voted.
+                </p>
+                {submitResult.receipt_hashes.map((hash, i) => (
+                  <code key={i} className="block text-xs bg-theme-surface px-2 py-1 rounded mb-1 break-all font-mono">
+                    {hash}
+                  </code>
+                ))}
+              </div>
+            )}
             <p className="mt-2">You may close this page.</p>
           </div>
         </div>

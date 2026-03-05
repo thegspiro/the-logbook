@@ -47,6 +47,22 @@ class BallotItem(BaseModel):
         description="If true, voter must be checked in as present at the meeting",
     )
 
+    # Per-item victory condition overrides (optional — defaults to election-level)
+    victory_condition: Optional[str] = Field(
+        default=None,
+        description="Override election-level victory condition for this item: most_votes, majority, supermajority, threshold",
+    )
+    victory_percentage: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=100,
+        description="Override election-level victory percentage (e.g., 67 for 2/3 supermajority)",
+    )
+    voting_method: Optional[str] = Field(
+        default=None,
+        description="Override election-level voting method for this item",
+    )
+
     @field_validator("type")
     @classmethod
     def validate_type(cls, v: str) -> str:
@@ -145,6 +161,25 @@ class ElectionBase(BaseModel):
     max_runoff_rounds: int = Field(
         default=3, ge=1, le=10, description="Maximum number of runoff rounds"
     )
+
+    # Quorum configuration
+    quorum_type: str = Field(
+        default="none",
+        description="Quorum type: none, percentage, count",
+    )
+    quorum_value: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=100,
+        description="Quorum value (percentage or count depending on quorum_type)",
+    )
+
+    @field_validator("quorum_type")
+    @classmethod
+    def validate_quorum_type(cls, v: str) -> str:
+        if v not in ("none", "percentage", "count"):
+            raise ValueError("quorum_type must be 'none', 'percentage', or 'count'")
+        return v
 
     @field_validator("voting_method")
     @classmethod
@@ -370,6 +405,9 @@ class VoteResponse(BaseModel):
     # Only include voter_id if voting is not anonymous
     voter_id: Optional[UUID] = None
 
+    # Voter receipt — can be used to verify the vote was recorded
+    receipt_hash: Optional[str] = None
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -406,6 +444,8 @@ class ElectionResults(BaseModel):
     voter_turnout_percentage: float
     results_by_position: List[PositionResults]
     overall_results: List[CandidateResult]
+    quorum_met: bool = True
+    quorum_detail: Optional[str] = None
 
 
 class ElectionStats(BaseModel):
@@ -461,6 +501,7 @@ class EmailBallotResponse(BaseModel):
     success: bool
     recipients_count: int
     failed_count: int
+    skipped_count: int = 0
     message: str
 
 
