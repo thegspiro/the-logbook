@@ -7,6 +7,7 @@ const mockLogin = vi.fn();
 const mockRegister = vi.fn();
 const mockLogout = vi.fn();
 const mockGetCurrentUser = vi.fn();
+const mockMarkLoginComplete = vi.fn();
 
 vi.mock('../services/api', () => ({
   authService: {
@@ -15,6 +16,10 @@ vi.mock('../services/api', () => ({
     logout: (...args: unknown[]) => mockLogout(...args) as unknown,
     getCurrentUser: (...args: unknown[]) => mockGetCurrentUser(...args) as unknown,
   },
+}));
+
+vi.mock('../services/apiClient', () => ({
+  markLoginComplete: (...args: unknown[]) => mockMarkLoginComplete(...args) as unknown,
 }));
 
 // ---- Import store AFTER mocks are in place ----
@@ -67,6 +72,9 @@ describe('authStore', () => {
     // Clear localStorage and sessionStorage
     localStorage.clear();
     sessionStorage.clear();
+
+    // Clear any cookies from previous tests
+    document.cookie = 'csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/';
   });
 
   // ---- Initial State ----
@@ -86,8 +94,13 @@ describe('authStore', () => {
   // ---- login ----
 
   describe('login', () => {
+    /** Simulate the browser processing Set-Cookie headers from a login response. */
+    function simulateLoginCookies(): void {
+      document.cookie = `csrf_token=${Math.random().toString(36)}; Path=/`;
+    }
+
     it('sets has_session flag and calls loadUser on success', async () => {
-      mockLogin.mockResolvedValue(undefined);
+      mockLogin.mockImplementation(async () => { simulateLoginCookies(); return undefined; });
       mockGetCurrentUser.mockResolvedValue(fakeUser);
 
       await act(async () => {
@@ -108,7 +121,7 @@ describe('authStore', () => {
     });
 
     it('does not store tokens in localStorage', async () => {
-      mockLogin.mockResolvedValue(undefined);
+      mockLogin.mockImplementation(async () => { simulateLoginCookies(); return undefined; });
       mockGetCurrentUser.mockResolvedValue(fakeUser);
 
       await act(async () => {
@@ -179,7 +192,7 @@ describe('authStore', () => {
       sessionStorage.setItem('login_lockout', JSON.stringify({ loginAttempts: 3, lockedUntil: null }));
       useAuthStore.setState({ loginAttempts: 3, lockedUntil: null });
 
-      mockLogin.mockResolvedValue(undefined);
+      mockLogin.mockImplementation(async () => { simulateLoginCookies(); return undefined; });
       mockGetCurrentUser.mockResolvedValue(fakeUser);
 
       await act(async () => {
@@ -202,7 +215,7 @@ describe('authStore', () => {
       expect(getState().loginAttempts).toBe(1);
 
       // Now: successful login
-      mockLogin.mockResolvedValue(undefined);
+      mockLogin.mockImplementation(async () => { simulateLoginCookies(); return undefined; });
       mockGetCurrentUser.mockResolvedValue(fakeUser);
 
       await act(async () => {

@@ -12,6 +12,7 @@
 
 import { create } from 'zustand';
 import { authService } from '../services/api';
+import { markLoginComplete } from '../services/apiClient';
 import type { CurrentUser, LoginCredentials, RegisterData } from '../types/auth';
 import { toAppError, getErrorMessage } from '../utils/errorHandling';
 
@@ -26,6 +27,43 @@ const LOGIN_MAX_LOCKOUT_MS = 5 * 60 * 1_000;
 
 /** sessionStorage key for persisting lockout state across page refreshes. */
 const LOCKOUT_STORAGE_KEY = 'login_lockout';
+
+/** Max time (ms) to wait for Set-Cookie headers to be processed after login. */
+const COOKIE_SETTLE_MAX_MS = 500;
+
+/** Polling interval (ms) when waiting for login cookies to settle. */
+const COOKIE_SETTLE_POLL_MS = 25;
+
+/**
+ * Read the csrf_token cookie value (the only login cookie readable by JS).
+ * Returns null if the cookie is absent.
+ */
+function getCsrfCookie(): string | null {
+  const match = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/);
+  return match?.[1] ?? null;
+}
+
+/**
+ * Wait until the browser has processed the Set-Cookie headers from the
+ * login response.  The login endpoint sets three cookies — httpOnly
+ * `access_token`, httpOnly `refresh_token`, and JS-readable `csrf_token`.
+ * We poll for a *change* in the csrf_token value (which is regenerated
+ * on every login) to confirm all three have been stored.  Under normal
+ * conditions the cookies are available synchronously and this returns
+ * immediately; the polling is a safety net for environments where
+ * response headers travel through middleware/proxy layers that introduce
+ * a brief delay.
+ */
+async function waitForLoginCookies(csrfBefore: string | null): Promise<void> {
+  for (let elapsed = 0; elapsed < COOKIE_SETTLE_MAX_MS; elapsed += COOKIE_SETTLE_POLL_MS) {
+    const csrfNow = getCsrfCookie();
+    // New cookie appeared (fresh session) or value changed (re-login)
+    if (csrfNow && csrfNow !== csrfBefore) return;
+    await new Promise(r => setTimeout(r, COOKIE_SETTLE_POLL_MS));
+  }
+  // Timed out — proceed anyway; dashboard calls may still succeed
+  // if the httpOnly cookies were stored independently of the csrf one.
+}
 
 /** Read lockout state from sessionStorage (survives page refresh, cleared on tab close). */
 function loadLockoutState(): { loginAttempts: number; lockedUntil: number | null } {
@@ -106,11 +144,27 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
+      // Snapshot the csrf_token BEFORE login so we can detect when
+      // the new Set-Cookie headers have been processed by the browser.
+      const csrfBefore = getCsrfCookie();
+
       const loginResponse = await authService.login(credentials);
 
       // SEC: Tokens are stored in httpOnly cookies by the backend response.
       // Only persist a lightweight session flag — never the actual tokens.
       localStorage.setItem('has_session', '1');
+
+      // Wait for auth cookies to be stored before navigating to the
+      // dashboard.  Without this, the dashboard can fire API calls
+      // before the browser has finished processing the Set-Cookie
+      // headers from the login response, causing spurious 401s that
+      // trigger a refresh cascade and kick the user back to login.
+      await waitForLoginCookies(csrfBefore);
+
+      // Tell the 401 interceptor that a login just completed so it
+      // retries with a delay instead of attempting a cookie-based
+      // refresh (which would also fail if cookies are still settling).
+      markLoginComplete();
 
       // Use user data from the login response if available. This avoids
       // a separate GET /auth/me call which can fail due to a race condition
