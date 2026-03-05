@@ -10,7 +10,7 @@
  * Uses @dnd-kit for drag-and-drop reordering with keyboard accessibility.
  */
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import {
   DndContext,
@@ -566,6 +566,18 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
     election.status === ElectionStatus.CLOSED ||
     election.status === ElectionStatus.CANCELLED;
 
+  // Positions already used by existing ballot items (one ballot item per position)
+  const usedPositions = useMemo(
+    () => new Set(ballotItems.map((item) => item.position).filter(Boolean)),
+    [ballotItems],
+  );
+
+  // Available positions that haven't been added to the ballot yet
+  const availablePositions = useMemo(
+    () => (election.positions || []).filter((pos) => !usedPositions.has(pos)),
+    [election.positions, usedPositions],
+  );
+
   // ── Sensors ──
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -683,6 +695,13 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
     if (!selectedTemplate || !templateNameInput.trim()) return;
 
     const name = templateNameInput.trim();
+
+    // Prevent duplicate ballot items for the same position
+    if (selectedTemplate.vote_type === 'candidate_selection' && usedPositions.has(name)) {
+      toast.error(`A ballot item for "${name}" already exists.`);
+      return;
+    }
+
     const newItem: BallotItem = {
       id: generateId(),
       type: selectedTemplate.type,
@@ -705,6 +724,12 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
   const handleAddCustom = async () => {
     if (!customForm.title?.trim()) {
       toast.error('Title is required');
+      return;
+    }
+
+    // Prevent duplicate ballot items for the same position
+    if (customForm.position && usedPositions.has(customForm.position)) {
+      toast.error(`A ballot item for "${customForm.position}" already exists.`);
       return;
     }
 
@@ -756,9 +781,9 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 Use Template
               </button>
 
-              {/* Template popover dropdown */}
+              {/* Template popover dropdown — opens upward so it doesn't clip */}
               {showTemplatePopover && (
-                <div className="absolute right-0 top-full mt-2 z-30 w-[28rem] max-w-[calc(100vw-2rem)] bg-theme-surface rounded-lg border border-theme-surface-border p-4 shadow-lg">
+                <div className="absolute right-0 bottom-full mb-2 z-30 w-[28rem] max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto bg-theme-surface rounded-lg border border-theme-surface-border p-4 shadow-lg">
                   {!selectedTemplate ? (
                     <>
                       <h4 className="text-sm font-semibold text-theme-text-primary mb-3">
@@ -840,21 +865,28 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                           {selectedTemplate.type === BallotItemType.OFFICER_ELECTION &&
                           election.positions &&
                           election.positions.length > 0 ? (
-                            <select
-                              value={templateNameInput}
-                              onChange={(e) =>
-                                setTemplateNameInput(e.target.value)
-                              }
-                              className={selectClass}
-                              autoFocus
-                            >
-                              <option value="">Select position...</option>
-                              {election.positions.map((pos) => (
-                                <option key={pos} value={pos}>
-                                  {pos}
-                                </option>
-                              ))}
-                            </select>
+                            <>
+                              <select
+                                value={templateNameInput}
+                                onChange={(e) =>
+                                  setTemplateNameInput(e.target.value)
+                                }
+                                className={selectClass}
+                                autoFocus
+                              >
+                                <option value="">Select position...</option>
+                                {availablePositions.map((pos) => (
+                                  <option key={pos} value={pos}>
+                                    {pos}
+                                  </option>
+                                ))}
+                              </select>
+                              {availablePositions.length === 0 && (
+                                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                                  All positions already have ballot items.
+                                </p>
+                              )}
+                            </>
                           ) : (
                             <input
                               type="text"
@@ -1098,23 +1130,30 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                   <div>
                     <label className={labelClass}>Position</label>
                     {election.positions && election.positions.length > 0 ? (
-                      <select
-                        value={customForm.position || ''}
-                        onChange={(e) =>
-                          setCustomForm((prev) => ({
-                            ...prev,
-                            position: e.target.value || undefined,
-                          }))
-                        }
-                        className={selectClass}
-                      >
-                        <option value="">Select position...</option>
-                        {election.positions.map((pos) => (
-                          <option key={pos} value={pos}>
-                            {pos}
-                          </option>
-                        ))}
-                      </select>
+                      <>
+                        <select
+                          value={customForm.position || ''}
+                          onChange={(e) =>
+                            setCustomForm((prev) => ({
+                              ...prev,
+                              position: e.target.value || undefined,
+                            }))
+                          }
+                          className={selectClass}
+                        >
+                          <option value="">Select position...</option>
+                          {availablePositions.map((pos) => (
+                            <option key={pos} value={pos}>
+                              {pos}
+                            </option>
+                          ))}
+                        </select>
+                        {availablePositions.length === 0 && (
+                          <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                            All positions already have ballot items.
+                          </p>
+                        )}
+                      </>
                     ) : (
                       <input
                         type="text"
