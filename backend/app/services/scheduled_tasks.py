@@ -36,6 +36,15 @@ Recommended crontab (add to host or container cron):
 
 # Weekly on Sundays at 2:00 AM — audit log archival and integrity checkpoint
 0 2 * * 0 curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=audit_log_archival
+
+# Daily at 7:00 AM — inventory low stock alerts
+0 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=inventory_low_stock_alerts
+
+# Daily at 7:30 AM — overdue equipment checkout reminders
+30 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=inventory_overdue_alerts
+
+# Weekly on Mondays at 8:00 AM — NFPA PPE retirement alerts
+0 8 * * 1 curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=nfpa_retirement_alerts
 -----------------------------------------------------
 """
 
@@ -116,6 +125,24 @@ SCHEDULE = {
         "frequency": "every 5 minutes",
         "recommended_time": "*/5 * * * *",
         "cron": "*/5 * * * *",
+    },
+    "inventory_low_stock_alerts": {
+        "description": "Send email alerts to admins when inventory items fall below their reorder point",
+        "frequency": "daily",
+        "recommended_time": "07:00",
+        "cron": "0 7 * * *",
+    },
+    "inventory_overdue_alerts": {
+        "description": "Send email reminders to members and admins about overdue equipment checkouts",
+        "frequency": "daily",
+        "recommended_time": "07:30",
+        "cron": "30 7 * * *",
+    },
+    "nfpa_retirement_alerts": {
+        "description": "Send weekly alerts for PPE approaching NFPA 1851 10-year retirement date (180/90/30-day tiers)",
+        "frequency": "weekly",
+        "recommended_time": "Monday 08:00",
+        "cron": "0 8 * * 1",
     },
 }
 
@@ -1218,6 +1245,291 @@ async def run_scheduled_emails(db: AsyncSession) -> Dict[str, Any]:
     return {"sent": sent, "failed": failed, "total_processed": len(pending)}
 
 
+async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Send email alerts to admins when inventory items drop below reorder point.
+    Daily at 07:00.
+    """
+    from app.models.inventory import InventoryItem
+    from app.services.email_service import EmailService
+    from app.services.inventory_service import InventoryService
+
+    orgs = await db.execute(select(Organization))
+    organizations = list(orgs.scalars().all())
+
+    total_alerts = 0
+    results = []
+
+    for org in organizations:
+        try:
+            service = InventoryService(db)
+            low_stock = await service.get_low_stock_items_for_alerts(org.id)
+            if not low_stock:
+                results.append({"org_id": str(org.id), "alerts": 0})
+                continue
+
+            # Build email content
+            items_html = ""
+            for item in low_stock:
+                cat_name = item.category.name if item.category else "Uncategorized"
+                items_html += (
+                    f"<tr><td style='padding:6px 12px;border-bottom:1px solid #eee;'>"
+                    f"{_html.escape(item.name)}</td>"
+                    f"<td style='padding:6px 12px;border-bottom:1px solid #eee;'>"
+                    f"{_html.escape(cat_name)}</td>"
+                    f"<td style='padding:6px 12px;border-bottom:1px solid #eee;text-align:center;'>"
+                    f"<strong style='color:#dc2626;'>{item.quantity}</strong></td>"
+                    f"<td style='padding:6px 12px;border-bottom:1px solid #eee;text-align:center;'>"
+                    f"{item.reorder_point}</td></tr>"
+                )
+
+            html_body = f"""
+            <div style="font-family:Arial,sans-serif;max-width:600px;">
+                <h2 style="color:#dc2626;">Low Stock Alert</h2>
+                <p>The following inventory items are at or below their reorder point:</p>
+                <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+                    <thead>
+                        <tr style="background:#f3f4f6;">
+                            <th style="padding:8px 12px;text-align:left;">Item</th>
+                            <th style="padding:8px 12px;text-align:left;">Category</th>
+                            <th style="padding:8px 12px;text-align:center;">Current Qty</th>
+                            <th style="padding:8px 12px;text-align:center;">Reorder Point</th>
+                        </tr>
+                    </thead>
+                    <tbody>{items_html}</tbody>
+                </table>
+                <p style="color:#6b7280;font-size:14px;">
+                    Please review and reorder as needed.
+                </p>
+            </div>
+            """
+
+            # Send to admins with inventory.manage permission
+            admin_result = await db.execute(
+                select(User)
+                .where(User.organization_id == str(org.id))
+                .where(User.is_active == True)  # noqa: E712
+                .where(User.email.isnot(None))
+            )
+            admins = [
+                u for u in admin_result.scalars().all()
+                if u.role in ("admin", "owner", "quartermaster")
+            ]
+            admin_emails = [a.email for a in admins if a.email]
+
+            if admin_emails:
+                email_svc = EmailService(organization=org)
+                success_count, _ = await email_svc.send_email(
+                    to_emails=admin_emails,
+                    subject=f"Low Stock Alert — {len(low_stock)} item(s) below reorder point",
+                    html_body=html_body,
+                    text_body=f"{len(low_stock)} inventory items are below their reorder point. Please check the inventory dashboard.",
+                )
+                if success_count > 0:
+                    total_alerts += 1
+
+            results.append({"org_id": str(org.id), "alerts": len(low_stock)})
+
+        except Exception as e:
+            logger.error(f"Low stock alerts failed for org {org.id}: {e}")
+            results.append({"org_id": str(org.id), "error": str(e)})
+
+    logger.info(f"Low stock alerts: {total_alerts} emails sent")
+    return {
+        "task": "inventory_low_stock_alerts",
+        "total_alerts_sent": total_alerts,
+        "organizations": results,
+    }
+
+
+async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Send email alerts for overdue checkouts. Daily at 07:30.
+    Notifies both the member who has the overdue item and admins.
+    """
+    from app.services.email_service import EmailService
+    from app.services.inventory_service import InventoryService
+
+    orgs = await db.execute(select(Organization))
+    organizations = list(orgs.scalars().all())
+
+    total_alerts = 0
+    results = []
+
+    for org in organizations:
+        try:
+            service = InventoryService(db)
+            overdue = await service.get_overdue_checkouts_for_alerts(org.id)
+            if not overdue:
+                results.append({"org_id": str(org.id), "overdue": 0})
+                continue
+
+            # Group by member for individual notifications
+            by_user: Dict[str, list] = {}
+            for co in overdue:
+                uid = str(co.user_id)
+                if uid not in by_user:
+                    by_user[uid] = []
+                by_user[uid].append(co)
+
+            email_svc = EmailService(organization=org)
+
+            for uid, user_checkouts in by_user.items():
+                user_obj = user_checkouts[0].user if user_checkouts[0].user else None
+                if not user_obj or not user_obj.email:
+                    continue
+
+                items_list = ""
+                for co in user_checkouts:
+                    item_name = co.item.name if co.item else "Unknown"
+                    due_date = co.expected_return_at.strftime("%B %d, %Y") if co.expected_return_at else "N/A"
+                    items_list += f"<li><strong>{_html.escape(item_name)}</strong> — due {due_date}</li>"
+
+                html_body = f"""
+                <div style="font-family:Arial,sans-serif;max-width:600px;">
+                    <h2 style="color:#dc2626;">Overdue Equipment</h2>
+                    <p>Hi {_html.escape(user_obj.first_name or 'Member')},</p>
+                    <p>The following items are overdue for return:</p>
+                    <ul style="margin:16px 0;">{items_list}</ul>
+                    <p>Please return these items as soon as possible.</p>
+                </div>
+                """
+
+                success_count, _ = await email_svc.send_email(
+                    to_emails=[user_obj.email],
+                    subject=f"Overdue Equipment Reminder — {len(user_checkouts)} item(s)",
+                    html_body=html_body,
+                    text_body=f"You have {len(user_checkouts)} overdue equipment item(s). Please return them as soon as possible.",
+                )
+                if success_count > 0:
+                    total_alerts += 1
+
+            results.append({"org_id": str(org.id), "overdue": len(overdue), "members_notified": len(by_user)})
+
+        except Exception as e:
+            logger.error(f"Overdue alerts failed for org {org.id}: {e}")
+            results.append({"org_id": str(org.id), "error": str(e)})
+
+    logger.info(f"Overdue alerts: {total_alerts} emails sent")
+    return {
+        "task": "inventory_overdue_alerts",
+        "total_alerts_sent": total_alerts,
+        "organizations": results,
+    }
+
+
+async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Send email alerts for PPE approaching NFPA 10-year retirement.
+    Weekly on Mondays at 08:00.
+    Tiers: 180 days, 90 days, 30 days, past due.
+    """
+    from app.services.email_service import EmailService
+    from app.services.inventory_service import InventoryService
+
+    orgs = await db.execute(select(Organization))
+    organizations = list(orgs.scalars().all())
+
+    total_alerts = 0
+    results = []
+
+    for org in organizations:
+        try:
+            service = InventoryService(db)
+            items_due = await service.get_nfpa_retirement_due_items(
+                organization_id=org.id,
+                days_ahead=180,
+            )
+            if not items_due:
+                results.append({"org_id": str(org.id), "items_due": 0})
+                continue
+
+            # Categorize by urgency
+            past_due = [i for i in items_due if i["days_until_retirement"] <= 0]
+            within_30 = [i for i in items_due if 0 < i["days_until_retirement"] <= 30]
+            within_90 = [i for i in items_due if 30 < i["days_until_retirement"] <= 90]
+            within_180 = [i for i in items_due if 90 < i["days_until_retirement"] <= 180]
+
+            def _build_section(title: str, items: list, color: str) -> str:
+                if not items:
+                    return ""
+                rows = ""
+                for it in items:
+                    rows += (
+                        f"<tr><td style='padding:6px 12px;border-bottom:1px solid #eee;'>"
+                        f"{_html.escape(it['item_name'])}</td>"
+                        f"<td style='padding:6px 12px;border-bottom:1px solid #eee;'>"
+                        f"{_html.escape(it.get('serial_number') or it.get('asset_tag') or 'N/A')}</td>"
+                        f"<td style='padding:6px 12px;border-bottom:1px solid #eee;'>"
+                        f"{it['retirement_date']}</td>"
+                        f"<td style='padding:6px 12px;border-bottom:1px solid #eee;text-align:center;'>"
+                        f"<strong style='color:{color};'>{it['days_until_retirement']}d</strong></td></tr>"
+                    )
+                return f"""
+                <h3 style="color:{color};margin-top:16px;">{title} ({len(items)})</h3>
+                <table style="width:100%;border-collapse:collapse;margin:8px 0;">
+                    <thead><tr style="background:#f3f4f6;">
+                        <th style="padding:8px 12px;text-align:left;">Item</th>
+                        <th style="padding:8px 12px;text-align:left;">ID</th>
+                        <th style="padding:8px 12px;text-align:left;">Retirement Date</th>
+                        <th style="padding:8px 12px;text-align:center;">Days</th>
+                    </tr></thead>
+                    <tbody>{rows}</tbody>
+                </table>
+                """
+
+            html_body = f"""
+            <div style="font-family:Arial,sans-serif;max-width:700px;">
+                <h2>NFPA 1851 Retirement Alert</h2>
+                <p>{len(items_due)} PPE item(s) are approaching or past their retirement date:</p>
+                {_build_section("Past Due — Retire Immediately", past_due, "#dc2626")}
+                {_build_section("Within 30 Days", within_30, "#ea580c")}
+                {_build_section("Within 90 Days", within_90, "#ca8a04")}
+                {_build_section("Within 180 Days", within_180, "#2563eb")}
+                <p style="color:#6b7280;font-size:14px;margin-top:16px;">
+                    Per NFPA 1851, structural firefighting PPE must be retired 10 years from manufacture date.
+                </p>
+            </div>
+            """
+
+            # Send to admins
+            admin_result = await db.execute(
+                select(User)
+                .where(User.organization_id == str(org.id))
+                .where(User.is_active == True)  # noqa: E712
+                .where(User.email.isnot(None))
+            )
+            admins = [
+                u for u in admin_result.scalars().all()
+                if u.role in ("admin", "owner", "quartermaster")
+            ]
+            admin_emails = [a.email for a in admins if a.email]
+
+            if admin_emails:
+                email_svc = EmailService(organization=org)
+                success_count, _ = await email_svc.send_email(
+                    to_emails=admin_emails,
+                    subject=f"NFPA Retirement Alert — {len(items_due)} PPE item(s)",
+                    html_body=html_body,
+                    text_body=f"{len(items_due)} PPE items are approaching NFPA retirement. Please check the inventory dashboard.",
+                )
+                if success_count > 0:
+                    total_alerts += 1
+
+            results.append({"org_id": str(org.id), "items_due": len(items_due)})
+
+        except Exception as e:
+            logger.error(f"NFPA retirement alerts failed for org {org.id}: {e}")
+            results.append({"org_id": str(org.id), "error": str(e)})
+
+    logger.info(f"NFPA retirement alerts: {total_alerts} emails sent")
+    return {
+        "task": "nfpa_retirement_alerts",
+        "total_alerts_sent": total_alerts,
+        "organizations": results,
+    }
+
+
 # Task runner map
 TASK_RUNNERS = {
     "cert_expiration_alerts": run_cert_expiration_alerts,
@@ -1231,4 +1543,7 @@ TASK_RUNNERS = {
     "post_shift_validation": run_post_shift_validation,
     "audit_log_archival": run_audit_log_archival,
     "scheduled_emails": run_scheduled_emails,
+    "inventory_low_stock_alerts": run_inventory_low_stock_alerts,
+    "inventory_overdue_alerts": run_inventory_overdue_alerts,
+    "nfpa_retirement_alerts": run_nfpa_retirement_alerts,
 }

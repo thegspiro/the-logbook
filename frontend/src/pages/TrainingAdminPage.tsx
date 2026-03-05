@@ -22,6 +22,7 @@ import {
   ClipboardList,
   Settings,
   ClipboardCheck,
+  TrendingUp,
 } from "lucide-react";
 import { HelpLink } from "../components/HelpLink";
 import { lazyWithRetry } from "../utils/lazyWithRetry";
@@ -61,10 +62,13 @@ const SkillsTestingTemplatesTab = lazyWithRetry(
 const SkillsTestingTestRecordsTab = lazyWithRetry(
   () => import("./SkillsTestingTestRecordsTab"),
 );
+const TrainingEnhancementsTab = lazyWithRetry(
+  () => import("./TrainingEnhancementsTab"),
+);
 
 // ── Type definitions ────────────────────────────────────────────
 
-type PageId = "dashboard" | "records" | "setup" | "skills-testing";
+type PageId = "dashboard" | "records" | "setup" | "skills-testing" | "enhancements";
 
 interface TabDef {
   id: string;
@@ -135,6 +139,22 @@ const pages: PageDef[] = [
     ],
     defaultTab: "templates",
   },
+  {
+    id: "enhancements",
+    label: "Advanced",
+    icon: TrendingUp,
+    description:
+      "Recertification pathways, competency tracking, instructor qualifications, effectiveness, and multi-agency training",
+    tabs: [
+      { id: "recertification", label: "Recertification" },
+      { id: "competency", label: "Competency" },
+      { id: "instructors", label: "Instructors" },
+      { id: "effectiveness", label: "Effectiveness" },
+      { id: "multi-agency", label: "Multi-Agency" },
+      { id: "reports", label: "Reports" },
+    ],
+    defaultTab: "recertification",
+  },
 ];
 
 // Map from old flat tab IDs to new page+tab for backwards compatibility
@@ -152,6 +172,12 @@ const legacyTabMap: Record<string, { page: PageId; tab: string }> = {
   import: { page: "setup", tab: "import" },
   templates: { page: "skills-testing", tab: "templates" },
   tests: { page: "skills-testing", tab: "tests" },
+  recertification: { page: "enhancements", tab: "recertification" },
+  competency: { page: "enhancements", tab: "competency" },
+  instructors: { page: "enhancements", tab: "instructors" },
+  effectiveness: { page: "enhancements", tab: "effectiveness" },
+  "multi-agency": { page: "enhancements", tab: "multi-agency" },
+  reports: { page: "enhancements", tab: "reports" },
 };
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -204,6 +230,11 @@ const TabContent: React.FC<{ page: PageId; tab: string }> = ({ page, tab }) => {
   if (page === "skills-testing") {
     if (tab === "templates") return <SkillsTestingTemplatesTab />;
     if (tab === "tests") return <SkillsTestingTestRecordsTab />;
+  }
+
+  // Advanced / Enhancements sub-page
+  if (page === "enhancements") {
+    return <TrainingEnhancementsTab activeTab={tab} />;
   }
 
   return null;

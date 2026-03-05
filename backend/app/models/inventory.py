@@ -243,6 +243,7 @@ class InventoryItem(Base):
     # Depreciation
     expected_lifetime_years = Column(Integer)
     current_value = Column(Numeric(10, 2))
+    replacement_cost = Column(Numeric(10, 2))  # Cost to charge member for lost/damaged item
 
     # Physical Details
     size = Column(String(50))  # Small, Medium, Large, or specific measurements
@@ -492,6 +493,15 @@ class ItemIssuance(Base):
     # Status
     is_returned = Column(Boolean, default=False, index=True)
 
+    # Cost snapshot — records replacement_cost at the time of issuance
+    unit_cost_at_issuance = Column(Numeric(10, 2))
+
+    # Cost recovery for lost/damaged items
+    charge_status = Column(
+        String(20), default="none"
+    )  # "none", "pending", "charged", "waived"
+    charge_amount = Column(Numeric(10, 2))  # Amount charged to member
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
@@ -508,6 +518,63 @@ class ItemIssuance(Base):
         Index("idx_item_issuances_org_item", "organization_id", "item_id"),
         Index("idx_item_issuances_org_user", "organization_id", "user_id"),
         Index("idx_item_issuances_org_returned", "organization_id", "is_returned"),
+    )
+
+
+class IssuanceAllowance(Base):
+    """
+    Issuance Allowance model
+
+    Defines how many units of a given category each member (by role or rank)
+    can be issued per period.  E.g. "Each firefighter gets 3 polo shirts per year."
+    """
+
+    __tablename__ = "issuance_allowances"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # What category this allowance applies to
+    category_id = Column(
+        String(36),
+        ForeignKey("inventory_categories.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # Who this applies to — NULL means all members
+    role_id = Column(String(36), ForeignKey("roles.id", ondelete="CASCADE"))
+
+    # Limits
+    max_quantity = Column(Integer, nullable=False)  # Max units per period
+    period_type = Column(
+        String(20), default="annual"
+    )  # "annual", "career", "one_time"
+    is_active = Column(Boolean, default=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    created_by = Column(String(36), ForeignKey("users.id"))
+
+    # Relationships
+    category = relationship("InventoryCategory", foreign_keys=[category_id])
+
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "category_id",
+            "role_id",
+            name="uq_allowance_org_cat_role",
+        ),
+        Index("idx_allowances_org", "organization_id"),
     )
 
 
@@ -946,6 +1013,7 @@ class RequestType(str, enum.Enum):
     CHECKOUT = "checkout"  # Temporary checkout
     ISSUANCE = "issuance"  # Pool item issuance
     PURCHASE = "purchase"  # Request to purchase new item
+    RETURN = "return"  # Member-initiated return request (requires QM approval)
 
 
 class RequestStatus(str, enum.Enum):
@@ -1430,4 +1498,103 @@ class NFPAExposureRecord(Base):
     __table_args__ = (
         Index("idx_nfpa_exposure_org_item", "organization_id", "item_id"),
         Index("idx_nfpa_exposure_org_date", "organization_id", "exposure_date"),
+    )
+
+
+class ReturnRequestStatus(str, enum.Enum):
+    """Status of a member-initiated return request"""
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    DENIED = "denied"
+    COMPLETED = "completed"  # Approved and physically returned
+
+
+class ReturnRequestType(str, enum.Enum):
+    """What type of hold is being returned"""
+
+    ASSIGNMENT = "assignment"  # Permanently assigned item
+    ISSUANCE = "issuance"  # Pool-issued item
+    CHECKOUT = "checkout"  # Temporarily checked-out item
+
+
+class ReturnRequest(Base):
+    """
+    Member-initiated return request.
+
+    Members can declare they want to return equipment.  A quartermaster
+    reviews and either approves (triggering the actual return) or denies
+    the request.  This prevents members from simply claiming they returned
+    an item without physical validation.
+    """
+
+    __tablename__ = "return_requests"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # Who is requesting the return
+    requester_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # What they want to return
+    return_type = Column(
+        Enum(ReturnRequestType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+    item_id = Column(
+        String(36),
+        ForeignKey("inventory_items.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    item_name = Column(String(255), nullable=False)  # Snapshot for display
+
+    # Link to specific record being returned
+    assignment_id = Column(String(36), ForeignKey("item_assignments.id", ondelete="SET NULL"))
+    issuance_id = Column(String(36), ForeignKey("item_issuances.id", ondelete="SET NULL"))
+    checkout_id = Column(String(36), ForeignKey("checkout_records.id", ondelete="SET NULL"))
+
+    # Member-reported details
+    quantity_returning = Column(Integer, nullable=False, default=1)
+    reported_condition = Column(
+        Enum(ItemCondition, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=ItemCondition.GOOD,
+    )
+    member_notes = Column(Text)
+
+    # Review
+    status = Column(
+        Enum(ReturnRequestStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=ReturnRequestStatus.PENDING,
+        index=True,
+    )
+    reviewed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+    reviewed_at = Column(DateTime(timezone=True))
+    review_notes = Column(Text)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    requester = relationship("User", foreign_keys=[requester_id])
+    reviewer = relationship("User", foreign_keys=[reviewed_by])
+    item = relationship("InventoryItem", foreign_keys=[item_id])
+
+    __table_args__ = (
+        Index("idx_return_requests_org_status", "organization_id", "status"),
+        Index("idx_return_requests_requester", "requester_id", "status"),
     )

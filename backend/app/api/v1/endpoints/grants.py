@@ -50,6 +50,7 @@ from app.schemas.grant import (
     GrantOpportunityCreate,
     GrantOpportunityResponse,
     GrantOpportunityUpdate,
+    GrantReportResponse,
     GrantsDashboardResponse,
     PledgeCreate,
     PledgeResponse,
@@ -312,6 +313,11 @@ async def create_application(
             data=data.model_dump(exclude_unset=True),
             user_id=str(current_user.id),
         )
+        # Reload with relationships for response serialization
+        application = await service.get_application(
+            application_id=application.id,
+            organization_id=str(current_user.organization_id),
+        )
         return application
     except ValueError as e:
         raise HTTPException(
@@ -387,6 +393,11 @@ async def update_application(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Grant application not found",
             )
+        # Reload with fresh relationships (status changes may add notes/tasks)
+        application = await service.get_application(
+            application_id=str(application_id),
+            organization_id=str(current_user.organization_id),
+        )
         return application
     except HTTPException:
         raise
@@ -1713,7 +1724,7 @@ async def get_dashboard(
         )
 
 
-@router.get("/reports/grants")
+@router.get("/reports/grants", response_model=GrantReportResponse)
 async def get_grant_report(
     start_date: Optional[date] = Query(None, description="Report start date"),
     end_date: Optional[date] = Query(None, description="Report end date"),

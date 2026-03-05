@@ -47,6 +47,7 @@ import {
   type MaintenanceRecord,
   type MaintenanceRecordCreate,
   type StorageAreaResponse,
+  type AllowanceCheck,
 } from '../services/api';
 import type { Role } from '../types/role';
 import { useAuthStore } from '../stores/authStore';
@@ -55,7 +56,12 @@ import { ITEM_CONDITION_OPTIONS } from '../constants/enums';
 import { useInventoryWebSocket } from '../hooks/useInventoryWebSocket';
 import { useRanks } from '../hooks/useRanks';
 import ItemDetailModal from './inventory/ItemDetailModal';
+import { MobileItemCard } from '../components/ux/MobileItemCard';
+import { FloatingActionButton } from '../components/ux/FloatingActionButton';
 import toast from 'react-hot-toast';
+
+const ChargeManagementPanel = React.lazy(() => import('../components/ChargeManagementPanel'));
+const ReturnRequestsPanel = React.lazy(() => import('../components/ReturnRequestsPanel'));
 
 const ITEM_TYPES = [
   { value: 'uniform', label: 'Uniform' },
@@ -97,7 +103,7 @@ const getConditionColor = (condition: string) => {
   }
 };
 
-type Tab = 'items' | 'categories' | 'maintenance';
+type Tab = 'items' | 'categories' | 'maintenance' | 'charges' | 'return-requests';
 
 const InventoryPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
@@ -165,6 +171,7 @@ const InventoryPage: React.FC = () => {
     quantity: 1,
     unit_of_measure: '',
     purchase_price: undefined,
+    replacement_cost: undefined,
     purchase_date: '',
     vendor: '',
     warranty_expiration: '',
@@ -172,6 +179,23 @@ const InventoryPage: React.FC = () => {
     notes: '',
   };
   const [itemForm, setItemForm] = useState<InventoryItemCreate>(defaultItemForm);
+
+  // Size variant creator
+  const [showVariantCreator, setShowVariantCreator] = useState(false);
+  const [variantForm, setVariantForm] = useState({
+    base_name: '',
+    sizes: '' as string,  // comma-separated input
+    colors: '' as string,  // comma-separated input
+    category_id: '',
+    quantity_per_variant: 0,
+    replacement_cost: undefined as number | undefined,
+    purchase_price: undefined as number | undefined,
+  });
+
+  // Bulk issuance
+  const [showBulkIssueModal, setShowBulkIssueModal] = useState(false);
+  const [bulkIssueItem, setBulkIssueItem] = useState<InventoryItem | null>(null);
+  const [bulkIssueTargets, setBulkIssueTargets] = useState<Array<{ user_id: string; quantity: number; issue_reason: string }>>([]);
 
   // Add category form
   const [categoryForm, setCategoryForm] = useState<InventoryCategoryCreate>({
@@ -476,6 +500,7 @@ const InventoryPage: React.FC = () => {
       unit_of_measure: item.unit_of_measure || '',
       purchase_date: item.purchase_date || '',
       purchase_price: item.purchase_price,
+      replacement_cost: item.replacement_cost,
       vendor: item.vendor || '',
       warranty_expiration: item.warranty_expiration || '',
       inspection_interval_days: item.inspection_interval_days,
@@ -507,6 +532,7 @@ const InventoryPage: React.FC = () => {
       color: item.color || '',
       unit_of_measure: item.unit_of_measure || '',
       purchase_price: item.purchase_price,
+      replacement_cost: item.replacement_cost,
       vendor: item.vendor || '',
       inspection_interval_days: item.inspection_interval_days,
       notes: '',
@@ -721,10 +747,22 @@ const InventoryPage: React.FC = () => {
   };
 
   // Pool issuance
+  const [poolAllowance, setPoolAllowance] = useState<AllowanceCheck | null>(null);
+
   const openPoolIssueModal = (item: InventoryItem) => {
     setPoolIssueItem(item);
     setPoolIssueForm({ member_id: '', quantity: 1, reason: '' });
+    setPoolAllowance(null);
     setShowPoolIssueModal(true);
+  };
+
+  const checkPoolAllowance = async (memberId: string, categoryId: string) => {
+    try {
+      const check = await inventoryService.checkAllowance(memberId, categoryId);
+      setPoolAllowance(check);
+    } catch {
+      setPoolAllowance(null);
+    }
   };
 
   const handlePoolIssue = async () => {
@@ -738,6 +776,68 @@ const InventoryPage: React.FC = () => {
       void loadData();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to issue item'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Size variant creator
+  const handleCreateVariants = async () => {
+    const sizes = variantForm.sizes.split(',').map(s => s.trim()).filter(Boolean);
+    if (!variantForm.base_name || sizes.length === 0) {
+      toast.error('Base name and at least one size are required');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const colors = variantForm.colors ? variantForm.colors.split(',').map(c => c.trim()).filter(Boolean) : undefined;
+      const result = await inventoryService.createSizeVariants({
+        base_name: variantForm.base_name,
+        sizes,
+        colors: colors && colors.length > 0 ? colors : undefined,
+        category_id: variantForm.category_id || undefined,
+        quantity_per_variant: variantForm.quantity_per_variant || undefined,
+        replacement_cost: variantForm.replacement_cost,
+        purchase_price: variantForm.purchase_price,
+      });
+      toast.success(`Created ${result.created_count} variants`);
+      setShowVariantCreator(false);
+      setVariantForm({ base_name: '', sizes: '', colors: '', category_id: '', quantity_per_variant: 0, replacement_cost: undefined, purchase_price: undefined });
+      void loadData();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to create variants'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Bulk issuance
+  const openBulkIssueModal = (item: InventoryItem) => {
+    setBulkIssueItem(item);
+    setBulkIssueTargets([{ user_id: '', quantity: 1, issue_reason: '' }]);
+    setShowBulkIssueModal(true);
+  };
+
+  const handleBulkIssue = async () => {
+    if (!bulkIssueItem) return;
+    const validTargets = bulkIssueTargets.filter(t => t.user_id);
+    if (validTargets.length === 0) {
+      toast.error('Select at least one member');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const result = await inventoryService.bulkIssueFromPool(bulkIssueItem.id, validTargets);
+      toast.success(`Issued to ${result.successful} of ${result.total} members`);
+      if (result.failed > 0) {
+        const failures = result.results.filter(r => !r.success);
+        failures.forEach(f => toast.error(`Failed for member: ${f.error ?? 'Unknown error'}`));
+      }
+      setShowBulkIssueModal(false);
+      setBulkIssueItem(null);
+      void loadData();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to bulk issue'));
     } finally {
       setSubmitting(false);
     }
@@ -845,19 +945,18 @@ const InventoryPage: React.FC = () => {
               {selectedItemIds.size > 0 && (
                 <div className="relative">
                   <div className="flex items-center">
-                    <button
-                      onClick={() => { void handlePrintLabels(); }}
-                      disabled={printingLabels}
-                      className="flex items-center space-x-2 px-3 sm:px-4 py-2 bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary rounded-l-lg border border-theme-surface-border transition-colors text-sm disabled:opacity-50"
+                    <Link
+                      to={`/inventory/print-labels?ids=${Array.from(selectedItemIds).join(',')}`}
+                      className="flex items-center space-x-2 px-3 sm:px-4 py-2 bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary rounded-l-lg border border-theme-surface-border transition-colors text-sm"
                     >
-                      <Printer className="w-4 h-4" aria-hidden="true" />
-                      <span className="hidden sm:inline">Print Labels ({selectedItemIds.size})</span>
-                      <span className="sm:hidden">Labels ({selectedItemIds.size})</span>
-                    </button>
+                      <Barcode className="w-4 h-4" aria-hidden="true" />
+                      <span className="hidden sm:inline">Print Barcodes ({selectedItemIds.size})</span>
+                      <span className="sm:hidden">Barcodes ({selectedItemIds.size})</span>
+                    </Link>
                     <button
                       onClick={(e) => { e.stopPropagation(); setShowLabelMenu(!showLabelMenu); }}
                       className="px-2 py-2 bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary rounded-r-lg border border-l-0 border-theme-surface-border transition-colors"
-                      aria-label="Select label format"
+                      aria-label="More print options"
                     >
                       <ChevronDown className="w-4 h-4" aria-hidden="true" />
                     </button>
@@ -865,15 +964,29 @@ const InventoryPage: React.FC = () => {
                   {showLabelMenu && (
                     <div className="absolute right-0 top-full mt-1 w-72 bg-theme-surface-modal rounded-lg shadow-xl border border-theme-surface-border z-50 py-1">
                       <div className="px-3 py-2 border-b border-theme-surface-border">
-                        <p className="text-xs font-medium text-theme-text-muted uppercase">Label Format</p>
+                        <p className="text-xs font-medium text-theme-text-muted uppercase">Print Options</p>
+                      </div>
+                      <Link
+                        to={`/inventory/print-labels?ids=${Array.from(selectedItemIds).join(',')}`}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-theme-surface-hover flex items-center gap-2 text-theme-text-primary"
+                        onClick={() => setShowLabelMenu(false)}
+                      >
+                        <Barcode className="w-4 h-4 shrink-0" aria-hidden="true" />
+                        <div>
+                          <span className="block">Print from Browser</span>
+                          <span className="text-xs text-theme-text-muted">Dymo, Rollo, or standard printer</span>
+                        </div>
+                      </Link>
+                      <div className="border-t border-theme-surface-border my-1" />
+                      <div className="px-3 py-1.5">
+                        <p className="text-xs font-medium text-theme-text-muted uppercase">Generate PDF</p>
                       </div>
                       {labelFormats.map((fmt) => (
                         <button
                           key={fmt.id}
-                          onClick={() => { setLabelFormat(fmt.id); setShowLabelMenu(false); }}
-                          className={`w-full text-left px-3 py-2 text-sm hover:bg-theme-surface-hover flex items-center justify-between ${
-                            labelFormat === fmt.id ? 'text-blue-600 dark:text-blue-400 bg-blue-500/5' : 'text-theme-text-primary'
-                          }`}
+                          onClick={() => { setLabelFormat(fmt.id); setShowLabelMenu(false); void handlePrintLabels(); }}
+                          disabled={printingLabels}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-theme-surface-hover flex items-center justify-between text-theme-text-primary disabled:opacity-50"
                         >
                           <div>
                             <span className="block">{fmt.description}</span>
@@ -884,9 +997,7 @@ const InventoryPage: React.FC = () => {
                               <span className="text-xs text-theme-text-muted">8.5" x 11" — Standard printer</span>
                             )}
                           </div>
-                          {labelFormat === fmt.id && (
-                            <span className="text-blue-600 dark:text-blue-400 text-xs font-medium">Selected</span>
-                          )}
+                          <Printer className="w-3 h-3 text-theme-text-muted shrink-0" aria-hidden="true" />
                         </button>
                       ))}
                     </div>
@@ -907,6 +1018,13 @@ const InventoryPage: React.FC = () => {
                 <Plus className="w-4 h-4" aria-hidden="true" />
                 <span className="hidden sm:inline">Add Category</span>
                 <span className="sm:hidden">Category</span>
+              </button>
+              <button
+                onClick={() => setShowVariantCreator(true)}
+                className="hidden lg:flex items-center space-x-2 px-3 sm:px-4 py-2 bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary rounded-lg transition-colors text-sm"
+              >
+                <Copy className="w-4 h-4" aria-hidden="true" />
+                <span>Create Variants</span>
               </button>
               <button
                 onClick={() => setShowAddItem(true)}
@@ -1232,6 +1350,34 @@ const InventoryPage: React.FC = () => {
               </span>
             )}
           </button>
+          {canManage && (
+            <>
+              <button
+                onClick={() => setActiveTab('charges')}
+                role="tab"
+                aria-selected={activeTab === 'charges'}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === 'charges'
+                    ? 'bg-emerald-600 text-white'
+                    : 'text-theme-text-muted hover:text-theme-text-primary'
+                }`}
+              >
+                Charges
+              </button>
+              <button
+                onClick={() => setActiveTab('return-requests')}
+                role="tab"
+                aria-selected={activeTab === 'return-requests'}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === 'return-requests'
+                    ? 'bg-emerald-600 text-white'
+                    : 'text-theme-text-muted hover:text-theme-text-primary'
+                }`}
+              >
+                Return Requests
+              </button>
+            </>
+          )}
         </div>
 
         {/* Items Tab */}
@@ -1365,7 +1511,48 @@ const InventoryPage: React.FC = () => {
                 )}
               </div>
             ) : (
-              <div className="card overflow-hidden">
+              <div>
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-3 mb-4" role="list" aria-label="Inventory items">
+                  {items.map((item) => {
+                    const room = item.location_id ? rooms.find(r => r.id === item.location_id) : null;
+                    const roomLabel = room ? room.name : null;
+                    const area = item.storage_location;
+                    const locationStr = roomLabel && area ? `${roomLabel} — ${area}` : roomLabel ?? area ?? item.station ?? undefined;
+                    return (
+                      <MobileItemCard
+                        key={item.id}
+                        name={item.name}
+                        status={item.status}
+                        statusStyle={getStatusStyle(item.status)}
+                        condition={item.condition}
+                        conditionColor={getConditionColor(item.condition)}
+                        category={getCategoryName(item.category_id)}
+                        serialNumber={item.serial_number}
+                        assetTag={item.asset_tag}
+                        size={item.size}
+                        color={item.color}
+                        location={locationStr}
+                        manufacturer={item.manufacturer ? `${item.manufacturer}${item.model_number ? ` ${item.model_number}` : ''}` : undefined}
+                        quantity={item.quantity}
+                        selected={selectedItemIds.has(item.id)}
+                        onSelect={canManage ? () => toggleItemSelection(item.id) : undefined}
+                        onTap={() => setDetailItem(item)}
+                        showActions={canManage}
+                        onEdit={canManage ? () => openEditModal(item) : undefined}
+                        onDuplicate={canManage ? () => handleDuplicateItem(item) : undefined}
+                        onIssue={canManage ? () => openPoolIssueModal(item) : undefined}
+                        onWriteOff={canManage ? () => openWriteOffModal(item) : undefined}
+                        onRetire={canManage ? () => setShowRetireConfirm(item) : undefined}
+                        canIssue={item.tracking_type === 'pool' && item.status !== 'retired'}
+                        canRetire={item.status !== 'retired'}
+                      />
+                    );
+                  })}
+                </div>
+
+                {/* Desktop Table View */}
+                <div className="card overflow-hidden hidden md:block">
                 <div className="overflow-x-auto">
                   <table className="w-full" aria-label="Inventory items list">
                     <thead className="bg-theme-input-bg border-b border-theme-surface-border">
@@ -1492,9 +1679,14 @@ const InventoryPage: React.FC = () => {
                                   <Copy className="w-4 h-4" aria-hidden="true" />
                                 </button>
                                 {item.tracking_type === 'pool' && item.status !== 'retired' && (
-                                  <button onClick={() => openPoolIssueModal(item)} className="p-1.5 text-theme-text-muted hover:text-purple-500 rounded-sm" title="Issue from pool" aria-label={`Issue ${item.name}`}>
-                                    <Send className="w-4 h-4" aria-hidden="true" />
-                                  </button>
+                                  <>
+                                    <button onClick={() => openPoolIssueModal(item)} className="p-1.5 text-theme-text-muted hover:text-purple-500 rounded-sm" title="Issue from pool" aria-label={`Issue ${item.name}`}>
+                                      <Send className="w-4 h-4" aria-hidden="true" />
+                                    </button>
+                                    <button onClick={() => openBulkIssueModal(item)} className="p-1.5 text-theme-text-muted hover:text-indigo-500 rounded-sm" title="Bulk issue to multiple members" aria-label={`Bulk issue ${item.name}`}>
+                                      <ClipboardList className="w-4 h-4" aria-hidden="true" />
+                                    </button>
+                                  </>
                                 )}
                                 {item.status !== 'retired' && (
                                   <button onClick={() => openWriteOffModal(item)} className="p-1.5 text-theme-text-muted hover:text-orange-500 rounded-sm" title="Write off item" aria-label={`Write off ${item.name}`}>
@@ -1519,6 +1711,29 @@ const InventoryPage: React.FC = () => {
                 </div>
                 {items.length < totalItems && (
                   <div className="flex justify-center py-4">
+                    <button
+                      onClick={() => { void loadMoreItems(); }}
+                      disabled={loadingMore}
+                      className="flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-theme-text-primary border border-theme-surface-border rounded-lg hover:bg-theme-surface-secondary transition-colors disabled:opacity-50"
+                    >
+                      {loadingMore ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        `Load More (${totalItems - items.length} remaining)`
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+                {/* Shared count + load more for mobile */}
+                <div className="text-center py-2 text-xs text-theme-text-muted md:hidden">
+                  Showing {items.length} of {totalItems} items
+                </div>
+                {items.length < totalItems && (
+                  <div className="flex justify-center py-4 md:hidden">
                     <button
                       onClick={() => { void loadMoreItems(); }}
                       disabled={loadingMore}
@@ -1704,6 +1919,20 @@ const InventoryPage: React.FC = () => {
               </div>
             )}
           </>
+        )}
+
+        {/* Charges Tab */}
+        {activeTab === 'charges' && canManage && (
+          <React.Suspense fallback={<div className="bg-theme-surface rounded-lg p-8 border border-theme-surface-border text-center"><Loader2 className="w-8 h-8 text-emerald-500 animate-spin mx-auto" /></div>}>
+            <ChargeManagementPanel />
+          </React.Suspense>
+        )}
+
+        {/* Return Requests Tab */}
+        {activeTab === 'return-requests' && canManage && (
+          <React.Suspense fallback={<div className="bg-theme-surface rounded-lg p-8 border border-theme-surface-border text-center"><Loader2 className="w-8 h-8 text-emerald-500 animate-spin mx-auto" /></div>}>
+            <ReturnRequestsPanel />
+          </React.Suspense>
         )}
 
         {/* Log Maintenance Modal */}
@@ -2117,6 +2346,17 @@ const InventoryPage: React.FC = () => {
                               />
                             </div>
                             <div>
+                              <label htmlFor="item-replacement-cost" className="block text-sm font-medium text-theme-text-secondary mb-1">Replacement Cost</label>
+                              <input
+                                id="item-replacement-cost"
+                                type="number" min="0" step="0.01"
+                                value={itemForm.replacement_cost ?? ''}
+                                onChange={(e) => setItemForm({ ...itemForm, replacement_cost: e.target.value ? parseFloat(e.target.value) : undefined })}
+                                className="form-input focus:ring-emerald-500"
+                                placeholder="Cost to charge for lost/damaged"
+                              />
+                            </div>
+                            <div>
                               <label htmlFor="item-purchase-date" className="block text-sm font-medium text-theme-text-secondary mb-1">Purchase Date</label>
                               <input
                                 id="item-purchase-date"
@@ -2519,6 +2759,10 @@ const InventoryPage: React.FC = () => {
                               <input id="edit-item-purchase-price" type="number" min="0" step="0.01" value={editForm.purchase_price ?? ''} onChange={(e) => setEditForm({ ...editForm, purchase_price: e.target.value ? parseFloat(e.target.value) : undefined })} className="form-input focus:ring-emerald-500" placeholder="0.00" />
                             </div>
                             <div>
+                              <label htmlFor="edit-item-replacement-cost" className="block text-sm font-medium text-theme-text-secondary mb-1">Replacement Cost</label>
+                              <input id="edit-item-replacement-cost" type="number" min="0" step="0.01" value={editForm.replacement_cost ?? ''} onChange={(e) => setEditForm({ ...editForm, replacement_cost: e.target.value ? parseFloat(e.target.value) : undefined })} className="form-input focus:ring-emerald-500" placeholder="Cost for lost/damaged" />
+                            </div>
+                            <div>
                               <label htmlFor="edit-item-purchase-date" className="block text-sm font-medium text-theme-text-secondary mb-1">Purchase Date</label>
                               <input id="edit-item-purchase-date" type="date" value={editForm.purchase_date || ''} onChange={(e) => setEditForm({ ...editForm, purchase_date: e.target.value })} className="form-input focus:ring-emerald-500" />
                             </div>
@@ -2771,7 +3015,7 @@ const InventoryPage: React.FC = () => {
           </div>
         )}
 
-        {/* Pool Issuance Modal */}
+        {/* Pool Issuance Modal (enhanced with cost & allowance info) */}
         {showPoolIssueModal && poolIssueItem && (
           <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" onKeyDown={(e) => { if (e.key === 'Escape') setShowPoolIssueModal(false); }}>
             <div className="flex items-center justify-center min-h-screen px-4">
@@ -2779,15 +3023,57 @@ const InventoryPage: React.FC = () => {
               <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-4">
                   <h3 className="text-lg font-medium text-theme-text-primary mb-1">Issue From Pool</h3>
-                  <p className="text-theme-text-secondary text-sm mb-4">{poolIssueItem.name} — {poolIssueItem.quantity - poolIssueItem.quantity_issued} available</p>
+                  <p className="text-theme-text-secondary text-sm mb-2">{poolIssueItem.name} — {poolIssueItem.quantity - poolIssueItem.quantity_issued} available</p>
+
+                  {/* Cost info banner */}
+                  {(poolIssueItem.replacement_cost != null || poolIssueItem.purchase_price != null) && (
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 mb-4">
+                      <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" aria-hidden="true" />
+                      <p className="text-xs text-amber-700 dark:text-amber-300">
+                        Unit cost: <span className="font-semibold">${(poolIssueItem.replacement_cost ?? poolIssueItem.purchase_price ?? 0).toFixed(2)}</span>
+                        {poolIssueItem.replacement_cost != null && <span className="ml-1">(replacement cost)</span>}
+                        {' '}— this amount will be recorded at time of issuance for cost recovery if lost/damaged.
+                      </p>
+                    </div>
+                  )}
+
                   <div className="space-y-4">
                     <div>
                       <label htmlFor="pool-issue-member" className="block text-sm font-medium text-theme-text-secondary mb-1">Member *</label>
-                      <select id="pool-issue-member" value={poolIssueForm.member_id} onChange={(e) => setPoolIssueForm({ ...poolIssueForm, member_id: e.target.value })} className="form-input">
+                      <select
+                        id="pool-issue-member"
+                        value={poolIssueForm.member_id}
+                        onChange={(e) => {
+                          setPoolIssueForm({ ...poolIssueForm, member_id: e.target.value });
+                          if (e.target.value && poolIssueItem.category_id) {
+                            void checkPoolAllowance(e.target.value, poolIssueItem.category_id);
+                          } else {
+                            setPoolAllowance(null);
+                          }
+                        }}
+                        className="form-input"
+                      >
                         <option value="">Select member...</option>
                         {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                       </select>
                     </div>
+
+                    {/* Allowance info */}
+                    {poolAllowance && (
+                      <div className={`flex items-center gap-2 p-2 rounded-lg border ${poolAllowance.remaining > 0 ? 'bg-green-500/10 border-green-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
+                        {poolAllowance.remaining > 0 ? (
+                          <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0" aria-hidden="true" />
+                        ) : (
+                          <XCircle className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" aria-hidden="true" />
+                        )}
+                        <p className="text-xs">
+                          <span className={poolAllowance.remaining > 0 ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}>
+                            Allowance: {poolAllowance.issued_this_period}/{poolAllowance.max_quantity} issued ({poolAllowance.remaining} remaining, {poolAllowance.period_type})
+                          </span>
+                        </p>
+                      </div>
+                    )}
+
                     <div>
                       <label htmlFor="pool-issue-quantity" className="block text-sm font-medium text-theme-text-secondary mb-1">Quantity</label>
                       <input id="pool-issue-quantity" type="number" min="1" max={poolIssueItem.quantity - poolIssueItem.quantity_issued} value={poolIssueForm.quantity} onChange={(e) => setPoolIssueForm({ ...poolIssueForm, quantity: parseInt(e.target.value) || 1 })} className="form-input" />
@@ -2857,7 +3143,218 @@ const InventoryPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Size Variant Creator Modal */}
+        {showVariantCreator && (
+          <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" onKeyDown={(e) => { if (e.key === 'Escape') setShowVariantCreator(false); }}>
+            <div className="flex items-center justify-center min-h-screen px-4">
+              <div className="fixed inset-0 bg-black/60" onClick={() => setShowVariantCreator(false)} aria-hidden="true" />
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
+                <div className="px-6 pt-5 pb-4">
+                  <h3 className="text-lg font-medium text-theme-text-primary mb-1">Create Size/Color Variants</h3>
+                  <p className="text-theme-text-secondary text-sm mb-4">
+                    Quickly create multiple pool items from one base item. A variant is created for each size (and color, if provided).
+                  </p>
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="variant-base-name" className="block text-sm font-medium text-theme-text-secondary mb-1">Base Name *</label>
+                      <input id="variant-base-name" type="text" value={variantForm.base_name} onChange={(e) => setVariantForm({ ...variantForm, base_name: e.target.value })} className="form-input" placeholder="e.g., Bunker Coat" />
+                      <p className="text-xs text-theme-text-muted mt-1">Items will be named like &quot;Bunker Coat - L&quot; or &quot;Bunker Coat - L / Black&quot;</p>
+                    </div>
+                    <div>
+                      <label htmlFor="variant-sizes" className="block text-sm font-medium text-theme-text-secondary mb-1">Sizes (comma-separated) *</label>
+                      <input id="variant-sizes" type="text" value={variantForm.sizes} onChange={(e) => setVariantForm({ ...variantForm, sizes: e.target.value })} className="form-input" placeholder="XS, S, M, L, XL, 2XL, 3XL" />
+                    </div>
+                    <div>
+                      <label htmlFor="variant-colors" className="block text-sm font-medium text-theme-text-secondary mb-1">Colors (comma-separated, optional)</label>
+                      <input id="variant-colors" type="text" value={variantForm.colors} onChange={(e) => setVariantForm({ ...variantForm, colors: e.target.value })} className="form-input" placeholder="Black, Navy, Tan" />
+                    </div>
+                    <div>
+                      <label htmlFor="variant-category" className="block text-sm font-medium text-theme-text-secondary mb-1">Category</label>
+                      <select id="variant-category" value={variantForm.category_id} onChange={(e) => setVariantForm({ ...variantForm, category_id: e.target.value })} className="form-input">
+                        <option value="">Select category...</option>
+                        {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label htmlFor="variant-qty" className="block text-sm font-medium text-theme-text-secondary mb-1">Qty per Variant</label>
+                        <input id="variant-qty" type="number" min="0" value={variantForm.quantity_per_variant || ''} onChange={(e) => setVariantForm({ ...variantForm, quantity_per_variant: parseInt(e.target.value) || 0 })} className="form-input" placeholder="0" />
+                      </div>
+                      <div>
+                        <label htmlFor="variant-price" className="block text-sm font-medium text-theme-text-secondary mb-1">Purchase Price</label>
+                        <input id="variant-price" type="number" min="0" step="0.01" value={variantForm.purchase_price ?? ''} onChange={(e) => setVariantForm({ ...variantForm, purchase_price: e.target.value ? parseFloat(e.target.value) : undefined })} className="form-input" placeholder="$0.00" />
+                      </div>
+                      <div>
+                        <label htmlFor="variant-replacement" className="block text-sm font-medium text-theme-text-secondary mb-1">Replacement Cost</label>
+                        <input id="variant-replacement" type="number" min="0" step="0.01" value={variantForm.replacement_cost ?? ''} onChange={(e) => setVariantForm({ ...variantForm, replacement_cost: e.target.value ? parseFloat(e.target.value) : undefined })} className="form-input" placeholder="$0.00" />
+                      </div>
+                    </div>
+
+                    {/* Preview */}
+                    {variantForm.base_name && variantForm.sizes && (() => {
+                      const sizes = variantForm.sizes.split(',').map(s => s.trim()).filter(Boolean);
+                      const colors = variantForm.colors ? variantForm.colors.split(',').map(c => c.trim()).filter(Boolean) : [];
+                      const count = colors.length > 0 ? sizes.length * colors.length : sizes.length;
+                      return (
+                        <div className="p-3 rounded-lg bg-theme-surface-secondary border border-theme-surface-border">
+                          <p className="text-xs font-medium text-theme-text-secondary mb-2">Preview: {count} variant{count !== 1 ? 's' : ''} will be created</p>
+                          <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                            {sizes.slice(0, 4).map(size => {
+                              if (colors.length > 0) {
+                                return colors.slice(0, 3).map(color => (
+                                  <span key={`${size}-${color}`} className="px-2 py-0.5 text-xs rounded bg-theme-surface-hover text-theme-text-primary">
+                                    {variantForm.base_name} - {size} / {color}
+                                  </span>
+                                ));
+                              }
+                              return (
+                                <span key={size} className="px-2 py-0.5 text-xs rounded bg-theme-surface-hover text-theme-text-primary">
+                                  {variantForm.base_name} - {size}
+                                </span>
+                              );
+                            })}
+                            {count > (colors.length > 0 ? 12 : 4) && (
+                              <span className="px-2 py-0.5 text-xs text-theme-text-muted">...and {count - (colors.length > 0 ? 12 : 4)} more</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+                <div className="bg-theme-input-bg px-6 py-3 flex justify-end gap-3 rounded-b-lg">
+                  <button onClick={() => setShowVariantCreator(false)} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
+                  <button onClick={() => { void handleCreateVariants(); }} disabled={submitting || !variantForm.base_name || !variantForm.sizes.trim()} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                    {submitting ? 'Creating...' : 'Create Variants'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Bulk Issuance Modal */}
+        {showBulkIssueModal && bulkIssueItem && (
+          <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" onKeyDown={(e) => { if (e.key === 'Escape') setShowBulkIssueModal(false); }}>
+            <div className="flex items-center justify-center min-h-screen px-4">
+              <div className="fixed inset-0 bg-black/60" onClick={() => setShowBulkIssueModal(false)} aria-hidden="true" />
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
+                <div className="px-6 pt-5 pb-4">
+                  <h3 className="text-lg font-medium text-theme-text-primary mb-1">Bulk Issue</h3>
+                  <p className="text-theme-text-secondary text-sm mb-4">
+                    {bulkIssueItem.name} — {bulkIssueItem.quantity - bulkIssueItem.quantity_issued} available
+                    {bulkIssueItem.replacement_cost != null && <span className="ml-2 text-amber-600 dark:text-amber-400">(${bulkIssueItem.replacement_cost.toFixed(2)}/unit)</span>}
+                  </p>
+
+                  <div className="space-y-3 max-h-64 overflow-y-auto">
+                    {bulkIssueTargets.map((target, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <select
+                          value={target.user_id}
+                          onChange={(e) => {
+                            const updated = [...bulkIssueTargets];
+                            updated[idx] = { ...target, user_id: e.target.value };
+                            setBulkIssueTargets(updated);
+                          }}
+                          className="form-input flex-1"
+                          aria-label={`Member ${idx + 1}`}
+                        >
+                          <option value="">Select member...</option>
+                          {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                        </select>
+                        <input
+                          type="number"
+                          min="1"
+                          value={target.quantity}
+                          onChange={(e) => {
+                            const updated = [...bulkIssueTargets];
+                            updated[idx] = { ...target, quantity: parseInt(e.target.value) || 1 };
+                            setBulkIssueTargets(updated);
+                          }}
+                          className="form-input w-20"
+                          aria-label={`Quantity for member ${idx + 1}`}
+                        />
+                        {bulkIssueTargets.length > 1 && (
+                          <button
+                            onClick={() => setBulkIssueTargets(bulkIssueTargets.filter((_, i) => i !== idx))}
+                            className="p-1.5 text-theme-text-muted hover:text-red-500 rounded"
+                            aria-label={`Remove member ${idx + 1}`}
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() => setBulkIssueTargets([...bulkIssueTargets, { user_id: '', quantity: 1, issue_reason: '' }])}
+                    className="mt-3 flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-700 dark:text-emerald-400"
+                  >
+                    <Plus className="w-4 h-4" /> Add another member
+                  </button>
+
+                  {/* Summary */}
+                  {(() => {
+                    const valid = bulkIssueTargets.filter(t => t.user_id);
+                    const totalQty = valid.reduce((sum, t) => sum + t.quantity, 0);
+                    const available = bulkIssueItem.quantity - bulkIssueItem.quantity_issued;
+                    return valid.length > 0 ? (
+                      <div className={`mt-3 p-2 rounded-lg border text-xs ${totalQty > available ? 'bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-300' : 'bg-theme-surface-secondary border-theme-surface-border text-theme-text-secondary'}`}>
+                        Issuing to {valid.length} member{valid.length !== 1 ? 's' : ''}, total {totalQty} unit{totalQty !== 1 ? 's' : ''}
+                        {totalQty > available && ' — exceeds available stock!'}
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+                <div className="bg-theme-input-bg px-6 py-3 flex justify-end gap-3 rounded-b-lg">
+                  <button onClick={() => setShowBulkIssueModal(false)} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
+                  <button onClick={() => { void handleBulkIssue(); }} disabled={submitting || bulkIssueTargets.every(t => !t.user_id)} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                    {submitting ? 'Issuing...' : 'Issue to All'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
+
+      {/* Mobile FAB for quick actions */}
+      {canManage && (
+        <FloatingActionButton
+          actions={[
+            {
+              id: 'add-item',
+              label: 'Add Item',
+              icon: <Plus className="w-5 h-5" />,
+              onClick: () => setShowAddItem(true),
+              color: 'bg-emerald-600',
+            },
+            {
+              id: 'add-category',
+              label: 'Add Category',
+              icon: <Tag className="w-5 h-5" />,
+              onClick: () => setShowAddCategory(true),
+              color: 'bg-blue-600',
+            },
+            {
+              id: 'variants',
+              label: 'Create Variants',
+              icon: <Copy className="w-5 h-5" />,
+              onClick: () => setShowVariantCreator(true),
+              color: 'bg-indigo-600',
+            },
+            {
+              id: 'import',
+              label: 'Import CSV',
+              icon: <Upload className="w-5 h-5" />,
+              onClick: () => { window.location.href = '/inventory/import'; },
+              color: 'bg-purple-600',
+            },
+          ]}
+        />
+      )}
     </div>
   );
 };

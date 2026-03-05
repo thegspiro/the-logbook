@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { Package, AlertTriangle, Clock, CheckCircle, ArrowDownToLine, RefreshCw, Plus, ClipboardList, CalendarClock, Search } from 'lucide-react';
+import { Package, AlertTriangle, Clock, CheckCircle, ArrowDownToLine, RefreshCw, Plus, ClipboardList, CalendarClock, Search, CornerDownLeft } from 'lucide-react';
 import {
   inventoryService,
   type UserInventoryResponse,
@@ -8,10 +8,12 @@ import {
   type UserIssuedItem,
   type EquipmentRequestItem,
   type InventoryItem,
+  type ReturnRequestItem,
 } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { useRanks } from '../hooks/useRanks';
 import { getErrorMessage } from '../utils/errorHandling';
+import { MobileCheckoutCard } from '../components/ux/MobileCheckoutCard';
 import toast from 'react-hot-toast';
 
 const CONDITION_COLORS: Record<string, string> = {
@@ -49,6 +51,22 @@ const MyEquipmentPage: React.FC = () => {
   const [requestForm, setRequestForm] = useState({ item_name: '', item_id: '', category_id: '', request_type: 'checkout', priority: 'normal', quantity: 1, reason: '' });
   const [myRequests, setMyRequests] = useState<EquipmentRequestItem[]>([]);
   const [showRequests, setShowRequests] = useState(false);
+
+  // Return request state
+  const [returnReqModal, setReturnReqModal] = useState<{
+    open: boolean;
+    returnType: 'assignment' | 'issuance' | 'checkout';
+    itemId: string;
+    itemName: string;
+    assignmentId?: string;
+    issuanceId?: string;
+    checkoutId?: string;
+    maxQty: number;
+  }>({ open: false, returnType: 'assignment', itemId: '', itemName: '', maxQty: 1 });
+  const [returnReqCondition, setReturnReqCondition] = useState('good');
+  const [returnReqNotes, setReturnReqNotes] = useState('');
+  const [returnReqQty, setReturnReqQty] = useState(1);
+  const [myReturnRequests, setMyReturnRequests] = useState<ReturnRequestItem[]>([]);
 
   // Item search autocomplete state
   const [itemSearch, setItemSearch] = useState('');
@@ -186,6 +204,46 @@ const MyEquipmentPage: React.FC = () => {
     }
   };
 
+  const loadReturnRequests = useCallback(async () => {
+    try {
+      const data = await inventoryService.getReturnRequests({ mine_only: true });
+      setMyReturnRequests(data);
+    } catch { /* non-critical */ }
+  }, []);
+
+  useEffect(() => { void loadReturnRequests(); }, [loadReturnRequests]);
+
+  const handleSubmitReturnRequest = async () => {
+    if (!returnReqModal.itemId) return;
+    setSubmitting(true);
+    try {
+      await inventoryService.createReturnRequest({
+        return_type: returnReqModal.returnType,
+        item_id: returnReqModal.itemId,
+        assignment_id: returnReqModal.assignmentId,
+        issuance_id: returnReqModal.issuanceId,
+        checkout_id: returnReqModal.checkoutId,
+        quantity_returning: returnReqQty,
+        reported_condition: returnReqCondition,
+        member_notes: returnReqNotes || undefined,
+      });
+      toast.success('Return request submitted for quartermaster review');
+      setReturnReqModal({ open: false, returnType: 'assignment', itemId: '', itemName: '', maxQty: 1 });
+      setReturnReqCondition('good');
+      setReturnReqNotes('');
+      setReturnReqQty(1);
+      void loadReturnRequests();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to submit return request'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Check if an item already has a pending return request
+  const hasPendingReturnRequest = (itemId: string) =>
+    myReturnRequests.some(r => r.item_id === itemId && r.status === 'pending');
+
   const pendingRequestCount = myRequests.filter(r => r.status === 'pending').length;
   const overdueCount = data?.active_checkouts?.filter(c => c.is_overdue)?.length ?? 0;
   const totalItems = (data?.permanent_assignments?.length ?? 0) + (data?.active_checkouts?.length ?? 0) + (data?.issued_items?.length ?? 0);
@@ -294,6 +352,27 @@ const MyEquipmentPage: React.FC = () => {
                         </p>
                         <p className="text-theme-text-muted text-xs">Assigned {formatDate(item.assigned_date)}</p>
                       </div>
+                      <div className="mt-3">
+                        {hasPendingReturnRequest(item.item_id) ? (
+                          <span className="text-xs text-yellow-600 dark:text-yellow-400 flex items-center gap-1">
+                            <Clock className="w-3 h-3" /> Return pending review
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => setReturnReqModal({
+                              open: true,
+                              returnType: 'assignment',
+                              itemId: item.item_id,
+                              itemName: item.item_name,
+                              assignmentId: item.assignment_id,
+                              maxQty: 1,
+                            })}
+                            className="flex items-center gap-1 text-xs text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+                          >
+                            <CornerDownLeft className="w-3 h-3" /> Request Return
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -307,7 +386,22 @@ const MyEquipmentPage: React.FC = () => {
                   <Clock className="w-5 h-5 text-yellow-500" />
                   Checked Out ({data?.active_checkouts.length ?? 0})
                 </h2>
-                <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden overflow-x-auto">
+                {/* Mobile card view */}
+                <div className="sm:hidden space-y-3">
+                  {data?.active_checkouts.map((co: UserCheckoutItem) => (
+                    <MobileCheckoutCard
+                      key={co.checkout_id}
+                      itemName={co.item_name}
+                      checkoutDate={formatDate(co.checked_out_at)}
+                      dueDate={co.expected_return_at ? formatDate(co.expected_return_at) : undefined}
+                      isOverdue={co.is_overdue}
+                      onCheckIn={() => setCheckInModal({ open: true, checkoutId: co.checkout_id, itemName: co.item_name })}
+                      onExtend={() => { setExtendModal({ open: true, checkoutId: co.checkout_id, itemName: co.item_name, currentDue: co.expected_return_at || '' }); setExtendDate(''); }}
+                    />
+                  ))}
+                </div>
+                {/* Desktop table view */}
+                <div className="hidden sm:block bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-theme-surface-border bg-theme-surface-secondary">
@@ -364,7 +458,45 @@ const MyEquipmentPage: React.FC = () => {
                   <Package className="w-5 h-5 text-purple-500" />
                   Issued Items ({data?.issued_items.length ?? 0})
                 </h2>
-                <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden overflow-x-auto">
+                {/* Mobile card view for issued items */}
+                <div className="sm:hidden space-y-3">
+                  {data?.issued_items.map((iss: UserIssuedItem) => (
+                    <div key={iss.issuance_id} className="bg-theme-surface rounded-lg border border-theme-surface-border p-4">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <h3 className="text-theme-text-primary font-medium text-sm">{iss.item_name}</h3>
+                        <span className="text-theme-text-primary text-sm font-medium shrink-0">x{iss.quantity_issued}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-theme-text-muted">
+                        {iss.category_name && <span>{iss.category_name}</span>}
+                        {iss.size && <span>Size: {iss.size}</span>}
+                        <span>Issued {formatDate(iss.issued_at)}</span>
+                      </div>
+                      <div className="mt-2">
+                        {hasPendingReturnRequest(iss.item_id) ? (
+                          <span className="text-xs text-yellow-600 dark:text-yellow-400 flex items-center gap-1">
+                            <Clock className="w-3 h-3" /> Return pending review
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => { setReturnReqModal({
+                              open: true,
+                              returnType: 'issuance',
+                              itemId: iss.item_id,
+                              itemName: iss.item_name,
+                              issuanceId: iss.issuance_id,
+                              maxQty: iss.quantity_issued,
+                            }); setReturnReqQty(iss.quantity_issued); }}
+                            className="flex items-center gap-1 text-xs text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+                          >
+                            <CornerDownLeft className="w-3 h-3" /> Request Return
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {/* Desktop table view for issued items */}
+                <div className="hidden sm:block bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-theme-surface-border bg-theme-surface-secondary">
@@ -373,6 +505,7 @@ const MyEquipmentPage: React.FC = () => {
                         <th className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Category</th>
                         <th className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Size</th>
                         <th className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Issued</th>
+                        <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -383,6 +516,27 @@ const MyEquipmentPage: React.FC = () => {
                           <td className="hidden sm:table-cell p-3 text-theme-text-secondary">{iss.category_name || '--'}</td>
                           <td className="hidden sm:table-cell p-3 text-theme-text-secondary">{iss.size || '--'}</td>
                           <td className="hidden sm:table-cell p-3 text-theme-text-secondary">{formatDate(iss.issued_at)}</td>
+                          <td className="p-3">
+                            {hasPendingReturnRequest(iss.item_id) ? (
+                              <span className="text-xs text-yellow-600 dark:text-yellow-400 flex items-center gap-1">
+                                <Clock className="w-3 h-3" /> Pending
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => { setReturnReqModal({
+                                  open: true,
+                                  returnType: 'issuance',
+                                  itemId: iss.item_id,
+                                  itemName: iss.item_name,
+                                  issuanceId: iss.issuance_id,
+                                  maxQty: iss.quantity_issued,
+                                }); setReturnReqQty(iss.quantity_issued); }}
+                                className="flex items-center gap-1 text-xs text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+                              >
+                                <CornerDownLeft className="w-3 h-3" /> Return
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -405,7 +559,38 @@ const MyEquipmentPage: React.FC = () => {
                 <p className="text-theme-text-secondary text-sm">No requests submitted yet.</p>
               </div>
             ) : (
-              <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden overflow-x-auto">
+              <>
+              {/* Mobile card view for requests */}
+              <div className="sm:hidden space-y-3">
+                {myRequests.map(req => (
+                  <div key={req.id} className="bg-theme-surface rounded-lg border border-theme-surface-border p-4">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <div className="min-w-0">
+                        <h3 className="text-theme-text-primary font-medium text-sm">
+                          {req.item_name}
+                          {req.quantity > 1 && <span className="text-theme-text-muted text-xs ml-1">x{req.quantity}</span>}
+                        </h3>
+                        {req.reason && <p className="text-theme-text-muted text-xs mt-0.5 truncate">{req.reason}</p>}
+                      </div>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${
+                        req.status === 'pending' ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400' :
+                        req.status === 'approved' ? 'bg-green-500/10 text-green-700 dark:text-green-400' :
+                        req.status === 'denied' ? 'bg-red-500/10 text-red-700 dark:text-red-400' :
+                        'bg-blue-500/10 text-blue-700 dark:text-blue-400'
+                      }`}>
+                        {req.status}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-theme-text-muted">
+                      <span className="capitalize">{req.request_type}</span>
+                      <span>{new Date(req.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                    </div>
+                    {req.review_notes && <p className="text-theme-text-muted text-xs mt-1 truncate">{req.review_notes}</p>}
+                  </div>
+                ))}
+              </div>
+              {/* Desktop table view for requests */}
+              <div className="hidden sm:block bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-theme-surface-border bg-theme-surface-secondary">
@@ -443,6 +628,7 @@ const MyEquipmentPage: React.FC = () => {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </div>
         )}
@@ -603,6 +789,64 @@ const MyEquipmentPage: React.FC = () => {
                   <button onClick={() => setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' })} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
                   <button onClick={() => { void handleExtend(); }} disabled={submitting || !extendDate} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50">
                     {submitting ? 'Extending...' : 'Extend'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Return Request Modal */}
+        {returnReqModal.open && (
+          <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" onKeyDown={(e) => { if (e.key === 'Escape') setReturnReqModal(prev => ({ ...prev, open: false })); }}>
+            <div className="flex items-center justify-center min-h-screen px-4">
+              <div className="fixed inset-0 bg-black/60" onClick={() => setReturnReqModal(prev => ({ ...prev, open: false }))} aria-hidden="true" />
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full border border-theme-surface-border">
+                <div className="px-4 sm:px-6 pt-5 pb-4">
+                  <h3 className="text-lg font-medium text-theme-text-primary mb-1">Request Return</h3>
+                  <p className="text-theme-text-muted text-sm mb-4">{returnReqModal.itemName}</p>
+                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 mb-4">
+                    <p className="text-xs text-yellow-700 dark:text-yellow-400">
+                      This request will be sent to the quartermaster for approval. You will need to physically return the item when approved.
+                    </p>
+                  </div>
+                  <div className="space-y-4">
+                    {returnReqModal.maxQty > 1 && (
+                      <div>
+                        <label htmlFor="return-req-qty" className="block text-sm font-medium text-theme-text-secondary mb-1">
+                          Quantity to return (max: {returnReqModal.maxQty})
+                        </label>
+                        <input
+                          id="return-req-qty"
+                          type="number"
+                          min="1"
+                          max={returnReqModal.maxQty}
+                          value={returnReqQty}
+                          onChange={(e) => setReturnReqQty(Math.min(parseInt(e.target.value) || 1, returnReqModal.maxQty))}
+                          className="form-input focus:ring-emerald-500"
+                        />
+                      </div>
+                    )}
+                    <div>
+                      <label htmlFor="return-req-condition" className="block text-sm font-medium text-theme-text-secondary mb-1">Current Condition *</label>
+                      <select id="return-req-condition" value={returnReqCondition} onChange={(e) => setReturnReqCondition(e.target.value)} className="form-input">
+                        <option value="excellent">Excellent</option>
+                        <option value="good">Good</option>
+                        <option value="fair">Fair</option>
+                        <option value="poor">Poor</option>
+                        <option value="damaged">Damaged</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="return-req-notes" className="block text-sm font-medium text-theme-text-secondary mb-1">Notes (optional)</label>
+                      <textarea id="return-req-notes" rows={2} value={returnReqNotes} onChange={(e) => setReturnReqNotes(e.target.value)} placeholder="Describe any issues or damage..." className="form-input" />
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-theme-input-bg px-4 sm:px-6 py-3 flex justify-end gap-3 rounded-b-lg">
+                  <button onClick={() => setReturnReqModal(prev => ({ ...prev, open: false }))} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
+                  <button onClick={() => { void handleSubmitReturnRequest(); }} disabled={submitting} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50">
+                    {submitting ? 'Submitting...' : 'Submit Request'}
                   </button>
                 </div>
               </div>

@@ -22,6 +22,7 @@ from app.api.v1.endpoints import (
     events,
     external_training,
     facilities,
+    training_enhancements,
     forms,
     grants,
     integrations,
@@ -142,6 +143,11 @@ api_router.include_router(
     admin_hours.router, prefix="/admin-hours", tags=["admin-hours"]
 )
 api_router.include_router(grants.router, prefix="/grants", tags=["grants"])
+api_router.include_router(
+    training_enhancements.router,
+    prefix="/training",
+    tags=["training-enhancements"],
+)
 api_router.include_router(public_portal_admin.router)
 
 

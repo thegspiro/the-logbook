@@ -2696,3 +2696,701 @@ class TrainingWaiver(Base):
         Index("idx_training_waivers_org_user", "organization_id", "user_id"),
         Index("idx_training_waivers_dates", "start_date", "end_date"),
     )
+
+
+# ============================================
+# Recertification Pathways
+# ============================================
+
+
+class RecertificationPathway(Base):
+    """
+    Recertification Pathway model
+
+    Defines how to renew an expiring certification. Maps expiring
+    certifications to the courses/hours needed for renewal, with
+    support for grace periods and prerequisite chains.
+
+    Industry standard: NREMT recertification requires specific
+    category-hours (e.g., 50 CE hours distributed across topics for EMT).
+    """
+
+    __tablename__ = "recertification_pathways"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # Which certification this pathway renews
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    source_requirement_id = Column(
+        String(36),
+        ForeignKey("training_requirements.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )  # The certification requirement this renews
+
+    # Renewal requirements
+    renewal_type = Column(
+        String(50), nullable=False, default="hours"
+    )  # hours, courses, assessment, combination
+    required_hours = Column(Float)  # Total renewal hours needed
+    required_courses = Column(JSON)  # Specific course IDs needed for renewal
+    category_hour_requirements = Column(
+        JSON
+    )  # Category-specific hours: [{"category_id": "...", "hours": 10, "label": "Trauma"}]
+    requires_assessment = Column(Boolean, default=False)
+    assessment_course_id = Column(
+        String(36),
+        ForeignKey("training_courses.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # Timing
+    renewal_window_days = Column(
+        Integer, default=90
+    )  # Days before expiration that renewal opens
+    grace_period_days = Column(
+        Integer, default=0
+    )  # Days after expiration where renewal is still possible
+    max_lapse_days = Column(
+        Integer
+    )  # Days after which full recertification is needed (null = no limit)
+
+    # Prerequisite pathways (must complete these renewals first)
+    prerequisite_pathway_ids = Column(JSON)  # e.g., CPR must be current before ACLS
+
+    # What happens on successful renewal
+    new_expiration_months = Column(
+        Integer
+    )  # Months from renewal completion to new expiration
+    auto_create_record = Column(
+        Boolean, default=True
+    )  # Auto-create a new TrainingRecord on completion
+
+    # Status
+    active = Column(Boolean, default=True, index=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    created_by = Column(String(36), ForeignKey("users.id"))
+
+    __table_args__ = (
+        Index("idx_recert_pathway_org", "organization_id", "active"),
+        Index("idx_recert_pathway_source", "source_requirement_id"),
+    )
+
+    def __repr__(self):
+        return f"<RecertificationPathway(name={self.name})>"
+
+
+class RenewalTaskStatus(str, enum.Enum):
+    """Status of a renewal task"""
+
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    EXPIRED = "expired"  # Grace period passed
+    LAPSED = "lapsed"  # Full recert needed
+
+
+class RenewalTask(Base):
+    """
+    Renewal Task model
+
+    Auto-generated when a certification enters its renewal window.
+    Guides the member through the renewal process.
+    """
+
+    __tablename__ = "renewal_tasks"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # Links
+    pathway_id = Column(
+        String(36),
+        ForeignKey("recertification_pathways.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    training_record_id = Column(
+        String(36),
+        ForeignKey("training_records.id", ondelete="SET NULL"),
+        nullable=True,
+    )  # The expiring record
+
+    # Status
+    status = Column(
+        Enum(RenewalTaskStatus, values_callable=lambda x: [e.value for e in x]),
+        default=RenewalTaskStatus.PENDING,
+        index=True,
+    )
+
+    # Certification dates
+    certification_expiration_date = Column(Date, nullable=False)
+    renewal_window_opens = Column(Date, nullable=False)
+    grace_period_ends = Column(Date)
+
+    # Progress
+    hours_completed = Column(Float, default=0)
+    courses_completed = Column(JSON)  # List of completed course IDs
+    category_hours_completed = Column(
+        JSON
+    )  # {"category_id": hours_completed} tracking
+    assessment_passed = Column(Boolean, default=False)
+    progress_percentage = Column(Float, default=0.0)
+
+    # Completion
+    completed_at = Column(DateTime(timezone=True))
+    new_record_id = Column(
+        String(36),
+        ForeignKey("training_records.id", ondelete="SET NULL"),
+        nullable=True,
+    )  # The new certification record created
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_renewal_task_user", "user_id", "status"),
+        Index("idx_renewal_task_pathway", "pathway_id"),
+        Index("idx_renewal_task_expiration", "certification_expiration_date"),
+    )
+
+    def __repr__(self):
+        return f"<RenewalTask(user_id={self.user_id}, status={self.status})>"
+
+
+# ============================================
+# Competency Levels & Progression
+# ============================================
+
+
+class CompetencyLevel(str, enum.Enum):
+    """Dreyfus model of skill acquisition"""
+
+    NOVICE = "novice"
+    ADVANCED_BEGINNER = "advanced_beginner"
+    COMPETENT = "competent"
+    PROFICIENT = "proficient"
+    EXPERT = "expert"
+
+
+class CompetencyMatrix(Base):
+    """
+    Competency Matrix model
+
+    Maps positions/roles to required skills at specific competency levels.
+    Based on NFPA 1021 (Fire Officer) and NFPA 1041 (Instructor) frameworks.
+    """
+
+    __tablename__ = "competency_matrices"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # Target
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    position = Column(
+        String(100), nullable=False, index=True
+    )  # firefighter, driver, officer, etc.
+    role_id = Column(
+        String(36), nullable=True, index=True
+    )  # Optional link to role
+
+    # Requirements: list of skill/competency pairs
+    # Format: [{"skill_evaluation_id": "...", "required_level": "competent", "priority": "required"}]
+    skill_requirements = Column(JSON, nullable=False, default=list)
+
+    # Status
+    active = Column(Boolean, default=True, index=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    created_by = Column(String(36), ForeignKey("users.id"))
+
+    __table_args__ = (
+        Index("idx_competency_matrix_org", "organization_id", "position"),
+    )
+
+    def __repr__(self):
+        return f"<CompetencyMatrix(name={self.name}, position={self.position})>"
+
+
+class MemberCompetency(Base):
+    """
+    Member Competency model
+
+    Tracks a member's current competency level for a specific skill.
+    Updated when skill evaluations are completed.
+    Supports skill decay tracking (requires re-validation after N months).
+    """
+
+    __tablename__ = "member_competencies"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    skill_evaluation_id = Column(
+        String(36),
+        ForeignKey("skill_evaluations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # Current level
+    current_level = Column(
+        Enum(CompetencyLevel, values_callable=lambda x: [e.value for e in x]),
+        default=CompetencyLevel.NOVICE,
+        nullable=False,
+    )
+    previous_level = Column(
+        Enum(CompetencyLevel, values_callable=lambda x: [e.value for e in x]),
+        nullable=True,
+    )
+
+    # Evaluation history
+    last_evaluated_at = Column(DateTime(timezone=True))
+    last_evaluator_id = Column(
+        String(36), ForeignKey("users.id"), nullable=True
+    )
+    evaluation_count = Column(Integer, default=0)
+    last_score = Column(Float)
+
+    # Skill decay tracking
+    decay_months = Column(
+        Integer
+    )  # After this many months without evaluation, level decays
+    decay_warning_sent = Column(Boolean, default=False)
+    next_evaluation_due = Column(Date)  # When re-evaluation is needed
+
+    # Score trend (last 5 scores for trend analysis)
+    score_history = Column(JSON)  # [{"date": "...", "score": 85, "level": "competent"}]
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_member_comp_user", "user_id", "skill_evaluation_id"),
+        Index("idx_member_comp_org", "organization_id"),
+        Index("idx_member_comp_decay", "next_evaluation_due"),
+    )
+
+    def __repr__(self):
+        return f"<MemberCompetency(user_id={self.user_id}, level={self.current_level})>"
+
+
+# ============================================
+# Instructor Qualifications
+# ============================================
+
+
+class InstructorQualification(Base):
+    """
+    Instructor Qualification model
+
+    Tracks which users are qualified to instruct or evaluate specific
+    courses and skills. Based on NFPA 1041 requirements.
+    """
+
+    __tablename__ = "instructor_qualifications"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # What they're qualified for
+    qualification_type = Column(
+        String(50), nullable=False
+    )  # instructor, evaluator, lead_instructor, mentor
+    course_id = Column(
+        String(36),
+        ForeignKey("training_courses.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )  # Specific course authorization
+    skill_evaluation_id = Column(
+        String(36),
+        ForeignKey("skill_evaluations.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )  # Specific skill they can evaluate
+    category_id = Column(
+        String(36),
+        ForeignKey("training_categories.id", ondelete="CASCADE"),
+        nullable=True,
+    )  # Broad category authorization
+
+    # Certification details
+    certification_number = Column(String(100))
+    issuing_agency = Column(String(255))
+    certification_level = Column(
+        String(50)
+    )  # e.g., "Fire Instructor I", "Fire Instructor II"
+    issued_date = Column(Date)
+    expiration_date = Column(Date, index=True)
+
+    # Status
+    active = Column(Boolean, default=True, index=True)
+    verified = Column(Boolean, default=False)
+    verified_by = Column(String(36), ForeignKey("users.id"))
+    verified_at = Column(DateTime(timezone=True))
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    created_by = Column(String(36), ForeignKey("users.id"))
+
+    __table_args__ = (
+        Index("idx_instructor_qual_user", "user_id", "active"),
+        Index("idx_instructor_qual_course", "course_id"),
+        Index("idx_instructor_qual_skill", "skill_evaluation_id"),
+        Index("idx_instructor_qual_expiration", "expiration_date"),
+    )
+
+    def __repr__(self):
+        return f"<InstructorQualification(user_id={self.user_id}, type={self.qualification_type})>"
+
+
+# ============================================
+# Training Effectiveness (Kirkpatrick Model)
+# ============================================
+
+
+class EvaluationLevel(str, enum.Enum):
+    """Kirkpatrick Model evaluation levels"""
+
+    REACTION = "reaction"  # Level 1: Participant satisfaction
+    LEARNING = "learning"  # Level 2: Knowledge/skill gained (pre/post test)
+    BEHAVIOR = "behavior"  # Level 3: On-the-job application
+    RESULTS = "results"  # Level 4: Organizational impact
+
+
+class TrainingEffectivenessEvaluation(Base):
+    """
+    Training Effectiveness Evaluation model
+
+    Implements the Kirkpatrick Model for measuring training effectiveness.
+    Level 1 (Reaction): Post-training survey
+    Level 2 (Learning): Pre/post assessment scores
+    Level 3 (Behavior): On-the-job observation
+    Level 4 (Results): Incident performance correlation
+    """
+
+    __tablename__ = "training_effectiveness_evaluations"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # What was evaluated
+    training_record_id = Column(
+        String(36),
+        ForeignKey("training_records.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    training_session_id = Column(
+        String(36),
+        ForeignKey("training_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    course_id = Column(
+        String(36),
+        ForeignKey("training_courses.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # Evaluation details
+    evaluation_level = Column(
+        Enum(EvaluationLevel, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+
+    # Level 1: Reaction (survey responses)
+    # Format: {"overall_rating": 4, "relevance": 5, "instructor_quality": 4, "would_recommend": true, "comments": "..."}
+    survey_responses = Column(JSON)
+    overall_rating = Column(Float)  # 1-5 scale
+
+    # Level 2: Learning (pre/post scores)
+    pre_assessment_score = Column(Float)
+    post_assessment_score = Column(Float)
+    knowledge_gain_percentage = Column(Float)  # Calculated: (post - pre) / pre * 100
+
+    # Level 3: Behavior (observed application)
+    behavior_observations = Column(JSON)  # From shift reports, skill checkoffs
+    behavior_rating = Column(Float)  # 1-5 scale
+
+    # Level 4: Results (organizational metrics)
+    results_metrics = Column(
+        JSON
+    )  # {"response_time_improvement": -5, "incident_outcome_score": 4.2}
+    results_notes = Column(Text)
+
+    # Evaluator
+    evaluated_by = Column(
+        String(36), ForeignKey("users.id"), nullable=True
+    )
+    evaluated_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_effectiveness_org", "organization_id"),
+        Index("idx_effectiveness_record", "training_record_id"),
+        Index("idx_effectiveness_level", "evaluation_level"),
+        Index("idx_effectiveness_user", "user_id"),
+    )
+
+    def __repr__(self):
+        return f"<TrainingEffectivenessEvaluation(level={self.evaluation_level}, rating={self.overall_rating})>"
+
+
+# ============================================
+# Multi-Agency Training
+# ============================================
+
+
+class MultiAgencyTraining(Base):
+    """
+    Multi-Agency Training model
+
+    Tags training records and sessions as multi-agency exercises,
+    records participating organizations, and supports cross-org
+    credential verification.
+
+    Industry standard: NFPA 1500 Chapter 5 and FEMA NIMS require
+    documented joint training.
+    """
+
+    __tablename__ = "multi_agency_trainings"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # Training link
+    training_session_id = Column(
+        String(36),
+        ForeignKey("training_sessions.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    training_record_id = Column(
+        String(36),
+        ForeignKey("training_records.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # Exercise details
+    exercise_name = Column(String(255), nullable=False)
+    exercise_type = Column(
+        String(50), nullable=False
+    )  # joint_training, mutual_aid_drill, regional_exercise, tabletop
+    description = Column(Text)
+
+    # Participating organizations
+    participating_organizations = Column(
+        JSON, nullable=False
+    )  # [{"name": "...", "role": "host/participant", "contact": "..."}]
+    lead_agency = Column(String(255))
+    total_participants = Column(Integer)
+
+    # NIMS/ICS compliance
+    ics_position_assignments = Column(
+        JSON
+    )  # [{"position": "IC", "user_id": "...", "agency": "..."}]
+    nims_compliant = Column(Boolean, default=False)
+    after_action_report = Column(Text)
+    lessons_learned = Column(JSON)  # [{"area": "communication", "finding": "...", "recommendation": "..."}]
+
+    # Agreement tracking
+    mutual_aid_agreement_id = Column(String(100))
+
+    # Timestamps
+    exercise_date = Column(Date, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    created_by = Column(String(36), ForeignKey("users.id"))
+
+    __table_args__ = (
+        Index("idx_multi_agency_org", "organization_id"),
+        Index("idx_multi_agency_date", "exercise_date"),
+        Index("idx_multi_agency_session", "training_session_id"),
+    )
+
+    def __repr__(self):
+        return f"<MultiAgencyTraining(name={self.exercise_name}, type={self.exercise_type})>"
+
+
+# ============================================
+# SCORM/xAPI Learning Record Store
+# ============================================
+
+
+class XAPIStatement(Base):
+    """
+    xAPI (Experience API / Tin Can) Statement model
+
+    Stores learning activity statements in xAPI format.
+    Enables ingestion from any xAPI-compliant learning platform
+    without building provider-specific connectors.
+    """
+
+    __tablename__ = "xapi_statements"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # Actor (who did it)
+    actor_email = Column(String(255), index=True)
+    actor_name = Column(String(255))
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )  # Mapped internal user
+
+    # Verb (what they did)
+    verb_id = Column(
+        String(500), nullable=False
+    )  # IRI like "http://adlnet.gov/expapi/verbs/completed"
+    verb_display = Column(String(100))  # Human-readable: "completed", "passed", etc.
+
+    # Object (what they did it to)
+    object_id = Column(String(500), nullable=False)  # IRI for the activity
+    object_name = Column(String(500))
+    object_type = Column(String(100))  # Activity, Agent, etc.
+
+    # Result
+    score_scaled = Column(Float)  # -1 to 1
+    score_raw = Column(Float)
+    score_min = Column(Float)
+    score_max = Column(Float)
+    success = Column(Boolean)
+    completion = Column(Boolean)
+    duration_seconds = Column(Integer)  # ISO 8601 duration converted to seconds
+
+    # Context
+    context_registration = Column(String(36))  # Registration UUID
+    context_platform = Column(String(255))  # LMS name
+    context_extensions = Column(JSON)
+
+    # Full statement (raw JSON for reference)
+    raw_statement = Column(JSON, nullable=False)
+
+    # Processing
+    processed = Column(Boolean, default=False, index=True)
+    training_record_id = Column(
+        String(36),
+        ForeignKey("training_records.id", ondelete="SET NULL"),
+        nullable=True,
+    )  # Created training record
+
+    # Source
+    source_provider_id = Column(
+        String(36),
+        ForeignKey("external_training_providers.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # Timestamp from xAPI statement
+    statement_timestamp = Column(DateTime(timezone=True), nullable=False)
+    stored_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_xapi_org", "organization_id"),
+        Index("idx_xapi_actor", "actor_email"),
+        Index("idx_xapi_verb", "verb_id"),
+        Index("idx_xapi_timestamp", "statement_timestamp"),
+        Index("idx_xapi_processed", "processed"),
+    )
+
+    def __repr__(self):
+        return f"<XAPIStatement(actor={self.actor_email}, verb={self.verb_display})>"

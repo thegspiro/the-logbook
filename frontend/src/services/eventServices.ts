@@ -401,6 +401,7 @@ export interface InventoryItem {
   barcode?: string;
   purchase_date?: string;
   purchase_price?: number;
+  replacement_cost?: number;
   vendor?: string;
   warranty_expiration?: string;
   location_id?: string;
@@ -571,6 +572,7 @@ export interface InventoryItemCreate {
   warranty_expiration?: string | undefined;
   expected_lifetime_years?: number | undefined;
   current_value?: number | undefined;
+  replacement_cost?: number | undefined;
   size?: string | undefined;
   color?: string | undefined;
   weight?: number | undefined;
@@ -603,8 +605,67 @@ export interface ItemIssuance {
   return_condition?: string;
   return_notes?: string;
   is_returned: boolean;
+  unit_cost_at_issuance?: number;
+  charge_status?: string;  // "none", "pending", "charged", "waived"
+  charge_amount?: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface SizeVariantCreate {
+  base_name: string;
+  sizes: string[];
+  colors?: string[] | undefined;
+  category_id?: string | undefined;
+  quantity_per_variant?: number | undefined;
+  replacement_cost?: number | undefined;
+  purchase_price?: number | undefined;
+  tracking_type?: string | undefined;
+  unit_of_measure?: string | undefined;
+  location_id?: string | undefined;
+  storage_area_id?: string | undefined;
+  station?: string | undefined;
+  notes?: string | undefined;
+}
+
+export interface BulkIssuanceTarget {
+  user_id: string;
+  quantity?: number;
+  issue_reason?: string;
+}
+
+export interface BulkIssuanceResponse {
+  item_id: string;
+  total: number;
+  successful: number;
+  failed: number;
+  results: Array<{
+    user_id: string;
+    success: boolean;
+    issuance_id?: string;
+    error?: string;
+  }>;
+}
+
+export interface IssuanceAllowance {
+  id: string;
+  organization_id: string;
+  category_id: string;
+  role_id?: string;
+  max_quantity: number;
+  period_type: string;
+  is_active: boolean;
+  category_name?: string;
+  role_name?: string;
+}
+
+export interface AllowanceCheck {
+  category_id: string;
+  category_name?: string;
+  max_quantity: number;
+  issued_this_period: number;
+  remaining: number;
+  period_type: string;
 }
 
 export interface InventoryItemsListResponse {
@@ -807,4 +868,59 @@ export interface NFPARetirementDueItem {
   expected_retirement_date?: string;
   days_remaining?: number;
   ensemble_id?: string;
+}
+
+// ============================================
+// Charge Management Types
+// ============================================
+
+export interface IssuanceChargeListItem {
+  issuance_id: string;
+  item_id: string;
+  item_name: string;
+  user_id: string;
+  user_name: string;
+  quantity_issued: number;
+  issued_at: string;
+  returned_at?: string;
+  is_returned: boolean;
+  return_condition?: string;
+  unit_cost_at_issuance?: number;
+  charge_status: string;
+  charge_amount?: number;
+}
+
+export interface ChargeManagementResponse {
+  items: IssuanceChargeListItem[];
+  total: number;
+  total_pending: number;
+  total_charged: number;
+  total_waived: number;
+}
+
+// ============================================
+// Return Request Types
+// ============================================
+
+export interface ReturnRequestItem {
+  id: string;
+  organization_id: string;
+  requester_id: string;
+  requester_name?: string;
+  return_type: 'assignment' | 'issuance' | 'checkout';
+  item_id: string;
+  item_name: string;
+  assignment_id?: string;
+  issuance_id?: string;
+  checkout_id?: string;
+  quantity_returning: number;
+  reported_condition: string;
+  member_notes?: string;
+  status: 'pending' | 'approved' | 'denied' | 'completed';
+  reviewed_by?: string;
+  reviewer_name?: string;
+  reviewed_at?: string;
+  review_notes?: string;
+  created_at: string;
+  updated_at: string;
 }
