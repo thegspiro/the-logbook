@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { waitFor } from '@testing-library/react';
 import { renderWithRouter } from '../test/utils';
 import TrainingRequirementsPage from './TrainingRequirementsPage';
 
