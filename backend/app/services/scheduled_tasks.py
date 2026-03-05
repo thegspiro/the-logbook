@@ -1250,7 +1250,6 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
     Send email alerts to admins when inventory items drop below reorder point.
     Daily at 07:00.
     """
-    from app.models.inventory import InventoryItem
     from app.services.email_service import EmailService
     from app.services.inventory_service import InventoryService
 

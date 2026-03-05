@@ -196,7 +196,7 @@ function NFPAComplianceTab({
               className={inputClass}
               value={form.manufacture_date ?? ''}
               onChange={(e) =>
-                setForm({ ...form, manufacture_date: e.target.value ?? undefined })
+                setForm({ ...form, manufacture_date: e.target.value || undefined })
               }
             />
           </div>
@@ -211,7 +211,7 @@ function NFPAComplianceTab({
               onChange={(e) =>
                 setForm({
                   ...form,
-                  first_in_service_date: e.target.value ?? undefined,
+                  first_in_service_date: e.target.value || undefined,
                 })
               }
             />
@@ -227,7 +227,7 @@ function NFPAComplianceTab({
               onChange={(e) =>
                 setForm({
                   ...form,
-                  expected_retirement_date: e.target.value ?? undefined,
+                  expected_retirement_date: e.target.value || undefined,
                 })
               }
             />
@@ -248,7 +248,7 @@ function NFPAComplianceTab({
               placeholder="e.g. ENS-001"
               value={form.ensemble_id ?? ''}
               onChange={(e) =>
-                setForm({ ...form, ensemble_id: e.target.value ?? undefined })
+                setForm({ ...form, ensemble_id: e.target.value || undefined })
               }
             />
           </div>
@@ -260,7 +260,7 @@ function NFPAComplianceTab({
               className={inputClass}
               value={form.ensemble_role ?? ''}
               onChange={(e) =>
-                setForm({ ...form, ensemble_role: e.target.value ?? undefined })
+                setForm({ ...form, ensemble_role: e.target.value || undefined })
               }
             >
               <option value="">— Select —</option>
@@ -288,7 +288,7 @@ function NFPAComplianceTab({
               onChange={(e) =>
                 setForm({
                   ...form,
-                  cylinder_manufacture_date: e.target.value ?? undefined,
+                  cylinder_manufacture_date: e.target.value || undefined,
                 })
               }
             />
@@ -304,7 +304,7 @@ function NFPAComplianceTab({
               onChange={(e) =>
                 setForm({
                   ...form,
-                  cylinder_expiration_date: e.target.value ?? undefined,
+                  cylinder_expiration_date: e.target.value || undefined,
                 })
               }
             />
@@ -320,7 +320,7 @@ function NFPAComplianceTab({
               onChange={(e) =>
                 setForm({
                   ...form,
-                  hydrostatic_test_date: e.target.value ?? undefined,
+                  hydrostatic_test_date: e.target.value || undefined,
                 })
               }
             />
@@ -336,7 +336,7 @@ function NFPAComplianceTab({
               onChange={(e) =>
                 setForm({
                   ...form,
-                  hydrostatic_test_due: e.target.value ?? undefined,
+                  hydrostatic_test_due: e.target.value || undefined,
                 })
               }
             />
@@ -352,7 +352,7 @@ function NFPAComplianceTab({
               onChange={(e) =>
                 setForm({
                   ...form,
-                  flow_test_date: e.target.value ?? undefined,
+                  flow_test_date: e.target.value || undefined,
                 })
               }
             />
@@ -368,7 +368,7 @@ function NFPAComplianceTab({
               onChange={(e) =>
                 setForm({
                   ...form,
-                  flow_test_due: e.target.value ?? undefined,
+                  flow_test_due: e.target.value || undefined,
                 })
               }
             />
@@ -706,7 +706,7 @@ function ExposuresTab({
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     exposure_type: 'structure_fire',
-    exposure_date: new Date().toISOString().split('T')[0] ?? '',
+    exposure_date: new Date().toISOString().split('T')[0],
     incident_number: '',
     description: '',
     decon_required: false,
@@ -741,7 +741,7 @@ function ExposuresTab({
       setShowForm(false);
       setForm({
         exposure_type: 'structure_fire',
-        exposure_date: new Date().toISOString().split('T')[0] ?? '',
+        exposure_date: new Date().toISOString().split('T')[0],
         incident_number: '',
         description: '',
         decon_required: false,
