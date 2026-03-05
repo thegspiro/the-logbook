@@ -168,6 +168,14 @@ async def list_events(
         if event.location_obj:
             location_name = event.location_obj.name
 
+        # Find the current user's RSVP status for this event
+        user_rsvp_status = None
+        if event.rsvps:
+            for rsvp in event.rsvps:
+                if str(rsvp.user_id) == str(current_user.id):
+                    user_rsvp_status = rsvp.status.value if rsvp.status else None
+                    break
+
         event_list.append(
             EventListItem(
                 id=event.id,
@@ -184,6 +192,7 @@ async def list_events(
                 is_cancelled=event.is_cancelled,
                 rsvp_count=rsvp_count,
                 going_count=going_count,
+                user_rsvp_status=user_rsvp_status,
             )
         )
 
@@ -1169,6 +1178,37 @@ async def record_actual_times(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     return _build_event_response(event)
+
+
+@router.post("/{event_id}/finalize-attendance")
+async def finalize_attendance(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Finalize attendance duration for all checked-in members who didn't check out.
+
+    When require_checkout is false (the default), members check in but never
+    check out, leaving attendance_duration_minutes as NULL. This endpoint
+    calculates duration using the event's actual_end_time (or end_datetime)
+    minus each member's check-in time.
+
+    Also updates any linked training records that have hours_completed == 0.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+    updated_count, error = await service.finalize_event_attendance(
+        event_id=event_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+
+    return {"updated_count": updated_count}
 
 
 # ============================================

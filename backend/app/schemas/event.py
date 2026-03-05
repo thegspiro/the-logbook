@@ -258,6 +258,7 @@ class EventListItem(BaseModel):
     is_cancelled: bool
     rsvp_count: Optional[int] = None
     going_count: Optional[int] = None
+    user_rsvp_status: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

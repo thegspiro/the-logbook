@@ -121,6 +121,15 @@ export const eventService = {
   },
 
   /**
+   * Finalize attendance duration for all checked-in members who didn't check out.
+   * Uses actual_end_time (if recorded) or end_datetime minus check-in time.
+   */
+  async finalizeAttendance(eventId: string): Promise<{ updated_count: number }> {
+    const response = await api.post<{ updated_count: number }>(`/events/${eventId}/finalize-attendance`);
+    return response.data;
+  },
+
+  /**
    * Get QR code check-in data for an event
    */
   async getQRCheckInData(eventId: string): Promise<import('../types/event').QRCheckInData> {

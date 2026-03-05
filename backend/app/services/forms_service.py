@@ -1938,11 +1938,31 @@ class FormsService:
                 "error": "event_id mapping is required for event registration",
             }
 
-        # If the submitter is an authenticated member, create an RSVP
+        # If the submitter is an authenticated member, create or update an RSVP
         if submission.submitted_by:
             try:
                 from app.core.utils import generate_uuid
                 from app.models.event import EventRSVP, RSVPStatus
+
+                # Check for existing RSVP to avoid duplicates
+                existing_result = await self.db.execute(
+                    select(EventRSVP)
+                    .where(EventRSVP.event_id == str(event_id))
+                    .where(EventRSVP.user_id == str(submission.submitted_by))
+                )
+                existing_rsvp = existing_result.scalar_one_or_none()
+
+                if existing_rsvp:
+                    # Update existing RSVP to GOING
+                    existing_rsvp.status = RSVPStatus.GOING
+                    if mapped_data.get("notes"):
+                        existing_rsvp.notes = mapped_data["notes"]
+                    await self.db.flush()
+                    return {
+                        "success": True,
+                        "rsvp_id": existing_rsvp.id,
+                        "message": "Member RSVP updated via form registration",
+                    }
 
                 rsvp = EventRSVP(
                     id=generate_uuid(),
