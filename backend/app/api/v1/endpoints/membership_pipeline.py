@@ -21,6 +21,9 @@ from app.schemas.membership_pipeline import (
     ElectionPackageCreate,
     ElectionPackageResponse,
     ElectionPackageUpdate,
+    InterviewCreate,
+    InterviewResponse,
+    InterviewUpdate,
     PaginatedProspectListResponse,
     PipelineCreate,
     PipelineListResponse,
@@ -1176,3 +1179,166 @@ async def process_inactivity(
         processed_by=current_user.id,
     )
     return result
+
+
+# ============================================
+# Interview Endpoints
+# ============================================
+
+
+def _interview_to_response(interview) -> InterviewResponse:
+    """Convert a ProspectInterview model to an InterviewResponse schema."""
+    interviewer_name = None
+    if interview.interviewer:
+        first = interview.interviewer.first_name or ""
+        last = interview.interviewer.last_name or ""
+        interviewer_name = f"{first} {last}".strip() or None
+
+    return InterviewResponse(
+        id=interview.id,
+        prospect_id=interview.prospect_id,
+        pipeline_id=interview.pipeline_id,
+        step_id=interview.step_id,
+        interviewer_id=interview.interviewer_id,
+        interviewer_name=interviewer_name,
+        interviewer_role=interview.interviewer_role,
+        notes=interview.notes,
+        recommendation=(
+            interview.recommendation.value
+            if interview.recommendation
+            else None
+        ),
+        recommendation_notes=interview.recommendation_notes,
+        interview_date=interview.interview_date,
+        created_at=interview.created_at,
+        updated_at=interview.updated_at,
+    )
+
+
+@router.get(
+    "/prospects/{prospect_id}/interviews",
+    response_model=list[InterviewResponse],
+)
+async def list_interviews(
+    prospect_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "members.view", "prospective_members.view", "prospective_members.manage"
+        )
+    ),
+):
+    """
+    List all interviews for a prospect.
+
+    **Requires permission: members.view or prospective_members.view**
+    """
+    service = MembershipPipelineService(db)
+    try:
+        interviews = await service.list_interviews(
+            prospect_id=str(prospect_id),
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return [_interview_to_response(i) for i in interviews]
+
+
+@router.post(
+    "/prospects/{prospect_id}/interviews",
+    response_model=InterviewResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_interview(
+    prospect_id: UUID,
+    data: InterviewCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("prospective_members.manage")
+    ),
+):
+    """
+    Create a new interview record for a prospect.
+
+    The current user is recorded as the interviewer.
+
+    **Requires permission: prospective_members.manage**
+    """
+    service = MembershipPipelineService(db)
+    try:
+        interview = await service.create_interview(
+            prospect_id=str(prospect_id),
+            organization_id=current_user.organization_id,
+            interviewer_id=current_user.id,
+            notes=data.notes,
+            recommendation=data.recommendation,
+            recommendation_notes=data.recommendation_notes,
+            interviewer_role=data.interviewer_role,
+            interview_date=data.interview_date,
+            step_id=str(data.step_id) if data.step_id else None,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return _interview_to_response(interview)
+
+
+@router.put(
+    "/interviews/{interview_id}",
+    response_model=InterviewResponse,
+)
+async def update_interview(
+    interview_id: UUID,
+    data: InterviewUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("prospective_members.manage")
+    ),
+):
+    """
+    Update an interview record. Only the original interviewer can update.
+
+    **Requires permission: prospective_members.manage**
+    """
+    service = MembershipPipelineService(db)
+    try:
+        interview = await service.update_interview(
+            interview_id=str(interview_id),
+            organization_id=current_user.organization_id,
+            interviewer_id=current_user.id,
+            notes=data.notes,
+            recommendation=data.recommendation,
+            recommendation_notes=data.recommendation_notes,
+            interviewer_role=data.interviewer_role,
+            interview_date=data.interview_date,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not interview:
+        raise HTTPException(status_code=404, detail="Interview not found")
+    return _interview_to_response(interview)
+
+
+@router.delete(
+    "/interviews/{interview_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_interview(
+    interview_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("prospective_members.manage")
+    ),
+):
+    """
+    Delete an interview record.
+
+    **Requires permission: prospective_members.manage**
+    """
+    service = MembershipPipelineService(db)
+    deleted = await service.delete_interview(
+        interview_id=str(interview_id),
+        organization_id=current_user.organization_id,
+        deleted_by=current_user.id,
+    )
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Interview not found")

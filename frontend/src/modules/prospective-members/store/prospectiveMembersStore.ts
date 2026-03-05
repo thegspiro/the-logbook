@@ -16,8 +16,11 @@ import type {
   PipelineViewMode,
   ElectionPackage,
   ElectionPackageUpdate,
+  Interview,
+  InterviewCreate,
+  InterviewUpdate,
 } from '../types';
-import { pipelineService, applicantService } from '../services/api';
+import { pipelineService, applicantService, interviewService } from '../services/api';
 import { handleStoreError } from '../../../utils/storeHelpers';
 import { StageType } from '../../../constants/enums';
 
@@ -62,6 +65,10 @@ interface ProspectiveMembersState {
   // Election package for current applicant
   currentElectionPackage: ElectionPackage | null;
   isLoadingElectionPackage: boolean;
+
+  // Interview data
+  interviews: Interview[];
+  isLoadingInterviews: boolean;
 
   // Loading states
   isLoading: boolean;
@@ -113,6 +120,12 @@ interface ProspectiveMembersState {
   updateElectionPackage: (applicantId: string, data: ElectionPackageUpdate) => Promise<void>;
   submitElectionPackage: (applicantId: string) => Promise<void>;
 
+  // Interview actions
+  fetchInterviews: (applicantId: string) => Promise<void>;
+  createInterview: (applicantId: string, data: InterviewCreate) => Promise<void>;
+  updateInterview: (interviewId: string, data: InterviewUpdate) => Promise<void>;
+  deleteInterview: (interviewId: string) => Promise<void>;
+
   // Filter & view actions
   setFilters: (filters: ApplicantListFilters) => void;
   clearFilters: () => void;
@@ -159,6 +172,9 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
 
     currentElectionPackage: null,
     isLoadingElectionPackage: false,
+
+    interviews: [],
+    isLoadingInterviews: false,
 
     isLoading: false,
     isLoadingPipelines: false,
@@ -611,6 +627,59 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         set({
           error: handleStoreError(error, 'Failed to submit election package'),
         });
+        throw error;
+      }
+    },
+
+    // Interview actions
+    fetchInterviews: async (applicantId: string) => {
+      set({ isLoadingInterviews: true, error: null });
+      try {
+        const interviews = await interviewService.getInterviews(applicantId);
+        set({ interviews, isLoadingInterviews: false });
+      } catch (error) {
+        set({
+          error: handleStoreError(error, 'Failed to fetch interviews'),
+          isLoadingInterviews: false,
+        });
+      }
+    },
+
+    createInterview: async (applicantId: string, data: InterviewCreate) => {
+      set({ error: null });
+      try {
+        await interviewService.createInterview(applicantId, data);
+        await get().fetchInterviews(applicantId);
+      } catch (error) {
+        set({ error: handleStoreError(error, 'Failed to create interview') });
+        throw error;
+      }
+    },
+
+    updateInterview: async (interviewId: string, data: InterviewUpdate) => {
+      set({ error: null });
+      try {
+        await interviewService.updateInterview(interviewId, data);
+        const currentApplicant = get().currentApplicant;
+        if (currentApplicant) {
+          await get().fetchInterviews(currentApplicant.id);
+        }
+      } catch (error) {
+        set({ error: handleStoreError(error, 'Failed to update interview') });
+        throw error;
+      }
+    },
+
+    deleteInterview: async (interviewId: string) => {
+      set({ error: null });
+      try {
+        await interviewService.deleteInterview(interviewId);
+        const currentApplicant = get().currentApplicant;
+        if (currentApplicant) {
+          await get().fetchInterviews(currentApplicant.id);
+        }
+      } catch (error) {
+        set({ error: handleStoreError(error, 'Failed to delete interview') });
         throw error;
       }
     },

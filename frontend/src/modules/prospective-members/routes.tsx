@@ -22,6 +22,9 @@ const ApplicationStatusPage = lazyWithRetry(() =>
     default: m.ApplicationStatusPage,
   })),
 );
+const InterviewPage = lazyWithRetry(
+  () => import('./pages/InterviewPage'),
+);
 
 export const getProspectiveMembersRoutes = () => {
   return (
@@ -45,6 +48,18 @@ export const getProspectiveMembersRoutes = () => {
           <ProtectedRoute requiredPermission="prospective_members.manage">
             <Suspense fallback={null}>
               <PipelineSettingsPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Interview View */}
+      <Route
+        path="/prospective-members/:applicantId/interview"
+        element={
+          <ProtectedRoute requiredPermission="prospective_members.manage">
+            <Suspense fallback={null}>
+              <InterviewPage />
             </Suspense>
           </ProtectedRoute>
         }

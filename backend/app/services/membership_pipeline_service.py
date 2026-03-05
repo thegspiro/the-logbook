@@ -17,12 +17,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.membership_pipeline import (
+    InterviewRecommendation,
     MembershipPipeline,
     MembershipPipelineStep,
     PipelineStepType,
     ProspectActivityLog,
     ProspectDocument,
     ProspectElectionPackage,
+    ProspectInterview,
     ProspectiveMember,
     ProspectStatus,
     ProspectStepProgress,
@@ -2569,3 +2571,184 @@ class MembershipPipelineService:
             "marked_inactive": inactive_count,
             "total_checked": len(warnings),
         }
+
+    # =========================================================================
+    # Interview Management
+    # =========================================================================
+
+    async def list_interviews(
+        self,
+        prospect_id: str,
+        organization_id: str,
+    ) -> List[ProspectInterview]:
+        """List all interviews for a prospect."""
+        # Verify prospect belongs to org
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            raise ValueError("Prospect not found")
+
+        result = await self.db.execute(
+            select(ProspectInterview)
+            .where(ProspectInterview.prospect_id == prospect_id)
+            .options(selectinload(ProspectInterview.interviewer))
+            .order_by(ProspectInterview.created_at.desc())
+        )
+        return list(result.scalars().all())
+
+    async def get_interview(
+        self,
+        interview_id: str,
+        organization_id: str,
+    ) -> Optional[ProspectInterview]:
+        """Get a single interview by ID, verifying org access."""
+        result = await self.db.execute(
+            select(ProspectInterview)
+            .join(
+                ProspectiveMember,
+                ProspectInterview.prospect_id == ProspectiveMember.id,
+            )
+            .where(
+                ProspectInterview.id == interview_id,
+                ProspectiveMember.organization_id == organization_id,
+            )
+            .options(selectinload(ProspectInterview.interviewer))
+        )
+        return result.scalar_one_or_none()
+
+    async def create_interview(
+        self,
+        prospect_id: str,
+        organization_id: str,
+        interviewer_id: str,
+        notes: Optional[str] = None,
+        recommendation: Optional[str] = None,
+        recommendation_notes: Optional[str] = None,
+        interviewer_role: Optional[str] = None,
+        interview_date: Optional[datetime] = None,
+        step_id: Optional[str] = None,
+    ) -> ProspectInterview:
+        """Create an interview record for a prospect."""
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            raise ValueError("Prospect not found")
+
+        rec_enum = None
+        if recommendation:
+            try:
+                rec_enum = InterviewRecommendation(recommendation)
+            except ValueError:
+                raise ValueError(
+                    f"Invalid recommendation: {recommendation}. "
+                    "Must be one of: recommend, recommend_with_reservations, "
+                    "do_not_recommend, undecided"
+                )
+
+        interview = ProspectInterview(
+            id=generate_uuid(),
+            prospect_id=prospect_id,
+            pipeline_id=str(prospect.pipeline_id) if prospect.pipeline_id else None,
+            step_id=step_id or (
+                str(prospect.current_step_id)
+                if prospect.current_step_id
+                else None
+            ),
+            interviewer_id=interviewer_id,
+            interviewer_role=interviewer_role,
+            notes=notes,
+            recommendation=rec_enum,
+            recommendation_notes=recommendation_notes,
+            interview_date=interview_date or datetime.now(timezone.utc),
+        )
+        self.db.add(interview)
+
+        await self._log_activity(
+            prospect_id=prospect_id,
+            action="interview_submitted",
+            details={
+                "interviewer_id": interviewer_id,
+                "interviewer_role": interviewer_role,
+                "recommendation": recommendation,
+            },
+            performed_by=interviewer_id,
+        )
+
+        await self.db.commit()
+
+        # Re-fetch to get relationships loaded
+        return await self.get_interview(interview.id, organization_id)  # type: ignore[return-value]
+
+    async def update_interview(
+        self,
+        interview_id: str,
+        organization_id: str,
+        interviewer_id: str,
+        notes: Optional[str] = None,
+        recommendation: Optional[str] = None,
+        recommendation_notes: Optional[str] = None,
+        interviewer_role: Optional[str] = None,
+        interview_date: Optional[datetime] = None,
+    ) -> Optional[ProspectInterview]:
+        """Update an interview. Only the original interviewer can update."""
+        interview = await self.get_interview(interview_id, organization_id)
+        if not interview:
+            raise ValueError("Interview not found")
+
+        if str(interview.interviewer_id) != str(interviewer_id):
+            raise ValueError("Only the original interviewer can update this interview")
+
+        if notes is not None:
+            interview.notes = notes
+        if recommendation is not None:
+            try:
+                interview.recommendation = InterviewRecommendation(recommendation)
+            except ValueError:
+                raise ValueError(
+                    f"Invalid recommendation: {recommendation}"
+                )
+        if recommendation_notes is not None:
+            interview.recommendation_notes = recommendation_notes
+        if interviewer_role is not None:
+            interview.interviewer_role = interviewer_role
+        if interview_date is not None:
+            interview.interview_date = interview_date
+
+        await self._log_activity(
+            prospect_id=str(interview.prospect_id),
+            action="interview_updated",
+            details={
+                "interview_id": interview_id,
+                "interviewer_id": interviewer_id,
+            },
+            performed_by=interviewer_id,
+        )
+
+        await self.db.commit()
+        return await self.get_interview(interview_id, organization_id)
+
+    async def delete_interview(
+        self,
+        interview_id: str,
+        organization_id: str,
+        deleted_by: str,
+    ) -> bool:
+        """Delete an interview record."""
+        interview = await self.get_interview(interview_id, organization_id)
+        if not interview:
+            return False
+
+        prospect_id = str(interview.prospect_id)
+        await self.db.execute(
+            delete(ProspectInterview).where(
+                ProspectInterview.id == interview_id
+            )
+        )
+
+        await self._log_activity(
+            prospect_id=prospect_id,
+            action="interview_deleted",
+            details={"interview_id": interview_id},
+            performed_by=deleted_by,
+        )
+
+        await self.db.commit()
+        return True

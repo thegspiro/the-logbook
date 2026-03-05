@@ -511,3 +511,57 @@ class InactivityCheckResponse(BaseModel):
     warnings_sent: int
     marked_inactive: int
     total_checked: int
+
+
+# --- Interview Schemas ---
+
+
+class InterviewCreate(BaseModel):
+    """Schema for creating an interview record"""
+
+    notes: Optional[str] = None
+    recommendation: Optional[str] = Field(
+        None,
+        description="recommend, recommend_with_reservations, do_not_recommend, undecided",
+    )
+    recommendation_notes: Optional[str] = None
+    interviewer_role: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="Role of the interviewer, e.g. Membership Coordinator, Chief",
+    )
+    interview_date: Optional[datetime] = None
+    step_id: Optional[UUID] = None
+
+
+class InterviewUpdate(BaseModel):
+    """Schema for updating an interview record"""
+
+    notes: Optional[str] = None
+    recommendation: Optional[str] = Field(
+        None,
+        description="recommend, recommend_with_reservations, do_not_recommend, undecided",
+    )
+    recommendation_notes: Optional[str] = None
+    interviewer_role: Optional[str] = Field(None, max_length=100)
+    interview_date: Optional[datetime] = None
+
+
+class InterviewResponse(BaseModel):
+    """Schema for interview response"""
+
+    id: UUID
+    prospect_id: UUID
+    pipeline_id: Optional[UUID] = None
+    step_id: Optional[UUID] = None
+    interviewer_id: UUID
+    interviewer_name: Optional[str] = None
+    interviewer_role: Optional[str] = None
+    notes: Optional[str] = None
+    recommendation: Optional[str] = None
+    recommendation_notes: Optional[str] = None
+    interview_date: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

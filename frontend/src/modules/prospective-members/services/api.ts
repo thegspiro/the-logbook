@@ -51,6 +51,9 @@ import type {
   BackendStepUpdatePayload,
   BackendStepProgressResponse,
   FormPipelineValidation,
+  Interview,
+  InterviewCreate,
+  InterviewUpdate,
 } from '../types';
 import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS, StepProgressStatus } from '../types';
 
@@ -939,6 +942,39 @@ export const publicStatusService = {
       applied_at?: string | undefined;
     }>(`/api/public/v1/application-status/${token}`);
     return response.data;
+  },
+};
+
+// =============================================================================
+// Interview Service
+// =============================================================================
+
+export const interviewService = {
+  async getInterviews(applicantId: string): Promise<Interview[]> {
+    const response = await api.get<Interview[]>(
+      `/prospective-members/prospects/${applicantId}/interviews`
+    );
+    return response.data;
+  },
+
+  async createInterview(applicantId: string, data: InterviewCreate): Promise<Interview> {
+    const response = await api.post<Interview>(
+      `/prospective-members/prospects/${applicantId}/interviews`,
+      data
+    );
+    return response.data;
+  },
+
+  async updateInterview(interviewId: string, data: InterviewUpdate): Promise<Interview> {
+    const response = await api.put<Interview>(
+      `/prospective-members/interviews/${interviewId}`,
+      data
+    );
+    return response.data;
+  },
+
+  async deleteInterview(interviewId: string): Promise<void> {
+    await api.delete(`/prospective-members/interviews/${interviewId}`);
   },
 };
 
