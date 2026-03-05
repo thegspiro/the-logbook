@@ -1113,6 +1113,12 @@ async def create_facility_maintenance_record(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
+    # Reload with relationships for response serialization
+    record = await service.get_maintenance_record(
+        record_id=record.id,
+        organization_id=current_user.organization_id,
+    )
+
     return record
 
 
@@ -1187,6 +1193,12 @@ async def update_facility_maintenance_record(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Maintenance record not found"
         )
+
+    # Reload with relationships for response serialization
+    record = await service.get_maintenance_record(
+        record_id=record.id,
+        organization_id=current_user.organization_id,
+    )
 
     return record
 

@@ -546,6 +546,7 @@ class GrantService:
         item = item_result.scalar_one_or_none()
         if item:
             item.amount_spent = total_spent
+            item.amount_remaining = item.amount_budgeted - total_spent
 
     # ------------------------------------------------------------------
     # Compliance Tasks
@@ -889,5 +890,4 @@ class GrantService:
                 "pending": tasks_pending,
             },
             "spending_by_category": spending_by_category,
-            "applications": applications,
         }
