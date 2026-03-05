@@ -56,6 +56,17 @@ This guide covers common issues and their solutions for The Logbook deployment.
 50. [Modal Click-Through](#modal-click-through-2026-03-04)
 51. [Theme Variable Compliance](#theme-variable-compliance-2026-03-04)
 52. [Email Template Enum Drift](#email-template-enum-drift-2026-03-04)
+53. [Inventory Empty String / WebSocket Issues](#inventory-empty-string--websocket-issues-2026-03-05)
+54. [Barcode Label Printing](#barcode-label-printing-2026-03-05)
+55. [Training Recertification & xAPI](#training-recertification--xapi-2026-03-05)
+56. [Compliance Officer Dashboard](#compliance-officer-dashboard-2026-03-05)
+57. [Grants Module Issues](#grants-module-issues-2026-03-05)
+58. [Reports Rank Display](#reports-rank-display-2026-03-05)
+59. [Prospective Member Stage History](#prospective-member-stage-history-2026-03-05)
+60. [Clipboard Copy Fallback](#clipboard-copy-fallback-2026-03-05)
+61. [Onboarding Auth State Reset](#onboarding-auth-state-reset-2026-03-05)
+62. [Unraid App Removal](#unraid-app-removal-2026-03-05)
+63. [Facilities MissingGreenlet](#facilities-missinggreenlet-2026-03-05)
 
 ---
 
@@ -3218,6 +3229,118 @@ Ensure `:root` and `.dark` selectors define all `--theme-*` CSS variables. Missi
 
 ### Problem: Email templates missing CC/BCC
 **Status (2026-03-04):** CC/BCC fields now available per template. BCC supported for scheduled emails. Run latest migration.
+
+---
+
+## Inventory Empty String / WebSocket Issues (2026-03-05)
+
+### Problem: Clearing form fields doesn't reset values; 422/403 on inventory page
+
+**Status (Fixed):** Three related issues: (1) `??` vs `||` — nullish coalescing passes empty strings through, use logical OR for string defaults; (2) empty optional fields sent as `""` instead of omitted, causing 422; (3) WebSocket missing auth cookie, causing 403.
+
+**Edge Case:** Hardcoded condition dropdown replaced with `ItemCondition` enum. If you added custom conditions via direct DB insert, ensure they match the enum values.
+
+---
+
+## Barcode Label Printing (2026-03-05)
+
+### Problem: Thermal labels print blank or don't print
+
+**Checklist:** Chrome/Edge recommended. Verify paper size (Dymo 2.25×1.25″, Rollo 4×6″). Check CSP allows inline SVG. Batch ≤30 labels.
+
+**Edge Case:** Organization logo loads from profile URL. 404/CORS errors cause silent logo omission. Verify logo in Settings > Organization.
+
+---
+
+## Training Recertification & xAPI (2026-03-05)
+
+### Problem: Recertification reminders not sending
+
+**Fix:** Cert needs expiration date + configured lead time + `EMAIL_ENABLED=true` + Celery beat running.
+
+### Problem: Competency matrix stale
+
+**Fix:** Cached ~5 min. Wait or flush Redis in dev.
+
+### Problem: xAPI statements missing in LRS
+
+**Fix:** Sent async via Celery. Check worker logs. Verify LRS endpoint URL and API key.
+
+---
+
+## Compliance Officer Dashboard (2026-03-05)
+
+### Problem: ISO readiness score 0%
+
+**Fix:** Create attestation workflows first. Score = attestation completion rate.
+
+**Edge Case:** NFPA 1401 record quality needs ≥10 training records for meaningful analysis.
+
+---
+
+## Grants Module Issues (2026-03-05)
+
+### Problem: GrantNote crashes backend
+
+**Status (Fixed):** `metadata` column renamed to `note_metadata` (SQLAlchemy `Base.metadata` conflict). Run `alembic upgrade head`.
+
+### Problem: snake_case in grant API responses
+
+**Status (Fixed):** Added `alias_generator=to_camel` to all grant response schemas.
+
+### Problem: Grant-donor N+1 queries
+
+**Status (Fixed):** Added `selectinload` for grant-donor relationships.
+
+---
+
+## Reports Rank Display (2026-03-05)
+
+### Problem: Reports show rank codes instead of names
+
+**Status (Fixed):** Query now joins ranks table. Deleted ranks fall back to raw code.
+
+---
+
+## Prospective Member Stage History (2026-03-05)
+
+### Problem: New prospects show history for all stages
+
+**Status (Fixed):** Now creates single entry for initial stage only.
+
+---
+
+## Clipboard Copy Fallback (2026-03-05)
+
+### Problem: "Copy error details" does nothing on HTTP sites
+
+**Status (Fixed):** Added `document.execCommand('copy')` fallback for non-HTTPS contexts.
+
+---
+
+## Onboarding Auth State Reset (2026-03-05)
+
+### Problem: Steps 8-10 redirect to login after step 7
+
+**Status (Fixed):** Reset now clears `has_session`, calls logout, and resets auth store.
+
+---
+
+## Unraid App Removal (2026-03-05)
+
+### Problem: App removal leaves orphaned Docker resources
+
+**Status (Fixed):** Template XML includes cleanup hooks. Manual: `docker network rm logbook_default; docker volume rm logbook_mysql_data logbook_redis_data`.
+
+---
+
+## Facilities MissingGreenlet (2026-03-05)
+
+### Problem: Maintenance create/update returns 500
+
+**Status (Fixed):** Lazy-loaded relationship in async context. Fixed with `selectinload()`.
+
+**Edge Case:** Any new lazy-loaded relationship in async SQLAlchemy needs `selectinload()`/`joinedload()` in the query.
 
 ---
 

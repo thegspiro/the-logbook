@@ -385,6 +385,11 @@ Navigate to **Training Admin > Import History** to import historical training re
 | Imported requirements missing source info | Update to the latest version. Imports now include `source`, `source_url`, and `last_updated` fields displayed in the UI for traceability. |
 | How to list available registries | Use the CLI tool: `python scripts/generate_registry.py --list` to see all available registries (NFPA, NREMT, Pro Board, etc.). |
 | Source filter not working on requirements | Update to the latest version. The source field has been added to the API schema and the filter is now wired up. |
+| Recertification reminders not sending | Verify: (1) certification has expiration date, (2) recertification lead time is configured, (3) `EMAIL_ENABLED=true` in environment, (4) Celery beat is running the `process_recertification_reminders` task. |
+| Competency matrix shows stale data | The competency heat-map is cached for ~5 minutes. Wait for cache expiry or clear Redis cache in development. |
+| xAPI statements not appearing in LRS | Multi-agency training records are sent asynchronously via Celery. Check Celery worker logs for delivery failures. Verify LRS endpoint URL and API key in training integration settings. |
+| Instructor not available for session | Instructor availability is tracked separately from member scheduling. Check the instructor's availability calendar in Training Admin > Instructors. |
+| Effectiveness score not calculating | Training effectiveness scoring (Kirkpatrick model) requires post-training evaluations to be submitted. Scores appear after the evaluation period configured on the training session. |
 
 ---
 

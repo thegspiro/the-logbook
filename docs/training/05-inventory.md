@@ -730,6 +730,16 @@ Items that fail validation are skipped with error details. Successfully validate
 | Pool item quantity below zero | Pool item quantity cannot go below zero. If a return fails, check that the issuance record exists and hasn't already been returned. |
 | Cannot see Inventory module | Inventory is a recommended module but can be disabled. Contact your administrator to enable it in Settings. |
 | Label PDF not generating | Ensure you have selected at least one item. Labels require the item to have a barcode or asset tag assigned. |
+| Thermal label blank or no barcode | Use Chrome/Edge (Safari has limited iframe print support). Verify Dymo (2.25×1.25″) or Rollo (4×6″) paper size in printer dialog. Check that inline SVG is not blocked by your Content Security Policy. Batch print ≤30 labels to avoid browser hangs. |
+| Organization logo missing on labels | Logo is loaded from organization profile URL. If the URL returns 404 or CORS error, the label prints without logo silently. Verify the logo URL in Settings > Organization. |
+| Form field cleared but value not resetting | The nullish coalescing operator (`??`) treats empty strings as truthy. This was fixed; pull latest code. If you see this in custom code, use `\|\|` instead of `??` when empty string should fall back to a default. |
+| 422 error on item create/update | Optional fields (notes, description) must be omitted from the payload when empty, not sent as `""`. Pull latest frontend code. |
+| WebSocket 403 on inventory page | The WebSocket connection needs the auth cookie. Pull latest; `withCredentials` is now set on the WebSocket connection. |
+| Charges not appearing on returned items | Verify `inventory.manage` permission. Charges are tied to return/write-off events. Quarantine items cannot have charges until inspection completes. |
+| Pool item cost recovery amount wrong | Check the item's `replacement_cost_per_unit` field. Cost recovery = (units not returned) × replacement cost per unit. |
+| Return request stuck in pending | Admin must approve return requests in Inventory Admin > Items. Check that the admin has `inventory.manage` permission. |
+| Quarantine item cannot be re-issued | Items in quarantine status must be inspected and cleared before re-issue. Change status from quarantine to available after inspection. |
+| Size variant stock not matching total | Each size variant tracks its own stock independently. The total shown is the sum of all variants. Verify per-size quantities in the item detail modal. |
 
 ---
 

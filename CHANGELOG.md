@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Unraid Duplicate Cleanup (2026-03-05)
+
+- **Consolidated unraid/ directory from 16 to 11 files**: Removed 5 duplicate/superseded files — deleted `QUICK-START.md` (superseded by `QUICK-START-UPDATED.md`, which was renamed to `QUICK-START.md`), deleted `DOCKER-COMPOSE-SETUP.md` (content covered by other guides), deleted `ICON-REQUIREMENTS.txt` (already in `COMMUNITY-APP-SUBMISSION.md`), merged `check-frontend-config.sh` and `rebuild-frontend.sh` into `validate-deployment.sh` as `--diagnose-frontend` and `--rebuild-frontend` flags. Reduces ~1,100 lines of duplication. Updated all cross-references in `README.md`, `docs/deployment/unraid.md`, `unraid/README.md`, and `unraid/UNRAID-INSTALLATION.md`
+
+### Onboarding & Auth State Fixes (2026-03-05)
+
+- **Onboarding reset not clearing auth state after step 7**: When the system owner is created at step 7, auth cookies are now set. Previously, if a user navigated away and returned, the stale auth state from the cookie conflicted with the onboarding flow. The reset now properly clears `has_session` and auth cookies before restarting
+- **Hardcoded condition options in inventory**: The item condition dropdown was using a hardcoded list instead of the enum values from the backend. Fixed to use the `ItemCondition` enum consistently
+- **getUserPermissions test failure**: Fixed test that was failing due to a mock not matching the updated permission response schema
+
+### Inventory Improvements (2026-03-05)
+
+- **Charges UI, return requests, alerts, quarantine**: Added charges/fees tracking for damaged or lost items, member return request workflow, configurable stock alerts with email notifications, and quarantine status for items pending inspection
+- **Pool item enhancements — cost recovery, size variants, bulk issuance, allowances**: Pool items now support cost recovery tracking (replacement cost per unit), size variant management (S/M/L/XL with per-size stock), bulk issuance to multiple members at once, and per-member issuance allowances with override capability
+- **Mobile-friendly card views and FAB**: Inventory browse and admin pages now use responsive card layouts on mobile with a floating action button (FAB) for quick actions (add item, scan barcode, import CSV)
+- **Client-side barcode label printing for thermal printers**: Added Dymo (2.25×1.25″) and Rollo (4×6″) thermal printer support with Code128 barcode generation. Labels include item name, barcode, serial number, and organization logo. Print preview with per-label and batch modes
+- **Empty string clearing bug (`??` vs `||`)**: Fixed `??` (nullish coalescing) being used where `||` (logical OR) was needed across inventory pages. `??` only catches `null`/`undefined`, not empty strings `""`, causing form fields that were cleared to retain empty string values instead of falling back to defaults
+- **Fix inventory page 422 errors and WebSocket 403 rejections**: Inventory admin page was sending malformed payloads due to optional fields being sent as empty strings. WebSocket connection was rejected with 403 due to missing auth token in the upgrade request
+
+### Training Enhancements (2026-03-05)
+
+- **Recertification tracking, competency matrix, instructor management, effectiveness scoring, multi-agency training, xAPI integration**: Major training module expansion adding automated recertification reminders with configurable lead times, department-wide competency heat-map, instructor qualification and availability tracking, training effectiveness scoring (Kirkpatrick model), multi-agency joint training coordination, and xAPI (Tin Can) learning record integration
+
+### Compliance Officer Dashboard (2026-03-05)
+
+- **ISO readiness, attestations, and NFPA 1401 record quality**: New compliance officer dashboard with ISO 9001/14001/45001 readiness scoring, configurable attestation workflows (annual compliance sign-offs), and NFPA 1401 record quality analysis for training documentation
+- **Expanded compliance officer tests from 20 to 95**: Test coverage across 12 test classes for the new compliance dashboard features
+
+### Facilities Module Bug Fixes (2026-03-05)
+
+- **6 critical bugs fixed**: (1) Acronym display showing `undefined` for facilities without acronyms, (2) name validation rejecting valid facility names with special characters, (3) maintenance create/update `MissingGreenlet` error from synchronous relationship access in async context, (4) facility list not loading due to missing `address_line1`/`zip_code` in list response schema, (5) inspection form crash on facilities with no inspection history, (6) utility cost chart rendering error when no data exists
+
+### Grants & Fundraising Module (2026-03-05)
+
+- **Full-stack Grants & Fundraising module**: Complete implementation including grant application management (AFG, SAFER, FP&S, USDA), fundraising campaign engine with goal tracking, donor management mini-CRM, grant note system, pipeline stages, and financial reporting
+- **Fix GrantNote model crash**: Renamed reserved `metadata` attribute that conflicted with SQLAlchemy's internal `metadata` property on `Base`, causing `AttributeError` at import time
+- **Fix camelCase serialization, relationship loading, schema mismatches**: Backend schemas were missing `alias_generator=to_camel` on several response models, causing the frontend to receive snake_case keys. Fixed eager loading on grant-donor relationships to prevent N+1 queries
+- **Stage history typed status enum, progress bar UX, test coverage**: Replaced raw string stage statuses with a typed `StageStatus` enum, improved the pipeline progress bar with color-coded segments and hover tooltips, added comprehensive test coverage
+
+### Reports Module (2026-03-05)
+
+- **Reports showing raw rank_code instead of display name**: The reports rank column was displaying the internal `rank_code` (e.g., `FF1`, `LT`) instead of the human-readable `rank_name` (e.g., `Firefighter I`, `Lieutenant`). Fixed by joining the ranks table in the report query
+
+### Prospective Members (2026-03-05)
+
+- **Interview view for prospective members**: New interview detail view showing applicant information, interview questions, scheduled date/time, interviewer assignments, and notes — accessible from the prospect detail drawer
+- **Stage history showing all pipeline stages for new prospects**: New prospects were incorrectly showing history entries for all pipeline stages instead of just their current stage. Fixed to only create a history entry for the initial stage on prospect creation
+
+### TypeScript & Build Fixes (2026-03-05)
+
+- **Remove unused imports in TrainingEnhancementsTab**: Fixed TypeScript build errors caused by unused imports after the training enhancements were refactored
+- **Fix exactOptionalPropertyTypes and unused imports in grants-fundraising**: Multiple TypeScript errors from `exactOptionalPropertyTypes` strict check — `|| undefined` patterns fail because `undefined` is not assignable to optional properties. Replaced with conditional spreads and proper type narrowing
+- **Replace all `|| undefined` patterns with safe alternatives across 69 files**: Systematic fix for `|| undefined` anti-pattern that violates `exactOptionalPropertyTypes`. Replaced with conditional object spreads (`...(val ? { key: val } : {})`), ternaries with `null`, or proper type narrowing
+- **Fix pre-existing TypeScript errors in grants-fundraising module**: Resolved type errors in campaign, donor, and grant page components that predated the grants module merge
+
+### Production Code Quality (2026-03-05)
+
+- **Comprehensive code review fixes**: Input validation schema for event settings, store summary error handling, import cleanup across multiple files
+- **12 data point mismatches fixed**: Cross-layer audit fixing mismatches between models, schemas, services, and TypeScript types across inventory, training, facilities, and grants modules
+
+### Error Handling & Clipboard (2026-03-05)
+
+- **"Copy error details to clipboard" not working**: The error boundary's copy button was using `navigator.clipboard.writeText()` without the required `clipboard-write` permission and without fallback. Added `document.execCommand('copy')` fallback for contexts where the Clipboard API is unavailable (e.g., non-HTTPS, iframes)
+
+### Unraid App Removal (2026-03-05)
+
+- **App removal on Unraid requiring full restart**: Removing The Logbook from Unraid Community Applications left orphaned Docker volumes and network configurations that required a full Unraid restart to clean up. Added proper cleanup hooks to the Unraid template XML
+
 ### Onboarding Auth Cookie Fix (2026-03-04)
 
 - **httpOnly auth cookies on system owner creation**: The onboarding system owner creation endpoint (Step 7) now sets httpOnly auth cookies via `_set_auth_cookies()`, matching the login endpoint pattern. Previously, tokens were returned in the response body but cookies were never set, causing `loadUser()` → 401 → cleared `has_session` → auth state lost for remaining onboarding steps (8–10) and the final redirect to `/dashboard` failed via `ProtectedRoute → /login`

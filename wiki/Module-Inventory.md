@@ -23,6 +23,12 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 - **CSV Export** — Export filtered inventory data to CSV
 - **Sort & Filter** — Members tab supports sort by name, total items, overdue, or most assigned
 - **Mobile Member ID Scanning** — Camera-based member ID scanning for quick member lookup during checkout (scan QR/barcode from member ID card)
+- **Charges & Cost Recovery** — *(2026-03-05)* Attach damage fees or replacement costs to return/write-off events. Pool items support per-unit replacement cost tracking with automatic cost recovery calculation
+- **Return Requests** — *(2026-03-05)* Members can submit return requests that require admin approval before processing
+- **Stock Alerts & Quarantine** — *(2026-03-05)* Configurable low-stock email alerts. Quarantine status for items pending inspection before re-issue
+- **Pool Item Enhancements** — *(2026-03-05)* Size variants (S/M/L/XL with per-size stock), bulk issuance to multiple members, per-member issuance allowances with override capability
+- **Mobile Card Views & FAB** — *(2026-03-05)* Responsive card layouts on mobile with floating action button for quick actions (add item, scan barcode, import CSV)
+- **CSV Import** — *(2026-03-02)* Bulk import items via CSV upload with downloadable template, header validation, duplicate serial detection
 
 ---
 
