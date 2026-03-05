@@ -800,13 +800,13 @@ describe('roleService', () => {
 
   // ── getUserPermissions ───────────────────────────────────────────────
   describe('getUserPermissions', () => {
-    it('should GET /users/:id/permissions', async () => {
+    it('should GET /roles/user/:id/permissions', async () => {
       const permsResponse = { user_id: 'u1', permissions: ['events.view'], roles: ['member'] };
       mockGet.mockResolvedValue({ data: permsResponse });
 
       const result = await roleService.getUserPermissions('u1');
 
-      expect(mockGet).toHaveBeenCalledWith('/users/u1/permissions');
+      expect(mockGet).toHaveBeenCalledWith('/roles/user/u1/permissions');
       expect(result).toEqual(permsResponse);
     });
   });

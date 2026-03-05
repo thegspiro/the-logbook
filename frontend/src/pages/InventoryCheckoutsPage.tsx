@@ -18,6 +18,7 @@ import {
 import { inventoryService } from '../services/api';
 import type { UserCheckoutItem } from '../services/api';
 import { MobileCheckoutCard } from '../components/ux/MobileCheckoutCard';
+import { RETURN_CONDITION_OPTIONS } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 
@@ -363,11 +364,9 @@ export const InventoryCheckoutsPage: React.FC = () => {
                         onChange={(e) => setReturnCondition(e.target.value)}
                         className="form-input"
                       >
-                        <option value="new">New</option>
-                        <option value="good">Good</option>
-                        <option value="fair">Fair</option>
-                        <option value="poor">Poor</option>
-                        <option value="damaged">Damaged</option>
+                        {RETURN_CONDITION_OPTIONS.map(opt => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
                       </select>
                     </div>
 
