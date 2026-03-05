@@ -12,7 +12,7 @@
 
 import { create } from 'zustand';
 import { authService } from '../services/api';
-import { markLoginComplete } from '../services/apiClient';
+import { markLoginComplete, clearTempAccessToken } from '../services/apiClient';
 import type { CurrentUser, LoginCredentials, RegisterData } from '../types/auth';
 import { toAppError, getErrorMessage } from '../utils/errorHandling';
 
@@ -161,10 +161,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // trigger a refresh cascade and kick the user back to login.
       await waitForLoginCookies(csrfBefore);
 
-      // Tell the 401 interceptor that a login just completed so it
-      // retries with a delay instead of attempting a cookie-based
-      // refresh (which would also fail if cookies are still settling).
-      markLoginComplete();
+      // Tell the 401 interceptor that a login just completed and
+      // provide the access_token from the response body.  The request
+      // interceptor will attach it as an Authorization: Bearer header
+      // until httpOnly cookies are established — this bridges the gap
+      // where the browser hasn't processed Set-Cookie headers yet.
+      markLoginComplete(loginResponse?.access_token);
 
       // Use user data from the login response if available. This avoids
       // a separate GET /auth/me call which can fail due to a race condition
@@ -250,7 +252,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch {
       // Logout errors are non-critical; cookies are cleared by the backend
     } finally {
-      // SEC: Clear session flag and any legacy token remnants from localStorage
+      // SEC: Clear session flag, temporary in-memory token, and any
+      // legacy token remnants from localStorage
+      clearTempAccessToken();
       localStorage.removeItem('has_session');
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
