@@ -42,12 +42,23 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
       // Clear Zustand store (which also clears localStorage via persist middleware)
       resetOnboarding();
 
-      // Clear all onboarding-related localStorage items comprehensively
-      // This ensures any keys we may have missed or added later are cleared
+      // Clear all onboarding-related localStorage items comprehensively.
+      // This includes auth session flags set during System Owner creation
+      // (step 7) and layout preferences written by the onboarding store.
+      // Without clearing `has_session`, Welcome.tsx would redirect to
+      // /dashboard after reset, causing auth errors because the user was
+      // just deleted from the database.
       const localStorageKeysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && (key.startsWith('onboarding') || key === 'csrf_token' || key === 'access_token' || key === 'refresh_token')) {
+        if (key && (
+          key.startsWith('onboarding') ||
+          key === 'csrf_token' ||
+          key === 'access_token' ||
+          key === 'refresh_token' ||
+          key === 'has_session' ||
+          key === 'navigationLayout'
+        )) {
           localStorageKeysToRemove.push(key);
         }
       }
