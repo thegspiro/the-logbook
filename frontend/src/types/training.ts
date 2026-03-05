@@ -1380,3 +1380,423 @@ export interface HistoricalImportResult {
   failed: number;
   errors: string[];
 }
+
+// ==================== Recertification Pathway Types ====================
+
+export interface CategoryHourRequirement {
+  category_id: string;
+  hours: number;
+  label: string;
+}
+
+export interface RecertificationPathway {
+  id: string;
+  organization_id: string;
+  name: string;
+  description?: string;
+  source_requirement_id?: string;
+  renewal_type: 'hours' | 'courses' | 'assessment' | 'combination';
+  required_hours?: number;
+  required_courses?: string[];
+  category_hour_requirements?: CategoryHourRequirement[];
+  requires_assessment: boolean;
+  assessment_course_id?: string;
+  renewal_window_days: number;
+  grace_period_days: number;
+  max_lapse_days?: number;
+  prerequisite_pathway_ids?: string[];
+  new_expiration_months?: number;
+  auto_create_record: boolean;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+}
+
+export interface RecertificationPathwayCreate {
+  name: string;
+  description?: string | undefined;
+  source_requirement_id?: string | undefined;
+  renewal_type: 'hours' | 'courses' | 'assessment' | 'combination';
+  required_hours?: number | undefined;
+  required_courses?: string[] | undefined;
+  category_hour_requirements?: CategoryHourRequirement[] | undefined;
+  requires_assessment?: boolean | undefined;
+  assessment_course_id?: string | undefined;
+  renewal_window_days?: number | undefined;
+  grace_period_days?: number | undefined;
+  max_lapse_days?: number | undefined;
+  prerequisite_pathway_ids?: string[] | undefined;
+  new_expiration_months?: number | undefined;
+  auto_create_record?: boolean | undefined;
+}
+
+export interface RecertificationPathwayUpdate {
+  name?: string;
+  description?: string | undefined;
+  source_requirement_id?: string | undefined;
+  renewal_type?: 'hours' | 'courses' | 'assessment' | 'combination';
+  required_hours?: number | undefined;
+  required_courses?: string[] | undefined;
+  category_hour_requirements?: CategoryHourRequirement[] | undefined;
+  requires_assessment?: boolean | undefined;
+  renewal_window_days?: number | undefined;
+  grace_period_days?: number | undefined;
+  prerequisite_pathway_ids?: string[] | undefined;
+  new_expiration_months?: number | undefined;
+  active?: boolean;
+}
+
+export type RenewalTaskStatus = 'pending' | 'in_progress' | 'completed' | 'expired' | 'lapsed';
+
+export interface RenewalTask {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  pathway_id: string;
+  training_record_id?: string;
+  status: RenewalTaskStatus;
+  certification_expiration_date: string;
+  renewal_window_opens: string;
+  grace_period_ends?: string;
+  hours_completed: number;
+  courses_completed?: string[];
+  category_hours_completed?: Record<string, number>;
+  assessment_passed: boolean;
+  progress_percentage: number;
+  completed_at?: string;
+  new_record_id?: string;
+  created_at: string;
+  updated_at: string;
+  pathway_name?: string;
+  required_hours?: number;
+}
+
+// ==================== Competency Level Types ====================
+
+export type CompetencyLevel = 'novice' | 'advanced_beginner' | 'competent' | 'proficient' | 'expert';
+
+export interface CompetencySkillRequirement {
+  skill_evaluation_id: string;
+  required_level: CompetencyLevel;
+  priority: 'required' | 'recommended' | 'optional';
+  skill_name?: string;
+}
+
+export interface CompetencyMatrix {
+  id: string;
+  organization_id: string;
+  name: string;
+  description?: string;
+  position: string;
+  role_id?: string;
+  skill_requirements: CompetencySkillRequirement[];
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+}
+
+export interface CompetencyMatrixCreate {
+  name: string;
+  description?: string | undefined;
+  position: string;
+  role_id?: string | undefined;
+  skill_requirements: CompetencySkillRequirement[];
+}
+
+export interface CompetencyMatrixUpdate {
+  name?: string;
+  description?: string | undefined;
+  position?: string;
+  role_id?: string | undefined;
+  skill_requirements?: CompetencySkillRequirement[];
+  active?: boolean;
+}
+
+export interface MemberCompetency {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  skill_evaluation_id: string;
+  current_level: CompetencyLevel;
+  previous_level?: CompetencyLevel;
+  last_evaluated_at?: string;
+  last_evaluator_id?: string;
+  evaluation_count: number;
+  last_score?: number;
+  decay_months?: number;
+  decay_warning_sent: boolean;
+  next_evaluation_due?: string;
+  score_history?: Array<{ date: string; score: number; level: CompetencyLevel }>;
+  created_at: string;
+  updated_at: string;
+  skill_name?: string;
+}
+
+// ==================== Instructor Qualification Types ====================
+
+export type InstructorQualificationType = 'instructor' | 'evaluator' | 'lead_instructor' | 'mentor';
+
+export interface InstructorQualification {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  qualification_type: InstructorQualificationType;
+  course_id?: string;
+  skill_evaluation_id?: string;
+  category_id?: string;
+  certification_number?: string;
+  issuing_agency?: string;
+  certification_level?: string;
+  issued_date?: string;
+  expiration_date?: string;
+  active: boolean;
+  verified: boolean;
+  verified_by?: string;
+  verified_at?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  user_name?: string;
+  course_name?: string;
+  skill_name?: string;
+}
+
+export interface InstructorQualificationCreate {
+  user_id: string;
+  qualification_type: InstructorQualificationType;
+  course_id?: string | undefined;
+  skill_evaluation_id?: string | undefined;
+  category_id?: string | undefined;
+  certification_number?: string | undefined;
+  issuing_agency?: string | undefined;
+  certification_level?: string | undefined;
+  issued_date?: string | undefined;
+  expiration_date?: string | undefined;
+}
+
+export interface InstructorQualificationUpdate {
+  qualification_type?: InstructorQualificationType;
+  course_id?: string | undefined;
+  skill_evaluation_id?: string | undefined;
+  category_id?: string | undefined;
+  certification_number?: string | undefined;
+  issuing_agency?: string | undefined;
+  certification_level?: string | undefined;
+  issued_date?: string | undefined;
+  expiration_date?: string | undefined;
+  active?: boolean;
+  verified?: boolean;
+}
+
+// ==================== Training Effectiveness Types ====================
+
+export type EvaluationLevel = 'reaction' | 'learning' | 'behavior' | 'results';
+
+export interface TrainingEffectivenessEvaluation {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  training_record_id?: string;
+  training_session_id?: string;
+  course_id?: string;
+  evaluation_level: EvaluationLevel;
+  survey_responses?: Record<string, unknown>;
+  overall_rating?: number;
+  pre_assessment_score?: number;
+  post_assessment_score?: number;
+  knowledge_gain_percentage?: number;
+  behavior_observations?: Record<string, unknown>;
+  behavior_rating?: number;
+  results_metrics?: Record<string, unknown>;
+  results_notes?: string;
+  evaluated_by?: string;
+  evaluated_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TrainingEffectivenessCreate {
+  user_id: string;
+  training_record_id?: string | undefined;
+  training_session_id?: string | undefined;
+  course_id?: string | undefined;
+  evaluation_level: EvaluationLevel;
+  survey_responses?: Record<string, unknown> | undefined;
+  overall_rating?: number | undefined;
+  pre_assessment_score?: number | undefined;
+  post_assessment_score?: number | undefined;
+  behavior_observations?: Record<string, unknown> | undefined;
+  behavior_rating?: number | undefined;
+  results_metrics?: Record<string, unknown> | undefined;
+  results_notes?: string | undefined;
+}
+
+export interface TrainingEffectivenessSummary {
+  course_id?: string;
+  session_id?: string;
+  course_name?: string;
+  total_evaluations: number;
+  avg_overall_rating?: number;
+  avg_knowledge_gain?: number;
+  avg_behavior_rating?: number;
+  completion_rate?: number;
+  evaluations_by_level: Record<string, number>;
+}
+
+// ==================== Multi-Agency Training Types ====================
+
+export interface ParticipatingOrganization {
+  name: string;
+  role: 'host' | 'participant' | 'observer' | 'evaluator';
+  contact_name?: string;
+  contact_email?: string;
+  participant_count?: number;
+}
+
+export interface MultiAgencyTraining {
+  id: string;
+  organization_id: string;
+  training_session_id?: string;
+  training_record_id?: string;
+  exercise_name: string;
+  exercise_type: 'joint_training' | 'mutual_aid_drill' | 'regional_exercise' | 'tabletop' | 'full_scale';
+  description?: string;
+  participating_organizations: ParticipatingOrganization[];
+  lead_agency?: string;
+  total_participants?: number;
+  ics_position_assignments?: Array<Record<string, unknown>>;
+  nims_compliant: boolean;
+  after_action_report?: string;
+  lessons_learned?: Array<{ area: string; finding: string; recommendation: string }>;
+  mutual_aid_agreement_id?: string;
+  exercise_date: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+}
+
+export interface MultiAgencyTrainingCreate {
+  exercise_name: string;
+  exercise_type: 'joint_training' | 'mutual_aid_drill' | 'regional_exercise' | 'tabletop' | 'full_scale';
+  description?: string | undefined;
+  training_session_id?: string | undefined;
+  training_record_id?: string | undefined;
+  participating_organizations: ParticipatingOrganization[];
+  lead_agency?: string | undefined;
+  total_participants?: number | undefined;
+  ics_position_assignments?: Array<Record<string, unknown>> | undefined;
+  nims_compliant?: boolean | undefined;
+  after_action_report?: string | undefined;
+  lessons_learned?: Array<{ area: string; finding: string; recommendation: string }> | undefined;
+  mutual_aid_agreement_id?: string | undefined;
+  exercise_date: string;
+}
+
+export interface MultiAgencyTrainingUpdate {
+  exercise_name?: string;
+  exercise_type?: 'joint_training' | 'mutual_aid_drill' | 'regional_exercise' | 'tabletop' | 'full_scale';
+  description?: string | undefined;
+  participating_organizations?: ParticipatingOrganization[];
+  lead_agency?: string | undefined;
+  total_participants?: number | undefined;
+  nims_compliant?: boolean;
+  after_action_report?: string | undefined;
+  lessons_learned?: Array<{ area: string; finding: string; recommendation: string }> | undefined;
+}
+
+// ==================== xAPI / SCORM Types ====================
+
+export interface XAPIStatement {
+  id: string;
+  organization_id: string;
+  actor_email?: string;
+  actor_name?: string;
+  user_id?: string;
+  verb_id: string;
+  verb_display?: string;
+  object_id: string;
+  object_name?: string;
+  score_scaled?: number;
+  score_raw?: number;
+  success?: boolean;
+  completion?: boolean;
+  duration_seconds?: number;
+  context_platform?: string;
+  processed: boolean;
+  training_record_id?: string;
+  statement_timestamp: string;
+  created_at: string;
+}
+
+export interface XAPIBatchResponse {
+  total: number;
+  accepted: number;
+  rejected: number;
+  errors: string[];
+}
+
+// ==================== Document/Certificate Upload Types ====================
+
+export interface DocumentUploadResponse {
+  file_id: string;
+  file_name: string;
+  file_size: number;
+  content_type: string;
+  upload_url: string;
+  created_at: string;
+}
+
+export interface TrainingRecordAttachment {
+  file_id: string;
+  file_name: string;
+  file_size: number;
+  content_type: string;
+  url: string;
+  uploaded_at: string;
+  uploaded_by?: string;
+}
+
+// ==================== Report Export Types ====================
+
+export interface ReportExportRequest {
+  report_type: 'compliance' | 'individual' | 'department' | 'certification' | 'hours_summary' | 'state_report';
+  format: 'csv' | 'pdf';
+  user_id?: string | undefined;
+  start_date?: string | undefined;
+  end_date?: string | undefined;
+  include_details?: boolean | undefined;
+  filters?: Record<string, unknown> | undefined;
+}
+
+export interface ReportExportResponse {
+  report_id: string;
+  report_type: string;
+  format: string;
+  file_name: string;
+  download_url: string;
+  generated_at: string;
+  record_count: number;
+}
+
+export interface ComplianceForecast {
+  user_id: string;
+  user_name?: string;
+  current_compliance_percentage: number;
+  forecast_30_days: number;
+  forecast_60_days: number;
+  forecast_90_days: number;
+  at_risk_requirements: Array<Record<string, unknown>>;
+  expiring_certifications: Array<Record<string, unknown>>;
+}
+
+export interface DepartmentComplianceTrend {
+  period: string;
+  compliance_percentage: number;
+  total_members: number;
+  compliant_members: number;
+  total_hours: number;
+  certifications_active: number;
+  certifications_expired: number;
+}
