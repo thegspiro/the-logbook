@@ -246,6 +246,48 @@ export const ElectionsSettingsPage: React.FC = () => {
           </div>
         </section>
 
+        {/* Proxy Voting */}
+        <section className="bg-theme-surface rounded-lg p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-theme-text-primary mb-2">
+            Proxy Voting
+          </h2>
+          <p className="text-sm text-theme-text-muted mb-4">
+            When enabled, a secretary can authorize one member to vote on behalf of another absent member.
+          </p>
+
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="proxy_voting_enabled"
+                checked={settings.proxy_voting_enabled ?? false}
+                onChange={(e) => updateField('proxy_voting_enabled', e.target.checked)}
+                className="h-4 w-4 text-red-600 rounded border-gray-300"
+              />
+              <label htmlFor="proxy_voting_enabled" className="text-sm text-theme-text-secondary">
+                Allow proxy voting
+              </label>
+            </div>
+
+            {settings.proxy_voting_enabled && (
+              <div className="max-w-xs">
+                <label className={labelClass}>Max Proxies Per Person</label>
+                <input
+                  type="number"
+                  className={inputClass}
+                  min={1}
+                  max={10}
+                  value={settings.max_proxies_per_person ?? 1}
+                  onChange={(e) => updateField('max_proxies_per_person', parseInt(e.target.value, 10) || 1)}
+                />
+                <p className="text-xs text-theme-text-muted mt-1">
+                  Maximum number of members one person can vote on behalf of.
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
+
         {/* Test Ballot */}
         <section className="bg-theme-surface rounded-lg p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-theme-text-primary mb-2">Test Ballot</h2>

@@ -386,6 +386,7 @@ class ElectionSettingsUpdate(BaseModel):
     default_quorum_type: Optional[str] = None
     default_quorum_value: Optional[int] = None
     max_proxies_per_person: Optional[int] = None
+    proxy_voting_enabled: Optional[bool] = None
 
 
 @router.get("/settings", response_model=None)
@@ -423,25 +424,28 @@ async def get_election_settings(
     signing_key_configured = bool(app_settings.VOTE_SIGNING_KEY)
 
     return {
-        "defaults": {
-            "voting_method": election_defaults.get(
-                "voting_method", "simple_majority"
-            ),
-            "victory_condition": election_defaults.get(
-                "victory_condition", "most_votes"
-            ),
-            "victory_percentage": election_defaults.get("victory_percentage"),
-            "anonymous_voting": election_defaults.get("anonymous_voting", True),
-            "allow_write_ins": election_defaults.get("allow_write_ins", False),
-            "quorum_type": election_defaults.get("quorum_type", "none"),
-            "quorum_value": election_defaults.get("quorum_value"),
-        },
-        "proxy_voting": {
-            "enabled": proxy_config.get("enabled", False),
-            "max_proxies_per_person": proxy_config.get(
-                "max_proxies_per_person", 1
-            ),
-        },
+        # Flat fields matching frontend ElectionSettings type
+        "default_voting_method": election_defaults.get(
+            "voting_method", "simple_majority"
+        ),
+        "default_victory_condition": election_defaults.get(
+            "victory_condition", "most_votes"
+        ),
+        "default_victory_percentage": election_defaults.get(
+            "victory_percentage"
+        ),
+        "default_anonymous_voting": election_defaults.get(
+            "anonymous_voting", True
+        ),
+        "default_allow_write_ins": election_defaults.get(
+            "allow_write_ins", False
+        ),
+        "default_quorum_type": election_defaults.get("quorum_type", "none"),
+        "default_quorum_value": election_defaults.get("quorum_value"),
+        "proxy_voting_enabled": proxy_config.get("enabled", False),
+        "max_proxies_per_person": proxy_config.get(
+            "max_proxies_per_person", 1
+        ),
         "security": {
             "vote_signing_key_configured": signing_key_configured,
             "anonymity_salt_auto_destroy": True,
@@ -497,6 +501,9 @@ async def update_election_settings(
         if api_field in update_data:
             election_defaults[settings_field] = update_data[api_field]
 
+    if "proxy_voting_enabled" in update_data:
+        proxy_config["enabled"] = update_data["proxy_voting_enabled"]
+
     if "max_proxies_per_person" in update_data:
         proxy_config["max_proxies_per_person"] = update_data[
             "max_proxies_per_person"
@@ -517,7 +524,30 @@ async def update_election_settings(
         user_id=str(current_user.id),
     )
 
-    return {"success": True, "message": "Election settings updated"}
+    # Return the full updated settings in the same flat shape as GET
+    return {
+        "default_voting_method": election_defaults.get(
+            "voting_method", "simple_majority"
+        ),
+        "default_victory_condition": election_defaults.get(
+            "victory_condition", "most_votes"
+        ),
+        "default_victory_percentage": election_defaults.get(
+            "victory_percentage"
+        ),
+        "default_anonymous_voting": election_defaults.get(
+            "anonymous_voting", True
+        ),
+        "default_allow_write_ins": election_defaults.get(
+            "allow_write_ins", False
+        ),
+        "default_quorum_type": election_defaults.get("quorum_type", "none"),
+        "default_quorum_value": election_defaults.get("quorum_value"),
+        "proxy_voting_enabled": proxy_config.get("enabled", False),
+        "max_proxies_per_person": proxy_config.get(
+            "max_proxies_per_person", 1
+        ),
+    }
 
 
 # ============================================
