@@ -22,6 +22,7 @@ from app.api.v1.endpoints import (
     events,
     external_training,
     facilities,
+    compliance_officer,
     training_enhancements,
     forms,
     grants,
@@ -147,6 +148,11 @@ api_router.include_router(
     training_enhancements.router,
     prefix="/training",
     tags=["training-enhancements"],
+)
+api_router.include_router(
+    compliance_officer.router,
+    prefix="/compliance",
+    tags=["compliance-officer"],
 )
 api_router.include_router(public_portal_admin.router)
 

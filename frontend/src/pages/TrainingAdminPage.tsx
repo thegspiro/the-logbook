@@ -23,6 +23,7 @@ import {
   Settings,
   ClipboardCheck,
   TrendingUp,
+  Shield,
 } from "lucide-react";
 import { HelpLink } from "../components/HelpLink";
 import { lazyWithRetry } from "../utils/lazyWithRetry";
@@ -65,10 +66,13 @@ const SkillsTestingTestRecordsTab = lazyWithRetry(
 const TrainingEnhancementsTab = lazyWithRetry(
   () => import("./TrainingEnhancementsTab"),
 );
+const ComplianceOfficerDashboard = lazyWithRetry(
+  () => import("./ComplianceOfficerDashboard"),
+);
 
 // ── Type definitions ────────────────────────────────────────────
 
-type PageId = "dashboard" | "records" | "setup" | "skills-testing" | "enhancements";
+type PageId = "dashboard" | "records" | "setup" | "skills-testing" | "enhancements" | "compliance";
 
 interface TabDef {
   id: string;
@@ -155,6 +159,21 @@ const pages: PageDef[] = [
     ],
     defaultTab: "recertification",
   },
+  {
+    id: "compliance",
+    label: "Compliance",
+    icon: Shield,
+    description:
+      "Annual compliance reporting, ISO readiness scoring, NFPA 1401 record quality, and formal attestation workflow",
+    tabs: [
+      { id: "annual-report", label: "Annual Report" },
+      { id: "iso-readiness", label: "ISO Readiness" },
+      { id: "record-completeness", label: "Record Quality" },
+      { id: "attestations", label: "Attestations" },
+      { id: "forecast", label: "Forecast" },
+    ],
+    defaultTab: "annual-report",
+  },
 ];
 
 // Map from old flat tab IDs to new page+tab for backwards compatibility
@@ -178,6 +197,11 @@ const legacyTabMap: Record<string, { page: PageId; tab: string }> = {
   effectiveness: { page: "enhancements", tab: "effectiveness" },
   "multi-agency": { page: "enhancements", tab: "multi-agency" },
   reports: { page: "enhancements", tab: "reports" },
+  "annual-report": { page: "compliance", tab: "annual-report" },
+  "iso-readiness": { page: "compliance", tab: "iso-readiness" },
+  "record-completeness": { page: "compliance", tab: "record-completeness" },
+  attestations: { page: "compliance", tab: "attestations" },
+  forecast: { page: "compliance", tab: "forecast" },
 };
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -235,6 +259,11 @@ const TabContent: React.FC<{ page: PageId; tab: string }> = ({ page, tab }) => {
   // Advanced / Enhancements sub-page
   if (page === "enhancements") {
     return <TrainingEnhancementsTab activeTab={tab} />;
+  }
+
+  // Compliance Officer sub-page
+  if (page === "compliance") {
+    return <ComplianceOfficerDashboard />;
   }
 
   return null;

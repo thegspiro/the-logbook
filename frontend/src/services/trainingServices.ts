@@ -1090,3 +1090,48 @@ export const documentService = {
   },
 };
 
+// ============================================
+// Compliance Officer Services
+// ============================================
+
+export const complianceOfficerService = {
+  async getISOReadiness(year?: number): Promise<import('../types/training').ISOReadiness> {
+    const params = year ? { year } : {};
+    const response = await api.get<import('../types/training').ISOReadiness>('/compliance/iso-readiness', { params });
+    return response.data;
+  },
+
+  async createAttestation(data: import('../types/training').AttestationCreate): Promise<import('../types/training').ComplianceAttestation> {
+    const response = await api.post<import('../types/training').ComplianceAttestation>('/compliance/attestations', data);
+    return response.data;
+  },
+
+  async getAttestations(limit = 20): Promise<import('../types/training').ComplianceAttestation[]> {
+    const response = await api.get<import('../types/training').ComplianceAttestation[]>('/compliance/attestations', { params: { limit } });
+    return response.data;
+  },
+
+  async getAnnualReport(year: number): Promise<import('../types/training').AnnualComplianceReport> {
+    const response = await api.get<import('../types/training').AnnualComplianceReport>('/compliance/annual-report', { params: { year } });
+    return response.data;
+  },
+
+  async exportAnnualReport(year: number): Promise<Blob> {
+    const response = await api.post('/compliance/annual-report/export', { year, format: 'csv' }, { responseType: 'blob' });
+    return response.data as Blob;
+  },
+
+  async getRecordCompleteness(startDate?: string, endDate?: string): Promise<import('../types/training').RecordCompleteness> {
+    const params: Record<string, string> = {};
+    if (startDate) params.start_date = startDate;
+    if (endDate) params.end_date = endDate;
+    const response = await api.get<import('../types/training').RecordCompleteness>('/compliance/record-completeness', { params });
+    return response.data;
+  },
+
+  async getIncompleteRecords(limit = 50): Promise<import('../types/training').IncompleteRecord[]> {
+    const response = await api.get<import('../types/training').IncompleteRecord[]>('/compliance/incomplete-records', { params: { limit } });
+    return response.data;
+  },
+};
+
