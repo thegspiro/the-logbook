@@ -548,7 +548,7 @@ class IssuanceAllowance(Base):
     )
 
     # Who this applies to — NULL means all members
-    role_id = Column(String(36), ForeignKey("roles.id", ondelete="CASCADE"))
+    role_id = Column(String(36), ForeignKey("positions.id", ondelete="CASCADE"))
 
     # Limits
     max_quantity = Column(Integer, nullable=False)  # Max units per period
