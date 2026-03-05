@@ -106,13 +106,27 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      await authService.login(credentials);
+      const loginResponse = await authService.login(credentials);
 
       // SEC: Tokens are stored in httpOnly cookies by the backend response.
       // Only persist a lightweight session flag — never the actual tokens.
       localStorage.setItem('has_session', '1');
 
-      await get().loadUser();
+      // Use user data from the login response if available. This avoids
+      // a separate GET /auth/me call which can fail due to a race condition
+      // where the browser hasn't processed the Set-Cookie header yet.
+      if (loginResponse?.user) {
+        const normalizedUser: CurrentUser = {
+          ...loginResponse.user,
+          positions: loginResponse.user.positions ?? loginResponse.user.roles ?? [],
+          rank: loginResponse.user.rank ?? null,
+          membership_type: loginResponse.user.membership_type ?? 'member',
+          must_change_password: loginResponse.user.must_change_password ?? false,
+        };
+        set({ user: normalizedUser, isAuthenticated: true });
+      } else {
+        await get().loadUser();
+      }
 
       // Reset brute-force counters on successful login
       saveLockoutState(0, null);

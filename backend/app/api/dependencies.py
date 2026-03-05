@@ -76,6 +76,7 @@ async def get_current_user(
             raise credentials_exception
 
     if not token:
+        logger.debug("Auth rejected: no access_token cookie or Authorization header")
         raise credentials_exception
 
     # Validate token and get user
