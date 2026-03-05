@@ -837,24 +837,44 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                                 ? 'Position Name'
                                 : 'Title / Topic'}
                           </label>
-                          <input
-                            type="text"
-                            value={templateNameInput}
-                            onChange={(e) =>
-                              setTemplateNameInput(e.target.value)
-                            }
-                            className={inputClass}
-                            placeholder={
-                              selectedTemplate.type ===
-                              BallotItemType.MEMBERSHIP_APPROVAL
-                                ? 'e.g., John Smith'
-                                : selectedTemplate.type ===
-                                    BallotItemType.OFFICER_ELECTION
-                                  ? 'e.g., Chief'
-                                  : 'e.g., Approve new equipment purchase'
-                            }
-                            autoFocus
-                          />
+                          {selectedTemplate.type === BallotItemType.OFFICER_ELECTION &&
+                          election.positions &&
+                          election.positions.length > 0 ? (
+                            <select
+                              value={templateNameInput}
+                              onChange={(e) =>
+                                setTemplateNameInput(e.target.value)
+                              }
+                              className={selectClass}
+                              autoFocus
+                            >
+                              <option value="">Select position...</option>
+                              {election.positions.map((pos) => (
+                                <option key={pos} value={pos}>
+                                  {pos}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              value={templateNameInput}
+                              onChange={(e) =>
+                                setTemplateNameInput(e.target.value)
+                              }
+                              className={inputClass}
+                              placeholder={
+                                selectedTemplate.type ===
+                                BallotItemType.MEMBERSHIP_APPROVAL
+                                  ? 'e.g., John Smith'
+                                  : selectedTemplate.type ===
+                                      BallotItemType.OFFICER_ELECTION
+                                    ? 'e.g., Chief'
+                                    : 'e.g., Approve new equipment purchase'
+                              }
+                              autoFocus
+                            />
+                          )}
                         </div>
                         <div className="text-xs text-theme-text-muted">
                           Preview:{' '}
@@ -1073,6 +1093,47 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                     </select>
                   </div>
                 </div>
+
+                {customForm.vote_type === 'candidate_selection' && (
+                  <div>
+                    <label className={labelClass}>Position</label>
+                    {election.positions && election.positions.length > 0 ? (
+                      <select
+                        value={customForm.position || ''}
+                        onChange={(e) =>
+                          setCustomForm((prev) => ({
+                            ...prev,
+                            position: e.target.value || undefined,
+                          }))
+                        }
+                        className={selectClass}
+                      >
+                        <option value="">Select position...</option>
+                        {election.positions.map((pos) => (
+                          <option key={pos} value={pos}>
+                            {pos}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={customForm.position || ''}
+                        onChange={(e) =>
+                          setCustomForm((prev) => ({
+                            ...prev,
+                            position: e.target.value || undefined,
+                          }))
+                        }
+                        className={inputClass}
+                        placeholder="e.g., Chief"
+                      />
+                    )}
+                    <p className="mt-1 text-xs text-theme-text-muted">
+                      Links this ballot item to candidates running for this position.
+                    </p>
+                  </div>
+                )}
 
                 <div>
                   <label className={labelClass}>Who Can Vote</label>
