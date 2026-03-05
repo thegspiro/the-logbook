@@ -241,12 +241,13 @@ class ProspectiveMember(Base):
     # Application details
     interest_reason = Column(Text)
     referral_source = Column(String(255))
-    referred_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+    referred_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # Pipeline tracking
     current_step_id = Column(
         String(36),
         ForeignKey("membership_pipeline_steps.id", ondelete="SET NULL"),
+        nullable=True,
     )
     status = Column(
         Enum(ProspectStatus, values_callable=lambda x: [e.value for e in x]),
@@ -260,6 +261,7 @@ class ProspectiveMember(Base):
     form_submission_id = Column(
         String(36),
         ForeignKey("form_submissions.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     # Public status check token
@@ -270,6 +272,7 @@ class ProspectiveMember(Base):
     transferred_user_id = Column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
     )
     transferred_at = Column(DateTime(timezone=True))
 
@@ -342,7 +345,7 @@ class ProspectStepProgress(Base):
         nullable=False,
     )
     completed_at = Column(DateTime(timezone=True))
-    completed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+    completed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     notes = Column(Text)
     action_result = Column(JSON)
 
@@ -383,7 +386,7 @@ class ProspectActivityLog(Base):
     )
     action = Column(String(100), nullable=False)
     details = Column(JSON)
-    performed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+    performed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -431,7 +434,7 @@ class ProspectDocument(Base):
     file_size = Column(Integer, default=0)
     mime_type = Column(String(100))
 
-    uploaded_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+    uploaded_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
@@ -537,7 +540,7 @@ class ProspectInterview(Base):
     interviewer_id = Column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     interviewer_role = Column(String(100))  # e.g., "Membership Coordinator", "Chief"

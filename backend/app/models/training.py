@@ -274,7 +274,7 @@ class TrainingRecord(Base):
         index=True,
     )
     course_id = Column(
-        String(36), ForeignKey("training_courses.id", ondelete="SET NULL"), index=True
+        String(36), ForeignKey("training_courses.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
     # Training Details
@@ -1753,7 +1753,7 @@ class ExternalTrainingProvider(Base):
 
     # Default Category Mapping
     default_category_id = Column(
-        String(36), ForeignKey("training_categories.id", ondelete="SET NULL")
+        String(36), ForeignKey("training_categories.id", ondelete="SET NULL"), nullable=True
     )
 
     # Status
@@ -1833,7 +1833,7 @@ class ExternalCategoryMapping(Base):
 
     # Internal Category Mapping
     internal_category_id = Column(
-        String(36), ForeignKey("training_categories.id", ondelete="SET NULL")
+        String(36), ForeignKey("training_categories.id", ondelete="SET NULL"), nullable=True
     )
 
     # Mapping Status
@@ -1892,7 +1892,7 @@ class ExternalUserMapping(Base):
     external_name = Column(String(255))  # Full name from external system
 
     # Internal User Mapping
-    internal_user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+    internal_user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # Mapping Status
     is_mapped = Column(Boolean, default=False)
@@ -2009,6 +2009,7 @@ class ExternalTrainingImport(Base):
     sync_log_id = Column(
         String(36),
         ForeignKey("external_training_sync_logs.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
 
@@ -2035,10 +2036,10 @@ class ExternalTrainingImport(Base):
 
     # Internal Record Link
     training_record_id = Column(
-        String(36), ForeignKey("training_records.id", ondelete="SET NULL"), index=True
+        String(36), ForeignKey("training_records.id", ondelete="SET NULL"), nullable=True, index=True
     )
     user_id = Column(
-        String(36), ForeignKey("users.id", ondelete="SET NULL"), index=True
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )  # Mapped internal user
 
     # Import Status
@@ -2335,7 +2336,7 @@ class ShiftTemplate(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     __table_args__ = (Index("idx_shift_template_org", "organization_id"),)
 
@@ -2370,7 +2371,7 @@ class ShiftPattern(Base):
 
     # Pattern definition
     template_id = Column(
-        String(36), ForeignKey("shift_templates.id", ondelete="SET NULL")
+        String(36), ForeignKey("shift_templates.id", ondelete="SET NULL"), nullable=True
     )
     rotation_days = Column(
         Integer
@@ -2397,7 +2398,7 @@ class ShiftPattern(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     __table_args__ = (Index("idx_shift_pattern_org", "organization_id"),)
 
@@ -2445,7 +2446,7 @@ class ShiftAssignment(Base):
     )
 
     # Tracking
-    assigned_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+    assigned_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     confirmed_at = Column(DateTime(timezone=True))
     notes = Column(Text)
 
@@ -2496,10 +2497,10 @@ class ShiftSwapRequest(Base):
     )
     # The shift they want to pick up (optional — can be open request)
     requesting_shift_id = Column(
-        String(36), ForeignKey("shifts.id", ondelete="SET NULL")
+        String(36), ForeignKey("shifts.id", ondelete="SET NULL"), nullable=True
     )
     # The member they want to swap with (optional — can be open request)
-    target_user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+    target_user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     status = Column(
         Enum(SwapRequestStatus), nullable=False, default=SwapRequestStatus.PENDING
@@ -2507,7 +2508,7 @@ class ShiftSwapRequest(Base):
     reason = Column(Text)
 
     # Review
-    reviewed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+    reviewed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     reviewed_at = Column(DateTime(timezone=True))
     reviewer_notes = Column(Text)
 
@@ -2560,7 +2561,7 @@ class ShiftTimeOff(Base):
     reason = Column(Text)
 
     status = Column(Enum(TimeOffStatus), nullable=False, default=TimeOffStatus.PENDING)
-    approved_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+    approved_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     approved_at = Column(DateTime(timezone=True))
     reviewer_notes = Column(Text)
 
