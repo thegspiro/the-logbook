@@ -97,7 +97,8 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
   };
 
   const handleAdd = async () => {
-    if (!formData.name.trim()) {
+    const candidateName = formData.name.trim() || (formData.is_write_in ? 'Write-in Candidate' : '');
+    if (!candidateName) {
       setError('Name is required');
       return;
     }
@@ -108,7 +109,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
 
       const candidateData: CandidateCreate = {
         election_id: electionId,
-        name: formData.name.trim(),
+        name: candidateName,
         ...(formData.position ? { position: formData.position } : {}),
         ...(formData.statement ? { statement: formData.statement } : {}),
         ...(formData.user_id ? { user_id: formData.user_id } : {}),
@@ -342,17 +343,33 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
               />
             </div>
 
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="is_write_in"
-                checked={formData.is_write_in}
-                onChange={(e) => setFormData((prev) => ({ ...prev, is_write_in: e.target.checked }))}
-                className="rounded-sm border-theme-input-border text-blue-600"
-              />
-              <label htmlFor="is_write_in" className="text-sm text-theme-text-primary">
-                Write-in candidate
-              </label>
+            <div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="is_write_in"
+                  checked={formData.is_write_in}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setFormData((prev) => ({
+                      ...prev,
+                      is_write_in: checked,
+                      // Auto-fill name for write-in candidates if empty
+                      ...(checked && !prev.name.trim() ? { name: 'Write-in Candidate' } : {}),
+                      // Clear member link for write-ins
+                      ...(checked ? { user_id: '' } : {}),
+                    }));
+                    if (checked) setMemberSearch('');
+                  }}
+                  className="rounded-sm border-theme-input-border text-blue-600"
+                />
+                <label htmlFor="is_write_in" className="text-sm text-theme-text-primary">
+                  Write-in candidate
+                </label>
+              </div>
+              <p className="mt-1 text-xs text-theme-text-muted ml-6">
+                Adds this candidate as a write-in nomination (not from the official slate).
+              </p>
             </div>
 
             <div className="flex justify-end gap-2">
@@ -366,7 +383,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
               <button
                 type="button"
                 onClick={() => { void handleAdd(); }}
-                disabled={submitting || !formData.name.trim()}
+                disabled={submitting || (!formData.name.trim() && !formData.is_write_in)}
                 className="btn-info rounded-md text-sm"
               >
                 {submitting ? 'Adding...' : 'Add Candidate'}
