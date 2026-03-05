@@ -76,7 +76,7 @@ def _set_auth_cookies(
         secure=is_production,
         samesite="strict",
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        path="/api/v1/auth/",  # Only sent to auth endpoints (trailing slash for sub-path matching)
+        path="/api/v1/auth",  # Only sent to auth endpoints
     )
     # Double-submit CSRF token (readable by JS, validated server-side)
     response.set_cookie(
@@ -91,10 +91,81 @@ def _set_auth_cookies(
 
 
 def _clear_auth_cookies(response: JSONResponse) -> None:
-    """Remove auth cookies from *response*."""
+    """Remove auth cookies from *response*.
+
+    Deletes the refresh_token at both the current path and the
+    trailing-slash variant so that stale cookies left by earlier
+    code revisions are cleaned up.
+    """
     response.delete_cookie(key="access_token", path="/")
+    response.delete_cookie(key="refresh_token", path="/api/v1/auth")
     response.delete_cookie(key="refresh_token", path="/api/v1/auth/")
     response.delete_cookie(key="csrf_token", path="/")
+
+
+async def _build_current_user_dict(user: User, db: AsyncSession) -> dict:
+    """Build a CurrentUser-compatible dict for *user*.
+
+    Shared by the login endpoint (inline in response) and GET /auth/me.
+    Eagerly loads positions if not already loaded.
+    """
+    from datetime import datetime, timezone
+
+    # Eager-load positions if the relationship wasn't already loaded
+    user_result = await db.execute(
+        select(User)
+        .where(User.id == user.id)
+        .options(selectinload(User.positions))
+    )
+    user = user_result.scalar_one()
+
+    position_names = [pos.name for pos in user.positions]
+
+    all_permissions: set[str] = set()
+    for pos in user.positions:
+        all_permissions.update(pos.permissions or [])
+    if user.rank:
+        all_permissions.update(get_rank_default_permissions(user.rank))
+
+    # HIPAA password age check
+    password_expired = False
+    max_age_days = settings.HIPAA_MAXIMUM_PASSWORD_AGE_DAYS
+    if max_age_days > 0 and user.password_changed_at:
+        pwd_changed = (
+            user.password_changed_at.replace(tzinfo=timezone.utc)
+            if user.password_changed_at.tzinfo is None
+            else user.password_changed_at
+        )
+        age = (datetime.now(timezone.utc) - pwd_changed).days
+        password_expired = age >= max_age_days
+
+    # Organization timezone
+    org_result = await db.execute(
+        select(Organization).where(Organization.id == user.organization_id)
+    )
+    org = org_result.scalar_one_or_none()
+    org_timezone = org.timezone if org else "America/New_York"
+
+    return CurrentUser(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        full_name=user.full_name,
+        organization_id=user.organization_id,
+        timezone=org_timezone,
+        roles=position_names,
+        positions=position_names,
+        rank=user.rank,
+        membership_type=user.membership_type,
+        permissions=list(all_permissions),
+        is_active=user.is_active,
+        email_verified=user.email_verified,
+        mfa_enabled=user.mfa_enabled,
+        password_expired=password_expired,
+        must_change_password=bool(user.must_change_password),
+    ).model_dump(mode="json")
 
 
 @router.get("/branding")
@@ -307,7 +378,17 @@ async def login(
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     ).model_dump()
 
+    # Include user data so the frontend can skip the GET /auth/me call.
+    # This avoids a race condition where the access_token cookie may not
+    # have been processed by the browser before the next request fires.
+    try:
+        body["user"] = await _build_current_user_dict(user, db)
+    except Exception:
+        # Non-fatal: frontend will fall back to GET /auth/me
+        logger.debug("Could not include user data in login response")
+
     response = JSONResponse(content=body)
+    _clear_auth_cookies(response)  # Remove stale cookies from previous sessions
     _set_auth_cookies(response, access_token, refresh_token)
     return response
 
@@ -420,69 +501,7 @@ async def get_current_user_info(
 
     Returns the authenticated user's profile and permissions.
     """
-    from datetime import datetime, timezone
-
-    # Re-fetch with eager loading so we can iterate positions safely in async
-    user_result = await db.execute(
-        select(User)
-        .where(User.id == current_user.id)
-        .options(selectinload(User.positions))
-    )
-    current_user = user_result.scalar_one()
-
-    # Get all positions and permissions
-    position_names = [pos.name for pos in current_user.positions]
-
-    # Collect all unique permissions from all positions
-    all_permissions = set()
-    for pos in current_user.positions:
-        all_permissions.update(pos.permissions or [])
-
-    # Also include rank default permissions
-    if current_user.rank:
-        all_permissions.update(get_rank_default_permissions(current_user.rank))
-
-    # Check HIPAA password age
-    password_expired = False
-    max_age_days = settings.HIPAA_MAXIMUM_PASSWORD_AGE_DAYS
-    if max_age_days > 0 and current_user.password_changed_at:
-        pwd_changed = (
-            current_user.password_changed_at.replace(tzinfo=timezone.utc)
-            if current_user.password_changed_at.tzinfo is None
-            else current_user.password_changed_at
-        )
-        age = (datetime.now(timezone.utc) - pwd_changed).days
-        password_expired = age >= max_age_days
-
-    # Get organization timezone
-    from app.models.user import Organization
-
-    org_result = await db.execute(
-        select(Organization).where(Organization.id == current_user.organization_id)
-    )
-    org = org_result.scalar_one_or_none()
-    org_timezone = org.timezone if org else "America/New_York"
-
-    return CurrentUser(
-        id=current_user.id,
-        username=current_user.username,
-        email=current_user.email,
-        first_name=current_user.first_name,
-        last_name=current_user.last_name,
-        full_name=current_user.full_name,
-        organization_id=current_user.organization_id,
-        timezone=org_timezone,
-        roles=position_names,
-        positions=position_names,
-        rank=current_user.rank,
-        membership_type=current_user.membership_type,
-        permissions=list(all_permissions),
-        is_active=current_user.is_active,
-        email_verified=current_user.email_verified,
-        mfa_enabled=current_user.mfa_enabled,
-        password_expired=password_expired,
-        must_change_password=bool(current_user.must_change_password),
-    )
+    return await _build_current_user_dict(current_user, db)
 
 
 @router.get("/session-settings")

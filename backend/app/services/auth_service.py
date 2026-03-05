@@ -562,7 +562,9 @@ class AuthService:
             session = session_result.scalar_one_or_none()
 
             if not session:
-                logger.debug("Token rejected: no matching session found")
+                logger.warning(
+                    f"Token rejected: no matching session (user_id={user_id})"
+                )
                 return None
 
             # Verify the session belongs to the claimed user
