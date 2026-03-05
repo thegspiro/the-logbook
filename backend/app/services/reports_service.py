@@ -30,6 +30,7 @@ from app.models.training import (
     TrainingRequirement,
     TrainingStatus,
 )
+from app.models.operational_rank import OperationalRank
 from app.models.user import User, UserStatus
 
 
@@ -38,6 +39,28 @@ class ReportsService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def _get_rank_display_map(
+        self, organization_id: UUID
+    ) -> Dict[str, str]:
+        """Build a rank_code → display_name mapping for the organization."""
+        result = await self.db.execute(
+            select(
+                OperationalRank.rank_code, OperationalRank.display_name
+            ).where(
+                OperationalRank.organization_id == str(organization_id),
+                OperationalRank.is_active == True,  # noqa: E712
+            )
+        )
+        return {row.rank_code: row.display_name for row in result}
+
+    def _resolve_rank(
+        self, rank_code: Optional[str], rank_map: Dict[str, str]
+    ) -> Optional[str]:
+        """Resolve a rank_code to its display_name, falling back to the code."""
+        if not rank_code:
+            return rank_code
+        return rank_map.get(rank_code, rank_code)
 
     async def generate_report(
         self,
@@ -102,6 +125,8 @@ class ReportsService:
         result = await self.db.execute(query)
         users = result.scalars().all()
 
+        rank_map = await self._get_rank_display_map(organization_id)
+
         members = []
         active_count = 0
         inactive_count = 0
@@ -126,7 +151,7 @@ class ReportsService:
                     "last_name": user.last_name or "",
                     "email": user.email or "",
                     "membership_number": user.membership_number,
-                    "rank": user.rank,
+                    "rank": self._resolve_rank(user.rank, rank_map),
                     "status": status_val,
                     "station": user.station,
                     "joined_date": (
@@ -581,6 +606,7 @@ class ReportsService:
         )
         users = users_result.scalars().all()
         member_map = {str(u.id): u for u in users}
+        rank_map = await self._get_rank_display_map(organization_id)
 
         # Get training records in period
         records_result = await self.db.execute(
@@ -609,7 +635,7 @@ class ReportsService:
                 "member_id": uid,
                 "member_name": f"{user.first_name or ''} {user.last_name or ''}".strip()
                 or user.username,
-                "rank": user.rank,
+                "rank": self._resolve_rank(user.rank, rank_map),
                 "training_hours": 0.0,
                 "courses_completed": 0,
                 "shift_hours": 0.0,
@@ -737,11 +763,12 @@ class ReportsService:
             )
         )
         users = users_result.scalars().all()
+        rank_map = await self._get_rank_display_map(organization_id)
         member_map = {
             str(u.id): {
                 "name": f"{u.first_name or ''} {u.last_name or ''}".strip()
                 or u.username,
-                "rank": u.rank,
+                "rank": self._resolve_rank(u.rank, rank_map),
             }
             for u in users
         }
@@ -1035,6 +1062,7 @@ class ReportsService:
             )
         )
         users = users_result.scalars().all()
+        rank_map = await self._get_rank_display_map(organization_id)
 
         enrollments_result = await self.db.execute(
             select(ProgramEnrollment)
@@ -1090,7 +1118,7 @@ class ReportsService:
                     "member_id": uid,
                     "member_name": f"{user.first_name or ''} {user.last_name or ''}".strip()
                     or user.username,
-                    "rank": user.rank,
+                    "rank": self._resolve_rank(user.rank, rank_map),
                     "total_requirements": total_reqs,
                     "completed_requirements": completed_count,
                     "compliance_percentage": pct,

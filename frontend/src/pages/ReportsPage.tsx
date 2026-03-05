@@ -227,6 +227,7 @@ export const ReportsPage: React.FC = () => {
                 <tr>
                   <th className="px-4 py-2">Name</th>
                   <th className="px-4 py-2">Email</th>
+                  <th className="px-4 py-2">Rank</th>
                   <th className="px-4 py-2">Status</th>
                   <th className="px-4 py-2">Role</th>
                 </tr>
@@ -238,6 +239,7 @@ export const ReportsPage: React.FC = () => {
                       {toStr(m.first_name ?? m.name ?? '')} {toStr(m.last_name ?? '')}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap">{toStr(m.email ?? '-')}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{formatRank(m.rank as string) || '-'}</td>
                     <td className="px-4 py-2 whitespace-nowrap capitalize">{toStr(m.status ?? '-')}</td>
                     <td className="px-4 py-2 whitespace-nowrap capitalize">{toStr(m.role ?? '-')}</td>
                   </tr>
