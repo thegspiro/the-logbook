@@ -96,8 +96,8 @@ class EmailTemplate(Base):
         onupdate=func.now(),
         nullable=False,
     )
-    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
-    updated_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    updated_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
     organization = relationship("Organization", backref="email_templates")
@@ -136,7 +136,7 @@ class EmailAttachment(Base):
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    uploaded_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+    uploaded_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
     template = relationship("EmailTemplate", backref="attachments")
@@ -207,7 +207,7 @@ class ScheduledEmail(Base):
     error_message = Column(Text, nullable=True)
 
     # Audit
-    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

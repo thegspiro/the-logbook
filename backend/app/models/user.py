@@ -247,7 +247,7 @@ class User(Base):
     referral_source = Column(String(255))
     interest_reason = Column(Text)
     referred_by_user_id = Column(
-        String(36), ForeignKey("users.id", ondelete="SET NULL")
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Emergency Contacts (stored as JSON array)
