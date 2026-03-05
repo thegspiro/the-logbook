@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Building2, Plus, Search, Filter, Wrench, ClipboardCheck,
-  MapPin, CheckCircle2, Clock, Loader2, X,
+  MapPin, CheckCircle2, Clock, Loader2, X, Phone, Mail,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { facilitiesService } from '../services/api';
@@ -284,6 +284,22 @@ export default function FacilitiesPage() {
                       <div className="flex items-center gap-1.5 text-sm text-theme-text-secondary mb-2">
                         <MapPin className="w-3.5 h-3.5" />
                         {address}
+                      </div>
+                    )}
+                    {(facility.phone || facility.email) && (
+                      <div className="flex items-center gap-3 text-xs text-theme-text-muted mb-2">
+                        {facility.phone && (
+                          <span className="flex items-center gap-1">
+                            <Phone className="w-3 h-3" />
+                            {facility.phone}
+                          </span>
+                        )}
+                        {facility.email && (
+                          <span className="flex items-center gap-1 truncate">
+                            <Mail className="w-3 h-3 shrink-0" />
+                            {facility.email}
+                          </span>
+                        )}
                       </div>
                     )}
                     <div className="flex items-center justify-between mt-3">

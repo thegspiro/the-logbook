@@ -16,8 +16,9 @@ from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.constants import ROLE_IT_MANAGER, ROLE_MEMBER
 from app.core.permissions import DEFAULT_ROLES
-from app.core.utils import generate_uuid
+from app.core.utils import generate_display_code, generate_uuid
 from app.models.facilities import Facility, FacilityStatus, FacilityType
+from app.models.location import Location
 from app.models.onboarding import OnboardingChecklistItem, OnboardingStatus
 from app.models.user import IdentifierType, Organization, OrganizationType, Role, User
 from app.services.auth_service import AuthService
@@ -567,6 +568,37 @@ class OnboardingService:
 
         self.db.add(facility)
         await self.db.flush()
+
+        # Also create a linked Location record so the headquarters appears
+        # in the Events location picker, QR check-in, and other modules.
+        display_code = await self._generate_unique_display_code()
+
+        location = Location(
+            id=generate_uuid(),
+            organization_id=org.id,
+            name=org.name,
+            address=addr_line1,
+            city=city,
+            state=state,
+            zip=zip_code,
+            facility_id=facility.id,
+            is_active=True,
+            display_code=display_code,
+        )
+        self.db.add(location)
+        await self.db.flush()
+
+    async def _generate_unique_display_code(self, max_attempts: int = 20) -> str:
+        """Generate a display code that doesn't collide with existing ones."""
+        for attempt in range(max_attempts):
+            length = 8 if attempt < 10 else 12
+            code = generate_display_code(length=length)
+            result = await self.db.execute(
+                select(Location.id).where(Location.display_code == code)
+            )
+            if result.scalar_one_or_none() is None:
+                return code
+        raise ValueError("Unable to generate a unique display code.")
 
     async def _create_default_roles(self, organization_id: str):
         """Create default positions for an organization.

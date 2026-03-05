@@ -63,6 +63,9 @@ interface OrganizationFormData {
   fdid: string;
   stateId: string;
   departmentId: string;
+  // Additional Info
+  county: string;
+  foundedYear: string;
   logo: string | null;
 }
 
@@ -157,6 +160,8 @@ const initialFormData: OrganizationFormData = {
   fdid: '',
   stateId: '',
   departmentId: '',
+  county: '',
+  foundedYear: '',
   logo: null,
 };
 
@@ -672,6 +677,8 @@ const OrganizationSetup: React.FC = () => {
         fdid: formData.fdid?.trim() || undefined,
         state_id: formData.stateId?.trim() || undefined,
         department_id: formData.departmentId?.trim() || undefined,
+        county: formData.county?.trim() || undefined,
+        founded_year: formData.foundedYear ? parseInt(formData.foundedYear, 10) : undefined,
         logo: formData.logo ?? undefined,
       };
 
@@ -1024,6 +1031,40 @@ const OrganizationSetup: React.FC = () => {
                       helpText="Your internal department ID (if applicable)"
                     />
                   )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* County & Year Founded */}
+          <div className="border border-theme-surface-border rounded-lg overflow-hidden">
+            <SectionHeader
+              title="Additional Information"
+              icon={<MapPin aria-hidden="true" className="w-5 h-5" />}
+              expanded={expandedSections.identifiers}
+              onToggle={() => toggleSection('identifiers')}
+            />
+            {expandedSections.identifiers && (
+              <div className="p-4 bg-theme-surface-secondary">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <InputField
+                    label="County / Jurisdiction"
+                    id="county"
+                    value={formData.county}
+                    onChange={(v) => updateFormData('county', v)}
+                    placeholder="e.g., Fairfax County"
+                    maxLength={100}
+                    helpText="County or jurisdiction your organization serves"
+                  />
+                  <InputField
+                    label="Year Founded"
+                    id="founded-year"
+                    value={formData.foundedYear}
+                    onChange={(v) => updateFormData('foundedYear', v)}
+                    placeholder="e.g., 1952"
+                    maxLength={4}
+                    helpText="Year your organization was established"
+                  />
                 </div>
               </div>
             )}
