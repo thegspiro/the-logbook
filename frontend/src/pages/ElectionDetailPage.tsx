@@ -331,8 +331,14 @@ export const ElectionDetailPage: React.FC = () => {
   };
 
   const getPreviewCandidatesForItem = (item: BallotItem): Candidate[] => {
-    const position = item.position || item.id;
-    return previewCandidates.filter((c) => c.position === position && !c.is_write_in);
+    if (item.position) {
+      return previewCandidates.filter((c) => c.position === item.position && !c.is_write_in);
+    }
+    // Fallback for ballot items without a position field: match candidates
+    // whose position appears in the ballot item title (e.g. "Election for Chief")
+    return previewCandidates.filter(
+      (c) => c.position && item.title.includes(c.position) && !c.is_write_in,
+    );
   };
 
   const getStatusBadgeClass = (status: string) => {

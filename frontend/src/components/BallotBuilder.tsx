@@ -688,6 +688,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
       type: selectedTemplate.type,
       title: selectedTemplate.title_template.replace('{name}', name),
       description: selectedTemplate.description_template?.replace('{name}', name),
+      ...(selectedTemplate.vote_type === 'candidate_selection' ? { position: name } : {}),
       eligible_voter_types: [...selectedTemplate.eligible_voter_types],
       vote_type: selectedTemplate.vote_type,
       require_attendance: selectedTemplate.require_attendance,
