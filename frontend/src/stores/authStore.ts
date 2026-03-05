@@ -166,7 +166,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // interceptor will attach it as an Authorization: Bearer header
       // until httpOnly cookies are established — this bridges the gap
       // where the browser hasn't processed Set-Cookie headers yet.
-      markLoginComplete(loginResponse?.access_token);
+      markLoginComplete(loginResponse?.access_token, loginResponse?.refresh_token);
 
       // Use user data from the login response if available. This avoids
       // a separate GET /auth/me call which can fail due to a race condition

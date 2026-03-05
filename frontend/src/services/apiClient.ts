@@ -126,41 +126,57 @@ let refreshPromise: Promise<void> | null = null;
 // logged in) from "session genuinely expired" (needs refresh/logout).
 let lastLoginAtMs = 0;
 
-// Temporary in-memory access token used as a bridge between login and
-// cookie establishment.  The backend sets auth tokens as httpOnly cookies,
-// but the browser may not make them available for subsequent requests
-// immediately (nginx proxy buffering, middleware wrapping, etc.).
-// During this window we send the token from the login response body as
-// an Authorization header — the backend already supports Bearer auth as
-// a fallback.  The token is cleared after a short grace period.
+// In-memory auth tokens used as a bridge between login and cookie
+// establishment.  The backend sets auth tokens as httpOnly cookies,
+// but in environments where the browser never stores those cookies
+// (nginx/middleware stripping Set-Cookie headers, etc.), these serve
+// as the primary auth mechanism.  They are never persisted to disk.
 let tempAccessToken: string | null = null;
+let tempRefreshToken: string | null = null;
 let tempTokenTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** Grace period (ms) after login during which the in-memory token is used. */
-const TEMP_TOKEN_TTL_MS = 30_000;
+/** TTL (ms) for in-memory tokens — matches the access token lifetime. */
+const TEMP_TOKEN_TTL_MS = 30 * 60 * 1_000; // 30 minutes
 
 /**
  * Called by the auth store after a successful login.
- * Stores the access_token temporarily so the request interceptor can
- * attach it as a Bearer token until httpOnly cookies are established.
+ * Stores tokens temporarily so interceptors can attach them as
+ * Authorization headers / refresh bodies until httpOnly cookies are
+ * established (or permanently if cookies never arrive).
  */
-export function markLoginComplete(accessToken?: string): void {
+export function markLoginComplete(accessToken?: string, refreshToken?: string): void {
   lastLoginAtMs = Date.now();
 
   if (accessToken) {
     tempAccessToken = accessToken;
-    // Auto-clear after grace period — by then cookies should be established
+    if (refreshToken) tempRefreshToken = refreshToken;
+    // Auto-clear after access token lifetime
     if (tempTokenTimer) clearTimeout(tempTokenTimer);
     tempTokenTimer = setTimeout(() => {
       tempAccessToken = null;
+      tempRefreshToken = null;
       tempTokenTimer = null;
     }, TEMP_TOKEN_TTL_MS);
   }
 }
 
-/** Clear the temporary token (e.g. on logout). */
+/** Update in-memory tokens after a successful refresh. */
+export function updateTempTokens(accessToken: string, refreshToken: string): void {
+  tempAccessToken = accessToken;
+  tempRefreshToken = refreshToken;
+  // Reset the auto-clear timer
+  if (tempTokenTimer) clearTimeout(tempTokenTimer);
+  tempTokenTimer = setTimeout(() => {
+    tempAccessToken = null;
+    tempRefreshToken = null;
+    tempTokenTimer = null;
+  }, TEMP_TOKEN_TTL_MS);
+}
+
+/** Clear the temporary tokens (e.g. on logout). */
 export function clearTempAccessToken(): void {
   tempAccessToken = null;
+  tempRefreshToken = null;
   if (tempTokenTimer) {
     clearTimeout(tempTokenTimer);
     tempTokenTimer = null;
@@ -170,6 +186,11 @@ export function clearTempAccessToken(): void {
 /** Get the current temporary access token (for module-specific axios instances). */
 export function getTempAccessToken(): string | null {
   return tempAccessToken;
+}
+
+/** Get the current temporary refresh token (for module-specific axios instances). */
+export function getTempRefreshToken(): string | null {
+  return tempRefreshToken;
 }
 
 // Grace period (ms) after login during which 401s are retried directly
@@ -249,25 +270,28 @@ api.interceptors.response.use(
       try {
         // If a refresh is already in flight, wait for it
         if (!refreshPromise) {
-          // POST to /auth/refresh — the httpOnly refresh_token cookie
-          // is sent automatically via withCredentials. The new tokens
-          // are set as httpOnly cookies in the response.
-          // NOTE: We use a standalone axios call (not `api`) to avoid
-          // triggering this same 401 interceptor recursively.  We must
-          // manually attach the CSRF header because the request
-          // interceptor on `api` won't run for this call.
+          // POST to /auth/refresh — send the refresh_token in the body
+          // (the backend accepts it from either httpOnly cookie or body).
+          // Also send withCredentials so cookies are used if available.
           const csrfToken = getCookie('csrf_token');
           const refreshHeaders: Record<string, string> = {};
           if (csrfToken) {
             refreshHeaders['X-CSRF-Token'] = csrfToken;
           }
+          const refreshBody = tempRefreshToken
+            ? { refresh_token: tempRefreshToken }
+            : undefined;
           refreshPromise = axios
-            .post(`${API_BASE_URL}/auth/refresh`, undefined, {
+            .post(`${API_BASE_URL}/auth/refresh`, refreshBody, {
               withCredentials: true,
               headers: refreshHeaders,
             })
-            .then(() => {
-              // New cookies are set by the backend response
+            .then((res) => {
+              // Update in-memory tokens from the refresh response
+              const data = res.data as Record<string, unknown> | undefined;
+              if (data && typeof data.access_token === 'string' && typeof data.refresh_token === 'string') {
+                updateTempTokens(data.access_token, data.refresh_token);
+              }
             })
             .finally(() => {
               refreshPromise = null;

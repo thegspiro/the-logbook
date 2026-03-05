@@ -14,7 +14,7 @@
 
 import axios, { type AxiosError, type AxiosInstance } from 'axios';
 import { API_TIMEOUT_MS } from '../constants/config';
-import { getTempAccessToken } from '../services/apiClient';
+import { getTempAccessToken, getTempRefreshToken, updateTempTokens } from '../services/apiClient';
 
 declare module 'axios' {
   export interface InternalAxiosRequestConfig {
@@ -80,9 +80,23 @@ export function createApiClient(baseURL = '/api/v1'): AxiosInstance {
         originalRequest._retry = true;
         try {
           if (!refreshPromise) {
+            const csrfToken = getCookie('csrf_token');
+            const headers: Record<string, string> = {};
+            if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
+            const refreshBody = getTempRefreshToken()
+              ? { refresh_token: getTempRefreshToken() }
+              : undefined;
             refreshPromise = axios
-              .post(`${baseURL}/auth/refresh`, {}, { withCredentials: true })
-              .then(() => {})
+              .post(`${baseURL}/auth/refresh`, refreshBody, {
+                withCredentials: true,
+                headers,
+              })
+              .then((res) => {
+                const data = res.data as Record<string, unknown> | undefined;
+                if (data && typeof data.access_token === 'string' && typeof data.refresh_token === 'string') {
+                  updateTempTokens(data.access_token, data.refresh_token);
+                }
+              })
               .finally(() => {
                 refreshPromise = null;
               });
