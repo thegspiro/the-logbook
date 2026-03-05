@@ -6,6 +6,7 @@
 
 import axios, { AxiosError } from 'axios';
 import { API_TIMEOUT_MS } from '../../../constants/config';
+import { getTempAccessToken } from '../../../services/apiClient';
 import type {
   Assignment,
   ShiftCall,
@@ -197,6 +198,13 @@ function getCookie(name: string): string | null {
 // Tokens must NEVER be stored in or read from localStorage (HIPAA compliance).
 api.interceptors.request.use(
   (config) => {
+    // Temporary Bearer token bridge: if cookies haven't been established
+    // yet (right after login), use the in-memory token from the global client.
+    const tempToken = getTempAccessToken();
+    if (tempToken && !config.headers['Authorization']) {
+      config.headers['Authorization'] = `Bearer ${tempToken}`;
+    }
+
     // Double-submit CSRF token for state-changing requests
     const method = (config.method || '').toUpperCase();
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {

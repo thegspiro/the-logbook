@@ -167,6 +167,11 @@ export function clearTempAccessToken(): void {
   }
 }
 
+/** Get the current temporary access token (for module-specific axios instances). */
+export function getTempAccessToken(): string | null {
+  return tempAccessToken;
+}
+
 // Grace period (ms) after login during which 401s are retried directly
 // instead of attempting a cookie-based refresh.  This covers the rare
 // case where the browser hasn't finished processing Set-Cookie headers.
