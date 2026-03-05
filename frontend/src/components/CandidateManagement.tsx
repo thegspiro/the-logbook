@@ -429,6 +429,22 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                           }
                           className="block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary text-sm"
                         />
+                        {positions.length > 0 && (
+                          <select
+                            value={formData.position}
+                            onChange={(e) =>
+                              setFormData((prev) => ({ ...prev, position: e.target.value }))
+                            }
+                            className="block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
+                          >
+                            <option value="">Select position...</option>
+                            {positions.map((pos) => (
+                              <option key={pos} value={pos}>
+                                {pos}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                         <textarea
                           value={formData.statement}
                           onChange={(e) =>
