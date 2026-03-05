@@ -420,6 +420,29 @@ export const ElectionDetailPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Integrity Alert Banner */}
+      {integrityResult && integrityResult.integrity_status !== 'PASS' && (
+        <div className="bg-red-500/10 border-2 border-red-500/50 rounded-lg p-4 mb-6 flex items-start gap-3">
+          <svg className="h-6 w-6 text-red-500 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          <div>
+            <h3 className="text-sm font-bold text-red-700 dark:text-red-300">
+              Vote Integrity Issue Detected
+            </h3>
+            <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+              {integrityResult.tampered_votes > 0
+                ? `${integrityResult.tampered_votes} tampered vote(s) detected. `
+                : ''}
+              {!integrityResult.chain_verified
+                ? 'Vote chain is broken — votes may have been deleted or reordered. '
+                : ''}
+              Review the Forensics & Integrity section below for details.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Election Info */}
       <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -729,7 +752,7 @@ export const ElectionDetailPage: React.FC = () => {
                       <span className={`text-lg font-bold ${
                         integrityResult.integrity_status === 'PASS' ? 'text-green-300' : 'text-red-300'
                       }`}>
-                        {integrityResult.integrity_status === 'PASS' ? 'PASS' : 'FAIL'}
+                        {integrityResult.integrity_status}
                       </span>
                       <span className="text-sm text-theme-text-secondary">
                         ({integrityResult.valid_signatures}/{integrityResult.total_votes} valid signatures)
@@ -754,6 +777,17 @@ export const ElectionDetailPage: React.FC = () => {
                           {integrityResult.tampered_votes}
                         </span>
                       </div>
+                    </div>
+                    {/* Vote chain verification status */}
+                    <div className="mt-3 flex items-center gap-2 text-sm">
+                      <span className="text-theme-text-muted">Vote Chain:</span>
+                      {integrityResult.chain_verified ? (
+                        <span className="font-medium text-green-300">Verified</span>
+                      ) : (
+                        <span className="font-medium text-red-300">
+                          Broken{integrityResult.chain_break_at ? ` at vote ${integrityResult.chain_break_at}` : ''}
+                        </span>
+                      )}
                     </div>
                     {integrityResult.tampered_vote_ids.length > 0 && (
                       <div className="mt-3 p-3 bg-red-500/20 rounded-sm">

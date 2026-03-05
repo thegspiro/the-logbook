@@ -14,6 +14,10 @@ export interface BallotItem {
   vote_type: string; // approval, candidate_selection
   required_for_approval?: number;
   require_attendance?: boolean; // If true, voter must be checked in as present at the meeting
+  // Per-item victory condition overrides (optional — defaults to election-level)
+  victory_condition?: VictoryCondition | undefined;
+  victory_percentage?: number | undefined;
+  voting_method?: VotingMethod | undefined;
 }
 
 export interface PositionEligibility {
@@ -57,6 +61,8 @@ export interface Election {
   is_runoff: boolean;
   parent_election_id?: string;
   runoff_round: number;
+  quorum_type?: string; // none, percentage, count
+  quorum_value?: number;
   created_by?: string;
   created_at: string;
   updated_at: string;
@@ -189,7 +195,9 @@ export interface VoteIntegrityResult {
   unsigned_votes: number;
   tampered_votes: number;
   tampered_vote_ids: string[];
-  integrity_status: 'PASS' | 'FAIL';
+  chain_verified: boolean;
+  chain_break_at?: string | null;
+  integrity_status: 'PASS' | 'FAIL' | 'CHAIN_BROKEN';
 }
 
 export interface VoterEligibility {
@@ -224,6 +232,8 @@ export interface ElectionResults {
   voter_turnout_percentage: number;
   results_by_position: PositionResults[];
   overall_results: CandidateResult[];
+  quorum_met?: boolean;
+  quorum_detail?: string | null;
 }
 
 export interface TimelineEvent {
@@ -360,6 +370,7 @@ export interface BallotSubmissionResponse {
   votes_cast: number;
   abstentions: number;
   message: string;
+  receipt_hashes?: string[];
 }
 
 // Voter override types
@@ -412,4 +423,31 @@ export interface ProxyVoteCreate {
   proxy_authorization_id: string;
   position?: string;
   vote_rank?: number;
+}
+
+// Election Settings (org-level defaults)
+export interface ElectionSettings {
+  default_voting_method?: VotingMethod;
+  default_victory_condition?: VictoryCondition;
+  default_victory_percentage?: number;
+  default_anonymous_voting?: boolean;
+  default_allow_write_ins?: boolean;
+  default_quorum_type?: string;
+  default_quorum_value?: number;
+}
+
+// Ballot Preview (secretary view with eligibility annotations)
+export interface BallotPreviewItem {
+  ballot_item: BallotItem;
+  eligible: boolean;
+  reason?: string;
+}
+
+export interface BallotPreview {
+  election_id: string;
+  user_id: string;
+  user_name: string;
+  items: BallotPreviewItem[];
+  total_eligible: number;
+  total_items: number;
 }

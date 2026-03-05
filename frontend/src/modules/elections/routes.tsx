@@ -17,6 +17,9 @@ const ElectionsPage = lazyWithRetry(() => import('../../pages/ElectionsPage'));
 const ElectionDetailPage = lazyWithRetry(
   () => import('../../pages/ElectionDetailPage'),
 );
+const ElectionsSettingsPage = lazyWithRetry(
+  () => import('../../pages/ElectionsSettingsPage'),
+);
 const BallotVotingPage = lazyWithRetry(
   () => import('../../pages/BallotVotingPage'),
 );
@@ -29,6 +32,14 @@ export const getElectionsRoutes = () => (
       element={
         <Suspense fallback={null}>
           <ElectionsPage />
+        </Suspense>
+      }
+    />
+    <Route
+      path="/elections/settings"
+      element={
+        <Suspense fallback={null}>
+          <ElectionsSettingsPage />
         </Suspense>
       }
     />

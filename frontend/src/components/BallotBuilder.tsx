@@ -444,6 +444,21 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                         Attendance Required
                       </span>
                     )}
+                    {item.victory_condition ? (
+                      <span className="px-2 py-0.5 text-xs bg-green-500/20 text-green-700 dark:text-green-300 rounded-sm">
+                        {item.victory_condition === 'supermajority'
+                          ? `Supermajority (${item.victory_percentage ?? 67}%)`
+                          : item.victory_condition === 'majority'
+                            ? 'Majority (>50%)'
+                            : item.victory_condition === 'threshold'
+                              ? `Threshold (${item.victory_percentage ?? ''}%)`
+                              : 'Most Votes'}
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 text-xs bg-theme-surface text-theme-text-muted rounded-sm">
+                        Uses election default
+                      </span>
+                    )}
                   </div>
                 </div>
 
