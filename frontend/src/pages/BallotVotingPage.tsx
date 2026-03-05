@@ -168,8 +168,14 @@ export const BallotVotingPage: React.FC = () => {
   };
 
   const getCandidatesForItem = (item: BallotItem): Candidate[] => {
-    const position = item.position || item.id;
-    return candidates.filter((c) => c.position === position && !c.is_write_in);
+    if (item.position) {
+      return candidates.filter((c) => c.position === item.position && !c.is_write_in);
+    }
+    // Fallback for ballot items without a position field: match candidates
+    // whose position appears in the ballot item title (e.g. "Election for Chief")
+    return candidates.filter(
+      (c) => c.position && item.title.includes(c.position) && !c.is_write_in,
+    );
   };
 
   // ---- Render states ----
