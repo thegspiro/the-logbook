@@ -17,7 +17,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.responses import Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import HTTPConnection
-from starlette.types import ASGIApp
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 # ============================================
 # Rate Limiting
@@ -295,70 +295,68 @@ class InputSanitizer:
 # ============================================
 
 
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+class SecurityHeadersMiddleware:
     """
-    Add security headers to all responses
+    Add security headers to all responses.
+
+    Implemented as a pure ASGI middleware (not BaseHTTPMiddleware) to avoid
+    the response-wrapping behaviour of BaseHTTPMiddleware which can strip
+    Set-Cookie headers when multiple BaseHTTPMiddleware layers are stacked.
     """
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
-        response = await call_next(request)
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
 
-        # Prevent caching of API responses containing sensitive data
-        if request.url.path.startswith("/api/"):
-            response.headers["Cache-Control"] = (
-                "no-store, no-cache, must-revalidate, proxy-revalidate"
-            )
-            response.headers["Pragma"] = "no-cache"
-            response.headers["Expires"] = "0"
+    # Pre-build the static header list once (all values are constant).
+    _STATIC_HEADERS: list[tuple[bytes, bytes]] = [
+        (b"strict-transport-security", b"max-age=31536000; includeSubDomains"),
+        (b"x-content-type-options", b"nosniff"),
+        (b"x-frame-options", b"DENY"),
+        (b"x-xss-protection", b"1; mode=block"),
+        (b"referrer-policy", b"strict-origin-when-cross-origin"),
+        (b"permissions-policy", b"geolocation=(), microphone=(), camera=()"),
+        (
+            b"content-security-policy",
+            b"default-src 'self'; "
+            b"script-src 'self'; "
+            b"style-src 'self' 'unsafe-inline'; "
+            b"style-src-elem 'self' 'unsafe-inline'; "
+            b"style-src-attr 'unsafe-inline'; "
+            b"img-src 'self' data: blob:; "
+            b"font-src 'self'; "
+            b"connect-src 'self'; "
+            b"object-src 'none'; "
+            b"frame-ancestors 'none'; "
+            b"base-uri 'self'; "
+            b"form-action 'self'; "
+            b"upgrade-insecure-requests",
+        ),
+    ]
 
-        # Strict Transport Security (HSTS)
-        response.headers["Strict-Transport-Security"] = (
-            "max-age=31536000; includeSubDomains"
-        )
+    _API_CACHE_HEADERS: list[tuple[bytes, bytes]] = [
+        (b"cache-control", b"no-store, no-cache, must-revalidate, proxy-revalidate"),
+        (b"pragma", b"no-cache"),
+        (b"expires", b"0"),
+    ]
 
-        # Prevent MIME type sniffing
-        response.headers["X-Content-Type-Options"] = "nosniff"
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
 
-        # Clickjacking protection
-        response.headers["X-Frame-Options"] = "DENY"
+        path: str = scope.get("path", "")
+        is_api = path.startswith("/api/")
 
-        # XSS Protection (legacy but still useful)
-        response.headers["X-XSS-Protection"] = "1; mode=block"
+        async def send_with_headers(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                headers.extend(self._STATIC_HEADERS)
+                if is_api:
+                    headers.extend(self._API_CACHE_HEADERS)
+                message = {**message, "headers": headers}
+            await send(message)
 
-        # Referrer Policy
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-
-        # Permissions Policy
-        response.headers["Permissions-Policy"] = (
-            "geolocation=(), microphone=(), camera=()"
-        )
-
-        # Content Security Policy
-        # SEC: 'unsafe-inline' is limited to style-src only because Tailwind
-        # and React use inline style attributes. style-src-elem restricts
-        # <style> blocks to 'self' (blocks XSS-injected <style> elements).
-        # object-src 'none' blocks Flash/Java/PDF embeds entirely.
-        # upgrade-insecure-requests forces HTTPS for all sub-resources.
-        csp = (
-            "default-src 'self'; "
-            "script-src 'self'; "
-            "style-src 'self' 'unsafe-inline'; "
-            "style-src-elem 'self' 'unsafe-inline'; "
-            "style-src-attr 'unsafe-inline'; "
-            "img-src 'self' data: blob:; "
-            "font-src 'self'; "
-            "connect-src 'self'; "
-            "object-src 'none'; "
-            "frame-ancestors 'none'; "
-            "base-uri 'self'; "
-            "form-action 'self'; "
-            "upgrade-insecure-requests"
-        )
-        response.headers["Content-Security-Policy"] = csp
-
-        return response
+        await self.app(scope, receive, send_with_headers)
 
 
 # ============================================
@@ -823,7 +821,7 @@ class IPBlockingMiddleware(BaseHTTPMiddleware):
 # ============================================
 
 
-class IPLoggingMiddleware(BaseHTTPMiddleware):
+class IPLoggingMiddleware:
     """
     Middleware for logging all request IP addresses and geo information.
 
@@ -832,16 +830,25 @@ class IPLoggingMiddleware(BaseHTTPMiddleware):
     logs request method/path/status/duration at INFO level, and
     binds the request_id to the Loguru context for the duration of
     the request.
+
+    Implemented as a pure ASGI middleware (not BaseHTTPMiddleware) to avoid
+    stripping Set-Cookie headers during response wrapping.
     """
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
-        """Log request IP, geo info, and request duration."""
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
         from loguru import logger
 
         from app.core.geoip import get_geoip_service
         from app.core.logging import generate_request_id, request_id_ctx
+
+        request = Request(scope)
 
         # Generate or reuse incoming request ID
         request_id = request.headers.get("X-Request-ID") or generate_request_id()
@@ -851,7 +858,7 @@ class IPLoggingMiddleware(BaseHTTPMiddleware):
         user_agent = get_user_agent(request)
 
         # Get geo info if available
-        geo_info = {}
+        geo_info: dict = {}
         geoip = get_geoip_service()
         if geoip:
             geo_info = geoip.lookup_ip(client_ip)
@@ -870,23 +877,30 @@ class IPLoggingMiddleware(BaseHTTPMiddleware):
             f"Request-ID: {request_id}"
         )
 
-        # Process request and measure duration
+        # Track timing and response status
         start = time.monotonic()
-        response = await call_next(request)
-        duration_ms = (time.monotonic() - start) * 1000
+        response_status = 0
 
-        # Attach request ID to response
-        response.headers["X-Request-ID"] = request_id
+        async def send_with_request_id(message: Message) -> None:
+            nonlocal response_status
+            if message["type"] == "http.response.start":
+                response_status = message.get("status", 0)
+                headers = list(message.get("headers", []))
+                headers.append((b"x-request-id", request_id.encode()))
+                message = {**message, "headers": headers}
+            await send(message)
+
+        await self.app(scope, receive, send_with_request_id)
+
+        duration_ms = (time.monotonic() - start) * 1000
 
         # Log completed request at INFO level (skip health checks to reduce noise)
         path = request.url.path
         if path not in ("/health", "/health/detailed"):
             logger.info(
-                f"{request.method} {path} → {response.status_code} "
+                f"{request.method} {path} → {response_status} "
                 f"({duration_ms:.0f}ms) [rid={request_id}]"
             )
-
-        return response
 
 
 # ============================================
