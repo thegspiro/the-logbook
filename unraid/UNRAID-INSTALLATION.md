@@ -904,14 +904,42 @@ A: Yes! Configure tunnel to point to your Unraid IP:7880.
 
 ---
 
+## Docker Compose Installation (Alternative)
+
+If you prefer Docker Compose over Community Applications, see:
+
+- **[Quick Start Guide](./QUICK-START.md)** - Automated one-liner setup or step-by-step manual installation
+- **[Build from Source](./BUILD-FROM-SOURCE-ON-UNRAID.md)** - Build locally without GitHub Container Registry
+- **[docker-compose-unraid.yml](./docker-compose-unraid.yml)** - Pre-built image compose file
+- **[docker-compose-build-from-source.yml](./docker-compose-build-from-source.yml)** - Local build compose file
+
+---
+
+## Deployment Validation
+
+After installation, validate your deployment:
+
+```bash
+# Full validation
+./unraid/validate-deployment.sh http://YOUR-UNRAID-IP:7880 http://YOUR-UNRAID-IP:7881
+
+# Diagnose frontend build issues
+./unraid/validate-deployment.sh --diagnose-frontend
+
+# Rebuild frontend with correct settings
+./unraid/validate-deployment.sh --rebuild-frontend
+```
+
+---
+
 ## Next Steps
 
-1. ✅ Install The Logbook from Community Apps
-2. ✅ Complete initial setup wizard
-3. ✅ Configure automated backups
-4. ✅ Set up reverse proxy for HTTPS (optional)
-5. ✅ Invite team members
-6. ✅ Customize organization settings
-7. ✅ Explore modules and features
+1. Install The Logbook from Community Apps
+2. Complete initial setup wizard
+3. Configure automated backups
+4. Set up reverse proxy for HTTPS (optional)
+5. Invite team members
+6. Customize organization settings
+7. Explore modules and features
 
-**Welcome to The Logbook! ** 🚀
+**Welcome to The Logbook!**

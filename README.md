@@ -209,7 +209,7 @@ curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/un
 
 Access: `http://YOUR-UNRAID-IP:7880`
 
-See [Unraid Quick Start](unraid/QUICK-START-UPDATED.md) for details.
+See [Unraid Quick Start](unraid/QUICK-START.md) for details.
 </details>
 
 <details>
@@ -339,7 +339,7 @@ See [QUICK_START_GITHUB.md](QUICK_START_GITHUB.md) for detailed instructions.
 - [AWS Deployment](docs/deployment/aws.md) — EC2, RDS, and ElastiCache
 - [Proxmox Deployment](docs/deployment/proxmox.md) — LXC and VM
 - [Synology NAS Deployment](docs/deployment/synology.md) — Docker on Synology DS+/XS+
-- [Unraid Quick Start](unraid/QUICK-START-UPDATED.md) — One-command Unraid setup
+- [Unraid Quick Start](unraid/QUICK-START.md) — One-command Unraid setup
 - [Docker Build & Publish](docs/DOCKER-BUILD-PUBLISH.md) — Docker image management
 
 ### Modules & Features

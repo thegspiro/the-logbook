@@ -5,8 +5,15 @@
 # Validates that the Logbook deployment is working correctly
 # Run this after starting containers to verify everything is set up
 #
-# Usage: ./validate-deployment.sh [FRONTEND_URL] [BACKEND_URL]
-# Example: ./validate-deployment.sh http://192.168.1.10:7880 http://192.168.1.10:7881
+# Usage:
+#   ./validate-deployment.sh [FRONTEND_URL] [BACKEND_URL]
+#   ./validate-deployment.sh --diagnose-frontend
+#   ./validate-deployment.sh --rebuild-frontend
+#
+# Examples:
+#   ./validate-deployment.sh http://192.168.1.10:7880 http://192.168.1.10:7881
+#   ./validate-deployment.sh --diagnose-frontend
+#   ./validate-deployment.sh --rebuild-frontend
 # ==================================================
 
 set -e
@@ -17,6 +24,151 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
+
+# Get the script's directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# ==================================================
+# Frontend Diagnostics Mode
+# ==================================================
+diagnose_frontend() {
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}Frontend Build Configuration Check${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+
+    if ! docker ps | grep -q "logbook-frontend"; then
+        echo -e "${RED}ERROR: logbook-frontend container is not running${NC}"
+        echo ""
+        echo "Start it with:"
+        echo "  docker-compose up -d logbook-frontend"
+        exit 1
+    fi
+
+    echo "1. Checking built index.html..."
+    echo "---"
+    docker exec logbook-frontend cat /usr/share/nginx/html/index.html | head -20
+    echo ""
+
+    echo "2. Searching for VITE_API_URL in built JavaScript..."
+    echo "---"
+    docker exec logbook-frontend sh -c "grep -o 'VITE_API_URL[^\"]*' /usr/share/nginx/html/assets/*.js 2>/dev/null || echo 'Not found in plaintext'"
+    echo ""
+
+    echo "3. Checking for hardcoded URLs in bundle..."
+    echo "---"
+    docker exec logbook-frontend sh -c "grep -o 'http[s]*://[^\"]*' /usr/share/nginx/html/assets/*.js | head -10 || echo 'None found'"
+    echo ""
+
+    echo "4. Checking nginx configuration..."
+    echo "---"
+    docker exec logbook-frontend cat /etc/nginx/conf.d/default.conf | grep -A3 "location /api"
+    echo ""
+
+    echo "5. Testing API proxy..."
+    echo "---"
+    docker exec logbook-frontend sh -c "wget -qO- http://localhost:80/api/v1/onboarding/status 2>&1 || echo 'Proxy failed'"
+    echo ""
+
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}Diagnosis Complete${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+    echo "If you see malformed URLs above, rebuild the frontend:"
+    echo "  $0 --rebuild-frontend"
+    echo ""
+    exit 0
+}
+
+# ==================================================
+# Frontend Rebuild Mode
+# ==================================================
+rebuild_frontend() {
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}Logbook Frontend Rebuild${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+
+    cd "$PROJECT_ROOT"
+
+    echo -e "${YELLOW}Step 1: Stopping containers...${NC}"
+    docker-compose -f unraid/docker-compose-unraid.yml down
+    echo -e "${GREEN}Done${NC}"
+    echo ""
+
+    echo -e "${YELLOW}Step 2: Removing old frontend image...${NC}"
+    if docker images | grep -q "the-logbook-frontend"; then
+        docker rmi the-logbook-frontend:local || true
+        echo -e "${GREEN}Old image removed${NC}"
+    else
+        echo -e "${GREEN}No old image to remove${NC}"
+    fi
+    echo ""
+
+    echo -e "${YELLOW}Step 3: Verifying build configuration...${NC}"
+    echo -e "  Checking docker-compose build args..."
+    VITE_URL=$(grep -A3 "args:" unraid/docker-compose-unraid.yml | grep VITE_API_URL | awk '{print $2}')
+    if [ "$VITE_URL" = "/api/v1" ]; then
+        echo -e "${GREEN}VITE_API_URL is correct: /api/v1${NC}"
+    else
+        echo -e "${RED}WARNING: VITE_API_URL is set to: $VITE_URL${NC}"
+        echo -e "${RED}  Expected: /api/v1${NC}"
+        echo -e "${YELLOW}  Continuing anyway...${NC}"
+    fi
+    echo ""
+
+    echo -e "${YELLOW}Step 4: Building frontend with correct settings...${NC}"
+    echo -e "  This will take 2-3 minutes..."
+    echo -e "  Build args:"
+    echo -e "    VITE_API_URL=/api/v1 ${GREEN}(relative URL for nginx proxy)${NC}"
+    echo ""
+    docker-compose -f unraid/docker-compose-unraid.yml build --no-cache --progress=plain frontend 2>&1 | grep -E "VITE_API_URL|Building|Successfully" || docker-compose -f unraid/docker-compose-unraid.yml build --no-cache frontend
+    echo -e "${GREEN}Frontend built successfully${NC}"
+    echo ""
+
+    echo -e "${YELLOW}Step 5: Starting all containers...${NC}"
+    docker-compose -f unraid/docker-compose-unraid.yml up -d
+    echo -e "${GREEN}Containers started${NC}"
+    echo ""
+
+    echo -e "${YELLOW}Step 6: Waiting for containers to be healthy...${NC}"
+    sleep 5
+    echo -e "${GREEN}Ready${NC}"
+    echo ""
+
+    echo -e "${YELLOW}Step 7: Checking container status...${NC}"
+    docker ps --filter "name=logbook" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+    echo ""
+
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${GREEN}Frontend rebuild complete!${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+    echo -e "${YELLOW}Next steps:${NC}"
+    echo -e "  1. Run validation: $0 http://YOUR-UNRAID-IP:7880 http://YOUR-UNRAID-IP:7881"
+    echo -e "  2. Clear your browser cache (Ctrl+Shift+Delete)"
+    echo -e "  3. Access The Logbook: http://YOUR-UNRAID-IP:7880"
+    echo -e "  4. Check browser console (F12) for errors"
+    echo ""
+    echo -e "If you see any errors, run:"
+    echo -e "  docker logs logbook-frontend --tail 50"
+    echo -e "  docker logs logbook-backend --tail 50"
+    echo ""
+    exit 0
+}
+
+# ==================================================
+# Handle subcommand flags
+# ==================================================
+case "${1:-}" in
+    --diagnose-frontend)
+        diagnose_frontend
+        ;;
+    --rebuild-frontend)
+        rebuild_frontend
+        ;;
+esac
 
 # Default URLs (can be overridden)
 FRONTEND_URL="${1:-http://localhost:7880}"
