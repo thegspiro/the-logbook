@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.cors import CORSMiddleware as _StarletteCORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
@@ -1560,6 +1560,25 @@ async def _validation_error_handler(request: Request, exc: RequestValidationErro
 # ============================================
 # Middleware
 # ============================================
+
+
+class CORSMiddleware(_StarletteCORSMiddleware):
+    """Thin wrapper that lets WebSocket connections bypass CORS origin checks.
+
+    Starlette's CORSMiddleware rejects WebSocket upgrades whose ``Origin``
+    header is not in ``allow_origins``.  Browsers *always* send ``Origin``
+    on WebSocket handshakes (even same-origin), so deployments behind a
+    reverse-proxy whose public URL differs from ``ALLOWED_ORIGINS`` get a
+    spurious 403.  WebSocket endpoints already perform their own JWT-based
+    authentication, so the CORS gate is redundant for them.
+    """
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "websocket":
+            await self.app(scope, receive, send)
+            return
+        await super().__call__(scope, receive, send)
+
 
 # Security Headers Middleware (add first so it wraps all responses)
 from app.core.security_middleware import (
