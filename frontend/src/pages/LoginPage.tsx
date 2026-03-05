@@ -199,7 +199,7 @@ export const LoginPage: React.FC = () => {
             </div>
           )}
 
-          {error && (
+          {error?.trim() && (
             <div className="rounded-md bg-red-50 p-4" role="alert" aria-live="assertive">
               <div className="flex">
                 <div className="shrink-0">
