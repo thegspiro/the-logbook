@@ -113,6 +113,21 @@ api.interceptors.request.use(
 // callers receive the same new access token.
 let refreshPromise: Promise<void> | null = null;
 
+// Timestamp (epoch ms) of the most recent successful login.  Used by
+// the 401 interceptor to distinguish "cookies not yet stored" (just
+// logged in) from "session genuinely expired" (needs refresh/logout).
+let lastLoginAtMs = 0;
+
+/** Called by the auth store after a successful login POST. */
+export function markLoginComplete(): void {
+  lastLoginAtMs = Date.now();
+}
+
+// Grace period (ms) after login during which 401s are retried directly
+// instead of attempting a cookie-based refresh.  This covers the rare
+// case where the browser hasn't finished processing Set-Cookie headers.
+const POST_LOGIN_GRACE_MS = 2_000;
+
 // Response interceptor to handle caching and token expiration
 api.interceptors.response.use(
   (response) => {
@@ -135,7 +150,7 @@ api.interceptors.response.use(
 
     return response;
   },
-  async (error: AxiosError & { config: AxiosRequestConfig & { _retry?: boolean; _503retries?: number } }) => {
+  async (error: AxiosError & { config: AxiosRequestConfig & { _retry?: boolean; _retryCount?: number; _503retries?: number } }) => {
     const originalRequest = error.config;
 
     // 503 Service Unavailable — the backend is up but a dependency (MySQL)
@@ -156,9 +171,31 @@ api.interceptors.response.use(
       // All retries exhausted — let it fall through as a normal error
     }
 
-    // If 401 and we haven't retried yet, try to refresh via httpOnly cookie
+    // If 401 and we haven't retried yet, try to recover
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
+
+      // --- Post-login grace period ---
+      // Right after login the browser may not have stored the
+      // Set-Cookie headers yet.  Instead of immediately trying a
+      // cookie-based refresh (which would also fail), wait briefly
+      // and retry the original request.
+      const msSinceLogin = Date.now() - lastLoginAtMs;
+      if (lastLoginAtMs > 0 && msSinceLogin < POST_LOGIN_GRACE_MS) {
+        const retryCount = originalRequest._retryCount ?? 0;
+        const MAX_POST_LOGIN_RETRIES = 3;
+
+        if (retryCount < MAX_POST_LOGIN_RETRIES) {
+          originalRequest._retryCount = retryCount + 1;
+          originalRequest._retry = false; // allow the next 401 to re-enter
+          const delay = 100 * Math.pow(2, retryCount); // 100, 200, 400ms
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          return api(originalRequest);
+        }
+        // Exhausted post-login retries — fall through to the normal
+        // refresh flow below.
+        originalRequest._retry = true;
+      }
 
       try {
         // If a refresh is already in flight, wait for it
