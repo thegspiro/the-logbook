@@ -1368,6 +1368,16 @@ export const ElectionDetailPage: React.FC = () => {
                 {election.description && (
                   <p className="mt-2 text-red-100">{election.description}</p>
                 )}
+                {election.meeting_date && (
+                  <p className="mt-1 text-red-200 text-sm">
+                    Meeting Date: {new Date(election.meeting_date).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      timeZone: tz,
+                    })}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -1414,6 +1424,22 @@ export const ElectionDetailPage: React.FC = () => {
                       <div className="px-6 py-4 space-y-3">
                         {isApprovalType ? (
                           <>
+                            {/* Show linked candidates/prospective members for approval items */}
+                            {itemCandidates.length > 0 && (
+                              <div className="mb-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
+                                <p className="text-xs font-medium text-blue-700 dark:text-blue-400 mb-1.5">
+                                  {item.type === 'membership_approval' ? 'Prospective Member' : 'Candidate'}{itemCandidates.length !== 1 ? 's' : ''}:
+                                </p>
+                                {itemCandidates.map((candidate) => (
+                                  <div key={candidate.id} className="flex items-center gap-2 py-1">
+                                    <span className="font-medium text-theme-text-primary text-sm">{candidate.name}</span>
+                                    {candidate.statement && (
+                                      <span className="text-xs text-theme-text-muted">— {candidate.statement}</span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                             <div className="flex items-center gap-3 p-3 rounded-lg border border-theme-surface-border">
                               <input type="radio" disabled className="w-4 h-4 text-green-600" />
                               <span className="font-medium text-theme-text-primary">Approve</span>
@@ -1446,9 +1472,17 @@ export const ElectionDetailPage: React.FC = () => {
                         )}
 
                         {election.allow_write_ins && (
-                          <div className="flex items-center gap-3 p-3 rounded-lg border border-theme-surface-border">
-                            <input type="radio" disabled className="w-4 h-4 text-purple-600" />
-                            <span className="font-medium text-theme-text-primary">Write-in</span>
+                          <div className="p-3 rounded-lg border border-theme-surface-border">
+                            <div className="flex items-center gap-3">
+                              <input type="radio" disabled className="w-4 h-4 text-purple-600" />
+                              <span className="font-medium text-theme-text-primary">Write-in</span>
+                            </div>
+                            <input
+                              type="text"
+                              disabled
+                              placeholder="Enter name or option..."
+                              className="mt-2 ml-7 block w-[calc(100%-1.75rem)] border border-theme-surface-border rounded-md py-2 px-3 text-sm bg-theme-input-bg text-theme-text-muted opacity-50 cursor-not-allowed"
+                            />
                           </div>
                         )}
 
@@ -1497,6 +1531,49 @@ export const ElectionDetailPage: React.FC = () => {
                   </p>
                 </div>
               )}
+
+              {/* Security notice (matches BallotVotingPage) */}
+              <div className="mt-6 text-center text-xs text-theme-text-muted">
+                <p>Your vote is anonymous and securely recorded.</p>
+                <p>This voting link is unique to you. Do not share it with others.</p>
+              </div>
+            </div>
+
+            {/* Election info summary (admin-only context) */}
+            <div className="px-6 py-4 bg-theme-surface border-t border-theme-surface-border">
+              <h4 className="text-xs font-semibold text-theme-text-muted uppercase tracking-wider mb-2">Election Details</h4>
+              <div className="flex flex-wrap gap-2">
+                <span className="text-xs px-2 py-1 rounded-sm bg-theme-surface-hover text-theme-text-secondary">
+                  {election.voting_method?.replace(/_/g, ' ')}
+                </span>
+                <span className="text-xs px-2 py-1 rounded-sm bg-theme-surface-hover text-theme-text-secondary">
+                  {election.victory_condition?.replace(/_/g, ' ')}
+                  {election.victory_percentage ? ` (${election.victory_percentage}%)` : ''}
+                </span>
+                {election.anonymous_voting && (
+                  <span className="text-xs px-2 py-1 rounded-sm bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400">
+                    Anonymous
+                  </span>
+                )}
+                {election.allow_write_ins && (
+                  <span className="text-xs px-2 py-1 rounded-sm bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400">
+                    Write-ins allowed
+                  </span>
+                )}
+                {election.quorum_type && election.quorum_type !== 'none' && (
+                  <span className="text-xs px-2 py-1 rounded-sm bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">
+                    Quorum: {election.quorum_value}{election.quorum_type === 'percentage' ? '%' : ' members'}
+                  </span>
+                )}
+                {election.positions && election.positions.length > 0 && (
+                  <span className="text-xs px-2 py-1 rounded-sm bg-theme-surface-hover text-theme-text-secondary">
+                    {election.positions.length} position{election.positions.length !== 1 ? 's' : ''}: {election.positions.join(', ')}
+                  </span>
+                )}
+                <span className="text-xs px-2 py-1 rounded-sm bg-theme-surface-hover text-theme-text-secondary">
+                  {previewCandidates.length} candidate{previewCandidates.length !== 1 ? 's' : ''} total
+                </span>
+              </div>
             </div>
 
             {/* Close button */}
