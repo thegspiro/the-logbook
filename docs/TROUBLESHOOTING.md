@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-03-04 (added onboarding auth cookie fix, physical address in org profile, custom event categories, admin hours camelCase fix, facility address display fix, theme/styling fixes, WebSocket CSRF fix, ResponseValidationError fix, Docker build fixes, Alembic migration fixes, form-to-pipeline integration hardening, reports module expansion, email template CC/BCC and enum sync, modal click-through fix; plus all previous updates)
+**Last Updated**: 2026-03-05 (added inventory improvements — charges, return requests, quarantine, pool item enhancements, mobile card views, barcode printing; training enhancements — recertification, competency, xAPI; compliance officer dashboard; facilities bug fixes; grants & fundraising module; reports rank display fix; prospective member interview view; stage history fix; empty string `??` vs `||` edge cases; clipboard copy fallback; Unraid app removal cleanup; onboarding auth state reset; unraid directory consolidation; plus all previous updates)
 
 ---
 
@@ -84,7 +84,21 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 70. [Modal Click-Through Issues](#modal-click-through-issues)
 71. [Theme Variable Compliance Issues](#theme-variable-compliance-issues)
 72. [Email Template Enum Drift](#email-template-enum-drift)
-73. [Getting Help](#getting-help)
+73. [Inventory Empty String Clearing Issues](#inventory-empty-string-clearing-issues)
+74. [Inventory WebSocket 403 & 422 Errors](#inventory-websocket-403--422-errors)
+75. [Inventory Charges & Return Request Issues](#inventory-charges--return-request-issues)
+76. [Barcode Label Printing Issues](#barcode-label-printing-issues)
+77. [Training Recertification & xAPI Issues](#training-recertification--xapi-issues)
+78. [Compliance Officer Dashboard Issues](#compliance-officer-dashboard-issues)
+79. [Grants Module Serialization Issues](#grants-module-serialization-issues)
+80. [GrantNote Metadata Attribute Conflict](#grantnote-metadata-attribute-conflict)
+81. [Reports Rank Display Issues](#reports-rank-display-issues)
+82. [Prospective Member Stage History Issues](#prospective-member-stage-history-issues)
+83. [Clipboard Copy Fallback Issues](#clipboard-copy-fallback-issues)
+84. [Onboarding Auth State Reset Issues](#onboarding-auth-state-reset-issues)
+85. [Unraid App Removal Cleanup](#unraid-app-removal-cleanup)
+86. [Facilities MissingGreenlet Error](#facilities-missinggreenlet-error)
+87. [Getting Help](#getting-help)
 
 ---
 
@@ -6031,3 +6045,272 @@ docker exec logbook-backend alembic upgrade head
 **Status (2026-03-04):** Each email template now supports configurable default CC and BCC addresses. BCC is also supported for scheduled emails. Pull latest and run migrations.
 
 ---
+
+## Inventory Empty String Clearing Issues
+
+### Problem: Form fields cleared to empty but value doesn't reset
+
+**Status (Fixed 2026-03-05):** The nullish coalescing operator (`??`) was used in inventory form handlers where the logical OR (`||`) was needed.
+
+**Symptoms:**
+- Clearing a text field (serial number, notes, etc.) leaves an empty string `""` instead of falling back to `null`/default
+- Item detail modal shows blank fields that should show placeholder text
+- Filter dropdowns appear empty instead of showing "All" after clearing
+
+**Root Cause:** `??` only catches `null` and `undefined`, not empty strings `""`. When a user clears a field, the value becomes `""`, which `??` treats as truthy and passes through. `||` treats `""` as falsy and falls through to the default.
+
+**Edge Case:** This also affected condition dropdown options — hardcoded condition values were used instead of the `ItemCondition` enum, causing mismatches when the backend added new condition types.
+
+**Fix:** Pull latest frontend code. All inventory pages now use `||` for string defaults and reference the `ItemCondition` enum for condition options.
+
+---
+
+## Inventory WebSocket 403 & 422 Errors
+
+### Problem: Inventory admin page throws 422 and WebSocket shows 403
+
+**Status (Fixed 2026-03-05):** Two separate issues compounded on the inventory admin page.
+
+**Symptoms:**
+- 422 Unprocessable Entity on item create/update
+- 403 Forbidden on WebSocket connection to `/api/v1/inventory/ws`
+- Real-time inventory updates not working
+
+**Root Cause (422):** Optional fields (notes, description) were being sent as empty strings `""` instead of being omitted from the payload. The backend Pydantic schema expected `Optional[str]` (accepts `None` or string) but empty string failed field-level validators like `min_length=1`.
+
+**Root Cause (403):** The WebSocket upgrade request was not including the auth cookie. The inventory WebSocket endpoint requires JWT authentication, and the `withCredentials` flag was not set on the WebSocket connection constructor.
+
+**Fix:** Pull latest. For the 422 issue, empty optional fields are now omitted from payloads. For the 403, the WebSocket connection uses the same cookie-based auth as HTTP requests.
+
+---
+
+## Inventory Charges & Return Request Issues
+
+### Problem: Charges not appearing on returned items
+
+**Status (2026-03-05):** New feature. Charges (damage fees, replacement costs) can now be attached to items. If charges don't appear:
+
+**Checklist:**
+1. Verify the `inventory.manage` permission is assigned to the user creating charges
+2. Charges are tied to specific return or write-off events — check the return record ID
+3. Member return requests must be approved before charges are finalized
+4. Quarantine items (pending inspection) cannot have charges until inspection is complete
+
+**Edge Case — Pool items with cost recovery:** Pool items track replacement cost per unit. If a member returns fewer units than issued, the cost recovery charge is automatically calculated. If the cost recovery amount seems wrong, check the item's `replacement_cost_per_unit` field.
+
+---
+
+## Barcode Label Printing Issues
+
+### Problem: Barcode labels not printing or printing blank
+
+**Status (2026-03-05):** Barcode label printing is client-side only (no backend involvement).
+
+**Checklist:**
+1. **Browser support:** Chrome/Edge recommended. Safari has limited `window.print()` support for iframes
+2. **Dymo format (2.25×1.25″):** Ensure your Dymo printer is set to the correct label size in the print dialog
+3. **Rollo format (4×6″):** Select the 4×6″ paper size in your printer settings
+4. **Code128 barcodes appearing blank:** The barcode is generated using SVG. If your browser has SVG disabled or a content security policy blocks inline SVG, barcodes won't render
+5. **Batch printing:** Printing more than 50 labels at once may cause the browser to become unresponsive. Use batches of 20-30 for large print jobs
+
+**Edge Case — Organization logo on labels:** The logo is loaded from the organization profile. If the logo URL returns a 404 or CORS error, the label prints without a logo but doesn't show an error. Check the organization logo URL in Settings > Organization.
+
+---
+
+## Training Recertification & xAPI Issues
+
+### Problem: Recertification reminders not sending
+
+**Status (2026-03-05):** Recertification reminders are new and require configuration.
+
+**Checklist:**
+1. Verify the certification has an expiration date set
+2. Recertification lead time must be configured (e.g., 90 days before expiry)
+3. Email notifications must be enabled (`EMAIL_ENABLED=true`)
+4. The scheduled task `process_recertification_reminders` must be running (Celery beat)
+
+**Edge Case — Multi-agency training records:** Joint training sessions with other agencies create records in both departments. If xAPI (Tin Can) integration is enabled, ensure the LRS (Learning Record Store) endpoint is reachable from your backend and the API key is valid. xAPI statements are sent asynchronously; check Celery worker logs for failures.
+
+### Problem: Competency matrix showing stale data
+
+**Root Cause:** The competency heat-map is computed from training records and cached for performance. After adding new training records, the matrix may take up to 5 minutes to update.
+
+**Fix:** Wait for cache expiry or manually refresh. For development, clear the Redis cache: `docker exec logbook-redis redis-cli FLUSHDB`.
+
+---
+
+## Compliance Officer Dashboard Issues
+
+### Problem: ISO readiness score showing 0%
+
+**Status (2026-03-05):** The ISO readiness scoring requires attestations to be configured.
+
+**Root Cause:** ISO readiness scores are calculated from attestation completion rates. If no attestation workflows have been created, the score defaults to 0%.
+
+**Fix:**
+1. Navigate to Compliance > Officer Dashboard > Attestations
+2. Create attestation workflows for the relevant ISO standards (9001, 14001, 45001)
+3. Assign attestation requirements to members
+4. Scores update as members complete their attestations
+
+**Edge Case — NFPA 1401 record quality:** The record quality analysis requires a minimum of 10 training records to generate meaningful scores. With fewer records, the quality score shows "Insufficient data".
+
+---
+
+## Grants Module Serialization Issues
+
+### Problem: Grant data shows snake_case field names in the frontend
+
+**Status (Fixed 2026-03-05):** Several grant response schemas were missing `alias_generator=to_camel` in their Pydantic model config.
+
+**Symptoms:**
+- Grant list shows `grant_name` instead of `grantName`
+- Campaign totals show `total_raised` instead of `totalRaised`
+- Donor records show `first_name` instead of `firstName`
+
+**Fix:** Pull latest backend code and restart. All grant schemas now have consistent camelCase serialization.
+
+**Edge Case — Grant notes:** The `GrantNote` response previously returned `note_metadata` because the original field was renamed from `metadata` to avoid the SQLAlchemy conflict (see below). The serialization alias now maps it back to `metadata` in the JSON response.
+
+---
+
+## GrantNote Metadata Attribute Conflict
+
+### Problem: Backend crashes on import with `AttributeError` on GrantNote model
+
+**Status (Fixed 2026-03-05):** The `GrantNote` model had a column named `metadata`, which shadows SQLAlchemy's internal `Base.metadata` attribute.
+
+**Symptoms:**
+- `AttributeError: 'MetaData' object has no attribute ...` during backend startup
+- Any endpoint touching grant notes returns 500
+
+**Root Cause:** SQLAlchemy's `DeclarativeBase` (our `Base` class) has a built-in `metadata` attribute that holds the `MetaData` object for table reflection. Naming a column `metadata` overrides this, causing unpredictable failures.
+
+**Fix:** The column was renamed to `note_metadata` in the model, with `serialization_alias="metadata"` in the Pydantic schema so the API response still uses `metadata`. Pull latest and run migrations:
+```bash
+docker exec logbook-backend alembic upgrade head
+```
+
+---
+
+## Reports Rank Display Issues
+
+### Problem: Reports show raw rank codes instead of display names
+
+**Status (Fixed 2026-03-05):** The reports module was displaying `rank_code` (e.g., `FF1`, `LT`, `CPT`) instead of `rank_name` (e.g., `Firefighter I`, `Lieutenant`, `Captain`).
+
+**Root Cause:** The report query selected `users.rank_code` but did not join the `ranks` table to get the `display_name`. This affects any report that includes a rank column.
+
+**Fix:** Pull latest backend code and restart. Reports now join the ranks table and display the human-readable name.
+
+**Edge Case:** Members with a `rank_code` that doesn't exist in the `ranks` table (e.g., after a rank was deleted) will show the raw code as a fallback instead of an error.
+
+---
+
+## Prospective Member Stage History Issues
+
+### Problem: New prospects show history entries for all pipeline stages
+
+**Status (Fixed 2026-03-05):** When a new prospect was created, stage history entries were being generated for every stage in the pipeline, not just the initial stage.
+
+**Symptoms:**
+- New applicant's history tab shows they've "been in" every stage
+- Timeline appears fully populated for a brand-new prospect
+
+**Root Cause:** The prospect creation logic iterated over all pipeline stages to build the stage history, instead of creating a single entry for the initial stage.
+
+**Fix:** Pull latest. New prospects now correctly have a single stage history entry for their starting stage.
+
+---
+
+## Clipboard Copy Fallback Issues
+
+### Problem: "Copy error details to clipboard" button doesn't work
+
+**Status (Fixed 2026-03-05):** The error boundary's copy-to-clipboard functionality relied solely on `navigator.clipboard.writeText()`, which requires HTTPS or `localhost` and the `clipboard-write` permission.
+
+**Symptoms:**
+- Clicking "Copy error details" does nothing
+- No error in the console (the promise silently fails)
+
+**Root Cause:** `navigator.clipboard` is only available in secure contexts (HTTPS). On HTTP deployments or in iframes, the API is undefined.
+
+**Fix:** Pull latest frontend code. The copy function now uses `document.execCommand('copy')` as a fallback when the Clipboard API is unavailable.
+
+**Edge Case:** The `document.execCommand('copy')` fallback creates a temporary `<textarea>` element. In some very old browsers or restrictive CSP environments, this may also fail. In that case, the button shows "Copy failed — select and copy manually" and selects the text for the user.
+
+---
+
+## Onboarding Auth State Reset Issues
+
+### Problem: Onboarding fails after completing step 7 (system owner creation)
+
+**Status (Fixed 2026-03-05):** After the system owner account is created at step 7, auth cookies are set. If the user then navigates backward or refreshes, the stale auth state interferes with the remaining onboarding steps (8-10).
+
+**Symptoms:**
+- Steps 8-10 redirect to login instead of continuing onboarding
+- Dashboard redirect after onboarding completes takes user to login page
+- Browser shows `has_session=true` in localStorage but API calls return 401
+
+**Root Cause:** The onboarding flow wasn't clearing the auth state (cookies + `has_session` flag) when resetting or restarting. The stale cookie from step 7 would persist and confuse the auth interceptor.
+
+**Fix:** Pull latest. The onboarding reset now:
+1. Clears `has_session` from localStorage
+2. Calls `POST /auth/logout` to invalidate the cookie
+3. Resets the Zustand auth store
+
+---
+
+## Unraid App Removal Cleanup
+
+### Problem: Removing The Logbook from Unraid requires full restart
+
+**Status (Fixed 2026-03-05):** Uninstalling The Logbook via Unraid Community Applications left orphaned Docker volumes and network configurations.
+
+**Symptoms:**
+- After removing the app, Docker network errors appear for other containers
+- Re-installing The Logbook fails with "network already exists" or "volume in use" errors
+- Only a full Unraid restart clears the stale resources
+
+**Fix:** Pull latest Unraid template. The template XML now includes proper cleanup hooks that remove volumes and networks on app removal.
+
+**Manual cleanup** (if you already hit this issue):
+```bash
+docker network rm logbook_default 2>/dev/null
+docker volume rm logbook_mysql_data logbook_redis_data 2>/dev/null
+```
+
+---
+
+## Facilities MissingGreenlet Error
+
+### Problem: Creating or updating maintenance records returns 500
+
+**Status (Fixed 2026-03-05):** The maintenance create/update endpoints accessed SQLAlchemy relationships synchronously within an async context.
+
+**Symptoms:**
+- 500 Internal Server Error on `POST /api/v1/facilities/{id}/maintenance`
+- Backend logs show `MissingGreenlet: greenlet_spawn has not been called`
+- Creating inspections works fine but maintenance records fail
+
+**Root Cause:** The maintenance service accessed `facility.maintenance_records` (a lazy-loaded relationship) without `await`ing or using `selectinload`. In SQLAlchemy 2.0 async mode, lazy loading raises `MissingGreenlet` because it requires a synchronous DB call.
+
+**Fix:** Pull latest backend code. The maintenance endpoints now use `selectinload(Facility.maintenance_records)` in the query to eagerly load the relationship.
+
+**Edge Case:** This same issue can occur with any lazy-loaded relationship in async SQLAlchemy. If you see `MissingGreenlet` errors after adding new relationships, add `selectinload()` or `joinedload()` to the query options.
+
+---
+
+## Getting Help
+
+If you're stuck:
+
+1. **Search this guide** — Use Ctrl+F with keywords from your error
+2. **Check the wiki** — [Troubleshooting](../wiki/Troubleshooting.md) has deployment-specific guides
+3. **Review recent changes** — Check [CHANGELOG.md](../CHANGELOG.md) for recent fixes
+4. **Open an issue** — [GitHub Issues](https://github.com/thegspiro/the-logbook/issues) with:
+   - Error message (full text)
+   - Steps to reproduce
+   - Environment (Docker, Unraid, bare metal)
+   - Browser and OS version
+   - Backend logs (`docker logs logbook-backend --tail 100`)

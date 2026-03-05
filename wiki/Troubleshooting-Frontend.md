@@ -603,4 +603,48 @@ Events Settings tab now uses sidebar + content panel layout (matching Organizati
 
 ---
 
+## Inventory Empty String Clearing (2026-03-05)
+
+### Problem: Clearing form fields doesn't reset to defaults
+
+**Status (Fixed):** `??` (nullish coalescing) was used where `||` (logical OR) was needed. `??` only catches `null`/`undefined`, not `""`. Fixed across all inventory pages.
+
+### Problem: Hardcoded condition dropdown options
+
+**Status (Fixed):** Replaced with `ItemCondition` enum for consistency with backend.
+
+---
+
+## Clipboard Copy Fallback (2026-03-05)
+
+### Problem: "Copy error details to clipboard" does nothing
+
+**Status (Fixed):** `navigator.clipboard` requires HTTPS. Added `document.execCommand('copy')` fallback. On failure, selects text for manual copy.
+
+---
+
+## Barcode Label Printing (2026-03-05)
+
+### Problem: Labels print blank or don't render barcodes
+
+**Checklist:** Use Chrome/Edge. Verify paper size matches printer (Dymo 2.25×1.25″, Rollo 4×6″). Check CSP allows inline SVG. Batch ≤30 labels.
+
+**Edge Case:** Organization logo loaded from profile URL — 404/CORS causes silent omission.
+
+---
+
+## Mobile Card Views & FAB (2026-03-05)
+
+Inventory pages now use responsive card layouts on mobile with a floating action button (FAB). If layout issues occur on specific screen sizes, check that the viewport meta tag is set correctly in `index.html`.
+
+---
+
+## Grants Module TypeScript Issues (2026-03-05)
+
+### Problem: `|| undefined` patterns cause TS errors with exactOptionalPropertyTypes
+
+**Status (Fixed):** Replaced with conditional spreads (`...(val ? { key: val } : {})`) across 69 files. If you see similar errors in custom code, avoid `|| undefined` and use proper type narrowing.
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Backend Issues](Troubleshooting-Backend)

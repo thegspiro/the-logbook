@@ -541,4 +541,62 @@ Each email template now supports default CC/BCC. BCC also available for schedule
 
 ---
 
+## Facilities MissingGreenlet Error (2026-03-05)
+
+### Problem: Creating/updating maintenance records returns 500
+
+**Status (Fixed):** Lazy-loaded `Facility.maintenance_records` relationship accessed synchronously in async context causes `MissingGreenlet: greenlet_spawn has not been called`.
+
+**Fix:** Pull latest. Queries now use `selectinload(Facility.maintenance_records)`.
+
+**Edge Case:** Any lazy-loaded relationship in async SQLAlchemy will cause this error. Always use `selectinload()` or `joinedload()` in async queries when accessing relationships.
+
+---
+
+## GrantNote Metadata Attribute Conflict (2026-03-05)
+
+### Problem: Backend crashes on import — `AttributeError` on GrantNote model
+
+**Status (Fixed):** Column `metadata` renamed to `note_metadata` to avoid shadowing SQLAlchemy's `Base.metadata`. Pydantic schema uses `serialization_alias="metadata"` for API compatibility.
+
+**Fix:** `docker exec logbook-backend alembic upgrade head`
+
+---
+
+## Grants Module Serialization (2026-03-05)
+
+### Problem: Grant API returns snake_case field names
+
+**Status (Fixed):** Several response schemas were missing `alias_generator=to_camel`. All grant schemas now have consistent camelCase output.
+
+### Problem: N+1 queries on grant-donor relationships
+
+**Status (Fixed):** Added `selectinload` for eager loading.
+
+---
+
+## Reports Rank Column (2026-03-05)
+
+### Problem: Reports show rank codes (FF1, LT) instead of display names
+
+**Status (Fixed):** Report query now joins ranks table. Members whose rank was deleted show the raw code as fallback.
+
+---
+
+## WebSocket Inventory 403 (2026-03-05)
+
+### Problem: Inventory WebSocket connection rejected with 403
+
+**Status (Fixed):** WebSocket upgrade request was missing auth cookie. The `withCredentials` flag is now set on the connection.
+
+---
+
+## Inventory 422 on Optional Fields (2026-03-05)
+
+### Problem: Item create/update returns 422 Unprocessable Entity
+
+**Status (Fixed):** Empty optional fields (notes, description) were sent as `""` instead of omitted. Pydantic's `Optional[str]` with `min_length=1` validators rejected empty strings. Frontend now omits empty optional fields.
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Database Issues](Troubleshooting-Database)

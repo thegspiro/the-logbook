@@ -37,6 +37,7 @@
 - [Member ID Card](../docs/MEMBER_ID_CARD.md)
 - [Apparatus](Module-Apparatus)
 - [Inventory](Module-Inventory)
+- [Grants & Fundraising](Module-Grants-Fundraising)
 - [Compliance](Module-Compliance)
 
 ### 🔐 Security

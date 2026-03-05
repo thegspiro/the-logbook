@@ -22,6 +22,11 @@ The Training module tracks courses, certifications, training requirements, progr
 - **Registry Integration** — NFPA Standards, NREMT Certifications, Pro Board one-click import with source URL citations and last-updated timestamps
 - **Registry Generator Tool** — Standalone CLI tool (`scripts/generate_registry.py`) for generating registries from standards bodies, with `--list` flag to show available registries
 - **Source Tracking on Imports** — Imported requirements include `source`, `source_url`, and `last_updated` fields for traceability
+- **Recertification Tracking** — *(2026-03-05)* Automated recertification reminders with configurable lead times. Scheduled Celery task sends tiered notifications before certification expiry
+- **Instructor Management** — *(2026-03-05)* Track instructor qualifications, availability, and assignment to training sessions
+- **Effectiveness Scoring** — *(2026-03-05)* Training effectiveness measurement using Kirkpatrick model (reaction, learning, behavior, results)
+- **Multi-Agency Training** — *(2026-03-05)* Joint training session coordination across departments with shared records and mutual aid tracking
+- **xAPI (Tin Can) Integration** — *(2026-03-05)* Learning Record Store integration for standardized training activity tracking. Async statement delivery via Celery
 
 ---
 

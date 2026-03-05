@@ -61,6 +61,17 @@ This guide covers common issues and their solutions for The Logbook deployment.
 55. [Modal Click-Through](#modal-click-through-2026-03-04)
 56. [Theme Variable Compliance](#theme-variable-compliance-2026-03-04)
 57. [Email Template Enum Drift](#email-template-enum-drift-2026-03-04)
+58. [Inventory Empty String / WebSocket Issues](#inventory-empty-string--websocket-issues-2026-03-05)
+59. [Barcode Label Printing](#barcode-label-printing-2026-03-05)
+60. [Training Recertification & xAPI](#training-recertification--xapi-2026-03-05)
+61. [Compliance Officer Dashboard](#compliance-officer-dashboard-2026-03-05)
+62. [Grants Module Issues](#grants-module-issues-2026-03-05)
+63. [Reports Rank Display](#reports-rank-display-2026-03-05)
+64. [Prospective Member Stage History](#prospective-member-stage-history-2026-03-05)
+65. [Clipboard Copy Fallback](#clipboard-copy-fallback-2026-03-05)
+66. [Onboarding Auth State Reset](#onboarding-auth-state-reset-2026-03-05)
+67. [Unraid App Removal](#unraid-app-removal-2026-03-05)
+68. [Facilities MissingGreenlet](#facilities-missinggreenlet-2026-03-05)
 
 ---
 
@@ -2192,3 +2203,127 @@ docker-compose up -d
 ### Problem: CC/BCC not available on email templates
 
 **Status (2026-03-04):** CC/BCC fields now available per template, including for scheduled emails. Run latest migration.
+
+---
+
+## Inventory Empty String / WebSocket Issues (2026-03-05)
+
+### Problem: Clearing inventory form fields doesn't reset values
+
+**Status (Fixed):** `??` (nullish coalescing) was used instead of `||` (logical OR). `??` passes empty strings through; `||` treats them as falsy. Fixed across all inventory pages.
+
+### Problem: Inventory admin returns 422 errors and WebSocket shows 403
+
+**Status (Fixed):** 422 — empty optional fields sent as `""` instead of omitted. 403 — WebSocket connection missing auth cookie. Both fixed in latest.
+
+**Edge Case:** Hardcoded condition dropdown options were also replaced with the `ItemCondition` enum to prevent mismatches when new conditions are added.
+
+---
+
+## Barcode Label Printing (2026-03-05)
+
+### Problem: Barcode labels print blank or don't print
+
+**Checklist:**
+1. Use Chrome/Edge (Safari has limited `window.print()` iframe support)
+2. Verify Dymo (2.25×1.25″) or Rollo (4×6″) paper size in printer dialog
+3. Check that inline SVG is not blocked by Content Security Policy
+4. Batch print ≤30 labels at once to avoid browser hangs
+
+**Edge Case:** Organization logo loaded from profile URL. If logo URL returns 404/CORS error, label prints without logo silently. Verify logo URL in Settings > Organization.
+
+---
+
+## Training Recertification & xAPI (2026-03-05)
+
+### Problem: Recertification reminders not sending
+
+**Fix:** Verify: (1) cert has expiration date, (2) lead time configured, (3) `EMAIL_ENABLED=true`, (4) Celery beat running `process_recertification_reminders`.
+
+### Problem: Competency matrix shows stale data
+
+**Fix:** Matrix is cached ~5 min. Wait for cache expiry or `docker exec logbook-redis redis-cli FLUSHDB` in development.
+
+**Edge Case — xAPI:** Multi-agency training records sent asynchronously to LRS. Check Celery worker logs if statements don't appear.
+
+---
+
+## Compliance Officer Dashboard (2026-03-05)
+
+### Problem: ISO readiness score showing 0%
+
+**Fix:** Create attestation workflows in Compliance > Officer Dashboard > Attestations. Assign to members. Score updates as attestations complete.
+
+**Edge Case:** NFPA 1401 record quality analysis requires ≥10 training records. Fewer shows "Insufficient data".
+
+---
+
+## Grants Module Issues (2026-03-05)
+
+### Problem: GrantNote model crashes backend on startup
+
+**Status (Fixed):** `metadata` column renamed to `note_metadata` to avoid SQLAlchemy `Base.metadata` conflict. Run `alembic upgrade head`.
+
+### Problem: Grant data shows snake_case in frontend
+
+**Status (Fixed):** Missing `alias_generator=to_camel` on grant response schemas. Pull latest backend.
+
+### Problem: Grant note JSON data not appearing
+
+**Fix:** Serialization alias maps `note_metadata` → `metadata` in API response. If upgrading from a pre-fix version, run migrations to rename the column.
+
+---
+
+## Reports Rank Display (2026-03-05)
+
+### Problem: Reports show rank codes (FF1, LT) instead of names
+
+**Status (Fixed):** Report query now joins ranks table. Members with deleted ranks show raw code as fallback.
+
+---
+
+## Prospective Member Stage History (2026-03-05)
+
+### Problem: New prospects show history for all pipeline stages
+
+**Status (Fixed):** Creation logic now creates single history entry for initial stage only.
+
+---
+
+## Clipboard Copy Fallback (2026-03-05)
+
+### Problem: "Copy error details" button does nothing
+
+**Status (Fixed):** `navigator.clipboard` requires HTTPS. Added `document.execCommand('copy')` fallback. On failure, selects text for manual copy.
+
+---
+
+## Onboarding Auth State Reset (2026-03-05)
+
+### Problem: Steps 8-10 redirect to login after step 7
+
+**Status (Fixed):** Onboarding reset now clears `has_session`, calls `POST /auth/logout`, and resets auth store.
+
+---
+
+## Unraid App Removal (2026-03-05)
+
+### Problem: Removing app from Unraid leaves orphaned Docker resources
+
+**Status (Fixed):** Unraid template XML now includes cleanup hooks.
+
+**Manual cleanup:**
+```bash
+docker network rm logbook_default 2>/dev/null
+docker volume rm logbook_mysql_data logbook_redis_data 2>/dev/null
+```
+
+---
+
+## Facilities MissingGreenlet (2026-03-05)
+
+### Problem: Creating maintenance records returns 500
+
+**Status (Fixed):** Lazy-loaded relationship accessed synchronously in async context. Fixed with `selectinload(Facility.maintenance_records)`.
+
+**Edge Case:** Any lazy-loaded relationship in async SQLAlchemy will cause `MissingGreenlet`. Always use `selectinload()` or `joinedload()` in async queries.

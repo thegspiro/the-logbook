@@ -16,6 +16,10 @@ The Compliance module provides organization-wide compliance tracking, reporting,
 - **Waiver Adjustments** — Leaves of Absence proportionally reduce requirements
 - **Compliance Calculations** — Documented formulas for every requirement type and frequency
 - **Reporting** — Annual training reports, compliance trends, member-level detail
+- **Compliance Officer Dashboard** — *(2026-03-05)* Dedicated dashboard for compliance officers with ISO readiness scoring, attestation workflows, and NFPA 1401 record quality analysis
+- **ISO Readiness Scoring** — *(2026-03-05)* ISO 9001/14001/45001 readiness scoring based on attestation completion rates
+- **Attestation Workflows** — *(2026-03-05)* Configurable annual compliance sign-off workflows assigned to members with tracking and reminders
+- **NFPA 1401 Record Quality** — *(2026-03-05)* Training record quality analysis per NFPA 1401 standards (requires ≥10 records for meaningful scores)
 
 ---
 
