@@ -4,11 +4,12 @@ Official Unraid Community Applications package for The Logbook.
 
 ## Quick Links
 
-- 📖 **[Installation Guide](./UNRAID-INSTALLATION.md)** - Complete setup instructions
-- 🐳 **[Docker Compose](./docker-compose-unraid.yml)** - Alternative installation method
-- 🚀 **[Community App Submission](./COMMUNITY-APP-SUBMISSION.md)** - For maintainers
-- 💬 **[Support Forum](https://forums.unraid.net/)** - Get help from the community
-- 🐛 **[Report Issues](https://github.com/thegspiro/the-logbook/issues)** - Bug reports
+- **[Installation Guide](./UNRAID-INSTALLATION.md)** - Complete setup via Community Apps
+- **[Quick Start](./QUICK-START.md)** - Docker Compose setup (automated or manual)
+- **[Build from Source](./BUILD-FROM-SOURCE-ON-UNRAID.md)** - Build locally on Unraid
+- **[Community App Submission](./COMMUNITY-APP-SUBMISSION.md)** - For maintainers
+- **[Support Forum](https://forums.unraid.net/)** - Get help from the community
+- **[Report Issues](https://github.com/thegspiro/the-logbook/issues)** - Bug reports
 
 ---
 
@@ -47,18 +48,10 @@ The Logbook is a comprehensive, modular intranet platform designed specifically 
 
 ### Method 2: Docker Compose
 
-For advanced users who want a self-contained stack:
+For advanced users who want a self-contained stack, see the **[Quick Start Guide](./QUICK-START.md)** or run:
 
 ```bash
-# Copy docker-compose file
-cp docker-compose-unraid.yml /mnt/user/appdata/the-logbook/docker-compose.yml
-
-# Create and configure .env file
-cd /mnt/user/appdata/the-logbook
-nano .env
-
-# Start services
-docker-compose up -d
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/unraid-setup.sh | bash
 ```
 
 ---
@@ -427,6 +420,8 @@ The Logbook is open source software. See [LICENSE](../LICENSE) for details.
 
 ### Documentation
 - [Installation Guide](./UNRAID-INSTALLATION.md)
+- [Quick Start](./QUICK-START.md)
+- [Build from Source](./BUILD-FROM-SOURCE-ON-UNRAID.md)
 - [Community App Submission](./COMMUNITY-APP-SUBMISSION.md)
 - [Main Documentation](../docs/)
 

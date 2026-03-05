@@ -413,7 +413,7 @@ docker stats --filter name=logbook
 
 ## More Information
 
-- [Unraid Quick Start](../../unraid/QUICK-START-UPDATED.md) - condensed setup steps
+- [Unraid Quick Start](../../unraid/QUICK-START.md) - condensed setup steps
 - [Unraid Docker Compose](../../unraid/docker-compose-unraid.yml) - the Unraid-optimized compose file
 - [Full Installation Guide](../../unraid/UNRAID-INSTALLATION.md) - Community Apps template details
 - [Main README](../../README.md) - project overview
