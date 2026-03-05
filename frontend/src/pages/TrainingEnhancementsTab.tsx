@@ -23,18 +23,12 @@ import {
   Globe,
   FileText,
   TrendingUp,
-  AlertTriangle,
-  CheckCircle2,
-  Clock,
-  ChevronDown,
-  ChevronUp,
   Loader2,
 } from 'lucide-react';
 import {
   recertificationService,
   competencyService,
   instructorService,
-  effectivenessService,
   multiAgencyService,
   reportExportService,
 } from '../services/trainingServices';
@@ -42,7 +36,6 @@ import type {
   RecertificationPathway,
   RenewalTask,
   CompetencyMatrix,
-  MemberCompetency,
   InstructorQualification,
   MultiAgencyTraining,
   ComplianceForecast,
