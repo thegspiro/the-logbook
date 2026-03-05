@@ -617,11 +617,14 @@ const OrganizationSetup: React.FC = () => {
       const errorCount = errorMessages.length;
 
       if (errorCount === 1) {
-        toast.error(errorMessages[0] ?? 'Validation error');
+        toast.error(errorMessages[0] || 'Validation error');
       } else {
-        // Show summary with count
+        // Show summary with count, filtering out any empty entries
+        const nonEmptyMessages = errorMessages.filter(msg => msg?.trim());
         toast.error(
-          `Please fix ${errorCount} errors:\n• ${errorMessages.join('\n• ')}`,
+          nonEmptyMessages.length > 0
+            ? `Please fix ${nonEmptyMessages.length} error${nonEmptyMessages.length === 1 ? '' : 's'}:\n• ${nonEmptyMessages.join('\n• ')}`
+            : 'Please fix the validation errors and try again.',
           { duration: 8000 } // Longer duration for multiple errors
         );
       }

@@ -264,14 +264,16 @@ export function formatValidationErrors(validationErrors: Array<{ loc?: string[];
       return 'Validation failed. Please check your input.';
     }
     const field = error.loc?.[error.loc.length - 1] ?? 'field';
-    return `${capitalizeFirst(field)}: ${error.msg ?? ''}`;
+    return `${capitalizeFirst(field)}: ${error.msg || 'Invalid value'}`;
   }
 
   // Multiple errors
-  const errorMessages = validationErrors.map(error => {
-    const field = error.loc?.[error.loc.length - 1] ?? 'field';
-    return `• ${capitalizeFirst(field)}: ${error.msg ?? ''}`;
-  });
+  const errorMessages = validationErrors
+    .filter((error): error is { loc?: string[]; msg?: string } => error != null)
+    .map(error => {
+      const field = error.loc?.[error.loc.length - 1] ?? 'field';
+      return `• ${capitalizeFirst(field)}: ${error.msg || 'Invalid value'}`;
+    });
 
   return `Please fix the following errors:\n${errorMessages.join('\n')}`;
 }
