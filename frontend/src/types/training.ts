@@ -1800,3 +1800,146 @@ export interface DepartmentComplianceTrend {
   certifications_active: number;
   certifications_expired: number;
 }
+
+// ============================================
+// Compliance Officer Dashboard Types
+// ============================================
+
+export interface ISOCategory {
+  name: string;
+  nfpa_standard: string;
+  required_hours: number;
+  avg_hours_completed: number;
+  total_department_hours: number;
+  members_meeting_requirement: number;
+  total_members: number;
+  compliance_pct: number;
+}
+
+export interface ISOReadiness {
+  year: number;
+  categories: ISOCategory[];
+  overall_readiness_pct: number;
+  iso_class_estimate: number;
+  total_members: number;
+}
+
+export interface ComplianceAttestation {
+  attestation_id: string;
+  period_type: string;
+  period_year: number;
+  period_quarter?: number | undefined;
+  compliance_percentage: number;
+  notes: string;
+  areas_reviewed: string[];
+  exceptions: Array<Record<string, unknown>>;
+  attested_at: string;
+  attested_by: string;
+  created_at: string;
+  timestamp?: string | undefined;
+}
+
+export interface AttestationCreate {
+  period_type: string;
+  period_year: number;
+  period_quarter?: number | undefined;
+  compliance_percentage: number;
+  notes: string;
+  areas_reviewed: string[];
+  exceptions: Array<{ requirement_name: string; reason: string; mitigation: string }>;
+}
+
+export interface RecordCompletenessField {
+  field_name: string;
+  records_with_value: number;
+  fill_rate_pct: number;
+}
+
+export interface RecordCompleteness {
+  total_records: number;
+  fields: RecordCompletenessField[];
+  overall_completeness_pct: number;
+  nfpa_1401_compliant: boolean;
+  period_start: string;
+  period_end: string;
+}
+
+export interface IncompleteRecord {
+  record_id: string;
+  course_name: string;
+  user_id: string;
+  completion_date?: string | undefined;
+  missing_fields: string[];
+}
+
+export interface AnnualReportMember {
+  user_id: string;
+  name: string;
+  compliance_pct: number;
+  hours_completed: number;
+  requirements_met: number;
+  requirements_total: number;
+  expired_certifications: number;
+  status: 'compliant' | 'at_risk' | 'non_compliant';
+}
+
+export interface AnnualReportRequirement {
+  requirement_id: string;
+  name: string;
+  type: string;
+  members_compliant: number;
+  members_total: number;
+  compliance_pct: number;
+}
+
+export interface AnnualComplianceReport {
+  report_type: 'annual_compliance';
+  organization_id: string;
+  year: number;
+  generated_at: string;
+  executive_summary: {
+    overall_compliance_pct: number;
+    total_members: number;
+    fully_compliant_members: number;
+    total_training_hours: number;
+    total_certifications_active: number;
+    total_certifications_expired: number;
+    iso_readiness_pct: number;
+    iso_class_estimate: number;
+  };
+  member_compliance: AnnualReportMember[];
+  requirement_analysis: AnnualReportRequirement[];
+  recertification_summary: {
+    active_pathways: number;
+    tasks_completed: number;
+    tasks_pending: number;
+    tasks_expired: number;
+  };
+  instructor_summary: {
+    total_qualified: number;
+    active_instructors: number;
+    active_qualifications: number;
+    expiring_qualifications: number;
+  };
+  multi_agency_summary: {
+    total_exercises: number;
+    nims_compliant_exercises: number;
+    total_participants: number;
+  };
+  effectiveness_summary: {
+    total_evaluations: number;
+    avg_reaction_rating: number | null;
+    avg_knowledge_gain: number | null;
+  };
+  record_completeness: {
+    total_records: number;
+    completeness_pct: number;
+    nfpa_1401_compliant: boolean;
+    field_details: RecordCompletenessField[];
+  };
+  iso_readiness: {
+    overall_pct: number;
+    class_estimate: number;
+    categories: ISOCategory[];
+  };
+}

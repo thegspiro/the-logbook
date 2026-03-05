@@ -52,6 +52,7 @@ const UNCACHEABLE_PREFIXES = [
   '/inventory/users/',     // user-specific inventory assignments (PII)
   '/inventory/checkouts/', // user checkout history (PII)
   '/documents/',           // private organizational documents
+  '/compliance/',          // compliance attestations, member compliance data (PII)
 ] as const;
 
 interface CacheEntry {
