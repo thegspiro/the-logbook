@@ -517,8 +517,12 @@ const OrganizationSetup: React.FC = () => {
     }
     if (!formData.mailingAddress.zipCode.trim()) {
       errors.mailingZip = 'ZIP/Postal code is required';
-    } else if (formData.mailingAddress.zipCode.trim().length < 3) {
-      errors.mailingZip = 'ZIP/Postal code must be at least 3 characters';
+    } else if (
+      !/^(\d{5}(-\d{4})?|[A-Za-z]\d[A-Za-z] ?\d[A-Za-z]\d)$/.test(
+        formData.mailingAddress.zipCode.trim()
+      )
+    ) {
+      errors.mailingZip = 'Enter a valid ZIP code (e.g., 12345 or 12345-6789)';
     }
 
     // Physical address validation (if different)
@@ -534,6 +538,12 @@ const OrganizationSetup: React.FC = () => {
       }
       if (!formData.physicalAddress.zipCode.trim()) {
         errors.physicalZip = 'ZIP code is required';
+      } else if (
+        !/^(\d{5}(-\d{4})?|[A-Za-z]\d[A-Za-z] ?\d[A-Za-z]\d)$/.test(
+          formData.physicalAddress.zipCode.trim()
+        )
+      ) {
+        errors.physicalZip = 'Enter a valid ZIP code (e.g., 12345 or 12345-6789)';
       }
     }
 
@@ -625,18 +635,20 @@ const OrganizationSetup: React.FC = () => {
       setDepartmentName(formData.name);
 
       // Prepare API payload
+      // Use || undefined (not ??) so empty strings become undefined and are omitted from JSON,
+      // preventing Pydantic validation errors on optional fields (e.g., phone regex rejects "")
       const payload = {
         name: formData.name.trim(),
-        slug: formData.slug ?? undefined,
+        slug: formData.slug?.trim() || undefined,
         organization_type: formData.organizationType,
         timezone: formData.timezone,
-        phone: formData.phone ?? undefined,
-        fax: formData.fax ?? undefined,
-        email: formData.email ?? undefined,
-        website: formData.website ?? undefined,
+        phone: formData.phone?.trim() || undefined,
+        fax: formData.fax?.trim() || undefined,
+        email: formData.email?.trim() || undefined,
+        website: formData.website?.trim() || undefined,
         mailing_address: {
           line1: formData.mailingAddress.line1.trim(),
-          line2: formData.mailingAddress.line2 ?? undefined,
+          line2: formData.mailingAddress.line2?.trim() || undefined,
           city: formData.mailingAddress.city.trim(),
           state: formData.mailingAddress.state,
           zip_code: formData.mailingAddress.zipCode.trim(),
@@ -647,16 +659,16 @@ const OrganizationSetup: React.FC = () => {
           ? undefined
           : {
               line1: formData.physicalAddress.line1.trim(),
-              line2: formData.physicalAddress.line2 ?? undefined,
+              line2: formData.physicalAddress.line2?.trim() || undefined,
               city: formData.physicalAddress.city.trim(),
               state: formData.physicalAddress.state,
               zip_code: formData.physicalAddress.zipCode.trim(),
               country: formData.physicalAddress.country || 'USA',
             },
         identifier_type: formData.identifierType,
-        fdid: formData.fdid ?? undefined,
-        state_id: formData.stateId ?? undefined,
-        department_id: formData.departmentId ?? undefined,
+        fdid: formData.fdid?.trim() || undefined,
+        state_id: formData.stateId?.trim() || undefined,
+        department_id: formData.departmentId?.trim() || undefined,
         logo: formData.logo ?? undefined,
       };
 
