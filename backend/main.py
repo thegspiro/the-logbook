@@ -395,7 +395,6 @@ INITIAL_SQL_REVISION = "20260118_0001"
 # Base.metadata.create_all() won't know about them.
 MIGRATION_ONLY_FILES = [
     "20260201_0016_create_compliance_tables.py",
-    "20260201_0017_create_fundraising_tables.py",
 ]
 
 # Tables created by migration-only files (used by validate_schema to check completeness).
@@ -406,12 +405,6 @@ MIGRATION_ONLY_TABLES = [
     "compliance_checklists",
     "checklist_submissions",
     "compliance_incidents",
-    # fundraising module (20260201_0017)
-    "fundraising_campaigns",
-    "donors",
-    "donations",
-    "pledges",
-    "fundraising_events",
 ]
 
 # Migration file that seeds initial apparatus system data
