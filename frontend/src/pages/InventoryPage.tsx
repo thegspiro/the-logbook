@@ -314,12 +314,12 @@ const InventoryPage: React.FC = () => {
     setFilterLoading(true);
     try {
       const data = await inventoryService.getItems({
-        search: searchQuery ?? undefined,
-        status: statusFilter ?? undefined,
-        category_id: categoryFilter ?? undefined,
-        condition: conditionFilter ?? undefined,
-        item_type: itemTypeFilter ?? undefined,
-        sort_by: sortBy ?? undefined,
+        search: searchQuery || undefined,
+        status: statusFilter || undefined,
+        category_id: categoryFilter || undefined,
+        condition: conditionFilter || undefined,
+        item_type: itemTypeFilter || undefined,
+        sort_by: sortBy || undefined,
         sort_order: sortOrder,
         limit: 50,
       });
@@ -418,12 +418,12 @@ const InventoryPage: React.FC = () => {
     setLoadingMore(true);
     try {
       const data = await inventoryService.getItems({
-        search: searchQuery ?? undefined,
-        status: statusFilter ?? undefined,
-        category_id: categoryFilter ?? undefined,
-        condition: conditionFilter ?? undefined,
-        item_type: itemTypeFilter ?? undefined,
-        sort_by: sortBy ?? undefined,
+        search: searchQuery || undefined,
+        status: statusFilter || undefined,
+        category_id: categoryFilter || undefined,
+        condition: conditionFilter || undefined,
+        item_type: itemTypeFilter || undefined,
+        sort_by: sortBy || undefined,
         sort_order: sortOrder,
         skip: items.length,
         limit: 50,
