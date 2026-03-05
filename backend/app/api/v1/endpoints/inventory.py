@@ -35,6 +35,7 @@ from app.models.inventory import (
     CheckOutRecord,
     EquipmentRequest,
     InventoryItem,
+    IssuanceAllowance,
     ItemCondition,
     ItemStatus,
     ItemType,
@@ -96,6 +97,21 @@ from app.schemas.inventory import (
     WriteOffRequestCreate,
     WriteOffRequestResponse,
     WriteOffReview,
+    SizeVariantCreate,
+    SizeVariantCreateResponse,
+    BulkIssuanceRequest,
+    BulkIssuanceResponse,
+    BulkIssuanceResultItem,
+    IssuanceAllowanceCreate,
+    IssuanceAllowanceUpdate,
+    IssuanceAllowanceResponse,
+    AllowanceCheckResponse,
+    IssuanceChargeRequest,
+    ChargeManagementResponse,
+    IssuanceChargeListItem,
+    ReturnRequestCreate,
+    ReturnRequestReview,
+    ReturnRequestResponse,
 )
 from app.services.departure_clearance_service import DepartureClearanceService
 from app.services.inventory_service import InventoryService
@@ -3604,3 +3620,559 @@ async def inventory_websocket(
         pass
     finally:
         ws_manager.disconnect(websocket, org_id)
+
+
+# ============================================
+# Size Variant Quick-Create
+# ============================================
+
+
+@router.post(
+    "/items/create-variants",
+    response_model=SizeVariantCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_size_variants(
+    data: SizeVariantCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Create multiple pool items from a base name with size/color variants.
+
+    E.g. "Dept Polo" with sizes ["S", "M", "L", "XL"] and colors ["Navy", "White"]
+    creates 8 items: "Dept Polo — S — Navy", "Dept Polo — S — White", etc.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    items = await service.create_size_variants(
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
+        base_name=data.base_name,
+        sizes=data.sizes,
+        colors=data.colors,
+        category_id=data.category_id,
+        quantity_per_variant=data.quantity_per_variant,
+        replacement_cost=data.replacement_cost,
+        purchase_price=data.purchase_price,
+        unit_of_measure=data.unit_of_measure,
+        location_id=data.location_id,
+        storage_area_id=data.storage_area_id,
+        station=data.station,
+        notes=data.notes,
+    )
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_variants_created",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "base_name": data.base_name,
+            "sizes": data.sizes,
+            "colors": data.colors,
+            "count": len(items),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return SizeVariantCreateResponse(
+        created_count=len(items),
+        items=[InventoryItemResponse.model_validate(i) for i in items],
+    )
+
+
+# ============================================
+# Bulk Issuance
+# ============================================
+
+
+@router.post(
+    "/items/{item_id}/bulk-issue",
+    response_model=BulkIssuanceResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def bulk_issue_from_pool(
+    item_id: UUID,
+    data: BulkIssuanceRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Issue a pool item to multiple members at once.
+
+    Useful for new recruit onboarding or uniform distribution.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    targets = [
+        {
+            "user_id": t.user_id,
+            "quantity": t.quantity,
+            "issue_reason": t.issue_reason,
+        }
+        for t in data.targets
+    ]
+
+    results = await service.bulk_issue_from_pool(
+        item_id=item_id,
+        targets=targets,
+        organization_id=current_user.organization_id,
+        issued_by=current_user.id,
+    )
+
+    successful = sum(1 for r in results if r["success"])
+    failed = len(results) - successful
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_bulk_issued",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "item_id": str(item_id),
+            "total_targets": len(targets),
+            "successful": successful,
+            "failed": failed,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    await _publish_inventory_event(
+        str(current_user.organization_id),
+        "bulk_issued",
+        {"item_id": str(item_id), "count": successful},
+    )
+
+    return BulkIssuanceResponse(
+        item_id=item_id,
+        total=len(results),
+        successful=successful,
+        failed=failed,
+        results=[
+            BulkIssuanceResultItem(
+                user_id=r["user_id"],
+                success=r["success"],
+                issuance_id=r.get("issuance_id"),
+                error=r.get("error"),
+            )
+            for r in results
+        ],
+    )
+
+
+# ============================================
+# Issuance Allowances
+# ============================================
+
+
+@router.get("/allowances", response_model=List[IssuanceAllowanceResponse])
+async def list_allowances(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """List all issuance allowances for the organization."""
+    result = await db.execute(
+        select(IssuanceAllowance).where(
+            IssuanceAllowance.organization_id == str(current_user.organization_id)
+        )
+    )
+    allowances = result.scalars().all()
+    return [IssuanceAllowanceResponse.model_validate(a) for a in allowances]
+
+
+@router.post(
+    "/allowances",
+    response_model=IssuanceAllowanceResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_allowance(
+    data: IssuanceAllowanceCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Create an issuance allowance (e.g. 3 polo shirts/year per firefighter)."""
+    allowance = IssuanceAllowance(
+        organization_id=str(current_user.organization_id),
+        category_id=str(data.category_id),
+        role_id=str(data.role_id) if data.role_id else None,
+        max_quantity=data.max_quantity,
+        period_type=data.period_type,
+        created_by=str(current_user.id),
+    )
+    db.add(allowance)
+    await db.commit()
+    await db.refresh(allowance)
+    return IssuanceAllowanceResponse.model_validate(allowance)
+
+
+@router.put("/allowances/{allowance_id}", response_model=IssuanceAllowanceResponse)
+async def update_allowance(
+    allowance_id: UUID,
+    data: IssuanceAllowanceUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Update an issuance allowance."""
+    result = await db.execute(
+        select(IssuanceAllowance)
+        .where(IssuanceAllowance.id == str(allowance_id))
+        .where(
+            IssuanceAllowance.organization_id == str(current_user.organization_id)
+        )
+    )
+    allowance = result.scalar_one_or_none()
+    if not allowance:
+        raise HTTPException(status_code=404, detail="Allowance not found")
+
+    if data.max_quantity is not None:
+        allowance.max_quantity = data.max_quantity
+    if data.period_type is not None:
+        allowance.period_type = data.period_type
+    if data.is_active is not None:
+        allowance.is_active = data.is_active
+
+    await db.commit()
+    await db.refresh(allowance)
+    return IssuanceAllowanceResponse.model_validate(allowance)
+
+
+@router.delete("/allowances/{allowance_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_allowance(
+    allowance_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Delete an issuance allowance."""
+    result = await db.execute(
+        select(IssuanceAllowance)
+        .where(IssuanceAllowance.id == str(allowance_id))
+        .where(
+            IssuanceAllowance.organization_id == str(current_user.organization_id)
+        )
+    )
+    allowance = result.scalar_one_or_none()
+    if not allowance:
+        raise HTTPException(status_code=404, detail="Allowance not found")
+
+    await db.delete(allowance)
+    await db.commit()
+
+
+@router.get(
+    "/allowances/check/{user_id}/{category_id}",
+    response_model=AllowanceCheckResponse,
+)
+async def check_member_allowance(
+    user_id: UUID,
+    category_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """Check a member's remaining issuance allowance for a category."""
+    # Get user's role for role-specific allowances
+    user_result = await db.execute(
+        select(User).where(User.id == str(user_id))
+    )
+    user = user_result.scalar_one_or_none()
+    role_id = user.role_id if user else None
+
+    service = InventoryService(db)
+    check = await service.check_allowance(
+        user_id=user_id,
+        category_id=category_id,
+        organization_id=current_user.organization_id,
+        role_id=role_id,
+    )
+    return AllowanceCheckResponse(
+        category_id=category_id,
+        max_quantity=check["max_quantity"],
+        issued_this_period=check["issued_this_period"],
+        remaining=check["remaining"],
+        period_type=check["period_type"],
+    )
+
+
+# ============================================
+# Cost Recovery (Charge for Lost/Damaged)
+# ============================================
+
+
+@router.put(
+    "/issuances/{issuance_id}/charge",
+    response_model=ItemIssuanceResponse,
+)
+async def update_issuance_charge(
+    issuance_id: UUID,
+    data: IssuanceChargeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Record a cost-recovery charge on an issuance (for lost/damaged items).
+
+    Set charge_status to "charged" to bill the member, or "waived" to forgive.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    success, error = await service.update_issuance_charge(
+        issuance_id=issuance_id,
+        organization_id=current_user.organization_id,
+        charge_status=data.charge_status,
+        charge_amount=data.charge_amount,
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=sanitize_error_message(error or "Unknown error"),
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_issuance_charged",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "issuance_id": str(issuance_id),
+            "charge_status": data.charge_status,
+            "charge_amount": str(data.charge_amount) if data.charge_amount else None,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    # Return updated record
+    from app.models.inventory import ItemIssuance
+
+    result = await db.execute(
+        select(ItemIssuance).where(ItemIssuance.id == str(issuance_id))
+    )
+    issuance = result.scalar_one()
+    return ItemIssuanceResponse.model_validate(issuance)
+
+
+# ============================================
+# Charge Management Endpoints
+# ============================================
+
+
+@router.get(
+    "/charges",
+    response_model=ChargeManagementResponse,
+)
+async def get_charges(
+    charge_status: Optional[str] = Query(None, description="Filter by charge status"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    List all issuances with active charges (pending/charged/waived) for admin management.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    data = await service.get_charges(
+        organization_id=current_user.organization_id,
+        charge_status_filter=charge_status,
+    )
+
+    return ChargeManagementResponse(
+        items=[IssuanceChargeListItem(**item) for item in data["items"]],
+        total=data["total"],
+        total_pending=data["total_pending"],
+        total_charged=data["total_charged"],
+        total_waived=data["total_waived"],
+    )
+
+
+# ============================================
+# Return Request Endpoints
+# ============================================
+
+
+@router.post(
+    "/return-requests",
+    response_model=ReturnRequestResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_return_request(
+    data: ReturnRequestCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Submit a return request for quartermaster review.
+
+    Members use this to declare intent to return equipment. The quartermaster
+    must approve before the actual return is processed.
+
+    **Authentication required**
+    """
+    service = InventoryService(db)
+    request_obj, error = await service.create_return_request(
+        organization_id=current_user.organization_id,
+        requester_id=current_user.id,
+        return_type=data.return_type,
+        item_id=data.item_id,
+        assignment_id=data.assignment_id,
+        issuance_id=data.issuance_id,
+        checkout_id=data.checkout_id,
+        quantity_returning=data.quantity_returning,
+        reported_condition=data.reported_condition,
+        member_notes=data.member_notes,
+    )
+
+    if not request_obj:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=sanitize_error_message(error or "Unknown error"),
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_return_requested",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "return_request_id": str(request_obj.id),
+            "item_id": str(data.item_id),
+            "return_type": data.return_type,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    # Build response with requester name
+    resp = ReturnRequestResponse.model_validate(request_obj)
+    resp.requester_name = f"{current_user.first_name or ''} {current_user.last_name or ''}".strip()
+    return resp
+
+
+@router.get(
+    "/return-requests",
+    response_model=List[ReturnRequestResponse],
+)
+async def list_return_requests(
+    request_status: Optional[str] = Query(None, alias="status"),
+    mine_only: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    List return requests. Members see their own; admins see all.
+
+    **Authentication required**
+    """
+    service = InventoryService(db)
+
+    requester_id = current_user.id if mine_only else None
+
+    requests = await service.get_return_requests(
+        organization_id=current_user.organization_id,
+        status_filter=request_status,
+        requester_id=requester_id,
+    )
+
+    result = []
+    for req in requests:
+        resp = ReturnRequestResponse.model_validate(req)
+        # Enrich with names
+        if req.requester:
+            resp.requester_name = f"{req.requester.first_name or ''} {req.requester.last_name or ''}".strip()
+        if req.reviewer:
+            resp.reviewer_name = f"{req.reviewer.first_name or ''} {req.reviewer.last_name or ''}".strip()
+        result.append(resp)
+
+    return result
+
+
+@router.put(
+    "/return-requests/{request_id}/review",
+    response_model=Dict[str, Any],
+)
+async def review_return_request(
+    request_id: UUID,
+    data: ReturnRequestReview,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Approve or deny a return request. On approval, the actual return is executed.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    success, error = await service.review_return_request(
+        request_id=request_id,
+        organization_id=current_user.organization_id,
+        reviewer_id=current_user.id,
+        status=data.status,
+        review_notes=data.review_notes,
+        override_condition=data.override_condition,
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=sanitize_error_message(error or "Unknown error"),
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_return_reviewed",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "return_request_id": str(request_id),
+            "decision": data.status,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    await _publish_inventory_event(
+        str(current_user.organization_id),
+        "return_request_reviewed",
+        {"request_id": str(request_id), "status": data.status},
+    )
+
+    return {"id": str(request_id), "status": data.status, "message": f"Return request {data.status}"}
+
+
+# ============================================
+# Issuance History Endpoint
+# ============================================
+
+
+@router.get(
+    "/users/{user_id}/issuance-history",
+    response_model=List[ItemIssuanceResponse],
+)
+async def get_user_issuance_history(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get full issuance history (active + returned) for a member.
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    issuances = await service.get_user_issuance_history(
+        user_id=user_id,
+        organization_id=current_user.organization_id,
+    )
+    return [ItemIssuanceResponse.model_validate(iss) for iss in issuances]

@@ -698,14 +698,19 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                       <div className="flex items-center gap-2 ml-3">
                         {/* Quantity for pool items */}
                         {si.trackingType === 'pool' && (
-                          <input
-                            type="number"
-                            min={1}
-                            value={si.quantity}
-                            onChange={(e) => updateQuantity(si.itemId, parseInt(e.target.value) || 1)}
-                            className="w-16 px-2 py-1 border border-theme-border rounded-sm text-sm text-center bg-theme-surface text-theme-text-primary"
-                            title="Quantity"
-                          />
+                          <div className="flex items-center gap-1">
+                            {mode === 'return' && (
+                              <span className="text-xs text-theme-text-muted whitespace-nowrap">Qty:</span>
+                            )}
+                            <input
+                              type="number"
+                              min={1}
+                              value={si.quantity}
+                              onChange={(e) => updateQuantity(si.itemId, parseInt(e.target.value) || 1)}
+                              className="w-16 px-2 py-1 border border-theme-border rounded-sm text-sm text-center bg-theme-surface text-theme-text-primary"
+                              title={mode === 'return' ? 'Quantity to return (partial return supported)' : 'Quantity'}
+                            />
+                          </div>
                         )}
 
                         {/* Return condition for return mode */}

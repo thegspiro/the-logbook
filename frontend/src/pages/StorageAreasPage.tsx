@@ -106,7 +106,7 @@ const StorageTreeNode: React.FC<StorageTreeNodeProps> = ({ area, depth, onEdit, 
         className={`flex items-center gap-2 py-2.5 px-3 hover:bg-theme-surface-hover rounded-lg transition-colors group ${
           depth === 0 ? 'border-b border-theme-surface-border' : ''
         }`}
-        style={{ paddingLeft: `${depth * 24 + 12}px` }}
+        style={{ paddingLeft: `${Math.min(depth * 24, 72) + 12}px` }}
       >
         {/* Expand/collapse */}
         <button
@@ -157,7 +157,7 @@ const StorageTreeNode: React.FC<StorageTreeNodeProps> = ({ area, depth, onEdit, 
 
         {/* Actions */}
         {canManage && (
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
             <button onClick={() => onAddChild(area)} className="p-1 text-theme-text-muted hover:text-emerald-600 rounded-sm" title="Add child">
               <Plus className="w-3.5 h-3.5" />
             </button>
@@ -175,7 +175,7 @@ const StorageTreeNode: React.FC<StorageTreeNodeProps> = ({ area, depth, onEdit, 
       {showItems && (
         <div
           className="border-l-2 border-emerald-500/30 ml-4 my-1"
-          style={{ marginLeft: `${depth * 24 + 36}px` }}
+          style={{ marginLeft: `${Math.min(depth * 24, 72) + 36}px` }}
         >
           {loadingItems ? (
             <div className="flex items-center gap-2 px-3 py-2 text-theme-text-muted text-xs">

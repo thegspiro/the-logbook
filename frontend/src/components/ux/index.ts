@@ -33,5 +33,10 @@ export { DateRangePicker } from './DateRangePicker';
 export { FileDropzone } from './FileDropzone';
 export { InlineEdit } from './InlineEdit';
 
+// Mobile-first Components
+export { MobileItemCard } from './MobileItemCard';
+export { MobileCheckoutCard } from './MobileCheckoutCard';
+export { FloatingActionButton } from './FloatingActionButton';
+
 // Information
 export { WhatsNew } from './WhatsNew';

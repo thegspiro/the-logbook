@@ -35,6 +35,9 @@ const StorageAreasPage = lazyWithRetry(
 const ImportInventoryPage = lazyWithRetry(
   () => import('../../pages/ImportInventory'),
 );
+const InventoryBarcodePrintPage = lazyWithRetry(
+  () => import('../../pages/inventory/InventoryBarcodePrintPage'),
+);
 
 export const getInventoryRoutes = () => {
   return (
@@ -102,6 +105,16 @@ export const getInventoryRoutes = () => {
               <ImportInventoryPage />
             </Suspense>
           </ProtectedRoute>
+        }
+      />
+
+      {/* Inventory - Barcode Label Printing */}
+      <Route
+        path="/inventory/print-labels"
+        element={
+          <Suspense fallback={null}>
+            <InventoryBarcodePrintPage />
+          </Suspense>
         }
       />
     </React.Fragment>

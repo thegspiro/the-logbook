@@ -22,12 +22,16 @@ from app.models.inventory import (
     InventoryActionType,
     InventoryCategory,
     InventoryItem,
+    IssuanceAllowance,
     ItemAssignment,
     ItemCondition,
     ItemIssuance,
     ItemStatus,
     ItemType,
     MaintenanceRecord,
+    ReturnRequest,
+    ReturnRequestStatus,
+    ReturnRequestType,
     TrackingType,
     WriteOffRequest,
     WriteOffStatus,
@@ -709,9 +713,19 @@ class InventoryService:
             # Update item
             item.assigned_to_user_id = None
             item.assigned_date = None
-            item.status = ItemStatus.AVAILABLE
             if return_condition:
                 item.condition = return_condition
+
+            # Auto-quarantine: items returned in poor/damaged condition
+            # go to in_maintenance instead of available
+            if return_condition and return_condition in (
+                ItemCondition.POOR,
+                ItemCondition.DAMAGED,
+                ItemCondition.OUT_OF_SERVICE,
+            ):
+                item.status = ItemStatus.IN_MAINTENANCE
+            else:
+                item.status = ItemStatus.AVAILABLE
 
             # Queue notification
             await self._queue_inventory_notification(
@@ -816,6 +830,13 @@ class InventoryService:
             item.quantity -= quantity
             item.quantity_issued = (item.quantity_issued or 0) + quantity
 
+            # Snapshot the replacement cost at issuance time for cost recovery
+            unit_cost = (
+                item.replacement_cost
+                if item.replacement_cost is not None
+                else item.purchase_price
+            )
+
             # Create issuance record
             issuance = ItemIssuance(
                 organization_id=organization_id,
@@ -825,6 +846,7 @@ class InventoryService:
                 issued_by=issued_by,
                 issue_reason=reason,
                 is_returned=False,
+                unit_cost_at_issuance=unit_cost,
             )
             self.db.add(issuance)
 
@@ -1088,8 +1110,17 @@ class InventoryService:
             )
             if not item:
                 return False, "Associated item not found"
-            item.status = ItemStatus.AVAILABLE
             item.condition = return_condition
+
+            # Auto-quarantine: items returned in poor/damaged condition
+            if return_condition in (
+                ItemCondition.POOR,
+                ItemCondition.DAMAGED,
+                ItemCondition.OUT_OF_SERVICE,
+            ):
+                item.status = ItemStatus.IN_MAINTENANCE
+            else:
+                item.status = ItemStatus.AVAILABLE
 
             # Queue notification
             await self._queue_inventory_notification(
@@ -2998,3 +3029,583 @@ class InventoryService:
         # Sort all events by date descending
         events.sort(key=lambda e: e["date"], reverse=True)
         return events
+
+    # ------------------------------------------------------------------
+    # Issuance Allowances
+    # ------------------------------------------------------------------
+
+    async def check_allowance(
+        self,
+        user_id: UUID,
+        category_id: UUID,
+        organization_id: UUID,
+        role_id: Optional[UUID] = None,
+    ) -> Dict[str, Any]:
+        """Check how many more units a member can receive for a category."""
+        # Find applicable allowance — role-specific first, then org-wide
+        q = (
+            select(IssuanceAllowance)
+            .where(IssuanceAllowance.organization_id == str(organization_id))
+            .where(IssuanceAllowance.category_id == str(category_id))
+            .where(IssuanceAllowance.is_active.is_(True))
+        )
+        result = await self.db.execute(q)
+        allowances = result.scalars().all()
+
+        if not allowances:
+            return {
+                "max_quantity": -1,  # -1 means unlimited
+                "issued_this_period": 0,
+                "remaining": -1,
+                "period_type": "none",
+            }
+
+        # Pick the most specific allowance (role match first)
+        allowance = None
+        for a in allowances:
+            if role_id and a.role_id == str(role_id):
+                allowance = a
+                break
+        if not allowance:
+            for a in allowances:
+                if not a.role_id:
+                    allowance = a
+                    break
+        if not allowance:
+            return {
+                "max_quantity": -1,
+                "issued_this_period": 0,
+                "remaining": -1,
+                "period_type": "none",
+            }
+
+        # Count issued this period
+        period_start = None
+        if allowance.period_type == "annual":
+            now = datetime.now(timezone.utc)
+            period_start = datetime(now.year, 1, 1, tzinfo=timezone.utc)
+        # "career" and "one_time" count all time
+
+        # Get items in this category
+        cat_items = await self.db.execute(
+            select(InventoryItem.id).where(
+                InventoryItem.organization_id == str(organization_id),
+                InventoryItem.category_id == str(category_id),
+                InventoryItem.tracking_type == TrackingType.POOL,
+            )
+        )
+        item_ids = [r[0] for r in cat_items.fetchall()]
+
+        if not item_ids:
+            return {
+                "max_quantity": allowance.max_quantity,
+                "issued_this_period": 0,
+                "remaining": allowance.max_quantity,
+                "period_type": allowance.period_type,
+            }
+
+        issued_q = select(func.coalesce(func.sum(ItemIssuance.quantity_issued), 0)).where(
+            ItemIssuance.organization_id == str(organization_id),
+            ItemIssuance.user_id == str(user_id),
+            ItemIssuance.item_id.in_(item_ids),
+        )
+        if period_start:
+            issued_q = issued_q.where(ItemIssuance.issued_at >= period_start)
+
+        issued_result = await self.db.execute(issued_q)
+        issued_count = int(issued_result.scalar() or 0)
+
+        remaining = max(0, allowance.max_quantity - issued_count)
+        return {
+            "max_quantity": allowance.max_quantity,
+            "issued_this_period": issued_count,
+            "remaining": remaining,
+            "period_type": allowance.period_type,
+        }
+
+    # ------------------------------------------------------------------
+    # Bulk Issuance
+    # ------------------------------------------------------------------
+
+    async def bulk_issue_from_pool(
+        self,
+        item_id: UUID,
+        targets: List[Dict[str, Any]],
+        organization_id: UUID,
+        issued_by: UUID,
+    ) -> List[Dict[str, Any]]:
+        """Issue a pool item to multiple members at once."""
+        results = []
+        for target in targets:
+            user_id = target["user_id"]
+            qty = target.get("quantity", 1)
+            reason = target.get("issue_reason")
+
+            issuance, error = await self.issue_from_pool(
+                item_id=item_id,
+                user_id=user_id,
+                organization_id=organization_id,
+                issued_by=issued_by,
+                quantity=qty,
+                reason=reason,
+            )
+            if error:
+                results.append(
+                    {"user_id": user_id, "success": False, "error": error}
+                )
+            else:
+                results.append(
+                    {
+                        "user_id": user_id,
+                        "success": True,
+                        "issuance_id": issuance.id if issuance else None,
+                    }
+                )
+        return results
+
+    # ------------------------------------------------------------------
+    # Size Variant Quick-Create
+    # ------------------------------------------------------------------
+
+    async def create_size_variants(
+        self,
+        organization_id: UUID,
+        created_by: UUID,
+        base_name: str,
+        sizes: List[str],
+        colors: Optional[List[str]] = None,
+        **kwargs: Any,
+    ) -> List["InventoryItem"]:
+        """Create multiple pool items from a base name × sizes × colors matrix."""
+        items_created = []
+        combos: List[Tuple[str, Optional[str]]] = []
+
+        if colors:
+            for size in sizes:
+                for color in colors:
+                    combos.append((size, color))
+        else:
+            for size in sizes:
+                combos.append((size, None))
+
+        for size, color in combos:
+            name_parts = [base_name, size]
+            if color:
+                name_parts.append(color)
+            item_name = " — ".join(name_parts)
+
+            item = InventoryItem(
+                organization_id=str(organization_id),
+                name=item_name,
+                size=size,
+                color=color,
+                tracking_type=TrackingType.POOL,
+                quantity=kwargs.get("quantity_per_variant", 0),
+                quantity_issued=0,
+                condition=ItemCondition.GOOD,
+                status=ItemStatus.AVAILABLE,
+                category_id=str(kwargs["category_id"]) if kwargs.get("category_id") else None,
+                replacement_cost=kwargs.get("replacement_cost"),
+                purchase_price=kwargs.get("purchase_price"),
+                unit_of_measure=kwargs.get("unit_of_measure"),
+                location_id=str(kwargs["location_id"]) if kwargs.get("location_id") else None,
+                storage_area_id=str(kwargs["storage_area_id"]) if kwargs.get("storage_area_id") else None,
+                station=kwargs.get("station"),
+                notes=kwargs.get("notes"),
+                created_by=str(created_by),
+                active=True,
+            )
+            self.db.add(item)
+            items_created.append(item)
+
+        await self.db.commit()
+        for item in items_created:
+            await self.db.refresh(item)
+
+        return items_created
+
+    # ------------------------------------------------------------------
+    # Cost Recovery
+    # ------------------------------------------------------------------
+
+    async def update_issuance_charge(
+        self,
+        issuance_id: UUID,
+        organization_id: UUID,
+        charge_status: str,
+        charge_amount: Optional[Decimal] = None,
+    ) -> Tuple[bool, Optional[str]]:
+        """Update the charge status and amount on an issuance record."""
+        result = await self.db.execute(
+            select(ItemIssuance)
+            .where(ItemIssuance.id == str(issuance_id))
+            .where(ItemIssuance.organization_id == str(organization_id))
+        )
+        issuance = result.scalar_one_or_none()
+        if not issuance:
+            return False, "Issuance record not found"
+
+        issuance.charge_status = charge_status
+        if charge_amount is not None:
+            issuance.charge_amount = charge_amount
+        elif charge_status == "charged" and issuance.unit_cost_at_issuance:
+            # Default to the cost snapshot × quantity
+            issuance.charge_amount = (
+                issuance.unit_cost_at_issuance * issuance.quantity_issued
+            )
+
+        await self.db.commit()
+        return True, None
+
+    async def get_charges(
+        self,
+        organization_id: UUID,
+        charge_status_filter: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """List issuances with charge-relevant info for admin charge management."""
+        query = (
+            select(ItemIssuance)
+            .where(ItemIssuance.organization_id == str(organization_id))
+            .where(ItemIssuance.charge_status != "none")
+            .options(selectinload(ItemIssuance.item), selectinload(ItemIssuance.user))
+            .order_by(ItemIssuance.created_at.desc())
+        )
+
+        if charge_status_filter:
+            query = query.where(ItemIssuance.charge_status == charge_status_filter)
+
+        result = await self.db.execute(query)
+        issuances = list(result.scalars().all())
+
+        items = []
+        total_pending = Decimal("0.00")
+        total_charged = Decimal("0.00")
+        total_waived = 0
+
+        for iss in issuances:
+            user_name = ""
+            if iss.user:
+                user_name = f"{iss.user.first_name or ''} {iss.user.last_name or ''}".strip()
+            item_name = iss.item.name if iss.item else "Unknown"
+
+            cost = iss.charge_amount or (
+                (iss.unit_cost_at_issuance or Decimal("0")) * iss.quantity_issued
+            )
+
+            if iss.charge_status == "pending":
+                total_pending += cost
+            elif iss.charge_status == "charged":
+                total_charged += iss.charge_amount or Decimal("0")
+            elif iss.charge_status == "waived":
+                total_waived += 1
+
+            items.append({
+                "issuance_id": iss.id,
+                "item_id": iss.item_id,
+                "item_name": item_name,
+                "user_id": iss.user_id,
+                "user_name": user_name,
+                "quantity_issued": iss.quantity_issued,
+                "issued_at": iss.issued_at,
+                "returned_at": iss.returned_at,
+                "is_returned": iss.is_returned,
+                "return_condition": iss.return_condition.value if iss.return_condition else None,
+                "unit_cost_at_issuance": iss.unit_cost_at_issuance,
+                "charge_status": iss.charge_status,
+                "charge_amount": iss.charge_amount,
+            })
+
+        return {
+            "items": items,
+            "total": len(items),
+            "total_pending": total_pending,
+            "total_charged": total_charged,
+            "total_waived": total_waived,
+        }
+
+    # ------------------------------------------------------------------
+    # Return Requests (member-initiated, QM-approved)
+    # ------------------------------------------------------------------
+
+    async def create_return_request(
+        self,
+        organization_id: UUID,
+        requester_id: UUID,
+        return_type: str,
+        item_id: UUID,
+        assignment_id: Optional[UUID] = None,
+        issuance_id: Optional[UUID] = None,
+        checkout_id: Optional[UUID] = None,
+        quantity_returning: int = 1,
+        reported_condition: str = "good",
+        member_notes: Optional[str] = None,
+    ) -> Tuple[Optional[ReturnRequest], Optional[str]]:
+        """Create a member-initiated return request for quartermaster review."""
+        # Validate the item exists and belongs to this org
+        item_result = await self.db.execute(
+            select(InventoryItem)
+            .where(InventoryItem.id == str(item_id))
+            .where(InventoryItem.organization_id == str(organization_id))
+        )
+        item = item_result.scalar_one_or_none()
+        if not item:
+            return None, "Item not found"
+
+        # Check for duplicate pending return requests
+        dupe_query = (
+            select(ReturnRequest)
+            .where(ReturnRequest.organization_id == str(organization_id))
+            .where(ReturnRequest.requester_id == str(requester_id))
+            .where(ReturnRequest.item_id == str(item_id))
+            .where(ReturnRequest.status == ReturnRequestStatus.PENDING)
+        )
+        dupe_result = await self.db.execute(dupe_query)
+        if dupe_result.scalar_one_or_none():
+            return None, "You already have a pending return request for this item"
+
+        condition_enum = ItemCondition(reported_condition) if reported_condition else ItemCondition.GOOD
+        type_enum = ReturnRequestType(return_type)
+
+        request = ReturnRequest(
+            organization_id=str(organization_id),
+            requester_id=str(requester_id),
+            return_type=type_enum,
+            item_id=str(item_id),
+            item_name=item.name,
+            assignment_id=str(assignment_id) if assignment_id else None,
+            issuance_id=str(issuance_id) if issuance_id else None,
+            checkout_id=str(checkout_id) if checkout_id else None,
+            quantity_returning=quantity_returning,
+            reported_condition=condition_enum,
+            member_notes=member_notes,
+            status=ReturnRequestStatus.PENDING,
+        )
+        self.db.add(request)
+        await self.db.commit()
+        await self.db.refresh(request)
+        return request, None
+
+    async def get_return_requests(
+        self,
+        organization_id: UUID,
+        status_filter: Optional[str] = None,
+        requester_id: Optional[UUID] = None,
+    ) -> List[ReturnRequest]:
+        """List return requests, optionally filtered by status or requester."""
+        query = (
+            select(ReturnRequest)
+            .where(ReturnRequest.organization_id == str(organization_id))
+            .options(
+                selectinload(ReturnRequest.requester),
+                selectinload(ReturnRequest.reviewer),
+            )
+            .order_by(ReturnRequest.created_at.desc())
+        )
+        if status_filter:
+            query = query.where(
+                ReturnRequest.status == ReturnRequestStatus(status_filter)
+            )
+        if requester_id:
+            query = query.where(ReturnRequest.requester_id == str(requester_id))
+
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def review_return_request(
+        self,
+        request_id: UUID,
+        organization_id: UUID,
+        reviewer_id: UUID,
+        status: str,
+        review_notes: Optional[str] = None,
+        override_condition: Optional[str] = None,
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Approve or deny a return request.
+
+        On approval, executes the actual return operation (unassign, return to pool,
+        or check-in) using the appropriate service method.
+        """
+        result = await self.db.execute(
+            select(ReturnRequest)
+            .where(ReturnRequest.id == str(request_id))
+            .where(ReturnRequest.organization_id == str(organization_id))
+        )
+        req = result.scalar_one_or_none()
+        if not req:
+            return False, "Return request not found"
+
+        if req.status != ReturnRequestStatus.PENDING:
+            return False, f"Request is already {req.status.value}"
+
+        req.reviewed_by = str(reviewer_id)
+        req.reviewed_at = datetime.now(timezone.utc)
+        req.review_notes = review_notes
+
+        if status == "denied":
+            req.status = ReturnRequestStatus.DENIED
+            await self.db.commit()
+            return True, None
+
+        # Approved — execute the actual return
+        condition_str = override_condition or req.reported_condition.value
+        condition_enum = ItemCondition(condition_str)
+
+        req.status = ReturnRequestStatus.APPROVED
+
+        if req.return_type == ReturnRequestType.ASSIGNMENT:
+            success, error = await self.unassign_item(
+                item_id=UUID(str(req.item_id)),
+                organization_id=organization_id,
+                returned_by=reviewer_id,
+                return_condition=condition_enum,
+                return_notes=f"Return request #{req.id[:8]} — {review_notes or ''}".strip(),
+                expected_user_id=UUID(str(req.requester_id)),
+            )
+            if not success:
+                req.status = ReturnRequestStatus.PENDING
+                req.reviewed_by = None
+                req.reviewed_at = None
+                await self.db.commit()
+                return False, f"Failed to unassign: {error}"
+
+        elif req.return_type == ReturnRequestType.ISSUANCE:
+            if not req.issuance_id:
+                return False, "No issuance ID on this request"
+            success, error = await self.return_to_pool(
+                issuance_id=UUID(str(req.issuance_id)),
+                organization_id=organization_id,
+                returned_by=reviewer_id,
+                return_condition=condition_enum,
+                return_notes=f"Return request #{req.id[:8]} — {review_notes or ''}".strip(),
+                quantity_returned=req.quantity_returning,
+            )
+            if not success:
+                req.status = ReturnRequestStatus.PENDING
+                req.reviewed_by = None
+                req.reviewed_at = None
+                await self.db.commit()
+                return False, f"Failed to return to pool: {error}"
+
+        elif req.return_type == ReturnRequestType.CHECKOUT:
+            if not req.checkout_id:
+                return False, "No checkout ID on this request"
+            success, error = await self.checkin_item(
+                checkout_id=UUID(str(req.checkout_id)),
+                organization_id=organization_id,
+                checked_in_by=reviewer_id,
+                return_condition=condition_enum,
+                damage_notes=f"Return request #{req.id[:8]} — {req.member_notes or ''}".strip(),
+            )
+            if not success:
+                req.status = ReturnRequestStatus.PENDING
+                req.reviewed_by = None
+                req.reviewed_at = None
+                await self.db.commit()
+                return False, f"Failed to check in: {error}"
+
+        req.status = ReturnRequestStatus.COMPLETED
+        await self.db.commit()
+        return True, None
+
+    # ------------------------------------------------------------------
+    # Issuance History (all issuances for a member, active + returned)
+    # ------------------------------------------------------------------
+
+    async def get_user_issuance_history(
+        self,
+        user_id: UUID,
+        organization_id: UUID,
+    ) -> List[ItemIssuance]:
+        """Get all issuance records (active + returned) for a user."""
+        result = await self.db.execute(
+            select(ItemIssuance)
+            .where(ItemIssuance.user_id == str(user_id))
+            .where(ItemIssuance.organization_id == str(organization_id))
+            .options(selectinload(ItemIssuance.item))
+            .order_by(ItemIssuance.issued_at.desc())
+        )
+        return list(result.scalars().all())
+
+    # ------------------------------------------------------------------
+    # Low Stock & Overdue Alerts
+    # ------------------------------------------------------------------
+
+    async def get_low_stock_items_for_alerts(
+        self,
+        organization_id: UUID,
+    ) -> List[InventoryItem]:
+        """Get items below their reorder point for email alerts."""
+        result = await self.db.execute(
+            select(InventoryItem)
+            .where(InventoryItem.organization_id == str(organization_id))
+            .where(InventoryItem.active == True)  # noqa: E712
+            .where(InventoryItem.reorder_point.isnot(None))
+            .where(InventoryItem.quantity <= InventoryItem.reorder_point)
+            .options(selectinload(InventoryItem.category))
+            .order_by(InventoryItem.quantity.asc())
+        )
+        return list(result.scalars().all())
+
+    async def get_overdue_checkouts_for_alerts(
+        self,
+        organization_id: UUID,
+    ) -> List[CheckOutRecord]:
+        """Get overdue checkouts for email alerts."""
+        now = datetime.now(timezone.utc)
+        result = await self.db.execute(
+            select(CheckOutRecord)
+            .where(CheckOutRecord.organization_id == str(organization_id))
+            .where(CheckOutRecord.is_returned == False)  # noqa: E712
+            .where(CheckOutRecord.expected_return_at.isnot(None))
+            .where(CheckOutRecord.expected_return_at < now)
+            .options(
+                selectinload(CheckOutRecord.item),
+                selectinload(CheckOutRecord.user),
+            )
+            .order_by(CheckOutRecord.expected_return_at.asc())
+        )
+        return list(result.scalars().all())
+
+    # ------------------------------------------------------------------
+    # NFPA Retirement Due Alerts
+    # ------------------------------------------------------------------
+
+    async def get_nfpa_retirement_due_items(
+        self,
+        organization_id: UUID,
+        days_ahead: int = 180,
+    ) -> List[Dict[str, Any]]:
+        """Get PPE items approaching NFPA 10-year retirement date."""
+        from app.models.inventory import NFPACompliance
+
+        cutoff = date.today() + timedelta(days=days_ahead)
+
+        result = await self.db.execute(
+            select(NFPACompliance)
+            .where(NFPACompliance.organization_id == str(organization_id))
+            .where(NFPACompliance.retirement_date.isnot(None))
+            .where(NFPACompliance.retirement_date <= cutoff)
+            .where(NFPACompliance.is_retired == False)  # noqa: E712
+        )
+        records = list(result.scalars().all())
+
+        items_due = []
+        for rec in records:
+            item_result = await self.db.execute(
+                select(InventoryItem).where(InventoryItem.id == rec.item_id)
+            )
+            item = item_result.scalar_one_or_none()
+            if item and item.active:
+                days_until = (rec.retirement_date - date.today()).days
+                items_due.append({
+                    "item_id": item.id,
+                    "item_name": item.name,
+                    "serial_number": item.serial_number,
+                    "asset_tag": item.asset_tag,
+                    "retirement_date": rec.retirement_date.isoformat(),
+                    "days_until_retirement": days_until,
+                    "assigned_to": item.assigned_to_user_id,
+                })
+
+        return items_due

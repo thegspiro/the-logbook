@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { inventoryService } from '../services/api';
 import type { UserCheckoutItem } from '../services/api';
+import { MobileCheckoutCard } from '../components/ux/MobileCheckoutCard';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 
@@ -234,7 +235,27 @@ export const InventoryCheckoutsPage: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="card-secondary overflow-hidden">
+            <>
+            {/* Mobile card view */}
+            <div className="sm:hidden space-y-3">
+              {filteredList.map((checkout) => (
+                <MobileCheckoutCard
+                  key={checkout.checkout_id}
+                  itemName={checkout.item_name}
+                  memberName={checkout.user_name || undefined}
+                  checkoutDate={formatDate(checkout.checked_out_at)}
+                  dueDate={checkout.expected_return_at ? formatDate(checkout.expected_return_at) : undefined}
+                  isOverdue={checkout.is_overdue}
+                  onCheckIn={() => openCheckInModal(checkout.checkout_id, checkout.item_name)}
+                  onExtend={() => { setExtendModal({ open: true, checkoutId: checkout.checkout_id, itemName: checkout.item_name, currentDue: checkout.expected_return_at || '' }); setExtendDate(''); }}
+                />
+              ))}
+              <div className="text-center py-2 text-xs text-theme-text-muted">
+                {filteredList.length} checkout{filteredList.length !== 1 ? 's' : ''}
+              </div>
+            </div>
+            {/* Desktop table view */}
+            <div className="hidden sm:block card-secondary overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -308,6 +329,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
                 {filteredList.length} checkout{filteredList.length !== 1 ? 's' : ''}
               </div>
             </div>
+            </>
           )}
         </div>
 

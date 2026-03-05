@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   X,
   Shield,
@@ -7,6 +8,7 @@ import {
   Info,
   Calendar,
   AlertTriangle,
+  Barcode,
   CheckCircle2,
   XCircle,
   Plus,
@@ -1051,6 +1053,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   onEdit,
   canManage,
 }) => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<DetailTab>('general');
   const isNFPA = category?.nfpa_tracking_enabled ?? false;
 
@@ -1111,6 +1114,13 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0 ml-4">
+            <button
+              onClick={() => { void navigate(`/inventory/print-labels?ids=${item.id}`); }}
+              className="p-1.5 rounded-lg hover:bg-theme-surface-secondary text-theme-text-muted"
+              title="Print barcode label"
+            >
+              <Barcode className="h-5 w-5" />
+            </button>
             {canManage && (
               <button
                 onClick={() => onEdit(item)}
