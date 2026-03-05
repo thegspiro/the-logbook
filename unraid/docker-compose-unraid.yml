@@ -26,7 +26,8 @@ services:
   db:
     image: mysql:8.0
     container_name: logbook-db
-    restart: unless-stopped
+    restart: on-failure
+    stop_grace_period: 10s
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change_me_strong_password}
       MYSQL_DATABASE: ${DB_NAME:-the_logbook}
@@ -69,7 +70,8 @@ services:
   redis:
     image: redis:7-alpine
     container_name: logbook-redis
-    restart: unless-stopped
+    restart: on-failure
+    stop_grace_period: 10s
     command: redis-server --requirepass ${REDIS_PASSWORD:-change_me_strong_password} --maxmemory 256mb --maxmemory-policy allkeys-lru
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-change_me_strong_password}
@@ -103,7 +105,7 @@ services:
       target: production
     image: the-logbook-backend:local
     container_name: logbook-backend
-    restart: unless-stopped
+    restart: on-failure
     environment:
       # Application
       APP_NAME: ${APP_NAME:-The Logbook}
@@ -215,7 +217,8 @@ services:
         VITE_API_URL: /api/v1
     image: the-logbook-frontend:local
     container_name: logbook-frontend
-    restart: unless-stopped
+    restart: on-failure
+    stop_grace_period: 10s
     environment:
       TZ: ${TZ:-America/New_York}
 
@@ -301,11 +304,16 @@ networks:
 # Management Commands:
 #   docker-compose up -d              # Start all services
 #   docker-compose down               # Stop all services
+#   docker-compose down --remove-orphans  # Stop all + clean up orphans
 #   docker-compose restart            # Restart all services
 #   docker-compose logs -f backend    # View backend logs
 #   docker-compose pull               # Pull latest images
 #   docker-compose exec backend bash  # Access backend shell
 #   docker-compose exec db mysql -u root -p  # Access database
+#
+# Removal:
+#   docker-compose down --remove-orphans  # Remove all containers + network
+#   Or run: ./unraid/unraid-setup.sh and choose option 4
 #
 # Backup:
 #   docker-compose exec backend /app/scripts/backup.sh
