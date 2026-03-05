@@ -781,9 +781,9 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 Use Template
               </button>
 
-              {/* Template popover dropdown */}
+              {/* Template popover dropdown — opens upward so it doesn't clip */}
               {showTemplatePopover && (
-                <div className="absolute right-0 top-full mt-2 z-30 w-[28rem] max-w-[calc(100vw-2rem)] bg-theme-surface rounded-lg border border-theme-surface-border p-4 shadow-lg">
+                <div className="absolute right-0 bottom-full mb-2 z-30 w-[28rem] max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto bg-theme-surface rounded-lg border border-theme-surface-border p-4 shadow-lg">
                   {!selectedTemplate ? (
                     <>
                       <h4 className="text-sm font-semibold text-theme-text-primary mb-3">
