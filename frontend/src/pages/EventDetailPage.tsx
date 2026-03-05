@@ -4,7 +4,7 @@
  * Shows detailed information about an event including RSVPs and attendee management.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
@@ -47,10 +47,23 @@ export const EventDetailPage: React.FC = () => {
   const [overrideCheckIn, setOverrideCheckIn] = useState('');
   const [overrideCheckOut, setOverrideCheckOut] = useState('');
   const [removeConfirmUserId, setRemoveConfirmUserId] = useState<string | null>(null);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const actionsMenuRef = useRef<HTMLDivElement>(null);
 
   const { checkPermission } = useAuthStore();
   const tz = useTimezone();
   const canManage = checkPermission('events.manage');
+
+  // Close actions menu on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target as Node)) {
+        setShowActionsMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     if (eventId) {
@@ -217,6 +230,26 @@ export const EventDetailPage: React.FC = () => {
     }
   };
 
+  const handleFinalizeAttendance = async () => {
+    if (!eventId) return;
+
+    try {
+      setSubmitting(true);
+      const result = await eventService.finalizeAttendance(eventId);
+      if (result.updated_count > 0) {
+        toast.success(`Attendance finalized for ${result.updated_count} member${result.updated_count !== 1 ? 's' : ''}`);
+        await fetchRSVPs();
+        await fetchStats();
+      } else {
+        toast.success('All attendance records are already up to date');
+      }
+    } catch (err) {
+      toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to finalize attendance');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const openRecordTimesModal = () => {
     if (event) {
       // Pre-fill with existing actual times if they exist
@@ -356,7 +389,7 @@ export const EventDetailPage: React.FC = () => {
             <div className="mt-2 flex items-center space-x-2">
               <EventTypeBadge type={event.event_type} size="sm" />
               {event.is_cancelled && (
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-300">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300">
                   Cancelled
                 </span>
               )}
@@ -370,6 +403,7 @@ export const EventDetailPage: React.FC = () => {
 
           {!event.is_cancelled && (
             <div className="flex flex-wrap gap-2 sm:gap-3">
+              {/* Primary actions — always visible */}
               {canRSVP && (
                 <button
                   onClick={() => setShowRSVPModal(true)}
@@ -399,79 +433,94 @@ export const EventDetailPage: React.FC = () => {
                     Edit
                   </button>
                   <button
-                    onClick={() => { void handleDuplicateEvent(); }}
-                    disabled={submitting}
-                    className="inline-flex items-center px-4 py-2 border border-theme-surface-border rounded-md shadow-xs text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-hover disabled:opacity-50"
-                  >
-                    <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                    Duplicate
-                  </button>
-                  <button
                     onClick={openCheckInModal}
                     className="inline-flex items-center px-4 py-2 border border-theme-surface-border rounded-md shadow-xs text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-hover"
                   >
                     <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                     </svg>
-                    Check In Members
+                    Check In
                   </button>
-                  <button
-                    onClick={openRecordTimesModal}
-                    className="inline-flex items-center px-4 py-2 border border-theme-surface-border rounded-md shadow-xs text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-hover"
-                  >
-                    <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Record Times
-                  </button>
-                  <button
-                    onClick={() => navigate(`/events/${eventId}/monitoring`)}
-                    className="inline-flex items-center px-4 py-2 border border-green-300 rounded-md shadow-xs text-sm font-medium text-green-400 bg-theme-surface hover:bg-green-500/20"
-                  >
-                    <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
-                    Monitoring
-                  </button>
-                  <button
-                    onClick={() => {
-                      void (async () => {
-                        if (!eventId) return;
-                        try {
-                          await meetingsService.createFromEvent(eventId);
-                          toast.success('Meeting created from event');
-                          navigate(`/minutes`);
-                        } catch (err) {
-                          const axiosErr = err as AxiosError<{ detail?: string }>;
-                          toast.error(axiosErr.response?.data?.detail || 'Failed to create meeting');
-                        }
-                      })();
-                    }}
-                    disabled={submitting}
-                    className="inline-flex items-center px-4 py-2 border border-cyan-300 rounded-md shadow-xs text-sm font-medium text-cyan-700 dark:text-cyan-400 bg-theme-surface hover:bg-cyan-500/20 disabled:opacity-50"
-                  >
-                    <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Create Meeting
-                  </button>
-                  <button
-                    onClick={() => setShowCancelModal(true)}
-                    className="inline-flex items-center px-4 py-2 border border-red-300 rounded-md shadow-xs text-sm font-medium text-red-400 bg-theme-surface hover:bg-red-500/20"
-                  >
-                    Cancel Event
-                  </button>
-                  <button
-                    onClick={() => setShowDeleteConfirm(true)}
-                    className="inline-flex items-center px-4 py-2 border border-red-300 rounded-md shadow-xs text-sm font-medium text-red-400 bg-theme-surface hover:bg-red-500/20"
-                  >
-                    <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                    Delete
-                  </button>
+
+                  {/* "More" dropdown for secondary actions */}
+                  <div className="relative" ref={actionsMenuRef}>
+                    <button
+                      onClick={() => setShowActionsMenu(!showActionsMenu)}
+                      className="inline-flex items-center px-4 py-2 border border-theme-surface-border rounded-md shadow-xs text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-hover"
+                    >
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                      </svg>
+                      <span className="ml-1">More</span>
+                    </button>
+                    {showActionsMenu && (
+                      <div className="absolute right-0 mt-2 w-56 rounded-lg bg-theme-surface border border-theme-surface-border shadow-lg z-20">
+                        <div className="py-1">
+                          <button
+                            onClick={() => { setShowActionsMenu(false); void handleDuplicateEvent(); }}
+                            disabled={submitting}
+                            className="w-full text-left px-4 py-2.5 text-sm text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50"
+                          >
+                            Duplicate Event
+                          </button>
+                          <button
+                            onClick={() => { setShowActionsMenu(false); openRecordTimesModal(); }}
+                            className="w-full text-left px-4 py-2.5 text-sm text-theme-text-secondary hover:bg-theme-surface-hover"
+                          >
+                            Record Times
+                          </button>
+                          {isPastEvent && (
+                            <button
+                              onClick={() => { setShowActionsMenu(false); void handleFinalizeAttendance(); }}
+                              disabled={submitting}
+                              className="w-full text-left px-4 py-2.5 text-sm text-emerald-700 dark:text-emerald-400 hover:bg-theme-surface-hover disabled:opacity-50"
+                            >
+                              Finalize Attendance
+                            </button>
+                          )}
+                          <button
+                            onClick={() => { setShowActionsMenu(false); navigate(`/events/${eventId}/monitoring`); }}
+                            className="w-full text-left px-4 py-2.5 text-sm text-theme-text-secondary hover:bg-theme-surface-hover"
+                          >
+                            Monitoring Dashboard
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowActionsMenu(false);
+                              void (async () => {
+                                if (!eventId) return;
+                                try {
+                                  await meetingsService.createFromEvent(eventId);
+                                  toast.success('Meeting created from event');
+                                  navigate(`/minutes`);
+                                } catch (err) {
+                                  const axiosErr = err as AxiosError<{ detail?: string }>;
+                                  toast.error(axiosErr.response?.data?.detail || 'Failed to create meeting');
+                                }
+                              })();
+                            }}
+                            disabled={submitting}
+                            className="w-full text-left px-4 py-2.5 text-sm text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50"
+                          >
+                            Create Meeting
+                          </button>
+                          <div className="border-t border-theme-surface-border my-1" />
+                          <button
+                            onClick={() => { setShowActionsMenu(false); setShowCancelModal(true); }}
+                            className="w-full text-left px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-theme-surface-hover"
+                          >
+                            Cancel Event
+                          </button>
+                          <button
+                            onClick={() => { setShowActionsMenu(false); setShowDeleteConfirm(true); }}
+                            className="w-full text-left px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-theme-surface-hover"
+                          >
+                            Delete Event
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </div>
@@ -488,9 +537,9 @@ export const EventDetailPage: React.FC = () => {
 
             {event.is_cancelled && (
               <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-4">
-                <p className="text-sm font-medium text-red-300">This event has been cancelled</p>
+                <p className="text-sm font-medium text-red-700 dark:text-red-300">This event has been cancelled</p>
                 {event.cancellation_reason && (
-                  <p className="text-sm text-red-400 mt-1">Reason: {event.cancellation_reason}</p>
+                  <p className="text-sm text-red-600 dark:text-red-400 mt-1">Reason: {event.cancellation_reason}</p>
                 )}
               </div>
             )}

@@ -76,6 +76,7 @@ export interface EventListItem {
   is_cancelled: boolean;
   rsvp_count?: number;
   going_count?: number;
+  user_rsvp_status?: RSVPStatus;
 }
 
 export interface EventCreate {

@@ -890,7 +890,110 @@ class EventService:
         await self.db.commit()
         await self.db.refresh(event)
 
+        # Auto-finalize attendance when actual end time is recorded
+        if actual_end_time is not None:
+            await self.finalize_event_attendance(event_id, organization_id)
+
         return event, None
+
+    async def finalize_event_attendance(
+        self,
+        event_id: UUID,
+        organization_id: UUID,
+    ) -> Tuple[int, Optional[str]]:
+        """
+        Finalize attendance duration for all checked-in members who didn't check out.
+
+        When require_checkout is false (the default), members check in but never
+        check out, leaving attendance_duration_minutes as NULL. This method
+        calculates duration using: actual_end_time (if recorded) > end_datetime,
+        minus the member's check-in time.
+
+        Also updates any linked training records that have hours_completed == 0.
+
+        Returns:
+            Tuple of (number_of_rsvps_updated, error_message)
+        """
+        # Get event
+        event_result = await self.db.execute(
+            select(Event)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
+        )
+        event = event_result.scalar_one_or_none()
+
+        if not event:
+            return 0, "Event not found"
+
+        # Determine effective end time: actual_end_time takes priority
+        effective_end = event.actual_end_time or event.end_datetime
+        if not effective_end:
+            return 0, "Event has no end time"
+
+        # Get all RSVPs that are checked in but have no checkout and no duration set
+        rsvp_result = await self.db.execute(
+            select(EventRSVP).where(
+                EventRSVP.event_id == str(event_id),
+                EventRSVP.checked_in.is_(True),
+                EventRSVP.checked_out_at.is_(None),
+                EventRSVP.override_duration_minutes.is_(None),
+                EventRSVP.attendance_duration_minutes.is_(None),
+            )
+        )
+        rsvps = list(rsvp_result.scalars().all())
+
+        if not rsvps:
+            return 0, None
+
+        # Get linked training session if this is a training event
+        training_session = None
+        if event.event_type == EventType.TRAINING:
+            session_result = await self.db.execute(
+                select(TrainingSession).where(
+                    TrainingSession.event_id == event.id
+                )
+            )
+            training_session = session_result.scalar_one_or_none()
+
+        updated_count = 0
+        for rsvp in rsvps:
+            check_in_time = rsvp.override_check_in_at or rsvp.checked_in_at
+            if not check_in_time:
+                continue
+
+            duration_minutes = (
+                effective_end - check_in_time
+            ).total_seconds() / 60
+            duration_minutes = max(0, int(duration_minutes))
+            rsvp.attendance_duration_minutes = duration_minutes
+            updated_count += 1
+
+            # Update linked training record if hours are still 0
+            if training_session:
+                record_result = await self.db.execute(
+                    select(TrainingRecord).where(
+                        TrainingRecord.user_id == str(rsvp.user_id),
+                        TrainingRecord.course_name
+                        == training_session.course_name,
+                        TrainingRecord.scheduled_date
+                        == event.start_datetime.date(),
+                    )
+                )
+                training_record = record_result.scalar_one_or_none()
+                if (
+                    training_record
+                    and (
+                        training_record.hours_completed is None
+                        or training_record.hours_completed == 0
+                    )
+                ):
+                    training_record.hours_completed = round(
+                        duration_minutes / 60.0, 2
+                    )
+
+        await self.db.commit()
+
+        return updated_count, None
 
     async def get_qr_check_in_data(
         self, event_id: UUID, organization_id: UUID

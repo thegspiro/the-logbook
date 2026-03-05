@@ -1,21 +1,22 @@
 /**
  * Events Page
  *
- * Lists all events with filtering by type.
- * Enhanced with skeleton loading, empty states, breadcrumbs, and relative time.
+ * Lists all events with filtering by type, search, pagination,
+ * and a toggle between upcoming and past events.
  */
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, Plus, Download } from 'lucide-react';
+import { Calendar, Plus, Download, Search } from 'lucide-react';
 import { eventService } from '../services/api';
 import type { EventListItem, EventType, EventCategoryConfig } from '../types/event';
-import { getEventTypeLabel, getEventTypeBadgeColor } from '../utils/eventHelpers';
+import { getEventTypeLabel, getEventTypeBadgeColor, getRSVPStatusLabel, getRSVPStatusColor } from '../utils/eventHelpers';
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime } from '../utils/dateFormatting';
-import { Breadcrumbs, SkeletonCardGrid, EmptyState } from '../components/ux';
+import { Breadcrumbs, SkeletonCardGrid, EmptyState, Pagination } from '../components/ux';
 import { formatRelativeTime, formatAbsoluteDate } from '../hooks/useRelativeTime';
+import { DEFAULT_PAGE_SIZE } from '../constants/config';
 
 const ALL_EVENT_TYPES: EventType[] = [
   'business_meeting',
@@ -35,6 +36,9 @@ export const EventsPage: React.FC = () => {
   const [visibleTypes, setVisibleTypes] = useState<EventType[]>(ALL_EVENT_TYPES);
   const [customCategories, setCustomCategories] = useState<EventCategoryConfig[]>([]);
   const [visibleCustomCategories, setVisibleCustomCategories] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [showPastEvents, setShowPastEvents] = useState(false);
 
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('events.manage');
@@ -49,7 +53,7 @@ export const EventsPage: React.FC = () => {
         setVisibleCustomCategories(data.visible_custom_categories || []);
       })
       .catch(() => { /* fall back to showing all types */ });
-  }, []);
+  }, [showPastEvents]);
 
   // Types not marked visible are grouped under the "Other" tab
   const hiddenTypes = useMemo(
@@ -69,16 +73,14 @@ export const EventsPage: React.FC = () => {
     return tabs;
   }, [visibleTypes, visibleCustomCategories]);
 
-  // #77: Memoize filtered events instead of storing in separate state
-  const filteredEvents = useMemo(() => {
+  // Filter by type, then search, then paginate
+  const typeFilteredEvents = useMemo(() => {
     if (typeFilter === 'all') return events;
-    // Custom category filter (prefixed with "cat:")
     if (typeFilter.startsWith('cat:')) {
       const catValue = typeFilter.slice(4);
       return events.filter((e) => e.custom_category === catValue);
     }
     if (typeFilter === 'other') {
-      // "Other" tab shows events typed "other" plus any hidden event types
       return events.filter(
         (e) => e.event_type === 'other' || hiddenTypes.includes(e.event_type)
       );
@@ -86,10 +88,30 @@ export const EventsPage: React.FC = () => {
     return events.filter(e => e.event_type === typeFilter);
   }, [events, typeFilter, hiddenTypes]);
 
+  const searchFilteredEvents = useMemo(() => {
+    if (!searchQuery.trim()) return typeFilteredEvents;
+    const query = searchQuery.toLowerCase();
+    return typeFilteredEvents.filter(
+      (e) =>
+        e.title.toLowerCase().includes(query) ||
+        (e.location_name || e.location || '').toLowerCase().includes(query)
+    );
+  }, [typeFilteredEvents, searchQuery]);
+
+  const paginatedEvents = useMemo(() => {
+    const start = (currentPage - 1) * DEFAULT_PAGE_SIZE;
+    return searchFilteredEvents.slice(start, start + DEFAULT_PAGE_SIZE);
+  }, [searchFilteredEvents, currentPage]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [typeFilter, searchQuery, showPastEvents]);
+
   // #48: CSV export for events
   const handleExportCSV = useCallback(() => {
     const headers = ['Title', 'Type', 'Date', 'Location', 'Mandatory', 'Cancelled'];
-    const rows = filteredEvents.map(e => [
+    const rows = searchFilteredEvents.map(e => [
       e.title,
       getEventTypeLabel(e.event_type),
       formatShortDateTime(e.start_datetime, tz),
@@ -105,15 +127,16 @@ export const EventsPage: React.FC = () => {
     a.download = `events-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [filteredEvents, tz]);
+  }, [searchFilteredEvents, tz]);
 
   const fetchEvents = async () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await eventService.getEvents({
-        end_after: new Date().toISOString(),
-      });
+      const params = showPastEvents
+        ? { end_before: new Date().toISOString() }
+        : { end_after: new Date().toISOString() };
+      const data = await eventService.getEvents(params);
       setEvents(data);
     } catch (_err) {
       setError('Failed to load events. Please try again later.');
@@ -165,7 +188,7 @@ export const EventsPage: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {filteredEvents.length > 0 && (
+          {searchFilteredEvents.length > 0 && (
             <button
               onClick={handleExportCSV}
               className="btn-secondary inline-flex items-center gap-2"
@@ -199,6 +222,42 @@ export const EventsPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Upcoming / Past Toggle + Search */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
+        <div className="inline-flex rounded-lg border border-theme-surface-border bg-theme-surface p-1">
+          <button
+            onClick={() => setShowPastEvents(false)}
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              !showPastEvents
+                ? 'bg-red-600 text-white shadow-sm'
+                : 'text-theme-text-secondary hover:text-theme-text-primary'
+            }`}
+          >
+            Upcoming
+          </button>
+          <button
+            onClick={() => setShowPastEvents(true)}
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              showPastEvents
+                ? 'bg-red-600 text-white shadow-sm'
+                : 'text-theme-text-secondary hover:text-theme-text-primary'
+            }`}
+          >
+            Past
+          </button>
+        </div>
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-theme-text-muted" aria-hidden="true" />
+          <input
+            type="text"
+            placeholder="Search events..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+          />
+        </div>
+      </div>
+
       {/* Filter Tabs */}
       <div className="border-b border-theme-surface-border mb-6 -mx-4 px-4 sm:mx-0 sm:px-0">
         <nav className="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto scrollbar-thin pb-px" aria-label="Tabs">
@@ -223,25 +282,30 @@ export const EventsPage: React.FC = () => {
       </div>
 
       {/* Events List */}
-      {filteredEvents.length === 0 ? (
+      {paginatedEvents.length === 0 ? (
         <EmptyState
           icon={Calendar}
           title="No events found"
           description={
-            typeFilter === 'all'
-              ? 'Get started by creating a new event.'
-              : typeFilter.startsWith('cat:')
-                ? `No events in "${customCategories.find((c) => c.value === typeFilter.slice(4))?.label || typeFilter.slice(4)}" category.`
-                : `No ${getEventTypeLabel(typeFilter as EventType).toLowerCase()} events found.`
+            searchQuery
+              ? `No events matching "${searchQuery}".`
+              : typeFilter === 'all'
+                ? showPastEvents
+                  ? 'No past events found.'
+                  : 'Get started by creating a new event.'
+                : typeFilter.startsWith('cat:')
+                  ? `No events in "${customCategories.find((c) => c.value === typeFilter.slice(4))?.label || typeFilter.slice(4)}" category.`
+                  : `No ${getEventTypeLabel(typeFilter as EventType).toLowerCase()} events found.`
           }
-          actions={canManage ? [
+          actions={canManage && !showPastEvents ? [
             { label: 'Create Event', onClick: () => window.location.href = '/events/new', icon: Plus },
           ] : undefined}
           className="bg-theme-surface-secondary rounded-lg"
         />
       ) : (
+        <>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredEvents.map((event) => (
+          {paginatedEvents.map((event) => (
             <Link
               key={event.id}
               to={`/events/${event.id}`}
@@ -267,10 +331,15 @@ export const EventsPage: React.FC = () => {
                           Mandatory
                         </span>
                       )}
+                      {event.user_rsvp_status && (
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRSVPStatusColor(event.user_rsvp_status)}`}>
+                          {getRSVPStatusLabel(event.user_rsvp_status)}
+                        </span>
+                      )}
                     </div>
                   </div>
                   {event.is_cancelled && (
-                    <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:text-red-300">
+                    <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300">
                       Cancelled
                     </span>
                   )}
@@ -312,6 +381,18 @@ export const EventsPage: React.FC = () => {
             </Link>
           ))}
         </div>
+
+        {searchFilteredEvents.length > DEFAULT_PAGE_SIZE && (
+          <div className="mt-6">
+            <Pagination
+              currentPage={currentPage}
+              totalItems={searchFilteredEvents.length}
+              pageSize={DEFAULT_PAGE_SIZE}
+              onPageChange={setCurrentPage}
+            />
+          </div>
+        )}
+        </>
       )}
     </div>
     </div>

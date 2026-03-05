@@ -29,6 +29,7 @@ vi.mock('../services/api', () => ({
     duplicateEvent: vi.fn(),
     checkInAttendee: vi.fn(),
     recordActualTimes: vi.fn(),
+    finalizeAttendance: vi.fn(),
   },
 }));
 
@@ -339,16 +340,24 @@ describe('EventDetailPage', () => {
       vi.mocked(eventService.getEventRSVPs).mockResolvedValue(mockRSVPs);
       vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
 
+      const user = userEvent.setup();
       renderWithRouter(<EventDetailPage />);
 
       await waitFor(() => {
         const editButtons = screen.getAllByRole('button', { name: /edit/i });
         expect(editButtons.length).toBeGreaterThan(0);
-        expect(screen.getByRole('button', { name: /duplicate/i })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /check in members/i })).toBeInTheDocument();
+        const checkInButtons = screen.getAllByRole('button', { name: /check in/i });
+        expect(checkInButtons.length).toBeGreaterThan(0);
+        expect(screen.getByRole('button', { name: /more/i })).toBeInTheDocument();
+      });
+
+      // Open the More dropdown to verify secondary actions
+      await user.click(screen.getByRole('button', { name: /more/i }));
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /duplicate event/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /record times/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /cancel event/i })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /delete/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /delete event/i })).toBeInTheDocument();
       });
     });
 
@@ -440,12 +449,13 @@ describe('EventDetailPage', () => {
       const user = userEvent.setup();
       renderWithRouter(<EventDetailPage />);
 
-      // Wait for page to load, then click the header "Cancel Event" button
+      // Wait for page to load
       await waitFor(() => {
         expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
       });
 
-      // Get the cancel button in the action buttons area (not in the modal)
+      // Open the More dropdown, then click Cancel Event
+      await user.click(screen.getByRole('button', { name: /more/i }));
       const cancelButtons = screen.getAllByRole('button', { name: /cancel event/i });
       await user.click(cancelButtons[0]);
 
@@ -485,7 +495,8 @@ describe('EventDetailPage', () => {
         expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
       });
 
-      // Open cancel modal
+      // Open More dropdown, then cancel modal
+      await user.click(screen.getByRole('button', { name: /more/i }));
       const cancelButtons = screen.getAllByRole('button', { name: /cancel event/i });
       await user.click(cancelButtons[0]);
 
@@ -529,7 +540,9 @@ describe('EventDetailPage', () => {
         expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
       });
 
-      const deleteButton = screen.getByRole('button', { name: /delete/i });
+      // Open More dropdown then click Delete Event
+      await user.click(screen.getByRole('button', { name: /more/i }));
+      const deleteButton = screen.getByRole('button', { name: /delete event/i });
       await user.click(deleteButton);
 
       await waitFor(() => {
@@ -551,8 +564,9 @@ describe('EventDetailPage', () => {
         expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
       });
 
-      // Open delete modal
-      const deleteButton = screen.getByRole('button', { name: /delete/i });
+      // Open More dropdown then Delete Event
+      await user.click(screen.getByRole('button', { name: /more/i }));
+      const deleteButton = screen.getByRole('button', { name: /delete event/i });
       await user.click(deleteButton);
 
       // Confirm delete
@@ -579,8 +593,9 @@ describe('EventDetailPage', () => {
         expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
       });
 
-      // Open delete modal
-      const deleteButton = screen.getByRole('button', { name: /delete/i });
+      // Open More dropdown then Delete Event
+      await user.click(screen.getByRole('button', { name: /more/i }));
+      const deleteButton = screen.getByRole('button', { name: /delete event/i });
       await user.click(deleteButton);
 
       // Click Go Back
@@ -619,7 +634,9 @@ describe('EventDetailPage', () => {
         expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
       });
 
-      const duplicateButton = screen.getByRole('button', { name: /duplicate/i });
+      // Open More dropdown then click Duplicate
+      await user.click(screen.getByRole('button', { name: /more/i }));
+      const duplicateButton = screen.getByRole('button', { name: /duplicate event/i });
       await user.click(duplicateButton);
 
       await waitFor(() => {
@@ -645,7 +662,9 @@ describe('EventDetailPage', () => {
         expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
       });
 
-      const duplicateButton = screen.getByRole('button', { name: /duplicate/i });
+      // Open More dropdown then click Duplicate
+      await user.click(screen.getByRole('button', { name: /more/i }));
+      const duplicateButton = screen.getByRole('button', { name: /duplicate event/i });
       await user.click(duplicateButton);
 
       await waitFor(() => {
@@ -758,7 +777,8 @@ describe('EventDetailPage', () => {
         expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
       });
 
-      // Open cancel modal
+      // Open More dropdown, then cancel modal
+      await user.click(screen.getByRole('button', { name: /more/i }));
       const cancelButtons = screen.getAllByRole('button', { name: /cancel event/i });
       await user.click(cancelButtons[0]);
 
