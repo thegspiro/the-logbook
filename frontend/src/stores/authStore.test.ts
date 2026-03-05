@@ -131,7 +131,7 @@ describe('authStore', () => {
         await getState().login({ username: 'testuser', password: 'password123' });
       });
 
-      expect(mockMarkLoginComplete).toHaveBeenCalledWith('my-jwt');
+      expect(mockMarkLoginComplete).toHaveBeenCalledWith('my-jwt', 'r');
     });
 
     it('does not store tokens in localStorage', async () => {

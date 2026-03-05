@@ -6,7 +6,7 @@
 
 import axios, { AxiosError } from 'axios';
 import { API_TIMEOUT_MS } from '../../../constants/config';
-import { getTempAccessToken } from '../../../services/apiClient';
+import { getTempAccessToken, getTempRefreshToken, updateTempTokens } from '../../../services/apiClient';
 import type {
   Assignment,
   ShiftCall,
@@ -235,9 +235,23 @@ api.interceptors.response.use(
 
       try {
         if (!refreshPromise) {
+          const csrf = getCookie('csrf_token');
+          const headers: Record<string, string> = {};
+          if (csrf) headers['X-CSRF-Token'] = csrf;
+          const refreshBody = getTempRefreshToken()
+            ? { refresh_token: getTempRefreshToken() }
+            : undefined;
           refreshPromise = axios
-            .post(`${API_BASE_URL}/auth/refresh`, {}, { withCredentials: true })
-            .then(() => {})
+            .post(`${API_BASE_URL}/auth/refresh`, refreshBody, {
+              withCredentials: true,
+              headers,
+            })
+            .then((res) => {
+              const data = res.data as Record<string, unknown> | undefined;
+              if (data && typeof data.access_token === 'string' && typeof data.refresh_token === 'string') {
+                updateTempTokens(data.access_token, data.refresh_token);
+              }
+            })
             .finally(() => { refreshPromise = null; });
         }
 
