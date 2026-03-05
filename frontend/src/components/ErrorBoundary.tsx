@@ -17,6 +17,7 @@ interface State {
   error: Error | null;
   errorInfo: ErrorInfo | null;
   isChunkError: boolean;
+  copied: boolean;
 }
 
 function isChunkLoadError(error: Error): boolean {
@@ -37,6 +38,7 @@ export class ErrorBoundary extends Component<Props, State> {
       error: null,
       errorInfo: null,
       isChunkError: false,
+      copied: false,
     };
   }
 
@@ -77,16 +79,33 @@ export class ErrorBoundary extends Component<Props, State> {
     });
   };
 
-  handleCopyError = (): void => {
+  handleCopyError = async (): Promise<void> => {
     const errorText = [
       `Error: ${this.state.error?.toString()}`,
       `\nComponent Stack: ${this.state.errorInfo?.componentStack}`,
       `\nURL: ${window.location.href}`,
       `\nTime: ${new Date().toISOString()}`,
     ].join("");
-    navigator.clipboard.writeText(errorText).catch(() => {
-      /* clipboard not available */
-    });
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(errorText);
+      } else {
+        // Fallback for non-HTTPS contexts
+        const textarea = document.createElement("textarea");
+        textarea.value = errorText;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      this.setState({ copied: true });
+      setTimeout(() => this.setState({ copied: false }), 2000);
+    } catch {
+      // clipboard not available
+    }
   };
 
   override render(): ReactNode {
@@ -180,10 +199,12 @@ export class ErrorBoundary extends Component<Props, State> {
               {/* Copy error & report (#65) */}
               <div className="mt-4 flex flex-col items-center gap-2">
                 <button
-                  onClick={this.handleCopyError}
+                  onClick={() => void this.handleCopyError()}
                   className="text-sm text-theme-text-muted hover:text-theme-text-primary transition-colors"
                 >
-                  Copy error details to clipboard
+                  {this.state.copied
+                    ? "Copied to clipboard!"
+                    : "Copy error details to clipboard"}
                 </button>
               </div>
             </div>

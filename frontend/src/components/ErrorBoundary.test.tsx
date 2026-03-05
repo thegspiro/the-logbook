@@ -108,7 +108,7 @@ describe('ErrorBoundary', () => {
     expect(screen.queryByText(/Something went wrong/i)).not.toBeInTheDocument();
   });
 
-  it('Copy error button calls navigator.clipboard.writeText', async () => {
+  it('Copy error button calls navigator.clipboard.writeText and shows feedback', async () => {
     const writeTextMock = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, {
       clipboard: { writeText: writeTextMock },
@@ -128,6 +128,30 @@ describe('ErrorBoundary', () => {
     expect(writeTextMock).toHaveBeenCalledWith(
       expect.stringContaining('Test error from child'),
     );
+
+    // Should show feedback text after copying
+    await screen.findByText('Copied to clipboard!');
+  });
+
+  it('Copy error button uses fallback when clipboard API is unavailable', async () => {
+    // Remove clipboard API to test fallback
+    Object.assign(navigator, { clipboard: undefined });
+
+    const execCommandMock = vi.fn().mockReturnValue(true);
+    document.execCommand = execCommandMock;
+
+    render(
+      <ErrorBoundary>
+        <ThrowingChild shouldThrow={true} />
+      </ErrorBoundary>,
+    );
+
+    const copyButton = screen.getByRole('button', { name: /Copy error details/i });
+    fireEvent.click(copyButton);
+
+    expect(execCommandMock).toHaveBeenCalledWith('copy');
+
+    await screen.findByText('Copied to clipboard!');
   });
 
   it('calls errorTracker.logError when error is caught', () => {
