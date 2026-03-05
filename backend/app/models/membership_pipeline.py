@@ -70,6 +70,15 @@ class StepProgressStatus(str, enum.Enum):
     SKIPPED = "skipped"
 
 
+class InterviewRecommendation(str, enum.Enum):
+    """Interviewer's recommendation for a prospect"""
+
+    RECOMMEND = "recommend"
+    RECOMMEND_WITH_RESERVATIONS = "recommend_with_reservations"
+    DO_NOT_RECOMMEND = "do_not_recommend"
+    UNDECIDED = "undecided"
+
+
 # --- Models ---
 
 
@@ -493,3 +502,80 @@ class ProspectElectionPackage(Base):
 
     def __repr__(self):
         return f"<ProspectElectionPackage(prospect={self.prospect_id}, status={self.status})>"
+
+
+class ProspectInterview(Base):
+    """
+    Interview record for a prospective member.
+
+    Tracks interviews conducted by department members (membership coordinators,
+    chiefs, presidents, etc.) at different stages of the pipeline.
+    Multiple interviewers can submit their own notes and recommendations.
+    """
+
+    __tablename__ = "prospect_interviews"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    prospect_id = Column(
+        String(36),
+        ForeignKey("prospective_members.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    pipeline_id = Column(
+        String(36),
+        ForeignKey("membership_pipelines.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    step_id = Column(
+        String(36),
+        ForeignKey("membership_pipeline_steps.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # Interviewer info
+    interviewer_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=False,
+        index=True,
+    )
+    interviewer_role = Column(String(100))  # e.g., "Membership Coordinator", "Chief"
+
+    # Interview content
+    notes = Column(Text)
+    recommendation = Column(
+        Enum(
+            InterviewRecommendation,
+            values_callable=lambda x: [e.value for e in x],
+        ),
+        nullable=True,
+    )
+    recommendation_notes = Column(Text)
+
+    # Interview scheduling
+    interview_date = Column(DateTime(timezone=True))
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    prospect = relationship("ProspectiveMember", backref="interviews")
+    pipeline = relationship("MembershipPipeline")
+    step = relationship("MembershipPipelineStep")
+    interviewer = relationship("User", foreign_keys=[interviewer_id])
+
+    __table_args__ = (
+        Index("idx_interview_prospect", "prospect_id"),
+        Index("idx_interview_interviewer", "interviewer_id"),
+        Index(
+            "idx_interview_prospect_interviewer",
+            "prospect_id",
+            "interviewer_id",
+        ),
+    )
+
+    def __repr__(self):
+        return f"<ProspectInterview(prospect={self.prospect_id}, interviewer={self.interviewer_id})>"

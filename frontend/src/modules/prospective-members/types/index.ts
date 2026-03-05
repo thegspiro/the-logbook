@@ -855,3 +855,64 @@ export interface BackendStepUpdatePayload {
   notify_prospect_on_completion?: boolean | undefined;
   public_visible?: boolean | undefined;
 }
+
+// =============================================================================
+// Interview Types
+// =============================================================================
+
+export const InterviewRecommendation = {
+  RECOMMEND: 'recommend',
+  RECOMMEND_WITH_RESERVATIONS: 'recommend_with_reservations',
+  DO_NOT_RECOMMEND: 'do_not_recommend',
+  UNDECIDED: 'undecided',
+} as const;
+export type InterviewRecommendation =
+  (typeof InterviewRecommendation)[keyof typeof InterviewRecommendation];
+
+export const INTERVIEW_RECOMMENDATION_LABELS: Record<InterviewRecommendation, string> = {
+  recommend: 'Recommend',
+  recommend_with_reservations: 'Recommend with Reservations',
+  do_not_recommend: 'Do Not Recommend',
+  undecided: 'Undecided',
+};
+
+export const INTERVIEW_RECOMMENDATION_COLORS: Record<InterviewRecommendation, string> = {
+  recommend: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+  recommend_with_reservations:
+    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+  do_not_recommend: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+  undecided: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
+};
+
+export interface Interview {
+  id: string;
+  prospect_id: string;
+  pipeline_id?: string | undefined;
+  step_id?: string | undefined;
+  interviewer_id: string;
+  interviewer_name?: string | undefined;
+  interviewer_role?: string | undefined;
+  notes?: string | undefined;
+  recommendation?: InterviewRecommendation | undefined;
+  recommendation_notes?: string | undefined;
+  interview_date?: string | undefined;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InterviewCreate {
+  notes?: string | undefined;
+  recommendation?: InterviewRecommendation | undefined;
+  recommendation_notes?: string | undefined;
+  interviewer_role?: string | undefined;
+  interview_date?: string | undefined;
+  step_id?: string | undefined;
+}
+
+export interface InterviewUpdate {
+  notes?: string | undefined;
+  recommendation?: InterviewRecommendation | undefined;
+  recommendation_notes?: string | undefined;
+  interviewer_role?: string | undefined;
+  interview_date?: string | undefined;
+}
