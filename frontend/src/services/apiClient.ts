@@ -167,7 +167,7 @@ api.interceptors.response.use(
           // is sent automatically via withCredentials. The new tokens
           // are set as httpOnly cookies in the response.
           refreshPromise = axios
-            .post(`${API_BASE_URL}/auth/refresh`, {}, { withCredentials: true })
+            .post(`${API_BASE_URL}/auth/refresh`, undefined, { withCredentials: true })
             .then(() => {
               // New cookies are set by the backend response
             })
