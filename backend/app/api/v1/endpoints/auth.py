@@ -388,7 +388,6 @@ async def login(
         logger.debug("Could not include user data in login response")
 
     response = JSONResponse(content=body)
-    _clear_auth_cookies(response)  # Remove stale cookies from previous sessions
     _set_auth_cookies(response, access_token, refresh_token)
     return response
 
