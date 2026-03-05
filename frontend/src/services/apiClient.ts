@@ -166,8 +166,20 @@ api.interceptors.response.use(
           // POST to /auth/refresh — the httpOnly refresh_token cookie
           // is sent automatically via withCredentials. The new tokens
           // are set as httpOnly cookies in the response.
+          // NOTE: We use a standalone axios call (not `api`) to avoid
+          // triggering this same 401 interceptor recursively.  We must
+          // manually attach the CSRF header because the request
+          // interceptor on `api` won't run for this call.
+          const csrfToken = getCookie('csrf_token');
+          const refreshHeaders: Record<string, string> = {};
+          if (csrfToken) {
+            refreshHeaders['X-CSRF-Token'] = csrfToken;
+          }
           refreshPromise = axios
-            .post(`${API_BASE_URL}/auth/refresh`, {}, { withCredentials: true })
+            .post(`${API_BASE_URL}/auth/refresh`, undefined, {
+              withCredentials: true,
+              headers: refreshHeaders,
+            })
             .then(() => {
               // New cookies are set by the backend response
             })
