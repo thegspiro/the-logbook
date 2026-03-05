@@ -4,6 +4,8 @@
  * SECURITY: Handles server-side sessions, CSRF tokens, and rate limiting
  */
 
+import { formatValidationErrors } from '../utils/errorHandler';
+
 interface ApiResponse<T> {
   data?: T | undefined;
   error?: string | undefined;
@@ -159,11 +161,19 @@ class SecureApiClient {
           error: 'Security validation failed. Please refresh the page and try again.',
           statusCode: 403,
         };
-      case 422:
+      case 422: {
+        // FastAPI/Pydantic returns detail as an array of validation error objects
+        if (Array.isArray(errorData.detail)) {
+          return {
+            error: formatValidationErrors(errorData.detail as Array<{ loc?: string[]; msg?: string }>),
+            statusCode: 422,
+          };
+        }
         return {
           error: detail || 'Invalid data submitted. Please check your input and try again.',
           statusCode: 422,
         };
+      }
       case 409:
         return {
           error: detail || 'This record already exists. Please check for duplicates.',

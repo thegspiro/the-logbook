@@ -43,6 +43,11 @@ export const ErrorAlert: React.FC<ErrorAlertProps> = ({
   onDismiss,
   className = '',
 }) => {
+  // Don't render an empty error alert
+  if (!message?.trim()) {
+    return null;
+  }
+
   return (
     <div
       className={`bg-red-500/10 border border-red-500/50 rounded-lg p-4 ${className}`}
