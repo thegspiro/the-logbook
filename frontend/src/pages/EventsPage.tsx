@@ -44,6 +44,22 @@ export const EventsPage: React.FC = () => {
   const canManage = checkPermission('events.manage');
   const tz = useTimezone();
 
+  const fetchEvents = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const params = showPastEvents
+        ? { end_before: new Date().toISOString() }
+        : { end_after: new Date().toISOString() };
+      const data = await eventService.getEvents(params);
+      setEvents(data);
+    } catch (_err) {
+      setError('Failed to load events. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  }, [showPastEvents]);
+
   useEffect(() => {
     void fetchEvents();
     eventService.getVisibleEventTypesWithCategories()
@@ -53,7 +69,7 @@ export const EventsPage: React.FC = () => {
         setVisibleCustomCategories(data.visible_custom_categories || []);
       })
       .catch(() => { /* fall back to showing all types */ });
-  }, [showPastEvents]);
+  }, [fetchEvents]);
 
   // Types not marked visible are grouped under the "Other" tab
   const hiddenTypes = useMemo(
@@ -128,22 +144,6 @@ export const EventsPage: React.FC = () => {
     a.click();
     URL.revokeObjectURL(url);
   }, [searchFilteredEvents, tz]);
-
-  const fetchEvents = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const params = showPastEvents
-        ? { end_before: new Date().toISOString() }
-        : { end_after: new Date().toISOString() };
-      const data = await eventService.getEvents(params);
-      setEvents(data);
-    } catch (_err) {
-      setError('Failed to load events. Please try again later.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading) {
     return (

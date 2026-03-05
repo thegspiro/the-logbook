@@ -97,7 +97,7 @@ const RecertificationSection: React.FC = () => {
         </div>
         <div className="flex space-x-2">
           <button
-            onClick={handleGenerateTasks}
+            onClick={() => { void handleGenerateTasks(); }}
             className="btn-secondary flex items-center space-x-1 px-3 py-2 text-sm rounded-lg"
           >
             <RefreshCw className="w-4 h-4" />
@@ -580,7 +580,7 @@ const ReportsSection: React.FC = () => {
             </p>
           </div>
           <button
-            onClick={handleLoadForecast}
+            onClick={() => { void handleLoadForecast(); }}
             disabled={loading}
             className="btn-secondary flex items-center space-x-1 px-3 py-2 text-sm rounded-lg"
           >

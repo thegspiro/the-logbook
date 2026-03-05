@@ -6,7 +6,7 @@
  * Requires `elections.manage` permission.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -48,11 +48,7 @@ export const ElectionsSettingsPage: React.FC = () => {
   const [selectedTestElection, setSelectedTestElection] = useState('');
   const [sendingTest, setSendingTest] = useState(false);
 
-  useEffect(() => {
-    void loadData();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const [settingsData, electionsData] = await Promise.all([
@@ -66,7 +62,11 @@ export const ElectionsSettingsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
   const handleSave = async () => {
     try {
