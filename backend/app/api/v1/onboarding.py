@@ -69,53 +69,6 @@ class SecurityCheckResponse(BaseModel):
     total_warnings: int
 
 
-class OrganizationCreate(BaseModel):
-    """Request model for creating organization"""
-
-    name: str = Field(
-        ..., min_length=2, max_length=255, description="Organization name"
-    )
-    slug: str = Field(
-        ..., min_length=2, max_length=100, description="URL-friendly slug"
-    )
-    organization_type: str = Field(
-        default="fire_department", description="Type of organization"
-    )
-    timezone: str = Field(default="America/New_York")
-
-    @validator("slug")
-    def validate_slug(cls, v):
-        if not re.match(r"^[a-z0-9-_]+$", v):
-            raise ValueError(
-                "Slug must contain only lowercase letters, numbers, hyphens, and underscores"
-            )
-        return v
-
-    @validator("organization_type")
-    def validate_org_type(cls, v):
-        # Must match OrganizationType enum values in models/user.py
-        valid_types = ["fire_department", "ems_only", "fire_ems_combined"]
-        if v not in valid_types:
-            raise ValueError(
-                f'Organization type must be one of: {", ".join(valid_types)}'
-            )
-        return v
-
-
-class OrganizationResponse(BaseModel):
-    """Response model for organization"""
-
-    id: str
-    name: str
-    slug: str
-    type: str
-    description: str | None
-    active: bool
-
-    class Config:
-        from_attributes = True
-
-
 class SystemOwnerCreate(BaseModel):
     """Request model for creating the System Owner (IT Manager) user"""
 
@@ -807,15 +760,21 @@ async def verify_database(
     return result
 
 
-@router.post("/organization", response_model=OrganizationResponse)
+@router.post("/organization", response_model=OrganizationSetupResponse)
 async def create_organization(
-    request: Request, org_data: OrganizationCreate, db: AsyncSession = Depends(get_db)
+    request: Request,
+    org_data: OrganizationSetupCreate,
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Create the first organization
 
     This creates the organization and default roles.
     Can only be called during onboarding.
+
+    Accepts the full OrganizationSetupCreate schema so all fields
+    (address, contact info, identifiers, etc.) are properly persisted
+    and flow through to the auto-created headquarters facility.
     """
     # Validate session
     await validate_session(request, db)
@@ -829,22 +788,68 @@ async def create_organization(
             detail="Onboarding has already been completed",
         )
 
+    # Generate slug if not provided
+    slug = org_data.slug
+    if not slug:
+        slug = org_data.name.lower().replace(" ", "-")
+        slug = re.sub(r"[^a-z0-9-]", "", slug)
+
     try:
-        org = await service.create_organization(
-            name=org_data.name,
-            slug=org_data.slug,
-            organization_type=org_data.organization_type,
-            description=None,
-            settings_dict={"timezone": org_data.timezone},
+        # Extract address fields
+        mailing = org_data.mailing_address
+        physical = (
+            org_data.physical_address if not org_data.physical_address_same else None
         )
 
-        return OrganizationResponse(
-            id=str(org.id),
+        org = await service.create_organization(
+            name=org_data.name,
+            slug=slug,
+            organization_type=org_data.organization_type.value,
+            description=None,
+            timezone=org_data.timezone,
+            # Contact info
+            phone=org_data.phone,
+            fax=org_data.fax,
+            email=org_data.email,
+            website=org_data.website,
+            # Mailing address
+            mailing_address_line1=mailing.line1,
+            mailing_address_line2=mailing.line2,
+            mailing_city=mailing.city,
+            mailing_state=mailing.state,
+            mailing_zip=mailing.zip_code,
+            mailing_country=mailing.country,
+            # Physical address
+            physical_address_same=org_data.physical_address_same,
+            physical_address_line1=physical.line1 if physical else None,
+            physical_address_line2=physical.line2 if physical else None,
+            physical_city=physical.city if physical else None,
+            physical_state=physical.state if physical else None,
+            physical_zip=physical.zip_code if physical else None,
+            physical_country=physical.country if physical else None,
+            # Identifiers
+            identifier_type=org_data.identifier_type.value,
+            fdid=org_data.fdid,
+            state_id=org_data.state_id,
+            department_id=org_data.department_id,
+            # Additional info
+            county=org_data.county,
+            founded_year=org_data.founded_year,
+            logo=validate_logo_image(org_data.logo),
+        )
+
+        await db.commit()
+
+        return OrganizationSetupResponse(
+            id=org.id,
             name=org.name,
             slug=org.slug,
-            type=org.type,
-            description=None,
+            organization_type=(
+                org.organization_type.value if org.organization_type else org.type
+            ),
+            timezone=org.timezone,
             active=org.active,
+            created_at=org.created_at,
         )
     except ValueError as e:
         raise HTTPException(
