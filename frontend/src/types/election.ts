@@ -434,6 +434,8 @@ export interface ElectionSettings {
   default_allow_write_ins?: boolean;
   default_quorum_type?: string;
   default_quorum_value?: number;
+  proxy_voting_enabled?: boolean;
+  max_proxies_per_person?: number;
 }
 
 // Ballot Preview (secretary view with eligibility annotations)
