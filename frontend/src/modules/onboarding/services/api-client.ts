@@ -96,6 +96,9 @@ class SecureApiClient {
     localStorage.removeItem('onboarding_session_id');
     localStorage.removeItem('csrf_token');
     localStorage.removeItem('onboarding_data');
+    // Clear auth session flag so Welcome.tsx doesn't redirect to /dashboard
+    // after a reset that deleted the user from the database
+    localStorage.removeItem('has_session');
   }
 
   /**
