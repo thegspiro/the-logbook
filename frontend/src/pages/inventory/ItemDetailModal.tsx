@@ -706,7 +706,7 @@ function ExposuresTab({
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     exposure_type: 'structure_fire',
-    exposure_date: new Date().toISOString().split('T')[0],
+    exposure_date: new Date().toISOString().split('T')[0] ?? '',
     incident_number: '',
     description: '',
     decon_required: false,
@@ -741,7 +741,7 @@ function ExposuresTab({
       setShowForm(false);
       setForm({
         exposure_type: 'structure_fire',
-        exposure_date: new Date().toISOString().split('T')[0],
+        exposure_date: new Date().toISOString().split('T')[0] ?? '',
         incident_number: '',
         description: '',
         decon_required: false,
