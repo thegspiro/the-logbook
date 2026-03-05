@@ -10,7 +10,7 @@ export interface DocumentFolder {
   name: string;
   slug: string;
   description?: string;
-  parent_folder_id?: string;
+  parent_id?: string;
   sort_order: number;
   is_system: boolean;
   icon?: string;

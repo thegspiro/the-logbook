@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class RankCreate(BaseModel):
@@ -47,6 +47,8 @@ class RankUpdate(BaseModel):
 
 class RankResponse(BaseModel):
     """Full rank response."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: UUID
     organization_id: UUID

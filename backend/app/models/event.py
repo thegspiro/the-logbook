@@ -183,7 +183,9 @@ class Event(Base):
     rsvps = relationship(
         "EventRSVP", back_populates="event", cascade="all, delete-orphan"
     )
-    location_obj = relationship("Location", foreign_keys=[location_id])
+    location_obj = relationship(
+        "Location", foreign_keys=[location_id], back_populates="events"
+    )
     recurrence_children = relationship(
         "Event", foreign_keys=[recurrence_parent_id], back_populates="recurrence_parent"
     )

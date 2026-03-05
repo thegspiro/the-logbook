@@ -36,7 +36,9 @@ class Election(Base):
     __tablename__ = "elections"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=False)
+    organization_id = Column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
 
     # Election details
     title = Column(String(200), nullable=False)
@@ -153,7 +155,9 @@ class Election(Base):
     #           "from_status": "closed", "to_status": "open", "reason": "Error in vote count"}]
 
     # Metadata
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -190,11 +194,13 @@ class Candidate(Base):
     __tablename__ = "candidates"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    election_id = Column(String(36), ForeignKey("elections.id"), nullable=False)
+    election_id = Column(
+        String(36), ForeignKey("elections.id", ondelete="CASCADE"), nullable=False
+    )
 
     # Candidate information
     user_id = Column(
-        String(36), ForeignKey("users.id"), nullable=True
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )  # Null for write-ins
     name = Column(String(200), nullable=False)  # For display (or write-in name)
     position = Column(String(100), nullable=True)  # Position they're running for
@@ -205,7 +211,9 @@ class Candidate(Base):
     nomination_date = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    nominated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    nominated_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     accepted = Column(Boolean, nullable=False, default=True)  # For member candidates
     is_write_in = Column(Boolean, nullable=False, default=False)
 
@@ -250,7 +258,9 @@ class VotingToken(Base):
     organization_id = Column(
         String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
     )
-    election_id = Column(String(36), ForeignKey("elections.id"), nullable=False)
+    election_id = Column(
+        String(36), ForeignKey("elections.id", ondelete="CASCADE"), nullable=False
+    )
 
     # Secure token for ballot access (sent via email)
     token = Column(String(128), nullable=False, unique=True)
@@ -296,11 +306,17 @@ class Vote(Base):
     __tablename__ = "votes"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    election_id = Column(String(36), ForeignKey("elections.id"), nullable=False)
-    candidate_id = Column(String(36), ForeignKey("candidates.id"), nullable=False)
+    election_id = Column(
+        String(36), ForeignKey("elections.id", ondelete="CASCADE"), nullable=False
+    )
+    candidate_id = Column(
+        String(36), ForeignKey("candidates.id", ondelete="CASCADE"), nullable=False
+    )
 
     # Voter information (nullable for anonymous voting)
-    voter_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    voter_id = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     # For tracking purposes (even in anonymous voting, we can track that a user voted)
     voter_hash = Column(
@@ -325,7 +341,7 @@ class Vote(Base):
     # Proxy voting — tracks when a vote is cast on behalf of another member
     is_proxy_vote = Column(Boolean, nullable=False, default=False)
     proxy_voter_id = Column(
-        String(36), ForeignKey("users.id"), nullable=True
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )  # The person who physically voted
     proxy_authorization_id = Column(
         String(36), nullable=True
