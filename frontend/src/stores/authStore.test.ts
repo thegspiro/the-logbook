@@ -18,8 +18,11 @@ vi.mock('../services/api', () => ({
   },
 }));
 
+const mockClearTempAccessToken = vi.fn();
+
 vi.mock('../services/apiClient', () => ({
   markLoginComplete: (...args: unknown[]) => mockMarkLoginComplete(...args) as unknown,
+  clearTempAccessToken: (...args: unknown[]) => mockClearTempAccessToken(...args) as unknown,
 }));
 
 // ---- Import store AFTER mocks are in place ----
@@ -100,7 +103,7 @@ describe('authStore', () => {
     }
 
     it('sets has_session flag and calls loadUser on success', async () => {
-      mockLogin.mockImplementation(async () => { simulateLoginCookies(); return undefined; });
+      mockLogin.mockImplementation(async () => { simulateLoginCookies(); return { access_token: 'fake-token', refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 1800 }; });
       mockGetCurrentUser.mockResolvedValue(fakeUser);
 
       await act(async () => {
@@ -120,8 +123,19 @@ describe('authStore', () => {
       expect(state.lockedUntil).toBeNull();
     });
 
+    it('passes access_token to markLoginComplete for Bearer bridge', async () => {
+      mockLogin.mockImplementation(async () => { simulateLoginCookies(); return { access_token: 'my-jwt', refresh_token: 'r', token_type: 'bearer', expires_in: 1800 }; });
+      mockGetCurrentUser.mockResolvedValue(fakeUser);
+
+      await act(async () => {
+        await getState().login({ username: 'testuser', password: 'password123' });
+      });
+
+      expect(mockMarkLoginComplete).toHaveBeenCalledWith('my-jwt');
+    });
+
     it('does not store tokens in localStorage', async () => {
-      mockLogin.mockImplementation(async () => { simulateLoginCookies(); return undefined; });
+      mockLogin.mockImplementation(async () => { simulateLoginCookies(); return { access_token: 'fake-token', refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 1800 }; });
       mockGetCurrentUser.mockResolvedValue(fakeUser);
 
       await act(async () => {
@@ -192,7 +206,7 @@ describe('authStore', () => {
       sessionStorage.setItem('login_lockout', JSON.stringify({ loginAttempts: 3, lockedUntil: null }));
       useAuthStore.setState({ loginAttempts: 3, lockedUntil: null });
 
-      mockLogin.mockImplementation(async () => { simulateLoginCookies(); return undefined; });
+      mockLogin.mockImplementation(async () => { simulateLoginCookies(); return { access_token: 'fake-token', refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 1800 }; });
       mockGetCurrentUser.mockResolvedValue(fakeUser);
 
       await act(async () => {
@@ -215,7 +229,7 @@ describe('authStore', () => {
       expect(getState().loginAttempts).toBe(1);
 
       // Now: successful login
-      mockLogin.mockImplementation(async () => { simulateLoginCookies(); return undefined; });
+      mockLogin.mockImplementation(async () => { simulateLoginCookies(); return { access_token: 'fake-token', refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 1800 }; });
       mockGetCurrentUser.mockResolvedValue(fakeUser);
 
       await act(async () => {
@@ -291,6 +305,19 @@ describe('authStore', () => {
       expect(state.user).toBeNull();
       expect(state.isAuthenticated).toBe(false);
       expect(state.error).toBeNull();
+    });
+
+    it('clears temporary access token on logout', async () => {
+      localStorage.setItem('has_session', '1');
+      useAuthStore.setState({ user: fakeUser, isAuthenticated: true });
+
+      mockLogout.mockResolvedValue(undefined);
+
+      await act(async () => {
+        await getState().logout();
+      });
+
+      expect(mockClearTempAccessToken).toHaveBeenCalled();
     });
 
     it('clears session even when authService.logout throws', async () => {

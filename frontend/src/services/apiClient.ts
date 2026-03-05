@@ -90,6 +90,14 @@ api.interceptors.request.use(
       }
     }
 
+    // Temporary Bearer token bridge: if cookies haven't been established
+    // yet (right after login), attach the access_token from the login
+    // response as an Authorization header.  The backend's get_current_user
+    // prefers cookies but falls back to Authorization: Bearer.
+    if (tempAccessToken && !config.headers['Authorization']) {
+      config.headers['Authorization'] = `Bearer ${tempAccessToken}`;
+    }
+
     // Double-submit CSRF token for state-changing requests
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
       const csrf = getCookie('csrf_token');
@@ -118,9 +126,45 @@ let refreshPromise: Promise<void> | null = null;
 // logged in) from "session genuinely expired" (needs refresh/logout).
 let lastLoginAtMs = 0;
 
-/** Called by the auth store after a successful login POST. */
-export function markLoginComplete(): void {
+// Temporary in-memory access token used as a bridge between login and
+// cookie establishment.  The backend sets auth tokens as httpOnly cookies,
+// but the browser may not make them available for subsequent requests
+// immediately (nginx proxy buffering, middleware wrapping, etc.).
+// During this window we send the token from the login response body as
+// an Authorization header — the backend already supports Bearer auth as
+// a fallback.  The token is cleared after a short grace period.
+let tempAccessToken: string | null = null;
+let tempTokenTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Grace period (ms) after login during which the in-memory token is used. */
+const TEMP_TOKEN_TTL_MS = 30_000;
+
+/**
+ * Called by the auth store after a successful login.
+ * Stores the access_token temporarily so the request interceptor can
+ * attach it as a Bearer token until httpOnly cookies are established.
+ */
+export function markLoginComplete(accessToken?: string): void {
   lastLoginAtMs = Date.now();
+
+  if (accessToken) {
+    tempAccessToken = accessToken;
+    // Auto-clear after grace period — by then cookies should be established
+    if (tempTokenTimer) clearTimeout(tempTokenTimer);
+    tempTokenTimer = setTimeout(() => {
+      tempAccessToken = null;
+      tempTokenTimer = null;
+    }, TEMP_TOKEN_TTL_MS);
+  }
+}
+
+/** Clear the temporary token (e.g. on logout). */
+export function clearTempAccessToken(): void {
+  tempAccessToken = null;
+  if (tempTokenTimer) {
+    clearTimeout(tempTokenTimer);
+    tempTokenTimer = null;
+  }
 }
 
 // Grace period (ms) after login during which 401s are retried directly
