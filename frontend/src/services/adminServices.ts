@@ -575,6 +575,11 @@ export const shiftCompletionService = {
 // Training Module Config Service
 // ============================================
 
+export interface TestConnectionResult {
+  success: boolean;
+  message: string;
+}
+
 export const integrationsService = {
   async getIntegrations(): Promise<IntegrationConfig[]> {
     const response = await api.get<IntegrationConfig[]>('/integrations');
@@ -587,7 +592,7 @@ export const integrationsService = {
   },
 
   async connectIntegration(integrationId: string, config: Record<string, unknown>): Promise<IntegrationConfig> {
-    const response = await api.post<IntegrationConfig>(`/integrations/${integrationId}/connect`, config);
+    const response = await api.post<IntegrationConfig>(`/integrations/${integrationId}/connect`, { config });
     return response.data;
   },
 
@@ -596,7 +601,12 @@ export const integrationsService = {
   },
 
   async updateIntegration(integrationId: string, config: Record<string, unknown>): Promise<IntegrationConfig> {
-    const response = await api.patch<IntegrationConfig>(`/integrations/${integrationId}`, config);
+    const response = await api.patch<IntegrationConfig>(`/integrations/${integrationId}`, { config });
+    return response.data;
+  },
+
+  async testConnection(integrationId: string): Promise<TestConnectionResult> {
+    const response = await api.post<TestConnectionResult>(`/integrations/${integrationId}/test-connection`);
     return response.data;
   },
 };

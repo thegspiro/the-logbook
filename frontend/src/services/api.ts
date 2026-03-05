@@ -123,4 +123,5 @@ export type {
   NotificationRuleRecord, NotificationLogRecord, NotificationsSummary,
   DepartmentMessageRecord, InboxMessage, MessageStats, RoleOption,
   AnalyticsEventRecord, AnalyticsMetrics,
+  TestConnectionResult,
 } from './adminServices';

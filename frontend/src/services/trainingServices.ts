@@ -813,6 +813,7 @@ export interface IntegrationConfig {
   status: 'available' | 'connected' | 'error' | 'coming_soon';
   config: Record<string, unknown>;
   enabled: boolean;
+  contains_phi?: boolean;
   last_sync_at?: string;
   created_at: string;
   updated_at: string;
