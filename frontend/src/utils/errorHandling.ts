@@ -20,7 +20,7 @@ export interface AppError {
  */
 interface HttpErrorResponse {
   response: {
-    data?: { detail?: string; message?: string; code?: string; details?: Record<string, unknown> };
+    data?: { detail?: string | Array<{ loc?: string[]; msg?: string }>; message?: string; code?: string; details?: Record<string, unknown> };
     status?: number;
     statusText?: string;
   };
@@ -50,11 +50,26 @@ export function toAppError(error: unknown): AppError {
     typeof (error as HttpErrorResponse).response === 'object'
   ) {
     const response = (error as HttpErrorResponse).response;
+    const { data } = response;
+    let message: string;
+    if (Array.isArray(data?.detail)) {
+      // FastAPI/Pydantic 422 validation errors return detail as an array
+      const errors = data.detail as Array<{ loc?: string[]; msg?: string }>;
+      message = errors
+        .map(e => {
+          const field = e.loc?.[e.loc.length - 1];
+          const msg = e.msg || 'Invalid value';
+          return field ? `${field}: ${msg}` : msg;
+        })
+        .join('. ') || 'Validation failed';
+    } else {
+      message = (data?.detail as string | undefined) || data?.message || response.statusText || 'Request failed';
+    }
     return {
-      message: response.data?.detail || response.data?.message || response.statusText || 'Request failed',
-      code: response.data?.code,
+      message,
+      code: data?.code,
       status: response.status,
-      details: response.data?.details,
+      details: data?.details,
     };
   }
 
