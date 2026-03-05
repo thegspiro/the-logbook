@@ -82,8 +82,9 @@ print_header "INSTALLATION OPTIONS"
 echo "1) Fresh Installation (recommended)"
 echo "2) Update Existing Installation"
 echo "3) Clean Install (removes all data)"
+echo "4) Uninstall / Remove Application"
 echo ""
-read -p "Choose option [1-3]: " INSTALL_TYPE
+read -p "Choose option [1-4]: " INSTALL_TYPE
 
 # ============================================
 # Clean Up Existing Containers
@@ -452,10 +453,93 @@ display_summary() {
 }
 
 # ============================================
+# Uninstall / Remove Application
+# ============================================
+
+uninstall_application() {
+    print_header "UNINSTALL THE LOGBOOK"
+
+    echo -e "${YELLOW}This will stop and remove all The Logbook containers and networks.${NC}"
+    echo ""
+    echo "1) Remove containers only (keep data for reinstall)"
+    echo "2) Remove everything (containers, images, and all data)"
+    echo ""
+    read -p "Choose option [1-2]: " UNINSTALL_TYPE
+
+    # Stop and remove containers via docker-compose if available
+    if [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
+        print_info "Stopping all services via docker-compose..."
+        cd "$INSTALL_DIR"
+        docker-compose down --remove-orphans 2>/dev/null || true
+        print_success "Docker Compose stack stopped and removed"
+    fi
+
+    # Force-remove any remaining containers by name
+    print_info "Removing any remaining containers..."
+    docker stop logbook-frontend logbook-backend logbook-db logbook-redis 2>/dev/null || true
+    docker rm -f logbook-frontend logbook-backend logbook-db logbook-redis 2>/dev/null || true
+
+    # Remove the docker network
+    for net in $(docker network ls --filter "name=logbook" -q 2>/dev/null); do
+        docker network rm "$net" 2>/dev/null || true
+    done
+    print_success "Containers and networks removed"
+
+    if [ "$UNINSTALL_TYPE" == "2" ]; then
+        # Create a final backup before deleting data
+        print_info "Creating final backup before removal..."
+        BACKUP_DATE=$(date +%Y%m%d_%H%M%S)
+        BACKUP_PATH="${BACKUP_DIR}/backup_final_${BACKUP_DATE}"
+        mkdir -p "$BACKUP_PATH"
+
+        for dir in mysql data uploads; do
+            if [ -d "$INSTALL_DIR/$dir" ]; then
+                cp -r "$INSTALL_DIR/$dir" "$BACKUP_PATH/$dir" 2>/dev/null || true
+            fi
+        done
+        if [ -f "$INSTALL_DIR/.env" ]; then
+            cp "$INSTALL_DIR/.env" "$BACKUP_PATH/.env" 2>/dev/null || true
+        fi
+        print_success "Final backup saved to: $BACKUP_PATH"
+
+        # Remove images
+        print_info "Removing Docker images..."
+        docker rmi the-logbook-frontend:local 2>/dev/null || true
+        docker rmi the-logbook-backend:local 2>/dev/null || true
+        print_success "Images removed"
+
+        # Remove data directories
+        print_warning "Removing application data..."
+        rm -rf "$INSTALL_DIR/mysql"
+        rm -rf "$INSTALL_DIR/redis"
+        rm -rf "$INSTALL_DIR/data"
+        rm -rf "$INSTALL_DIR/uploads"
+        rm -rf "$INSTALL_DIR/logs"
+        print_success "Application data removed"
+    fi
+
+    echo ""
+    print_success "The Logbook has been uninstalled."
+    if [ "$UNINSTALL_TYPE" == "1" ]; then
+        echo -e "  Your data is preserved in: ${BLUE}$INSTALL_DIR${NC}"
+        echo "  You can reinstall at any time by running this script again."
+    else
+        echo -e "  A final backup was saved to: ${BLUE}$BACKUP_PATH${NC}"
+    fi
+    echo ""
+}
+
+# ============================================
 # Main Execution
 # ============================================
 
 main() {
+    # Handle uninstall separately
+    if [ "$INSTALL_TYPE" == "4" ]; then
+        uninstall_application
+        exit 0
+    fi
+
     # Run setup steps
     cleanup_containers
     backup_existing_data
