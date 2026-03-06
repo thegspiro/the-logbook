@@ -145,12 +145,12 @@ export default function FacilityDetailPanel({
       await facilitiesService.createRoom({
         facility_id: facility.id,
         name: newRoom.name.trim(),
-        room_number: newRoom.room_number.trim() || undefined,
-        floor: newRoom.floor ? Number(newRoom.floor) : undefined,
         room_type: newRoom.room_type,
-        capacity: newRoom.capacity ? Number(newRoom.capacity) : undefined,
-        square_footage: newRoom.square_footage ? Number(newRoom.square_footage) : undefined,
-        description: newRoom.description.trim() || undefined,
+        ...(newRoom.room_number.trim() ? { room_number: newRoom.room_number.trim() } : {}),
+        ...(newRoom.floor ? { floor: Number(newRoom.floor) } : {}),
+        ...(newRoom.capacity ? { capacity: Number(newRoom.capacity) } : {}),
+        ...(newRoom.square_footage ? { square_footage: Number(newRoom.square_footage) } : {}),
+        ...(newRoom.description.trim() ? { description: newRoom.description.trim() } : {}),
       });
       toast.success('Room added');
       setNewRoom({ name: '', room_number: '', floor: '', room_type: 'other', capacity: '', square_footage: '', description: '' });
