@@ -668,6 +668,7 @@ class MembershipPipelineService:
             interest_reason=data.get("interest_reason"),
             referral_source=data.get("referral_source"),
             referred_by=data.get("referred_by"),
+            desired_membership_type=data.get("desired_membership_type"),
             current_step_id=first_step_id,
             status=ProspectStatus.ACTIVE,
             metadata_=data.get("metadata_", {}),

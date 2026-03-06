@@ -313,7 +313,7 @@ export function mapProspectToApplicant(data: BackendProspectResponse): Applicant
     stage_history: stageHistory,
     total_stages: (data.step_progress || []).length,
     stage_entered_at: data.created_at,
-    target_membership_type: 'probationary',
+    target_membership_type: (data.desired_membership_type as Applicant['target_membership_type'] | null) ?? 'probationary',
     form_submission_id: data.form_submission_id ?? undefined,
     status_token: data.status_token ?? undefined,
     status: extractStatus(data.status) as Applicant['status'],
@@ -336,7 +336,7 @@ function mapProspectListToApplicantList(data: BackendProspectListResponse): Appl
     current_stage_id: data.current_step_id ?? '',
     current_stage_name: data.current_step_name ?? undefined,
     stage_entered_at: data.created_at,
-    target_membership_type: 'probationary',
+    target_membership_type: (data.desired_membership_type as ApplicantListItem['target_membership_type'] | null) ?? 'probationary',
     status: extractStatus(data.status) as ApplicantListItem['status'],
     days_in_stage: 0,
     days_in_pipeline: 0,
@@ -359,7 +359,7 @@ function mapElectionPackageResponse(data: BackendElectionPackageResponse): Elect
     applicant_name: `${snapshot.first_name ?? ''} ${snapshot.last_name ?? ''}`.trim(),
     applicant_email: snapshot.email,
     applicant_phone: snapshot.phone,
-    target_membership_type: 'probationary',
+    target_membership_type: ((snapshot as Record<string, unknown>).desired_membership_type as ElectionPackage['target_membership_type'] | undefined) ?? 'probationary',
     coordinator_notes: data.coordinator_notes ?? undefined,
     supporting_statement: config.supporting_statement,
     documents: config.documents,
@@ -606,6 +606,7 @@ export const applicantService = {
       phone: data.phone,
       date_of_birth: data.date_of_birth,
       pipeline_id: data.pipeline_id,
+      desired_membership_type: data.target_membership_type,
       notes: data.notes,
     };
     if (data.address) {
@@ -626,6 +627,7 @@ export const applicantService = {
     if (data.email !== undefined) payload.email = data.email;
     if (data.phone !== undefined) payload.phone = data.phone;
     if (data.date_of_birth !== undefined) payload.date_of_birth = data.date_of_birth;
+    if (data.target_membership_type !== undefined) payload.desired_membership_type = data.target_membership_type;
     if (data.notes !== undefined) payload.notes = data.notes;
     if (data.status !== undefined) payload.status = data.status;
     if (data.address) {

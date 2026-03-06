@@ -53,6 +53,10 @@ LABEL_MAP: Dict[str, str] = {
     "referral": "referral_source",
     "how did you hear about us": "referral_source",
     "how did you hear": "referral_source",
+    "membership type": "desired_membership_type",
+    "desired membership type": "desired_membership_type",
+    "type of membership": "desired_membership_type",
+    "member type": "desired_membership_type",
 }
 
 # Fallback: map by field_type when the label is ambiguous.
@@ -81,4 +85,5 @@ FIELD_DISPLAY_LABELS: Dict[str, str] = {
     "interest_reason": "Interest Reason",
     "referral_source": "Referral Source",
     "referred_by": "Referred By",
+    "desired_membership_type": "Desired Membership Type",
 }
