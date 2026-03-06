@@ -711,6 +711,14 @@ export interface InventorySummary {
   maintenance_due_count: number;
 }
 
+export interface LocationInventorySummary {
+  location_id: string | null;
+  location_name: string;
+  item_count: number;
+  total_quantity: number;
+  total_value: number;
+}
+
 export interface InventoryCategoryCreate {
   name: string;
   description?: string | undefined;

@@ -576,6 +576,16 @@ class InventorySummary(BaseModel):
     maintenance_due_count: int
 
 
+class LocationInventorySummary(BaseModel):
+    """Schema for inventory summary per location"""
+
+    location_id: Optional[UUID] = None
+    location_name: str
+    item_count: int
+    total_quantity: int
+    total_value: float
+
+
 class UserInventoryItem(BaseModel):
     """Schema for user's assigned item"""
 

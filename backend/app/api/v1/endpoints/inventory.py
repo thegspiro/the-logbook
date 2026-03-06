@@ -112,6 +112,7 @@ from app.schemas.inventory import (
     ReturnRequestCreate,
     ReturnRequestReview,
     ReturnRequestResponse,
+    LocationInventorySummary,
 )
 from app.services.departure_clearance_service import DepartureClearanceService
 from app.services.inventory_service import InventoryService
@@ -287,6 +288,7 @@ async def list_items(
     condition: str | None = None,
     item_type: str | None = None,
     assigned_to: UUID | None = None,
+    location_id: UUID | None = None,
     storage_area_id: UUID | None = None,
     search: str | None = None,
     active_only: bool = True,
@@ -345,6 +347,7 @@ async def list_items(
         condition=condition_enum,
         item_type=item_type_enum,
         assigned_to=assigned_to,
+        location_id=location_id,
         storage_area_id=storage_area_id,
         search=search,
         active_only=active_only,
@@ -1886,6 +1889,23 @@ async def get_inventory_summary(
         organization_id=current_user.organization_id
     )
     return summary
+
+
+@router.get("/summary/by-location", response_model=list[LocationInventorySummary])
+async def get_summary_by_location(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get inventory summary grouped by location
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    return await service.get_summary_by_location(
+        organization_id=current_user.organization_id
+    )
 
 
 @router.get("/low-stock", response_model=list[LowStockItem])

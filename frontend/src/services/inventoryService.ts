@@ -12,7 +12,7 @@ import type {
   BatchReturnRequest, BatchReturnResponse, LabelFormat, NFPACompliance, NFPAExposureRecord,
   NFPASummary, NFPARetirementDueItem, MembersInventoryListResponse, InventoryImportResult,
   SizeVariantCreate, BulkIssuanceTarget, BulkIssuanceResponse, IssuanceAllowance, AllowanceCheck,
-  ChargeManagementResponse, ReturnRequestItem,
+  ChargeManagementResponse, ReturnRequestItem, LocationInventorySummary,
 } from './eventServices';
 
 export const inventoryService = {
@@ -33,6 +33,11 @@ export const inventoryService = {
     return response.data;
   },
 
+  async getSummaryByLocation(): Promise<LocationInventorySummary[]> {
+    const response = await api.get<LocationInventorySummary[]>('/inventory/summary/by-location');
+    return response.data;
+  },
+
   async getCategories(itemType?: string, activeOnly: boolean = true): Promise<InventoryCategory[]> {
     const response = await api.get<InventoryCategory[]>('/inventory/categories', {
       params: { item_type: itemType, active_only: activeOnly },
@@ -50,6 +55,7 @@ export const inventoryService = {
     status?: string | undefined;
     condition?: string | undefined;
     item_type?: string | undefined;
+    location_id?: string | undefined;
     storage_area_id?: string | undefined;
     search?: string | undefined;
     active_only?: boolean | undefined;
