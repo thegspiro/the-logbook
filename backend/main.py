@@ -407,8 +407,13 @@ MIGRATION_ONLY_TABLES = [
     "compliance_incidents",
 ]
 
-# Migration file that seeds initial apparatus system data
+# Migration files that seed initial system data
 SEED_DATA_FILE = "20260203_0023_seed_apparatus_data.py"
+SEED_DATA_FILES = [
+    "20260203_0023_seed_apparatus_data.py",
+    "20260214_2000_seed_facilities_data.py",
+    "20260306_0200_seed_nfpa_facility_data.py",
+]
 
 
 def _cleanup_duplicate_revisions(versions_dir):
@@ -700,12 +705,13 @@ def _fast_path_init(engine, alembic_cfg, base_dir, head_revision=None):
                     )
                     _run_migration_file(conn, migration_path)
 
-            # 5. Insert seed data (apparatus types, statuses, maintenance types).
-            seed_path = os.path.join(versions_dir, SEED_DATA_FILE)
-            if os.path.exists(seed_path):
-                logger.info("Inserting apparatus seed data...")
-                _run_migration_file(conn, seed_path)
-                logger.info("Apparatus seed data inserted")
+            # 5. Insert seed data (apparatus types, statuses, maintenance types, facilities).
+            for seed_file in SEED_DATA_FILES:
+                seed_path = os.path.join(versions_dir, seed_file)
+                if os.path.exists(seed_path):
+                    logger.info(f"Inserting seed data from {seed_file}...")
+                    _run_migration_file(conn, seed_path)
+                    logger.info(f"Seed data from {seed_file} inserted")
         finally:
             # Re-enable FK checks even on failure. With NullPool the connection
             # dies anyway, but this is defense-in-depth for pooled engines.

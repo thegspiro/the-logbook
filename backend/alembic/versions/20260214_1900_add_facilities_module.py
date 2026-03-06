@@ -32,7 +32,7 @@ def upgrade() -> None:
     op.create_table(
         'facility_types',
         sa.Column('id', sa.String(36), primary_key=True),
-        sa.Column('organization_id', sa.String(36), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('organization_id', sa.String(36), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=True),
         sa.Column('name', sa.String(100), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
         sa.Column('category', sa.String(50), nullable=True),
@@ -50,7 +50,7 @@ def upgrade() -> None:
     op.create_table(
         'facility_statuses',
         sa.Column('id', sa.String(36), primary_key=True),
-        sa.Column('organization_id', sa.String(36), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('organization_id', sa.String(36), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=True),
         sa.Column('name', sa.String(100), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
         sa.Column('color', sa.String(7), nullable=True),
@@ -169,7 +169,7 @@ def upgrade() -> None:
     op.create_table(
         'facility_maintenance_types',
         sa.Column('id', sa.String(36), primary_key=True),
-        sa.Column('organization_id', sa.String(36), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('organization_id', sa.String(36), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=True),
         sa.Column('name', sa.String(200), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
         sa.Column('category', sa.String(50), nullable=True),
