@@ -2,16 +2,9 @@
  * Event Type Definitions
  */
 
-export type EventType =
-  | 'business_meeting'
-  | 'public_education'
-  | 'training'
-  | 'social'
-  | 'fundraiser'
-  | 'ceremony'
-  | 'other';
-
-export type RSVPStatus = 'going' | 'not_going' | 'maybe';
+// Import enum types from the canonical source and re-export
+import type { EventType, RSVPStatus } from '../constants/enums';
+export type { EventType, RSVPStatus };
 
 export interface Event {
   id: string;

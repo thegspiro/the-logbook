@@ -2,7 +2,9 @@
  * Election Type Definitions
  */
 
-export type ElectionStatus = 'draft' | 'open' | 'closed' | 'cancelled';
+// Import enum type from the canonical source and re-export
+import type { ElectionStatus } from '../constants/enums';
+export type { ElectionStatus };
 
 export interface BallotItem {
   id: string;

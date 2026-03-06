@@ -8,16 +8,9 @@
 // Enumerations
 // =============================================================================
 
-export type StageType =
-  | 'form_submission'
-  | 'document_upload'
-  | 'election_vote'
-  | 'manual_approval'
-  | 'meeting'
-  | 'status_page_toggle'
-  | 'automated_email';
-
-export type ApplicantStatus = 'active' | 'on_hold' | 'withdrawn' | 'converted' | 'rejected' | 'inactive';
+// Import enum types from the canonical source and re-export
+import type { StageType, ApplicantStatus } from '../../../constants/enums';
+export type { StageType, ApplicantStatus };
 
 /** Backend step progress status values (mirrors StepProgressStatus enum). */
 export const StepProgressStatus = {
