@@ -2,7 +2,7 @@
 
 ## IMPORTANT: Fix All Errors
 
-**Always fix errors you encounter, even if they are pre-existing or unrelated to your current task.** Do not leave broken code, failing tests, linting violations, or type errors for later. If you discover an issue while working on something else, fix it immediately in the same PR. We never leave known errors behind.
+**Always fix errors you encounter, even if they are pre-existing or unrelated to your current task.** Do not leave broken code, warnings, failing tests, linting violations, or type errors for later. If you discover an issue while working on something else, fix it immediately in the same PR. We never leave known errors behind.
 
 ## Pre-Commit Verification Checklist
 
