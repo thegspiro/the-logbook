@@ -25,6 +25,7 @@ import { Breadcrumbs, SkeletonPage, EmptyState, Pagination } from '../components
 import { SortableHeader, sortItems } from '../components/ux/SortableHeader';
 import type { SortDirection } from '../components/ux/SortableHeader';
 import type { MemberStats } from '../types/member';
+import { UserStatus } from '../constants/enums';
 
 const Members: React.FC = () => {
   const navigate = useNavigate();
@@ -77,10 +78,10 @@ const Members: React.FC = () => {
       // Calculate stats from real data
       const calculatedStats: MemberStats = {
         total: users.length,
-        active: users.filter(u => u.status === 'active').length,
-        inactive: users.filter(u => u.status === 'inactive').length,
-        onLeave: users.filter(u => u.status === 'leave').length,
-        retired: users.filter(u => u.status === 'retired').length,
+        active: users.filter(u => u.status === UserStatus.ACTIVE).length,
+        inactive: users.filter(u => u.status === UserStatus.INACTIVE).length,
+        onLeave: users.filter(u => u.status === UserStatus.LEAVE).length,
+        retired: users.filter(u => u.status === UserStatus.RETIRED).length,
         expiringCertifications: 0,
       };
       setStats(calculatedStats);

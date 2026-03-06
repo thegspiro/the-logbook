@@ -44,15 +44,16 @@ import type {
   EmailTemplate,
 } from '../types/event';
 import { getEventTypeLabel, getEventTypeBadgeColor } from '../utils/eventHelpers';
+import { EventType as EventTypeEnum } from '../constants/enums';
 
 const ALL_EVENT_TYPES: EventType[] = [
-  'business_meeting',
-  'public_education',
-  'training',
-  'social',
-  'fundraiser',
-  'ceremony',
-  'other',
+  EventTypeEnum.BUSINESS_MEETING,
+  EventTypeEnum.PUBLIC_EDUCATION,
+  EventTypeEnum.TRAINING,
+  EventTypeEnum.SOCIAL,
+  EventTypeEnum.FUNDRAISER,
+  EventTypeEnum.CEREMONY,
+  EventTypeEnum.OTHER,
 ];
 
 const CATEGORY_COLOR_OPTIONS = [

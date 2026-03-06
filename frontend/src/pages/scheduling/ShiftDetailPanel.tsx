@@ -27,7 +27,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatTime, getTodayLocalDate } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS } from '../../constants/enums';
+import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, UserStatus, AssignmentStatus } from '../../constants/enums';
 
 interface ShiftDetailPanelProps {
   shift: ShiftRecord;
@@ -173,7 +173,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       setLoadingMembers(true);
       try {
         const users = await userService.getUsers();
-        const members = users.filter((m) => m.status === 'active').map((m) => ({
+        const members = users.filter((m) => m.status === UserStatus.ACTIVE).map((m) => ({
           id: String(m.id),
           label: `${m.first_name || ''} ${m.last_name || ''}`.trim() || String(m.email || m.id),
         }));
@@ -411,7 +411,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     const effectiveStatus = assignment.status || 'assigned';
     const statusColor = ASSIGNMENT_STATUS_COLORS[effectiveStatus] || ASSIGNMENT_STATUS_COLORS.assigned;
     const isCurrentUser = assignment.user_id === user?.id;
-    const isAssigned = effectiveStatus === 'assigned';
+    const isAssigned = effectiveStatus === AssignmentStatus.ASSIGNED;
     return (
       <div key={assignment.id} className={`flex items-center justify-between gap-2 p-2.5 sm:p-3 rounded-lg border ${isCurrentUser ? 'border-violet-500/30 bg-violet-500/5' : 'border-theme-surface-border bg-theme-surface-hover/30'}`}>
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -818,7 +818,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                           <span className={`px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full capitalize ${ASSIGNMENT_STATUS_COLORS[assignment.status || 'assigned'] || ASSIGNMENT_STATUS_COLORS.assigned}`}>
                             {assignment.status || 'assigned'}
                           </span>
-                          {assignment.user_id === user?.id && assignment.status === 'assigned' && confirmingDecline !== assignment.id && (
+                          {assignment.user_id === user?.id && assignment.status === AssignmentStatus.ASSIGNED && confirmingDecline !== assignment.id && (
                             <>
                               <button onClick={() => { void handleConfirm(assignment.id); }}
                                 className="p-1.5 text-green-600 hover:bg-green-500/10 rounded-sm transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Confirm assignment"

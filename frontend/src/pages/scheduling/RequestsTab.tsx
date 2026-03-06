@@ -17,7 +17,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatTime } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { REQUEST_STATUS_COLORS } from '../../constants/enums';
+import { REQUEST_STATUS_COLORS, RequestStatus } from '../../constants/enums';
 
 export const RequestsTab: React.FC = () => {
   const { checkPermission, user: currentUser } = useAuthStore();
@@ -217,14 +217,14 @@ export const RequestsTab: React.FC = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
-                      {canManage && req.status === 'pending' && (
+                      {canManage && req.status === RequestStatus.PENDING && (
                         <button onClick={() => { setReviewing({ type: 'swap', id: req.id }); setReviewNotes(''); }}
                           className="p-2 text-theme-text-muted hover:text-green-600 hover:bg-green-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label="Review swap request"
                         >
                           <Check className="w-4 h-4" />
                         </button>
                       )}
-                      {req.status === 'pending' && (req.requesting_user_id ?? req.user_id) === currentUser?.id && confirmingCancel?.id !== req.id && (
+                      {req.status === RequestStatus.PENDING && (req.requesting_user_id ?? req.user_id) === currentUser?.id && confirmingCancel?.id !== req.id && (
                         <button onClick={() => setConfirmingCancel({ type: 'swap', id: req.id })}
                           className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label="Cancel swap request"
                         >
@@ -291,14 +291,14 @@ export const RequestsTab: React.FC = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
-                      {canManage && req.status === 'pending' && (
+                      {canManage && req.status === RequestStatus.PENDING && (
                         <button onClick={() => { setReviewing({ type: 'timeoff', id: req.id }); setReviewNotes(''); }}
                           className="p-2 text-theme-text-muted hover:text-green-600 hover:bg-green-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label="Review time-off request"
                         >
                           <Check className="w-4 h-4" />
                         </button>
                       )}
-                      {req.status === 'pending' && req.user_id === currentUser?.id && confirmingCancel?.id !== req.id && (
+                      {req.status === RequestStatus.PENDING && req.user_id === currentUser?.id && confirmingCancel?.id !== req.id && (
                         <button onClick={() => setConfirmingCancel({ type: 'timeoff', id: req.id })}
                           className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label="Cancel time-off request"
                         >
@@ -344,13 +344,13 @@ export const RequestsTab: React.FC = () => {
               <button onClick={() => { void handleReview('denied'); }} disabled={submittingReview}
                 className="btn-primary gap-1.5 inline-flex items-center"
               >
-                {reviewAction === 'denied' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                {reviewAction === RequestStatus.DENIED ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
                 Deny
               </button>
               <button onClick={() => { void handleReview('approved'); }} disabled={submittingReview}
                 className="btn-success gap-1.5 inline-flex items-center"
               >
-                {reviewAction === 'approved' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                {reviewAction === RequestStatus.APPROVED ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                 Approve
               </button>
             </div>

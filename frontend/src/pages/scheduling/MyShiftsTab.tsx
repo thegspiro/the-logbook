@@ -17,7 +17,7 @@ import type { Assignment } from '../../types/scheduling';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatTime, getTodayLocalDate } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { ASSIGNMENT_STATUS_COLORS } from '../../constants/enums';
+import { ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
 
 interface MyShiftsTabProps {
   onViewShift?: (shift: ShiftRecord) => void;
@@ -259,7 +259,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                     <span className={`hidden sm:inline-block px-2.5 py-1 text-xs font-medium rounded-full border capitalize ${statusColor}`}>
                       {assignment.status}
                     </span>
-                    {view === 'upcoming' && assignment.status === 'assigned' && confirmingDecline !== assignment.id && (
+                    {view === 'upcoming' && assignment.status === AssignmentStatus.ASSIGNED && confirmingDecline !== assignment.id && (
                       <>
                         <button onClick={() => { void handleConfirm(assignment.id); }}
                           disabled={confirmingId === assignment.id}

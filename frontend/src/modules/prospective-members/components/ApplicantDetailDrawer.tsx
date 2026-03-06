@@ -50,7 +50,7 @@ import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { applicantService } from '../services/api';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
-import { ApplicantStatus, StageType as StageTypeEnum } from '../../../constants/enums';
+import { ApplicantStatus, StageType as StageTypeEnum, ElectionStatus } from '../../../constants/enums';
 
 /** Maps snake_case backend field keys to human-readable labels. */
 const FORM_FIELD_LABELS: Record<string, string> = {
@@ -750,7 +750,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-theme-text-muted">Status</span>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                          currentElectionPackage.status === 'draft'
+                          currentElectionPackage.status === ElectionStatus.DRAFT
                             ? 'bg-slate-500/20 text-theme-text-muted'
                             : currentElectionPackage.status === 'ready'
                               ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300'
@@ -802,7 +802,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       </div>
 
                       {/* Editable fields — only for draft packages */}
-                      {currentElectionPackage.status === 'draft' && (
+                      {currentElectionPackage.status === ElectionStatus.DRAFT && (
                         <>
                           <div>
                             <label className="block text-xs text-theme-text-muted mb-1">
@@ -1306,7 +1306,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
             )}
 
             {/* On Hold Actions */}
-            {applicant.status === 'on_hold' && (
+            {applicant.status === ApplicantStatus.ON_HOLD && (
               <div className="border-t border-theme-surface-border p-4 space-y-3">
                 {showNotesInput && (
                   <div className="flex items-start gap-2">

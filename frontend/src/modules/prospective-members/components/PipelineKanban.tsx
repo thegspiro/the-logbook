@@ -24,6 +24,7 @@ import type {
 } from '../types';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { ApplicantCard } from './ApplicantCard';
+import { ApplicantStatus as ApplicantStatusEnum } from '../../../constants/enums';
 
 interface PipelineKanbanProps {
   stages: PipelineStage[];
@@ -119,7 +120,7 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
       return;
     }
 
-    if (draggedApplicant.status !== 'active') {
+    if (draggedApplicant.status !== ApplicantStatusEnum.ACTIVE) {
       toast.error('Only active applicants can be advanced');
       setDraggedApplicant(null);
       return;
