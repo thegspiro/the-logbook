@@ -57,6 +57,7 @@ LABEL_MAP: Dict[str, str] = {
     "desired membership type": "desired_membership_type",
     "type of membership": "desired_membership_type",
     "member type": "desired_membership_type",
+    "regular or administrative": "desired_membership_type",
 }
 
 # Fallback: map by field_type when the label is ambiguous.

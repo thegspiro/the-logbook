@@ -106,7 +106,7 @@ export const ProspectiveMembersPage: React.FC = () => {
     last_name: '',
     email: '',
     phone: '',
-    target_membership_type: 'probationary' as 'probationary' | 'administrative',
+    target_membership_type: 'regular' as 'regular' | 'administrative',
   });
   const [isCreating, setIsCreating] = useState(false);
 
@@ -277,7 +277,7 @@ export const ProspectiveMembersPage: React.FC = () => {
         last_name: '',
         email: '',
         phone: '',
-        target_membership_type: 'probationary',
+        target_membership_type: 'regular',
       });
       void fetchApplicants();
       void fetchPipelineStats(currentPipeline.id);
@@ -1186,12 +1186,12 @@ export const ProspectiveMembersPage: React.FC = () => {
                   onChange={(e) =>
                     setNewApplicant({
                       ...newApplicant,
-                      target_membership_type: e.target.value as 'probationary' | 'administrative',
+                      target_membership_type: e.target.value as 'regular' | 'administrative',
                     })
                   }
                   className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                 >
-                  <option value="probationary">Probationary</option>
+                  <option value="regular">Regular Member</option>
                   <option value="administrative">Administrative</option>
                 </select>
               </div>

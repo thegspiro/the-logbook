@@ -684,10 +684,10 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   Desired Membership Type
                 </h3>
                 <div className="flex items-center gap-2">
-                  {(['probationary', 'administrative'] as const).map((type) => {
+                  {(['regular', 'administrative'] as const).map((type) => {
                     const isSelected = applicant.target_membership_type === type;
-                    const label = type === 'probationary' ? 'Probationary' : 'Administrative';
-                    const desc = type === 'probationary' ? 'Regular member' : 'Non-operational role';
+                    const label = type === 'regular' ? 'Regular Member' : 'Administrative';
+                    const desc = type === 'regular' ? 'Starts as probationary' : 'Non-operational role';
                     return (
                       <button
                         key={type}

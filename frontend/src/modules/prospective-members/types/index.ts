@@ -41,7 +41,7 @@ export const TIMEOUT_PRESET_LABELS: Record<InactivityTimeoutPreset, string> = {
   custom: 'Custom',
 };
 
-export type TargetMembershipType = 'administrative' | 'probationary';
+export type TargetMembershipType = 'regular' | 'administrative';
 
 export type PipelineViewMode = 'kanban' | 'table';
 

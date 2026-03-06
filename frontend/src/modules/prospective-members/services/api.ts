@@ -54,6 +54,7 @@ import type {
   Interview,
   InterviewCreate,
   InterviewUpdate,
+  TargetMembershipType,
 } from '../types';
 import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS, StepProgressStatus } from '../types';
 import { StageType as StageTypeConst } from '../../../constants/enums';
@@ -86,6 +87,17 @@ function mapStageTypeToBackend(stageType: StageType): { step_type: string; actio
 }
 
 /** Map backend step_type + action_type to frontend stage_type */
+/**
+ * Map backend desired_membership_type to frontend TargetMembershipType.
+ * Legacy records may store 'probationary'; new records store 'regular'.
+ * Both map to 'regular' on the frontend since probationary is a status,
+ * not a membership type applicants choose.
+ */
+function mapDesiredMembershipType(value: string | null | undefined): TargetMembershipType {
+  if (value === 'administrative') return 'administrative';
+  return 'regular';
+}
+
 function mapStepTypeToFrontend(
   stepType: string,
   actionType?: string | null,
@@ -313,7 +325,7 @@ export function mapProspectToApplicant(data: BackendProspectResponse): Applicant
     stage_history: stageHistory,
     total_stages: (data.step_progress || []).length,
     stage_entered_at: data.created_at,
-    target_membership_type: (data.desired_membership_type as Applicant['target_membership_type'] | null) ?? 'probationary',
+    target_membership_type: mapDesiredMembershipType(data.desired_membership_type),
     form_submission_id: data.form_submission_id ?? undefined,
     status_token: data.status_token ?? undefined,
     status: extractStatus(data.status) as Applicant['status'],
@@ -336,7 +348,7 @@ function mapProspectListToApplicantList(data: BackendProspectListResponse): Appl
     current_stage_id: data.current_step_id ?? '',
     current_stage_name: data.current_step_name ?? undefined,
     stage_entered_at: data.created_at,
-    target_membership_type: (data.desired_membership_type as ApplicantListItem['target_membership_type'] | null) ?? 'probationary',
+    target_membership_type: mapDesiredMembershipType(data.desired_membership_type),
     status: extractStatus(data.status) as ApplicantListItem['status'],
     days_in_stage: 0,
     days_in_pipeline: 0,
@@ -359,7 +371,7 @@ function mapElectionPackageResponse(data: BackendElectionPackageResponse): Elect
     applicant_name: `${snapshot.first_name ?? ''} ${snapshot.last_name ?? ''}`.trim(),
     applicant_email: snapshot.email,
     applicant_phone: snapshot.phone,
-    target_membership_type: ((snapshot as Record<string, unknown>).desired_membership_type as ElectionPackage['target_membership_type'] | undefined) ?? 'probationary',
+    target_membership_type: mapDesiredMembershipType((snapshot as Record<string, unknown>).desired_membership_type as string | null | undefined),
     coordinator_notes: data.coordinator_notes ?? undefined,
     supporting_statement: config.supporting_statement,
     documents: config.documents,
@@ -798,10 +810,12 @@ export const applicantService = {
   },
 
   async convertToMember(applicantId: string, data: ConvertApplicantRequest): Promise<ConvertApplicantResponse> {
-    // Backend uses /transfer endpoint with different payload shape
+    // Backend uses /transfer endpoint with different payload shape.
+    // Map 'regular' → 'probationary' since all regular members start as probationary.
+    const backendMembershipType = data.target_membership_type === 'regular' ? 'probationary' : data.target_membership_type;
     const payload: Record<string, unknown> = {
       send_welcome_email: data.send_welcome_email,
-      membership_type: data.target_membership_type,
+      membership_type: backendMembershipType,
     };
     if (data.target_role_id) {
       payload.role_ids = [data.target_role_id];
