@@ -4,8 +4,9 @@
  * and provides a modal to log new maintenance records.
  */
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import {
-  Wrench, RefreshCw, AlertTriangle, CheckCircle2, XCircle,
+  ArrowLeft, Wrench, RefreshCw, AlertTriangle, CheckCircle2, XCircle,
   Clock, Calendar, Loader2, ChevronRight,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
@@ -157,7 +158,12 @@ const InventoryMaintenancePage: React.FC = () => {
     `px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${active ? 'border-orange-500 text-orange-600 dark:text-orange-400' : 'border-transparent text-theme-text-muted hover:text-theme-text-primary'}`;
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <Link to="/inventory/admin" className="text-sm text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1">
+        <ArrowLeft className="h-4 w-4" />
+        Back to Admin
+      </Link>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
