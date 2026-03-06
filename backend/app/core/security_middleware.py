@@ -14,8 +14,9 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import Depends, HTTPException, Request, status
-from fastapi.responses import Response
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+
+# BaseHTTPMiddleware intentionally NOT imported — all middleware in this
+# module uses the pure ASGI pattern to avoid stripping Set-Cookie headers.
 from starlette.requests import HTTPConnection
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -406,8 +407,8 @@ async def check_rate_limit(
 
     # Try Redis-backed sliding-window rate limiting first
     try:
-        from app.core.security import is_rate_limited as redis_rate_limited
         from app.core.cache import cache_manager
+        from app.core.security import is_rate_limited as redis_rate_limited
 
         if cache_manager.is_connected and cache_manager.redis_client:
             exceeded = await redis_rate_limited(
@@ -683,9 +684,13 @@ def get_user_agent(request: Request) -> str | None:
 # ============================================
 
 
-class IPBlockingMiddleware(BaseHTTPMiddleware):
+class IPBlockingMiddleware:
     """
     Middleware for IP-based and country-based access control.
+
+    Implemented as a pure ASGI middleware (not BaseHTTPMiddleware) to avoid
+    stripping Set-Cookie headers when multiple middleware layers are stacked
+    (SEC-15).
 
     Features:
     - Blocks requests from specified countries (geo-blocking)
@@ -706,26 +711,34 @@ class IPBlockingMiddleware(BaseHTTPMiddleware):
         enabled: bool = True,
         log_blocked_attempts: bool = True,
     ):
-        super().__init__(app)
+        self.app = app
         self.enabled = enabled
         self.log_blocked_attempts = log_blocked_attempts
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         """Process request and check IP/country restrictions."""
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
 
         # Skip if disabled
         if not self.enabled:
-            return await call_next(request)
+            await self.app(scope, receive, send)
+            return
+
+        path: str = scope.get("path", "")
 
         # Skip health check and onboarding endpoints
-        if request.url.path in self.BYPASS_PATHS:
-            return await call_next(request)
+        if path in self.BYPASS_PATHS:
+            await self.app(scope, receive, send)
+            return
 
         # Skip paths with bypass prefixes (e.g., onboarding)
-        if any(request.url.path.startswith(prefix) for prefix in self.BYPASS_PREFIXES):
-            return await call_next(request)
+        if any(path.startswith(prefix) for prefix in self.BYPASS_PREFIXES):
+            await self.app(scope, receive, send)
+            return
+
+        request = Request(scope)
 
         # Get client IP
         client_ip = get_client_ip(request)
@@ -745,23 +758,40 @@ class IPBlockingMiddleware(BaseHTTPMiddleware):
                 if self.log_blocked_attempts:
                     await self._log_blocked_attempt(request, client_ip, reason)
 
-                # Return 403 Forbidden
-                from fastapi.responses import JSONResponse
+                # Return 403 Forbidden as a raw ASGI response
+                import json
 
-                return JSONResponse(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    content={
+                body = json.dumps(
+                    {
                         "detail": "Access denied from your location",
                         "error_code": "GEO_BLOCKED",
-                    },
+                    }
+                ).encode("utf-8")
+                await send(
+                    {
+                        "type": "http.response.start",
+                        "status": 403,
+                        "headers": [
+                            (b"content-type", b"application/json"),
+                            (b"content-length", str(len(body)).encode()),
+                        ],
+                    }
                 )
+                await send(
+                    {
+                        "type": "http.response.body",
+                        "body": body,
+                    }
+                )
+                return
 
             # Add geo info to request state for downstream use
             geo_info = geoip.lookup_ip(client_ip)
-            request.state.geo_info = geo_info
-            request.state.client_ip = client_ip
+            scope.setdefault("state", {})
+            scope["state"]["geo_info"] = geo_info
+            scope["state"]["client_ip"] = client_ip
 
-        return await call_next(request)
+        await self.app(scope, receive, send)
 
     async def _get_allowed_ips(self) -> set:
         """
@@ -930,9 +960,13 @@ class IPLoggingMiddleware:
 # ============================================
 
 
-class SecurityMonitoringMiddleware(BaseHTTPMiddleware):
+class SecurityMonitoringMiddleware:
     """
     Middleware for real-time security monitoring.
+
+    Implemented as a pure ASGI middleware (not BaseHTTPMiddleware) to avoid
+    stripping Set-Cookie headers when multiple middleware layers are stacked
+    (SEC-15).
 
     Integrates with the SecurityMonitoringService to:
     - Detect injection attempts
@@ -958,21 +992,29 @@ class SecurityMonitoringMiddleware(BaseHTTPMiddleware):
         "/api/v1/reports",
     }
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         """Process request through security monitoring."""
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
         from loguru import logger
 
+        request = Request(scope)
         client_ip = get_client_ip(request)
         user_agent = get_user_agent(request)
+        path: str = scope.get("path", "")
+        method: str = scope.get("method", "GET")
 
         # Build request data for analysis
-        request_data = {
+        request_data: dict[str, Any] = {
             "ip_address": client_ip,
             "user_agent": user_agent,
-            "path": request.url.path,
-            "method": request.method,
+            "path": path,
+            "method": method,
             "query_params": dict(request.query_params),
         }
 
@@ -991,34 +1033,46 @@ class SecurityMonitoringMiddleware(BaseHTTPMiddleware):
         # Analyze request for threats (only for write operations)
         if request.method not in {"GET", "HEAD", "OPTIONS"}:
             try:
-                # Read body for analysis (need to reconstruct for handler)
-                body = await request.body()
-                if body:
+                body_chunks: list[bytes] = []
+                while True:
+                    message = await receive()
+                    chunk = message.get("body", b"")
+                    if chunk:
+                        body_chunks.append(chunk)
+                    if not message.get("more_body", False):
+                        break
+                body_for_analysis = b"".join(body_chunks)
+
+                if body_for_analysis:
                     try:
-                        request_data["body"] = body.decode("utf-8")[
+                        request_data["body"] = body_for_analysis.decode("utf-8")[
                             :10000
                         ]  # Limit size
                     except UnicodeDecodeError:
                         pass  # Binary data, skip
 
-                # Re-wrap body for handler so downstream can read it again.
-                # ASGI requires `receive` to be an async callable.
-                from starlette.requests import Request as StarletteRequest
+                # Create a replay receive callable so downstream can read the body
+                _body_sent = False
 
-                async def _replay_body() -> Message:
-                    return {"type": "http.request", "body": body}
+                async def _replay_receive() -> Message:
+                    nonlocal _body_sent
+                    if not _body_sent:
+                        _body_sent = True
+                        return {
+                            "type": "http.request",
+                            "body": body_for_analysis,
+                            "more_body": False,
+                        }
+                    # Subsequent calls return empty body (ASGI protocol)
+                    return {"type": "http.request", "body": b"", "more_body": False}
 
-                request = StarletteRequest(
-                    scope=request.scope,
-                    receive=_replay_body,
-                )
+                actual_receive = _replay_receive
             except Exception as e:
                 logger.debug(f"Could not read request body: {e}")
 
         # Check for session hijacking on authenticated requests
         if user_id and session_id and client_ip:
             try:
-                # Import here to avoid circular imports
                 from app.core.database import async_session_factory
                 from app.services.security_monitoring import security_monitor
 
@@ -1035,16 +1089,27 @@ class SecurityMonitoringMiddleware(BaseHTTPMiddleware):
             except Exception as e:
                 logger.debug(f"Session monitoring error: {e}")
 
-        # Process the request
-        response = await call_next(request)
+        # Track response status and content-length for exfiltration monitoring
+        response_status = 0
+        content_length_value: str | None = None
 
-        # Monitor data exfiltration on export endpoints
-        if request.url.path in self.EXPORT_ENDPOINTS and user_id:
+        async def send_with_monitoring(message: Message) -> None:
+            nonlocal response_status, content_length_value
+            if message["type"] == "http.response.start":
+                response_status = message.get("status", 0)
+                for header_name, header_value in message.get("headers", []):
+                    if header_name == b"content-length":
+                        content_length_value = header_value.decode()
+                        break
+            await send(message)
+
+        await self.app(scope, actual_receive, send_with_monitoring)
+
+        # Monitor data exfiltration on export endpoints (post-response)
+        if path in self.EXPORT_ENDPOINTS and user_id:
             try:
-                # Estimate response size
-                content_length = response.headers.get("content-length")
-                if content_length:
-                    data_size = int(content_length)
+                if content_length_value:
+                    data_size = int(content_length_value)
 
                     from app.core.database import async_session_factory
                     from app.services.security_monitoring import security_monitor
@@ -1054,13 +1119,11 @@ class SecurityMonitoringMiddleware(BaseHTTPMiddleware):
                             db=db,
                             user_id=user_id,
                             data_size_bytes=data_size,
-                            endpoint=request.url.path,
+                            endpoint=path,
                             ip_address=client_ip,
                         )
             except Exception as e:
                 logger.debug(f"Data exfiltration monitoring error: {e}")
-
-        return response
 
 
 # ============================================

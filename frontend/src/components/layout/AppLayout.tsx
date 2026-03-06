@@ -9,13 +9,17 @@ import { useIdleTimer } from '../../hooks/useIdleTimer';
 import { TopProgressBar, CommandPalette, PageTransition } from '../ux';
 import { useNavigationShortcuts } from '../../hooks/useKeyboardShortcuts';
 
-/** SEC: Validate logo URL protocol to prevent javascript: or data:text/html XSS */
+/** SEC: Validate logo URL protocol to prevent javascript: or data:text/html XSS.
+ *  Only safe raster image data URIs are allowed — SVG can contain embedded JS. */
 function isValidLogoUrl(url: string): boolean {
   return (
     url.startsWith('http://') ||
     url.startsWith('https://') ||
     url.startsWith('/') ||
-    url.startsWith('data:image/')
+    url.startsWith('data:image/png') ||
+    url.startsWith('data:image/jpeg') ||
+    url.startsWith('data:image/webp') ||
+    url.startsWith('data:image/gif')
   );
 }
 

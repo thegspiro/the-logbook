@@ -56,7 +56,7 @@ const mockFacilities = [
     addressLine1: '456 Oak Ave',
     city: 'Springfield',
     state: 'IL',
-    facilityType: { id: 'type-2', name: 'Training Center' },
+    facilityType: { id: 'type-2', name: 'Training Facility' },
     statusRecord: { id: 'status-1', name: 'Operational' },
     isArchived: false,
     createdAt: '2025-02-01T00:00:00Z',
@@ -66,7 +66,7 @@ const mockFacilities = [
 
 const mockTypes = [
   { id: 'type-1', name: 'Fire Station', isActive: true },
-  { id: 'type-2', name: 'Training Center', isActive: true },
+  { id: 'type-2', name: 'Training Facility', isActive: true },
 ];
 
 const mockStatuses = [
@@ -93,7 +93,7 @@ describe('FacilitiesPage', () => {
 
   it('renders the page header', async () => {
     renderPage();
-    expect(screen.getByText('Facilities')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Facilities' })).toBeInTheDocument();
     expect(screen.getByText('Manage stations, buildings, rooms, and maintenance')).toBeInTheDocument();
   });
 
@@ -131,9 +131,9 @@ describe('FacilitiesPage', () => {
 
   it('shows tabs for facilities, maintenance, and inspections', async () => {
     renderPage();
-    expect(screen.getByText('Facilities')).toBeInTheDocument();
-    expect(screen.getByText('Maintenance')).toBeInTheDocument();
-    expect(screen.getByText('Inspections')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Facilities/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Maintenance/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Inspections/ })).toBeInTheDocument();
   });
 
   it('opens create facility modal', async () => {
