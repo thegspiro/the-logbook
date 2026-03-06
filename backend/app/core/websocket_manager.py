@@ -7,6 +7,7 @@ for broadcasting inventory change events to connected clients.
 
 import asyncio
 import json
+import time
 from typing import Dict, Optional, Set
 
 from fastapi import WebSocket
@@ -52,7 +53,9 @@ class ConnectionManager:
 
         dead: list[WebSocket] = []
         data = json.dumps(message)
-        for ws in connections:
+        # Snapshot the set to avoid RuntimeError if disconnect() is called
+        # by another coroutine during an await in the loop body.
+        for ws in list(connections):
             try:
                 await ws.send_text(data)
             except Exception:
@@ -122,7 +125,7 @@ class ConnectionManager:
 
     async def _listen(self):
         """Background task that reads from Redis pub/sub and broadcasts."""
-        cleanup_counter = 0
+        last_cleanup = time.monotonic()
         try:
             while True:
                 message = await self._pubsub.get_message(
@@ -140,10 +143,10 @@ class ConnectionManager:
                 else:
                     await asyncio.sleep(0.1)
 
-                # Periodically clean up dead connections (~every 60 seconds)
-                cleanup_counter += 1
-                if cleanup_counter >= 600:  # ~600 iterations × 0.1s sleep
-                    cleanup_counter = 0
+                # Periodically clean up dead connections (every 60 seconds)
+                now = time.monotonic()
+                if now - last_cleanup >= 60:
+                    last_cleanup = now
                     await self.cleanup_dead_connections()
         except asyncio.CancelledError:
             pass

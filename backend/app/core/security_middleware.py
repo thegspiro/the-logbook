@@ -1030,11 +1030,8 @@ class SecurityMonitoringMiddleware:
         # Get session ID from header
         session_id = request.headers.get("X-Session-ID")
 
-        # For write operations, read and buffer the body for analysis
-        # then replay it for downstream handlers via a custom receive callable.
-        body_for_analysis: bytes = b""
-        actual_receive = receive
-        if method not in ("GET", "HEAD", "OPTIONS"):
+        # Analyze request for threats (only for write operations)
+        if request.method not in {"GET", "HEAD", "OPTIONS"}:
             try:
                 body_chunks: list[bytes] = []
                 while True:
