@@ -4,6 +4,19 @@
 
 **Always fix errors you encounter, even if they are pre-existing or unrelated to your current task.** Do not leave broken code, failing tests, linting violations, or type errors for later. If you discover an issue while working on something else, fix it immediately in the same PR. We never leave known errors behind.
 
+## Pre-Commit Verification Checklist
+
+Before committing any changes, mentally verify these items (the most frequent sources of bugs):
+
+- [ ] **No `??` on form values** — used `||` to coerce empty strings to `undefined` for all optional API fields
+- [ ] **`nullable=True` on SET NULL FKs** — every `ondelete="SET NULL"` column has `nullable=True`
+- [ ] **Indexed access has fallbacks** — `arr[0] ?? ''` not bare `arr[0]` (due to `noUncheckedIndexedAccess`)
+- [ ] **Schema fields match** — Pydantic `Optional` for any field the frontend may omit; enum values are lowercase
+- [ ] **No `BaseHTTPMiddleware`** — new middleware uses pure ASGI `__call__(scope, receive, send)`
+- [ ] **Module axios has auth** — new module axios instances include `withCredentials: true` + CSRF interceptor
+- [ ] **No unused imports** — TypeScript strict mode rejects them; remove before committing
+- [ ] **Seed migrations registered** — new seed data files added to `SEED_DATA_FILES`; org_id is nullable for system records
+
 ## Project Overview
 
 The Logbook is an open-source modular intranet platform for fire departments and emergency services. It is a monorepo with an npm workspaces structure containing a React frontend and a Python backend.
@@ -295,6 +308,119 @@ This application handles protected health information (PHI) and must maintain HI
 - **Source maps disabled in production** — `sourcemap: false` in vite build config to prevent source code exposure
 - **`safe_error_detail()`** — sanitizes exception messages server-side to prevent leaking SQL, file paths, or stack traces to clients
 - **Encryption at rest** — `ENCRYPTION_KEY` + `ENCRYPTION_SALT` env vars used for AES-256 encryption of sensitive fields
+
+## Common Pitfalls & Prevention
+
+These are recurring errors identified from the project's change history. Follow these rules to avoid re-introducing them.
+
+### 1. Empty Strings: Always Use `||`, Never `??` for Form Values
+
+**The #1 most common bug in this project.** React form fields initialize as empty strings (`""`). The nullish coalescing operator (`??`) only filters `null`/`undefined` — it does NOT filter `""`. This causes empty strings to be sent to the backend, where Pydantic validators reject them with 422 errors.
+
+```typescript
+// WRONG — empty string passes through ??
+const phone = formData.phone?.trim() ?? undefined;  // '' ?? undefined === ''
+
+// CORRECT — empty string is converted to undefined by ||
+const phone = formData.phone?.trim() || undefined;   // '' || undefined === undefined
+```
+
+**Rule:** When converting form values to send to the API, always use `||` (logical OR), never `??` (nullish coalescing), to coerce empty strings to `undefined` so they are omitted from the JSON payload. This applies to all optional string fields in forms, onboarding flows, modals, and CSV exports.
+
+### 2. Database Models: `ondelete="SET NULL"` Requires `nullable=True`
+
+Every foreign key column with `ondelete="SET NULL"` **must** also have `nullable=True`. MySQL error 1830 rejects SET NULL on NOT NULL columns. This has caused multiple container startup failures.
+
+```python
+# WRONG — will crash on deletion of referenced row
+organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="SET NULL"))
+
+# CORRECT
+organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True)
+```
+
+**Rule:** When writing or reviewing any model with `ondelete="SET NULL"`, always verify the column is `nullable=True`. Also verify this when adding seed/lookup tables that may hold system-level (org-agnostic) records with NULL org references.
+
+### 3. TypeScript: `noUncheckedIndexedAccess` Pitfalls
+
+With `noUncheckedIndexedAccess: true`, array indexing and `.split()` results return `T | undefined`. This causes TS2322 build errors.
+
+```typescript
+// WRONG — TS error: string | undefined is not assignable to string
+const datePart = isoString.split('T')[0];
+
+// CORRECT — provide a fallback
+const datePart = isoString.split('T')[0] ?? '';
+```
+
+**Rule:** Always add `?? defaultValue` after indexed access (`arr[0]`, `.split()[n]`, `Object.keys()[n]`). Never use non-null assertions (`!`) as a workaround — use safe fallbacks instead.
+
+### 4. Backend Middleware: Use Pure ASGI, Not `BaseHTTPMiddleware`
+
+Starlette's `BaseHTTPMiddleware` has known issues: it can strip `Set-Cookie` headers when multiple middleware layers are stacked, and it wraps the response body in ways that break streaming. This caused the post-login auth cookie loss that took 7 commits to debug.
+
+```python
+# WRONG — BaseHTTPMiddleware can strip headers
+class MyMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        return response
+
+# CORRECT — Pure ASGI middleware preserves all headers
+class MyMiddleware:
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        # Custom logic here, then:
+        await self.app(scope, receive, send)
+```
+
+**Rule:** All new middleware must use the pure ASGI pattern (`__call__` with scope/receive/send). Never use `BaseHTTPMiddleware`. When the ASGI `receive` callable is wrapped or replaced, it **must** be `async`.
+
+### 5. Frontend-Backend Schema Contract
+
+Mismatches between Pydantic schemas and frontend TypeScript types cause 422 errors and broken UI. Common sub-issues:
+
+- **Required vs optional fields:** If a frontend form field is optional, the corresponding Pydantic schema field must be `Optional[T] = None`. Do not mark fields as required in the schema if the frontend can omit them.
+- **Enum casing:** Backend `(str, Enum)` values must be **lowercase** (`routine`, not `ROUTINE`). If the frontend sends uppercase, add `.lower()` conversion or a `@field_validator`.
+- **Response shape:** Backend response schemas use `alias_generator=to_camel` for camelCase serialization. If a frontend component destructures a specific field name, verify it matches the camelCase alias, not the snake_case Python attribute.
+- **422 error display:** FastAPI returns 422 errors as `{"detail": [{"loc": [...], "msg": "..."}]}` — an array, not a string. The `toAppError()` utility handles this, but any custom error handling must also check for array-format details.
+
+**Rule:** When adding or modifying an API endpoint, verify the Pydantic schema field requirements match what the frontend actually sends. When adding new fields to a response schema, verify the frontend type interface includes the camelCase version.
+
+### 6. Cookie Path Matching
+
+Cookie `path` attributes must match the request URL exactly, including trailing slashes. A cookie set with `path=/api/v1/auth` will NOT be sent to `/api/v1/auth/refresh` on all browsers.
+
+**Rule:** When setting cookies with a path restriction, always include a trailing slash (`path=/api/v1/auth/`) or use the broadest appropriate path.
+
+### 7. Module Axios Instances and Auth
+
+Each module in `modules/*/services/api.ts` creates its own axios instance. These instances must include the same auth configuration as the global instance (`withCredentials: true`, CSRF header interceptor, Bearer token bridge if applicable). Missing auth headers on module-specific axios instances causes 401/403 errors that only appear in specific modules.
+
+**Rule:** When creating a new module with its own axios instance, copy the auth interceptor setup from the global `services/api.ts` or import a shared interceptor factory.
+
+### 8. Alembic Migrations: Seed Data and Ordering
+
+Seed data migrations that insert system-level records (default facility types, status codes, etc.) must handle the case where the target table has `nullable=True` on `organization_id`. If seed data is inserted before the column is made nullable, or if the migration file isn't registered in `SEED_DATA_FILES`, fresh installs will have missing seed data and crash when code queries for expected defaults.
+
+**Rule:** When adding seed/lookup data: (1) ensure the migration makes org_id nullable first, (2) register the seed migration in `SEED_DATA_FILES`, (3) add fallback logic in service code for when expected defaults are missing (auto-create or raise a clear error).
+
+### 9. Unbounded In-Memory Caches
+
+Backend middleware and services that track request state (rate limiting, security monitoring, IP logging) must have size limits and periodic eviction. Without these, tracking dicts grow unboundedly and cause memory exhaustion in long-running processes.
+
+**Rule:** Any in-memory dict/set used for tracking must have: (1) a maximum size cap, (2) periodic eviction of stale entries, (3) a fallback behavior when the cap is reached.
+
+### 10. Verify After Creating — Fetch Full Records
+
+When creating a record (facility, ballot item, candidate, etc.) and immediately displaying it in a detail view, always fetch the full record from the API after creation. Do not rely on the creation response or list-item data, which may lack nested relationships or computed fields needed by the detail view.
+
+**Rule:** After a successful create/update, re-fetch the full record via its detail endpoint before populating the UI. This also applies when selecting an item from a list view to show in a detail panel.
 
 ## Environment Variables
 
