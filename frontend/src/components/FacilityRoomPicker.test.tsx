@@ -52,6 +52,7 @@ describe('FacilityRoomPicker', () => {
     render(<FacilityRoomPicker value={null} onChange={mockOnChange} facilityId="f1" />);
 
     expect(screen.queryByLabelText('Select facility')).not.toBeInTheDocument();
+    // Wait for rooms to finish loading before checking the select
 
     // Room selector appears after rooms finish loading
     await waitFor(() => {
