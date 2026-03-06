@@ -225,12 +225,16 @@ export default function FacilityDetailPanel({
           {address && (
             <div className="flex items-start gap-2 text-sm text-theme-text-secondary">
               <MapPin className="w-4 h-4 mt-0.5 shrink-0" />
-              <span>{address}{facility.addressLine2 ? `, ${facility.addressLine2}` : ''}</span>
+              <div>
+                <span>{address}{facility.addressLine2 ? `, ${facility.addressLine2}` : ''}</span>
+                {facility.county && <span className="block text-xs text-theme-text-muted mt-0.5">{facility.county} County</span>}
+              </div>
             </div>
           )}
-          {(facility.phone || facility.email) && (
-            <div className="flex items-center gap-4 text-sm text-theme-text-secondary">
+          {(facility.phone || facility.fax || facility.email) && (
+            <div className="flex flex-wrap items-center gap-4 text-sm text-theme-text-secondary">
               {facility.phone && <span className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" />{facility.phone}</span>}
+              {facility.fax && <span className="flex items-center gap-1.5 text-theme-text-muted"><Phone className="w-3.5 h-3.5" />Fax: {facility.fax}</span>}
               {facility.email && <span className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" />{facility.email}</span>}
             </div>
           )}
@@ -277,9 +281,11 @@ export default function FacilityDetailPanel({
             <div><label className={labelCls}>City</label><input type="text" value={editData.city as string} onChange={e => setEditData(p => ({...p, city: e.target.value}))} className={inputCls} /></div>
             <div><label className={labelCls}>State</label><input type="text" value={editData.state as string} onChange={e => setEditData(p => ({...p, state: e.target.value}))} className={inputCls} /></div>
             <div><label className={labelCls}>Zip Code</label><input type="text" value={editData.zip_code as string} onChange={e => setEditData(p => ({...p, zip_code: e.target.value}))} className={inputCls} /></div>
+            <div><label className={labelCls}>County</label><input type="text" value={editData.county as string} onChange={e => setEditData(p => ({...p, county: e.target.value}))} className={inputCls} /></div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div><label className={labelCls}>Phone</label><input type="text" value={editData.phone as string} onChange={e => setEditData(p => ({...p, phone: e.target.value}))} className={inputCls} /></div>
+            <div><label className={labelCls}>Fax</label><input type="text" value={editData.fax as string} onChange={e => setEditData(p => ({...p, fax: e.target.value}))} className={inputCls} /></div>
             <div><label className={labelCls}>Email</label><input type="text" value={editData.email as string} onChange={e => setEditData(p => ({...p, email: e.target.value}))} className={inputCls} /></div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">

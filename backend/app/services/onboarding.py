@@ -552,6 +552,38 @@ class OnboardingService:
             facility_type = type_result.scalar_one_or_none()
 
         if not facility_type:
+            # Seed data may be missing — attempt auto-creation
+            from app.services.facilities_service import FacilitiesService
+
+            await FacilitiesService(self.db)._ensure_system_defaults()
+            type_result = await self.db.execute(
+                select(FacilityType)
+                .where(
+                    or_(
+                        FacilityType.organization_id == org.id,
+                        FacilityType.organization_id.is_(None),
+                    ),
+                    FacilityType.is_active.is_(True),
+                    FacilityType.name == default_type_name,
+                )
+            )
+            facility_type = type_result.scalar_one_or_none()
+            if not facility_type:
+                # Fall back to any type at all
+                type_result = await self.db.execute(
+                    select(FacilityType)
+                    .where(
+                        or_(
+                            FacilityType.organization_id == org.id,
+                            FacilityType.organization_id.is_(None),
+                        ),
+                        FacilityType.is_active.is_(True),
+                    )
+                    .limit(1)
+                )
+                facility_type = type_result.scalar_one_or_none()
+
+        if not facility_type:
             logger.warning(
                 "No facility types available for org %s — skipping "
                 "headquarters facility creation",

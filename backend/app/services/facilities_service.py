@@ -1923,7 +1923,7 @@ class FacilitiesService:
         organization_id: str,
         created_by: str,
     ) -> FacilityRoom:
-        """Create a facility room"""
+        """Create a facility room and a linked Location for cross-module use."""
         # Verify facility exists
         facility = await self.get_facility(
             room_data.facility_id, organization_id, include_relations=False
@@ -1938,6 +1938,11 @@ class FacilitiesService:
         )
 
         self.db.add(room)
+        await self.db.flush()
+
+        # Create a Location so this room appears in Events, Storage, etc.
+        await self._sync_room_location(room, facility, organization_id, created_by)
+
         await self.db.commit()
         await self.db.refresh(room)
 
@@ -1950,7 +1955,7 @@ class FacilitiesService:
         organization_id: str,
         updated_by: Optional[str] = None,
     ) -> Optional[FacilityRoom]:
-        """Update room"""
+        """Update room and its linked Location."""
         room = await self.get_room(room_id, organization_id)
         if not room:
             return None
@@ -1962,21 +1967,102 @@ class FacilitiesService:
         if updated_by:
             room.updated_by = updated_by
 
+        # Sync the linked Location (name, capacity, active state, etc.)
+        facility = await self.get_facility(
+            room.facility_id, organization_id, include_relations=False
+        )
+        if facility:
+            await self._sync_room_location(room, facility, organization_id)
+
         await self.db.commit()
         await self.db.refresh(room)
 
         return room
 
     async def delete_room(self, room_id: str, organization_id: str) -> bool:
-        """Delete room"""
+        """Delete room and its linked Location."""
+        from app.models.location import Location
+
         room = await self.get_room(room_id, organization_id)
         if not room:
             return False
+
+        # Remove the linked Location (cascade won't handle this since FK is SET NULL)
+        result = await self.db.execute(
+            select(Location).where(
+                Location.facility_room_id == room_id,
+                Location.organization_id == organization_id,
+            )
+        )
+        linked_location = result.scalar_one_or_none()
+        if linked_location:
+            await self.db.delete(linked_location)
 
         await self.db.delete(room)
         await self.db.commit()
 
         return True
+
+    async def _sync_room_location(
+        self,
+        room: FacilityRoom,
+        facility: Facility,
+        organization_id: str,
+        created_by: Optional[str] = None,
+    ) -> None:
+        """Create or update a Location record linked to a FacilityRoom.
+
+        This makes rooms available to Events (location picker), Storage,
+        and any other module that uses the Location model.
+        """
+        from app.models.location import Location
+
+        result = await self.db.execute(
+            select(Location).where(
+                Location.facility_room_id == room.id,
+                Location.organization_id == organization_id,
+            )
+        )
+        location = result.scalar_one_or_none()
+
+        # Build a descriptive name: "Room Name — Facility Name"
+        loc_name = f"{room.name} — {facility.name}"
+
+        if location:
+            location.name = loc_name
+            location.building = facility.name
+            location.floor = str(room.floor) if room.floor is not None else None
+            location.room_number = room.room_number
+            location.capacity = room.capacity
+            location.address = facility.address_line1
+            location.city = facility.city
+            location.state = facility.state
+            location.zip = facility.zip_code
+            location.is_active = room.is_active
+        else:
+            from app.core.utils import generate_display_code, generate_uuid
+
+            display_code = generate_display_code(length=8)
+            location = Location(
+                id=generate_uuid(),
+                organization_id=organization_id,
+                name=loc_name,
+                facility_id=facility.id,
+                facility_room_id=room.id,
+                building=facility.name,
+                floor=str(room.floor) if room.floor is not None else None,
+                room_number=room.room_number,
+                capacity=room.capacity,
+                address=facility.address_line1,
+                city=facility.city,
+                state=facility.state,
+                zip=facility.zip_code,
+                description=room.description,
+                is_active=room.is_active,
+                display_code=display_code,
+                created_by=created_by,
+            )
+            self.db.add(location)
 
     # =========================================================================
     # Emergency Contact Methods

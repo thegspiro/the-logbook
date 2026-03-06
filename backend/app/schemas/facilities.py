@@ -427,10 +427,13 @@ class FacilityListItem(BaseModel):
     name: str
     facility_number: Optional[str] = None
     address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     zip_code: Optional[str] = None
+    county: Optional[str] = None
     phone: Optional[str] = None
+    fax: Optional[str] = None
     email: Optional[str] = None
     is_archived: bool
     facility_type: Optional[FacilityTypeListItem] = None

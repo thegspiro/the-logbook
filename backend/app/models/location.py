@@ -72,6 +72,16 @@ class Location(Base):
         String(36), ForeignKey("facilities.id", ondelete="SET NULL"), nullable=True
     )
 
+    # Room link — when a Location represents a specific room within a facility.
+    # Auto-populated when rooms are created via the Facilities module, making
+    # rooms available to Events, Storage, and other modules that use Locations.
+    facility_room_id = Column(
+        String(36),
+        ForeignKey("facility_rooms.id", ondelete="SET NULL"),
+        nullable=True,
+        unique=True,
+    )
+
     # Metadata
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     created_at = Column(
@@ -87,12 +97,14 @@ class Location(Base):
     # Relationships
     events = relationship("Event", back_populates="location_obj")
     facility = relationship("Facility", foreign_keys=[facility_id])
+    facility_room = relationship("FacilityRoom", foreign_keys=[facility_room_id])
 
     __table_args__ = (
         Index("ix_locations_organization_id", "organization_id"),
         Index("ix_locations_name", "name"),
         Index("ix_locations_is_active", "is_active"),
         Index("ix_locations_facility_id", "facility_id"),
+        Index("ix_locations_facility_room_id", "facility_room_id"),
     )
 
     def __repr__(self):

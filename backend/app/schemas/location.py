@@ -74,6 +74,7 @@ class LocationResponse(LocationBase):
 
     id: UUID
     organization_id: UUID
+    facility_room_id: Optional[UUID] = None
     display_code: Optional[str] = None
     created_by: Optional[UUID] = None
     created_at: datetime
@@ -99,6 +100,7 @@ class LocationListItem(BaseModel):
     capacity: Optional[int] = None
     is_active: bool
     facility_id: Optional[UUID] = None
+    facility_room_id: Optional[UUID] = None
     display_code: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
