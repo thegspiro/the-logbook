@@ -202,6 +202,7 @@ class InventoryItemBase(BaseModel):
     tracking_type: TrackingTypeLiteral = "individual"
     quantity: int = Field(default=1, ge=0)
     unit_of_measure: Optional[str] = Field(None, max_length=50)
+    reorder_point: Optional[int] = Field(None, ge=0)
     inspection_interval_days: Optional[int] = Field(None, ge=0)
     min_rank_order: Optional[int] = None
     restricted_to_positions: Optional[List[str]] = None
@@ -246,6 +247,7 @@ class InventoryItemUpdate(BaseModel):
     tracking_type: Optional[TrackingTypeLiteral] = None
     quantity: Optional[int] = Field(None, ge=0)
     unit_of_measure: Optional[str] = Field(None, max_length=50)
+    reorder_point: Optional[int] = Field(None, ge=0)
     last_inspection_date: Optional[date] = None
     next_inspection_due: Optional[date] = None
     inspection_interval_days: Optional[int] = Field(None, ge=0)
@@ -1416,6 +1418,80 @@ class ReturnRequestResponse(BaseModel):
     reviewer_name: Optional[str] = None
     reviewed_at: Optional[datetime] = None
     review_notes: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================
+# Reorder Request Schemas
+# ============================================
+
+ReorderStatusLiteral = Literal[
+    "pending", "approved", "ordered", "received", "cancelled"
+]
+ReorderUrgencyLiteral = Literal["low", "normal", "high", "critical"]
+
+
+class ReorderRequestCreate(BaseModel):
+    """Schema for creating a reorder request"""
+
+    item_id: Optional[UUID] = None
+    category_id: Optional[UUID] = None
+    item_name: str = Field(..., min_length=1, max_length=255)
+    quantity_requested: int = Field(default=1, ge=1)
+    vendor: Optional[str] = Field(None, max_length=255)
+    vendor_contact: Optional[str] = Field(None, max_length=255)
+    estimated_unit_cost: Optional[Decimal] = Field(None, ge=0)
+    expected_delivery_date: Optional[date] = None
+    urgency: ReorderUrgencyLiteral = "normal"
+    notes: Optional[str] = None
+
+
+class ReorderRequestUpdate(BaseModel):
+    """Schema for updating a reorder request"""
+
+    item_name: Optional[str] = Field(None, min_length=1, max_length=255)
+    quantity_requested: Optional[int] = Field(None, ge=1)
+    quantity_received: Optional[int] = Field(None, ge=0)
+    vendor: Optional[str] = Field(None, max_length=255)
+    vendor_contact: Optional[str] = Field(None, max_length=255)
+    estimated_unit_cost: Optional[Decimal] = Field(None, ge=0)
+    actual_unit_cost: Optional[Decimal] = Field(None, ge=0)
+    purchase_order_number: Optional[str] = Field(None, max_length=255)
+    expected_delivery_date: Optional[date] = None
+    status: Optional[ReorderStatusLiteral] = None
+    urgency: Optional[ReorderUrgencyLiteral] = None
+    notes: Optional[str] = None
+
+
+class ReorderRequestResponse(BaseModel):
+    """Schema for reorder request response"""
+
+    id: UUID
+    organization_id: UUID
+    item_id: Optional[UUID] = None
+    category_id: Optional[UUID] = None
+    item_name: str
+    quantity_requested: int
+    quantity_received: Optional[int] = None
+    vendor: Optional[str] = None
+    vendor_contact: Optional[str] = None
+    estimated_unit_cost: Optional[Decimal] = None
+    actual_unit_cost: Optional[Decimal] = None
+    purchase_order_number: Optional[str] = None
+    expected_delivery_date: Optional[date] = None
+    status: ReorderStatusLiteral
+    urgency: ReorderUrgencyLiteral
+    notes: Optional[str] = None
+    requested_by: Optional[UUID] = None
+    requester_name: Optional[str] = None
+    approved_by: Optional[UUID] = None
+    approver_name: Optional[str] = None
+    approved_at: Optional[datetime] = None
+    ordered_at: Optional[datetime] = None
+    received_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 

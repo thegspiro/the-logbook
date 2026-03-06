@@ -1327,6 +1327,23 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
                 if success_count > 0:
                     total_alerts += 1
 
+            # SMS alerts to admins with phone numbers
+            try:
+                from app.services.sms_service import SMSService
+
+                sms_svc = SMSService()
+                if sms_svc.enabled:
+                    admin_phones = [a.phone for a in admins if getattr(a, "phone", None)]
+                    if admin_phones:
+                        sms_body = (
+                            f"Low Stock Alert: {len(low_stock)} inventory item(s) "
+                            f"below reorder point. Check the inventory dashboard."
+                        )
+                        sms_sent = await sms_svc.send_bulk_sms(admin_phones, sms_body)
+                        logger.info(f"Low stock SMS sent to {sms_sent}/{len(admin_phones)} admins for org {org.id}")
+            except Exception as sms_err:
+                logger.warning(f"SMS low stock alerts failed for org {org.id}: {sms_err}")
+
             results.append({"org_id": str(org.id), "alerts": len(low_stock)})
 
         except Exception as e:

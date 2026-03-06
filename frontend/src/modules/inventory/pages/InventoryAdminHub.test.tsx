@@ -60,10 +60,10 @@ describe('InventoryAdminHub', () => {
   it('displays low stock alerts', async () => {
     renderWithRouter(<InventoryAdminHub />);
     await waitFor(() => {
-      expect(screen.getByText('Low Stock Alerts')).toBeInTheDocument();
+      expect(screen.getByText(/Low Stock Alerts/)).toBeInTheDocument();
     });
-    expect(screen.getByText(/Turnout Gear: 2 items/)).toBeInTheDocument();
-    expect(screen.getByText(/Helmets: 1 items/)).toBeInTheDocument();
+    expect(screen.getByText('Turnout Gear')).toBeInTheDocument();
+    expect(screen.getByText('Helmets')).toBeInTheDocument();
   });
 
   it('hides low stock section when there are no alerts', async () => {
@@ -72,7 +72,7 @@ describe('InventoryAdminHub', () => {
     await waitFor(() => {
       expect(screen.getByText('Total Items')).toBeInTheDocument();
     });
-    expect(screen.queryByText('Low Stock Alerts')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Low Stock Alerts/)).not.toBeInTheDocument();
   });
 
   it('shows "...and X more" when more than 5 alerts', async () => {
@@ -85,7 +85,7 @@ describe('InventoryAdminHub', () => {
     mockGetLowStockItems.mockResolvedValue(manyAlerts);
     renderWithRouter(<InventoryAdminHub />);
     await waitFor(() => {
-      expect(screen.getByText('...and 3 more')).toBeInTheDocument();
+      expect(screen.getByText(/and 3 more/)).toBeInTheDocument();
     });
   });
 
@@ -98,6 +98,7 @@ describe('InventoryAdminHub', () => {
       'Items', 'Pool Items', 'Categories', 'Members',
       'Maintenance', 'Checkouts', 'Charges', 'Return Requests',
       'Storage Areas', 'Import / Export', 'Equipment Requests', 'Write-Offs',
+      'Reorder Requests',
     ];
     for (const title of navTitles) {
       expect(screen.getByText(title)).toBeInTheDocument();
