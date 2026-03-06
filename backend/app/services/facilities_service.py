@@ -505,8 +505,26 @@ class FacilitiesService:
             if not status:
                 raise ValueError("Invalid facility status")
 
+        facility_dict = facility_data.model_dump()
         extra = {}
-        if facility_data.status_id:
+
+        # Auto-assign "Operational" status if none provided
+        if not facility_dict.get("status_id"):
+            op_result = await self.db.execute(
+                select(FacilityStatus).where(
+                    or_(
+                        FacilityStatus.organization_id == organization_id,
+                        FacilityStatus.organization_id.is_(None),
+                    ),
+                    FacilityStatus.is_active.is_(True),
+                    FacilityStatus.name == "Operational",
+                )
+            )
+            operational = op_result.scalar_one_or_none()
+            if operational:
+                facility_dict["status_id"] = operational.id
+
+        if facility_dict.get("status_id"):
             extra["status_changed_at"] = datetime.now(tz=timezone.utc)
             extra["status_changed_by"] = created_by
 
@@ -514,7 +532,7 @@ class FacilitiesService:
             organization_id=organization_id,
             created_by=created_by,
             **extra,
-            **facility_data.model_dump(),
+            **facility_dict,
         )
 
         self.db.add(facility)
