@@ -6,8 +6,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { Settings, Plus, Trash2, Loader2, Pencil, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { facilitiesService } from '../../../services/api';
+import type { FacilitySystemCreate } from '../../../services/facilitiesServices';
 import type { FacilitySystem } from '../types';
 import { enumLabel, SYSTEM_TYPES } from '../types';
+import { formatDate, isPastDate } from '../../../utils/dateFormatting';
 
 const CONDITION_OPTIONS = ['excellent', 'good', 'fair', 'poor', 'critical'] as const;
 
@@ -94,7 +96,7 @@ export default function SystemsSection({ facilityId }: Props) {
     }
     setIsSaving(true);
     try {
-      const payload: Record<string, unknown> = {
+      const payload: FacilitySystemCreate = {
         facility_id: facilityId,
         name: formData.name.trim(),
         system_type: formData.system_type,
@@ -110,10 +112,10 @@ export default function SystemsSection({ facilityId }: Props) {
       if (formData.test_frequency_days) payload.test_frequency_days = Number(formData.test_frequency_days);
 
       if (editingSystem) {
-        await facilitiesService.updateSystem(editingSystem.id, payload as unknown as Parameters<typeof facilitiesService.updateSystem>[1]);
+        await facilitiesService.updateSystem(editingSystem.id, payload);
         toast.success('System updated');
       } else {
-        await facilitiesService.createSystem(payload as unknown as Parameters<typeof facilitiesService.createSystem>[0]);
+        await facilitiesService.createSystem(payload);
         toast.success('System added');
       }
       resetForm();
@@ -240,8 +242,8 @@ export default function SystemsSection({ facilityId }: Props) {
                       )}
                       {sys.manufacturer && <span>{sys.manufacturer}</span>}
                       {sys.warrantyExpiration && (
-                        <span className={new Date(sys.warrantyExpiration) < new Date() ? 'text-red-500' : ''}>
-                          Warranty: {sys.warrantyExpiration}
+                        <span className={isPastDate(sys.warrantyExpiration) ? 'text-red-500' : ''}>
+                          Warranty: {formatDate(sys.warrantyExpiration)}
                         </span>
                       )}
                       {sys.testFrequencyDays != null && (

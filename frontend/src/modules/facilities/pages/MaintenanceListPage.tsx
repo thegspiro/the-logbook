@@ -17,7 +17,7 @@ import type { MaintenanceRecordCreate } from '../../../services/facilitiesServic
 import type { MaintenanceRecord, MaintenanceType } from '../types';
 import { useFacilitiesStore } from '../store/facilitiesStore';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { getTodayLocalDate } from '../../../utils/dateFormatting';
+import { getTodayLocalDate, formatDate } from '../../../utils/dateFormatting';
 
 export default function MaintenanceListPage() {
   const navigate = useNavigate();
@@ -73,7 +73,7 @@ export default function MaintenanceListPage() {
     if (statusFilter === 'overdue' && !r.isOverdue) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      return (r.description?.toLowerCase().includes(q) || r.vendor?.toLowerCase().includes(q) || r.workOrderNumber?.toLowerCase().includes(q) || r.performedBy?.toLowerCase().includes(q));
+      return !!(r.description?.toLowerCase().includes(q) || r.vendor?.toLowerCase().includes(q) || r.workOrderNumber?.toLowerCase().includes(q) || r.performedBy?.toLowerCase().includes(q));
     }
     return true;
   });
@@ -237,7 +237,7 @@ export default function MaintenanceListPage() {
                 </div>
                 <div className="flex items-center gap-3 text-xs text-theme-text-muted">
                   <span>{getFacilityName(record.facilityId)}</span>
-                  {record.scheduledDate && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{record.scheduledDate}</span>}
+                  {record.scheduledDate && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDate(record.scheduledDate)}</span>}
                   {record.vendor && <span>{record.vendor}</span>}
                   {record.cost != null && record.cost > 0 && <span className="flex items-center gap-1"><DollarSign className="w-3 h-3" />${record.cost.toLocaleString()}</span>}
                   {record.workOrderNumber && <span>WO# {record.workOrderNumber}</span>}

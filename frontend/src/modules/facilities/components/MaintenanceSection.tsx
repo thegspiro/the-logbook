@@ -9,9 +9,10 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { facilitiesService } from '../../../services/api';
+import type { MaintenanceRecordCreate } from '../../../services/facilitiesServices';
 import type { MaintenanceRecord, MaintenanceType } from '../types';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { getTodayLocalDate } from '../../../utils/dateFormatting';
+import { getTodayLocalDate, formatDate } from '../../../utils/dateFormatting';
 
 interface Props {
   facilityId: string;
@@ -57,7 +58,7 @@ export default function MaintenanceSection({ facilityId }: Props) {
     if (statusFilter === 'overdue' && !r.isOverdue) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      return (
+      return !!(
         r.description?.toLowerCase().includes(q) ||
         r.vendor?.toLowerCase().includes(q) ||
         r.workOrderNumber?.toLowerCase().includes(q)
@@ -96,7 +97,7 @@ export default function MaintenanceSection({ facilityId }: Props) {
     if (!formData.description.trim()) { toast.error('Description is required'); return; }
     setIsSaving(true);
     try {
-      const payload: Record<string, unknown> = {
+      const payload: MaintenanceRecordCreate = {
         facility_id: facilityId,
         description: formData.description.trim(),
       };
@@ -110,10 +111,10 @@ export default function MaintenanceSection({ facilityId }: Props) {
       if (formData.notes.trim()) payload.notes = formData.notes.trim();
 
       if (editingRecord) {
-        await facilitiesService.updateMaintenanceRecord(editingRecord.id, payload as unknown as Parameters<typeof facilitiesService.updateMaintenanceRecord>[1]);
+        await facilitiesService.updateMaintenanceRecord(editingRecord.id, payload);
         toast.success('Record updated');
       } else {
-        await facilitiesService.createMaintenanceRecord(payload as unknown as Parameters<typeof facilitiesService.createMaintenanceRecord>[0]);
+        await facilitiesService.createMaintenanceRecord(payload);
         toast.success('Record created');
       }
       setShowModal(false);
@@ -206,7 +207,7 @@ export default function MaintenanceSection({ facilityId }: Props) {
                     )}
                   </div>
                   <div className="flex items-center gap-3 text-xs text-theme-text-muted">
-                    {record.scheduledDate && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{record.scheduledDate}</span>}
+                    {record.scheduledDate && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDate(record.scheduledDate)}</span>}
                     {record.vendor && <span>{record.vendor}</span>}
                     {record.cost != null && record.cost > 0 && <span className="flex items-center gap-1"><DollarSign className="w-3 h-3" />${record.cost.toLocaleString()}</span>}
                     {record.workOrderNumber && <span>WO# {record.workOrderNumber}</span>}
@@ -214,14 +215,14 @@ export default function MaintenanceSection({ facilityId }: Props) {
                 </div>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   {!record.isCompleted && (
-                    <button onClick={() => { void handleComplete(record); }} title="Mark completed" className="p-1.5 text-emerald-600 hover:bg-emerald-500/10 rounded-lg transition-colors">
+                    <button onClick={() => { void handleComplete(record); }} title="Mark completed" aria-label="Mark completed" className="p-1.5 text-emerald-600 hover:bg-emerald-500/10 rounded-lg transition-colors">
                       <CheckCircle2 className="w-3.5 h-3.5" />
                     </button>
                   )}
-                  <button onClick={() => openEdit(record)} title="Edit" className="p-1.5 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors">
+                  <button onClick={() => openEdit(record)} title="Edit" aria-label="Edit record" className="p-1.5 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors">
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
-                  <button onClick={() => { void handleDelete(record); }} title="Delete" className="p-1.5 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors">
+                  <button onClick={() => { void handleDelete(record); }} title="Delete" aria-label="Delete record" className="p-1.5 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors">
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>

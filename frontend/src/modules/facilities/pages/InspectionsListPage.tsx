@@ -18,7 +18,7 @@ import type { Inspection } from '../types';
 import { enumLabel } from '../types';
 import { useFacilitiesStore } from '../store/facilitiesStore';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { getTodayLocalDate } from '../../../utils/dateFormatting';
+import { getTodayLocalDate, formatDate } from '../../../utils/dateFormatting';
 
 const INSPECTION_TYPE_OPTIONS = [
   'fire', 'building_code', 'health', 'ada', 'environmental',
@@ -69,7 +69,7 @@ export default function InspectionsListPage() {
     if (resultFilter === 'pending' && i.passed !== null && i.passed !== undefined) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      return (i.title?.toLowerCase().includes(q) || i.inspectorName?.toLowerCase().includes(q) || i.inspectorOrganization?.toLowerCase().includes(q));
+      return !!(i.title?.toLowerCase().includes(q) || i.inspectorName?.toLowerCase().includes(q) || i.inspectorOrganization?.toLowerCase().includes(q));
     }
     return true;
   });
@@ -223,9 +223,9 @@ export default function InspectionsListPage() {
                 </div>
                 <div className="flex items-center gap-3 text-xs text-theme-text-muted">
                   <span>{getFacilityName(insp.facilityId)}</span>
-                  <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{insp.inspectionDate}</span>
+                  <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDate(insp.inspectionDate)}</span>
                   {insp.inspectorName && <span>{insp.inspectorName}</span>}
-                  {insp.nextInspectionDate && <span>Next: {insp.nextInspectionDate}</span>}
+                  {insp.nextInspectionDate && <span>Next: {formatDate(insp.nextInspectionDate)}</span>}
                   {insp.correctiveActions && !insp.correctiveActionCompleted && (
                     <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
                       <AlertTriangle className="w-3 h-3" /> Corrective action needed

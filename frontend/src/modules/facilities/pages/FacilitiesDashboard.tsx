@@ -5,7 +5,7 @@
  * upcoming inspections), an action-items list, and a quick-access facility grid.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Building2,
@@ -24,7 +24,7 @@ import toast from 'react-hot-toast';
 import { useFacilitiesStore } from '../store/facilitiesStore';
 import type { Facility } from '../types';
 import CreateFacilityModal from '../components/CreateFacilityModal';
-import { useState } from 'react';
+import { formatDate } from '../../../utils/dateFormatting';
 
 export default function FacilitiesDashboard() {
   const navigate = useNavigate();
@@ -156,7 +156,7 @@ export default function FacilitiesDashboard() {
                               <span>{facilityName}</span>
                               {record.dueDate && (
                                 <span className="text-red-500 font-medium">
-                                  Due: {record.dueDate}
+                                  Due: {formatDate(record.dueDate)}
                                 </span>
                               )}
                             </div>
@@ -207,7 +207,7 @@ export default function FacilitiesDashboard() {
                               <span>{facilityName}</span>
                               {insp.nextInspectionDate && (
                                 <span className="font-medium">
-                                  {insp.nextInspectionDate}
+                                  {formatDate(insp.nextInspectionDate)}
                                 </span>
                               )}
                             </div>
@@ -243,7 +243,7 @@ export default function FacilitiesDashboard() {
                         <p className="text-xs text-theme-text-muted">{facilityName}</p>
                       </div>
                       <span className="text-xs text-theme-text-muted shrink-0">
-                        {record.completedDate || ''}
+                        {record.completedDate ? formatDate(record.completedDate) : ''}
                       </span>
                     </div>
                   );

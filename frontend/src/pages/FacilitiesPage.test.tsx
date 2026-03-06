@@ -162,7 +162,8 @@ describe('FacilitiesDashboard', () => {
 
     // Find the header "Add Facility" button (first one in the DOM)
     const addButtons = screen.getAllByText('Add Facility');
-    await user.click(addButtons[0]!);
+    const firstAddButton = addButtons[0] ?? addButtons[addButtons.length - 1];
+    await user.click(firstAddButton!);
 
     expect(screen.getByText('Name *')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('e.g., Station 1')).toBeInTheDocument();
@@ -179,14 +180,15 @@ describe('FacilitiesDashboard', () => {
 
     // Open modal
     const addButtons = screen.getAllByText('Add Facility');
-    await user.click(addButtons[0]!);
+    const openButton = addButtons[0] ?? addButtons[addButtons.length - 1];
+    await user.click(openButton!);
 
     const nameInput = screen.getByPlaceholderText('e.g., Station 1');
     await user.type(nameInput, 'Station 3');
 
     // Find the submit button in the modal (the last "Add Facility" button)
     const submitButtons = screen.getAllByText('Add Facility');
-    const modalSubmit = submitButtons[submitButtons.length - 1]!;
+    const modalSubmit = submitButtons[submitButtons.length - 1] ?? submitButtons[0];
     await user.click(modalSubmit);
 
     await waitFor(() => {

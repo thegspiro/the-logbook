@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { facilitiesService } from '../../../services/api';
 import type { ComplianceChecklist, ComplianceChecklistCreate } from '../../../services/facilitiesServices';
 import { enumLabel } from '../types';
+import { formatDate, isPastDate } from '../../../utils/dateFormatting';
 
 const COMPLIANCE_TYPE_OPTIONS = [
   'nfpa', 'osha', 'ada', 'building_code', 'fire_code',
@@ -149,14 +150,14 @@ export default function ComplianceSection({ facilityId }: Props) {
                     <div className="flex items-center gap-2 text-xs text-theme-text-muted">
                       <span>{enumLabel(checklist.complianceType)}</span>
                       {checklist.dueDate && (
-                        <span className={`flex items-center gap-1 ${new Date(checklist.dueDate) < new Date() && !checklist.isCompleted ? 'text-red-500 font-medium' : ''}`}>
+                        <span className={`flex items-center gap-1 ${isPastDate(checklist.dueDate) && !checklist.isCompleted ? 'text-red-500 font-medium' : ''}`}>
                           <Calendar className="w-3 h-3" />
-                          Due: {checklist.dueDate}
+                          Due: {formatDate(checklist.dueDate)}
                         </span>
                       )}
                       {checklist.isCompleted && checklist.completedDate && (
                         <span className="text-emerald-600 dark:text-emerald-400">
-                          Completed: {checklist.completedDate}
+                          Completed: {formatDate(checklist.completedDate)}
                         </span>
                       )}
                     </div>

@@ -9,10 +9,11 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { facilitiesService } from '../../../services/api';
+import type { InspectionCreate } from '../../../services/facilitiesServices';
 import type { Inspection } from '../types';
 import { enumLabel } from '../types';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { getTodayLocalDate } from '../../../utils/dateFormatting';
+import { getTodayLocalDate, formatDate } from '../../../utils/dateFormatting';
 
 const INSPECTION_TYPE_OPTIONS = [
   'fire', 'building_code', 'health', 'ada', 'environmental',
@@ -67,7 +68,7 @@ export default function InspectionsSection({ facilityId }: Props) {
     if (resultFilter === 'pending' && i.passed !== null && i.passed !== undefined) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      return (
+      return !!(
         i.title?.toLowerCase().includes(q) ||
         i.inspectorName?.toLowerCase().includes(q) ||
         i.inspectorOrganization?.toLowerCase().includes(q)
@@ -111,7 +112,7 @@ export default function InspectionsSection({ facilityId }: Props) {
     if (!formData.inspection_date) { toast.error('Inspection date is required'); return; }
     setIsSaving(true);
     try {
-      const payload: Record<string, unknown> = {
+      const payload: InspectionCreate = {
         facility_id: facilityId,
         inspection_type: formData.inspection_type,
         title: formData.title.trim(),
@@ -128,10 +129,10 @@ export default function InspectionsSection({ facilityId }: Props) {
       if (formData.notes.trim()) payload.notes = formData.notes.trim();
 
       if (editingInspection) {
-        await facilitiesService.updateInspection(editingInspection.id, payload as unknown as Parameters<typeof facilitiesService.updateInspection>[1]);
+        await facilitiesService.updateInspection(editingInspection.id, payload);
         toast.success('Inspection updated');
       } else {
-        await facilitiesService.createInspection(payload as unknown as Parameters<typeof facilitiesService.createInspection>[0]);
+        await facilitiesService.createInspection(payload);
         toast.success('Inspection created');
       }
       setShowModal(false);
@@ -207,9 +208,9 @@ export default function InspectionsSection({ facilityId }: Props) {
                     <span className="text-xs px-2 py-0.5 rounded-full bg-theme-surface-hover text-theme-text-muted shrink-0">{enumLabel(insp.inspectionType)}</span>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-theme-text-muted">
-                    <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{insp.inspectionDate}</span>
+                    <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDate(insp.inspectionDate)}</span>
                     {insp.inspectorName && <span>{insp.inspectorName}</span>}
-                    {insp.nextInspectionDate && <span>Next: {insp.nextInspectionDate}</span>}
+                    {insp.nextInspectionDate && <span>Next: {formatDate(insp.nextInspectionDate)}</span>}
                     {insp.correctiveActions && !insp.correctiveActionCompleted && (
                       <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
                         <AlertTriangle className="w-3 h-3" /> Corrective action needed
@@ -218,10 +219,10 @@ export default function InspectionsSection({ facilityId }: Props) {
                   </div>
                 </div>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => openEdit(insp)} title="Edit" className="p-1.5 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors">
+                  <button onClick={() => openEdit(insp)} title="Edit" aria-label="Edit inspection" className="p-1.5 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors">
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
-                  <button onClick={() => { void handleDelete(insp); }} title="Delete" className="p-1.5 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors">
+                  <button onClick={() => { void handleDelete(insp); }} title="Delete" aria-label="Delete inspection" className="p-1.5 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors">
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>

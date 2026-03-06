@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { DoorOpen, Plus, Trash2, Loader2, Pencil, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { facilitiesService } from '../../../services/api';
+import type { RoomCreate } from '../../../services/facilitiesServices';
 import type { Room } from '../types';
 import { enumLabel, ZONE_CLASSIFICATION_COLORS } from '../types';
 
@@ -88,7 +89,7 @@ export default function RoomsSection({ facilityId }: Props) {
     }
     setIsSaving(true);
     try {
-      const payload: Record<string, unknown> = {
+      const payload: RoomCreate = {
         facility_id: facilityId,
         name: formData.name.trim(),
         room_type: formData.room_type,
@@ -102,10 +103,10 @@ export default function RoomsSection({ facilityId }: Props) {
       if (formData.equipment.trim()) payload.equipment = formData.equipment.trim();
 
       if (editingRoom) {
-        await facilitiesService.updateRoom(editingRoom.id, payload as unknown as Parameters<typeof facilitiesService.updateRoom>[1]);
+        await facilitiesService.updateRoom(editingRoom.id, payload);
         toast.success('Room updated');
       } else {
-        await facilitiesService.createRoom(payload as unknown as Parameters<typeof facilitiesService.createRoom>[0]);
+        await facilitiesService.createRoom(payload);
         toast.success('Room added');
       }
       resetForm();

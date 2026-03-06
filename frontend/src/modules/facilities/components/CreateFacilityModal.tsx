@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFacilitiesStore } from '../store/facilitiesStore';
+import type { FacilityCreate } from '../../../services/facilitiesServices';
 import type { Facility, FacilityType, FacilityStatus } from '../types';
 
 interface Props {
@@ -37,7 +38,7 @@ export default function CreateFacilityModal({
     notes: '',
   });
 
-  const set = (field: string, value: string) =>
+  const setField = (field: string, value: string) =>
     setFormData((prev) => ({ ...prev, [field]: value }));
 
   const handleCreate = async () => {
@@ -48,7 +49,7 @@ export default function CreateFacilityModal({
     setIsCreating(true);
     try {
       // Use || to coerce empty strings to undefined (not ?? — see CLAUDE.md pitfall #1)
-      const payload: Record<string, unknown> = {
+      const payload: FacilityCreate = {
         name: formData.name.trim(),
       };
       if (formData.facility_number.trim()) payload.facility_number = formData.facility_number.trim();
@@ -110,7 +111,7 @@ export default function CreateFacilityModal({
             <input
               type="text"
               value={formData.name}
-              onChange={(e) => set('name', e.target.value)}
+              onChange={(e) => setField('name', e.target.value)}
               placeholder="e.g., Station 1"
               className={inputCls}
               autoFocus
@@ -124,7 +125,7 @@ export default function CreateFacilityModal({
             <input
               type="text"
               value={formData.facility_number}
-              onChange={(e) => set('facility_number', e.target.value)}
+              onChange={(e) => setField('facility_number', e.target.value)}
               placeholder="e.g., STA-01"
               className={inputCls}
             />
@@ -137,7 +138,7 @@ export default function CreateFacilityModal({
             <input
               type="text"
               value={formData.address_line1}
-              onChange={(e) => set('address_line1', e.target.value)}
+              onChange={(e) => setField('address_line1', e.target.value)}
               placeholder="123 Main St"
               className={inputCls}
             />
@@ -151,7 +152,7 @@ export default function CreateFacilityModal({
               <input
                 type="text"
                 value={formData.city}
-                onChange={(e) => set('city', e.target.value)}
+                onChange={(e) => setField('city', e.target.value)}
                 className={inputCls}
               />
             </div>
@@ -162,7 +163,7 @@ export default function CreateFacilityModal({
               <input
                 type="text"
                 value={formData.state}
-                onChange={(e) => set('state', e.target.value)}
+                onChange={(e) => setField('state', e.target.value)}
                 className={inputCls}
               />
             </div>
@@ -173,7 +174,7 @@ export default function CreateFacilityModal({
               <input
                 type="text"
                 value={formData.zip_code}
-                onChange={(e) => set('zip_code', e.target.value)}
+                onChange={(e) => setField('zip_code', e.target.value)}
                 className={inputCls}
               />
             </div>
@@ -187,7 +188,7 @@ export default function CreateFacilityModal({
               <input
                 type="tel"
                 value={formData.phone}
-                onChange={(e) => set('phone', e.target.value)}
+                onChange={(e) => setField('phone', e.target.value)}
                 placeholder="(555) 123-4567"
                 className={inputCls}
               />
@@ -199,7 +200,7 @@ export default function CreateFacilityModal({
               <input
                 type="email"
                 value={formData.email}
-                onChange={(e) => set('email', e.target.value)}
+                onChange={(e) => setField('email', e.target.value)}
                 placeholder="station@example.com"
                 className={inputCls}
               />
@@ -214,7 +215,7 @@ export default function CreateFacilityModal({
                 </label>
                 <select
                   value={formData.facility_type_id}
-                  onChange={(e) => set('facility_type_id', e.target.value)}
+                  onChange={(e) => setField('facility_type_id', e.target.value)}
                   className={inputCls}
                 >
                   <option value="">Select type...</option>
@@ -233,7 +234,7 @@ export default function CreateFacilityModal({
                 </label>
                 <select
                   value={formData.status_id}
-                  onChange={(e) => set('status_id', e.target.value)}
+                  onChange={(e) => setField('status_id', e.target.value)}
                   className={inputCls}
                 >
                   <option value="">Select status...</option>
@@ -253,7 +254,7 @@ export default function CreateFacilityModal({
             </label>
             <textarea
               value={formData.notes}
-              onChange={(e) => set('notes', e.target.value)}
+              onChange={(e) => setField('notes', e.target.value)}
               rows={3}
               placeholder="Optional notes..."
               className={inputCls + ' resize-none'}

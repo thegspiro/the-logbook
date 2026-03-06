@@ -18,7 +18,7 @@ import type {
   Room,
   FacilitySystem,
 } from '../types';
-import type { EmergencyContact } from '../../../services/facilitiesServices';
+import type { EmergencyContact, FacilityCreate } from '../../../services/facilitiesServices';
 import { getErrorMessage } from '../../../utils/errorHandling';
 
 interface DashboardStats {
@@ -64,8 +64,8 @@ interface FacilitiesState {
   loadFacilityContacts: (facilityId: string) => Promise<void>;
 
   // Actions — mutations
-  createFacility: (data: Record<string, unknown>) => Promise<Facility>;
-  updateFacility: (facilityId: string, data: Record<string, unknown>) => Promise<void>;
+  createFacility: (data: FacilityCreate) => Promise<Facility>;
+  updateFacility: (facilityId: string, data: Partial<FacilityCreate>) => Promise<void>;
   archiveFacility: (facilityId: string) => Promise<void>;
   restoreFacility: (facilityId: string) => Promise<void>;
 
@@ -228,16 +228,16 @@ export const useFacilitiesStore = create<FacilitiesState>((set, get) => ({
   },
 
   // Create a new facility
-  createFacility: async (data: Record<string, unknown>) => {
-    const result = await facilitiesService.createFacility(data as unknown as Parameters<typeof facilitiesService.createFacility>[0]);
+  createFacility: async (data: FacilityCreate) => {
+    const result = await facilitiesService.createFacility(data);
     // Reload the list after creation
     void get().loadFacilities();
     return result;
   },
 
   // Update an existing facility
-  updateFacility: async (facilityId: string, data: Record<string, unknown>) => {
-    await facilitiesService.updateFacility(facilityId, data as Parameters<typeof facilitiesService.updateFacility>[1]);
+  updateFacility: async (facilityId: string, data: Partial<FacilityCreate>) => {
+    await facilitiesService.updateFacility(facilityId, data);
     // Reload detail and list
     void get().loadFacilityDetail(facilityId);
     void get().loadFacilities();

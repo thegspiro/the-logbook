@@ -14,7 +14,9 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFacilitiesStore } from '../store/facilitiesStore';
+import type { FacilityCreate } from '../../../services/facilitiesServices';
 import type { Facility, FacilityType, FacilityStatus } from '../types';
+import { formatDate } from '../../../utils/dateFormatting';
 
 interface Props {
   facility: Facility;
@@ -81,12 +83,12 @@ export default function OverviewSection({ facility, facilityTypes, facilityStatu
             payload[key] = value;
           }
         } else if (value === '') {
-          // Use || pattern: empty string → null to clear the field
-          payload[key] = null;
+          // Use || pattern: empty string → undefined to omit from payload
+          payload[key] = undefined;
         }
       }
 
-      await updateFacility(facility.id, payload);
+      await updateFacility(facility.id, payload as Partial<FacilityCreate>);
       toast.success('Facility updated');
       setIsEditing(false);
     } catch {
@@ -237,8 +239,8 @@ export default function OverviewSection({ facility, facilityTypes, facilityStatu
 
             {/* Timestamps */}
             <div className="flex items-center gap-4 text-xs text-theme-text-muted pt-2 border-t border-theme-surface-border">
-              <span>Created: {new Date(facility.createdAt).toLocaleDateString()}</span>
-              <span>Updated: {new Date(facility.updatedAt).toLocaleDateString()}</span>
+              <span>Created: {formatDate(facility.createdAt)}</span>
+              <span>Updated: {formatDate(facility.updatedAt)}</span>
             </div>
           </div>
         ) : (
