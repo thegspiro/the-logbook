@@ -1,8 +1,9 @@
 /** PoolItemsPage — View for pool-tracked (quantity-based) inventory items. */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import {
-  Package, Plus, Search, RefreshCw, AlertTriangle,
+  ArrowLeft, Package, Plus, Search, RefreshCw, AlertTriangle,
   Users, ArrowDownToLine, Loader2, X, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
@@ -385,6 +386,11 @@ const PoolItemsPage: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
+      <Link to="/inventory/admin" className="text-sm text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1">
+        <ArrowLeft className="h-4 w-4" />
+        Back to Admin
+      </Link>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
