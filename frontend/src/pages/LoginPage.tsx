@@ -65,8 +65,11 @@ export const LoginPage: React.FC = () => {
         const response = await axios.get<OrgBranding>('/api/v1/auth/branding');
         // SEC: Validate logo URL protocol to prevent javascript: or data:text/html XSS
         const logo = response.data.logo;
+        // SEC: Allow only safe raster image data URIs — SVG can contain embedded JS
         const safeLogo = (typeof logo === 'string' &&
-          (logo.startsWith('http://') || logo.startsWith('https://') || logo.startsWith('/') || logo.startsWith('data:image/')))
+          (logo.startsWith('http://') || logo.startsWith('https://') || logo.startsWith('/') ||
+           logo.startsWith('data:image/png') || logo.startsWith('data:image/jpeg') ||
+           logo.startsWith('data:image/webp') || logo.startsWith('data:image/gif')))
           ? logo
           : null;
         setBranding({ ...response.data, logo: safeLogo });
