@@ -989,7 +989,7 @@ class SecurityMonitoringMiddleware(BaseHTTPMiddleware):
         session_id = request.headers.get("X-Session-ID")
 
         # Analyze request for threats (only for write operations)
-        if request.method not in ["GET", "HEAD", "OPTIONS"]:
+        if request.method not in {"GET", "HEAD", "OPTIONS"}:
             try:
                 # Read body for analysis (need to reconstruct for handler)
                 body = await request.body()
