@@ -14,7 +14,8 @@ Before committing any changes, mentally verify these items (the most frequent so
 - [ ] **Schema fields match** — Pydantic `Optional` for any field the frontend may omit; enum values are lowercase
 - [ ] **No `BaseHTTPMiddleware`** — new middleware uses pure ASGI `__call__(scope, receive, send)`
 - [ ] **Module axios has auth** — new module axios instances include `withCredentials: true` + CSRF interceptor
-- [ ] **No unused imports** — TypeScript strict mode rejects them; remove before committing
+- [ ] **No unused imports (frontend or backend)** — TypeScript strict mode rejects them; Python flake8 F401 catches them. Remove all unused imports before committing
+- [ ] **No Python lint violations** — no F401 (unused imports), F811 (redefined unused), F821 (undefined names), E303 (excess blank lines), or W291/W293 (trailing whitespace). Run `flake8` on changed files before committing
 - [ ] **Seed migrations registered** — new seed data files added to `SEED_DATA_FILES`; org_id is nullable for system records
 
 ## Project Overview
@@ -416,7 +417,36 @@ Backend middleware and services that track request state (rate limiting, securit
 
 **Rule:** Any in-memory dict/set used for tracking must have: (1) a maximum size cap, (2) periodic eviction of stale entries, (3) a fallback behavior when the cap is reached.
 
-### 10. Verify After Creating — Fetch Full Records
+### 10. Python Lint Violations: Never Ignore flake8 Errors
+
+Python lint violations (flake8) must be fixed immediately, never suppressed with `# noqa` or left for later. These are the most common recurring violations:
+
+- **F401 (unused import):** Remove any `import` that is not used in the file. Do not keep imports "for later" or "just in case."
+- **F811 (redefined unused name):** A name was imported or defined but then redefined without being used. Remove the duplicate.
+- **F821 (undefined name):** A variable or class is referenced but never imported or defined. Add the missing import or fix the typo.
+- **E303 (too many blank lines):** Python allows at most 2 blank lines between top-level definitions and 1 inside a class/function. Remove excess blank lines.
+- **W291/W293 (trailing whitespace):** Remove trailing spaces/tabs from lines. Formatters (Black) handle this automatically.
+- **E302/E303 (blank line formatting):** Ensure exactly 2 blank lines before top-level function/class definitions, 1 blank line before methods.
+
+```python
+# WRONG — unused import (F401)
+from app.models.user import User  # never referenced below
+
+# WRONG — undefined name (F821)
+result = await some_service.process(data)  # some_service never imported
+
+# WRONG — too many blank lines (E303)
+def foo():
+    pass
+
+
+
+    # three blank lines inside a function
+```
+
+**Rule:** Run `flake8` on all modified Python files before committing. Fix every violation — do not use `# noqa` comments to suppress errors unless there is a documented, unavoidable reason (e.g., a re-export in `__init__.py`, which should use `# noqa: F401` with the specific code). When you encounter pre-existing flake8 violations in files you are editing, fix them in the same commit. Zero flake8 errors is the standard.
+
+### 11. Verify After Creating — Fetch Full Records
 
 When creating a record (facility, ballot item, candidate, etc.) and immediately displaying it in a detail view, always fetch the full record from the API after creation. Do not rely on the creation response or list-item data, which may lack nested relationships or computed fields needed by the detail view.
 
