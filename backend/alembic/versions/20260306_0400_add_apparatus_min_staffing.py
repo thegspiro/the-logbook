@@ -1,7 +1,7 @@
 """add min_staffing to apparatus table
 
-Revision ID: add_apparatus_min_staffing
-Revises: add_location_room_link
+Revision ID: 20260306_0400
+Revises: 20260306_0300
 Create Date: 2026-03-06 04:00:00.000000
 
 """
@@ -9,8 +9,8 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = "add_apparatus_min_staffing"
-down_revision = "add_location_room_link"
+revision = "20260306_0400"
+down_revision = "20260306_0300"
 branch_labels = None
 depends_on = None
 
