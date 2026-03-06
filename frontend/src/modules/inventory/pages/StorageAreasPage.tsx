@@ -124,7 +124,10 @@ const StorageAreasPage: React.FC = () => {
 
   const facilities = locations.filter((l) => l.building && !l.room_number);
   const rooms = locations.filter((l) => !!l.room_number);
-  const filteredRooms = selectedFacilityId ? rooms.filter((r) => r.facility_id === selectedFacilityId) : rooms;
+  const selectedFacility = facilities.find((f) => f.id === selectedFacilityId);
+  const filteredRooms = selectedFacility
+    ? rooms.filter((r) => r.building === selectedFacility.building || r.facility_id === selectedFacilityId)
+    : rooms;
   const tree = buildTree(storageAreas);
   const searchTree = buildTree(searchResults);
   const isShowingSearch = searchQuery.trim().length > 0;
@@ -222,17 +225,17 @@ const StorageAreasPage: React.FC = () => {
   const set = (patch: Partial<AreaFormData>) => setFormData((p) => ({ ...p, ...patch }));
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
       {/* Header */}
+      <Link to="/inventory/admin" className="text-sm text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1">
+        <ArrowLeft className="h-4 w-4" />
+        Back to Admin
+      </Link>
+
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Link to="/inventory" className="p-2 rounded-lg text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div>
-            <h1 className="text-3xl font-bold text-theme-text-primary">Storage Areas</h1>
-            <p className="text-theme-text-secondary mt-1">Manage hierarchical storage locations within rooms.</p>
-          </div>
+        <div>
+          <h1 className="text-3xl font-bold text-theme-text-primary">Storage Areas</h1>
+          <p className="text-theme-text-secondary mt-1">Manage hierarchical storage locations within rooms.</p>
         </div>
         <button onClick={openCreateModal} className="btn-primary flex gap-2 items-center py-2.5">
           <Plus className="w-4 h-4" /> Add Storage Area

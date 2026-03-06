@@ -93,6 +93,15 @@ const LABEL_PRESETS: LabelPreset[] = [
 
 const DEFAULT_PRESET_ID = 'dymo-30252';
 
+/** Map frontend preset IDs to backend label format keys */
+const PRESET_TO_BACKEND: Record<string, string> = {
+  'dymo-30252': 'dymo_30252',
+  'dymo-30336': 'dymo_30334',
+  'rollo-2x1': 'custom',
+  'thermal-1x1': 'custom',
+  'letter-grid': 'letter',
+};
+
 /** Gets a printable barcode value for an item, or null if none available */
 function getBarcodeValue(item: InventoryItem): string | null {
   const value = item.barcode || item.asset_tag || item.serial_number;
@@ -290,9 +299,14 @@ const InventoryBarcodePrintPage: React.FC = () => {
     if (items.length === 0) return;
     setDownloadingPdf(true);
     try {
+      const backendFormat = PRESET_TO_BACKEND[preset.id] || 'letter';
+      const customW = backendFormat === 'custom' ? parseFloat(preset.width) : undefined;
+      const customH = backendFormat === 'custom' ? parseFloat(preset.height) : undefined;
       const blob = await inventoryService.generateBarcodeLabels(
         items.map(i => i.id),
-        preset.id === 'letter-grid' ? 'letter' : preset.id,
+        backendFormat,
+        customW,
+        customH,
       );
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

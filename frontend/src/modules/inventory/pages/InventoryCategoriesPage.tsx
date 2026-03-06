@@ -7,7 +7,8 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Tag, Plus, Pencil, RefreshCw, Settings, Shield, Wrench, Hash, AlertTriangle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ArrowLeft, Tag, Plus, Pencil, RefreshCw, Settings, Shield, Wrench, Hash, AlertTriangle } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import type { InventoryCategory, InventoryCategoryCreate } from '../types';
 import { ITEM_TYPES } from '../types';
@@ -153,7 +154,12 @@ const InventoryCategoriesPage: React.FC = () => {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <Link to="/inventory/admin" className="text-sm text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1">
+        <ArrowLeft className="h-4 w-4" />
+        Back to Admin
+      </Link>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
