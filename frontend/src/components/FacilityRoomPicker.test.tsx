@@ -53,6 +53,8 @@ describe('FacilityRoomPicker', () => {
 
     expect(screen.queryByLabelText('Select facility')).not.toBeInTheDocument();
     // Wait for rooms to finish loading before checking the select
+
+    // Room selector appears after rooms finish loading
     await waitFor(() => {
       expect(screen.getByLabelText('Select room')).toBeInTheDocument();
     });

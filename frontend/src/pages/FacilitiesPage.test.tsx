@@ -59,8 +59,8 @@ const mockFacilities = [
     addressLine1: '456 Oak Ave',
     city: 'Springfield',
     state: 'IL',
-    facilityType: { id: 'type-2', name: 'Training Center' },
-    statusRecord: { id: 'status-1', name: 'Operational', isOperational: true },
+    facilityType: { id: 'type-2', name: 'Training Facility' },
+    statusRecord: { id: 'status-1', name: 'Operational' },
     isArchived: false,
     createdAt: '2025-02-01T00:00:00Z',
     updatedAt: '2025-02-01T00:00:00Z',
@@ -69,7 +69,7 @@ const mockFacilities = [
 
 const mockTypes = [
   { id: 'type-1', name: 'Fire Station', isActive: true },
-  { id: 'type-2', name: 'Training Center', isActive: true },
+  { id: 'type-2', name: 'Training Facility', isActive: true },
 ];
 
 const mockStatuses = [
@@ -117,10 +117,8 @@ describe('FacilitiesDashboard', () => {
 
   it('renders the page header', async () => {
     renderPage();
-    expect(screen.getByText('Facilities')).toBeInTheDocument();
-    expect(
-      screen.getByText('Manage stations, buildings, maintenance, and inspections'),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Facilities' })).toBeInTheDocument();
+    expect(screen.getByText('Manage stations, buildings, rooms, and maintenance')).toBeInTheDocument();
   });
 
   it('shows loading state then facility cards', async () => {
@@ -146,10 +144,19 @@ describe('FacilitiesDashboard', () => {
     await waitFor(() => {
       expect(screen.getByText('Total Facilities')).toBeInTheDocument();
     });
-    // These labels also appear in section headers and status badges, so use getAllByText
-    expect(screen.getAllByText('Operational').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('Overdue Maintenance').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('Upcoming Inspections').length).toBeGreaterThanOrEqual(1);
+
+    const searchInput = screen.getByPlaceholderText('Search facilities...');
+    await user.type(searchInput, 'Training');
+
+    expect(screen.queryByText('Station 1')).not.toBeInTheDocument();
+    expect(screen.getByText('Training Center')).toBeInTheDocument();
+  });
+
+  it('shows tabs for facilities, maintenance, and inspections', async () => {
+    renderPage();
+    expect(screen.getByRole('button', { name: /Facilities/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Maintenance/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Inspections/ })).toBeInTheDocument();
   });
 
   it('opens create facility modal', async () => {

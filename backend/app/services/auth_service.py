@@ -106,10 +106,19 @@ class AuthService:
         user = result.scalar_one_or_none()
 
         if not user:
+            # SEC-02: Perform a dummy hash to prevent timing-based username
+            # enumeration.  Without this, "user not found" returns in ~1ms
+            # while "wrong password" takes ~100-300ms (Argon2 cost).
+            verify_password(
+                "dummy-password", hash_password("dummy-password", skip_validation=True)
+            )
             logger.warning("Authentication failed for login attempt")
             return None, "Incorrect username or password"
 
         if not user.password_hash:
+            verify_password(
+                "dummy-password", hash_password("dummy-password", skip_validation=True)
+            )
             logger.warning("Authentication failed for login attempt")
             return None, "Incorrect username or password"
 
@@ -711,6 +720,11 @@ class AuthService:
         Returns:
             Tuple of (is_valid, user_email_or_none)
         """
+        # SEC-01: Validate token format/length before hashing to prevent
+        # DoS via extremely long strings (SHA-256 still processes them).
+        if not raw_token or len(raw_token) > 256:
+            return False, None
+
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
 
         result = await self.db.execute(
@@ -743,6 +757,13 @@ class AuthService:
         Returns:
             Tuple of (success, error_message)
         """
+        # SEC-01: Validate token format/length before hashing
+        if not raw_token or len(raw_token) > 256:
+            return (
+                False,
+                "This password reset link is invalid or has already been used. Please request a new reset link from the login page.",
+            )
+
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
 
         result = await self.db.execute(

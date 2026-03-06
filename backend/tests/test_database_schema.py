@@ -427,6 +427,7 @@ class TestColumnConstraints:
         # Tables that support both system-defined (null org) and org-specific records
         nullable_ok = {
             "apparatus_types", "apparatus_statuses", "apparatus_maintenance_types",
+            "facility_types", "facility_statuses", "facility_maintenance_types",
             "onboarding_status", "onboarding_checklist",
         }
         for table_name, table in _tables.items():

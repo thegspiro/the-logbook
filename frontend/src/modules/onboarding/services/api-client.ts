@@ -5,6 +5,7 @@
  */
 
 import { formatValidationErrors } from '../utils/errorHandler';
+import { obfuscate, deobfuscate } from '../utils/security';
 
 interface ApiResponse<T> {
   data?: T | undefined;
@@ -73,7 +74,9 @@ class SecureApiClient {
    */
   private loadSession(): void {
     this.sessionId = localStorage.getItem('onboarding_session_id');
-    this.csrfToken = localStorage.getItem('csrf_token');
+    // SEC: CSRF token is obfuscated in localStorage to prevent casual inspection
+    const raw = localStorage.getItem('csrf_token');
+    this.csrfToken = raw ? deobfuscate(raw) : null;
   }
 
   /**
@@ -85,7 +88,8 @@ class SecureApiClient {
 
     if (csrfToken) {
       this.csrfToken = csrfToken;
-      localStorage.setItem('csrf_token', csrfToken);
+      // SEC: Obfuscate CSRF token before storing in localStorage
+      localStorage.setItem('csrf_token', obfuscate(csrfToken));
     }
   }
 
@@ -233,7 +237,8 @@ class SecureApiClient {
       const newCsrfToken = response.headers.get('X-CSRF-Token');
       if (newCsrfToken) {
         this.csrfToken = newCsrfToken;
-        localStorage.setItem('csrf_token', newCsrfToken);
+        // SEC: Obfuscate CSRF token before storing in localStorage
+        localStorage.setItem('csrf_token', obfuscate(newCsrfToken));
       }
 
       if (!response.ok) {
