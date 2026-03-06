@@ -52,9 +52,9 @@ export default function FacilitiesPage() {
         facilitiesService.getTypes(),
         facilitiesService.getStatuses(),
       ]);
-      setFacilities(data as unknown as Facility[]);
-      setFacilityTypes(types as unknown as FacilityType[]);
-      setFacilityStatuses(statuses as unknown as FacilityStatus[]);
+      setFacilities(data);
+      setFacilityTypes(types);
+      setFacilityStatuses(statuses);
     } catch {
       toast.error('Failed to load facilities');
     } finally {
@@ -72,7 +72,7 @@ export default function FacilitiesPage() {
     if (selectedFacility) {
       try {
         const updated = await facilitiesService.getFacility(selectedFacility.id);
-        setSelectedFacility(updated as unknown as Facility);
+        setSelectedFacility(updated);
       } catch { /* ignore */ }
     }
   };
@@ -114,7 +114,7 @@ export default function FacilitiesPage() {
     // Fetch full record (list endpoint returns limited fields)
     try {
       const full = await facilitiesService.getFacility(facility.id);
-      setSelectedFacility(full as unknown as Facility);
+      setSelectedFacility(full);
     } catch {
       // Keep the partial data rather than clearing
     }

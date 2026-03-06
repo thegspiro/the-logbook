@@ -1,23 +1,27 @@
 /**
- * Facility Detail Panel - Shows full facility details with edit, rooms, and actions.
+ * Facility Detail Panel — Shows full facility details with edit capabilities,
+ * rooms, building systems, and emergency contacts in a tabbed layout.
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import {
   Building2, X, Archive, RotateCcw, MapPin, DoorOpen, Wrench,
-  ClipboardCheck, ChevronDown, ChevronUp, Plus, Pencil, Save, Trash2,
-  Loader2, Phone, Mail,
+  ClipboardCheck, Plus, Pencil, Save, Trash2,
+  Loader2, Phone, Mail, Settings, Users, AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { facilitiesService } from '../../services/api';
-import type { Facility, FacilityType, FacilityStatus, Room, ROOM_TYPES } from './types';
-import { enumLabel } from './types';
+import type { FacilityCreate, EmergencyContact } from '../../services/facilitiesServices';
+import type { Facility, FacilityType, FacilityStatus, Room, FacilitySystem, ROOM_TYPES } from './types';
+import { enumLabel, ZONE_CLASSIFICATION_COLORS } from './types';
 
 const ROOM_TYPE_OPTIONS: Array<typeof ROOM_TYPES[number]> = [
   'apparatus_bay', 'bunk_room', 'kitchen', 'bathroom', 'office',
   'training_room', 'storage', 'mechanical', 'lobby', 'common_area',
   'laundry', 'gym', 'decontamination', 'dispatch', 'other',
 ];
+
+type DetailTab = 'rooms' | 'systems' | 'contacts';
 
 interface Props {
   facility: Facility;
@@ -38,15 +42,19 @@ export default function FacilityDetailPanel({
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editData, setEditData] = useState<Record<string, unknown>>({});
-  const [showRooms, setShowRooms] = useState(false);
+
+  // Sub-entity state
+  const [activeDetailTab, setActiveDetailTab] = useState<DetailTab | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [isLoadingRooms, setIsLoadingRooms] = useState(false);
+  const [systems, setSystems] = useState<FacilitySystem[]>([]);
+  const [contacts, setContacts] = useState<EmergencyContact[]>([]);
+  const [isLoadingSub, setIsLoadingSub] = useState(false);
+
+  // Add room form
   const [showAddRoom, setShowAddRoom] = useState(false);
   const [newRoom, setNewRoom] = useState({ name: '', room_number: '', floor: '', room_type: 'other', capacity: '', square_footage: '', description: '' });
 
   const startEditing = () => {
-    // Keys are snake_case (matching the backend FacilityUpdate schema).
-    // Values are read from the camelCase API response via the Facility interface.
     setEditData({
       name: facility.name || '',
       facility_number: facility.facilityNumber || '',
@@ -91,7 +99,7 @@ export default function FacilityDetailPanel({
           payload[key] = null;
         }
       }
-      await facilitiesService.updateFacility(facility.id, payload);
+      await facilitiesService.updateFacility(facility.id, payload as Partial<FacilityCreate>);
       toast.success('Facility updated');
       setIsEditing(false);
       onUpdated();
@@ -102,21 +110,34 @@ export default function FacilityDetailPanel({
     }
   };
 
-  const loadRooms = useCallback(async () => {
-    setIsLoadingRooms(true);
+  // Load sub-entities when tab changes
+  const loadSubEntities = useCallback(async (tab: DetailTab) => {
+    setIsLoadingSub(true);
     try {
-      const data = await facilitiesService.getRooms({ facility_id: facility.id });
-      setRooms(data as unknown as Room[]);
+      if (tab === 'rooms') {
+        const data = await facilitiesService.getRooms({ facility_id: facility.id });
+        setRooms(data);
+      } else if (tab === 'systems') {
+        const data = await facilitiesService.getSystems({ facility_id: facility.id });
+        setSystems(data);
+      } else if (tab === 'contacts') {
+        const data = await facilitiesService.getEmergencyContacts({ facility_id: facility.id });
+        setContacts(data);
+      }
     } catch {
-      toast.error('Failed to load rooms');
+      toast.error(`Failed to load ${tab}`);
     } finally {
-      setIsLoadingRooms(false);
+      setIsLoadingSub(false);
     }
   }, [facility.id]);
 
   useEffect(() => {
-    if (showRooms) void loadRooms();
-  }, [showRooms, loadRooms]);
+    if (activeDetailTab) void loadSubEntities(activeDetailTab);
+  }, [activeDetailTab, loadSubEntities]);
+
+  const handleTabToggle = (tab: DetailTab) => {
+    setActiveDetailTab(prev => prev === tab ? null : tab);
+  };
 
   const handleAddRoom = async () => {
     if (!newRoom.name.trim()) { toast.error('Room name is required'); return; }
@@ -134,7 +155,7 @@ export default function FacilityDetailPanel({
       toast.success('Room added');
       setNewRoom({ name: '', room_number: '', floor: '', room_type: 'other', capacity: '', square_footage: '', description: '' });
       setShowAddRoom(false);
-      void loadRooms();
+      void loadSubEntities('rooms');
     } catch {
       toast.error('Failed to add room');
     }
@@ -145,9 +166,31 @@ export default function FacilityDetailPanel({
     try {
       await facilitiesService.deleteRoom(room.id);
       toast.success('Room deleted');
-      void loadRooms();
+      void loadSubEntities('rooms');
     } catch {
       toast.error('Failed to delete room');
+    }
+  };
+
+  const handleDeleteSystem = async (sys: FacilitySystem) => {
+    if (!window.confirm(`Delete system "${sys.name}"?`)) return;
+    try {
+      await facilitiesService.deleteSystem(sys.id);
+      toast.success('System deleted');
+      void loadSubEntities('systems');
+    } catch {
+      toast.error('Failed to delete system');
+    }
+  };
+
+  const handleDeleteContact = async (contact: EmergencyContact) => {
+    if (!window.confirm(`Delete contact "${contact.companyName || contact.contactName}"?`)) return;
+    try {
+      await facilitiesService.deleteEmergencyContact(contact.id);
+      toast.success('Contact deleted');
+      void loadSubEntities('contacts');
+    } catch {
+      toast.error('Failed to delete contact');
     }
   };
 
@@ -155,6 +198,20 @@ export default function FacilityDetailPanel({
 
   const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
   const labelCls = 'block text-xs font-medium text-theme-text-muted mb-1';
+
+  const CONDITION_COLORS: Record<string, string> = {
+    excellent: 'text-emerald-600 dark:text-emerald-400',
+    good: 'text-blue-600 dark:text-blue-400',
+    fair: 'text-amber-600 dark:text-amber-400',
+    poor: 'text-orange-600 dark:text-orange-400',
+    critical: 'text-red-600 dark:text-red-400',
+  };
+
+  const detailTabs: { id: DetailTab; label: string; icon: React.ElementType }[] = [
+    { id: 'rooms', label: 'Rooms', icon: DoorOpen },
+    { id: 'systems', label: 'Systems', icon: Settings },
+    { id: 'contacts', label: 'Emergency', icon: Users },
+  ];
 
   return (
     <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-6 space-y-5">
@@ -323,71 +380,187 @@ export default function FacilityDetailPanel({
         >
           <ClipboardCheck className="w-4 h-4" /> Inspections
         </button>
-        <button onClick={() => setShowRooms(!showRooms)}
-          className="flex items-center gap-2 px-3 py-2 text-sm text-theme-text-secondary border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors"
-        >
-          <DoorOpen className="w-4 h-4" /> Rooms
-          {showRooms ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-        </button>
       </div>
 
-      {/* Rooms Panel */}
-      {showRooms && (
-        <div className="space-y-3 pt-2">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-theme-text-primary">Rooms ({rooms.length})</h3>
-            <button onClick={() => setShowAddRoom(!showAddRoom)}
-              className="flex items-center gap-1 px-2 py-1 text-xs text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-            >
-              <Plus className="w-3 h-3" /> Add Room
-            </button>
-          </div>
-          {showAddRoom && (
-            <div className="p-3 bg-theme-surface-hover/50 rounded-lg space-y-2">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <input type="text" value={newRoom.name} onChange={e => setNewRoom(p => ({...p, name: e.target.value}))} placeholder="Room name *" className={inputCls} />
-                <input type="text" value={newRoom.room_number} onChange={e => setNewRoom(p => ({...p, room_number: e.target.value}))} placeholder="Room #" className={inputCls} />
-                <select value={newRoom.room_type} onChange={e => setNewRoom(p => ({...p, room_type: e.target.value}))} className={inputCls}>
-                  {ROOM_TYPE_OPTIONS.map(rt => <option key={rt} value={rt}>{enumLabel(rt)}</option>)}
-                </select>
-                <input type="number" value={newRoom.floor} onChange={e => setNewRoom(p => ({...p, floor: e.target.value}))} placeholder="Floor" className={inputCls} />
-                <input type="number" value={newRoom.capacity} onChange={e => setNewRoom(p => ({...p, capacity: e.target.value}))} placeholder="Capacity" className={inputCls} />
-                <input type="number" value={newRoom.square_footage} onChange={e => setNewRoom(p => ({...p, square_footage: e.target.value}))} placeholder="Sq ft" className={inputCls} />
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => { void handleAddRoom(); }} className="btn-primary px-3 py-1.5 text-xs">Add</button>
-                <button onClick={() => setShowAddRoom(false)} className="px-3 py-1.5 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors">Cancel</button>
-              </div>
-            </div>
-          )}
-          {isLoadingRooms ? (
-            <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" /></div>
-          ) : rooms.length === 0 ? (
-            <p className="text-sm text-theme-text-muted py-2">No rooms added yet.</p>
-          ) : (
-            <div className="space-y-1">
-              {rooms.map(room => (
-                <div key={room.id} className="flex items-center justify-between p-2.5 bg-theme-surface-hover/30 rounded-lg group">
-                  <div className="flex items-center gap-3">
-                    <DoorOpen className="w-4 h-4 text-theme-text-muted" />
-                    <div>
-                      <p className="text-sm font-medium text-theme-text-primary">
-                        {room.name}{room.roomNumber ? ` (#${room.roomNumber})` : ''}
-                      </p>
-                      <p className="text-xs text-theme-text-muted">
-                        {enumLabel(room.roomType)}{room.floor != null ? ` · Floor ${room.floor}` : ''}{room.capacity ? ` · Cap: ${room.capacity}` : ''}
-                      </p>
-                    </div>
-                  </div>
-                  <button onClick={() => { void handleDeleteRoom(room); }} className="opacity-0 group-hover:opacity-100 text-theme-text-muted hover:text-red-500 transition-all">
-                    <Trash2 className="w-3.5 h-3.5" />
+      {/* Detail Sub-Tabs */}
+      <div className="border-t border-theme-surface-border pt-4">
+        <div className="flex gap-1 mb-3">
+          {detailTabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeDetailTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => handleTabToggle(tab.id)}
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg transition-colors ${
+                  isActive
+                    ? 'bg-red-500/10 text-red-700 dark:text-red-400'
+                    : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Sub-tab content */}
+        {activeDetailTab && (
+          <div className="space-y-3">
+            {isLoadingSub ? (
+              <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" /></div>
+            ) : activeDetailTab === 'rooms' ? (
+              /* Rooms */
+              <>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-theme-text-primary">Rooms ({rooms.length})</h3>
+                  <button onClick={() => setShowAddRoom(!showAddRoom)}
+                    className="flex items-center gap-1 px-2 py-1 text-xs text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                  >
+                    <Plus className="w-3 h-3" /> Add Room
                   </button>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+                {showAddRoom && (
+                  <div className="p-3 bg-theme-surface-hover/50 rounded-lg space-y-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      <input type="text" value={newRoom.name} onChange={e => setNewRoom(p => ({...p, name: e.target.value}))} placeholder="Room name *" className={inputCls} />
+                      <input type="text" value={newRoom.room_number} onChange={e => setNewRoom(p => ({...p, room_number: e.target.value}))} placeholder="Room #" className={inputCls} />
+                      <select value={newRoom.room_type} onChange={e => setNewRoom(p => ({...p, room_type: e.target.value}))} className={inputCls}>
+                        {ROOM_TYPE_OPTIONS.map(rt => <option key={rt} value={rt}>{enumLabel(rt)}</option>)}
+                      </select>
+                      <input type="number" value={newRoom.floor} onChange={e => setNewRoom(p => ({...p, floor: e.target.value}))} placeholder="Floor" className={inputCls} />
+                      <input type="number" value={newRoom.capacity} onChange={e => setNewRoom(p => ({...p, capacity: e.target.value}))} placeholder="Capacity" className={inputCls} />
+                      <input type="number" value={newRoom.square_footage} onChange={e => setNewRoom(p => ({...p, square_footage: e.target.value}))} placeholder="Sq ft" className={inputCls} />
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => { void handleAddRoom(); }} className="btn-primary px-3 py-1.5 text-xs">Add</button>
+                      <button onClick={() => setShowAddRoom(false)} className="px-3 py-1.5 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors">Cancel</button>
+                    </div>
+                  </div>
+                )}
+                {rooms.length === 0 ? (
+                  <p className="text-sm text-theme-text-muted py-2">No rooms added yet.</p>
+                ) : (
+                  <div className="space-y-1">
+                    {rooms.map(room => (
+                      <div key={room.id} className="flex items-center justify-between p-2.5 bg-theme-surface-hover/30 rounded-lg group">
+                        <div className="flex items-center gap-3">
+                          <DoorOpen className="w-4 h-4 text-theme-text-muted" />
+                          <div>
+                            <p className="text-sm font-medium text-theme-text-primary">
+                              {room.name}{room.roomNumber ? ` (#${room.roomNumber})` : ''}
+                            </p>
+                            <div className="flex items-center gap-2 text-xs text-theme-text-muted">
+                              <span>{enumLabel(room.roomType)}</span>
+                              {room.floor != null && <span>Floor {room.floor}</span>}
+                              {room.capacity && <span>Cap: {room.capacity}</span>}
+                              {room.zoneClassification && room.zoneClassification !== 'unclassified' && (
+                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${ZONE_CLASSIFICATION_COLORS[room.zoneClassification] || ''}`}>
+                                  {enumLabel(room.zoneClassification)} Zone
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <button onClick={() => { void handleDeleteRoom(room); }} className="opacity-0 group-hover:opacity-100 text-theme-text-muted hover:text-red-500 transition-all">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : activeDetailTab === 'systems' ? (
+              /* Building Systems */
+              <>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-theme-text-primary">Building Systems ({systems.length})</h3>
+                </div>
+                {systems.length === 0 ? (
+                  <p className="text-sm text-theme-text-muted py-2">No building systems recorded.</p>
+                ) : (
+                  <div className="space-y-1">
+                    {systems.map(sys => (
+                      <div key={sys.id} className="flex items-center justify-between p-2.5 bg-theme-surface-hover/30 rounded-lg group">
+                        <div className="flex items-center gap-3">
+                          <Settings className="w-4 h-4 text-theme-text-muted" />
+                          <div>
+                            <p className="text-sm font-medium text-theme-text-primary">{sys.name}</p>
+                            <div className="flex items-center gap-2 text-xs text-theme-text-muted">
+                              <span>{enumLabel(sys.systemType)}</span>
+                              {sys.condition && (
+                                <span className={`font-medium ${CONDITION_COLORS[sys.condition.toLowerCase()] || ''}`}>
+                                  {enumLabel(sys.condition)}
+                                </span>
+                              )}
+                              {sys.manufacturer && <span>{sys.manufacturer}</span>}
+                              {sys.warrantyExpiration && (
+                                <span className={new Date(sys.warrantyExpiration) < new Date() ? 'text-red-500' : ''}>
+                                  Warranty: {sys.warrantyExpiration}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <button onClick={() => { void handleDeleteSystem(sys); }} className="opacity-0 group-hover:opacity-100 text-theme-text-muted hover:text-red-500 transition-all">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : activeDetailTab === 'contacts' ? (
+              /* Emergency Contacts */
+              <>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-theme-text-primary">Emergency Contacts ({contacts.length})</h3>
+                </div>
+                {contacts.length === 0 ? (
+                  <p className="text-sm text-theme-text-muted py-2">No emergency contacts recorded.</p>
+                ) : (
+                  <div className="space-y-1">
+                    {contacts.map(contact => (
+                      <div key={contact.id} className="flex items-center justify-between p-2.5 bg-theme-surface-hover/30 rounded-lg group">
+                        <div className="flex items-center gap-3">
+                          <AlertTriangle className="w-4 h-4 text-theme-text-muted" />
+                          <div>
+                            <p className="text-sm font-medium text-theme-text-primary">
+                              {contact.companyName || contact.contactName || 'Unknown'}
+                            </p>
+                            <div className="flex items-center gap-3 text-xs text-theme-text-muted">
+                              <span>{enumLabel(contact.contactType)}</span>
+                              {contact.phone && (
+                                <span className="flex items-center gap-1">
+                                  <Phone className="w-3 h-3" />{contact.phone}
+                                </span>
+                              )}
+                              {contact.email && (
+                                <span className="flex items-center gap-1">
+                                  <Mail className="w-3 h-3" />{contact.email}
+                                </span>
+                              )}
+                              {contact.priority && (
+                                <span className={contact.priority === 1 ? 'text-red-500 font-medium' : ''}>
+                                  Priority {contact.priority}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <button onClick={() => { void handleDeleteContact(contact); }} className="opacity-0 group-hover:opacity-100 text-theme-text-muted hover:text-red-500 transition-all">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : null}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
