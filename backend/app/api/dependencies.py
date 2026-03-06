@@ -68,8 +68,8 @@ async def get_current_user(
     elif authorization:
         # Extract token from "Bearer <token>" format
         try:
-            scheme, bearer_token = authorization.split()
-            if scheme.lower() != "bearer":
+            scheme, _, bearer_token = authorization.partition(" ")
+            if scheme.lower() != "bearer" or not bearer_token:
                 raise credentials_exception
             token = bearer_token
         except ValueError:
