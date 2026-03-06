@@ -521,8 +521,24 @@ class FacilitiesService:
                 )
             )
             default_type = type_result.scalar_one_or_none()
+            if not default_type:
+                # Fall back to any active type for this org
+                type_result = await self.db.execute(
+                    select(FacilityType).where(
+                        or_(
+                            FacilityType.organization_id == organization_id,
+                            FacilityType.organization_id.is_(None),
+                        ),
+                        FacilityType.is_active.is_(True),
+                    ).limit(1)
+                )
+                default_type = type_result.scalar_one_or_none()
             if default_type:
                 facility_dict["facility_type_id"] = default_type.id
+            else:
+                raise ValueError(
+                    "No facility types available. Please create a facility type first."
+                )
 
         # Auto-assign "Operational" status if none provided
         if not facility_dict.get("status_id"):
@@ -537,8 +553,24 @@ class FacilitiesService:
                 )
             )
             operational = op_result.scalar_one_or_none()
+            if not operational:
+                # Fall back to any active status for this org
+                op_result = await self.db.execute(
+                    select(FacilityStatus).where(
+                        or_(
+                            FacilityStatus.organization_id == organization_id,
+                            FacilityStatus.organization_id.is_(None),
+                        ),
+                        FacilityStatus.is_active.is_(True),
+                    ).limit(1)
+                )
+                operational = op_result.scalar_one_or_none()
             if operational:
                 facility_dict["status_id"] = operational.id
+            else:
+                raise ValueError(
+                    "No facility statuses available. Please create a facility status first."
+                )
 
         if facility_dict.get("status_id"):
             extra["status_changed_at"] = datetime.now(tz=timezone.utc)
