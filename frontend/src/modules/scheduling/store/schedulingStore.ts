@@ -16,6 +16,7 @@ import type {
   BasicApparatusRecord,
 } from "../services/api";
 import { getErrorMessage } from "../../../utils/errorHandling";
+import { UserStatus } from "../../../constants/enums";
 
 interface MemberOption {
   id: string;
@@ -84,7 +85,7 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
     try {
       const users = await userService.getUsers();
       const members = users
-        .filter((m) => m.status === "active")
+        .filter((m) => m.status === UserStatus.ACTIVE)
         .map((m) => ({
           id: String(m.id),
           label:

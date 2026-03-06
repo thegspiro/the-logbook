@@ -697,7 +697,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
     const name = templateNameInput.trim();
 
     // Prevent duplicate ballot items for the same position
-    if (selectedTemplate.vote_type === 'candidate_selection' && usedPositions.has(name)) {
+    if (selectedTemplate.vote_type === VoteType.CANDIDATE_SELECTION && usedPositions.has(name)) {
       toast.error(`A ballot item for "${name}" already exists.`);
       return;
     }
@@ -707,7 +707,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
       type: selectedTemplate.type,
       title: selectedTemplate.title_template.replace('{name}', name),
       description: selectedTemplate.description_template?.replace('{name}', name),
-      ...(selectedTemplate.vote_type === 'candidate_selection' ? { position: name } : {}),
+      ...(selectedTemplate.vote_type === VoteType.CANDIDATE_SELECTION ? { position: name } : {}),
       eligible_voter_types: [...selectedTemplate.eligible_voter_types],
       vote_type: selectedTemplate.vote_type,
       require_attendance: selectedTemplate.require_attendance,
@@ -1126,7 +1126,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                   </div>
                 </div>
 
-                {customForm.vote_type === 'candidate_selection' && (
+                {customForm.vote_type === VoteType.CANDIDATE_SELECTION && (
                   <div>
                     <label className={labelClass}>Position</label>
                     {election.positions && election.positions.length > 0 ? (

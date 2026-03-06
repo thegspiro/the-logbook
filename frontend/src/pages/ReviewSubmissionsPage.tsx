@@ -111,9 +111,9 @@ const ReviewPanel: React.FC<{
           <span>Approve</span>
         </button>
         <button
-          onClick={() => setAction('revision_requested')}
+          onClick={() => setAction(SubmissionStatus.REVISION_REQUESTED)}
           className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-            action === 'revision_requested'
+            action === SubmissionStatus.REVISION_REQUESTED
               ? 'bg-orange-600 text-white'
               : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
           }`}
@@ -393,8 +393,8 @@ const SubmissionCard: React.FC<{
 }> = ({ submission, onReview, onRecordUpdated }) => {
   const [expanded, setExpanded] = useState(false);
   const tz = useTimezone();
-  const isPending = submission.status === 'pending_review';
-  const isApproved = submission.status === 'approved' && !!submission.training_record_id;
+  const isPending = submission.status === SubmissionStatus.PENDING_REVIEW;
+  const isApproved = submission.status === SubmissionStatus.APPROVED && !!submission.training_record_id;
 
   return (
     <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden">

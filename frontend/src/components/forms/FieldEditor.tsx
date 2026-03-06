@@ -138,9 +138,9 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
   }, [field]);
 
   const needsOptions = NEEDS_OPTIONS.includes(fieldType);
-  const isSectionHeader = fieldType === 'section_header';
-  const isNumeric = fieldType === 'number';
-  const isTextLike = ['text', 'textarea', 'email', 'phone'].includes(fieldType);
+  const isSectionHeader = fieldType === FieldType.SECTION_HEADER;
+  const isNumeric = fieldType === FieldType.NUMBER;
+  const isTextLike = ([FieldType.TEXT, FieldType.TEXTAREA, FieldType.EMAIL, FieldType.PHONE] as string[]).includes(fieldType);
 
   // Available sibling fields for condition (exclude self)
   const conditionTargets = siblingFields.filter(

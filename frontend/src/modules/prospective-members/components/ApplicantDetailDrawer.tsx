@@ -681,7 +681,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
               {(() => {
                 const formArtifact = applicant.stage_history
                   .flatMap((e) => e.artifacts)
-                  .find((a) => a.type === 'form_submission' && a.data);
+                  .find((a) => a.type === StageTypeEnum.FORM_SUBMISSION && a.data);
                 if (!formArtifact?.data) return null;
                 const fields = formArtifact.data;
                 return (
@@ -1012,7 +1012,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                               {entry.artifacts.length > 0 && (
                                 <div className="mt-2 space-y-1">
                                   {entry.artifacts.map((artifact) => {
-                                    if (artifact.type === 'form_submission' && artifact.data) {
+                                    if (artifact.type === StageTypeEnum.FORM_SUBMISSION && artifact.data) {
                                       const fields = artifact.data;
                                       return (
                                         <div key={artifact.id} className="bg-theme-surface-secondary rounded px-3 py-2">

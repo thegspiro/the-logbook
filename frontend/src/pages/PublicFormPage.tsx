@@ -4,6 +4,7 @@ import DOMPurify from 'dompurify';
 import { publicFormsService } from '../services/api';
 import type { PublicFormDef, PublicFormField } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
+import { FieldType } from '../constants/enums';
 
 // Sanitize any text content that came from the server
 const clean = (text: string | null | undefined): string => {
@@ -118,7 +119,7 @@ const PublicFormPage = () => {
       case 'phone':
         return (
           <input
-            type={field.field_type === 'phone' ? 'tel' : field.field_type}
+            type={field.field_type === FieldType.PHONE ? 'tel' : field.field_type}
             className={baseInputClass}
             placeholder={field.placeholder || ''}
             value={value}
@@ -360,7 +361,7 @@ const PublicFormPage = () => {
             {form.fields.map((field) => {
               if (!isFieldVisible(field)) return null;
 
-              if (field.field_type === 'section_header') {
+              if (field.field_type === FieldType.SECTION_HEADER) {
                 return (
                   <div key={field.id} className="pt-4">
                     {renderField(field)}

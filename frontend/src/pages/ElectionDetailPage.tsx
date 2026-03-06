@@ -17,7 +17,7 @@ import { MeetingAttendance } from '../components/MeetingAttendance';
 import { VoterOverrideManagement } from '../components/VoterOverrideManagement';
 import { ProxyVotingManagement } from '../components/ProxyVotingManagement';
 import { useAuthStore } from '../stores/authStore';
-import { ElectionStatus } from '../constants/enums';
+import { ElectionStatus, VoteType, BallotItemType } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
@@ -1398,7 +1398,7 @@ export const ElectionDetailPage: React.FC = () => {
               ) : (
                 (election.ballot_items || []).map((item, index) => {
                   const itemCandidates = getPreviewCandidatesForItem(item);
-                  const isApprovalType = item.vote_type === 'approval';
+                  const isApprovalType = item.vote_type === VoteType.APPROVAL;
 
                   return (
                     <div
@@ -1428,7 +1428,7 @@ export const ElectionDetailPage: React.FC = () => {
                             {itemCandidates.length > 0 && (
                               <div className="mb-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
                                 <p className="text-xs font-medium text-blue-700 dark:text-blue-400 mb-1.5">
-                                  {item.type === 'membership_approval' ? 'Prospective Member' : 'Candidate'}{itemCandidates.length !== 1 ? 's' : ''}:
+                                  {item.type === BallotItemType.MEMBERSHIP_APPROVAL ? 'Prospective Member' : 'Candidate'}{itemCandidates.length !== 1 ? 's' : ''}:
                                 </p>
                                 {itemCandidates.map((candidate) => (
                                   <div key={candidate.id} className="flex items-center gap-2 py-1">

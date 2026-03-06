@@ -299,7 +299,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                 </label>
                 <div className="form-grid-2">
                   <button
-                    onClick={() => setMembershipType('probationary')}
+                    onClick={() => setMembershipType(MembershipType.PROBATIONARY)}
                     className={`p-3 rounded-lg border text-left transition-all ${
                       membershipType === MembershipType.PROBATIONARY
                         ? 'border-red-500 bg-red-500/10'
@@ -310,9 +310,9 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                     <p className="text-xs text-theme-text-muted mt-0.5">New member in trial period</p>
                   </button>
                   <button
-                    onClick={() => setMembershipType('administrative')}
+                    onClick={() => setMembershipType(MembershipType.ADMINISTRATIVE)}
                     className={`p-3 rounded-lg border text-left transition-all ${
-                      membershipType === 'administrative'
+                      membershipType === MembershipType.ADMINISTRATIVE
                         ? 'border-red-500 bg-red-500/10'
                         : 'border-theme-surface-border bg-theme-surface-hover hover:border-theme-surface-border'
                     }`}

@@ -21,6 +21,7 @@ import {
   AlertCircle,
   Mail,
 } from 'lucide-react';
+import { StageType as StageTypeConst } from '../../../constants/enums';
 import type {
   PipelineStage,
   PipelineStageCreate,
@@ -320,7 +321,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
         setTimeoutOverrideDays(180);
       }
       // Validate pre-selected form for pipeline compatibility
-      if (editingStage.stage_type === 'form_submission' && (editingStage.config as FormStageConfig).form_id) {
+      if (editingStage.stage_type === StageTypeConst.FORM_SUBMISSION && (editingStage.config as FormStageConfig).form_id) {
         const formId = (editingStage.config as FormStageConfig).form_id;
         setFormValidationLoading(true);
         void pipelineService.validateFormForPipeline(formId).then(
@@ -336,7 +337,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
     } else {
       setName('');
       setDescription('');
-      setStageType('manual_approval');
+      setStageType(StageTypeConst.MANUAL_APPROVAL);
       setConfig(DEFAULT_CONFIGS.manual_approval());
       setIsRequired(true);
       setNotifyProspect(false);
@@ -411,18 +412,18 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
     const newErrors: Record<string, string> = {};
     if (!name.trim()) newErrors.name = 'Stage name is required';
 
-    if (stageType === 'form_submission') {
+    if (stageType === StageTypeConst.FORM_SUBMISSION) {
       const c = config as FormStageConfig;
       if (!c.form_id) newErrors.form_id = 'Please select a form';
     }
 
-    if (stageType === 'document_upload') {
+    if (stageType === StageTypeConst.DOCUMENT_UPLOAD) {
       const c = config as DocumentStageConfig;
       const validTypes = c.required_document_types.filter((t) => t.trim());
       if (validTypes.length === 0) newErrors.document_types = 'At least one document type is required';
     }
 
-    if (stageType === 'election_vote') {
+    if (stageType === StageTypeConst.ELECTION_VOTE) {
       const c = config as ElectionStageConfig;
       if (!c.eligible_voter_roles || c.eligible_voter_roles.length === 0) {
         newErrors.eligible_voter_roles = 'At least one eligible voter role is required';
@@ -433,14 +434,14 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
       }
     }
 
-    if (stageType === 'manual_approval') {
+    if (stageType === StageTypeConst.MANUAL_APPROVAL) {
       const c = config as ManualApprovalConfig;
       if (!c.approver_roles || c.approver_roles.length === 0) {
         newErrors.approver_roles = 'At least one approver role is required';
       }
     }
 
-    if (stageType === 'automated_email') {
+    if (stageType === StageTypeConst.AUTOMATED_EMAIL) {
       const c = config as AutomatedEmailStageConfig;
       if (!c.email_subject.trim()) newErrors.email_subject = 'Email subject is required';
     }
@@ -610,7 +611,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
             <h3 className="text-theme-text-secondary mb-4 text-sm font-medium">Stage Configuration</h3>
 
             {/* Form Submission Config */}
-            {stageType === 'form_submission' && (
+            {stageType === StageTypeConst.FORM_SUBMISSION && (
               <div>
                 <label htmlFor="stage-form-id" className="text-theme-text-muted mb-2 block text-sm">
                   Form
@@ -763,7 +764,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
             )}
 
             {/* Document Upload Config */}
-            {stageType === 'document_upload' && (
+            {stageType === StageTypeConst.DOCUMENT_UPLOAD && (
               <div className="space-y-4">
                 <div>
                   <label className="text-theme-text-muted mb-2 block text-sm">Required Document Types</label>
@@ -823,7 +824,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
             )}
 
             {/* Meeting Config */}
-            {stageType === 'meeting' && (
+            {stageType === StageTypeConst.MEETING && (
               <div className="space-y-4">
                 <div>
                   <label htmlFor="stage-meeting-type" className="text-theme-text-muted mb-2 block text-sm">
@@ -892,7 +893,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
             )}
 
             {/* Election Vote Config */}
-            {stageType === 'election_vote' && (
+            {stageType === StageTypeConst.ELECTION_VOTE && (
               <div className="space-y-4">
                 <div>
                   <label htmlFor="stage-voting-method" className="text-theme-text-muted mb-2 block text-sm">
@@ -1057,7 +1058,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
             )}
 
             {/* Manual Approval Config */}
-            {stageType === 'manual_approval' && (
+            {stageType === StageTypeConst.MANUAL_APPROVAL && (
               <div className="space-y-4">
                 <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
                   <input
@@ -1076,7 +1077,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
             )}
 
             {/* Status Page Toggle Config */}
-            {stageType === 'status_page_toggle' && (
+            {stageType === StageTypeConst.STATUS_PAGE_TOGGLE && (
               <div className="space-y-4">
                 <div className="bg-theme-surface-hover border-theme-surface-border rounded-lg border p-4">
                   <div className="mb-2 flex items-center gap-2">
@@ -1117,7 +1118,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
             )}
 
             {/* Automated Email Config */}
-            {stageType === 'automated_email' && (
+            {stageType === StageTypeConst.AUTOMATED_EMAIL && (
               <div className="space-y-4">
                 <div>
                   <label htmlFor="stage-email-subject" className="text-theme-text-muted mb-2 block text-sm">

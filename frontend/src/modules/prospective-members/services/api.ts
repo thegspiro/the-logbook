@@ -56,6 +56,7 @@ import type {
   InterviewUpdate,
 } from '../types';
 import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS, StepProgressStatus } from '../types';
+import { StageType as StageTypeConst } from '../../../constants/enums';
 
 const api = createApiClient();
 
@@ -255,17 +256,17 @@ export function mapProspectToApplicant(data: BackendProspectResponse): Applicant
     .map((sp: BackendStepProgressResponse) => {
     const stageType = sp.step?.step_type
       ? mapStepTypeToFrontend(sp.step.step_type, sp.step.action_type)
-      : ('manual_approval' as StageType);
+      : (StageTypeConst.MANUAL_APPROVAL as StageType);
 
     // Build artifacts from action_result when available
     const artifacts: StageHistoryEntry['artifacts'] = [];
     const actionResult = sp.action_result;
     if (actionResult && typeof actionResult === 'object') {
       const mappedData = actionResult['mapped_data'] as Record<string, unknown> | undefined;
-      if (mappedData && stageType === 'form_submission') {
+      if (mappedData && stageType === StageTypeConst.FORM_SUBMISSION) {
         artifacts.push({
           id: `${sp.id}-form`,
-          type: 'form_submission',
+          type: StageTypeConst.FORM_SUBMISSION,
           name: 'Membership Interest Form',
           data: mappedData,
           created_at: sp.completed_at ?? sp.created_at,

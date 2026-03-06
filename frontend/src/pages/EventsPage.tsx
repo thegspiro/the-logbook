@@ -97,9 +97,9 @@ export const EventsPage: React.FC = () => {
       const catValue = typeFilter.slice(4);
       return events.filter((e) => e.custom_category === catValue);
     }
-    if (typeFilter === 'other') {
+    if (typeFilter === EventTypeEnum.OTHER) {
       return events.filter(
-        (e) => e.event_type === 'other' || hiddenTypes.includes(e.event_type)
+        (e) => e.event_type === EventTypeEnum.OTHER || hiddenTypes.includes(e.event_type)
       );
     }
     return events.filter(e => e.event_type === typeFilter);

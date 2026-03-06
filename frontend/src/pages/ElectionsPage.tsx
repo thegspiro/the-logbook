@@ -10,7 +10,7 @@ import { electionService, meetingsService, ranksService } from '../services/api'
 import type { MeetingRecord, OperationalRankResponse } from '../services/api';
 import type { ElectionListItem, ElectionCreate, VotingMethod, VictoryCondition } from '../types/election';
 import { useAuthStore } from '../stores/authStore';
-import { ElectionStatus } from '../constants/enums';
+import { ElectionStatus, VoteType } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
@@ -646,7 +646,7 @@ export const ElectionsPage: React.FC = () => {
                   <p className="mt-1 text-xs text-theme-text-muted">
                     {formData.voting_method === 'ranked_choice'
                       ? 'Voters rank candidates in order of preference. Lowest-ranked candidates are eliminated until one has a majority.'
-                      : formData.voting_method === 'approval'
+                      : formData.voting_method === VoteType.APPROVAL
                       ? 'Voters approve or disapprove each candidate. The candidate with the most approvals wins.'
                       : formData.victory_condition === 'majority'
                       ? 'Each voter picks one candidate. Winner must receive more than 50% of the votes.'
