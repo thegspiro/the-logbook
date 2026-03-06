@@ -343,13 +343,13 @@ export const ElectionDetailPage: React.FC = () => {
 
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
-      case 'open':
+      case ElectionStatus.OPEN:
         return 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400';
-      case 'closed':
+      case ElectionStatus.CLOSED:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400';
-      case 'draft':
+      case ElectionStatus.DRAFT:
         return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400';
-      case 'cancelled':
+      case ElectionStatus.CANCELLED:
         return 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400';
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400';
@@ -582,7 +582,7 @@ export const ElectionDetailPage: React.FC = () => {
               )}
 
               {/* Delete Election */}
-              {election.status !== 'cancelled' && (
+              {election.status !== ElectionStatus.CANCELLED && (
                 <button
                   onClick={() => setShowDeleteModal(true)}
                   className={`px-4 py-2 rounded-md ${
@@ -617,7 +617,7 @@ export const ElectionDetailPage: React.FC = () => {
       )}
 
       {/* Ballot Builder (Admin - draft/open elections) */}
-      {canManage && electionId && election.status !== 'cancelled' && (
+      {canManage && electionId && election.status !== ElectionStatus.CANCELLED && (
         <div className="mb-6">
           <BallotBuilder
             electionId={electionId}
@@ -628,7 +628,7 @@ export const ElectionDetailPage: React.FC = () => {
       )}
 
       {/* Meeting Attendance (Admin) */}
-      {canManage && electionId && election.status !== 'cancelled' && (
+      {canManage && electionId && election.status !== ElectionStatus.CANCELLED && (
         <div className="mb-6">
           <MeetingAttendance
             electionId={electionId}
@@ -639,14 +639,14 @@ export const ElectionDetailPage: React.FC = () => {
       )}
 
       {/* Voter Override Management (Admin) */}
-      {canManage && electionId && election.status !== 'cancelled' && (
+      {canManage && electionId && election.status !== ElectionStatus.CANCELLED && (
         <div className="mb-6">
           <VoterOverrideManagement electionId={electionId} canManage={canManage} />
         </div>
       )}
 
       {/* Proxy Voting Management (Admin) */}
-      {canManage && electionId && election.status !== 'cancelled' && (
+      {canManage && electionId && election.status !== ElectionStatus.CANCELLED && (
         <div className="mb-6">
           <ProxyVotingManagement electionId={electionId} canManage={canManage} />
         </div>

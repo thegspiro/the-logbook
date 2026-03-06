@@ -29,6 +29,7 @@ import {
 import { trainingModuleConfigService } from '../services/api';
 import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
+import { SubmissionStatus } from '../constants/enums';
 import type { MyTrainingSummary, TrainingModuleConfig as TMConfig, RequirementDetail } from '../types/training';
 import { getErrorMessage } from '../utils/errorHandling';
 
@@ -37,12 +38,12 @@ import { getErrorMessage } from '../utils/errorHandling';
 const getStatusColor = (status: string) => {
   switch (status) {
     case 'completed': return 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400';
-    case 'approved': return 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400';
+    case SubmissionStatus.APPROVED: return 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400';
     case 'active': return 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400';
     case 'in_progress': return 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400';
-    case 'pending_review': return 'bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400';
-    case 'rejected': return 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400';
-    case 'revision_requested': return 'bg-orange-500/10 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400';
+    case SubmissionStatus.PENDING_REVIEW: return 'bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400';
+    case SubmissionStatus.REJECTED: return 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400';
+    case SubmissionStatus.REVISION_REQUESTED: return 'bg-orange-500/10 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400';
     default: return 'bg-gray-500/10 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400';
   }
 };

@@ -103,7 +103,7 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
     const sorted = [...fields].sort((a, b) => a.sort_order - b.sort_order);
 
     return sorted
-      .filter((f) => f.field_type !== 'section_header' && f.field_type !== 'file' && f.field_type !== 'signature')
+      .filter((f) => f.field_type !== FieldType.SECTION_HEADER && f.field_type !== FieldType.FILE && f.field_type !== FieldType.SIGNATURE)
       .map((field) => {
         // Gather all non-empty values for this field
         const values: string[] = [];

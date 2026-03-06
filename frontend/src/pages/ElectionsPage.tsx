@@ -201,13 +201,13 @@ export const ElectionsPage: React.FC = () => {
 
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
-      case 'open':
+      case ElectionStatus.OPEN:
         return 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400';
-      case 'closed':
+      case ElectionStatus.CLOSED:
         return 'bg-theme-surface-secondary text-theme-text-primary';
-      case 'draft':
+      case ElectionStatus.DRAFT:
         return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400';
-      case 'cancelled':
+      case ElectionStatus.CANCELLED:
         return 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400';
       default:
         return 'bg-theme-surface-secondary text-theme-text-primary';

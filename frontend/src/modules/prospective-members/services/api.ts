@@ -67,19 +67,19 @@ const api = createApiClient();
 /** Map frontend stage_type to backend step_type + action_type */
 function mapStageTypeToBackend(stageType: StageType): { step_type: string; action_type?: string } {
   switch (stageType) {
-    case 'form_submission':
+    case StageTypeConst.FORM_SUBMISSION:
       return { step_type: 'action', action_type: 'custom' };
-    case 'document_upload':
+    case StageTypeConst.DOCUMENT_UPLOAD:
       return { step_type: 'action', action_type: 'collect_document' };
-    case 'election_vote':
+    case StageTypeConst.ELECTION_VOTE:
       return { step_type: 'action', action_type: 'custom' };
-    case 'meeting':
+    case StageTypeConst.MEETING:
       return { step_type: 'action', action_type: 'schedule_meeting' };
-    case 'status_page_toggle':
+    case StageTypeConst.STATUS_PAGE_TOGGLE:
       return { step_type: 'action', action_type: 'custom' };
-    case 'automated_email':
+    case StageTypeConst.AUTOMATED_EMAIL:
       return { step_type: 'action', action_type: 'send_email' };
-    case 'manual_approval':
+    case StageTypeConst.MANUAL_APPROVAL:
     default:
       return { step_type: 'checkbox' };
   }
@@ -92,38 +92,38 @@ function mapStepTypeToFrontend(
   config?: Record<string, unknown> | null
 ): StageType {
   if (stepType === 'action') {
-    if (actionType === 'collect_document') return 'document_upload';
-    if (actionType === 'schedule_meeting') return 'meeting';
-    if (actionType === 'send_email') return 'automated_email';
+    if (actionType === 'collect_document') return StageTypeConst.DOCUMENT_UPLOAD;
+    if (actionType === 'schedule_meeting') return StageTypeConst.MEETING;
+    if (actionType === 'send_email') return StageTypeConst.AUTOMATED_EMAIL;
     // Distinguish between form_submission, election_vote, and status_page_toggle
     // by inspecting the config JSON
-    if (config && 'enable_public_status' in config) return 'status_page_toggle';
-    if (config && 'voting_method' in config) return 'election_vote';
-    return 'form_submission';
+    if (config && 'enable_public_status' in config) return StageTypeConst.STATUS_PAGE_TOGGLE;
+    if (config && 'voting_method' in config) return StageTypeConst.ELECTION_VOTE;
+    return StageTypeConst.FORM_SUBMISSION;
   }
   // checkbox and note both map to manual_approval
-  return 'manual_approval';
+  return StageTypeConst.MANUAL_APPROVAL;
 }
 
 /** Provide a valid default StageConfig for a given stage type */
 function getDefaultStageConfig(stageType: StageType): PipelineStage['config'] {
   switch (stageType) {
-    case 'form_submission':
+    case StageTypeConst.FORM_SUBMISSION:
       return { form_id: '', form_name: '' };
-    case 'document_upload':
+    case StageTypeConst.DOCUMENT_UPLOAD:
       return { required_document_types: [], allow_multiple: true };
-    case 'election_vote':
+    case StageTypeConst.ELECTION_VOTE:
       return {
         voting_method: 'simple_majority',
         victory_condition: 'majority',
         eligible_voter_roles: [],
         anonymous_voting: true,
       };
-    case 'meeting':
+    case StageTypeConst.MEETING:
       return { meeting_type: 'chief_meeting', meeting_description: '' };
-    case 'status_page_toggle':
+    case StageTypeConst.STATUS_PAGE_TOGGLE:
       return { enable_public_status: true, custom_message: '' };
-    case 'automated_email':
+    case StageTypeConst.AUTOMATED_EMAIL:
       return {
         email_subject: 'Welcome to the Membership Process',
         include_welcome: true,
@@ -135,7 +135,7 @@ function getDefaultStageConfig(stageType: StageType): PipelineStage['config'] {
         include_status_tracker: false,
         custom_sections: [],
       };
-    case 'manual_approval':
+    case StageTypeConst.MANUAL_APPROVAL:
     default:
       return { approver_roles: [], require_notes: false };
   }

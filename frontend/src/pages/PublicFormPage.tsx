@@ -114,9 +114,9 @@ const PublicFormPage = () => {
       'w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-theme-text-primary placeholder-theme-text-muted';
 
     switch (field.field_type) {
-      case 'text':
-      case 'email':
-      case 'phone':
+      case FieldType.TEXT:
+      case FieldType.EMAIL:
+      case FieldType.PHONE:
         return (
           <input
             type={field.field_type === FieldType.PHONE ? 'tel' : field.field_type}
@@ -130,7 +130,7 @@ const PublicFormPage = () => {
           />
         );
 
-      case 'number':
+      case FieldType.NUMBER:
         return (
           <input
             type="number"
@@ -144,7 +144,7 @@ const PublicFormPage = () => {
           />
         );
 
-      case 'textarea':
+      case FieldType.TEXTAREA:
         return (
           <textarea
             className={`${baseInputClass} min-h-[100px]`}
@@ -157,7 +157,7 @@ const PublicFormPage = () => {
           />
         );
 
-      case 'date':
+      case FieldType.DATE:
         return (
           <input
             type="date"
@@ -168,7 +168,7 @@ const PublicFormPage = () => {
           />
         );
 
-      case 'time':
+      case FieldType.TIME:
         return (
           <input
             type="time"
@@ -180,7 +180,7 @@ const PublicFormPage = () => {
           />
         );
 
-      case 'datetime':
+      case FieldType.DATETIME:
         return (
           <input
             type="datetime-local"
@@ -192,7 +192,7 @@ const PublicFormPage = () => {
           />
         );
 
-      case 'select':
+      case FieldType.SELECT:
         return (
           <select
             className={baseInputClass}
@@ -209,7 +209,7 @@ const PublicFormPage = () => {
           </select>
         );
 
-      case 'radio':
+      case FieldType.RADIO:
         return (
           <div className="space-y-2">
             {field.options?.map((opt) => (
@@ -228,7 +228,7 @@ const PublicFormPage = () => {
           </div>
         );
 
-      case 'checkbox':
+      case FieldType.CHECKBOX:
         return (
           <div className="space-y-2">
             {field.options?.map((opt) => {
@@ -254,7 +254,7 @@ const PublicFormPage = () => {
           </div>
         );
 
-      case 'section_header':
+      case FieldType.SECTION_HEADER:
         return (
           <div className="border-b border-theme-surface-border pb-2 -mb-2">
             <h3 className="text-lg font-semibold text-theme-text-primary">{clean(field.label)}</h3>

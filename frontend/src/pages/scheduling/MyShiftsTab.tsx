@@ -167,7 +167,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   const today = getTodayLocalDate(tz);
   const upcoming = assignments.filter(a => {
     const shiftDate = a.shift?.shift_date || '';
-    return shiftDate >= today && a.status !== 'declined' && a.status !== 'cancelled';
+    return shiftDate >= today && a.status !== AssignmentStatus.DECLINED && a.status !== AssignmentStatus.CANCELLED;
   });
   const past = assignments.filter(a => {
     const shiftDate = a.shift?.shift_date || '';

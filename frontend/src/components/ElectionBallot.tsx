@@ -238,7 +238,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
     switch (votingMethod) {
       case 'ranked_choice':
         return 'Rank candidates in order of preference (click to add ranking)';
-      case 'approval':
+      case VoteType.APPROVAL:
         return 'Select all candidates you approve of';
       case 'supermajority':
         return 'Select one candidate';
