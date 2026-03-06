@@ -77,10 +77,12 @@ class StartupStatus:
     def set_phase(
         self, phase: str, message: str, detailed_message: Optional[str] = None
     ):
+        import os as _os
+
         self.phase = phase
         self.message = message
         self.detailed_message = detailed_message
-        logger.info(f"Startup: {message}")
+        logger.info(f"Startup [worker {_os.getpid()}]: {message}")
 
     def set_migration_progress(self, current: str, completed: int, total: int):
         self.current_migration = current
@@ -938,7 +940,7 @@ def run_migrations():
     if current_rev == head_revision:
         startup_status.migrations_completed = total_migrations
         startup_status.set_phase("migrations", "Database schema is up to date")
-        logger.info("Database schema is already up to date")
+        logger.info(f"Database schema is already up to date (worker PID {os.getpid()})")
 
         # Still check for missing columns — create_all(checkfirst=True) during
         # fast-path init only creates missing TABLES, not missing columns on
@@ -973,7 +975,10 @@ def run_migrations():
                 f"Could not acquire migration lock within {MIGRATION_LOCK_TIMEOUT}s. "
                 "Another process may be stuck. Check for long-running DDL queries."
             )
-        logger.info("Acquired migration lock - this worker will run migrations")
+        logger.info(
+            f"Acquired migration lock (worker PID {os.getpid()}) - "
+            "checking if migrations are needed"
+        )
 
         # Re-check revision after acquiring lock - another worker may have
         # already completed migrations while we were waiting.
@@ -995,8 +1000,8 @@ def run_migrations():
             startup_status.migrations_completed = total_migrations
             startup_status.set_phase("migrations", "Database schema is up to date")
             logger.info(
-                "Database already at head after acquiring lock "
-                "(another worker completed migrations)"
+                f"Database already at head after acquiring lock (worker PID {os.getpid()}) "
+                "- skipping migrations (another worker completed them)"
             )
             return
 
@@ -1249,7 +1254,10 @@ async def lifespan(app: FastAPI):
     Lifespan context manager for startup and shutdown events
     """
     # Startup
-    logger.info("Starting The Logbook Backend...")
+    import os as _os
+
+    _worker_pid = _os.getpid()
+    logger.info(f"Starting The Logbook Backend (worker PID {_worker_pid})...")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
     logger.info(f"Version: {settings.VERSION}")
 
@@ -1306,7 +1314,7 @@ async def lifespan(app: FastAPI):
         "Initializing services...",
         "Connecting to Redis, initializing GeoIP, and validating database in parallel.",
     )
-    logger.info("Starting parallel service initialization...")
+    logger.info(f"Starting parallel service initialization (worker PID {_worker_pid})...")
 
     import asyncio
 
@@ -1364,12 +1372,28 @@ async def lifespan(app: FastAPI):
         connect_redis(), initialize_geoip(), validate_database(), return_exceptions=True
     )
 
-    logger.info("✓ Parallel service initialization complete")
+    logger.info(f"✓ Parallel service initialization complete (worker PID {_worker_pid})")
 
     # Start WebSocket pub/sub listener (after Redis is connected)
     from app.core.websocket_manager import ws_manager
 
     await ws_manager.start_listener()
+
+    # Helper: use Redis SETNX to ensure a background task runs on only one worker.
+    # Returns True if this worker should run the task.
+    async def _try_claim_background_task(task_name: str, ttl: int = 300) -> bool:
+        """Claim a one-time background task using Redis SETNX. Returns True if claimed."""
+        try:
+            if cache_manager.is_connected and cache_manager.redis_client:
+                key = f"startup_task:{task_name}"
+                claimed = await cache_manager.redis_client.set(
+                    key, str(_worker_pid), nx=True, ex=ttl
+                )
+                return bool(claimed)
+        except Exception:
+            pass
+        # If Redis is unavailable, fall back to running on all workers
+        return True
 
     # Defer audit log verification to background (only in production, don't block startup)
     if settings.ENVIRONMENT == "production":
@@ -1378,7 +1402,13 @@ async def lifespan(app: FastAPI):
             """Verify audit log integrity in background, rehash if needed"""
             try:
                 await asyncio.sleep(5)  # Give server time to fully start
-                logger.info("Starting background audit log verification...")
+                if not await _try_claim_background_task("audit_log_verification"):
+                    logger.debug(
+                        f"Audit log verification skipped (worker PID {_worker_pid}) "
+                        "- another worker is handling it"
+                    )
+                    return
+                logger.info(f"Starting background audit log verification (worker PID {_worker_pid})...")
                 from app.core.audit import audit_logger, verify_audit_log_integrity
                 from app.core.database import async_session_factory
 
@@ -1416,6 +1446,12 @@ async def lifespan(app: FastAPI):
         """
         try:
             await asyncio.sleep(3)  # Let the server finish starting
+            if not await _try_claim_background_task("pipeline_backfill"):
+                logger.debug(
+                    f"Pipeline backfill skipped (worker PID {_worker_pid}) "
+                    "- another worker is handling it"
+                )
+                return
             from app.core.database import async_session_factory
             from app.models.membership_pipeline import (
                 MembershipPipeline,
@@ -1470,14 +1506,14 @@ async def lifespan(app: FastAPI):
 
     # Mark server as ready
     startup_status.set_ready()
-    logger.info(f"Server started on port {settings.PORT}")
+    logger.info(f"Server started on port {settings.PORT} (worker PID {_worker_pid})")
     logger.info(f"API Documentation: http://localhost:{settings.PORT}/docs")
     logger.info(f"Health Check: http://localhost:{settings.PORT}/health")
 
     yield
 
     # Shutdown
-    logger.info("Shutting down gracefully...")
+    logger.info(f"Shutting down gracefully (worker PID {_worker_pid})...")
     await ws_manager.stop_listener()
     await database_manager.disconnect()
     await cache_manager.disconnect()
