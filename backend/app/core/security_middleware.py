@@ -1031,6 +1031,7 @@ class SecurityMonitoringMiddleware:
         session_id = request.headers.get("X-Session-ID")
 
         # Analyze request for threats (only for write operations)
+        actual_receive = receive
         if request.method not in {"GET", "HEAD", "OPTIONS"}:
             try:
                 body_chunks: list[bytes] = []
