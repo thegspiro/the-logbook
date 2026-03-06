@@ -8,9 +8,10 @@ const mockGetFacilities = vi.fn();
 const mockGetTypes = vi.fn();
 const mockGetStatuses = vi.fn();
 const mockCreateFacility = vi.fn();
-const mockArchiveFacility = vi.fn();
-const mockRestoreFacility = vi.fn();
 const mockGetFacility = vi.fn();
+const mockGetMaintenanceRecords = vi.fn();
+const mockGetMaintenanceTypes = vi.fn();
+const mockGetInspections = vi.fn();
 
 vi.mock('../services/api', () => ({
   facilitiesService: {
@@ -18,19 +19,21 @@ vi.mock('../services/api', () => ({
     getTypes: (...args: unknown[]) => mockGetTypes(...args) as unknown,
     getStatuses: (...args: unknown[]) => mockGetStatuses(...args) as unknown,
     createFacility: (...args: unknown[]) => mockCreateFacility(...args) as unknown,
-    archiveFacility: (...args: unknown[]) => mockArchiveFacility(...args) as unknown,
-    restoreFacility: (...args: unknown[]) => mockRestoreFacility(...args) as unknown,
     getFacility: (...args: unknown[]) => mockGetFacility(...args) as unknown,
+    getMaintenanceRecords: (...args: unknown[]) => mockGetMaintenanceRecords(...args) as unknown,
+    getMaintenanceTypes: (...args: unknown[]) => mockGetMaintenanceTypes(...args) as unknown,
+    getInspections: (...args: unknown[]) => mockGetInspections(...args) as unknown,
+    archiveFacility: vi.fn().mockResolvedValue({}),
+    restoreFacility: vi.fn().mockResolvedValue({}),
     getRooms: vi.fn().mockResolvedValue([]),
     getSystems: vi.fn().mockResolvedValue([]),
     getEmergencyContacts: vi.fn().mockResolvedValue([]),
-    getMaintenanceRecords: vi.fn().mockResolvedValue([]),
-    getMaintenanceTypes: vi.fn().mockResolvedValue([]),
-    getInspections: vi.fn().mockResolvedValue([]),
   },
 }));
 
-import FacilitiesPage from './FacilitiesPage';
+// Must import after mocks
+import FacilitiesDashboard from '../modules/facilities/pages/FacilitiesDashboard';
+import { useFacilitiesStore } from '../modules/facilities/store/facilitiesStore';
 
 const mockFacilities = [
   {
@@ -44,7 +47,7 @@ const mockFacilities = [
     facilityTypeId: 'type-1',
     facilityType: { id: 'type-1', name: 'Fire Station' },
     statusId: 'status-1',
-    statusRecord: { id: 'status-1', name: 'Operational', color: '#22c55e' },
+    statusRecord: { id: 'status-1', name: 'Operational', color: '#22c55e', isOperational: true },
     isArchived: false,
     createdAt: '2025-01-01T00:00:00Z',
     updatedAt: '2025-01-01T00:00:00Z',
@@ -57,7 +60,7 @@ const mockFacilities = [
     city: 'Springfield',
     state: 'IL',
     facilityType: { id: 'type-2', name: 'Training Center' },
-    statusRecord: { id: 'status-1', name: 'Operational' },
+    statusRecord: { id: 'status-1', name: 'Operational', isOperational: true },
     isArchived: false,
     createdAt: '2025-02-01T00:00:00Z',
     updatedAt: '2025-02-01T00:00:00Z',
@@ -70,38 +73,62 @@ const mockTypes = [
 ];
 
 const mockStatuses = [
-  { id: 'status-1', name: 'Operational', isActive: true, color: '#22c55e' },
-  { id: 'status-2', name: 'Under Renovation', isActive: true, color: '#f59e0b' },
+  { id: 'status-1', name: 'Operational', isActive: true, color: '#22c55e', isOperational: true },
+  { id: 'status-2', name: 'Under Renovation', isActive: true, color: '#f59e0b', isOperational: false },
 ];
 
 function renderPage() {
   return render(
     <BrowserRouter>
-      <FacilitiesPage />
+      <FacilitiesDashboard />
     </BrowserRouter>
   );
 }
 
-describe('FacilitiesPage', () => {
+describe('FacilitiesDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Reset the store between tests
+    useFacilitiesStore.setState({
+      facilities: [],
+      facilityTypes: [],
+      facilityStatuses: [],
+      maintenanceTypes: [],
+      selectedFacility: null,
+      selectedFacilityRooms: [],
+      selectedFacilitySystems: [],
+      selectedFacilityContacts: [],
+      dashboardStats: null,
+      isLoading: false,
+      isLoadingDetail: false,
+      isLoadingDashboard: false,
+      error: null,
+      showArchived: false,
+      searchQuery: '',
+    });
     mockGetFacilities.mockResolvedValue(mockFacilities);
     mockGetTypes.mockResolvedValue(mockTypes);
     mockGetStatuses.mockResolvedValue(mockStatuses);
+    mockGetMaintenanceTypes.mockResolvedValue([]);
+    mockGetMaintenanceRecords.mockResolvedValue([]);
+    mockGetInspections.mockResolvedValue([]);
     mockGetFacility.mockResolvedValue(mockFacilities[0]);
   });
 
   it('renders the page header', async () => {
     renderPage();
     expect(screen.getByText('Facilities')).toBeInTheDocument();
-    expect(screen.getByText('Manage stations, buildings, rooms, and maintenance')).toBeInTheDocument();
+    expect(
+      screen.getByText('Manage stations, buildings, maintenance, and inspections'),
+    ).toBeInTheDocument();
   });
 
-  it('shows loading state then facilities', async () => {
+  it('shows loading state then facility cards', async () => {
     renderPage();
     await waitFor(() => {
       expect(screen.getByText('Station 1')).toBeInTheDocument();
-      expect(screen.getByText('Training Center')).toBeInTheDocument();
+      // "Training Center" appears as both facility name and facility type badge
+      expect(screen.getAllByText('Training Center').length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -114,26 +141,15 @@ describe('FacilitiesPage', () => {
     expect(screen.getByText('Fire Station')).toBeInTheDocument();
   });
 
-  it('filters facilities by search query', async () => {
-    const user = userEvent.setup();
+  it('shows summary cards', async () => {
     renderPage();
-
     await waitFor(() => {
-      expect(screen.getByText('Station 1')).toBeInTheDocument();
+      expect(screen.getByText('Total Facilities')).toBeInTheDocument();
     });
-
-    const searchInput = screen.getByPlaceholderText('Search facilities...');
-    await user.type(searchInput, 'Training');
-
-    expect(screen.queryByText('Station 1')).not.toBeInTheDocument();
-    expect(screen.getByText('Training Center')).toBeInTheDocument();
-  });
-
-  it('shows tabs for facilities, maintenance, and inspections', async () => {
-    renderPage();
-    expect(screen.getByText('Facilities')).toBeInTheDocument();
-    expect(screen.getByText('Maintenance')).toBeInTheDocument();
-    expect(screen.getByText('Inspections')).toBeInTheDocument();
+    // These labels also appear in section headers and status badges, so use getAllByText
+    expect(screen.getAllByText('Operational').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Overdue Maintenance').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Upcoming Inspections').length).toBeGreaterThanOrEqual(1);
   });
 
   it('opens create facility modal', async () => {
@@ -144,8 +160,9 @@ describe('FacilitiesPage', () => {
       expect(screen.getByText('Station 1')).toBeInTheDocument();
     });
 
-    const addButton = screen.getByText('Add Facility');
-    await user.click(addButton);
+    // Find the header "Add Facility" button (first one in the DOM)
+    const addButtons = screen.getAllByText('Add Facility');
+    await user.click(addButtons[0]!);
 
     expect(screen.getByText('Name *')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('e.g., Station 1')).toBeInTheDocument();
@@ -160,19 +177,21 @@ describe('FacilitiesPage', () => {
       expect(screen.getByText('Station 1')).toBeInTheDocument();
     });
 
-    await user.click(screen.getByText('Add Facility'));
+    // Open modal
+    const addButtons = screen.getAllByText('Add Facility');
+    await user.click(addButtons[0]!);
 
     const nameInput = screen.getByPlaceholderText('e.g., Station 1');
     await user.type(nameInput, 'Station 3');
 
-    // Find and click the "Add Facility" button in the modal (not the header button)
+    // Find the submit button in the modal (the last "Add Facility" button)
     const submitButtons = screen.getAllByText('Add Facility');
     const modalSubmit = submitButtons[submitButtons.length - 1]!;
     await user.click(modalSubmit);
 
     await waitFor(() => {
       expect(mockCreateFacility).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'Station 3' })
+        expect.objectContaining({ name: 'Station 3' }),
       );
     });
   });
@@ -182,15 +201,33 @@ describe('FacilitiesPage', () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('No facilities yet. Add your first facility to get started.')).toBeInTheDocument();
+      expect(
+        screen.getByText('No facilities yet. Add your first facility to get started.'),
+      ).toBeInTheDocument();
     });
   });
 
-  it('calls getFacilities with is_archived filter', async () => {
+  it('calls getFacilities for dashboard stats', async () => {
     renderPage();
 
     await waitFor(() => {
       expect(mockGetFacilities).toHaveBeenCalledWith({ is_archived: false });
+    });
+  });
+
+  it('shows overdue maintenance section', async () => {
+    renderPage();
+    await waitFor(() => {
+      // "Overdue Maintenance" appears in both summary card and section header
+      expect(screen.getAllByText('Overdue Maintenance').length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  it('shows upcoming inspections section', async () => {
+    renderPage();
+    await waitFor(() => {
+      // "Upcoming Inspections" appears in both summary card and section header
+      expect(screen.getAllByText('Upcoming Inspections').length).toBeGreaterThanOrEqual(2);
     });
   });
 });
