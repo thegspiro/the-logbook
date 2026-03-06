@@ -468,7 +468,7 @@ export interface ConvertApplicantResponse {
 export interface ApplicationStatus {
   first_name: string;
   last_name: string;
-  status: string;
+  status: ApplicantStatus;
   current_stage_name?: string | undefined;
   pipeline_name?: string | undefined;
   total_stages: number;

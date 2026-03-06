@@ -5,6 +5,8 @@
  * These mirror the backend Pydantic schemas in backend/app/schemas/scheduling.py.
  */
 
+import type { AssignmentStatus, RequestStatus } from '../../../constants/enums';
+
 // ============================================================================
 // Shift Create/Update
 // ============================================================================
@@ -89,7 +91,7 @@ export interface AssignmentCreate {
 
 export interface AssignmentUpdate {
   position?: string;
-  assignment_status?: string;
+  assignment_status?: AssignmentStatus;
   notes?: string | undefined;
 }
 
@@ -224,12 +226,12 @@ export interface BasicApparatusUpdate {
 // ============================================================================
 
 export interface SwapRequestFilters {
-  status?: string;
+  status?: RequestStatus;
   user_id?: string;
 }
 
 export interface TimeOffFilters {
-  status?: string;
+  status?: RequestStatus;
   user_id?: string;
 }
 
@@ -310,5 +312,5 @@ export interface ShiftSignupResponse {
   shift_id: string;
   user_id: string;
   position: string;
-  status: string;
+  status: AssignmentStatus;
 }

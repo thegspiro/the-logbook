@@ -7,6 +7,7 @@
  */
 
 import type { ShiftRecord, ShiftAttendanceRecord, SchedulingSummary, ShiftTemplateRecord, BasicApparatusRecord } from '../modules/scheduling/services/api';
+import type { AssignmentStatus, RequestStatus } from '../constants/enums';
 
 // Re-export the API-level types so consumers can import from one place
 export type { ShiftRecord, ShiftAttendanceRecord, SchedulingSummary, ShiftTemplateRecord, BasicApparatusRecord };
@@ -23,9 +24,9 @@ export interface Assignment {
   shift_id: string;
   position: string;
   /** Canonical status field. Resolved from `assignment_status` via {@link normalizeAssignmentStatus}. */
-  status: string;
+  status: AssignmentStatus;
   /** Raw backend field — prefer `status` in display code. */
-  assignment_status?: string;
+  assignment_status?: AssignmentStatus;
   user_name?: string;
   shift?: ShiftRecord;
   confirmed_at?: string;
@@ -51,7 +52,7 @@ export interface SwapRequest {
   target_user_id?: string;
   target_user_name?: string;
   reason?: string;
-  status: string;
+  status: RequestStatus;
   reviewer_notes?: string;
   reviewed_at?: string;
   created_at: string;
@@ -73,7 +74,7 @@ export interface TimeOffRequest {
   start_date: string;
   end_date: string;
   reason?: string;
-  status: string;
+  status: RequestStatus;
   reviewer_notes?: string;
   approved_by?: string;
   approved_at?: string;

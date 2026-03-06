@@ -4,6 +4,8 @@
  * TypeScript interfaces for report requests, responses, and configuration.
  */
 
+import type { UserStatus } from '../../../constants/enums';
+
 // ============================================================================
 // Report Category & Type Enums
 // ============================================================================
@@ -96,7 +98,7 @@ export interface MemberRosterEntry {
   email: string;
   membership_number?: string;
   rank?: string;
-  status: string;
+  status: UserStatus;
   station?: string;
   joined_date?: string;
   roles: string[];

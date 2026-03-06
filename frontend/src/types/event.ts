@@ -212,7 +212,7 @@ export interface CheckInActivity {
   user_name: string;
   user_email: string;
   checked_in_at: string;
-  rsvp_status: string;
+  rsvp_status: RSVPStatus;
   guest_count: number;
 }
 

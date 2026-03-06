@@ -228,7 +228,7 @@ export interface PositionResults {
 export interface ElectionResults {
   election_id: string;
   election_title: string;
-  status: string;
+  status: ElectionStatus;
   total_votes: number;
   total_eligible_voters: number;
   voter_turnout_percentage: number;
@@ -279,7 +279,7 @@ export interface ElectionDeleteResponse {
 export interface ForensicsReport {
   election_id: string;
   election_title: string;
-  election_status: string;
+  election_status: ElectionStatus;
   anonymous_voting: boolean;
   voting_method: string;
   created_at: string;
