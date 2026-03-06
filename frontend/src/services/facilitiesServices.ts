@@ -833,7 +833,7 @@ export interface TrainingWaiverResponse {
 }
 
 export const locationsService = {
-  async getLocations(params?: { is_active?: boolean; skip?: number; limit?: number }): Promise<Location[]> {
+  async getLocations(params?: { is_active?: boolean; exclude_rooms?: boolean; skip?: number; limit?: number }): Promise<Location[]> {
     const response = await api.get<Location[]>('/locations', { params });
     return response.data;
   },

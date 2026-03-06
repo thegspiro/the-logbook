@@ -79,6 +79,7 @@ class LocationService:
         self,
         organization_id: str,
         is_active: Optional[bool] = None,
+        exclude_rooms: bool = False,
         skip: int = 0,
         limit: int = 100,
     ) -> List[Location]:
@@ -87,6 +88,9 @@ class LocationService:
 
         if is_active is not None:
             query = query.where(Location.is_active == is_active)
+
+        if exclude_rooms:
+            query = query.where(Location.facility_room_id.is_(None))
 
         query = query.order_by(Location.name).offset(skip).limit(limit)
 

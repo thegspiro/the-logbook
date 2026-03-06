@@ -122,8 +122,8 @@ const StorageAreasPage: React.FC = () => {
   const [deleteTarget, setDeleteTarget] = useState<StorageAreaResponse | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const facilities = locations.filter((l) => l.building && !l.room_number);
-  const rooms = locations.filter((l) => !!l.room_number);
+  const facilities = locations.filter((l) => l.building && !l.facility_room_id);
+  const rooms = locations.filter((l) => !!l.facility_room_id || !!l.room_number);
   const filteredRooms = selectedFacilityId ? rooms.filter((r) => r.facility_id === selectedFacilityId) : rooms;
   const tree = buildTree(storageAreas);
   const searchTree = buildTree(searchResults);

@@ -52,8 +52,8 @@ function groupLocations(locations: Location[]): { stations: Location[]; rooms: M
   const orphanRooms: Location[] = [];
 
   for (const loc of locations) {
-    // A "station" is a location with an address and no room_number
-    if (loc.address && !loc.room_number) {
+    // A "station" is a location with an address that is not a facility room
+    if (loc.address && !loc.facility_room_id && !loc.room_number) {
       stations.push(loc);
     } else if (loc.building) {
       // A room linked to a station via building name

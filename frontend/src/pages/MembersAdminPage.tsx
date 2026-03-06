@@ -86,10 +86,9 @@ export const MembersAdminPage: React.FC = () => {
   useEffect(() => {
     void fetchData();
 
-    // Load stations for dropdown (top-level locations with an address)
-    locationsService.getLocations({ is_active: true }).then((locs) => {
-      const stations = locs.filter((l: Location) => l.address && !l.room_number);
-      setAvailableStations(stations);
+    // Load stations for dropdown (exclude rooms — they belong to facilities)
+    locationsService.getLocations({ is_active: true, exclude_rooms: true }).then((locs) => {
+      setAvailableStations(locs.filter((l: Location) => l.address));
     }).catch(() => { /* non-critical UI data */ });
   }, []);
 

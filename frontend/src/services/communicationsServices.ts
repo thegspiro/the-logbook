@@ -260,6 +260,7 @@ export interface Location {
   room_number?: string;
   capacity?: number;
   facility_id?: string;
+  facility_room_id?: string;
   display_code?: string;
   is_active: boolean;
   created_at: string;
