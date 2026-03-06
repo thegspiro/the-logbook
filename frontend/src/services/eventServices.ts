@@ -410,6 +410,7 @@ export interface InventoryItem {
   barcode?: string;
   purchase_date?: string;
   purchase_price?: number;
+  current_value?: number;
   replacement_cost?: number;
   vendor?: string;
   warranty_expiration?: string;

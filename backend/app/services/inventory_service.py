@@ -2799,7 +2799,7 @@ class InventoryService:
                 ItemAssignment.item_id == str(item_id),
                 ItemAssignment.organization_id == str(organization_id),
             )
-            .order_by(ItemAssignment.assigned_at.desc())
+            .order_by(ItemAssignment.assigned_date.desc())
         )
         for a in asgn_result.scalars().all():
             user_name = ""
@@ -2814,8 +2814,8 @@ class InventoryService:
                     "type": "assignment",
                     "id": a.id,
                     "date": (
-                        a.assigned_at.isoformat()
-                        if a.assigned_at
+                        a.assigned_date.isoformat()
+                        if a.assigned_date
                         else a.created_at.isoformat()
                     ),
                     "summary": (
@@ -2830,10 +2830,10 @@ class InventoryService:
                             if hasattr(a.assignment_type, "value")
                             else a.assignment_type
                         ),
-                        "reason": a.reason,
+                        "reason": a.assignment_reason,
                         "is_active": a.is_active,
                         "returned_at": (
-                            a.returned_at.isoformat() if a.returned_at else None
+                            a.returned_date.isoformat() if a.returned_date else None
                         ),
                         "return_condition": (
                             a.return_condition.value
@@ -2846,12 +2846,12 @@ class InventoryService:
                 }
             )
             # If returned, add a separate return event
-            if a.returned_at:
+            if a.returned_date:
                 events.append(
                     {
                         "type": "return",
                         "id": f"{a.id}_return",
-                        "date": a.returned_at.isoformat(),
+                        "date": a.returned_date.isoformat(),
                         "summary": f"Returned by {user_name}",
                         "details": {
                             "user_name": user_name,

@@ -42,6 +42,8 @@ interface MobileItemCardProps {
   manufacturer?: string | undefined;
   /** Item quantity */
   quantity?: number | undefined;
+  /** Cost/price display string */
+  cost?: string | undefined;
   /** Whether the item is selected (checkbox) */
   selected?: boolean | undefined;
   /** Called when selection changes */
@@ -80,6 +82,7 @@ export const MobileItemCard: React.FC<MobileItemCardProps> = ({
   location,
   manufacturer,
   quantity,
+  cost,
   selected,
   onSelect,
   onTap,
@@ -169,6 +172,7 @@ export const MobileItemCard: React.FC<MobileItemCardProps> = ({
               {serialNumber && <span className="font-mono truncate">SN: {serialNumber}</span>}
               {assetTag && <span className="font-mono truncate">Tag: {assetTag}</span>}
               {location && <span className="truncate">{location}</span>}
+              {cost && <span className="font-medium text-theme-text-secondary">{cost}</span>}
             </div>
             <ChevronRight className="w-4 h-4 text-theme-text-muted shrink-0" aria-hidden="true" />
           </div>
