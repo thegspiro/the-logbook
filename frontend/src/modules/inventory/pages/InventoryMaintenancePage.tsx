@@ -157,7 +157,7 @@ const InventoryMaintenancePage: React.FC = () => {
     `px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${active ? 'border-orange-500 text-orange-600 dark:text-orange-400' : 'border-transparent text-theme-text-muted hover:text-theme-text-primary'}`;
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">

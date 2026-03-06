@@ -384,7 +384,7 @@ const PoolItemsPage: React.FC = () => {
   const issueItemOnHand = issueItem ? issueItem.quantity - issueItem.quantity_issued : 0;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>

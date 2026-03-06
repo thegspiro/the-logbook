@@ -230,7 +230,7 @@ const ItemDetailPage: React.FC = () => {
   /*  Render                                                           */
   /* ================================================================ */
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
       {/* Breadcrumbs */}
       <nav className="flex items-center text-sm text-theme-text-muted gap-1">
         <Link to="/inventory" className="hover:text-theme-text-primary">Inventory</Link>
