@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import { publicFormsService } from '../services/api';
 import type { PublicFormDef, PublicFormField } from '../services/api';
+import { getErrorMessage } from '../utils/errorHandling';
 
 // Sanitize any text content that came from the server
 const clean = (text: string | null | undefined): string => {
@@ -75,7 +76,7 @@ const PublicFormPage = () => {
       setSubmitted(true);
       setSubmitMessage(result.message);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to submit form. Please try again.';
+      const msg = getErrorMessage(err, 'Failed to submit form. Please try again.');
       setError(msg);
     } finally {
       setSubmitting(false);

@@ -29,6 +29,7 @@ import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate } from '../../../utils/dateFormatting';
 import { MembershipType } from '../../../constants/enums';
+import { getErrorMessage } from '../../../utils/errorHandling';
 
 interface ConversionModalProps {
   isOpen: boolean;
@@ -116,7 +117,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
       );
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : 'Failed to convert applicant';
+        getErrorMessage(err, 'Failed to convert applicant');
       toast.error(message);
     } finally {
       setIsConverting(false);

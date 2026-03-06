@@ -30,6 +30,7 @@ import { trainingModuleConfigService } from '../services/api';
 import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import type { MyTrainingSummary, TrainingModuleConfig as TMConfig, RequirementDetail } from '../types/training';
+import { getErrorMessage } from '../utils/errorHandling';
 
 // ==================== Helpers ====================
 
@@ -336,7 +337,7 @@ const MyTrainingPage: React.FC = () => {
         setIsOfficer(false);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load training data');
+      setError(getErrorMessage(err, 'Failed to load training data'));
     } finally {
       setLoading(false);
     }

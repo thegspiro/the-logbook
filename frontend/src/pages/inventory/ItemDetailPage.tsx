@@ -176,7 +176,7 @@ function NFPAComplianceSection({
       setEditing(false);
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : 'Failed to save compliance'
+        getErrorMessage(err, 'Failed to save compliance')
       );
     }
   };
@@ -544,7 +544,7 @@ function ExposuresSection({ item, canManage }: { item: InventoryItem; canManage:
       });
       void load();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to record exposure');
+      toast.error(getErrorMessage(err, 'Failed to record exposure'));
     }
   };
 

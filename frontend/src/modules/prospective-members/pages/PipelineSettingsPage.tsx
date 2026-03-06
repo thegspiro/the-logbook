@@ -43,6 +43,7 @@ import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { pipelineService } from '../services/api';
 import { PipelineBuilder } from '../components/PipelineBuilder';
 import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
+import { getErrorMessage } from '../../../utils/errorHandling';
 import type {
   Pipeline,
   PipelineListItem,
@@ -153,7 +154,7 @@ export const PipelineSettingsPage: React.FC = () => {
       setPipelineDescription('');
       toast.success('Pipeline created');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to create pipeline';
+      const msg = getErrorMessage(err, 'Failed to create pipeline');
       toast.error(msg);
     } finally {
       setIsCreating(false);
@@ -172,7 +173,7 @@ export const PipelineSettingsPage: React.FC = () => {
       await fetchPipelines();
       toast.success('Pipeline updated');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to update pipeline';
+      const msg = getErrorMessage(err, 'Failed to update pipeline');
       toast.error(msg);
     }
   };
@@ -189,7 +190,7 @@ export const PipelineSettingsPage: React.FC = () => {
         updated.is_active ? 'Pipeline activated' : 'Pipeline deactivated'
       );
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to toggle pipeline';
+      const msg = getErrorMessage(err, 'Failed to toggle pipeline');
       toast.error(msg);
     }
   };
@@ -204,7 +205,7 @@ export const PipelineSettingsPage: React.FC = () => {
       setDeleteConfirmOpen(false);
       toast.success('Pipeline deleted');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to delete pipeline';
+      const msg = getErrorMessage(err, 'Failed to delete pipeline');
       toast.error(msg);
     } finally {
       setIsDeleting(false);
@@ -221,7 +222,7 @@ export const PipelineSettingsPage: React.FC = () => {
       setCloneName('');
       toast.success('Pipeline cloned');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to clone pipeline';
+      const msg = getErrorMessage(err, 'Failed to clone pipeline');
       toast.error(msg);
     } finally {
       setIsCloning(false);
@@ -234,7 +235,7 @@ export const PipelineSettingsPage: React.FC = () => {
       await setDefaultPipeline(currentPipeline.id);
       toast.success('Set as default pipeline');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to set default';
+      const msg = getErrorMessage(err, 'Failed to set default');
       toast.error(msg);
     }
   };
@@ -248,7 +249,7 @@ export const PipelineSettingsPage: React.FC = () => {
       setTemplateName('');
       toast.success('Saved as template');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to save template';
+      const msg = getErrorMessage(err, 'Failed to save template');
       toast.error(msg);
     } finally {
       setIsSavingTemplate(false);
@@ -282,7 +283,7 @@ export const PipelineSettingsPage: React.FC = () => {
       setShowTemplateGallery(false);
       toast.success('Pipeline created from template');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to create from template';
+      const msg = getErrorMessage(err, 'Failed to create from template');
       toast.error(msg);
     } finally {
       setIsCreatingFromTemplate(false);
@@ -299,7 +300,7 @@ export const PipelineSettingsPage: React.FC = () => {
       setCurrentPipeline(updated);
       toast.success('Inactivity settings saved');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to save inactivity settings';
+      const msg = getErrorMessage(err, 'Failed to save inactivity settings');
       toast.error(msg);
     } finally {
       setIsSavingInactivity(false);
@@ -324,7 +325,7 @@ export const PipelineSettingsPage: React.FC = () => {
           : 'Public status page disabled'
       );
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to toggle setting';
+      const msg = getErrorMessage(err, 'Failed to toggle setting');
       toast.error(msg);
     }
   };

@@ -24,6 +24,7 @@ import { reportsService } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
 import { toLocalDateString } from '../utils/dateFormatting';
 import { useRanks } from '../hooks/useRanks';
+import { getErrorMessage } from '../utils/errorHandling';
 
 interface ReportCard {
   id: string;
@@ -194,7 +195,7 @@ export const ReportsPage: React.FC = () => {
       setActiveReport(report);
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : 'Failed to generate report. Please try again.';
+        getErrorMessage(err, 'Failed to generate report. Please try again.');
       setError(message);
     } finally {
       setGeneratingId(null);

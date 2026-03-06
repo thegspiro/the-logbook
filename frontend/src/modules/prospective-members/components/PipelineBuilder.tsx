@@ -32,6 +32,7 @@ import type {
 } from '../types';
 import { pipelineService } from '../services/api';
 import { StageConfigModal } from './StageConfigModal';
+import { getErrorMessage } from '../../../utils/errorHandling';
 
 interface PipelineBuilderProps {
   pipeline: Pipeline;
@@ -92,7 +93,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
       onPipelineUpdated({ ...pipeline, stages: updated });
       toast.success('Stage added');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to add stage';
+      const message = getErrorMessage(err, 'Failed to add stage');
       toast.error(message);
     }
   };
@@ -113,7 +114,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
       setEditingStage(null);
       toast.success('Stage updated');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to update stage';
+      const message = getErrorMessage(err, 'Failed to update stage');
       toast.error(message);
     }
   };
@@ -126,7 +127,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
       onPipelineUpdated({ ...pipeline, stages: updated });
       toast.success('Stage removed');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to remove stage';
+      const message = getErrorMessage(err, 'Failed to remove stage');
       toast.error(message);
     }
   };
@@ -158,7 +159,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
     } catch (err: unknown) {
       // Revert on error
       setStages(pipeline.stages);
-      const message = err instanceof Error ? err.message : 'Failed to reorder stages';
+      const message = getErrorMessage(err, 'Failed to reorder stages');
       toast.error(message);
     } finally {
       setIsSaving(false);

@@ -44,6 +44,7 @@ import type {
 } from '../types/event';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime } from '../utils/dateFormatting';
+import { getErrorMessage } from '../utils/errorHandling';
 
 const STATUS_CONFIG: Record<
   EventRequestStatus,
@@ -328,7 +329,7 @@ const EventRequestsTab: React.FC = () => {
       setScheduleNotes('');
       await refreshDetail(requestId);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to schedule request.';
+      const message = getErrorMessage(err, 'Failed to schedule request.');
       toast.error(message.includes('already booked') ? message : 'Failed to schedule request. The room may be double-booked.');
     } finally {
       setActionLoading(false);

@@ -21,6 +21,7 @@ import { eventService, locationsService } from '../services/api';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum, CheckInWindowType } from '../constants/enums';
 import type { Location } from '../services/api';
 import { getEventTypeLabel } from '../utils/eventHelpers';
+import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 
@@ -261,7 +262,7 @@ export const EventForm: React.FC<EventFormProps> = ({
     try {
       await onSubmit(submitData);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'An error occurred';
+      const message = getErrorMessage(err, 'An error occurred');
       setError(message);
     }
   };

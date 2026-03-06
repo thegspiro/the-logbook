@@ -22,6 +22,7 @@ import type { User } from '../types/user';
 import { useAuthStore } from '../stores/authStore';
 import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
+import { getErrorMessage } from '../utils/errorHandling';
 
 type WaiverTab = 'active' | 'create' | 'history';
 
@@ -295,7 +296,7 @@ export const WaiverManagementPage: React.FC = () => {
       });
       void fetchData();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to create waiver';
+      const msg = getErrorMessage(err, 'Failed to create waiver');
       setCreateError(msg);
     } finally {
       setCreating(false);
