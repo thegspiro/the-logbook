@@ -30,7 +30,7 @@ import {
   Copy,
   Upload,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   inventoryService,
   locationsService,
@@ -55,7 +55,6 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { ITEM_CONDITION_OPTIONS } from '../constants/enums';
 import { useInventoryWebSocket } from '../hooks/useInventoryWebSocket';
 import { useRanks } from '../hooks/useRanks';
-import ItemDetailModal from './inventory/ItemDetailModal';
 import { MobileItemCard } from '../components/ux/MobileItemCard';
 import { FloatingActionButton } from '../components/ux/FloatingActionButton';
 import toast from 'react-hot-toast';
@@ -109,6 +108,7 @@ const InventoryPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('inventory.manage');
   const { ranks } = useRanks();
+  const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<Tab>('items');
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -214,7 +214,6 @@ const InventoryPage: React.FC = () => {
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [editForm, setEditForm] = useState<Partial<InventoryItemCreate>>({});
   const [showEditModal, setShowEditModal] = useState(false);
-  const [detailItem, setDetailItem] = useState<InventoryItem | null>(null);
   const [showRetireConfirm, setShowRetireConfirm] = useState<InventoryItem | null>(null);
   const [retireNotes, setRetireNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -1537,7 +1536,7 @@ const InventoryPage: React.FC = () => {
                         quantity={item.quantity}
                         selected={selectedItemIds.has(item.id)}
                         onSelect={canManage ? () => toggleItemSelection(item.id) : undefined}
-                        onTap={() => setDetailItem(item)}
+                        onTap={() => { void navigate(`/inventory/items/${item.id}`); }}
                         showActions={canManage}
                         onEdit={canManage ? () => openEditModal(item) : undefined}
                         onDuplicate={canManage ? () => handleDuplicateItem(item) : undefined}
@@ -1603,10 +1602,10 @@ const InventoryPage: React.FC = () => {
                         <tr
                           key={item.id}
                           className="hover:bg-theme-surface-secondary transition-colors cursor-pointer"
-                          onClick={() => setDetailItem(item)}
+                          onClick={() => { void navigate(`/inventory/items/${item.id}`); }}
                           role="button"
                           tabIndex={0}
-                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailItem(item); } }}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void navigate(`/inventory/items/${item.id}`); } }}
                         >
                           {canManage && (
                             <td className="w-10 px-3 py-4" onClick={(e) => e.stopPropagation()}>
@@ -2558,19 +2557,6 @@ const InventoryPage: React.FC = () => {
               </div>
             </div>
           </div>
-        )}
-        {/* Item Detail Modal */}
-        {detailItem && (
-          <ItemDetailModal
-            item={detailItem}
-            category={categories.find((c) => c.id === detailItem.category_id)}
-            onClose={() => setDetailItem(null)}
-            onEdit={(item) => {
-              setDetailItem(null);
-              openEditModal(item);
-            }}
-            canManage={canManage}
-          />
         )}
         {/* Edit Item Modal */}
         {showEditModal && editingItem && (

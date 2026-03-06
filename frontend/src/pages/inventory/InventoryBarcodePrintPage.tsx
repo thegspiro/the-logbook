@@ -206,7 +206,11 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset }) => {
         style={{
           maxWidth: '100%',
           flexShrink: 0,
-        }}
+          display: 'block',
+          colorAdjust: 'exact',
+          WebkitPrintColorAdjust: 'exact',
+          printColorAdjust: 'exact',
+        } as React.CSSProperties}
       />
       {subtitle && (
         <div
@@ -271,7 +275,10 @@ const InventoryBarcodePrintPage: React.FC = () => {
   }, [fetchItems]);
 
   const handlePrint = () => {
-    window.print();
+    // Small delay to ensure JsBarcode useEffect has rendered all SVGs
+    requestAnimationFrame(() => {
+      window.print();
+    });
   };
 
   // Build the repeated items list based on copies
@@ -334,6 +341,26 @@ const InventoryBarcodePrintPage: React.FC = () => {
               break-inside: avoid;
               border: none !important;
               background: white !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+              color-adjust: exact !important;
+            }
+
+            /* Ensure SVG barcodes are visible in print */
+            .barcode-label svg {
+              display: block !important;
+              visibility: visible !important;
+              max-width: 100% !important;
+              height: auto !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+
+            .barcode-label svg rect,
+            .barcode-label svg g rect {
+              fill: #000 !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
             }
 
             /* For thermal printers, one label per page */
