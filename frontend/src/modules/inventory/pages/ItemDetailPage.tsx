@@ -312,14 +312,15 @@ const ItemDetailPage: React.FC = () => {
           </Card>
         )}
 
-        {/* Financial — electronics, equipment, tool, vehicle */}
-        {['electronics', 'equipment', 'tool', 'vehicle'].includes(itemType) && (
+        {/* Financial — shown when any cost data exists, or for typical asset types */}
+        {(item.purchase_price != null || item.current_value != null || item.replacement_cost != null || ['electronics', 'equipment', 'tool', 'vehicle'].includes(itemType)) && (
           <Card title="Financial" icon={<Calendar className="w-4 h-4" />}>
             <Field label="Purchase Price" value={fmtCurrency(item.purchase_price)} />
+            <Field label="Current Value" value={fmtCurrency(item.current_value)} />
+            <Field label="Replacement Cost" value={fmtCurrency(item.replacement_cost)} />
             <Field label="Purchase Date" value={fmtDate(item.purchase_date, tz)} />
             <Field label="Vendor" value={item.vendor || '--'} />
             <Field label="Warranty Exp." value={fmtDate(item.warranty_expiration, tz)} />
-            <Field label="Replacement Cost" value={fmtCurrency(item.replacement_cost)} />
           </Card>
         )}
 

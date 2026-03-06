@@ -47,7 +47,7 @@ function locLabel(item: InventoryItem, locs: Location[]): string {
 interface FD {
   name: string; description: string; category_id: string; tracking_type: string;
   serial_number: string; asset_tag: string; barcode: string; size: string; color: string;
-  purchase_price: string; purchase_date: string; vendor: string; warranty_expiration: string;
+  purchase_price: string; current_value: string; purchase_date: string; vendor: string; warranty_expiration: string;
   replacement_cost: string; location_id: string; storage_area_id: string;
   quantity: string; unit_of_measure: string; inspection_interval_days: string;
   condition: string; notes: string;
@@ -55,7 +55,7 @@ interface FD {
 const EMPTY: FD = {
   name: '', description: '', category_id: '', tracking_type: 'individual',
   serial_number: '', asset_tag: '', barcode: '', size: '', color: '',
-  purchase_price: '', purchase_date: '', vendor: '', warranty_expiration: '',
+  purchase_price: '', current_value: '', purchase_date: '', vendor: '', warranty_expiration: '',
   replacement_cost: '', location_id: '', storage_area_id: '',
   quantity: '1', unit_of_measure: '', inspection_interval_days: '',
   condition: 'good', notes: '',
@@ -82,6 +82,7 @@ const ItemFormModal: React.FC<FormProps> = ({
         serial_number: editItem.serial_number ?? '', asset_tag: editItem.asset_tag ?? '',
         barcode: editItem.barcode ?? '', size: editItem.size ?? '', color: editItem.color ?? '',
         purchase_price: editItem.purchase_price != null ? String(editItem.purchase_price) : '',
+        current_value: editItem.current_value != null ? String(editItem.current_value) : '',
         purchase_date: editItem.purchase_date ?? '', vendor: editItem.vendor ?? '',
         warranty_expiration: editItem.warranty_expiration ?? '',
         replacement_cost: editItem.replacement_cost != null ? String(editItem.replacement_cost) : '',
@@ -120,6 +121,7 @@ const ItemFormModal: React.FC<FormProps> = ({
         size: f.size.trim() || undefined,
         color: f.color.trim() || undefined,
         purchase_price: f.purchase_price ? Number(f.purchase_price) : undefined,
+        current_value: f.current_value ? Number(f.current_value) : undefined,
         purchase_date: f.purchase_date || undefined,
         vendor: f.vendor.trim() || undefined,
         warranty_expiration: f.warranty_expiration || undefined,
@@ -212,6 +214,7 @@ const ItemFormModal: React.FC<FormProps> = ({
           {showFin && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div><label className={lbl}>Purchase Price</label><input type="number" step="0.01" className={inp} value={f.purchase_price} onChange={(e) => up('purchase_price', e.target.value)} /></div>
+              <div><label className={lbl}>Current Value</label><input type="number" step="0.01" className={inp} value={f.current_value} onChange={(e) => up('current_value', e.target.value)} /></div>
               <div><label className={lbl}>Purchase Date</label><input type="date" className={inp} value={f.purchase_date} onChange={(e) => up('purchase_date', e.target.value)} /></div>
               <div><label className={lbl}>Vendor</label><input className={inp} value={f.vendor} onChange={(e) => up('vendor', e.target.value)} /></div>
               <div><label className={lbl}>Warranty Expiration</label><input type="date" className={inp} value={f.warranty_expiration} onChange={(e) => up('warranty_expiration', e.target.value)} /></div>
@@ -578,6 +581,7 @@ const InventoryItemsPage: React.FC = () => {
                 <th className="px-3 py-3 text-left text-theme-text-secondary font-medium">Tracking</th>
                 <th className="px-3 py-3 text-left text-theme-text-secondary font-medium">Serial / Tag</th>
                 <th className="px-3 py-3 text-left text-theme-text-secondary font-medium">Location</th>
+                <th className="px-3 py-3 text-right text-theme-text-secondary font-medium">Cost</th>
                 <th className="px-3 py-3 w-10" />
               </tr>
             </thead>
@@ -596,6 +600,7 @@ const InventoryItemsPage: React.FC = () => {
                     <td className="px-3 py-3 text-theme-text-muted capitalize">{item.tracking_type}</td>
                     <td className="px-3 py-3 text-theme-text-muted font-mono text-xs">{ids || '-'}</td>
                     <td className="px-3 py-3 text-theme-text-muted truncate max-w-[160px]">{loc || '-'}</td>
+                    <td className="px-3 py-3 text-right text-theme-text-muted tabular-nums">{item.purchase_price != null ? `$${item.purchase_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
                     <td className="px-3 py-3"><Link to={`/inventory/items/${item.id}`} className="text-theme-text-muted hover:text-theme-text-primary" aria-label={`View ${item.name}`}><ChevronRight className="w-4 h-4" /></Link></td>
                   </tr>
                 );
@@ -619,6 +624,7 @@ const InventoryItemsPage: React.FC = () => {
                 size={item.size} color={item.color} location={loc || undefined}
                 manufacturer={[item.manufacturer, item.model_number].filter(Boolean).join(' ') || undefined}
                 quantity={item.tracking_type === 'pool' ? item.quantity : undefined}
+                cost={item.purchase_price != null ? `$${item.purchase_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : undefined}
                 selected={selIds.has(item.id)} onSelect={() => toggle(item.id)}
                 onTap={() => navigate(`/inventory/items/${item.id}`)}
                 showActions={canManage} onEdit={() => openEdit(item)}
