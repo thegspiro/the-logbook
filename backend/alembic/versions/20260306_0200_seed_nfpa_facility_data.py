@@ -26,6 +26,31 @@ def generate_uuid():
 
 
 def upgrade() -> None:
+    # ------------------------------------------------------------------
+    # Make organization_id nullable on facility lookup tables so that
+    # system-level records (is_system=True) can exist without an org.
+    # The earlier seed migration (20260214_2000) also inserts system
+    # records with organization_id=NULL, so this fixes both.
+    # ------------------------------------------------------------------
+    op.alter_column(
+        "facility_maintenance_types",
+        "organization_id",
+        existing_type=sa.String(36),
+        nullable=True,
+    )
+    op.alter_column(
+        "facility_types",
+        "organization_id",
+        existing_type=sa.String(36),
+        nullable=True,
+    )
+    op.alter_column(
+        "facility_statuses",
+        "organization_id",
+        existing_type=sa.String(36),
+        nullable=True,
+    )
+
     facility_maintenance_types = table(
         "facility_maintenance_types",
         column("id", sa.String),
@@ -259,4 +284,24 @@ def downgrade() -> None:
         f"DELETE FROM facility_maintenance_types "
         f"WHERE organization_id IS NULL AND is_system = 1 "
         f"AND name IN ({placeholders})"
+    )
+
+    # Revert organization_id back to NOT NULL on lookup tables
+    op.alter_column(
+        "facility_statuses",
+        "organization_id",
+        existing_type=sa.String(36),
+        nullable=False,
+    )
+    op.alter_column(
+        "facility_types",
+        "organization_id",
+        existing_type=sa.String(36),
+        nullable=False,
+    )
+    op.alter_column(
+        "facility_maintenance_types",
+        "organization_id",
+        existing_type=sa.String(36),
+        nullable=False,
     )
