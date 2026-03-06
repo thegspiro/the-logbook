@@ -117,6 +117,23 @@ DELETE /api/v1/event-requests/email-templates/{id}         # Delete template
 
 ---
 
+## Recent Changes (2026-03-06)
+
+- **Attendance Duration Finalization** — New `finalize_event_attendance()` calculates duration for checked-in members who didn't check out (the default when `require_checkout` is false). Uses `actual_end_time` with fallback to `end_datetime`. Auto-triggers when secretary records actual end time. Updates linked training records still at 0 hours
+- **Events Page Search & Pagination** — Search bar filters events by title and location. Pagination added. Upcoming/Past toggle accessible to all users (past events were previously admin-only)
+- **RSVP Status Badge** — Event cards now show the current user's RSVP status (Going/Maybe/Not Going) with `user_rsvp_status` on `EventListItem`
+- **Action Button Reorganization** — Event detail page organizes 9+ manager buttons into primary actions (RSVP, QR Code, Edit, Check In) plus a "More" dropdown for secondary actions (Duplicate, Record Times, Finalize Attendance, Monitoring, Create Meeting, Cancel, Delete)
+- **Duplicate RSVP Prevention** — `_process_event_registration` checks for existing RSVPs before creating new ones, updating to GOING status if one exists
+- **Cancelled Event Badge Fix** — Badge/text colors corrected for light mode (`text-red-300` → `text-red-700 dark:text-red-300`)
+
+### API Endpoints — Attendance Finalization
+
+```
+POST   /api/v1/events/{id}/finalize-attendance   # Calculate duration for unchecked-out members
+```
+
+---
+
 ## Recent Changes (2026-03-04)
 
 - **Custom Event Categories** — Full-stack integration: `custom_category` column on events table, visibility settings, category filter tabs on Events page, category dropdown in Event form

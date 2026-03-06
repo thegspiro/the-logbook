@@ -599,4 +599,64 @@ Each email template now supports default CC/BCC. BCC also available for schedule
 
 ---
 
+## Login Cookie Delivery (2026-03-06)
+
+### Problem: Login returns 200 but cookies not stored by browser
+
+**Status (Fixed):** Multiple causes: (1) `_clear_auth_cookies()` before `_set_auth_cookies()` produced conflicting Set-Cookie headers, (2) Starlette `BaseHTTPMiddleware` stripped Set-Cookie when stacked, (3) stale cookies from previous sessions with different `SECRET_KEY`. SecurityHeaders and IPLogging middleware converted to pure ASGI. Login no longer clears cookies before setting. User data included directly in login response to eliminate race condition.
+
+---
+
+## Security Middleware Memory Growth (2026-03-06)
+
+### Problem: Backend memory usage grows unbounded under sustained traffic
+
+**Status (Fixed):** `SecurityMonitoringService` tracking dicts (`_api_calls`, `_login_attempts`, `_session_ips`, `_data_transfers`) and alerts list grew without limit. Added periodic eviction and trimming. Public portal rate-limit caches also capped.
+
+**Monitor:** `docker stats logbook-backend` to verify memory stays stable.
+
+---
+
+## Facilities Startup Crash Chain (2026-03-06)
+
+### Problem: Backend crashes on startup with facilities module enabled
+
+**Status (Fixed):** Chain: FK reference to wrong table (`roles` vs `positions`), ~50 SET NULL FK columns missing `nullable=True`, duplicate migration, NOT NULL `organization_id` on system seed records, missing seed data. All resolved.
+
+**Fix:** `docker exec logbook-backend alembic upgrade head`
+
+---
+
+## Facilities Route Ordering (2026-03-06)
+
+### Problem: Static facility routes (maintenance, maintenance-types) return 404
+
+**Status (Fixed):** `GET /{facility_id}` was defined before static routes. Moved to end of router.
+
+---
+
+## Auth Refresh 422 (2026-03-06)
+
+### Problem: Token refresh returns 422 Unprocessable Entity
+
+**Status (Fixed):** Frontend sent `{}` body which Pydantic rejected. Changed to `undefined`. `TokenRefresh.refresh_token` made optional. Cookie path fixed to `/api/v1/auth/` (with trailing slash).
+
+---
+
+## Onboarding 422 on Empty Optional Fields (2026-03-06)
+
+### Problem: Creating organization during onboarding returns 422
+
+**Status (Fixed):** Empty strings passed through `??` (nullish coalescing) to backend where Pydantic validators rejected them. Changed to `|| undefined`.
+
+---
+
+## Pydantic 422 Error Formatting (2026-03-06)
+
+### Problem: 422 errors display as "[object Object]" in frontend
+
+**Status (Fixed):** FastAPI returns validation errors as arrays. `toAppError()` now detects and formats them as "field: reason".
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Database Issues](Troubleshooting-Database)

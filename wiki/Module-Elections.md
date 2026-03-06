@@ -61,6 +61,20 @@ POST   /api/v1/elections/{id}/proxy-votes      # Authorize proxy vote
 
 ---
 
+## Recent Improvements (2026-03-06)
+
+- **BallotBuilder redesigned**: Modern card-based UI with `@dnd-kit` drag-and-drop reordering, expandable inline editing, color-coded type badges (emerald/purple/blue), two-step inline delete, template popover, and summary pills
+- **Ballot position matching fixed**: Template-created ballot items now include the `position` field. Preview and voting pages use position-based matching with title-based fallback for backward compatibility
+- **One ballot item per position**: Position dropdowns only show unused positions with validation toast on duplicates
+- **Ballot preview enhanced**: Shows meeting date, prospective member info cards on approval items, write-in input placeholders, security notice footer, and election configuration summary
+- **Position dropdown from org ranks**: Position field loads operational ranks (Chief, Captain, etc.) with type-ahead filtering. Also added to candidate edit form
+- **Write-in candidate auto-fill**: Checking "Write-in candidate" auto-fills name and clears linked member
+- **Proxy voting settings**: Enable/disable toggle with max proxies per person in Election Settings
+- **Election settings API fixed**: GET/PATCH endpoints return flat field names matching frontend expectations
+- **Election integrity chain**: Ballot hash chaining and server-side voter eligibility enforcement
+
+---
+
 ## Recent Fixes (2026-03-01)
 
 - **Type errors and missing fields**: Fixed TypeScript type errors and added missing required fields across election pages
