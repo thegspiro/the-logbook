@@ -638,7 +638,7 @@ const ShiftReportPage: React.FC = () => {
                   <input
                     type="text"
                     value={task.description || ''}
-                    onChange={(e) => updateTask(i, { description: e.target.value ?? undefined })}
+                    onChange={(e) => updateTask(i, { description: e.target.value || undefined })}
                     placeholder="Notes (optional)"
                     className="form-input flex-1"
                   />

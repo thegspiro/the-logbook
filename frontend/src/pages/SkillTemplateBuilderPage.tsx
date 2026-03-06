@@ -189,7 +189,7 @@ const CriterionEditor: React.FC<{
               <label className="block text-xs font-medium text-theme-text-muted mb-1">Statement Text <span className="text-red-500">*</span></label>
               <textarea
                 value={criterion.statement_text ?? ''}
-                onChange={(e) => onChange({ ...criterion, statement_text: e.target.value ?? undefined })}
+                onChange={(e) => onChange({ ...criterion, statement_text: e.target.value || undefined })}
                 rows={3}
                 placeholder="Enter the statement the evaluator must read or announce..."
                 className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50 resize-none"
@@ -220,7 +220,7 @@ const CriterionEditor: React.FC<{
           <input
             type="text"
             value={criterion.description ?? ''}
-            onChange={(e) => onChange({ ...criterion, description: e.target.value ?? undefined })}
+            onChange={(e) => onChange({ ...criterion, description: e.target.value || undefined })}
             placeholder="Optional notes"
             className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
           />
@@ -287,7 +287,7 @@ const SectionEditor: React.FC<{
           <input
             type="text"
             value={section.description ?? ''}
-            onChange={(e) => onChange({ ...section, description: e.target.value ?? undefined })}
+            onChange={(e) => onChange({ ...section, description: e.target.value || undefined })}
             placeholder="Description (optional)"
             className="hidden lg:block flex-1 px-3 py-1.5 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
           />
@@ -438,8 +438,8 @@ export const SkillTemplateBuilderPage: React.FC = () => {
     const parsedTags = tags.split(',').map((t) => t.trim()).filter(Boolean);
     return {
       name: name.trim(),
-      description: description.trim() ?? undefined,
-      category: category.trim() ?? undefined,
+      description: description.trim() || undefined,
+      category: category.trim() || undefined,
       visibility: visibility as 'all_members' | 'officers_only' | 'assigned_only',
       time_limit_seconds: timeLimitMinutes != null ? Math.round(timeLimitMinutes * 60) : undefined,
       passing_percentage: passingPercentage,
@@ -447,11 +447,11 @@ export const SkillTemplateBuilderPage: React.FC = () => {
       tags: parsedTags.length > 0 ? parsedTags : undefined,
       sections: sections.map((s, si) => ({
         name: s.name.trim(),
-        description: s.description?.trim() ?? undefined,
+        description: s.description?.trim() || undefined,
         sort_order: si,
         criteria: s.criteria.map((c, ci) => ({
           label: c.label.trim(),
-          description: c.description?.trim() ?? undefined,
+          description: c.description?.trim() || undefined,
           type: c.type,
           required: c.required,
           sort_order: ci,
@@ -459,7 +459,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
           max_score: c.max_score,
           time_limit_seconds: c.time_limit_seconds,
           checklist_items: c.checklist_items?.length ? c.checklist_items : undefined,
-          statement_text: c.statement_text?.trim() ?? undefined,
+          statement_text: c.statement_text?.trim() || undefined,
         })),
       })),
     };

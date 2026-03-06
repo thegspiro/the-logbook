@@ -209,13 +209,13 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
         first_name: editFields.first_name,
         last_name: editFields.last_name,
         email: editFields.email,
-        phone: editFields.phone ?? undefined,
-        date_of_birth: editFields.date_of_birth ?? undefined,
+        phone: editFields.phone || undefined,
+        date_of_birth: editFields.date_of_birth || undefined,
         address: {
-          street: editFields.address_street ?? undefined,
-          city: editFields.address_city ?? undefined,
-          state: editFields.address_state ?? undefined,
-          zip_code: editFields.address_zip ?? undefined,
+          street: editFields.address_street || undefined,
+          city: editFields.address_city || undefined,
+          state: editFields.address_state || undefined,
+          zip_code: editFields.address_zip || undefined,
         },
       });
       toast.success('Contact info updated');

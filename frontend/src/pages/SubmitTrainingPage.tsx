@@ -320,7 +320,7 @@ const SubmissionForm: React.FC<{
             <input
               type="text"
               value={formData.instructor || ''}
-              onChange={(e) => setFormData({ ...formData, instructor: e.target.value ?? undefined })}
+              onChange={(e) => setFormData({ ...formData, instructor: e.target.value || undefined })}
               className="form-input text-sm"
               required={isFieldRequired('instructor')}
             />
@@ -336,7 +336,7 @@ const SubmissionForm: React.FC<{
             <input
               type="text"
               value={formData.location || ''}
-              onChange={(e) => setFormData({ ...formData, location: e.target.value ?? undefined })}
+              onChange={(e) => setFormData({ ...formData, location: e.target.value || undefined })}
               className="form-input text-sm"
               required={isFieldRequired('location')}
             />
@@ -352,7 +352,7 @@ const SubmissionForm: React.FC<{
           </label>
           <select
             value={formData.category_id || ''}
-            onChange={(e) => setFormData({ ...formData, category_id: e.target.value ?? undefined })}
+            onChange={(e) => setFormData({ ...formData, category_id: e.target.value || undefined })}
             className="form-input text-sm"
             required={isFieldRequired('category_id')}
           >
@@ -372,7 +372,7 @@ const SubmissionForm: React.FC<{
           </label>
           <textarea
             value={formData.description || ''}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value ?? undefined })}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value || undefined })}
             rows={3}
             className="form-input text-sm"
             required={isFieldRequired('description')}
@@ -391,7 +391,7 @@ const SubmissionForm: React.FC<{
             <input
               type="text"
               value={formData.certification_number || ''}
-              onChange={(e) => setFormData({ ...formData, certification_number: e.target.value ?? undefined })}
+              onChange={(e) => setFormData({ ...formData, certification_number: e.target.value || undefined })}
               className="form-input text-sm"
               required={isFieldRequired('certification_number')}
             />
@@ -407,7 +407,7 @@ const SubmissionForm: React.FC<{
             <input
               type="text"
               value={formData.issuing_agency || ''}
-              onChange={(e) => setFormData({ ...formData, issuing_agency: e.target.value ?? undefined })}
+              onChange={(e) => setFormData({ ...formData, issuing_agency: e.target.value || undefined })}
               className="form-input text-sm"
               required={isFieldRequired('issuing_agency')}
             />
@@ -423,7 +423,7 @@ const SubmissionForm: React.FC<{
             <input
               type="date"
               value={formData.expiration_date || ''}
-              onChange={(e) => setFormData({ ...formData, expiration_date: e.target.value ?? undefined })}
+              onChange={(e) => setFormData({ ...formData, expiration_date: e.target.value || undefined })}
               className="form-input text-sm"
               required={isFieldRequired('expiration_date')}
             />

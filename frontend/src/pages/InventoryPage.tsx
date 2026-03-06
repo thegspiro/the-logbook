@@ -396,7 +396,7 @@ const InventoryPage: React.FC = () => {
         maintenance_type: maintenanceForm.maintenance_type || 'inspection',
         description: maintenanceForm.description || undefined,
         notes: maintenanceForm.notes || undefined,
-        completed_date: maintenanceForm.is_completed ? new Date().toISOString().split('T')[0] : undefined,
+        completed_date: maintenanceForm.is_completed ? (new Date().toISOString().split('T')[0] ?? '') : undefined,
         is_completed: maintenanceForm.is_completed ?? false,
         condition_after: maintenanceForm.condition_after || undefined,
         next_due_date: maintenanceForm.next_due_date || undefined,

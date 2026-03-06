@@ -433,7 +433,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
                       id="admin-extend-date"
                       type="date"
                       value={extendDate}
-                      min={new Date().toISOString().split('T')[0]}
+                      min={new Date().toISOString().split('T')[0] ?? ''}
                       onChange={(e) => setExtendDate(e.target.value)}
                       className="form-input focus:ring-emerald-500"
                     />

@@ -162,7 +162,7 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({
               value={scheduledDate}
               onChange={(e) => setScheduledDate(e.target.value)}
               className={inputClass}
-              min={new Date().toISOString().split('T')[0]}
+              min={new Date().toISOString().split('T')[0] ?? ''}
               required
             />
           </div>

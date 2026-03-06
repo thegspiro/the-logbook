@@ -679,7 +679,7 @@ const OrganizationSetup: React.FC = () => {
         department_id: formData.departmentId?.trim() || undefined,
         county: formData.county?.trim() || undefined,
         founded_year: formData.foundedYear ? parseInt(formData.foundedYear, 10) : undefined,
-        logo: formData.logo ?? undefined,
+        logo: formData.logo || undefined,
       };
 
       // Save to API

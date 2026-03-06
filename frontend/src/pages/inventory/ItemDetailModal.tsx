@@ -732,8 +732,8 @@ function ExposuresTab({
       await inventoryService.createExposureRecord(item.id, {
         exposure_type: form.exposure_type,
         exposure_date: form.exposure_date,
-        incident_number: form.incident_number ?? undefined,
-        description: form.description ?? undefined,
+        incident_number: form.incident_number || undefined,
+        description: form.description || undefined,
         decon_required: form.decon_required,
         decon_completed: false,
       });

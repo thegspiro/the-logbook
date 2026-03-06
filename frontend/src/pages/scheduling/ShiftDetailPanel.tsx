@@ -61,7 +61,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     if (!v) return '';
     // If it contains 'T', it's an ISO datetime — extract the time portion
     if (v.includes('T')) {
-      const timePart = v.split('T')[1];
+      const timePart = v.split('T')[1] ?? '';
       return timePart ? timePart.slice(0, 5) : '';
     }
     // Already HH:MM or HH:MM:SS
