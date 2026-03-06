@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-03-05 (added inventory improvements — charges, return requests, quarantine, pool item enhancements, mobile card views, barcode printing; training enhancements — recertification, competency, xAPI; compliance officer dashboard; facilities bug fixes; grants & fundraising module; reports rank display fix; prospective member interview view; stage history fix; empty string `??` vs `||` edge cases; clipboard copy fallback; Unraid app removal cleanup; onboarding auth state reset; unraid directory consolidation; plus all previous updates)
+**Last Updated**: 2026-03-06 (added login auth cookie delivery fixes — Set-Cookie stripping by BaseHTTPMiddleware, Bearer token bridge, cookie settle polling, CSRF on refresh; security middleware ASGI conversion and memory growth caps; elections ballot preview/position matching/BallotBuilder redesign/proxy voting; events attendance finalization/search/pagination/RSVP badges; facilities NFPA compliance fields, container startup crash chain, route ordering, room-location integration, type safety improvements; onboarding empty string 422s and error message formatting; plus all previous updates)
 
 ---
 
@@ -98,7 +98,17 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 84. [Onboarding Auth State Reset Issues](#onboarding-auth-state-reset-issues)
 85. [Unraid App Removal Cleanup](#unraid-app-removal-cleanup)
 86. [Facilities MissingGreenlet Error](#facilities-missinggreenlet-error)
-87. [Getting Help](#getting-help)
+87. [Login Cookie Delivery & Auth Flow Issues](#login-cookie-delivery--auth-flow-issues)
+88. [Security Middleware ASGI & Memory Issues](#security-middleware-asgi--memory-issues)
+89. [Elections Ballot Position Matching Issues](#elections-ballot-position-matching-issues)
+90. [Events Attendance Finalization Issues](#events-attendance-finalization-issues)
+91. [Facilities Container Startup Crash Chain](#facilities-container-startup-crash-chain)
+92. [Facilities Route Ordering & Seed Data Issues](#facilities-route-ordering--seed-data-issues)
+93. [Facilities Room-Location Integration Issues](#facilities-room-location-integration-issues)
+94. [Facilities NFPA Compliance Fields](#facilities-nfpa-compliance-fields)
+95. [Onboarding Empty String 422 Errors](#onboarding-empty-string-422-errors)
+96. [Pydantic 422 Error Display Issues](#pydantic-422-error-display-issues)
+97. [Getting Help](#getting-help)
 
 ---
 
@@ -6298,6 +6308,197 @@ docker volume rm logbook_mysql_data logbook_redis_data 2>/dev/null
 **Fix:** Pull latest backend code. The maintenance endpoints now use `selectinload(Facility.maintenance_records)` in the query to eagerly load the relationship.
 
 **Edge Case:** This same issue can occur with any lazy-loaded relationship in async SQLAlchemy. If you see `MissingGreenlet` errors after adding new relationships, add `selectinload()` or `joinedload()` to the query options.
+
+---
+
+## Login Cookie Delivery & Auth Flow Issues
+
+### Problem: Login succeeds (200) but user is immediately redirected back to login
+
+**Status (Fixed 2026-03-06):** Multiple cascading issues caused login cookies to be lost or ignored.
+
+**Root Causes (in order of discovery):**
+
+1. **Conflicting Set-Cookie headers**: The login endpoint called `_clear_auth_cookies()` before `_set_auth_cookies()`, producing delete headers (`Max-Age=0`, `SameSite=lax`) and set headers (`SameSite=strict`, `HttpOnly`) for the same cookie names in the same response. Browsers processed the conflicting attributes inconsistently, often honoring the delete.
+
+2. **BaseHTTPMiddleware stripping Set-Cookie**: Starlette's `BaseHTTPMiddleware.call_next()` wraps the response, which can strip Set-Cookie headers when multiple `BaseHTTPMiddleware` layers are stacked. `SecurityHeadersMiddleware` and `IPLoggingMiddleware` were both `BaseHTTPMiddleware` subclasses.
+
+3. **Cookie timing race**: The dashboard fires ~15 parallel API calls immediately after login. If the browser hasn't processed the Set-Cookie headers yet, all calls return 401, triggering a refresh cascade that redirects to login.
+
+4. **Stale cookies from previous sessions**: A `refresh_token` cookie with path `/api/v1/auth` (no trailing slash) persisted alongside the new cookie at `/api/v1/auth/`, causing the backend to attempt refresh with an expired/invalid token.
+
+5. **CSRF missing on refresh request**: The standalone axios instance used for refresh bypasses the request interceptor that adds the `X-CSRF-Token` header, causing 403 Forbidden.
+
+6. **Refresh 422 from empty body**: The refresh request sent `{}` instead of `undefined`, which Pydantic parsed against `TokenRefresh` (requires `refresh_token: str`) and rejected.
+
+**Fix:** Pull latest code. All issues are resolved. The system now uses a temporary Bearer token bridge (access token from login response body stored in memory) as a fallback for the httpOnly cookie, with automatic cleanup after 30 minutes.
+
+**Edge Cases:**
+- Module-specific axios instances (scheduling, admin-hours) each have independent interceptors and also need the Bearer token bridge — all now included
+- The refresh token is stored in memory alongside the access token for environments where cookies are never stored by the browser
+- Cookie settle polling (`waitForLoginCookies`) waits for the `csrf_token` cookie to change before navigating to the dashboard
+
+---
+
+## Security Middleware ASGI & Memory Issues
+
+### Problem: Security middleware causes TypeError or memory growth
+
+**Status (Fixed 2026-03-06):**
+
+**Issue 1 — SecurityMonitoringMiddleware TypeError:**
+The `receive` lambda used to re-wrap the request body was synchronous, but ASGI requires an async callable. Downstream handlers calling `await request.body()` would raise `TypeError`.
+
+**Fix:** Changed the receive callable to an `async def`.
+
+**Issue 2 — Unbounded memory growth under sustained traffic:**
+`SecurityMonitoringService` tracked API calls, login attempts, session IPs, and data transfers in unbounded in-memory dicts. The in-memory alerts list also grew without limit.
+
+**Fix:** Added periodic eviction of stale tracking keys and trimming of the alerts list. Public portal rate-limit caches (`rate_limit_cache`, `ip_rate_limit_cache`) also now trigger automatic cleanup when they exceed their key limits.
+
+**Edge Case:** If you see memory growth in production after updating, check for other in-memory caches or tracking dicts that may lack eviction policies. Use `docker stats` to monitor container memory over time.
+
+---
+
+## Elections Ballot Position Matching Issues
+
+### Problem: Candidates not showing in ballot preview or voting page
+
+**Status (Fixed 2026-03-06):** Ballot items created from templates were missing the `position` field.
+
+**Symptoms:**
+- Ballot preview shows ballot items but no candidates listed under them
+- Voting page shows ballot items but no candidate radio buttons
+- Candidates exist and show in the Candidates tab
+
+**Root Cause:** Candidate-to-ballot-item matching uses the `position` field. Template-created ballot items didn't set this field, so matching fell back to the ballot item UUID, which never matches any candidate's position string.
+
+**Fix:** Pull latest frontend code. Template-created ballot items now include the `position` field. Preview and voting pages also fall back to title-based matching for backward compatibility with existing ballot items that lack a position field.
+
+**Edge Cases:**
+- Existing elections created before this fix may have ballot items without position fields — the title-based fallback handles this
+- One ballot item per position is now enforced; the position dropdown only shows unused positions
+- Write-in candidates auto-fill with "Write-in Candidate" name when the checkbox is enabled
+
+### Problem: Election settings not saving or loading
+
+**Status (Fixed 2026-03-06):** The `GET`/`PATCH /elections/settings` endpoints returned a nested structure, but the frontend expected flat field names (e.g., `default_voting_method`). Settings appeared blank on page load and saves were silently ignored.
+
+**Fix:** Backend endpoints now return flat field names. Also added proxy voting toggle to settings.
+
+---
+
+## Events Attendance Finalization Issues
+
+### Problem: Members who checked in but didn't check out show 0 hours
+
+**Status (Fixed 2026-03-06):** When `require_checkout` is `false` (the default), members who check in are never prompted to check out, leaving their attendance duration at 0.
+
+**Fix:** Added `finalize_event_attendance()` that calculates duration for all checked-in members using `actual_end_time` (with fallback to `end_datetime`) minus each member's `check_in_at`. Auto-triggers when a secretary records actual end time via `record_actual_times()`. Also updates linked training records that are still at 0 hours.
+
+**API Endpoint:** `POST /api/v1/events/{id}/finalize-attendance`
+
+**Edge Cases:**
+- Members who checked out normally are not affected (their duration is already set)
+- If no `actual_end_time` is recorded, the scheduled `end_datetime` is used as fallback
+- Training records created on check-in with 0 hours are updated to the calculated duration
+- Duplicate RSVPs from form-event integration are now detected and updated instead of duplicated
+
+---
+
+## Facilities Container Startup Crash Chain
+
+### Problem: Backend won't start after enabling the facilities module
+
+**Status (Fixed 2026-03-06):** A chain of cascading issues prevented the backend from starting.
+
+**Chain of failures:**
+1. `IssuanceAllowance.role_id` referenced `ForeignKey("roles.id")` but the model was renamed to `Position` with `__tablename__="positions"` — `metadata.sorted_tables` failed
+2. ~50 FK columns across 8 model files had `ondelete="SET NULL"` but missing `nullable=True` — MySQL error 1830
+3. Fundraising migration in `MIGRATION_ONLY_FILES` tried to create tables that already existed from `Base.metadata.sorted_tables` — error 1050
+4. Facility lookup tables (`facility_types`, `facility_statuses`) had `organization_id NOT NULL`, preventing system seed data (which has `NULL` org_id) from being inserted
+5. Seed migration was stamped but data was never inserted, so `create_facility` couldn't find "Fire Station" type — crash
+
+**Fix:** Pull latest code. All issues are resolved with proper FK references, nullable columns, removed duplicate migration, and a backfill seed migration.
+
+**Edge Case:** If you have an existing deployment that partially applied migrations, run `alembic upgrade head` to apply the backfill seed migration. Check for existing data conflicts before running.
+
+---
+
+## Facilities Route Ordering & Seed Data Issues
+
+### Problem: GET /api/v1/facilities/maintenance returns 404
+
+**Status (Fixed 2026-03-06):** FastAPI matched "maintenance" as a `{facility_id}` parameter because `GET /{facility_id}` was defined before static routes like `/maintenance` and `/maintenance-types`.
+
+**Fix:** Parameterized routes (`GET /{facility_id}`, `PATCH /{facility_id}`) moved to end of router after all static routes.
+
+### Problem: POST /api/v1/facilities returns 400 "No facility types available"
+
+**Status (Fixed 2026-03-06):** System facility types/statuses weren't in the database (migration may have been stamped without data insertion).
+
+**Fix:** `_ensure_system_defaults()` safety net auto-creates system types/statuses if missing. Facility type is auto-matched to organization type ("EMS Station" for EMS-only orgs, "Fire Station" for fire departments). Status defaults to "Operational".
+
+**Edge Case:** If you have a custom org type that isn't fire or EMS, the auto-assign falls back to any active type for the org. If no types exist at all, a clear 400 error is returned instead of a 500 IntegrityError.
+
+---
+
+## Facilities Room-Location Integration Issues
+
+### Problem: Facility rooms don't appear in Events location picker
+
+**Status (Fixed 2026-03-06):** Rooms existed in the facilities module but had no linked Location record, so they weren't available to Events, Storage, and other modules that use the location picker.
+
+**Fix:** `FacilitiesService.create_room`/`update_room`/`delete_room` now auto-sync a linked Location record. Each room gets a display code for QR check-in support. A new `facility_room_id` FK on the Location model links rooms to locations.
+
+**Edge Cases:**
+- Existing rooms created before this fix won't have linked locations — they'll be created on next room update
+- Deleting a room deletes the linked location
+- The FacilityRoomPicker component (`components/FacilityRoomPicker.tsx`) provides a reusable facility dropdown + room dropdown for cross-module room selection
+
+---
+
+## Facilities NFPA Compliance Fields
+
+### New Feature (2026-03-06)
+
+Facilities now include NFPA compliance tracking:
+
+- **8 fire-critical system types**: exhaust extraction, cascade air, decontamination, bay door, air quality monitor, PPE cleaning, alerting system, shore power
+- **Certification/testing fields**: last tested date, next test due, test result, certification number, certified by, test frequency days
+- **Inspector fields**: license number, agency, corrective action completed date
+- **Zone classification**: NFPA 1500/1585 hot/transition/cold zones on rooms for contamination control
+- **16 NFPA-aligned maintenance types**: seeded automatically via migration
+
+**Edge Case:** If the seed migration was stamped without inserting data, the `_ensure_system_defaults()` safety net will create the default types on first use.
+
+---
+
+## Onboarding Empty String 422 Errors
+
+### Problem: Onboarding organization creation fails with 422 Unprocessable Entity
+
+**Status (Fixed 2026-03-06):** Form fields initialize as empty strings (`""`). The payload builder used `??` (nullish coalescing) for optional fields, but `"" ?? undefined === ""`, so empty strings were sent to the backend where Pydantic validators (e.g., phone regex) rejected them.
+
+**Fix:** Changed to `|| undefined` so empty strings become `undefined` and are omitted from JSON. Also strengthened frontend ZIP code validation to match the backend regex (US 5-digit/ZIP+4 or Canadian postal code).
+
+**Edge Case:** This is the same `??` vs `||` pattern that affected inventory pages. Any form that uses `??` for optional field fallback will have this issue. Use `||` when you want empty strings to be treated as falsy.
+
+---
+
+## Pydantic 422 Error Display Issues
+
+### Problem: Error messages show "[object Object]" or empty red alert box
+
+**Status (Fixed 2026-03-06):** Two related issues:
+
+1. **`toAppError()` assumed `detail` was a string**: FastAPI returns 422 validation errors as an array of `{loc, msg}` objects. Converting this array to a string produced `[object Object]`.
+
+2. **Empty error strings rendered an empty alert box**: `ErrorAlert` component rendered even when the error message was blank/whitespace.
+
+**Fix:** `toAppError()` now detects array detail and formats it as "field: reason" joined by periods. `ErrorAlert` returns `null` for empty/whitespace messages. `LoginPage` guards against rendering empty error boxes.
+
+**Edge Case:** If you have custom error handling that accesses `response.data.detail`, always check whether it's a string or an array before displaying.
 
 ---
 

@@ -34,9 +34,9 @@ Events are categorized by type:
 - **Other** - Miscellaneous events
 - **Custom Categories** - Your department can define additional custom event categories with color-coded badges in **Events Settings > Custom Event Categories**
 
-You can filter events by type and date range using the controls at the top of the page. If custom categories have been configured and enabled, they appear as additional filter tabs alongside the built-in types.
+You can filter events by type and date range using the controls at the top of the page. A **search bar** lets you filter by event title and location. If custom categories have been configured and enabled, they appear as additional filter tabs alongside the built-in types. Event cards show your **RSVP status badge** (Going/Maybe/Not Going) so you can see at a glance which events you've responded to.
 
-**Past Events:** Officers and managers see a **Past Events** tab to browse historical events with the same filtering and search capabilities.
+**Past Events:** All users can toggle between **Upcoming** and **Past** events using the toggle at the top of the page. Results are paginated for easy browsing.
 
 > **Screenshot placeholder:**
 > _[Screenshot of the Events listing page showing upcoming events as cards or rows, with type badges (color-coded), dates, times, and RSVP status indicators. Show the filter controls and Past Events tab at the top]_
@@ -280,13 +280,18 @@ Each election shows:
 
 1. Navigate to **Elections** and click **Create Election**.
 2. Set the election title, description, and voting period.
-3. Add **ballot items** (positions, questions, or measures).
+3. Add **ballot items** using the card-based Ballot Builder with drag-and-drop reordering:
+   - Use templates for common items (officer election, bylaw vote, membership approval) or create custom items
+   - Each position can only have one ballot item (the dropdown shows only unused positions)
+   - Positions load from your organization's operational ranks (Chief, Captain, etc.) with type-ahead filtering
 4. For each item, add **candidates** and configure options:
-   - Allow write-ins
+   - Allow write-ins (auto-fills name with "Write-in Candidate")
    - Victory condition (plurality, majority, ranked choice)
    - Number of winners
-5. Optionally enable **email ballots** for members who cannot access the system.
-6. Open the election for voting.
+   - Move candidates between positions using the position dropdown in the edit form
+5. Configure **proxy voting** in Election Settings if needed (enable/disable, set max proxies per person).
+6. Optionally enable **email ballots** for members who cannot access the system.
+7. Open the election for voting.
 
 > **Screenshot placeholder:**
 > _[Screenshot of the election creation form showing the title, date range, ballot items section with candidates, and the configuration options (write-ins, victory type)]_
@@ -581,6 +586,9 @@ Thank you for working with Riverside Fire-Rescue!
 | Minutes not showing attendees | If creating minutes from an event, attendees are imported from check-in records, not RSVPs. Ensure members checked in. |
 | "Already voted" error | Each member can only vote once per election. This is by design. |
 | Election results not visible | The election creator controls when results are visible. Results may be hidden until the voting period ends. |
+| Candidates not showing in ballot preview | Fixed in March 2026 — ballot items from templates were missing the `position` field for candidate matching. Pull latest and rebuild. |
+| Ballot builder only shows one candidate per position | As of 2026-03-06, one ballot item per position is enforced. Use separate positions for multiple candidate races. |
+| Election settings not saving or loading | Fixed in March 2026 — GET/PATCH endpoints returned wrong structure. Pull latest and restart. |
 | Event request form not showing outreach types | Add outreach types in **Events > Settings > Outreach Types**. At least one type must be configured. |
 | Submitted request not appearing for coordinator | Coordinator needs `events.manage` permission. Check role permissions in Administration. |
 | Room double-booking error when scheduling | Another event is already booked at that location and time. Choose a different room or time slot. |
@@ -592,6 +600,9 @@ Thank you for working with Riverside Fire-Rescue!
 | Events Settings page layout changed | As of 2026-03-04, the Events Settings page uses a sidebar + content panel layout (matching Organization Settings) instead of collapsible sections. Desktop shows a sidebar with section descriptions; mobile uses horizontal scrollable tabs. |
 | EventRequestStatusPage colors look wrong in light mode | Fixed in March 2026 — hardcoded colors replaced with theme-aware CSS variables. Pull latest and rebuild. |
 | Email templates missing CC/BCC fields | As of 2026-03-04, each email template now supports configurable CC/BCC addresses. Run the latest migration and restart. |
+| Members show 0 hours despite checking in | As of 2026-03-06, use **Finalize Attendance** from the event detail "More" menu to calculate duration for members who checked in but didn't check out. Auto-triggers when recording actual end time. |
+| Past events not visible to regular members | As of 2026-03-06, all users can toggle between Upcoming and Past events. Previously past events were only accessible via the admin hub. |
+| Facility rooms not in event location picker | As of 2026-03-06, facility rooms auto-create linked Location records. Existing rooms get locations on next update. |
 
 ---
 

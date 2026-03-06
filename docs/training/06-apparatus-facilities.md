@@ -164,9 +164,9 @@ Click on any facility to view its full record:
 - **Photos** - Building photos
 - **Documents** - Floor plans, leases, permits
 - **Systems** - HVAC, electrical, plumbing, fire suppression
-- **Rooms** - Room inventory with purpose and capacity
-- **Maintenance** - Maintenance history and schedules
-- **Inspections** - Inspection records and schedules
+- **Rooms** - Room inventory with purpose, capacity, and NFPA zone classification (hot/transition/cold). Rooms auto-create linked Location records for use in Events and QR check-in
+- **Maintenance** - Maintenance history and schedules (16 NFPA-aligned maintenance types available)
+- **Inspections** - Inspection records and schedules, with inspector license/agency tracking and corrective action dates
 - **Utilities** - Utility accounts and usage readings
 - **Access Keys** - Key and access card tracking
 - **Emergency Contacts** - Building-specific emergency contacts
@@ -515,6 +515,12 @@ Over time, these readings build a usage trend that helps identify anomalies (e.g
 | Facility address fields showing as blank | Fixed in March 2026 — frontend types were using snake_case (`address_line1`, `zip_code`) but the API returns camelCase (`addressLine1`, `zipCode`). Pull latest and rebuild. |
 | Apparatus list page gradient looks wrong in light mode | Fixed in March 2026 — hardcoded `via-red-900` gradient replaced with theme-aware CSS variables. Pull latest and rebuild. |
 | Physical address not showing in Organization Settings | As of 2026-03-04, a Physical Address section is now available in Organization Settings > General with a "Same as mailing address" toggle. |
+| Facility creation fails with "No facility types available" | As of 2026-03-06, system types/statuses are auto-seeded on first use if migration data was missing. Run `alembic upgrade head` for the backfill migration. |
+| Backend won't start after enabling facilities | Fixed in March 2026 — cascading issues with FK references, nullable columns, and seed data. Pull latest and restart. See [Troubleshooting](../../docs/TROUBLESHOOTING.md#facilities-container-startup-crash-chain). |
+| Facility rooms don't appear in Events location picker | As of 2026-03-06, rooms auto-sync a linked Location record. Existing rooms will get locations on next update. |
+| Maintenance routes returning 404 | Fixed in March 2026 — route ordering issue where `GET /{facility_id}` matched before static routes like `/maintenance`. Pull latest and restart. |
+| NFPA zone classification not visible on rooms | As of 2026-03-06, rooms support NFPA 1500/1585 zone classification (hot/transition/cold). Check the Rooms tab in facility detail for zone badges. |
+| Facility detail only shows Rooms tab | As of 2026-03-06, the FacilityDetailPanel has tabbed sub-sections: Rooms, Building Systems, and Emergency Contacts. Pull latest and rebuild. |
 
 ---
 

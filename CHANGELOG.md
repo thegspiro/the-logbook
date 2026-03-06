@@ -7,6 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Login Auth Flow & Cookie Delivery Fixes (2026-03-06)
+
+- **Login auto-refresh loop caused by conflicting Set-Cookie headers**: The login endpoint called `_clear_auth_cookies()` before `_set_auth_cookies()`, adding delete headers (`Max-Age=0`, `SameSite=lax`) followed by set headers (`SameSite=strict`, `HttpOnly`) for the same cookie names. Browsers inconsistently processed the conflicting attributes, resulting in the `access_token` never being stored and a refresh loop that kicked users back to login
+- **Post-login 401 cascade from cookie timing race**: After login, the browser may not have processed Set-Cookie headers before the dashboard fires ~15 parallel API calls, causing spurious 401s. Added cookie settle polling (`waitForLoginCookies`) and a post-login grace period with exponential backoff in the 401 interceptor
+- **Temporary Bearer token bridge for post-login requests**: httpOnly auth cookies set by the login response may not be immediately available due to nginx proxy buffering or middleware response wrapping. Now temporarily uses the `access_token` from the login response body as an `Authorization: Bearer` header (the backend already supports this as a fallback), with automatic cleanup after 30 minutes
+- **Bearer token bridge extended to module-specific axios instances**: The scheduling module and `createApiClient` factory each create their own axios instances with independent interceptors. These now also include the Bearer token bridge to prevent 401s on module-specific endpoints (`scheduling/*`, `admin-hours/*`) after login
+- **Refresh token stored in memory alongside access token**: Cookies are never stored by the browser in some deployment configurations. The refresh token is now stored in memory with the access token, and all 401 interceptors send the refresh token in the request body (backend accepts it from body or cookie)
+- **CSRF header missing on standalone refresh request**: The refresh request uses a standalone axios instance to avoid recursive 401 interception, but this bypassed the CSRF header. Now manually reads the `csrf_token` cookie and attaches `X-CSRF-Token` on refresh requests
+- **Auth refresh 422 from empty body and cookie path mismatch**: `apiClient` was sending `{}` body on refresh, which Pydantic parsed against `TokenRefresh` (requires `refresh_token: str`) and rejected with 422. Also fixed cookie path from `/api/v1/auth` to `/api/v1/auth/` for correct sub-path matching. Made `TokenRefresh.refresh_token` optional as defense-in-depth
+- **Login response now includes user data**: Eliminated the separate `GET /auth/me` call after login, preventing the race condition where the access token cookie isn't processed by the browser before the `/auth/me` request fires
+- **Stale refresh token cookie cleanup on login**: Stale `refresh_token` cookies from previous sessions (different `SECRET_KEY`) persisted because the cookie path changed. Login now clears cookies for both path variants
+
+### Security Middleware Fixes (2026-03-06)
+
+- **SecurityHeaders and IPLogging middleware converted to pure ASGI**: Starlette's `BaseHTTPMiddleware` wraps responses through `call_next()`, which can strip Set-Cookie headers when multiple `BaseHTTPMiddleware` layers are stacked. This was the root cause of httpOnly auth cookies set by the login endpoint being lost before reaching the browser. Converted both middleware classes to pure ASGI to leave original response headers untouched
+- **SecurityMonitoringMiddleware receive lambda TypeError**: The `receive` lambda used to re-wrap the request body was synchronous, causing `TypeError` when downstream handlers called `await request.body()`. Changed to an async callable as required by ASGI
+- **Unbounded in-memory growth in SecurityMonitoringService**: Added periodic eviction of stale tracking keys (`_api_calls`, `_login_attempts`, `_session_ips`, `_data_transfers`) and trimming of the in-memory alerts list to prevent memory exhaustion under sustained traffic
+- **Unbounded in-memory growth in public portal security caches**: Added automatic `cleanup_rate_limit_cache()` calls when `rate_limit_cache` or `ip_rate_limit_cache` exceed their key limits
+
+### Elections Module Improvements (2026-03-06)
+
+- **Candidates not showing in ballot preview and voting page**: Ballot items created from templates were missing the `position` field, causing candidate-to-ballot-item matching to fail. Fixed template-created ballot items, preview matching, and voting page matching to all use position-based or title-based fallback
+- **Position field added to ballot item creation**: BallotBuilder now includes a position dropdown (from `election.positions`) when `vote_type` is `candidate_selection`. Templates also set the position field automatically
+- **Ballot preview enhanced with prospective members and election context**: Ballot preview now shows meeting date, prospective member/candidate info cards on approval-type items, write-in input placeholders, security notice footer, and election configuration summary
+- **BallotBuilder redesigned with modern card-based UI and drag-and-drop**: Replaced flat numbered list with interactive cards using `@dnd-kit` for drag-and-drop reordering with keyboard accessibility, expandable inline editing, color-coded type badges, two-step delete confirmation, and template popover
+- **Limit one ballot item per position**: Track which positions already have ballot items, filter dropdowns to show only unused positions, and show validation error toast on duplicate attempts
+- **Write-in candidate auto-fill**: When "Write-in candidate" is checked, auto-fills name with "Write-in Candidate" if empty and clears any linked member
+- **Election position input converted to dropdown with rank suggestions**: Position field now loads the organization's operational ranks (Chief, Captain, etc.) as dropdown suggestions with type-ahead filtering
+- **Position dropdown added to candidate edit form**: The edit form previously only showed name and statement fields, preventing users from moving a candidate to a different position
+- **Template popover repositioned above button**: Changed from downward to upward opening to prevent clipping inside the card content area
+- **Proxy voting toggle added to Election Settings**: Enable/disable proxy voting org-wide with max proxies per person. Fixed GET/PATCH `/elections/settings` endpoints to return flat field names matching frontend expectations
+- **Election integrity chain and security hardening**: Added ballot hash chaining, server-side voter eligibility enforcement, and election settings page
+
+### Events Module Improvements (2026-03-06)
+
+- **Attendance duration calculation for auto-checkout**: Added `finalize_event_attendance()` that calculates duration for all checked-in members who didn't check out (the default when `require_checkout` is false). Auto-finalizes when a secretary records actual end time. Updates linked training records with calculated hours
+- **Duplicate RSVP bug in form-event integration**: `_process_event_registration` now checks for existing RSVPs before creating new ones, updating to GOING status if one exists
+- **Events page UX improvements**: Added search bar filtering by title/location, Upcoming/Past toggle for all users, pagination, user RSVP status badge on event cards, and fixed cancelled event badge colors for light mode
+- **Event detail action button reorganization**: Organized 9+ manager action buttons into primary actions (RSVP, QR Code, Edit, Check In) plus a "More" dropdown for secondary actions (Duplicate, Record Times, Finalize Attendance, Monitoring, Create Meeting, Cancel, Delete)
+- **ESLint warning reduction**: Wrapped `fetchEvents` in `useCallback`, replaced eslint-disable with proper `useCallback` on ElectionsSettingsPage, added void prefix to async onClick handlers
+
+### Facilities Module Improvements (2026-03-06)
+
+- **NFPA compliance fields added**: 8 fire-critical system types (exhaust extraction, cascade air, decontamination, bay door, air quality monitor, PPE cleaning, alerting system, shore power), certification/testing fields on FacilitySystem, inspector fields on FacilityInspection, NFPA 1500/1585 zone classification (hot/transition/cold) on FacilityRoom, and 16 NFPA-aligned maintenance types seeded
+- **Facility type auto-matched to organization type**: "EMS Station" selected for EMS-only orgs instead of always defaulting to "Fire Station"
+- **Auto-assign "Operational" status on facility creation**: No longer requires explicit status selection
+- **Add Facility modal enhanced**: Now includes status dropdown, phone, and email fields
+- **Facility onboarding data flow fixed**: Location record now linked to auto-created facility during onboarding so headquarters appears in Events location picker and QR check-in. County and founded year fields added to onboarding form
+- **Container startup crash from facilities module**: Multiple cascading issues fixed: (1) FK reference from `roles` to `positions` table, (2) SET NULL FK columns missing `nullable=True` across ~50 columns in 8 model files, (3) fundraising migration in `MIGRATION_ONLY_FILES` causing "Table already exists", (4) lookup tables with NOT NULL `organization_id` preventing system seed data, (5) missing seed data causing "No facility types available" on create, (6) full migration chain fix with nullable `org_id` from creation and backfill seed migration
+- **Facility type/status auto-assignment fallback and validation**: Falls back to any active type/status for the org if "Fire Station"/"Operational" not found. Raises clear `ValueError` (400) instead of DB crash (500) if none exist
+- **Route ordering bug**: `GET /{facility_id}` was defined before static routes like `/maintenance`, causing FastAPI to match "maintenance" as a facility_id. Moved parameterized routes to end of router
+- **Auto-seed missing system defaults**: Safety net in `_ensure_system_defaults()` creates system types/statuses if missing (handles stamped migrations without data insertion)
+- **Null address data in facilities onboarding**: Falls back to mailing address when `physical_address_same=False` but physical address fields are `None`
+- **Room → Location integration**: Rooms now auto-sync a linked Location record, making them available to Events, Storage, and other modules via the location picker. Each room gets a display code for QR check-in support
+- **FacilityListItem schema expanded**: Added county, fax, and `address_line2` fields. FacilityDetailPanel updated to display county and fax in view mode
+- **Type safety improvements**: Replaced all `Record<string, unknown>` types with proper TypeScript interfaces matching backend schemas. Removed all `as unknown as` type casts. Created reusable `FacilityRoomPicker` component for cross-module room selection
+- **FacilityDetailPanel enhanced with tabbed sub-sections**: Rooms, Building Systems, and Emergency Contacts (previously only rooms were accessible). Zone classification badges and condition color coding added
+
+### Backend Startup & Onboarding Fixes (2026-03-06)
+
+- **Onboarding organization 422 from empty strings**: Form fields initialize as empty strings. `??` (nullish coalescing) passes `""` through to the backend where Pydantic validators reject it. Changed to `|| undefined` so empty strings become `undefined` and are omitted from JSON. ZIP code validation also strengthened to match backend regex
+- **Onboarding error messages showing empty or garbled content**: FastAPI returns 422 validation errors as arrays of `{loc, msg}` objects. `toAppError()` assumed `detail` was always a string, producing `[object Object]`. Now detects array detail and formats as "field: reason". Empty/whitespace error messages render `null` instead of an empty red alert box
+- **Global error handler for Pydantic 422 validation arrays**: `toAppError()` in `errorHandling.ts` now properly formats FastAPI's array-style validation errors
+
+### Integration Services (2026-03-06)
+
+- **Integration services secured, expanded, and implemented**: Hardened integration service layer with proper auth, expanded configuration options, and implemented core integration functionality
+
+### ESLint & Code Quality (2026-03-06)
+
+- **Pre-existing ESLint warnings resolved across pages**: Reduced warning count from 22 to 18 with proper `useCallback` wrapping and void-prefixed async handlers
+
 ### Unraid Duplicate Cleanup (2026-03-05)
 
 - **Consolidated unraid/ directory from 16 to 11 files**: Removed 5 duplicate/superseded files — deleted `QUICK-START.md` (superseded by `QUICK-START-UPDATED.md`, which was renamed to `QUICK-START.md`), deleted `DOCKER-COMPOSE-SETUP.md` (content covered by other guides), deleted `ICON-REQUIREMENTS.txt` (already in `COMMUNITY-APP-SUBMISSION.md`), merged `check-frontend-config.sh` and `rebuild-frontend.sh` into `validate-deployment.sh` as `--diagnose-frontend` and `--rebuild-frontend` flags. Reduces ~1,100 lines of duplication. Updated all cross-references in `README.md`, `docs/deployment/unraid.md`, `unraid/README.md`, and `unraid/UNRAID-INSTALLATION.md`

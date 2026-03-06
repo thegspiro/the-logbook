@@ -647,4 +647,55 @@ Inventory pages now use responsive card layouts on mobile with a floating action
 
 ---
 
+## Post-Login 401 Cascade (2026-03-06)
+
+### Problem: Login succeeds but dashboard shows errors and redirects to login
+
+**Status (Fixed):** Dashboard fires ~15 parallel API calls immediately after login. If cookies aren't processed yet, all return 401, triggering a refresh cascade. Fixed with: (1) Bearer token bridge using access token from login response body, (2) cookie settle polling before dashboard navigation, (3) post-login grace period with exponential backoff in 401 interceptor.
+
+**Edge Cases:** Module-specific axios instances (scheduling, admin-hours, createApiClient) each need independent Bearer token bridges — all now included. Refresh token stored in memory for environments where cookies are never stored.
+
+---
+
+## Elections Ballot Preview Missing Candidates (2026-03-06)
+
+### Problem: Candidates don't appear in ballot preview or voting page
+
+**Status (Fixed):** Template-created ballot items lacked `position` field for candidate matching. Fixed with position-based matching and title-based fallback.
+
+**Related:** BallotBuilder redesigned with drag-and-drop card UI, one ballot item per position enforcement, write-in candidate auto-fill, position dropdown from org ranks.
+
+---
+
+## Events Page UX (2026-03-06)
+
+### New Features
+- Search bar filtering events by title and location
+- Upcoming/Past toggle for all users (past events previously admin-only)
+- Pagination on events list
+- User RSVP status badge on event cards
+- Manager action buttons reorganized into primary + "More" dropdown
+
+---
+
+## Onboarding Error Messages (2026-03-06)
+
+### Problem: Error messages show "[object Object]" or empty red alert box
+
+**Status (Fixed):** `toAppError()` now detects array-style 422 validation errors and formats as "field: reason". `ErrorAlert` returns null for empty/whitespace messages.
+
+### Problem: Organization creation 422 from empty form fields
+
+**Status (Fixed):** `??` passes empty strings to backend. Changed to `|| undefined`. ZIP validation strengthened.
+
+---
+
+## Facilities Type Safety (2026-03-06)
+
+### Improvement: `Record<string, unknown>` replaced with typed interfaces
+
+All `Record<string, unknown>` types in `facilitiesService` replaced with proper TypeScript interfaces matching backend Pydantic schemas. All `as unknown as` type casts removed from consuming components. New `FacilityRoomPicker` component for cross-module room selection.
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Backend Issues](Troubleshooting-Backend)

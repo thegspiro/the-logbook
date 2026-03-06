@@ -19,6 +19,8 @@ Username and password authentication with Argon2id password hashing.
 
 > **Security Note (2026-02-24):** JWT tokens were previously stored in `localStorage` and sent via `Authorization: Bearer` headers. This has been changed to httpOnly cookies to prevent XSS-based token theft. If you have custom integrations using Bearer tokens, update them to use cookie-based authentication.
 
+> **Auth Flow Update (2026-03-06):** The login response now includes user data directly (eliminating a separate `GET /auth/me` call), and a temporary Bearer token bridge stores the access token in memory for 30 minutes as a fallback for environments where httpOnly cookies are not immediately available (e.g., due to nginx proxy buffering). The backend's `get_current_user` accepts both cookie-based and Bearer token authentication. Security middleware (SecurityHeaders, IPLogging) was converted from Starlette `BaseHTTPMiddleware` to pure ASGI to prevent Set-Cookie header stripping.
+
 ### Password Requirements
 
 - Minimum 12 characters

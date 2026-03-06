@@ -72,6 +72,15 @@ This guide covers common issues and their solutions for The Logbook deployment.
 66. [Onboarding Auth State Reset](#onboarding-auth-state-reset-2026-03-05)
 67. [Unraid App Removal](#unraid-app-removal-2026-03-05)
 68. [Facilities MissingGreenlet](#facilities-missinggreenlet-2026-03-05)
+69. [Login Cookie Delivery & Auth Flow](#login-cookie-delivery--auth-flow-2026-03-06)
+70. [Security Middleware ASGI & Memory](#security-middleware-asgi--memory-2026-03-06)
+71. [Elections Ballot Position Matching](#elections-ballot-position-matching-2026-03-06)
+72. [Events Attendance Finalization](#events-attendance-finalization-2026-03-06)
+73. [Facilities Container Startup Chain](#facilities-container-startup-chain-2026-03-06)
+74. [Facilities Route Ordering & Seed Data](#facilities-route-ordering--seed-data-2026-03-06)
+75. [Facilities Room-Location Integration](#facilities-room-location-integration-2026-03-06)
+76. [Onboarding Empty String 422s](#onboarding-empty-string-422s-2026-03-06)
+77. [Pydantic 422 Error Display](#pydantic-422-error-display-2026-03-06)
 
 ---
 
@@ -2327,3 +2336,89 @@ docker volume rm logbook_mysql_data logbook_redis_data 2>/dev/null
 **Status (Fixed):** Lazy-loaded relationship accessed synchronously in async context. Fixed with `selectinload(Facility.maintenance_records)`.
 
 **Edge Case:** Any lazy-loaded relationship in async SQLAlchemy will cause `MissingGreenlet`. Always use `selectinload()` or `joinedload()` in async queries.
+
+---
+
+## Login Cookie Delivery & Auth Flow (2026-03-06)
+
+### Problem: Login succeeds but redirects back to login page
+
+**Status (Fixed):** Multiple cascading issues: (1) conflicting Set-Cookie headers from clear + set in same response, (2) `BaseHTTPMiddleware` stripping Set-Cookie when stacked, (3) cookie timing race on dashboard load, (4) stale cookies from previous sessions, (5) CSRF missing on refresh request, (6) refresh 422 from empty body. Now uses a temporary Bearer token bridge with 30-minute auto-cleanup.
+
+**Edge Cases:** Module-specific axios instances need independent Bearer bridges. Refresh token stored in memory for environments where cookies aren't stored. Cookie settle polling waits for `csrf_token` cookie change.
+
+---
+
+## Security Middleware ASGI & Memory (2026-03-06)
+
+### Problem: SecurityMonitoringMiddleware TypeError or memory growth
+
+**Status (Fixed):** Synchronous `receive` lambda changed to async callable. Added periodic eviction of stale tracking keys and alerts list trimming. Public portal rate-limit caches auto-cleanup when exceeding key limits.
+
+---
+
+## Elections Ballot Position Matching (2026-03-06)
+
+### Problem: Candidates not showing in ballot preview or voting page
+
+**Status (Fixed):** Template-created ballot items missing `position` field. Fixed templates, preview, and voting page matching with title-based fallback for backward compatibility.
+
+**Edge Cases:** One ballot item per position now enforced. Write-in candidates auto-fill name. Election settings GET/PATCH returns flat field names.
+
+---
+
+## Events Attendance Finalization (2026-03-06)
+
+### Problem: Members who checked in but didn't check out show 0 hours
+
+**Status (Fixed):** Added `finalize_event_attendance()` using `actual_end_time` minus `check_in_at`. Auto-triggers when secretary records actual end time. Updates linked training records.
+
+**Edge Case:** Duplicate RSVPs from form-event integration now detected and updated instead of duplicated.
+
+---
+
+## Facilities Container Startup Chain (2026-03-06)
+
+### Problem: Backend won't start after enabling facilities module
+
+**Status (Fixed):** Chain of 5 cascading issues: wrong FK table reference, missing `nullable=True` on SET NULL columns, duplicate migration, NOT NULL org_id on system records, missing seed data. All resolved.
+
+**Edge Case:** Existing deployments with partially applied migrations should run `alembic upgrade head` for the backfill seed migration.
+
+---
+
+## Facilities Route Ordering & Seed Data (2026-03-06)
+
+### Problem: GET /api/v1/facilities/maintenance returns 404
+
+**Status (Fixed):** `GET /{facility_id}` was before static routes. Moved parameterized routes to end of router.
+
+### Problem: POST /api/v1/facilities returns 400 "No facility types available"
+
+**Status (Fixed):** `_ensure_system_defaults()` auto-creates system types/statuses if missing. Type auto-matched to org type.
+
+---
+
+## Facilities Room-Location Integration (2026-03-06)
+
+### Problem: Facility rooms don't appear in Events location picker
+
+**Status (Fixed):** Rooms now auto-sync a linked Location record. Each room gets a display code for QR check-in. `FacilityRoomPicker` component available for cross-module room selection.
+
+**Edge Case:** Existing rooms without linked locations will be created on next room update.
+
+---
+
+## Onboarding Empty String 422s (2026-03-06)
+
+### Problem: Organization creation fails with 422
+
+**Status (Fixed):** `??` passes `""` to backend where Pydantic rejects it. Changed to `|| undefined`. ZIP validation strengthened to match backend regex.
+
+---
+
+## Pydantic 422 Error Display (2026-03-06)
+
+### Problem: Error messages show "[object Object]" or empty red alert
+
+**Status (Fixed):** `toAppError()` now detects array `detail` and formats as "field: reason". `ErrorAlert` returns null for empty messages.

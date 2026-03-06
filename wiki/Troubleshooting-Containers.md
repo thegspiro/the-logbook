@@ -199,4 +199,35 @@ docker-compose up -d frontend
 
 ---
 
+## Backend Crash on Startup — Facilities Module (2026-03-06)
+
+### Problem: Backend container restarts repeatedly after enabling facilities
+
+**Status (Fixed):** A chain of 5 cascading issues: wrong FK table reference (`roles` vs `positions`), ~50 SET NULL FK columns missing `nullable=True`, duplicate migration creating existing tables, NOT NULL `organization_id` on system seed records, and missing seed data for facility types/statuses.
+
+**Fix:**
+```bash
+docker-compose exec backend alembic upgrade head
+docker-compose restart backend
+```
+
+**Edge Case:** If the container won't stay up long enough to run migrations, set `ENVIRONMENT=development` temporarily in `.env` to bypass the security check, run migrations, then restore the production value.
+
+---
+
+## Backend Memory Growth (2026-03-06)
+
+### Problem: Backend container memory usage climbs steadily over days
+
+**Status (Fixed):** In-memory tracking dicts in `SecurityMonitoringService` and public portal rate-limit caches grew without eviction. Added periodic cleanup and key limits.
+
+**Monitor:**
+```bash
+docker stats logbook-backend
+```
+
+If memory still grows, check for other unbounded in-memory caches in custom code.
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Backend Issues](Troubleshooting-Backend) | [Quick Reference](Quick-Reference)
