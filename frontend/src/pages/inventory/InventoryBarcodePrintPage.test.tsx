@@ -139,6 +139,8 @@ describe('InventoryBarcodePrintPage', () => {
     await screen.findByText('SCBA Mask');
 
     await user.click(screen.getByText('Print Labels'));
+    // handlePrint uses requestAnimationFrame before calling window.print
+    await new Promise((resolve) => requestAnimationFrame(resolve));
     expect(window.print).toHaveBeenCalled();
   });
 

@@ -38,6 +38,9 @@ const ImportInventoryPage = lazyWithRetry(
 const InventoryBarcodePrintPage = lazyWithRetry(
   () => import('../../pages/inventory/InventoryBarcodePrintPage'),
 );
+const ItemDetailPage = lazyWithRetry(
+  () => import('../../pages/inventory/ItemDetailPage'),
+);
 
 export const getInventoryRoutes = () => {
   return (
@@ -105,6 +108,16 @@ export const getInventoryRoutes = () => {
               <ImportInventoryPage />
             </Suspense>
           </ProtectedRoute>
+        }
+      />
+
+      {/* Inventory - Item Detail Page */}
+      <Route
+        path="/inventory/items/:id"
+        element={
+          <Suspense fallback={null}>
+            <ItemDetailPage />
+          </Suspense>
         }
       />
 
