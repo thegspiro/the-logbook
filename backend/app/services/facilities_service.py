@@ -7,6 +7,7 @@ Business logic for facility/building management.
 from datetime import date, datetime, timezone
 from typing import List, Optional, Tuple
 
+from loguru import logger
 from sqlalchemy import and_, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -80,8 +81,143 @@ from app.schemas.facilities import (
 class FacilitiesService:
     """Service for facility management"""
 
+    # System-level defaults seeded for all organizations.
+    _SYSTEM_TYPES = [
+        ("Fire Station", "Active fire station housing apparatus and personnel", "station"),
+        ("EMS Station", "Emergency medical services station", "station"),
+        ("Training Center", "Dedicated training facility or academy", "training"),
+        ("Administrative Office", "Administrative and headquarters building", "administration"),
+        ("Meeting Hall", "Meeting hall or social hall", "meeting_hall"),
+        ("Storage Building", "Equipment or supply storage facility", "storage"),
+        ("Maintenance Shop", "Vehicle and equipment maintenance facility", "storage"),
+        ("Communications Center", "Dispatch or communications center", "administration"),
+        ("Community Center", "Community outreach or public education facility", "community"),
+        ("Other", "Other facility type", "other"),
+    ]
+    _SYSTEM_STATUSES = [
+        ("Operational", "Facility is fully operational and in use", "#22C55E", True),
+        ("Under Renovation", "Facility is undergoing renovation or major repairs", "#F59E0B", False),
+        ("Under Construction", "New facility under construction", "#3B82F6", False),
+        ("Temporarily Closed", "Facility is temporarily closed or out of service", "#EF4444", False),
+        ("Decommissioned", "Facility has been decommissioned and is no longer in use", "#6B7280", False),
+        ("Other", "Other status", "#9CA3AF", True),
+    ]
+
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def _ensure_system_defaults(self) -> None:
+        """Create system-level facility types and statuses if missing.
+
+        The Alembic seed migration (20260214_2000 / 20260306_0200) inserts
+        these records, but if migrations were partially applied or the
+        database was recreated without re-running seeds, the module would
+        be unusable.  This method acts as a safety net.
+        """
+        from app.core.utils import generate_uuid
+
+        # Check for any system types
+        result = await self.db.execute(
+            select(func.count(FacilityType.id)).where(
+                FacilityType.organization_id.is_(None),
+                FacilityType.is_system.is_(True),
+            )
+        )
+        if not result.scalar():
+            logger.warning(
+                "No system facility types found — inserting defaults"
+            )
+            for name, desc, cat in self._SYSTEM_TYPES:
+                self.db.add(FacilityType(
+                    id=generate_uuid(),
+                    organization_id=None,
+                    name=name,
+                    description=desc,
+                    category=cat,
+                    is_system=True,
+                    is_active=True,
+                ))
+            await self.db.flush()
+
+        # Check for any system statuses
+        result = await self.db.execute(
+            select(func.count(FacilityStatus.id)).where(
+                FacilityStatus.organization_id.is_(None),
+                FacilityStatus.is_system.is_(True),
+            )
+        )
+        if not result.scalar():
+            logger.warning(
+                "No system facility statuses found — inserting defaults"
+            )
+            for name, desc, color, is_op in self._SYSTEM_STATUSES:
+                self.db.add(FacilityStatus(
+                    id=generate_uuid(),
+                    organization_id=None,
+                    name=name,
+                    description=desc,
+                    color=color,
+                    is_operational=is_op,
+                    is_system=True,
+                    is_active=True,
+                ))
+            await self.db.flush()
+
+    async def _find_default_type(self, organization_id: str):
+        """Find the default facility type (Fire Station or any active type)."""
+        result = await self.db.execute(
+            select(FacilityType).where(
+                or_(
+                    FacilityType.organization_id == organization_id,
+                    FacilityType.organization_id.is_(None),
+                ),
+                FacilityType.is_active.is_(True),
+                FacilityType.name == "Fire Station",
+            )
+        )
+        default_type = result.scalar_one_or_none()
+        if not default_type:
+            result = await self.db.execute(
+                select(FacilityType)
+                .where(
+                    or_(
+                        FacilityType.organization_id == organization_id,
+                        FacilityType.organization_id.is_(None),
+                    ),
+                    FacilityType.is_active.is_(True),
+                )
+                .limit(1)
+            )
+            default_type = result.scalar_one_or_none()
+        return default_type
+
+    async def _find_default_status(self, organization_id: str):
+        """Find the default facility status (Operational or any active status)."""
+        result = await self.db.execute(
+            select(FacilityStatus).where(
+                or_(
+                    FacilityStatus.organization_id == organization_id,
+                    FacilityStatus.organization_id.is_(None),
+                ),
+                FacilityStatus.is_active.is_(True),
+                FacilityStatus.name == "Operational",
+            )
+        )
+        default_status = result.scalar_one_or_none()
+        if not default_status:
+            result = await self.db.execute(
+                select(FacilityStatus)
+                .where(
+                    or_(
+                        FacilityStatus.organization_id == organization_id,
+                        FacilityStatus.organization_id.is_(None),
+                    ),
+                    FacilityStatus.is_active.is_(True),
+                )
+                .limit(1)
+            )
+            default_status = result.scalar_one_or_none()
+        return default_status
 
     # =========================================================================
     # Facility Type Methods
@@ -510,29 +646,11 @@ class FacilitiesService:
 
         # Auto-assign "Fire Station" type if none provided
         if not facility_dict.get("facility_type_id"):
-            type_result = await self.db.execute(
-                select(FacilityType).where(
-                    or_(
-                        FacilityType.organization_id == organization_id,
-                        FacilityType.organization_id.is_(None),
-                    ),
-                    FacilityType.is_active.is_(True),
-                    FacilityType.name == "Fire Station",
-                )
-            )
-            default_type = type_result.scalar_one_or_none()
+            default_type = await self._find_default_type(organization_id)
             if not default_type:
-                # Fall back to any active type for this org
-                type_result = await self.db.execute(
-                    select(FacilityType).where(
-                        or_(
-                            FacilityType.organization_id == organization_id,
-                            FacilityType.organization_id.is_(None),
-                        ),
-                        FacilityType.is_active.is_(True),
-                    ).limit(1)
-                )
-                default_type = type_result.scalar_one_or_none()
+                # Seed data may be missing — create system defaults and retry
+                await self._ensure_system_defaults()
+                default_type = await self._find_default_type(organization_id)
             if default_type:
                 facility_dict["facility_type_id"] = default_type.id
             else:
@@ -542,29 +660,12 @@ class FacilitiesService:
 
         # Auto-assign "Operational" status if none provided
         if not facility_dict.get("status_id"):
-            op_result = await self.db.execute(
-                select(FacilityStatus).where(
-                    or_(
-                        FacilityStatus.organization_id == organization_id,
-                        FacilityStatus.organization_id.is_(None),
-                    ),
-                    FacilityStatus.is_active.is_(True),
-                    FacilityStatus.name == "Operational",
-                )
-            )
-            operational = op_result.scalar_one_or_none()
+            operational = await self._find_default_status(organization_id)
             if not operational:
-                # Fall back to any active status for this org
-                op_result = await self.db.execute(
-                    select(FacilityStatus).where(
-                        or_(
-                            FacilityStatus.organization_id == organization_id,
-                            FacilityStatus.organization_id.is_(None),
-                        ),
-                        FacilityStatus.is_active.is_(True),
-                    ).limit(1)
-                )
-                operational = op_result.scalar_one_or_none()
+                # _ensure_system_defaults was already called above for types;
+                # statuses should exist now, but retry just in case.
+                await self._ensure_system_defaults()
+                operational = await self._find_default_status(organization_id)
             if operational:
                 facility_dict["status_id"] = operational.id
             else:

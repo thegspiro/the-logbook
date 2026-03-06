@@ -471,77 +471,6 @@ async def create_facility(
     return facility
 
 
-@router.get("/{facility_id}", response_model=FacilityResponse, tags=["Facilities"])
-async def get_facility(
-    facility_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("facilities.view", "facilities.manage")
-    ),
-):
-    """
-    Get a specific facility by ID
-
-    **Authentication required**
-    **Permissions required:** facilities.view or facilities.manage
-    """
-    service = FacilitiesService(db)
-    facility = await service.get_facility(
-        facility_id=facility_id,
-        organization_id=current_user.organization_id,
-    )
-
-    if not facility:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Facility not found"
-        )
-
-    return facility
-
-
-@router.patch("/{facility_id}", response_model=FacilityResponse, tags=["Facilities"])
-async def update_facility(
-    facility_id: str,
-    facility_data: FacilityUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("facilities.edit", "facilities.manage")
-    ),
-):
-    """
-    Update a facility
-
-    **Authentication required**
-    **Permissions required:** facilities.edit or facilities.manage
-    """
-    service = FacilitiesService(db)
-
-    try:
-        facility = await service.update_facility(
-            facility_id=facility_id,
-            facility_data=facility_data,
-            organization_id=current_user.organization_id,
-            updated_by=current_user.id,
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
-        )
-
-    if not facility:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Facility not found"
-        )
-
-    # Reload with relations
-    facility = await service.get_facility(
-        facility_id=facility.id,
-        organization_id=current_user.organization_id,
-    )
-
-    return facility
-
-
 @router.post(
     "/{facility_id}/archive", response_model=FacilityResponse, tags=["Facilities"]
 )
@@ -3521,3 +3450,83 @@ async def get_facility_folders(
         ],
         "total": len(sub_folders),
     }
+
+
+# ============================================================================
+# Single-Facility Endpoints (GET / PATCH by ID)
+#
+# IMPORTANT: These wildcard routes MUST be defined after all static routes
+# (e.g. /maintenance, /photos, /systems) so FastAPI doesn't match a static
+# path segment like "maintenance" as a {facility_id} parameter.
+# ============================================================================
+
+
+@router.get("/{facility_id}", response_model=FacilityResponse, tags=["Facilities"])
+async def get_facility(
+    facility_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("facilities.view", "facilities.manage")
+    ),
+):
+    """
+    Get a specific facility by ID
+
+    **Authentication required**
+    **Permissions required:** facilities.view or facilities.manage
+    """
+    service = FacilitiesService(db)
+    facility = await service.get_facility(
+        facility_id=facility_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not facility:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Facility not found"
+        )
+
+    return facility
+
+
+@router.patch("/{facility_id}", response_model=FacilityResponse, tags=["Facilities"])
+async def update_facility(
+    facility_id: str,
+    facility_data: FacilityUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("facilities.edit", "facilities.manage")
+    ),
+):
+    """
+    Update a facility
+
+    **Authentication required**
+    **Permissions required:** facilities.edit or facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    try:
+        facility = await service.update_facility(
+            facility_id=facility_id,
+            facility_data=facility_data,
+            organization_id=current_user.organization_id,
+            updated_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+
+    if not facility:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Facility not found"
+        )
+
+    # Reload with relations
+    facility = await service.get_facility(
+        facility_id=facility.id,
+        organization_id=current_user.organization_id,
+    )
+
+    return facility
