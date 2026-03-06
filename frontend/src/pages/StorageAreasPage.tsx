@@ -273,7 +273,7 @@ export const StorageAreasPage: React.FC = () => {
         locationsService.getLocations({ is_active: true }),
       ]);
       setAreas(areasData);
-      setRooms(locationsData.filter(l => l.room_number || l.building));
+      setRooms(locationsData.filter(l => l.facility_room_id || l.room_number || l.building));
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to load storage areas'));
     } finally {

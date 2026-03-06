@@ -284,8 +284,8 @@ const InventoryPage: React.FC = () => {
       setItems(itemsData.items);
       setTotalItems(itemsData.total);
       setLabelFormats(formatsData.formats);
-      // Rooms are locations that have a room_number or a building (parent station) set
-      setRooms(locationsData.filter(l => l.room_number || l.building));
+      // Rooms are locations linked to a facility room (or legacy locations with room_number/building)
+      setRooms(locationsData.filter(l => l.facility_room_id || l.room_number || l.building));
       // Positions for restriction dropdown (non-critical)
       void roleService.getRoles().then(setPositions).catch(() => { /* non-critical */ });
       // Low stock alerts (non-critical)

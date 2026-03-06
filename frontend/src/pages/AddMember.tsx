@@ -85,10 +85,9 @@ const AddMember: React.FC = () => {
       setAvailablePositions(roles.map((r: { id: string; name: string }) => ({ id: r.id, name: r.name })));
     }).catch(() => { /* non-critical */ });
 
-    // Load stations for dropdown (only top-level locations with an address)
-    locationsService.getLocations({ is_active: true }).then((locs) => {
-      const stations = locs.filter((l: Location) => l.address && !l.room_number);
-      setAvailableStations(stations);
+    // Load stations for dropdown (exclude rooms — they belong to facilities, not station pickers)
+    locationsService.getLocations({ is_active: true, exclude_rooms: true }).then((locs) => {
+      setAvailableStations(locs.filter((l: Location) => l.address));
     }).catch(() => { /* non-critical */ });
   }, []);
 

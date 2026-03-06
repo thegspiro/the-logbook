@@ -129,9 +129,8 @@ export const MemberAdminEditPage: React.FC = () => {
   }, [fetchUser]);
 
   useEffect(() => {
-    locationsService.getLocations({ is_active: true }).then((locs) => {
-      const stations = locs.filter((l: Location) => l.address && !l.room_number);
-      setAvailableStations(stations);
+    locationsService.getLocations({ is_active: true, exclude_rooms: true }).then((locs) => {
+      setAvailableStations(locs.filter((l: Location) => l.address));
     }).catch(() => { /* non-critical UI data */ });
   }, []);
 

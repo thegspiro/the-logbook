@@ -36,6 +36,10 @@ router = APIRouter()
 @router.get("", response_model=list[LocationListItem])
 async def list_locations(
     is_active: bool | None = Query(None, description="Filter by active status"),
+    exclude_rooms: bool = Query(
+        False,
+        description="Exclude locations that represent rooms within a facility",
+    ),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
@@ -50,6 +54,7 @@ async def list_locations(
     locations = await service.list_locations(
         organization_id=current_user.organization_id,
         is_active=is_active,
+        exclude_rooms=exclude_rooms,
         skip=skip,
         limit=limit,
     )
@@ -70,6 +75,7 @@ async def list_locations(
             capacity=loc.capacity,
             is_active=loc.is_active,
             facility_id=UUID(loc.facility_id) if loc.facility_id else None,
+            facility_room_id=UUID(loc.facility_room_id) if loc.facility_room_id else None,
             display_code=loc.display_code,
             created_at=loc.created_at,
             updated_at=loc.updated_at,
@@ -122,6 +128,7 @@ async def create_location(
         capacity=location.capacity,
         is_active=location.is_active,
         facility_id=UUID(location.facility_id) if location.facility_id else None,
+        facility_room_id=UUID(location.facility_room_id) if location.facility_room_id else None,
         display_code=location.display_code,
         created_by=UUID(location.created_by) if location.created_by else None,
         created_at=location.created_at,
@@ -168,6 +175,7 @@ async def get_location(
         capacity=location.capacity,
         is_active=location.is_active,
         facility_id=UUID(location.facility_id) if location.facility_id else None,
+        facility_room_id=UUID(location.facility_room_id) if location.facility_room_id else None,
         display_code=location.display_code,
         created_by=UUID(location.created_by) if location.created_by else None,
         created_at=location.created_at,
@@ -225,6 +233,7 @@ async def update_location(
         capacity=location.capacity,
         is_active=location.is_active,
         facility_id=UUID(location.facility_id) if location.facility_id else None,
+        facility_room_id=UUID(location.facility_room_id) if location.facility_room_id else None,
         display_code=location.display_code,
         created_by=UUID(location.created_by) if location.created_by else None,
         created_at=location.created_at,
