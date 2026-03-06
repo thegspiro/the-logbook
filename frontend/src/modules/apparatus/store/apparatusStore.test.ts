@@ -48,6 +48,7 @@ const makeApparatusListItem = (overrides: Record<string, unknown> = {}) => ({
   primaryStationId: 'station1',
   currentMileage: 15000,
   currentHours: 500,
+  minStaffing: 4,
   isArchived: false,
   ...overrides,
 });
@@ -76,6 +77,7 @@ const makeApparatus = (overrides: Record<string, unknown> = {}) => ({
   fuelCapacityGallons: 65,
   seatingCapacity: 6,
   gvwr: 44000,
+  minStaffing: 4,
   pumpCapacityGpm: 1500,
   tankCapacityGallons: 750,
   foamCapacityGallons: null,

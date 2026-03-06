@@ -20,6 +20,7 @@ import {
   Wrench,
   Gauge,
   Clock,
+  Users,
 } from 'lucide-react';
 import { useApparatusStore } from '../store/apparatusStore';
 import { StatusBadge } from '../components/StatusBadge';
@@ -331,6 +332,10 @@ export const ApparatusListPage: React.FC = () => {
                       <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                         Status
                       </th>
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider table-col-secondary">
+                        <Users className="w-4 h-4 inline mr-1" />
+                        Min Crew
+                      </th>
                       <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider table-col-tertiary">
                         <Gauge className="w-4 h-4 inline mr-1" />
                         Mileage
@@ -385,6 +390,11 @@ export const ApparatusListPage: React.FC = () => {
                           </td>
                           <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
                             {status && <StatusBadge status={status} />}
+                          </td>
+                          <td className="px-3 sm:px-6 py-4 whitespace-nowrap table-col-secondary">
+                            <div className="text-theme-text-secondary text-sm">
+                              {apparatus.minStaffing}
+                            </div>
                           </td>
                           <td className="px-3 sm:px-6 py-4 whitespace-nowrap table-col-tertiary">
                             <div className="text-theme-text-secondary text-sm">

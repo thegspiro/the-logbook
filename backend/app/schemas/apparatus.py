@@ -294,6 +294,11 @@ class ApparatusBase(BaseModel):
         None, ge=0, description="Gross Vehicle Weight Rating (lbs)"
     )
 
+    # Staffing
+    min_staffing: int = Field(
+        default=1, ge=1, le=50, description="Minimum staffing level for this apparatus"
+    )
+
     # Fire/EMS Specifications
     pump_capacity_gpm: Optional[int] = Field(
         None, ge=0, description="Pump capacity in GPM"
@@ -401,6 +406,9 @@ class ApparatusUpdate(BaseModel):
     # Capacity
     seating_capacity: Optional[int] = Field(None, ge=1)
     gvwr: Optional[int] = Field(None, ge=0)
+
+    # Staffing
+    min_staffing: Optional[int] = Field(None, ge=1, le=50)
 
     # Fire/EMS Specifications
     pump_capacity_gpm: Optional[int] = Field(None, ge=0)
@@ -518,6 +526,7 @@ class ApparatusListItem(BaseModel):
     primary_station_id: Optional[str] = None
     current_mileage: Optional[int] = None
     current_hours: Optional[Decimal] = None
+    min_staffing: int = 1
     is_archived: bool
 
     # Nested type and status info
