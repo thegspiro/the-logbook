@@ -1533,6 +1533,21 @@ ALLOWED_EXTENSIONS = {
     ".png",
     ".gif",
 }
+# SEC: MIME types validated via magic bytes to prevent extension spoofing
+ALLOWED_ATTACHMENT_MIME_TYPES = {
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "text/plain",
+    "text/csv",
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+}
 MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024  # 25MB
 
 
@@ -1576,6 +1591,23 @@ async def upload_event_attachment(
         raise HTTPException(
             status_code=400, detail="File too large. Maximum size is 25MB."
         )
+
+    # SEC: Validate actual file content via magic bytes, not just extension
+    try:
+        import magic
+
+        detected_mime = magic.from_buffer(content[:2048], mime=True)
+        if detected_mime not in ALLOWED_ATTACHMENT_MIME_TYPES:
+            logger.warning(
+                f"Event attachment rejected: detected MIME '{detected_mime}' "
+                f"(claimed: '{file.content_type}') for file '{file.filename}'"
+            )
+            raise HTTPException(
+                status_code=400,
+                detail=f"File content type '{detected_mime}' not allowed.",
+            )
+    except ImportError:
+        pass  # magic library optional — fall back to extension check only
 
     # Save file
     org_dir = os.path.join(
@@ -1790,6 +1822,7 @@ async def get_event_folder(
 # ============================================
 # External Attendees (for public outreach events)
 # ============================================
+
 
 class ExternalAttendeeCreate(BaseModel):
     name: str
