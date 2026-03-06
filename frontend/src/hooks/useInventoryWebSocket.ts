@@ -64,8 +64,11 @@ export function useInventoryWebSocket({ onEvent, enabled = true }: UseInventoryW
 
       ws.onclose = (event) => {
         wsRef.current = null;
-        // Don't reconnect if intentionally closed (code 1000) or auth failed
+        // Don't reconnect if intentionally closed (code 1000) or auth failed.
+        // Code 1006 without a prior successful open means the server rejected
+        // the upgrade (HTTP 403) — treat as auth failure to avoid infinite retries.
         if (event.code === 1000 || event.code === 4001 || event.code === 4003) return;
+        if (event.code === 1006 && retriesRef.current === 0) return;
         scheduleReconnect();
       };
 
