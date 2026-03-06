@@ -26,11 +26,18 @@ export function useIdleTimer() {
   const warningRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const timeoutMsRef = useRef(DEFAULT_TIMEOUT_MINUTES * 60 * 1000);
   const warningShownRef = useRef(false);
+  const settingsFetchedRef = useRef(false);
+
+  // Keep mutable refs to latest values so resetTimers never needs to change identity
+  const logoutRef = useRef(logout);
+  const navigateRef = useRef(navigate);
+  useEffect(() => { logoutRef.current = logout; }, [logout]);
+  useEffect(() => { navigateRef.current = navigate; }, [navigate]);
 
   const performLogout = useCallback(async () => {
     toast.dismiss();
     try {
-      await logout();
+      await logoutRef.current();
     } catch {
       // Logout may fail if session already expired
     }
@@ -38,8 +45,8 @@ export function useIdleTimer() {
     // Actual auth tokens live in httpOnly cookies (cleared by logout API call above).
     localStorage.removeItem('has_session');
     sessionStorage.clear();
-    navigate('/login', { state: { reason: 'timeout' }, replace: true });
-  }, [logout, navigate]);
+    navigateRef.current('/login', { state: { reason: 'timeout' }, replace: true });
+  }, []);
 
   const resetTimers = useCallback(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -77,20 +84,28 @@ export function useIdleTimer() {
   }, [performLogout]);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated) {
+      settingsFetchedRef.current = false;
+      return;
+    }
 
-    // Fetch session timeout from backend (uses shared axios instance with CSRF/auth interceptors)
-    void authService
-      .getSessionSettings()
-      .then((data) => {
-        const minutes = data.session_timeout_minutes ?? DEFAULT_TIMEOUT_MINUTES;
-        timeoutMsRef.current = minutes * 60 * 1000;
-        resetTimers();
-      })
-      .catch(() => {
-        // Use default timeout
-        resetTimers();
-      });
+    // Fetch session timeout once per authentication session
+    if (!settingsFetchedRef.current) {
+      settingsFetchedRef.current = true;
+      void authService
+        .getSessionSettings()
+        .then((data) => {
+          const minutes = data.session_timeout_minutes ?? DEFAULT_TIMEOUT_MINUTES;
+          timeoutMsRef.current = minutes * 60 * 1000;
+          resetTimers();
+        })
+        .catch(() => {
+          // Use default timeout
+          resetTimers();
+        });
+    } else {
+      resetTimers();
+    }
 
     // Add activity listeners
     const handler = () => resetTimers();
@@ -105,5 +120,6 @@ export function useIdleTimer() {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       if (warningRef.current) clearTimeout(warningRef.current);
     };
-  }, [isAuthenticated, resetTimers]);
+    // resetTimers and performLogout have stable identities (no external deps in useCallback)
+  }, [isAuthenticated, resetTimers, performLogout]);
 }

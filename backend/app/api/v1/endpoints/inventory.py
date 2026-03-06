@@ -3590,10 +3590,17 @@ async def inventory_websocket(
              item_checked_out, item_checked_in, batch_checkout, batch_return,
              pool_issued, pool_returned, item_retired, write_off_reviewed
     """
+    # Accept the WebSocket upgrade first so that close codes are delivered
+    # to the client.  Without accept(), Starlette sends a bare HTTP 403
+    # which the browser surfaces as a generic error (no close code).
+    await websocket.accept()
+
     # Prefer httpOnly cookie, fall back to query param for non-browser clients
     if not token:
         token = websocket.cookies.get("access_token")
     if not token:
+        from loguru import logger
+        logger.warning("Inventory WS rejected: no access_token cookie or query param")
         await websocket.close(code=4001, reason="Missing token")
         return
 
