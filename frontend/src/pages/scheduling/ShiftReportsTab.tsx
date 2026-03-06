@@ -17,6 +17,7 @@ import toast from 'react-hot-toast';
 import { shiftCompletionService, trainingModuleConfigService } from '../../services/api';
 import { userService } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
+import { SubmissionStatus } from '../../constants/enums';
 import type {
   ShiftCompletionReport,
   ShiftCompletionReportCreate,
@@ -270,7 +271,7 @@ export const ShiftReportsTab: React.FC = () => {
     }
   };
 
-  const handleReview = async (action: 'approved' | 'flagged') => {
+  const handleReview = async (action: typeof SubmissionStatus.APPROVED | 'flagged') => {
     if (!reviewReportId) return;
     setReviewing(true);
     try {
@@ -279,7 +280,7 @@ export const ShiftReportsTab: React.FC = () => {
         reviewer_notes: reviewNotes ?? undefined,
         redact_fields: redactFields.length > 0 ? redactFields : undefined,
       });
-      toast.success(action === 'approved' ? 'Report approved' : 'Report flagged');
+      toast.success(action === SubmissionStatus.APPROVED ? 'Report approved' : 'Report flagged');
       setReviewReportId(null);
       setReviewNotes('');
       setRedactFields([]);
@@ -420,12 +421,12 @@ export const ShiftReportsTab: React.FC = () => {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {/* Review status badge */}
-            {report.review_status !== 'approved' && (
+            {report.review_status !== SubmissionStatus.APPROVED && (
               <span className={`px-2 py-0.5 text-xs font-medium ${statusStyle.bg} ${statusStyle.text} border border-current/20 rounded-full`}>
                 {statusStyle.label}
               </span>
             )}
-            {isMyReport && !report.trainee_acknowledged && report.review_status === 'approved' && (
+            {isMyReport && !report.trainee_acknowledged && report.review_status === SubmissionStatus.APPROVED && (
               <span className="px-2 py-0.5 text-xs font-medium bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 rounded-full">
                 Needs Acknowledgment
               </span>
@@ -541,7 +542,7 @@ export const ShiftReportsTab: React.FC = () => {
             )}
 
             {/* Review actions for pending-review mode */}
-            {isReviewMode && report.review_status === 'pending_review' && (
+            {isReviewMode && report.review_status === SubmissionStatus.PENDING_REVIEW && (
               <div className="pt-2 flex items-center gap-2">
                 <button
                   onClick={(e) => { e.stopPropagation(); setReviewReportId(report.id); }}
@@ -553,7 +554,7 @@ export const ShiftReportsTab: React.FC = () => {
             )}
 
             {/* Acknowledge button for trainee */}
-            {isMyReport && !report.trainee_acknowledged && report.review_status === 'approved' && (
+            {isMyReport && !report.trainee_acknowledged && report.review_status === SubmissionStatus.APPROVED && (
               <div className="pt-2">
                 <button
                   onClick={(e) => { e.stopPropagation(); setAckReportId(report.id); }}
@@ -962,7 +963,7 @@ export const ShiftReportsTab: React.FC = () => {
               >
                 <AlertCircle className="w-3.5 h-3.5" /> Flag
               </button>
-              <button onClick={() => { void handleReview('approved'); }} disabled={reviewing}
+              <button onClick={() => { void handleReview(SubmissionStatus.APPROVED); }} disabled={reviewing}
                 className="btn-success font-medium gap-1.5 inline-flex items-center text-sm"
               >
                 {reviewing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}

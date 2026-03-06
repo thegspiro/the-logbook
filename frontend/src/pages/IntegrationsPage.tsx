@@ -31,6 +31,7 @@ import toast from 'react-hot-toast';
 import { useAuthStore } from '../stores/authStore';
 import { integrationsService, type IntegrationConfig } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
+import { ConnectionStatus } from '../constants/enums';
 
 // UI metadata for integration types (icons, colors)
 const INTEGRATION_UI: Record<string, { icon: React.ReactNode; color: string; bgColor: string; features: string[] }> = {
@@ -244,7 +245,7 @@ const IntegrationsPage: React.FC = () => {
     cat === 'all' || integrations.some(i => i.category === cat)
   );
 
-  const connectedCount = integrations.filter(i => i.status === 'connected').length;
+  const connectedCount = integrations.filter(i => i.status === ConnectionStatus.CONNECTED).length;
   const availableCount = integrations.filter(i => i.status === 'available').length;
 
   const selectedIntegration = showConnectModal
@@ -549,7 +550,7 @@ const IntegrationsPage: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    {integration.status === 'connected' && (
+                    {integration.status === ConnectionStatus.CONNECTED && (
                       <span className="flex items-center space-x-1 px-2 py-0.5 text-xs bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/30 rounded-sm">
                         <Wifi className="w-3 h-3" />
                         <span>Connected</span>
@@ -576,7 +577,7 @@ const IntegrationsPage: React.FC = () => {
                   ))}
                 </div>
                 <div className="flex justify-end gap-2">
-                  {integration.status === 'connected' && canManage && (
+                  {integration.status === ConnectionStatus.CONNECTED && canManage && (
                     <>
                       <button
                         onClick={() => { void handleTestConnection(integration.id); }}

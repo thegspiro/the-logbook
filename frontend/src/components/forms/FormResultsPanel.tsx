@@ -19,6 +19,7 @@ import { formsService } from '../../services/api';
 import type { FormField, FormSubmission } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatShortDateTime } from '../../utils/dateFormatting';
+import { FieldType } from '../../constants/enums';
 
 const CHOICE_TYPES = new Set(['select', 'multiselect', 'checkbox', 'radio']);
 const TEXT_TYPES = new Set(['text', 'textarea', 'email', 'phone']);
@@ -102,7 +103,7 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
     const sorted = [...fields].sort((a, b) => a.sort_order - b.sort_order);
 
     return sorted
-      .filter((f) => f.field_type !== 'section_header' && f.field_type !== 'file' && f.field_type !== 'signature')
+      .filter((f) => f.field_type !== FieldType.SECTION_HEADER && f.field_type !== FieldType.FILE && f.field_type !== FieldType.SIGNATURE)
       .map((field) => {
         // Gather all non-empty values for this field
         const values: string[] = [];
@@ -143,7 +144,7 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
           // Sort by count descending
           choices.sort((a, b) => b.count - a.count);
           summary.choices = choices;
-        } else if (field.field_type === 'number') {
+        } else if (field.field_type === FieldType.NUMBER) {
           const nums = values.map(Number).filter((n) => !isNaN(n));
           if (nums.length > 0) {
             nums.sort((a, b) => a - b);
@@ -275,7 +276,7 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
               <div className="flex items-center gap-2">
                 {CHOICE_TYPES.has(summary.field.field_type) ? (
                   <BarChart3 className="w-4 h-4 text-pink-700 dark:text-pink-400" />
-                ) : summary.field.field_type === 'number' ? (
+                ) : summary.field.field_type === FieldType.NUMBER ? (
                   <Hash className="w-4 h-4 text-cyan-700 dark:text-cyan-400" />
                 ) : DATE_TYPES.has(summary.field.field_type) ? (
                   <Calendar className="w-4 h-4 text-green-700 dark:text-green-400" />

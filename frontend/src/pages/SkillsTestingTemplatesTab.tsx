@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import type { SkillTemplateListItem } from '../types/skillsTesting';
+import { FormStatus } from '../constants/enums';
 
 // ── Shared sub-components ──────────────────────────────────────
 
@@ -103,7 +104,7 @@ const TemplateRow: React.FC<{
         <button onClick={onEdit} className="p-1.5 rounded-sm hover:bg-theme-surface-hover transition-colors" title="Edit">
           <Pencil className="w-4 h-4 text-theme-text-muted" />
         </button>
-        {template.status === 'draft' && (
+        {template.status === FormStatus.DRAFT && (
           <button onClick={onPublish} className="p-1.5 rounded-sm hover:bg-theme-surface-hover transition-colors" title="Publish">
             <Send className="w-4 h-4 text-green-600" />
           </button>

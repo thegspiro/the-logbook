@@ -238,9 +238,9 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
 
   const renderInput = () => {
     switch (field.field_type) {
-      case 'text':
-      case 'email':
-      case 'phone':
+      case FieldType.TEXT:
+      case FieldType.EMAIL:
+      case FieldType.PHONE:
         return (
           <>
             <input
@@ -264,7 +264,7 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
           </>
         );
 
-      case 'number':
+      case FieldType.NUMBER:
         return (
           <input
             id={`field-${field.id}`}
@@ -282,7 +282,7 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
           />
         );
 
-      case 'textarea':
+      case FieldType.TEXTAREA:
         return (
           <>
             <textarea
@@ -304,7 +304,7 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
           </>
         );
 
-      case 'date':
+      case FieldType.DATE:
         return (
           <input
             id={`field-${field.id}`}
@@ -319,7 +319,7 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
           />
         );
 
-      case 'time':
+      case FieldType.TIME:
         return (
           <input
             id={`field-${field.id}`}
@@ -335,7 +335,7 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
           />
         );
 
-      case 'datetime':
+      case FieldType.DATETIME:
         return (
           <input
             id={`field-${field.id}`}
@@ -351,7 +351,7 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
           />
         );
 
-      case 'select':
+      case FieldType.SELECT:
         return (
           <select
             id={`field-${field.id}`}
@@ -372,7 +372,7 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
           </select>
         );
 
-      case 'multiselect': {
+      case FieldType.MULTISELECT: {
         const selected = value ? value.split(',').filter(Boolean) : [];
         return (
           <div className="bg-theme-input-bg border border-theme-input-border rounded-lg p-3 space-y-2">
@@ -400,7 +400,7 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
         );
       }
 
-      case 'checkbox': {
+      case FieldType.CHECKBOX: {
         const checkedValues = value ? value.split(',').filter(Boolean) : [];
         return (
           <div className="space-y-2">
@@ -428,7 +428,7 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
         );
       }
 
-      case 'radio':
+      case FieldType.RADIO:
         return (
           <div className="space-y-2">
             {field.options?.map((opt) => (
@@ -448,7 +448,7 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
           </div>
         );
 
-      case 'member_lookup':
+      case FieldType.MEMBER_LOOKUP:
         return (
           <div className="relative">
             <div className="relative">
@@ -490,7 +490,7 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
           </div>
         );
 
-      case 'file': {
+      case FieldType.FILE: {
         let fileInfo: { name: string; size: number; type: string } | null = null;
         if (value) {
           try { fileInfo = JSON.parse(value) as { name: string; size: number; type: string }; } catch { /* invalid stored value */ }
@@ -571,7 +571,7 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
         );
       }
 
-      case 'signature':
+      case FieldType.SIGNATURE:
         return (
           <SignaturePad
             value={value}

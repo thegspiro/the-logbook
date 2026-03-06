@@ -574,7 +574,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
       onSuccess();
       onClose();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to update provider';
+      const message = getErrorMessage(err, 'Failed to update provider');
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
       setError(detail || message);
     } finally {

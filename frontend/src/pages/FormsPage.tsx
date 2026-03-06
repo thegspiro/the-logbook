@@ -40,7 +40,7 @@ import {
   type FormIntegrationCreate,
 } from '../services/api';
 import { FormBuilder, FormRenderer, SubmissionViewer, FormResultsPanel } from '../components/forms';
-import { FormStatus } from '../constants/enums';
+import { FormStatus, FieldType } from '../constants/enums';
 
 /** Target fields each integration type expects the user to map. */
 const INTEGRATION_TARGET_FIELDS: Record<string, { key: string; label: string; required: boolean }[]> = {
@@ -551,9 +551,9 @@ const FormsPage: React.FC = () => {
 
   const statusColor = (s: string) => {
     switch (s) {
-      case 'published': return 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30';
-      case 'draft': return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30';
-      case 'archived': return 'bg-slate-500/10 text-theme-text-muted border-slate-500/30';
+      case FormStatus.PUBLISHED: return 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30';
+      case FormStatus.DRAFT: return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30';
+      case FormStatus.ARCHIVED: return 'bg-slate-500/10 text-theme-text-muted border-slate-500/30';
       default: return 'bg-slate-500/10 text-theme-text-muted border-slate-500/30';
     }
   };
@@ -1360,7 +1360,7 @@ const FormsPage: React.FC = () => {
                               </p>
                             </div>
 
-                            {form.status !== 'published' && (
+                            {form.status !== FormStatus.PUBLISHED && (
                               <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
                                 <p className="text-yellow-700 dark:text-yellow-300 text-sm">
                                   This form must be published before the public URL will be active.
@@ -1566,7 +1566,7 @@ const FormsPage: React.FC = () => {
                                 >
                                   <option value="">{tf.required ? 'Select a field...' : '(none)'}</option>
                                   {selectedFormDetail.fields
-                                    .filter((f) => f.field_type !== 'section_header')
+                                    .filter((f) => f.field_type !== FieldType.SECTION_HEADER)
                                     .sort((a, b) => a.sort_order - b.sort_order)
                                     .map((f) => (
                                       <option key={f.id} value={f.id}>

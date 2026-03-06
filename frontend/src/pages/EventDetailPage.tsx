@@ -17,6 +17,7 @@ import { RSVPStatusBadge } from '../components/RSVPStatusBadge';
 import { getRSVPStatusLabel, getRSVPStatusColor } from '../utils/eventHelpers';
 import { formatDateTime, formatShortDateTime, formatTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
+import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum } from '../constants/enums';
 
 export const EventDetailPage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
@@ -30,7 +31,7 @@ export const EventDetailPage: React.FC = () => {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [showRecordTimesModal, setShowRecordTimesModal] = useState(false);
-  const [rsvpStatus, setRsvpStatus] = useState<RSVPStatus>('going');
+  const [rsvpStatus, setRsvpStatus] = useState<RSVPStatus>(RSVPStatusEnum.GOING);
   const [guestCount, setGuestCount] = useState(0);
   const [rsvpNotes, setRsvpNotes] = useState('');
   const [cancelReason, setCancelReason] = useState('');
@@ -145,7 +146,7 @@ export const EventDetailPage: React.FC = () => {
       });
 
       setShowRSVPModal(false);
-      setRsvpStatus('going');
+      setRsvpStatus(RSVPStatusEnum.GOING);
       setGuestCount(0);
       setRsvpNotes('');
       toast.success('RSVP submitted successfully');
@@ -586,7 +587,7 @@ export const EventDetailPage: React.FC = () => {
           </div>
 
           {/* Training Session Details */}
-          {event.event_type === 'training' && event.custom_fields && (
+          {event.event_type === EventTypeEnum.TRAINING && event.custom_fields && (
             <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-sm p-6 border-l-4 border-purple-600">
               <div className="flex items-center mb-4">
                 <svg className="h-6 w-6 text-purple-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -717,7 +718,7 @@ export const EventDetailPage: React.FC = () => {
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRSVPStatusColor(rsvp.status)}`}>
                             {getRSVPStatusLabel(rsvp.status)}
                           </span>
-                          {rsvp.status === 'going' && !rsvp.checked_in && (
+                          {rsvp.status === RSVPStatusEnum.GOING && !rsvp.checked_in && (
                             <button
                               onClick={() => { void handleCheckIn(rsvp.user_id); }}
                               className="text-xs text-red-400 hover:text-red-300"
@@ -905,7 +906,7 @@ export const EventDetailPage: React.FC = () => {
                         Your Response
                       </legend>
                       <div className="space-y-2">
-                        {(event.allowed_rsvp_statuses || ['going', 'not_going']).map((status) => (
+                        {(event.allowed_rsvp_statuses || [RSVPStatusEnum.GOING, RSVPStatusEnum.NOT_GOING]).map((status) => (
                           <label key={status} className="flex items-center">
                             <input
                               type="radio"
@@ -923,7 +924,7 @@ export const EventDetailPage: React.FC = () => {
                       </div>
                     </fieldset>
 
-                    {event.allow_guests && rsvpStatus === 'going' && (
+                    {event.allow_guests && rsvpStatus === RSVPStatusEnum.GOING && (
                       <div>
                         <label htmlFor="guest_count" className="block text-sm font-medium text-theme-text-secondary">
                           Number of Guests

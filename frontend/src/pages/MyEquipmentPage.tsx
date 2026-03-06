@@ -15,6 +15,7 @@ import { useRanks } from '../hooks/useRanks';
 import { getErrorMessage } from '../utils/errorHandling';
 import { MobileCheckoutCard } from '../components/ux/MobileCheckoutCard';
 import toast from 'react-hot-toast';
+import { RequestStatus } from '../constants/enums';
 
 const CONDITION_COLORS: Record<string, string> = {
   excellent: 'text-green-600 dark:text-green-400',
@@ -242,9 +243,9 @@ const MyEquipmentPage: React.FC = () => {
 
   // Check if an item already has a pending return request
   const hasPendingReturnRequest = (itemId: string) =>
-    myReturnRequests.some(r => r.item_id === itemId && r.status === 'pending');
+    myReturnRequests.some(r => r.item_id === itemId && r.status === RequestStatus.PENDING);
 
-  const pendingRequestCount = myRequests.filter(r => r.status === 'pending').length;
+  const pendingRequestCount = myRequests.filter(r => r.status === RequestStatus.PENDING).length;
   const overdueCount = data?.active_checkouts?.filter(c => c.is_overdue)?.length ?? 0;
   const totalItems = (data?.permanent_assignments?.length ?? 0) + (data?.active_checkouts?.length ?? 0) + (data?.issued_items?.length ?? 0);
 
@@ -573,9 +574,9 @@ const MyEquipmentPage: React.FC = () => {
                         {req.reason && <p className="text-theme-text-muted text-xs mt-0.5 truncate">{req.reason}</p>}
                       </div>
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${
-                        req.status === 'pending' ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400' :
-                        req.status === 'approved' ? 'bg-green-500/10 text-green-700 dark:text-green-400' :
-                        req.status === 'denied' ? 'bg-red-500/10 text-red-700 dark:text-red-400' :
+                        req.status === RequestStatus.PENDING ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400' :
+                        req.status === RequestStatus.APPROVED ? 'bg-green-500/10 text-green-700 dark:text-green-400' :
+                        req.status === RequestStatus.DENIED ? 'bg-red-500/10 text-red-700 dark:text-red-400' :
                         'bg-blue-500/10 text-blue-700 dark:text-blue-400'
                       }`}>
                         {req.status}
@@ -611,9 +612,9 @@ const MyEquipmentPage: React.FC = () => {
                         <td className="hidden sm:table-cell p-3 text-theme-text-secondary capitalize">{req.request_type}</td>
                         <td className="p-3">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                            req.status === 'pending' ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400' :
-                            req.status === 'approved' ? 'bg-green-500/10 text-green-700 dark:text-green-400' :
-                            req.status === 'denied' ? 'bg-red-500/10 text-red-700 dark:text-red-400' :
+                            req.status === RequestStatus.PENDING ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400' :
+                            req.status === RequestStatus.APPROVED ? 'bg-green-500/10 text-green-700 dark:text-green-400' :
+                            req.status === RequestStatus.DENIED ? 'bg-red-500/10 text-red-700 dark:text-red-400' :
                             'bg-blue-500/10 text-blue-700 dark:text-blue-400'
                           }`}>
                             {req.status}

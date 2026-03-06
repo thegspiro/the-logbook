@@ -22,6 +22,8 @@ import type { User } from '../types/user';
 import { useAuthStore } from '../stores/authStore';
 import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
+import { getErrorMessage } from '../utils/errorHandling';
+import { UserStatus } from '../constants/enums';
 
 type WaiverTab = 'active' | 'create' | 'history';
 
@@ -295,7 +297,7 @@ export const WaiverManagementPage: React.FC = () => {
       });
       void fetchData();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to create waiver';
+      const msg = getErrorMessage(err, 'Failed to create waiver');
       setCreateError(msg);
     } finally {
       setCreating(false);
@@ -320,7 +322,7 @@ export const WaiverManagementPage: React.FC = () => {
   // Active members sorted by name for the member picker
   const activeMembers = useMemo(() => {
     return members
-      .filter((m) => m.status === 'active' || m.status === 'probationary' || m.status === 'leave')
+      .filter((m) => m.status === UserStatus.ACTIVE || m.status === UserStatus.PROBATIONARY || m.status === UserStatus.LEAVE)
       .sort((a, b) => (a.full_name || a.username || '').localeCompare(b.full_name || b.username || ''));
   }, [members]);
 

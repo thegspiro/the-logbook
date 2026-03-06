@@ -990,12 +990,9 @@ export interface BulkImportResponse {
 
 // ==================== Self-Reported Training Types ====================
 
-export type SubmissionStatus =
-  | 'draft'
-  | 'pending_review'
-  | 'approved'
-  | 'rejected'
-  | 'revision_requested';
+// Import enum type from the canonical source and re-export
+import type { SubmissionStatus } from '../constants/enums';
+export type { SubmissionStatus };
 
 export interface FieldConfig {
   visible: boolean;

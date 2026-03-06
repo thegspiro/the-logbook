@@ -25,6 +25,7 @@ import { Breadcrumbs, SkeletonPage, EmptyState, Pagination } from '../components
 import { SortableHeader, sortItems } from '../components/ux/SortableHeader';
 import type { SortDirection } from '../components/ux/SortableHeader';
 import type { MemberStats } from '../types/member';
+import { UserStatus } from '../constants/enums';
 
 const Members: React.FC = () => {
   const navigate = useNavigate();
@@ -77,10 +78,10 @@ const Members: React.FC = () => {
       // Calculate stats from real data
       const calculatedStats: MemberStats = {
         total: users.length,
-        active: users.filter(u => u.status === 'active').length,
-        inactive: users.filter(u => u.status === 'inactive').length,
-        onLeave: users.filter(u => u.status === 'leave').length,
-        retired: users.filter(u => u.status === 'retired').length,
+        active: users.filter(u => u.status === UserStatus.ACTIVE).length,
+        inactive: users.filter(u => u.status === UserStatus.INACTIVE).length,
+        onLeave: users.filter(u => u.status === UserStatus.LEAVE).length,
+        retired: users.filter(u => u.status === UserStatus.RETIRED).length,
         expiringCertifications: 0,
       };
       setStats(calculatedStats);
@@ -219,13 +220,13 @@ const Members: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'active':
+      case UserStatus.ACTIVE:
         return 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30';
-      case 'inactive':
+      case UserStatus.INACTIVE:
         return 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border';
-      case 'leave':
+      case UserStatus.LEAVE:
         return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30';
-      case 'retired':
+      case UserStatus.RETIRED:
         return 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30';
       default:
         return 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border';

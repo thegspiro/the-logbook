@@ -27,6 +27,7 @@ import { getInitials } from '../utils';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate } from '../../../utils/dateFormatting';
+import { ApplicantStatus as ApplicantStatusEnum } from '../../../constants/enums';
 
 interface PipelineTableProps {
   applicants: ApplicantListItem[];
@@ -426,7 +427,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                             >
                               View Details
                             </button>
-                            {applicant.status === 'active' && (
+                            {applicant.status === ApplicantStatusEnum.ACTIVE && (
                               <>
                                 <button
                                   onClick={() => {

@@ -41,6 +41,7 @@ import type {
 import type { TrainingRecord, ComplianceSummary } from "../types/training";
 import { AVAILABLE_MODULES } from "../types/modules";
 import { MAX_AVATAR_SIZE } from "../constants/config";
+import { UserStatus } from "../constants/enums";
 
 // Types for inventory data
 interface InventoryItem {
@@ -658,7 +659,7 @@ export const MemberProfilePage: React.FC = () => {
                 </Link>
                 <span
                   className={`px-3 py-1 text-sm font-semibold rounded-full ${
-                    user.status === "active"
+                    user.status === UserStatus.ACTIVE
                       ? "bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400"
                       : "bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400"
                   }`}

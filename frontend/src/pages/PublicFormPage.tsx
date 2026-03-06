@@ -3,6 +3,8 @@ import { useParams } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import { publicFormsService } from '../services/api';
 import type { PublicFormDef, PublicFormField } from '../services/api';
+import { getErrorMessage } from '../utils/errorHandling';
+import { FieldType } from '../constants/enums';
 
 // Sanitize any text content that came from the server
 const clean = (text: string | null | undefined): string => {
@@ -75,7 +77,7 @@ const PublicFormPage = () => {
       setSubmitted(true);
       setSubmitMessage(result.message);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to submit form. Please try again.';
+      const msg = getErrorMessage(err, 'Failed to submit form. Please try again.');
       setError(msg);
     } finally {
       setSubmitting(false);
@@ -112,12 +114,12 @@ const PublicFormPage = () => {
       'w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-theme-text-primary placeholder-theme-text-muted';
 
     switch (field.field_type) {
-      case 'text':
-      case 'email':
-      case 'phone':
+      case FieldType.TEXT:
+      case FieldType.EMAIL:
+      case FieldType.PHONE:
         return (
           <input
-            type={field.field_type === 'phone' ? 'tel' : field.field_type}
+            type={field.field_type === FieldType.PHONE ? 'tel' : field.field_type}
             className={baseInputClass}
             placeholder={field.placeholder || ''}
             value={value}
@@ -128,7 +130,7 @@ const PublicFormPage = () => {
           />
         );
 
-      case 'number':
+      case FieldType.NUMBER:
         return (
           <input
             type="number"
@@ -142,7 +144,7 @@ const PublicFormPage = () => {
           />
         );
 
-      case 'textarea':
+      case FieldType.TEXTAREA:
         return (
           <textarea
             className={`${baseInputClass} min-h-[100px]`}
@@ -155,7 +157,7 @@ const PublicFormPage = () => {
           />
         );
 
-      case 'date':
+      case FieldType.DATE:
         return (
           <input
             type="date"
@@ -166,7 +168,7 @@ const PublicFormPage = () => {
           />
         );
 
-      case 'time':
+      case FieldType.TIME:
         return (
           <input
             type="time"
@@ -178,7 +180,7 @@ const PublicFormPage = () => {
           />
         );
 
-      case 'datetime':
+      case FieldType.DATETIME:
         return (
           <input
             type="datetime-local"
@@ -190,7 +192,7 @@ const PublicFormPage = () => {
           />
         );
 
-      case 'select':
+      case FieldType.SELECT:
         return (
           <select
             className={baseInputClass}
@@ -207,7 +209,7 @@ const PublicFormPage = () => {
           </select>
         );
 
-      case 'radio':
+      case FieldType.RADIO:
         return (
           <div className="space-y-2">
             {field.options?.map((opt) => (
@@ -226,7 +228,7 @@ const PublicFormPage = () => {
           </div>
         );
 
-      case 'checkbox':
+      case FieldType.CHECKBOX:
         return (
           <div className="space-y-2">
             {field.options?.map((opt) => {
@@ -252,7 +254,7 @@ const PublicFormPage = () => {
           </div>
         );
 
-      case 'section_header':
+      case FieldType.SECTION_HEADER:
         return (
           <div className="border-b border-theme-surface-border pb-2 -mb-2">
             <h3 className="text-lg font-semibold text-theme-text-primary">{clean(field.label)}</h3>
@@ -359,7 +361,7 @@ const PublicFormPage = () => {
             {form.fields.map((field) => {
               if (!isFieldVisible(field)) return null;
 
-              if (field.field_type === 'section_header') {
+              if (field.field_type === FieldType.SECTION_HEADER) {
                 return (
                   <div key={field.id} className="pt-4">
                     {renderField(field)}

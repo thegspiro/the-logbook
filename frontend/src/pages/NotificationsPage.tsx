@@ -33,6 +33,7 @@ import type {
   NotificationLogRecord,
   NotificationsSummary,
 } from '../services/api';
+import { getErrorMessage } from '../utils/errorHandling';
 
 // Maps trigger enum values to display-friendly icons and colors
 const TRIGGER_DISPLAY: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
@@ -141,7 +142,7 @@ const NotificationsPage: React.FC = () => {
         setSummary(summaryRes);
         setLogs(logsRes.logs);
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Failed to load notification data';
+        const message = getErrorMessage(err, 'Failed to load notification data');
         setError(message);
       } finally {
         setLoading(false);
@@ -166,7 +167,7 @@ const NotificationsPage: React.FC = () => {
         };
       });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to toggle rule';
+      const message = getErrorMessage(err, 'Failed to toggle rule');
       setError(message);
     } finally {
       setTogglingRuleId(null);
@@ -205,7 +206,7 @@ const NotificationsPage: React.FC = () => {
       setCreateDescription('');
       setShowCreateModal(false);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to create rule';
+      const message = getErrorMessage(err, 'Failed to create rule');
       setCreateError(message);
     } finally {
       setCreating(false);

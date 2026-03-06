@@ -36,6 +36,7 @@ import {
   NFPA_ENSEMBLE_ROLE_OPTIONS,
 } from '../../constants/enums';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '../../utils/errorHandling';
 
 type DetailTab = 'general' | 'history' | 'nfpa' | 'inspections' | 'exposures';
 
@@ -147,7 +148,7 @@ function NFPAComplianceTab({
       setEditing(false);
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : 'Failed to save compliance'
+        getErrorMessage(err, 'Failed to save compliance')
       );
     }
   };
@@ -749,7 +750,7 @@ function ExposuresTab({
       void load();
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : 'Failed to record exposure'
+        getErrorMessage(err, 'Failed to record exposure')
       );
     }
   };

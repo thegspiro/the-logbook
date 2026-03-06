@@ -2,6 +2,8 @@
  * User type definitions
  */
 
+import type { UserStatus } from '../constants/enums';
+
 export interface User {
   id: string;
   organization_id: string;
@@ -18,7 +20,7 @@ export interface User {
   photo_url?: string | undefined;
   rank?: string | undefined;
   station?: string | undefined;
-  status: string;
+  status: UserStatus;
   membership_type?: string | undefined;
   date_of_birth?: string | undefined;
   hire_date?: string | undefined;
@@ -215,7 +217,7 @@ export interface PropertyReturnReport {
 export interface DeletionImpact {
   user_id: string;
   full_name?: string;
-  status: string;
+  status: UserStatus;
   training_records: number;
   inventory_items: number;
   documents: number;

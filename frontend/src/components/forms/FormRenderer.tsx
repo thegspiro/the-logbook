@@ -22,6 +22,7 @@ import { formsService } from '../../services/api';
 import type { FieldDefinition } from './FieldRenderer';
 import type { FormDetailDef, FormSubmission } from '../../services/api';
 import { FieldType } from '../../constants/enums';
+import { getErrorMessage } from '../../utils/errorHandling';
 
 export interface FormRendererProps {
   /** Fetch and render a form by ID */
@@ -294,7 +295,7 @@ const FormRenderer = ({
         onSubmitSuccess?.(submission);
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Submission failed. Please try again.';
+      const msg = getErrorMessage(err, 'Submission failed. Please try again.');
       setError(msg);
     } finally {
       setSubmitting(false);

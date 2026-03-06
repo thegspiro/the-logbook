@@ -63,7 +63,7 @@ export function toAppError(error: unknown): AppError {
         })
         .join('. ') || 'Validation failed';
     } else {
-      message = (data?.detail as string | undefined) || data?.message || response.statusText || 'Request failed';
+      message = data?.detail || data?.message || response.statusText || 'Request failed';
     }
     return {
       message,

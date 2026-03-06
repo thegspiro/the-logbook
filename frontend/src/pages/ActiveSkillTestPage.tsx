@@ -40,6 +40,7 @@ import {
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { formatDateTime } from '../utils/dateFormatting';
+import { FormStatus } from '../constants/enums';
 import type {
   SkillCriterion,
   SkillTemplateSection,
@@ -875,7 +876,7 @@ export const ActiveSkillTestPage: React.FC = () => {
 
   const toggleTimer = useCallback(() => {
     setActiveTestRunning(!activeTestRunning);
-    if (!activeTestRunning && currentTest?.status === 'draft') {
+    if (!activeTestRunning && currentTest?.status === FormStatus.DRAFT) {
       // Start the test
       void updateTest(currentTest.id, { status: 'in_progress' });
     }

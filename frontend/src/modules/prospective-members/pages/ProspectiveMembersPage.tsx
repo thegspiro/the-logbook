@@ -37,6 +37,7 @@ import { ConversionModal } from '../components/ConversionModal';
 import { applicantService } from '../services/api';
 import type { ApplicantListItem, Applicant, ApplicantStatus } from '../types';
 import { isValidEmail, getInitials } from '../utils';
+import { getErrorMessage } from '../../../utils/errorHandling';
 import { useTimezone } from '../../../hooks/useTimezone';
 
 export const ProspectiveMembersPage: React.FC = () => {
@@ -281,7 +282,7 @@ export const ProspectiveMembersPage: React.FC = () => {
       void fetchApplicants();
       void fetchPipelineStats(currentPipeline.id);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to create applicant';
+      const msg = getErrorMessage(err, 'Failed to create applicant');
       toast.error(msg);
     } finally {
       setIsCreating(false);

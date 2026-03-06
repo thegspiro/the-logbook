@@ -18,6 +18,7 @@ import {
   Globe, Trash2, Download, CheckCircle2, XCircle, RotateCcw, Plug,
 } from 'lucide-react';
 import { formsService } from '../../services/api';
+import { FieldType } from '../../constants/enums';
 import type { FormSubmission, FormField } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatShortDateTime } from '../../utils/dateFormatting';
@@ -146,14 +147,14 @@ const SubmissionViewer = ({
     const strVal = typeof value === 'string' ? value : typeof value === 'number' || typeof value === 'boolean' ? String(value) : JSON.stringify(value);
 
     switch (type) {
-      case 'date':
+      case FieldType.DATE:
         try { return formatDate(strVal, tz); } catch { return strVal; }
-      case 'time':
+      case FieldType.TIME:
         return strVal;
-      case 'datetime':
+      case FieldType.DATETIME:
         try { return formatShortDateTime(strVal, tz); } catch { return strVal; }
-      case 'checkbox':
-      case 'multiselect':
+      case FieldType.CHECKBOX:
+      case FieldType.MULTISELECT:
         return strVal.split(',').join(', ');
       default:
         return strVal;

@@ -16,6 +16,7 @@ import type {
   VotingMethod,
 } from '../types/election';
 import { getErrorMessage } from '../utils/errorHandling';
+import { VoteType } from '../constants/enums';
 
 interface ElectionBallotProps {
   electionId: string;
@@ -145,7 +146,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
           };
           await electionService.castVote(electionId, voteData);
         }
-      } else if (votingMethod === 'approval') {
+      } else if (votingMethod === VoteType.APPROVAL) {
         const approved = approvals[position];
         if (!approved || approved.size === 0) {
           setError('Please approve at least one candidate');
@@ -237,7 +238,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
     switch (votingMethod) {
       case 'ranked_choice':
         return 'Rank candidates in order of preference (click to add ranking)';
-      case 'approval':
+      case VoteType.APPROVAL:
         return 'Select all candidates you approve of';
       case 'supermajority':
         return 'Select one candidate';
@@ -355,7 +356,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
                   )}
 
                   {/* Approval Voting: Checkboxes */}
-                  {votingMethod === 'approval' && (
+                  {votingMethod === VoteType.APPROVAL && (
                     <div className="space-y-2" role="group" aria-label={`Approval voting candidates${position !== '_default' ? ` for ${position}` : ''}`}>
                       {positionCandidates.map((candidate) => {
                         const isApproved = (approvals[position] || new Set()).has(candidate.id);

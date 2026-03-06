@@ -10,7 +10,7 @@ import { electionService, meetingsService, ranksService } from '../services/api'
 import type { MeetingRecord, OperationalRankResponse } from '../services/api';
 import type { ElectionListItem, ElectionCreate, VotingMethod, VictoryCondition } from '../types/election';
 import { useAuthStore } from '../stores/authStore';
-import { ElectionStatus } from '../constants/enums';
+import { ElectionStatus, VoteType } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
@@ -201,13 +201,13 @@ export const ElectionsPage: React.FC = () => {
 
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
-      case 'open':
+      case ElectionStatus.OPEN:
         return 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400';
-      case 'closed':
+      case ElectionStatus.CLOSED:
         return 'bg-theme-surface-secondary text-theme-text-primary';
-      case 'draft':
+      case ElectionStatus.DRAFT:
         return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400';
-      case 'cancelled':
+      case ElectionStatus.CANCELLED:
         return 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400';
       default:
         return 'bg-theme-surface-secondary text-theme-text-primary';
@@ -646,7 +646,7 @@ export const ElectionsPage: React.FC = () => {
                   <p className="mt-1 text-xs text-theme-text-muted">
                     {formData.voting_method === 'ranked_choice'
                       ? 'Voters rank candidates in order of preference. Lowest-ranked candidates are eliminated until one has a majority.'
-                      : formData.voting_method === 'approval'
+                      : formData.voting_method === VoteType.APPROVAL
                       ? 'Voters approve or disapprove each candidate. The candidate with the most approvals wins.'
                       : formData.victory_condition === 'majority'
                       ? 'Each voter picks one candidate. Winner must receive more than 50% of the votes.'

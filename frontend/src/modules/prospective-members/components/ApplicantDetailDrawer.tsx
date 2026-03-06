@@ -50,7 +50,7 @@ import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { applicantService } from '../services/api';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
-import { ApplicantStatus, StageType as StageTypeEnum } from '../../../constants/enums';
+import { ApplicantStatus, StageType as StageTypeEnum, ElectionStatus } from '../../../constants/enums';
 
 /** Maps snake_case backend field keys to human-readable labels. */
 const FORM_FIELD_LABELS: Record<string, string> = {
@@ -681,7 +681,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
               {(() => {
                 const formArtifact = applicant.stage_history
                   .flatMap((e) => e.artifacts)
-                  .find((a) => a.type === 'form_submission' && a.data);
+                  .find((a) => a.type === StageTypeEnum.FORM_SUBMISSION && a.data);
                 if (!formArtifact?.data) return null;
                 const fields = formArtifact.data;
                 return (
@@ -750,7 +750,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-theme-text-muted">Status</span>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                          currentElectionPackage.status === 'draft'
+                          currentElectionPackage.status === ElectionStatus.DRAFT
                             ? 'bg-slate-500/20 text-theme-text-muted'
                             : currentElectionPackage.status === 'ready'
                               ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300'
@@ -802,7 +802,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       </div>
 
                       {/* Editable fields — only for draft packages */}
-                      {currentElectionPackage.status === 'draft' && (
+                      {currentElectionPackage.status === ElectionStatus.DRAFT && (
                         <>
                           <div>
                             <label className="block text-xs text-theme-text-muted mb-1">
@@ -1012,7 +1012,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                               {entry.artifacts.length > 0 && (
                                 <div className="mt-2 space-y-1">
                                   {entry.artifacts.map((artifact) => {
-                                    if (artifact.type === 'form_submission' && artifact.data) {
+                                    if (artifact.type === StageTypeEnum.FORM_SUBMISSION && artifact.data) {
                                       const fields = artifact.data;
                                       return (
                                         <div key={artifact.id} className="bg-theme-surface-secondary rounded px-3 py-2">
@@ -1306,7 +1306,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
             )}
 
             {/* On Hold Actions */}
-            {applicant.status === 'on_hold' && (
+            {applicant.status === ApplicantStatus.ON_HOLD && (
               <div className="border-t border-theme-surface-border p-4 space-y-3">
                 {showNotesInput && (
                   <div className="flex items-start gap-2">

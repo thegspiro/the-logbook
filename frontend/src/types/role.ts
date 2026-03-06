@@ -3,6 +3,7 @@
  */
 
 import type { NotificationPreferences } from './user';
+import type { UserStatus } from '../constants/enums';
 
 export interface Role {
   id: string;
@@ -42,7 +43,7 @@ export interface UserWithRoles {
   mobile?: string | undefined;
   personal_email?: string | undefined;
   photo_url?: string | undefined;
-  status: string;
+  status: UserStatus;
   membership_type?: string | undefined;
   hire_date?: string | undefined;
   date_of_birth?: string | undefined;

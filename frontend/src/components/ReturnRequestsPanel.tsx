@@ -4,6 +4,7 @@ import { inventoryService } from '../services/inventoryService';
 import type { ReturnRequestItem } from '../services/eventServices';
 import { getErrorMessage } from '../utils/errorHandling';
 import toast from 'react-hot-toast';
+import { RequestStatus } from '../constants/enums';
 
 const STATUS_BADGES: Record<string, string> = {
   pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
@@ -63,7 +64,7 @@ const ReturnRequestsPanel: React.FC = () => {
     }
   };
 
-  const pendingCount = requests.filter(r => r.status === 'pending').length;
+  const pendingCount = requests.filter(r => r.status === RequestStatus.PENDING).length;
 
   return (
     <div className="space-y-4">
@@ -128,7 +129,7 @@ const ReturnRequestsPanel: React.FC = () => {
                   <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGES[req.status] ?? ''}`}>
                     {req.status}
                   </span>
-                  {req.status === 'pending' && (
+                  {req.status === RequestStatus.PENDING && (
                     <div className="flex gap-1">
                       <button
                         onClick={() => { setReviewModal({ open: true, request: req }); setReviewAction('approved'); setOverrideCondition(''); setReviewNotes(''); }}
@@ -161,7 +162,7 @@ const ReturnRequestsPanel: React.FC = () => {
             <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full border border-theme-surface-border">
               <div className="px-4 sm:px-6 pt-5 pb-4">
                 <h3 className="text-lg font-medium text-theme-text-primary mb-4">
-                  {reviewAction === 'approved' ? 'Approve Return' : 'Deny Return'}
+                  {reviewAction === RequestStatus.APPROVED ? 'Approve Return' : 'Deny Return'}
                 </h3>
                 <div className="space-y-4">
                   <div className="bg-theme-surface-secondary rounded-lg p-3">
@@ -177,7 +178,7 @@ const ReturnRequestsPanel: React.FC = () => {
                     )}
                   </div>
 
-                  {reviewAction === 'approved' && (
+                  {reviewAction === RequestStatus.APPROVED && (
                     <div>
                       <label htmlFor="override-condition" className="block text-sm font-medium text-theme-text-secondary mb-1">
                         Actual Condition (override if different)
@@ -206,7 +207,7 @@ const ReturnRequestsPanel: React.FC = () => {
                       value={reviewNotes}
                       onChange={(e) => setReviewNotes(e.target.value)}
                       className="form-input"
-                      placeholder={reviewAction === 'denied' ? 'Reason for denial...' : 'Any notes...'}
+                      placeholder={reviewAction === RequestStatus.DENIED ? 'Reason for denial...' : 'Any notes...'}
                     />
                   </div>
                 </div>
@@ -217,10 +218,10 @@ const ReturnRequestsPanel: React.FC = () => {
                   onClick={() => { void handleReview(); }}
                   disabled={submitting}
                   className={`px-4 py-2 rounded-lg text-white transition-colors disabled:opacity-50 ${
-                    reviewAction === 'approved' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+                    reviewAction === RequestStatus.APPROVED ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
                   }`}
                 >
-                  {submitting ? 'Processing...' : reviewAction === 'approved' ? 'Approve & Return' : 'Deny'}
+                  {submitting ? 'Processing...' : reviewAction === RequestStatus.APPROVED ? 'Approve & Return' : 'Deny'}
                 </button>
               </div>
             </div>

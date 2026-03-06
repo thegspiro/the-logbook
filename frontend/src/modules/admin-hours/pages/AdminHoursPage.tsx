@@ -10,6 +10,7 @@ import { AlertTriangle, ChevronLeft, ChevronRight, Clock, LogOut, Plus, Timer } 
 import { useAdminHoursStore } from '../store/adminHoursStore';
 import type { AdminHoursEntryCreate } from '../types';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '../../../utils/errorHandling';
 
 const PAGE_SIZE = 20;
 
@@ -115,7 +116,7 @@ const AdminHoursPage: React.FC = () => {
       });
       void fetchSummary();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to submit hours');
+      toast.error(getErrorMessage(err, 'Failed to submit hours'));
     } finally {
       setIsSubmitting(false);
     }

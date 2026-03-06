@@ -17,7 +17,7 @@ import { MeetingAttendance } from '../components/MeetingAttendance';
 import { VoterOverrideManagement } from '../components/VoterOverrideManagement';
 import { ProxyVotingManagement } from '../components/ProxyVotingManagement';
 import { useAuthStore } from '../stores/authStore';
-import { ElectionStatus } from '../constants/enums';
+import { ElectionStatus, VoteType, BallotItemType } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
@@ -343,13 +343,13 @@ export const ElectionDetailPage: React.FC = () => {
 
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
-      case 'open':
+      case ElectionStatus.OPEN:
         return 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400';
-      case 'closed':
+      case ElectionStatus.CLOSED:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400';
-      case 'draft':
+      case ElectionStatus.DRAFT:
         return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400';
-      case 'cancelled':
+      case ElectionStatus.CANCELLED:
         return 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400';
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400';
@@ -582,7 +582,7 @@ export const ElectionDetailPage: React.FC = () => {
               )}
 
               {/* Delete Election */}
-              {election.status !== 'cancelled' && (
+              {election.status !== ElectionStatus.CANCELLED && (
                 <button
                   onClick={() => setShowDeleteModal(true)}
                   className={`px-4 py-2 rounded-md ${
@@ -617,7 +617,7 @@ export const ElectionDetailPage: React.FC = () => {
       )}
 
       {/* Ballot Builder (Admin - draft/open elections) */}
-      {canManage && electionId && election.status !== 'cancelled' && (
+      {canManage && electionId && election.status !== ElectionStatus.CANCELLED && (
         <div className="mb-6">
           <BallotBuilder
             electionId={electionId}
@@ -628,7 +628,7 @@ export const ElectionDetailPage: React.FC = () => {
       )}
 
       {/* Meeting Attendance (Admin) */}
-      {canManage && electionId && election.status !== 'cancelled' && (
+      {canManage && electionId && election.status !== ElectionStatus.CANCELLED && (
         <div className="mb-6">
           <MeetingAttendance
             electionId={electionId}
@@ -639,14 +639,14 @@ export const ElectionDetailPage: React.FC = () => {
       )}
 
       {/* Voter Override Management (Admin) */}
-      {canManage && electionId && election.status !== 'cancelled' && (
+      {canManage && electionId && election.status !== ElectionStatus.CANCELLED && (
         <div className="mb-6">
           <VoterOverrideManagement electionId={electionId} canManage={canManage} />
         </div>
       )}
 
       {/* Proxy Voting Management (Admin) */}
-      {canManage && electionId && election.status !== 'cancelled' && (
+      {canManage && electionId && election.status !== ElectionStatus.CANCELLED && (
         <div className="mb-6">
           <ProxyVotingManagement electionId={electionId} canManage={canManage} />
         </div>
@@ -1398,7 +1398,7 @@ export const ElectionDetailPage: React.FC = () => {
               ) : (
                 (election.ballot_items || []).map((item, index) => {
                   const itemCandidates = getPreviewCandidatesForItem(item);
-                  const isApprovalType = item.vote_type === 'approval';
+                  const isApprovalType = item.vote_type === VoteType.APPROVAL;
 
                   return (
                     <div
@@ -1428,7 +1428,7 @@ export const ElectionDetailPage: React.FC = () => {
                             {itemCandidates.length > 0 && (
                               <div className="mb-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
                                 <p className="text-xs font-medium text-blue-700 dark:text-blue-400 mb-1.5">
-                                  {item.type === 'membership_approval' ? 'Prospective Member' : 'Candidate'}{itemCandidates.length !== 1 ? 's' : ''}:
+                                  {item.type === BallotItemType.MEMBERSHIP_APPROVAL ? 'Prospective Member' : 'Candidate'}{itemCandidates.length !== 1 ? 's' : ''}:
                                 </p>
                                 {itemCandidates.map((candidate) => (
                                   <div key={candidate.id} className="flex items-center gap-2 py-1">

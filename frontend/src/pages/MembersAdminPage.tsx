@@ -22,6 +22,7 @@ import { validatePasswordStrength } from '../utils/passwordValidation';
 import { Modal } from '../components/Modal';
 import { DeleteMemberModal } from '../components/DeleteMemberModal';
 import { useRanks } from '../hooks/useRanks';
+import { UserStatus } from '../constants/enums';
 
 type ViewMode = 'by-member' | 'by-role';
 
@@ -523,7 +524,7 @@ export const MembersAdminPage: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
                       className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        user.status === 'active'
+                        user.status === UserStatus.ACTIVE
                           ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
                           : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
                       }`}

@@ -56,6 +56,7 @@ import type {
   InterviewUpdate,
 } from '../types';
 import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS, StepProgressStatus } from '../types';
+import { StageType as StageTypeConst } from '../../../constants/enums';
 
 const api = createApiClient();
 
@@ -66,19 +67,19 @@ const api = createApiClient();
 /** Map frontend stage_type to backend step_type + action_type */
 function mapStageTypeToBackend(stageType: StageType): { step_type: string; action_type?: string } {
   switch (stageType) {
-    case 'form_submission':
+    case StageTypeConst.FORM_SUBMISSION:
       return { step_type: 'action', action_type: 'custom' };
-    case 'document_upload':
+    case StageTypeConst.DOCUMENT_UPLOAD:
       return { step_type: 'action', action_type: 'collect_document' };
-    case 'election_vote':
+    case StageTypeConst.ELECTION_VOTE:
       return { step_type: 'action', action_type: 'custom' };
-    case 'meeting':
+    case StageTypeConst.MEETING:
       return { step_type: 'action', action_type: 'schedule_meeting' };
-    case 'status_page_toggle':
+    case StageTypeConst.STATUS_PAGE_TOGGLE:
       return { step_type: 'action', action_type: 'custom' };
-    case 'automated_email':
+    case StageTypeConst.AUTOMATED_EMAIL:
       return { step_type: 'action', action_type: 'send_email' };
-    case 'manual_approval':
+    case StageTypeConst.MANUAL_APPROVAL:
     default:
       return { step_type: 'checkbox' };
   }
@@ -91,38 +92,38 @@ function mapStepTypeToFrontend(
   config?: Record<string, unknown> | null
 ): StageType {
   if (stepType === 'action') {
-    if (actionType === 'collect_document') return 'document_upload';
-    if (actionType === 'schedule_meeting') return 'meeting';
-    if (actionType === 'send_email') return 'automated_email';
+    if (actionType === 'collect_document') return StageTypeConst.DOCUMENT_UPLOAD;
+    if (actionType === 'schedule_meeting') return StageTypeConst.MEETING;
+    if (actionType === 'send_email') return StageTypeConst.AUTOMATED_EMAIL;
     // Distinguish between form_submission, election_vote, and status_page_toggle
     // by inspecting the config JSON
-    if (config && 'enable_public_status' in config) return 'status_page_toggle';
-    if (config && 'voting_method' in config) return 'election_vote';
-    return 'form_submission';
+    if (config && 'enable_public_status' in config) return StageTypeConst.STATUS_PAGE_TOGGLE;
+    if (config && 'voting_method' in config) return StageTypeConst.ELECTION_VOTE;
+    return StageTypeConst.FORM_SUBMISSION;
   }
   // checkbox and note both map to manual_approval
-  return 'manual_approval';
+  return StageTypeConst.MANUAL_APPROVAL;
 }
 
 /** Provide a valid default StageConfig for a given stage type */
 function getDefaultStageConfig(stageType: StageType): PipelineStage['config'] {
   switch (stageType) {
-    case 'form_submission':
+    case StageTypeConst.FORM_SUBMISSION:
       return { form_id: '', form_name: '' };
-    case 'document_upload':
+    case StageTypeConst.DOCUMENT_UPLOAD:
       return { required_document_types: [], allow_multiple: true };
-    case 'election_vote':
+    case StageTypeConst.ELECTION_VOTE:
       return {
         voting_method: 'simple_majority',
         victory_condition: 'majority',
         eligible_voter_roles: [],
         anonymous_voting: true,
       };
-    case 'meeting':
+    case StageTypeConst.MEETING:
       return { meeting_type: 'chief_meeting', meeting_description: '' };
-    case 'status_page_toggle':
+    case StageTypeConst.STATUS_PAGE_TOGGLE:
       return { enable_public_status: true, custom_message: '' };
-    case 'automated_email':
+    case StageTypeConst.AUTOMATED_EMAIL:
       return {
         email_subject: 'Welcome to the Membership Process',
         include_welcome: true,
@@ -134,7 +135,7 @@ function getDefaultStageConfig(stageType: StageType): PipelineStage['config'] {
         include_status_tracker: false,
         custom_sections: [],
       };
-    case 'manual_approval':
+    case StageTypeConst.MANUAL_APPROVAL:
     default:
       return { approver_roles: [], require_notes: false };
   }
@@ -255,17 +256,17 @@ export function mapProspectToApplicant(data: BackendProspectResponse): Applicant
     .map((sp: BackendStepProgressResponse) => {
     const stageType = sp.step?.step_type
       ? mapStepTypeToFrontend(sp.step.step_type, sp.step.action_type)
-      : ('manual_approval' as StageType);
+      : (StageTypeConst.MANUAL_APPROVAL as StageType);
 
     // Build artifacts from action_result when available
     const artifacts: StageHistoryEntry['artifacts'] = [];
     const actionResult = sp.action_result;
     if (actionResult && typeof actionResult === 'object') {
       const mappedData = actionResult['mapped_data'] as Record<string, unknown> | undefined;
-      if (mappedData && stageType === 'form_submission') {
+      if (mappedData && stageType === StageTypeConst.FORM_SUBMISSION) {
         artifacts.push({
           id: `${sp.id}-form`,
-          type: 'form_submission',
+          type: StageTypeConst.FORM_SUBMISSION,
           name: 'Membership Interest Form',
           data: mappedData,
           created_at: sp.completed_at ?? sp.created_at,

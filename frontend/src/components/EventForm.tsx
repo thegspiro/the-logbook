@@ -21,6 +21,7 @@ import { eventService, locationsService } from '../services/api';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum, CheckInWindowType } from '../constants/enums';
 import type { Location } from '../services/api';
 import { getEventTypeLabel } from '../utils/eventHelpers';
+import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 
@@ -33,19 +34,19 @@ interface EventFormProps {
 }
 
 const EVENT_TYPES: EventType[] = [
-  'business_meeting',
-  'public_education',
-  'training',
-  'social',
-  'fundraiser',
-  'ceremony',
-  'other',
+  EventTypeEnum.BUSINESS_MEETING,
+  EventTypeEnum.PUBLIC_EDUCATION,
+  EventTypeEnum.TRAINING,
+  EventTypeEnum.SOCIAL,
+  EventTypeEnum.FUNDRAISER,
+  EventTypeEnum.CEREMONY,
+  EventTypeEnum.OTHER,
 ];
 
 const DEFAULT_FORM_DATA: EventCreate = {
   title: '',
   description: '',
-  event_type: 'business_meeting',
+  event_type: EventTypeEnum.BUSINESS_MEETING,
   custom_category: undefined,
   location_id: undefined,
   location: '',
@@ -55,7 +56,7 @@ const DEFAULT_FORM_DATA: EventCreate = {
   requires_rsvp: false,
   rsvp_deadline: '',
   max_attendees: undefined,
-  allowed_rsvp_statuses: ['going', 'not_going'],
+  allowed_rsvp_statuses: [RSVPStatusEnum.GOING, RSVPStatusEnum.NOT_GOING],
   is_mandatory: false,
   allow_guests: false,
   send_reminders: true,
@@ -261,7 +262,7 @@ export const EventForm: React.FC<EventFormProps> = ({
     try {
       await onSubmit(submitData);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'An error occurred';
+      const message = getErrorMessage(err, 'An error occurred');
       setError(message);
     }
   };
@@ -642,7 +643,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             <fieldset>
               <legend className={labelClass}>RSVP Status Options</legend>
               <div className="flex gap-4">
-                {(['going', 'not_going', 'maybe'] as RSVPStatus[]).map((status) => (
+                {([RSVPStatusEnum.GOING, RSVPStatusEnum.NOT_GOING, RSVPStatusEnum.MAYBE] as RSVPStatus[]).map((status) => (
                   <label key={status} className="flex items-center gap-2 text-sm cursor-pointer">
                     <input
                       type="checkbox"
