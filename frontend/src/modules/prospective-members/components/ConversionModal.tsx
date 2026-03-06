@@ -28,7 +28,6 @@ import { applicantService } from '../services/api';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate } from '../../../utils/dateFormatting';
-import { MembershipType } from '../../../constants/enums';
 import { getErrorMessage } from '../../../utils/errorHandling';
 
 interface ConversionModalProps {
@@ -49,7 +48,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
   const [step, setStep] = useState<1 | 2>(1);
 
   // Step 2 fields
-  const [membershipType, setMembershipType] = useState<TargetMembershipType>('probationary');
+  const [membershipType, setMembershipType] = useState<TargetMembershipType>('regular');
   const [rank, setRank] = useState('');
   const [station, setStation] = useState('');
   const [middleName, setMiddleName] = useState('');
@@ -73,7 +72,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
   useEffect(() => {
     if (applicant && isOpen) {
       setStep(1);
-      setMembershipType(applicant.target_membership_type ?? 'probationary');
+      setMembershipType(applicant.target_membership_type ?? 'regular');
       setRank('');
       setStation('');
       setMiddleName('');
@@ -299,20 +298,20 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                 </label>
                 <div className="form-grid-2">
                   <button
-                    onClick={() => setMembershipType(MembershipType.PROBATIONARY)}
+                    onClick={() => setMembershipType('regular')}
                     className={`p-3 rounded-lg border text-left transition-all ${
-                      membershipType === MembershipType.PROBATIONARY
+                      membershipType === 'regular'
                         ? 'border-red-500 bg-red-500/10'
                         : 'border-theme-surface-border bg-theme-surface-hover hover:border-theme-surface-border'
                     }`}
                   >
-                    <p className="text-sm font-medium text-theme-text-primary">Probationary</p>
-                    <p className="text-xs text-theme-text-muted mt-0.5">New member in trial period</p>
+                    <p className="text-sm font-medium text-theme-text-primary">Regular Member</p>
+                    <p className="text-xs text-theme-text-muted mt-0.5">Starts as probationary</p>
                   </button>
                   <button
-                    onClick={() => setMembershipType(MembershipType.ADMINISTRATIVE)}
+                    onClick={() => setMembershipType('administrative')}
                     className={`p-3 rounded-lg border text-left transition-all ${
-                      membershipType === MembershipType.ADMINISTRATIVE
+                      membershipType === 'administrative'
                         ? 'border-red-500 bg-red-500/10'
                         : 'border-theme-surface-border bg-theme-surface-hover hover:border-theme-surface-border'
                     }`}

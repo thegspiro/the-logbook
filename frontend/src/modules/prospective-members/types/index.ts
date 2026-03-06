@@ -41,7 +41,7 @@ export const TIMEOUT_PRESET_LABELS: Record<InactivityTimeoutPreset, string> = {
   custom: 'Custom',
 };
 
-export type TargetMembershipType = 'administrative' | 'probationary';
+export type TargetMembershipType = 'regular' | 'administrative';
 
 export type PipelineViewMode = 'kanban' | 'table';
 
@@ -733,6 +733,7 @@ export interface BackendProspectResponse {
   interest_reason: string | null;
   referral_source: string | null;
   referred_by: string | null;
+  desired_membership_type: string | null;
   notes: string | null;
   current_step_id: string | null;
   status: string | { value: string };
@@ -760,6 +761,7 @@ export interface BackendProspectListResponse {
   pipeline_name: string | null;
   current_step_id: string | null;
   current_step_name: string | null;
+  desired_membership_type: string | null;
   created_at: string;
 }
 

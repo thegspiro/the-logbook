@@ -14,7 +14,8 @@ The Prospective Members module provides a complete applicant tracking system for
 - **Applicant Lifecycle**: Six statuses (active, on_hold, withdrawn, converted, rejected, inactive) with full audit trail
 - **Withdraw / Archive**: Applicants can voluntarily withdraw; withdrawn applications are archived and reactivatable
 - **Election Package Integration**: Auto-generates election packages when applicants reach an election_vote stage, bundling applicant data for the secretary to build a ballot
-- **Conversion Flow**: Convert successful applicants to administrative member or probationary member
+- **Desired Membership Type**: Applicants indicate their preferred membership type (regular or administrative) via the interest form; coordinators can change it inline at any pipeline stage
+- **Conversion Flow**: Convert successful applicants to regular member (starts as probationary) or administrative member, pre-filled from the applicant's desired membership type
 - **Bulk Operations**: Select multiple applicants for batch advance, hold, or reject actions
 - **Cross-Module Integration**: Links to Forms (data collection), Elections (membership votes via election packages), and Notifications (alerts)
 
@@ -57,6 +58,7 @@ frontend/src/modules/prospective-members/
 | `InactivityTimeoutPreset` | `'3_months' \| '6_months' \| '1_year' \| 'never' \| 'custom'` |
 | `InactivityAlertLevel` | `'normal' \| 'warning' \| 'critical'` |
 | `PipelineTab` | `'active' \| 'inactive' \| 'withdrawn'` |
+| `TargetMembershipType` | `'regular' \| 'administrative'` |
 | `ElectionPackageStatus` | `'draft' \| 'ready' \| 'added_to_ballot' \| 'elected' \| 'not_elected'` |
 
 ### Key Interfaces
@@ -234,15 +236,26 @@ When an applicant (or their coordinator) decides to withdraw from the process:
 
 The Withdrawn tab on the main page shows all withdrawn applications with name, last stage, withdrawal date, and reason.
 
+### Desired Membership Type
+
+Each applicant has an optional `desired_membership_type` field (`'regular'` or `'administrative'`) indicating what kind of membership they are seeking. The options are presented as **Regular Member** (starts as probationary) and **Administrative Member** (non-operational role). "Probationary" is not offered as a direct choice since it is a transitional status that all regular members pass through, not a membership type applicants select.
+
+**Setting it via forms:** When a Membership Interest Form includes a "Membership Type" question, the answer is auto-mapped to `desired_membership_type` using the form field label mapping system. Recognized labels include: `membership type`, `desired membership type`, `type of membership`, `member type`, `regular or administrative`.
+
+**Changing it in the pipeline:** The Applicant Detail Drawer displays the current membership type as a pair of toggle buttons between the Contact Info and Application Data sections. A coordinator can click the alternate type to change it at any time. The change takes effect immediately via an inline API update.
+
+**How it flows through to conversion:** The Conversion Modal reads the applicant's `desired_membership_type` to pre-select the membership type. If the applicant never specified a type, it defaults to regular. When converting, selecting "Regular Member" creates the member with `probationary` membership status (since all regular members begin with a probationary period).
+
 ### Conversion
 
 When an applicant reaches the final pipeline stage and is approved:
 
 1. Coordinator clicks "Convert to Member" in the detail drawer or action menu
-2. Conversion modal appears with membership type selection:
+2. Conversion modal appears with membership type pre-selected from the applicant's desired membership type:
+   - **Regular Member**: Starts as probationary — all regular members go through a probationary period
    - **Administrative Member**: Non-operational support role
-   - **Probationary Member**: New member in probationary period
-3. On confirmation, the system:
+3. The coordinator can override the pre-selected type if needed
+4. On confirmation, the system:
    - Creates a new member record in the membership module
    - Sets the applicant status to `converted`
    - Records the conversion timestamp
@@ -272,7 +285,7 @@ An election package bundles the following applicant data (configurable per stage
 | Field | Default | Description |
 |-------|---------|-------------|
 | Applicant name | Always | Full name snapshot at package creation |
-| Membership type | Always | Administrative or probationary |
+| Desired membership type | Always | Administrative or probationary (from applicant's `desired_membership_type`) |
 | Target role | Always | If assigned |
 | Email | On | Applicant's email address |
 | Phone | Off | Applicant's phone number |
@@ -479,6 +492,13 @@ See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#prospective-members-module-issues)
 
 ## Recent Changes (March 2026)
 
+### March 6, 2026
+- **Desired membership type field**: Added `desired_membership_type` column to `ProspectiveMember` model (nullable `String(50)`) to track whether an applicant wants to be a regular or administrative member. Options presented as "Regular Member" (starts as probationary) and "Administrative Member" — probationary is not offered as a direct choice since it is a transitional status
+- **Form field auto-mapping**: Added label mappings (`membership type`, `desired membership type`, `type of membership`, `member type`) in `prospect_fields.py` so Membership Interest Forms auto-populate the field
+- **Inline editing in detail drawer**: Added toggle buttons in the Applicant Detail Drawer between Contact Info and Application Data sections, allowing coordinators to change the desired membership type at any pipeline stage
+- **Conversion pre-fill**: The Conversion Modal now pre-selects the membership type from the applicant's `desired_membership_type` instead of always defaulting to probationary
+- **Pipeline table column**: The "Target Type" column in the sortable pipeline table displays the applicant's desired membership type
+
 ### March 4, 2026
 - **Form-to-pipeline integration hardening (13 improvements)**: Label-based field mapping fallback, server-side validation, reprocessing fix, O(N) cleanup query optimization, field compatibility checks, step update lifecycle fix
 - **Duplicate prospect detection**: Email-based duplicate detection with coordinator email notification
@@ -490,6 +510,6 @@ See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#prospective-members-module-issues)
 
 ---
 
-**Document Version**: 1.2
-**Last Updated**: 2026-03-04
+**Document Version**: 1.3
+**Last Updated**: 2026-03-06
 **Maintainer**: Development Team

@@ -57,6 +57,7 @@ const INTEGRATION_TARGET_FIELDS: Record<string, { key: string; label: string; re
     { key: 'address_zip', label: 'ZIP Code', required: false },
     { key: 'interest_reason', label: 'Interest / Reason', required: false },
     { key: 'referral_source', label: 'Referral Source', required: false },
+    { key: 'desired_membership_type', label: 'Membership Type', required: false },
   ],
   equipment_assignment: [
     { key: 'member_id', label: 'Member (member_lookup field)', required: true },
@@ -86,7 +87,7 @@ interface StarterTemplate {
   name: string;
   description: string;
   category: string;
-  fields: { label: string; field_type: string; required: boolean }[];
+  fields: { label: string; field_type: string; required: boolean; options?: { value: string; label: string }[] }[];
   icon: React.ReactNode;
   color: string;
   isPublic?: boolean;
@@ -134,6 +135,10 @@ const STARTER_TEMPLATES: StarterTemplate[] = [
       { label: 'City', field_type: 'text', required: false },
       { label: 'State', field_type: 'text', required: false },
       { label: 'Zip Code', field_type: 'text', required: false },
+      { label: 'Membership Type', field_type: 'select', required: false, options: [
+        { value: 'regular', label: 'Regular Member' },
+        { value: 'administrative', label: 'Administrative Member' },
+      ] },
       { label: 'Previous Fire/EMS Experience', field_type: 'radio', required: true },
       { label: 'Experience Details', field_type: 'textarea', required: false },
       { label: 'Why are you interested in joining?', field_type: 'textarea', required: true },
@@ -369,6 +374,7 @@ const FormsPage: React.FC = () => {
           field_type: f.field_type,
           required: f.required,
           sort_order: i,
+          ...(f.options ? { options: f.options } : {}),
         })),
       };
       await formsService.createForm(createData);

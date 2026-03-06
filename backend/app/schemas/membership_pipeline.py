@@ -215,6 +215,11 @@ class ProspectBase(BaseModel):
     interest_reason: Optional[str] = None
     referral_source: Optional[str] = Field(None, max_length=255)
     referred_by: Optional[UUID] = None
+    desired_membership_type: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="Desired membership type: probationary or administrative",
+    )
     notes: Optional[str] = None
 
 
@@ -243,6 +248,11 @@ class ProspectUpdate(BaseModel):
     interest_reason: Optional[str] = None
     referral_source: Optional[str] = Field(None, max_length=255)
     referred_by: Optional[UUID] = None
+    desired_membership_type: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="Desired membership type: probationary or administrative",
+    )
     notes: Optional[str] = None
     status: Optional[str] = Field(
         None,
@@ -309,6 +319,7 @@ class ProspectListResponse(BaseModel):
     pipeline_name: Optional[str] = None
     current_step_id: Optional[UUID] = None
     current_step_name: Optional[str] = None
+    desired_membership_type: Optional[str] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

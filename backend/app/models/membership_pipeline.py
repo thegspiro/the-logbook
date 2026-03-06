@@ -242,6 +242,9 @@ class ProspectiveMember(Base):
     interest_reason = Column(Text)
     referral_source = Column(String(255))
     referred_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    desired_membership_type = Column(
+        String(50), nullable=True, default=None
+    )  # e.g., "probationary", "administrative"
 
     # Pipeline tracking
     current_step_id = Column(

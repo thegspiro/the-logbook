@@ -67,6 +67,7 @@ const FORM_FIELD_LABELS: Record<string, string> = {
   interest_reason: 'Interest Reason',
   referral_source: 'Referral Source',
   referred_by: 'Referred By',
+  desired_membership_type: 'Desired Membership Type',
 };
 
 /** Title-case fallback for keys not in FORM_FIELD_LABELS. */
@@ -675,6 +676,45 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     )}
                   </div>
                 )}
+              </div>
+
+              {/* Desired Membership Type */}
+              <div className="p-4 border-b border-theme-surface-border">
+                <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
+                  Desired Membership Type
+                </h3>
+                <div className="flex items-center gap-2">
+                  {(['regular', 'administrative'] as const).map((type) => {
+                    const isSelected = applicant.target_membership_type === type;
+                    const label = type === 'regular' ? 'Regular Member' : 'Administrative';
+                    const desc = type === 'regular' ? 'Starts as probationary' : 'Non-operational role';
+                    return (
+                      <button
+                        key={type}
+                        disabled={isSelected}
+                        onClick={() => {
+                          void applicantService.updateApplicant(applicant.id, { target_membership_type: type }).then(() => {
+                            toast.success(`Membership type changed to ${label.toLowerCase()}`);
+                            const { fetchApplicant } = useProspectiveMembersStore.getState();
+                            if (fetchApplicant) {
+                              void fetchApplicant(applicant.id);
+                            }
+                          }).catch(() => {
+                            toast.error('Failed to update membership type');
+                          });
+                        }}
+                        className={`flex-1 p-2.5 rounded-lg border text-left transition-all ${
+                          isSelected
+                            ? 'border-red-500 bg-red-500/10'
+                            : 'border-theme-surface-border bg-theme-surface-hover hover:border-theme-surface-border cursor-pointer'
+                        }`}
+                      >
+                        <p className="text-sm font-medium text-theme-text-primary">{label}</p>
+                        <p className="text-xs text-theme-text-muted">{desc}</p>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Application Data — always visible regardless of current step */}
