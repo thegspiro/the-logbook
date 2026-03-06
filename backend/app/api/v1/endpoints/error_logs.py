@@ -5,7 +5,7 @@ Endpoints for logging and retrieving application errors.
 """
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field, field_validator

@@ -6,7 +6,7 @@ maintenance tracking, building systems, inspections, photos, and documents.
 """
 
 from datetime import date
-from typing import List, Optional
+
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -398,13 +398,9 @@ async def delete_facility_status(
 
 @router.get("", response_model=list[FacilityListItem], tags=["Facilities"])
 async def list_facilities(
-    facility_type_id: str | None = Query(
-        None, description="Filter by facility type"
-    ),
+    facility_type_id: str | None = Query(None, description="Filter by facility type"),
     status_id: str | None = Query(None, description="Filter by status"),
-    is_archived: bool | None = Query(
-        False, description="Include archived facilities"
-    ),
+    is_archived: bool | None = Query(False, description="Include archived facilities"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
@@ -962,9 +958,7 @@ async def list_facility_maintenance_records(
     maintenance_type_id: str | None = Query(
         None, description="Filter by maintenance type"
     ),
-    is_completed: bool | None = Query(
-        None, description="Filter by completion status"
-    ),
+    is_completed: bool | None = Query(None, description="Filter by completion status"),
     is_overdue: bool | None = Query(None, description="Filter by overdue status"),
     is_historic: bool | None = Query(
         None,
@@ -3078,9 +3072,7 @@ async def list_facility_compliance_checklists(
     compliance_type: ComplianceTypeEnum | None = Query(
         None, description="Filter by compliance type"
     ),
-    is_completed: bool | None = Query(
-        None, description="Filter by completion status"
-    ),
+    is_completed: bool | None = Query(None, description="Filter by completion status"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),

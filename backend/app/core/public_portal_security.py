@@ -7,7 +7,7 @@ API key authentication, rate limiting, and access logging.
 
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Tuple
+
 
 import bcrypt
 from fastapi import Depends, HTTPException, Request, status
@@ -118,7 +118,9 @@ async def check_rate_limit(
 
     # Prune stale hour-buckets for this key to prevent unbounded growth
     if api_key_id in rate_limit_cache:
-        stale = [ts for ts in rate_limit_cache[api_key_id] if ts < hour_timestamp - 3600]
+        stale = [
+            ts for ts in rate_limit_cache[api_key_id] if ts < hour_timestamp - 3600
+        ]
         for ts in stale:
             del rate_limit_cache[api_key_id][ts]
 
@@ -174,7 +176,9 @@ async def check_ip_rate_limit(
 
     # Prune stale minute-buckets for this IP to prevent unbounded growth
     if ip_address in ip_rate_limit_cache:
-        stale = [ts for ts in ip_rate_limit_cache[ip_address] if ts < minute_timestamp - 120]
+        stale = [
+            ts for ts in ip_rate_limit_cache[ip_address] if ts < minute_timestamp - 120
+        ]
         for ts in stale:
             del ip_rate_limit_cache[ip_address][ts]
 

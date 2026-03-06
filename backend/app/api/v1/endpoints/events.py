@@ -8,7 +8,7 @@ import os
 import uuid as uuid_lib
 from datetime import datetime
 from datetime import timezone as dt_timezone
-from typing import List, Optional
+
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status

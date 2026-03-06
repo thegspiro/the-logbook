@@ -5,12 +5,10 @@ Business logic for fundraising campaigns, donors, donations, pledges,
 and fundraising events. Provides dashboard aggregation and reporting.
 """
 
-from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal
+from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
 
-from loguru import logger
-from sqlalchemy import and_, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import log_audit_event
@@ -99,9 +97,7 @@ class FundraisingService:
         await self.db.flush()
         return campaign
 
-    async def delete_campaign(
-        self, campaign_id: str, organization_id: str
-    ) -> bool:
+    async def delete_campaign(self, campaign_id: str, organization_id: str) -> bool:
         campaign = await self.get_campaign(campaign_id, organization_id)
         if not campaign:
             return False
@@ -137,9 +133,7 @@ class FundraisingService:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
-    async def get_donor(
-        self, donor_id: str, organization_id: str
-    ) -> Optional[Donor]:
+    async def get_donor(self, donor_id: str, organization_id: str) -> Optional[Donor]:
         result = await self.db.execute(
             select(Donor).where(
                 Donor.id == donor_id,
@@ -148,9 +142,7 @@ class FundraisingService:
         )
         return result.scalar_one_or_none()
 
-    async def create_donor(
-        self, organization_id: str, data: Dict[str, Any]
-    ) -> Donor:
+    async def create_donor(self, organization_id: str, data: Dict[str, Any]) -> Donor:
         donor = Donor(organization_id=organization_id, **data)
         self.db.add(donor)
         await self.db.flush()
@@ -179,9 +171,7 @@ class FundraisingService:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
     ) -> List[Donation]:
-        query = select(Donation).where(
-            Donation.organization_id == organization_id
-        )
+        query = select(Donation).where(Donation.organization_id == organization_id)
         if campaign_id:
             query = query.where(Donation.campaign_id == campaign_id)
         if donor_id:
@@ -268,9 +258,7 @@ class FundraisingService:
             )
         )
         row = result.one()
-        donor_result = await self.db.execute(
-            select(Donor).where(Donor.id == donor_id)
-        )
+        donor_result = await self.db.execute(select(Donor).where(Donor.id == donor_id))
         donor = donor_result.scalar_one_or_none()
         if donor:
             donor.total_donated = row[0]
@@ -383,9 +371,7 @@ class FundraisingService:
     # Dashboard & Reporting
     # ------------------------------------------------------------------
 
-    async def get_dashboard_data(
-        self, organization_id: str
-    ) -> Dict[str, Any]:
+    async def get_dashboard_data(self, organization_id: str) -> Dict[str, Any]:
         """Aggregate fundraising dashboard data."""
         today = date.today()
         year_start = date(today.year, 1, 1)
@@ -444,9 +430,15 @@ class FundraisingService:
 
         # Outstanding pledges
         pledges_result = await self.db.execute(
-            select(func.coalesce(func.sum(Pledge.pledged_amount - Pledge.fulfilled_amount), 0)).where(
+            select(
+                func.coalesce(
+                    func.sum(Pledge.pledged_amount - Pledge.fulfilled_amount), 0
+                )
+            ).where(
                 Pledge.organization_id == organization_id,
-                Pledge.status.in_([PledgeStatus.PENDING.value, PledgeStatus.PARTIAL.value]),
+                Pledge.status.in_(
+                    [PledgeStatus.PENDING.value, PledgeStatus.PARTIAL.value]
+                ),
             )
         )
         outstanding_pledges = float(pledges_result.scalar() or 0)
@@ -486,7 +478,11 @@ class FundraisingService:
         # Donations by payment method
         by_method: Dict[str, float] = {}
         for d in donations:
-            method = d.payment_method.value if hasattr(d.payment_method, "value") else d.payment_method
+            method = (
+                d.payment_method.value
+                if hasattr(d.payment_method, "value")
+                else d.payment_method
+            )
             by_method[method] = by_method.get(method, 0) + float(d.amount)
 
         # Monthly totals
@@ -504,7 +500,6 @@ class FundraisingService:
             "average_gift": round(average_gift, 2),
             "donations_by_method": by_method,
             "monthly_totals": [
-                {"month": k, "total": v}
-                for k, v in sorted(monthly_totals.items())
+                {"month": k, "total": v} for k, v in sorted(monthly_totals.items())
             ],
         }

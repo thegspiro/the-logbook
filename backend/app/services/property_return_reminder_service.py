@@ -286,6 +286,11 @@ class PropertyReturnReminderService:
 
         local_drop_date = self._to_local(member.status_changed_at, org_tz)
         drop_date_display = local_drop_date.strftime("%B %d, %Y")
+        drop_type_display = (
+            member.status.value.replace("_", " ").title()
+            if member.status
+            else "Dropped"
+        )
 
         items = items_info.get("items", [])
         total_val = items_info.get("total_value", 0.0)

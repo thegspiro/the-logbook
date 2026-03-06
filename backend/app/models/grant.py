@@ -30,7 +30,6 @@ from sqlalchemy.sql import func
 from app.core.database import Base
 from app.core.utils import generate_uuid
 
-
 # ---------------------------------------------------------------------------
 # Grant Enums
 # ---------------------------------------------------------------------------
@@ -404,9 +403,7 @@ class GrantApplication(Base):
     # Performance and reporting
     performance_period_months = Column(Integer, nullable=True)
     reporting_frequency = Column(
-        SQLEnum(
-            ReportingFrequency, values_callable=lambda x: [e.value for e in x]
-        ),
+        SQLEnum(ReportingFrequency, values_callable=lambda x: [e.value for e in x]),
         nullable=True,
     )
     next_report_due = Column(Date, nullable=True)
@@ -462,7 +459,9 @@ class GrantApplication(Base):
     grant_notes = relationship(
         "GrantNote", back_populates="application", cascade="all, delete-orphan"
     )
-    linked_campaign = relationship("FundraisingCampaign", foreign_keys=[linked_campaign_id])
+    linked_campaign = relationship(
+        "FundraisingCampaign", foreign_keys=[linked_campaign_id]
+    )
 
     __table_args__ = (
         Index("ix_grant_applications_organization_id", "organization_id"),
@@ -494,9 +493,7 @@ class GrantBudgetItem(Base):
 
     # Budget item details
     category = Column(
-        SQLEnum(
-            BudgetItemCategory, values_callable=lambda x: [e.value for e in x]
-        ),
+        SQLEnum(BudgetItemCategory, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
     description = Column(String(500), nullable=True)
@@ -525,9 +522,7 @@ class GrantBudgetItem(Base):
 
     # Relationships
     application = relationship("GrantApplication", back_populates="budget_items")
-    expenditures = relationship(
-        "GrantExpenditure", back_populates="budget_item"
-    )
+    expenditures = relationship("GrantExpenditure", back_populates="budget_item")
 
     __table_args__ = (
         Index("ix_grant_budget_items_application_id", "application_id"),
@@ -619,9 +614,7 @@ class GrantComplianceTask(Base):
 
     # Task details
     task_type = Column(
-        SQLEnum(
-            ComplianceTaskType, values_callable=lambda x: [e.value for e in x]
-        ),
+        SQLEnum(ComplianceTaskType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
     title = Column(String(255), nullable=False)
@@ -633,9 +626,7 @@ class GrantComplianceTask(Base):
 
     # Status
     status = Column(
-        SQLEnum(
-            ComplianceTaskStatus, values_callable=lambda x: [e.value for e in x]
-        ),
+        SQLEnum(ComplianceTaskStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=ComplianceTaskStatus.PENDING,
     )
@@ -795,9 +786,7 @@ class FundraisingCampaign(Base):
     active = Column(Boolean, nullable=False, server_default="1")
 
     # Metadata
-    created_at = Column(
-        DateTime, nullable=False, server_default=func.now()
-    )
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_at = Column(
         DateTime, nullable=False, server_default=func.now(), onupdate=func.now()
     )
@@ -874,9 +863,7 @@ class Donor(Base):
     active = Column(Boolean, nullable=False, server_default="1")
 
     # Metadata
-    created_at = Column(
-        DateTime, nullable=False, server_default=func.now()
-    )
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_at = Column(
         DateTime, nullable=False, server_default=func.now(), onupdate=func.now()
     )
@@ -942,9 +929,7 @@ class Donation(Base):
     # Recurring
     is_recurring = Column(Boolean, nullable=False, server_default="0")
     recurring_frequency = Column(
-        SQLEnum(
-            RecurringFrequency, values_callable=lambda x: [e.value for e in x]
-        ),
+        SQLEnum(RecurringFrequency, values_callable=lambda x: [e.value for e in x]),
         nullable=True,
     )
 
@@ -979,9 +964,7 @@ class Donation(Base):
     recorded_by = Column(String(36), ForeignKey("users.id"), nullable=True)
 
     # Metadata
-    created_at = Column(
-        DateTime, nullable=False, server_default=func.now()
-    )
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_at = Column(
         DateTime, nullable=False, server_default=func.now(), onupdate=func.now()
     )
@@ -1052,9 +1035,7 @@ class Pledge(Base):
 
     # Metadata
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    created_at = Column(
-        DateTime, nullable=False, server_default=func.now()
-    )
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_at = Column(
         DateTime, nullable=False, server_default=func.now(), onupdate=func.now()
     )
@@ -1103,9 +1084,7 @@ class FundraisingEvent(Base):
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     event_type = Column(
-        SQLEnum(
-            FundraisingEventType, values_callable=lambda x: [e.value for e in x]
-        ),
+        SQLEnum(FundraisingEventType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
     event_date = Column(DateTime, nullable=False)
@@ -1123,9 +1102,7 @@ class FundraisingEvent(Base):
 
     # Status
     status = Column(
-        SQLEnum(
-            FundraisingEventStatus, values_callable=lambda x: [e.value for e in x]
-        ),
+        SQLEnum(FundraisingEventStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         server_default="planning",
     )
@@ -1139,9 +1116,7 @@ class FundraisingEvent(Base):
 
     # Metadata
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    created_at = Column(
-        DateTime, nullable=False, server_default=func.now()
-    )
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_at = Column(
         DateTime, nullable=False, server_default=func.now(), onupdate=func.now()
     )

@@ -7,7 +7,6 @@ including an admin-level summary for Chiefs and department leaders.
 
 import logging
 from datetime import date, datetime, timedelta, timezone
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel

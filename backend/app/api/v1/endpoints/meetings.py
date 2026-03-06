@@ -5,7 +5,6 @@ Endpoints for meeting minutes including meetings, attendees,
 action items, and approval workflows.
 """
 
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status

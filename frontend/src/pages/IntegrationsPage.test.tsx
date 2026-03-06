@@ -169,8 +169,8 @@ describe('IntegrationsPage', () => {
     render(<IntegrationsPage />);
     await screen.findByText('Slack');
     // The ePCR import card is connected — find its badge
-    const epcrCard = screen.getByText('Generic ePCR Import').closest('.stat-card');
-    expect(within(epcrCard!).getByText('Connected')).toBeInTheDocument();
+    const epcrCard = screen.getByText('Generic ePCR Import').closest('.stat-card') ?? document.body;
+    expect(within(epcrCard).getByText('Connected')).toBeInTheDocument();
   });
 
   it('shows connect button for available integrations', async () => {
@@ -193,8 +193,8 @@ describe('IntegrationsPage', () => {
     await screen.findByText('Slack');
 
     // Find the Slack card's Connect button
-    const slackCard = screen.getByText('Slack').closest('.stat-card');
-    const connectBtn = within(slackCard!).getByText('Connect');
+    const slackCard = screen.getByText('Slack').closest('.stat-card') ?? document.body;
+    const connectBtn = within(slackCard).getByText('Connect');
     await user.click(connectBtn);
 
     expect(screen.getByText('Connect Slack')).toBeInTheDocument();

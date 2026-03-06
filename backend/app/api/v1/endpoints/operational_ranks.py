@@ -4,7 +4,6 @@ Operational Rank API Endpoints
 CRUD endpoints for per-organization operational rank management.
 """
 
-from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status

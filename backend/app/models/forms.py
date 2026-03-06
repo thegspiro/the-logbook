@@ -258,7 +258,10 @@ class FormSubmission(Base):
 
     # Submission Info
     submitted_by = Column(
-        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     submitted_at = Column(DateTime(timezone=True), server_default=func.now())
 

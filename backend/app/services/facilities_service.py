@@ -83,23 +83,54 @@ class FacilitiesService:
 
     # System-level defaults seeded for all organizations.
     _SYSTEM_TYPES = [
-        ("Fire Station", "Active fire station housing apparatus and personnel", "station"),
+        (
+            "Fire Station",
+            "Active fire station housing apparatus and personnel",
+            "station",
+        ),
         ("EMS Station", "Emergency medical services station", "station"),
         ("Training Center", "Dedicated training facility or academy", "training"),
-        ("Administrative Office", "Administrative and headquarters building", "administration"),
+        (
+            "Administrative Office",
+            "Administrative and headquarters building",
+            "administration",
+        ),
         ("Meeting Hall", "Meeting hall or social hall", "meeting_hall"),
         ("Storage Building", "Equipment or supply storage facility", "storage"),
         ("Maintenance Shop", "Vehicle and equipment maintenance facility", "storage"),
-        ("Communications Center", "Dispatch or communications center", "administration"),
-        ("Community Center", "Community outreach or public education facility", "community"),
+        (
+            "Communications Center",
+            "Dispatch or communications center",
+            "administration",
+        ),
+        (
+            "Community Center",
+            "Community outreach or public education facility",
+            "community",
+        ),
         ("Other", "Other facility type", "other"),
     ]
     _SYSTEM_STATUSES = [
         ("Operational", "Facility is fully operational and in use", "#22C55E", True),
-        ("Under Renovation", "Facility is undergoing renovation or major repairs", "#F59E0B", False),
+        (
+            "Under Renovation",
+            "Facility is undergoing renovation or major repairs",
+            "#F59E0B",
+            False,
+        ),
         ("Under Construction", "New facility under construction", "#3B82F6", False),
-        ("Temporarily Closed", "Facility is temporarily closed or out of service", "#EF4444", False),
-        ("Decommissioned", "Facility has been decommissioned and is no longer in use", "#6B7280", False),
+        (
+            "Temporarily Closed",
+            "Facility is temporarily closed or out of service",
+            "#EF4444",
+            False,
+        ),
+        (
+            "Decommissioned",
+            "Facility has been decommissioned and is no longer in use",
+            "#6B7280",
+            False,
+        ),
         ("Other", "Other status", "#9CA3AF", True),
     ]
 
@@ -124,19 +155,19 @@ class FacilitiesService:
             )
         )
         if not result.scalar():
-            logger.warning(
-                "No system facility types found — inserting defaults"
-            )
-            for name, desc, cat in self._SYSTEM_TYPES:
-                self.db.add(FacilityType(
-                    id=generate_uuid(),
-                    organization_id=None,
-                    name=name,
-                    description=desc,
-                    category=cat,
-                    is_system=True,
-                    is_active=True,
-                ))
+            logger.warning("No system facility types found — inserting defaults")
+            for name, descr, cat in self._SYSTEM_TYPES:
+                self.db.add(
+                    FacilityType(
+                        id=generate_uuid(),
+                        organization_id=None,
+                        name=name,
+                        description=descr,
+                        category=cat,
+                        is_system=True,
+                        is_active=True,
+                    )
+                )
             await self.db.flush()
 
         # Check for any system statuses
@@ -147,20 +178,20 @@ class FacilitiesService:
             )
         )
         if not result.scalar():
-            logger.warning(
-                "No system facility statuses found — inserting defaults"
-            )
-            for name, desc, color, is_op in self._SYSTEM_STATUSES:
-                self.db.add(FacilityStatus(
-                    id=generate_uuid(),
-                    organization_id=None,
-                    name=name,
-                    description=desc,
-                    color=color,
-                    is_operational=is_op,
-                    is_system=True,
-                    is_active=True,
-                ))
+            logger.warning("No system facility statuses found — inserting defaults")
+            for name, descr, color, is_op in self._SYSTEM_STATUSES:
+                self.db.add(
+                    FacilityStatus(
+                        id=generate_uuid(),
+                        organization_id=None,
+                        name=name,
+                        description=descr,
+                        color=color,
+                        is_operational=is_op,
+                        is_system=True,
+                        is_active=True,
+                    )
+                )
             await self.db.flush()
 
     async def _find_default_type(self, organization_id: str):

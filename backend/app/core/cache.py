@@ -7,7 +7,7 @@ Includes retry logic and graceful degradation for robust startup.
 
 import asyncio
 import json
-from typing import Any, Optional
+from typing import Any
 
 import redis.asyncio as redis
 from loguru import logger

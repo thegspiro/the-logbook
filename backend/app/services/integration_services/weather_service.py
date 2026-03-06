@@ -60,6 +60,4 @@ async def test_zone(zone_id: str) -> str:
         alerts = await fetch_active_alerts(zone_id)
         return f"Zone {zone_id} is valid. {len(alerts)} active alert(s)."
     except Exception as e:
-        raise Exception(
-            f"Could not fetch alerts for zone {zone_id}: {e}"
-        )
+        raise Exception(f"Could not fetch alerts for zone {zone_id}: {e}")

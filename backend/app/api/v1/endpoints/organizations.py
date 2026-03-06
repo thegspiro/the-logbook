@@ -23,7 +23,6 @@ from app.schemas.organization import (
     MembershipIdSettings,
     ModuleSettingsUpdate,
     OrganizationProfileUpdate,
-    OrganizationSettings,
     OrganizationSettingsResponse,
     OrganizationSettingsUpdate,
     SetupChecklistItem,
@@ -901,9 +900,9 @@ async def get_organization_profile(
             "state": org.mailing_state or "",
             "zip": org.mailing_zip or "",
         },
-        "physical_address_same": org.physical_address_same
-        if org.physical_address_same is not None
-        else True,
+        "physical_address_same": (
+            org.physical_address_same if org.physical_address_same is not None else True
+        ),
         "physical_address": {
             "line1": org.physical_address_line1 or "",
             "line2": org.physical_address_line2 or "",
@@ -999,9 +998,9 @@ async def update_organization_profile(
             "state": org.mailing_state or "",
             "zip": org.mailing_zip or "",
         },
-        "physical_address_same": org.physical_address_same
-        if org.physical_address_same is not None
-        else True,
+        "physical_address_same": (
+            org.physical_address_same if org.physical_address_same is not None else True
+        ),
         "physical_address": {
             "line1": org.physical_address_line1 or "",
             "line2": org.physical_address_line2 or "",

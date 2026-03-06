@@ -138,12 +138,18 @@ class NotificationLog(Base):
         index=True,
     )
     rule_id = Column(
-        String(36), ForeignKey("notification_rules.id", ondelete="SET NULL"), nullable=True, index=True
+        String(36),
+        ForeignKey("notification_rules.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
     # Notification Details
     recipient_id = Column(
-        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     recipient_email = Column(String(255))
     channel = Column(

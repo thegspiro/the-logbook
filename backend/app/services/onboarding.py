@@ -557,8 +557,7 @@ class OnboardingService:
 
             await FacilitiesService(self.db)._ensure_system_defaults()
             type_result = await self.db.execute(
-                select(FacilityType)
-                .where(
+                select(FacilityType).where(
                     or_(
                         FacilityType.organization_id == org.id,
                         FacilityType.organization_id.is_(None),

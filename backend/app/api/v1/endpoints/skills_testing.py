@@ -7,7 +7,6 @@ and tracking pass/fail results for fire department skills assessments.
 """
 
 from datetime import datetime, timezone
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status

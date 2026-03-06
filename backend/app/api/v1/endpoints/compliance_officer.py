@@ -40,7 +40,9 @@ router = APIRouter()
 class AttestationCreate(BaseModel):
     """Request body for creating a compliance attestation."""
 
-    period_type: str = Field(..., description="Period type, e.g. 'annual' or 'quarterly'")
+    period_type: str = Field(
+        ..., description="Period type, e.g. 'annual' or 'quarterly'"
+    )
     period_year: int = Field(..., description="Year of the attestation period")
     period_quarter: Optional[int] = Field(
         None, description="Quarter number (1-4) if period_type is quarterly"
@@ -177,27 +179,31 @@ async def export_annual_report(
 
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow([
-            "Name",
-            "Compliance %",
-            "Hours",
-            "Requirements Met",
-            "Requirements Total",
-            "Expired Certs",
-            "Status",
-        ])
+        writer.writerow(
+            [
+                "Name",
+                "Compliance %",
+                "Hours",
+                "Requirements Met",
+                "Requirements Total",
+                "Expired Certs",
+                "Status",
+            ]
+        )
 
         members = report.get("member_compliance", [])
         for member in members:
-            writer.writerow([
-                member.get("name", ""),
-                member.get("compliance_pct", 0),
-                member.get("hours_completed", 0),
-                member.get("requirements_met", 0),
-                member.get("requirements_total", 0),
-                member.get("expired_certifications", 0),
-                member.get("status", ""),
-            ])
+            writer.writerow(
+                [
+                    member.get("name", ""),
+                    member.get("compliance_pct", 0),
+                    member.get("hours_completed", 0),
+                    member.get("requirements_met", 0),
+                    member.get("requirements_total", 0),
+                    member.get("expired_certifications", 0),
+                    member.get("status", ""),
+                ]
+            )
 
         return StreamingResponse(
             iter([output.getvalue()]),

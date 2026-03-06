@@ -53,6 +53,7 @@ export const MemberRosterRenderer: React.FC<Props> = ({ data }) => {
 };
 
 /** Flat rows and column definitions for export. */
+// eslint-disable-next-line react-refresh/only-export-components
 export function getMemberRosterExportData(data: MemberRosterReport) {
   const columns = [
     { key: 'first_name', header: 'First Name' },

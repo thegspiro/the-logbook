@@ -96,9 +96,7 @@ def parse_nemsis_xml(file_content: bytes) -> list[dict[str, Any]]:
         record = _extract_pcr_dispatch_fields(pcr, ns)
         try:
             validated = EPCRImportRow(**record)
-            result = {
-                k: v for k, v in validated.model_dump().items() if v is not None
-            }
+            result = {k: v for k, v in validated.model_dump().items() if v is not None}
             if result.get("incident_number"):
                 records.append(result)
         except Exception:
@@ -145,9 +143,8 @@ def _extract_pcr_dispatch_fields(
 
     # eCrew — member names only (no personal identifiers)
     members: list[str] = []
-    crew_groups = (
-        pcr.findall(".//n:eCrew/n:eCrew.CrewGroup", ns)
-        or pcr.findall(".//eCrew/eCrew.CrewGroup")
+    crew_groups = pcr.findall(".//n:eCrew/n:eCrew.CrewGroup", ns) or pcr.findall(
+        ".//eCrew/eCrew.CrewGroup"
     )
     for group in crew_groups:
         name = _find_text_direct(group, "eCrew.01", ns)

@@ -6,7 +6,6 @@ with type validation and defaults.
 """
 
 from functools import lru_cache
-from typing import List, Optional, Union
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict

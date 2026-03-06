@@ -8,8 +8,6 @@ Permission aggregation combines **position permissions** (from the
 (from the ``OPERATIONAL_RANKS`` config keyed by ``User.rank``).
 """
 
-from typing import List, Optional
-
 from fastapi import Cookie, Depends, Header, HTTPException, status
 from loguru import logger
 from sqlalchemy import select

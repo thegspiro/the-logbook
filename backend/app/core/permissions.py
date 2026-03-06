@@ -15,7 +15,6 @@ Terminology
 """
 
 from enum import Enum
-from typing import Dict, List
 
 
 class PermissionCategory(str, Enum):

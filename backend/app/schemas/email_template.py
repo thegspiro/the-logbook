@@ -122,9 +122,7 @@ class ScheduledEmailUpdate(BaseModel):
     """Request schema for updating a scheduled email"""
 
     scheduled_at: Optional[datetime] = None
-    status: Optional[str] = Field(
-        None, description="Set to 'cancelled' to cancel"
-    )
+    status: Optional[str] = Field(None, description="Set to 'cancelled' to cancel")
 
 
 class ScheduledEmailResponse(BaseModel):

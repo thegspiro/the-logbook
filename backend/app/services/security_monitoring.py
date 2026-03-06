@@ -211,7 +211,7 @@ class SecurityMonitoringService:
         self.alerts.append(alert)
         # Trim oldest in-memory alerts to prevent unbounded growth
         if len(self.alerts) > self._MAX_IN_MEMORY_ALERTS:
-            self.alerts = self.alerts[-self._MAX_IN_MEMORY_ALERTS:]
+            self.alerts = self.alerts[-self._MAX_IN_MEMORY_ALERTS :]
         try:
             from app.models.security_alert import (
                 AlertType as DBAlertType,

@@ -7,7 +7,6 @@ Business logic for election management including elections, candidates, voting, 
 import hashlib
 import hmac
 import html
-import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
@@ -154,7 +153,7 @@ class ElectionService:
             select(Organization).where(Organization.id == organization_id)
         )
         org = org_result.scalar_one_or_none()
-        tier_config = ((org.settings or {}).get("membership_tiers", {}) if org else {})
+        tier_config = (org.settings or {}).get("membership_tiers", {}) if org else {}
         tiers = tier_config.get("tiers", [])
         member_tier_id = getattr(user, "membership_type", None) or "active"
         tier_def = next((t for t in tiers if t.get("id") == member_tier_id), None)
@@ -1005,7 +1004,9 @@ class ElectionService:
         )
         prev_chain = "GENESIS"
         for vote in sorted_votes:
-            expected_chain = self._compute_chain_hash(prev_chain, vote.vote_signature or "")
+            expected_chain = self._compute_chain_hash(
+                prev_chain, vote.vote_signature or ""
+            )
             if vote.chain_hash != expected_chain:
                 chain_broken = True
                 chain_break_at = str(vote.id)
@@ -1060,7 +1061,11 @@ class ElectionService:
         }
 
     async def soft_delete_vote(
-        self, vote_id: UUID, deleted_by: UUID, reason: str, organization_id: Optional[UUID] = None
+        self,
+        vote_id: UUID,
+        deleted_by: UUID,
+        reason: str,
+        organization_id: Optional[UUID] = None,
     ) -> Optional[Vote]:
         """Soft-delete a vote with audit trail instead of hard-deleting."""
         query = (

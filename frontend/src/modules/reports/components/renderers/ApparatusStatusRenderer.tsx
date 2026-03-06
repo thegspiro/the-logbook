@@ -80,6 +80,7 @@ export const ApparatusStatusRenderer: React.FC<Props> = ({ data }) => {
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function getApparatusStatusExportData(data: ApparatusStatusReport) {
   const columns = [
     { key: 'name', header: 'Apparatus' },

@@ -5,7 +5,7 @@ Endpoints for location management including CRUD operations and event queries.
 """
 
 from datetime import timedelta
-from typing import List, Optional
+
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -75,7 +75,9 @@ async def list_locations(
             capacity=loc.capacity,
             is_active=loc.is_active,
             facility_id=UUID(loc.facility_id) if loc.facility_id else None,
-            facility_room_id=UUID(loc.facility_room_id) if loc.facility_room_id else None,
+            facility_room_id=(
+                UUID(loc.facility_room_id) if loc.facility_room_id else None
+            ),
             display_code=loc.display_code,
             created_at=loc.created_at,
             updated_at=loc.updated_at,
@@ -128,7 +130,9 @@ async def create_location(
         capacity=location.capacity,
         is_active=location.is_active,
         facility_id=UUID(location.facility_id) if location.facility_id else None,
-        facility_room_id=UUID(location.facility_room_id) if location.facility_room_id else None,
+        facility_room_id=(
+            UUID(location.facility_room_id) if location.facility_room_id else None
+        ),
         display_code=location.display_code,
         created_by=UUID(location.created_by) if location.created_by else None,
         created_at=location.created_at,
@@ -175,7 +179,9 @@ async def get_location(
         capacity=location.capacity,
         is_active=location.is_active,
         facility_id=UUID(location.facility_id) if location.facility_id else None,
-        facility_room_id=UUID(location.facility_room_id) if location.facility_room_id else None,
+        facility_room_id=(
+            UUID(location.facility_room_id) if location.facility_room_id else None
+        ),
         display_code=location.display_code,
         created_by=UUID(location.created_by) if location.created_by else None,
         created_at=location.created_at,
@@ -233,7 +239,9 @@ async def update_location(
         capacity=location.capacity,
         is_active=location.is_active,
         facility_id=UUID(location.facility_id) if location.facility_id else None,
-        facility_room_id=UUID(location.facility_room_id) if location.facility_room_id else None,
+        facility_room_id=(
+            UUID(location.facility_room_id) if location.facility_room_id else None
+        ),
         display_code=location.display_code,
         created_by=UUID(location.created_by) if location.created_by else None,
         created_at=location.created_at,

@@ -5,7 +5,7 @@ Endpoints for election management including elections, candidates, voting, and r
 """
 
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Optional
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
@@ -59,14 +59,18 @@ def _ballot_read_rate_limit(
     request: Request,
 ) -> None:
     """10 requests/minute per IP for ballot reads."""
-    return check_rate_limit(request, max_requests=10, window_seconds=60, lockout_seconds=300)
+    return check_rate_limit(
+        request, max_requests=10, window_seconds=60, lockout_seconds=300
+    )
 
 
 def _ballot_vote_rate_limit(
     request: Request,
 ) -> None:
     """5 requests/minute per IP for vote submissions."""
-    return check_rate_limit(request, max_requests=5, window_seconds=60, lockout_seconds=600)
+    return check_rate_limit(
+        request, max_requests=5, window_seconds=60, lockout_seconds=600
+    )
 
 
 # ============================================
@@ -403,9 +407,7 @@ async def get_election_settings(
     from app.models.user import Organization
 
     org_result = await db.execute(
-        select(Organization).where(
-            Organization.id == str(current_user.organization_id)
-        )
+        select(Organization).where(Organization.id == str(current_user.organization_id))
     )
     org = org_result.scalar_one_or_none()
 
@@ -431,21 +433,13 @@ async def get_election_settings(
         "default_victory_condition": election_defaults.get(
             "victory_condition", "most_votes"
         ),
-        "default_victory_percentage": election_defaults.get(
-            "victory_percentage"
-        ),
-        "default_anonymous_voting": election_defaults.get(
-            "anonymous_voting", True
-        ),
-        "default_allow_write_ins": election_defaults.get(
-            "allow_write_ins", False
-        ),
+        "default_victory_percentage": election_defaults.get("victory_percentage"),
+        "default_anonymous_voting": election_defaults.get("anonymous_voting", True),
+        "default_allow_write_ins": election_defaults.get("allow_write_ins", False),
         "default_quorum_type": election_defaults.get("quorum_type", "none"),
         "default_quorum_value": election_defaults.get("quorum_value"),
         "proxy_voting_enabled": proxy_config.get("enabled", False),
-        "max_proxies_per_person": proxy_config.get(
-            "max_proxies_per_person", 1
-        ),
+        "max_proxies_per_person": proxy_config.get("max_proxies_per_person", 1),
         "security": {
             "vote_signing_key_configured": signing_key_configured,
             "anonymity_salt_auto_destroy": True,
@@ -469,9 +463,7 @@ async def update_election_settings(
     from app.models.user import Organization
 
     org_result = await db.execute(
-        select(Organization).where(
-            Organization.id == str(current_user.organization_id)
-        )
+        select(Organization).where(Organization.id == str(current_user.organization_id))
     )
     org = org_result.scalar_one_or_none()
 
@@ -505,9 +497,7 @@ async def update_election_settings(
         proxy_config["enabled"] = update_data["proxy_voting_enabled"]
 
     if "max_proxies_per_person" in update_data:
-        proxy_config["max_proxies_per_person"] = update_data[
-            "max_proxies_per_person"
-        ]
+        proxy_config["max_proxies_per_person"] = update_data["max_proxies_per_person"]
 
     org_settings["election_defaults"] = election_defaults
     org_settings["proxy_voting"] = proxy_config
@@ -532,21 +522,13 @@ async def update_election_settings(
         "default_victory_condition": election_defaults.get(
             "victory_condition", "most_votes"
         ),
-        "default_victory_percentage": election_defaults.get(
-            "victory_percentage"
-        ),
-        "default_anonymous_voting": election_defaults.get(
-            "anonymous_voting", True
-        ),
-        "default_allow_write_ins": election_defaults.get(
-            "allow_write_ins", False
-        ),
+        "default_victory_percentage": election_defaults.get("victory_percentage"),
+        "default_anonymous_voting": election_defaults.get("anonymous_voting", True),
+        "default_allow_write_ins": election_defaults.get("allow_write_ins", False),
         "default_quorum_type": election_defaults.get("quorum_type", "none"),
         "default_quorum_value": election_defaults.get("quorum_value"),
         "proxy_voting_enabled": proxy_config.get("enabled", False),
-        "max_proxies_per_person": proxy_config.get(
-            "max_proxies_per_person", 1
-        ),
+        "max_proxies_per_person": proxy_config.get("max_proxies_per_person", 1),
     }
 
 
@@ -2090,9 +2072,11 @@ async def send_test_ballot(
         "message": (
             "Test ballot sent to your email"
             if failed_count == 0 and skipped_count == 0
-            else "Failed to send test ballot"
-            if failed_count > 0
-            else "No eligible ballot items for your account"
+            else (
+                "Failed to send test ballot"
+                if failed_count > 0
+                else "No eligible ballot items for your account"
+            )
         ),
     }
 
@@ -2173,7 +2157,9 @@ async def preview_ballot_for_user(
             user_type = getattr(target_user, "membership_type", None) or "regular"
             if user_type not in eligible_types:
                 item_eligible = False
-                reason = f"{user_type.capitalize()} members are not eligible for this item"
+                reason = (
+                    f"{user_type.capitalize()} members are not eligible for this item"
+                )
 
         # Check attendance requirement
         if item.get("require_attendance") and election.attendees:
@@ -2185,13 +2171,15 @@ async def preview_ballot_for_user(
         if item_eligible:
             eligible_count += 1
 
-        annotated_items.append({
-            **item,
-            "eligibility": {
-                "eligible": item_eligible,
-                "reason": reason,
-            },
-        })
+        annotated_items.append(
+            {
+                **item,
+                "eligibility": {
+                    "eligible": item_eligible,
+                    "reason": reason,
+                },
+            }
+        )
 
     return {
         "election_id": str(election_id),

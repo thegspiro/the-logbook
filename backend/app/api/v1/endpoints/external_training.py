@@ -7,7 +7,7 @@ and syncing training records from external platforms.
 
 import logging
 from datetime import date, datetime, timezone
-from typing import List, Optional
+
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status

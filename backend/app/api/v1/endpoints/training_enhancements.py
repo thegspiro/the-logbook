@@ -33,7 +33,6 @@ from app.schemas.training_enhancements import (
     ReportExportRequest,
     TrainingEffectivenessCreate,
     TrainingEffectivenessResponse,
-    TrainingEffectivenessSummary,
     XAPIBatchCreate,
     XAPIBatchResponse,
     XAPIStatementCreate,
@@ -57,7 +56,9 @@ router = APIRouter()
 # ============================================
 
 
-@router.get("/recertification/pathways", response_model=List[RecertificationPathwayResponse])
+@router.get(
+    "/recertification/pathways", response_model=List[RecertificationPathwayResponse]
+)
 async def get_recertification_pathways(
     active_only: bool = Query(True),
     db: AsyncSession = Depends(get_db),
@@ -94,7 +95,10 @@ async def create_recertification_pathway(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
-@router.patch("/recertification/pathways/{pathway_id}", response_model=RecertificationPathwayResponse)
+@router.patch(
+    "/recertification/pathways/{pathway_id}",
+    response_model=RecertificationPathwayResponse,
+)
 async def update_recertification_pathway(
     pathway_id: str,
     data: RecertificationPathwayUpdate,
@@ -190,7 +194,9 @@ async def create_competency_matrix(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
-@router.patch("/competency/matrices/{matrix_id}", response_model=CompetencyMatrixResponse)
+@router.patch(
+    "/competency/matrices/{matrix_id}", response_model=CompetencyMatrixResponse
+)
 async def update_competency_matrix(
     matrix_id: str,
     data: CompetencyMatrixUpdate,
@@ -214,7 +220,9 @@ async def update_competency_matrix(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
-@router.get("/competency/members/{user_id}", response_model=List[MemberCompetencyResponse])
+@router.get(
+    "/competency/members/{user_id}", response_model=List[MemberCompetencyResponse]
+)
 async def get_member_competencies(
     user_id: str,
     db: AsyncSession = Depends(get_db),
@@ -246,7 +254,9 @@ async def get_my_competencies(
 # ============================================
 
 
-@router.get("/instructors/qualifications", response_model=List[InstructorQualificationResponse])
+@router.get(
+    "/instructors/qualifications", response_model=List[InstructorQualificationResponse]
+)
 async def get_instructor_qualifications(
     user_id: Optional[str] = Query(None),
     course_id: Optional[str] = Query(None),
@@ -261,7 +271,9 @@ async def get_instructor_qualifications(
     return quals
 
 
-@router.post("/instructors/qualifications", response_model=InstructorQualificationResponse)
+@router.post(
+    "/instructors/qualifications", response_model=InstructorQualificationResponse
+)
 async def create_instructor_qualification(
     data: InstructorQualificationCreate,
     db: AsyncSession = Depends(get_db),
@@ -284,7 +296,10 @@ async def create_instructor_qualification(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
-@router.patch("/instructors/qualifications/{qual_id}", response_model=InstructorQualificationResponse)
+@router.patch(
+    "/instructors/qualifications/{qual_id}",
+    response_model=InstructorQualificationResponse,
+)
 async def update_instructor_qualification(
     qual_id: str,
     data: InstructorQualificationUpdate,
@@ -308,7 +323,10 @@ async def update_instructor_qualification(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
-@router.get("/instructors/qualifications/{course_id}/qualified", response_model=List[InstructorQualificationResponse])
+@router.get(
+    "/instructors/qualifications/{course_id}/qualified",
+    response_model=List[InstructorQualificationResponse],
+)
 async def get_qualified_instructors(
     course_id: str,
     db: AsyncSession = Depends(get_db),
@@ -353,7 +371,10 @@ async def create_effectiveness_evaluation(
         service = TrainingEffectivenessService(db)
         evaluation = await service.create_evaluation(
             current_user.organization_id,
-            {**data.model_dump(exclude_unset=True), "evaluated_by": str(current_user.id)},
+            {
+                **data.model_dump(exclude_unset=True),
+                "evaluated_by": str(current_user.id),
+            },
         )
         await db.commit()
         return evaluation
@@ -364,7 +385,9 @@ async def create_effectiveness_evaluation(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
-@router.get("/effectiveness/evaluations", response_model=List[TrainingEffectivenessResponse])
+@router.get(
+    "/effectiveness/evaluations", response_model=List[TrainingEffectivenessResponse]
+)
 async def get_effectiveness_evaluations(
     course_id: Optional[str] = Query(None),
     session_id: Optional[str] = Query(None),
@@ -483,7 +506,9 @@ async def ingest_xapi_statement(
         statement = await service.ingest_statement(
             current_user.organization_id,
             data.raw_statement,
-            source_provider_id=str(data.source_provider_id) if data.source_provider_id else None,
+            source_provider_id=(
+                str(data.source_provider_id) if data.source_provider_id else None
+            ),
         )
         await db.commit()
         return statement
@@ -504,7 +529,9 @@ async def ingest_xapi_batch(
         result = await service.ingest_batch(
             current_user.organization_id,
             data.statements,
-            source_provider_id=str(data.source_provider_id) if data.source_provider_id else None,
+            source_provider_id=(
+                str(data.source_provider_id) if data.source_provider_id else None
+            ),
         )
         await db.commit()
         return result
@@ -613,8 +640,6 @@ async def upload_record_attachment(
     Full file upload integration with MinIO/S3 should be configured
     in the deployment environment.
     """
-    from datetime import datetime, timezone as tz
-
     from sqlalchemy import select
 
     from app.models.training import TrainingRecord

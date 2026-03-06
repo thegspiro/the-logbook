@@ -108,6 +108,7 @@ export const TrainingSummaryRenderer: React.FC<Props> = ({ data }) => {
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function getTrainingSummaryExportData(data: TrainingSummaryReport) {
   const columns = [
     { key: 'member_name', header: 'Member' },

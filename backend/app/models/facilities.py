@@ -1228,9 +1228,7 @@ class FacilityRoom(Base):
         nullable=False,
     )
     zone_classification = Column(
-        Enum(
-            ZoneClassification, values_callable=lambda x: [e.value for e in x]
-        ),
+        Enum(ZoneClassification, values_callable=lambda x: [e.value for e in x]),
         default=ZoneClassification.UNCLASSIFIED,
         nullable=False,
     )

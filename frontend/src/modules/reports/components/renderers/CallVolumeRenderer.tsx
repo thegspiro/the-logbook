@@ -68,6 +68,7 @@ export const CallVolumeRenderer: React.FC<Props> = ({ data }) => {
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function getCallVolumeExportData(data: CallVolumeReport) {
   // Flatten the by_type object into separate columns for CSV
   const allTypes = new Set<string>();

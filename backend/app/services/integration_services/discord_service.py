@@ -95,9 +95,7 @@ def format_shift_embed(shift: dict[str, Any]) -> dict[str, Any]:
         {"name": "End", "value": str(end), "inline": True},
     ]
     if crew:
-        fields.append(
-            {"name": "Crew", "value": ", ".join(crew[:10]), "inline": False}
-        )
+        fields.append({"name": "Crew", "value": ", ".join(crew[:10]), "inline": False})
 
     return {
         "title": f"🚒 {shift_type} Update",

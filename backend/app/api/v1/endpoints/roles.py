@@ -8,7 +8,6 @@ Post-Onboarding Role Management endpoints for:
 - Role cloning
 """
 
-from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status

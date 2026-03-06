@@ -286,9 +286,7 @@ class ProspectResponse(ProspectBase):
     pipeline_id: Optional[UUID] = None
     current_step_id: Optional[UUID] = None
     status: str
-    metadata_: Optional[Dict[str, Any]] = Field(
-        None, serialization_alias="metadata"
-    )
+    metadata_: Optional[Dict[str, Any]] = Field(None, serialization_alias="metadata")
     form_submission_id: Optional[UUID] = None
     status_token: Optional[str] = None
     transferred_user_id: Optional[UUID] = None

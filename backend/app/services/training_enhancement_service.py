@@ -10,16 +10,12 @@ import csv
 import io
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
-from uuid import UUID
-
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.utils import generate_uuid
 from app.models.training import (
     CompetencyLevel,
     CompetencyMatrix,
-    EvaluationLevel,
     InstructorQualification,
     MemberCompetency,
     MultiAgencyTraining,
@@ -27,8 +23,6 @@ from app.models.training import (
     RenewalTask,
     RenewalTaskStatus,
     SkillCheckoff,
-    SkillEvaluation,
-    TrainingCourse,
     TrainingEffectivenessEvaluation,
     TrainingRecord,
     TrainingRequirement,
@@ -232,9 +226,7 @@ class CompetencyService:
         await self.db.flush()
         return matrix
 
-    async def get_member_competencies(
-        self, user_id: str, organization_id: str
-    ) -> list:
+    async def get_member_competencies(self, user_id: str, organization_id: str) -> list:
         """Get all competencies for a member"""
         result = await self.db.execute(
             select(MemberCompetency)
@@ -358,14 +350,14 @@ class InstructorQualificationService:
             InstructorQualification.organization_id == organization_id
         )
         if active_only:
-            query = query.where(
-                InstructorQualification.active == True  # noqa: E712
-            )
+            query = query.where(InstructorQualification.active == True)  # noqa: E712
         if user_id:
             query = query.where(InstructorQualification.user_id == user_id)
         if course_id:
             query = query.where(InstructorQualification.course_id == course_id)
-        result = await self.db.execute(query.order_by(InstructorQualification.created_at.desc()))
+        result = await self.db.execute(
+            query.order_by(InstructorQualification.created_at.desc())
+        )
         return result.scalars().all()
 
     async def create_qualification(
@@ -408,9 +400,7 @@ class InstructorQualificationService:
             .where(InstructorQualification.user_id == user_id)
             .where(InstructorQualification.organization_id == organization_id)
             .where(InstructorQualification.active == True)  # noqa: E712
-            .where(
-                InstructorQualification.course_id == course_id
-            )
+            .where(InstructorQualification.course_id == course_id)
         )
         qual = result.scalar_one_or_none()
         if not qual:
@@ -476,9 +466,7 @@ class TrainingEffectivenessService:
             TrainingEffectivenessEvaluation.organization_id == organization_id
         )
         if course_id:
-            query = query.where(
-                TrainingEffectivenessEvaluation.course_id == course_id
-            )
+            query = query.where(TrainingEffectivenessEvaluation.course_id == course_id)
         if session_id:
             query = query.where(
                 TrainingEffectivenessEvaluation.training_session_id == session_id
@@ -516,13 +504,15 @@ class TrainingEffectivenessService:
             for e in evals
             if e.knowledge_gain_percentage is not None
         ]
-        behavior = [
-            e.behavior_rating for e in evals if e.behavior_rating is not None
-        ]
+        behavior = [e.behavior_rating for e in evals if e.behavior_rating is not None]
 
         by_level: Dict[str, int] = {}
         for e in evals:
-            level = e.evaluation_level.value if hasattr(e.evaluation_level, "value") else str(e.evaluation_level)
+            level = (
+                e.evaluation_level.value
+                if hasattr(e.evaluation_level, "value")
+                else str(e.evaluation_level)
+            )
             by_level[level] = by_level.get(level, 0) + 1
 
         return {
@@ -574,9 +564,7 @@ class MultiAgencyService:
         if "participating_organizations" in data:
             orgs = data["participating_organizations"]
             if orgs and hasattr(orgs[0], "model_dump"):
-                data["participating_organizations"] = [
-                    o.model_dump() for o in orgs
-                ]
+                data["participating_organizations"] = [o.model_dump() for o in orgs]
             elif orgs and hasattr(orgs[0], "dict"):
                 data["participating_organizations"] = [o.dict() for o in orgs]
 
@@ -605,9 +593,7 @@ class MultiAgencyService:
         if "participating_organizations" in data:
             orgs = data["participating_organizations"]
             if orgs and hasattr(orgs[0], "model_dump"):
-                data["participating_organizations"] = [
-                    o.model_dump() for o in orgs
-                ]
+                data["participating_organizations"] = [o.model_dump() for o in orgs]
 
         for key, value in data.items():
             if value is not None:
@@ -623,7 +609,10 @@ class XAPIService:
         self.db = db
 
     async def ingest_statement(
-        self, organization_id: str, raw_statement: dict, source_provider_id: Optional[str] = None
+        self,
+        organization_id: str,
+        raw_statement: dict,
+        source_provider_id: Optional[str] = None,
     ) -> XAPIStatement:
         """Ingest a single xAPI statement"""
         actor = raw_statement.get("actor", {})
@@ -646,7 +635,9 @@ class XAPIService:
             duration_seconds = self._parse_iso_duration(result_data["duration"])
 
         # Parse timestamp
-        timestamp = raw_statement.get("timestamp", datetime.now(timezone.utc).isoformat())
+        timestamp = raw_statement.get(
+            "timestamp", datetime.now(timezone.utc).isoformat()
+        )
         try:
             stmt_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
         except (ValueError, AttributeError):
@@ -694,7 +685,10 @@ class XAPIService:
         return statement
 
     async def ingest_batch(
-        self, organization_id: str, statements: list, source_provider_id: Optional[str] = None
+        self,
+        organization_id: str,
+        statements: list,
+        source_provider_id: Optional[str] = None,
     ) -> dict:
         """Ingest a batch of xAPI statements"""
         accepted = 0
@@ -739,9 +733,11 @@ class XAPIService:
                 training_type="continuing_education",
                 status="completed",
                 hours_completed=(stmt.duration_seconds or 0) / 3600,
-                completion_date=stmt.statement_timestamp.date()
-                if stmt.statement_timestamp
-                else date.today(),
+                completion_date=(
+                    stmt.statement_timestamp.date()
+                    if stmt.statement_timestamp
+                    else date.today()
+                ),
                 score=stmt.score_raw,
                 passed=stmt.success,
                 notes=f"Imported from xAPI ({stmt.context_platform or 'unknown platform'})",
@@ -788,7 +784,10 @@ class ReportExportService:
         self.db = db
 
     async def generate_compliance_csv(
-        self, organization_id: str, start_date: Optional[date] = None, end_date: Optional[date] = None
+        self,
+        organization_id: str,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
     ) -> str:
         """Generate a compliance report as CSV string"""
         if not end_date:
@@ -798,7 +797,9 @@ class ReportExportService:
 
         # Get all members
         users_result = await self.db.execute(
-            select(User).where(User.organization_id == organization_id).where(User.is_active == True)  # noqa: E712
+            select(User)
+            .where(User.organization_id == organization_id)
+            .where(User.is_active == True)  # noqa: E712
         )
         users = users_result.scalars().all()
 
@@ -853,7 +854,11 @@ class ReportExportService:
         return output.getvalue()
 
     async def generate_individual_csv(
-        self, user_id: str, organization_id: str, start_date: Optional[date] = None, end_date: Optional[date] = None
+        self,
+        user_id: str,
+        organization_id: str,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
     ) -> str:
         """Generate an individual training history CSV"""
         if not end_date:
@@ -874,37 +879,45 @@ class ReportExportService:
 
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow([
-            "Course Name",
-            "Course Code",
-            "Training Type",
-            "Completion Date",
-            "Hours",
-            "Credit Hours",
-            "Certification #",
-            "Issuing Agency",
-            "Expiration Date",
-            "Score",
-            "Instructor",
-            "Location",
-        ])
+        writer.writerow(
+            [
+                "Course Name",
+                "Course Code",
+                "Training Type",
+                "Completion Date",
+                "Hours",
+                "Credit Hours",
+                "Certification #",
+                "Issuing Agency",
+                "Expiration Date",
+                "Score",
+                "Instructor",
+                "Location",
+            ]
+        )
 
         for r in records:
-            training_type = r.training_type.value if hasattr(r.training_type, "value") else str(r.training_type)
-            writer.writerow([
-                r.course_name,
-                r.course_code or "",
-                training_type,
-                str(r.completion_date) if r.completion_date else "",
-                f"{r.hours_completed:.1f}" if r.hours_completed else "0",
-                f"{r.credit_hours:.1f}" if r.credit_hours else "",
-                r.certification_number or "",
-                r.issuing_agency or "",
-                str(r.expiration_date) if r.expiration_date else "",
-                f"{r.score:.1f}" if r.score else "",
-                r.instructor or "",
-                r.location or "",
-            ])
+            training_type = (
+                r.training_type.value
+                if hasattr(r.training_type, "value")
+                else str(r.training_type)
+            )
+            writer.writerow(
+                [
+                    r.course_name,
+                    r.course_code or "",
+                    training_type,
+                    str(r.completion_date) if r.completion_date else "",
+                    f"{r.hours_completed:.1f}" if r.hours_completed else "0",
+                    f"{r.credit_hours:.1f}" if r.credit_hours else "",
+                    r.certification_number or "",
+                    r.issuing_agency or "",
+                    str(r.expiration_date) if r.expiration_date else "",
+                    f"{r.score:.1f}" if r.score else "",
+                    r.instructor or "",
+                    r.location or "",
+                ]
+            )
 
         return output.getvalue()
 
@@ -954,17 +967,27 @@ class ReportExportService:
                 )
                 if detail["is_met"]:
                     met += 1
-                if detail.get("days_until_due") is not None and 0 < detail["days_until_due"] <= 90:
-                    at_risk.append({"name": req.name, "days_until_due": detail["days_until_due"]})
+                if (
+                    detail.get("days_until_due") is not None
+                    and 0 < detail["days_until_due"] <= 90
+                ):
+                    at_risk.append(
+                        {"name": req.name, "days_until_due": detail["days_until_due"]}
+                    )
 
             # Check expiring certs
             for r in records:
-                if r.expiration_date and today < r.expiration_date <= today + timedelta(days=90):
-                    expiring.append({
-                        "course_name": r.course_name,
-                        "expiration_date": str(r.expiration_date),
-                        "days_remaining": (r.expiration_date - today).days,
-                    })
+                if (
+                    r.expiration_date
+                    and today < r.expiration_date <= today + timedelta(days=90)
+                ):
+                    expiring.append(
+                        {
+                            "course_name": r.course_name,
+                            "expiration_date": str(r.expiration_date),
+                            "days_remaining": (r.expiration_date - today).days,
+                        }
+                    )
 
             total = len(requirements) if requirements else 1
             current_pct = (met / total * 100) if total > 0 else 100
@@ -974,19 +997,33 @@ class ReportExportService:
             expiring_60 = sum(1 for e in expiring if e["days_remaining"] <= 60)
             expiring_90 = len(expiring)
 
-            forecast_30 = max(0, current_pct - (expiring_30 / total * 100)) if total > 0 else current_pct
-            forecast_60 = max(0, current_pct - (expiring_60 / total * 100)) if total > 0 else current_pct
-            forecast_90 = max(0, current_pct - (expiring_90 / total * 100)) if total > 0 else current_pct
+            forecast_30 = (
+                max(0, current_pct - (expiring_30 / total * 100))
+                if total > 0
+                else current_pct
+            )
+            forecast_60 = (
+                max(0, current_pct - (expiring_60 / total * 100))
+                if total > 0
+                else current_pct
+            )
+            forecast_90 = (
+                max(0, current_pct - (expiring_90 / total * 100))
+                if total > 0
+                else current_pct
+            )
 
-            forecasts.append({
-                "user_id": str(user.id),
-                "user_name": f"{user.first_name} {user.last_name}",
-                "current_compliance_percentage": round(current_pct, 1),
-                "forecast_30_days": round(forecast_30, 1),
-                "forecast_60_days": round(forecast_60, 1),
-                "forecast_90_days": round(forecast_90, 1),
-                "at_risk_requirements": at_risk,
-                "expiring_certifications": expiring,
-            })
+            forecasts.append(
+                {
+                    "user_id": str(user.id),
+                    "user_name": f"{user.first_name} {user.last_name}",
+                    "current_compliance_percentage": round(current_pct, 1),
+                    "forecast_30_days": round(forecast_30, 1),
+                    "forecast_60_days": round(forecast_60, 1),
+                    "forecast_90_days": round(forecast_90, 1),
+                    "at_risk_requirements": at_risk,
+                    "expiring_certifications": expiring,
+                }
+            )
 
         return forecasts

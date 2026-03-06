@@ -17,9 +17,7 @@ _response_config = ConfigDict(
     from_attributes=True, alias_generator=to_camel, populate_by_name=True
 )
 
-_request_config = ConfigDict(
-    alias_generator=to_camel, populate_by_name=True
-)
+_request_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 # ============================================
 # Enum Literal Types
@@ -565,9 +563,7 @@ class GrantNoteCreate(BaseModel):
         default=None, validation_alias="metadata"
     )
 
-    model_config = ConfigDict(
-        alias_generator=to_camel, populate_by_name=True
-    )
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
 class GrantNoteResponse(BaseModel):
@@ -949,9 +945,7 @@ class GrantsDashboardResponse(BaseModel):
     outstanding_pledges: Decimal = Decimal("0")
     pipeline_summary: List[Dict[str, Any]] = []
 
-    model_config = ConfigDict(
-        alias_generator=to_camel, populate_by_name=True
-    )
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
 class GrantReportFilters(BaseModel):
@@ -971,9 +965,7 @@ class ComplianceSummary(BaseModel):
     overdue: int = 0
     pending: int = 0
 
-    model_config = ConfigDict(
-        alias_generator=to_camel, populate_by_name=True
-    )
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
 class GrantReportResponse(BaseModel):
@@ -989,9 +981,7 @@ class GrantReportResponse(BaseModel):
     compliance_summary: ComplianceSummary = ComplianceSummary()
     spending_by_category: Dict[str, Decimal] = {}
 
-    model_config = ConfigDict(
-        alias_generator=to_camel, populate_by_name=True
-    )
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
 class FundraisingReportResponse(BaseModel):
@@ -1004,9 +994,7 @@ class FundraisingReportResponse(BaseModel):
     donations_by_method: Dict[str, Decimal] = {}
     monthly_totals: List[Dict[str, Any]] = []
 
-    model_config = ConfigDict(
-        alias_generator=to_camel, populate_by_name=True
-    )
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
 # Rebuild models that use forward references

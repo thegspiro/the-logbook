@@ -6,7 +6,6 @@ Auto-updates pipeline requirement progress for shift/call/hour requirements.
 """
 
 from datetime import date
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession

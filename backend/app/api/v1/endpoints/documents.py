@@ -8,7 +8,6 @@ document CRUD, and file uploads.
 import logging
 import os
 import uuid as uuid_lib
-from typing import Optional
 from uuid import UUID
 
 import magic

@@ -5,7 +5,6 @@ Endpoints for user management and listing.
 """
 
 from datetime import datetime, timezone
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import (
@@ -62,7 +61,9 @@ router = APIRouter()
 
 async def _rate_limit_admin_reset(request: Request) -> None:
     """Rate limit admin password resets: 5 per 5 minutes."""
-    await check_rate_limit(request, max_requests=5, window_seconds=300, lockout_seconds=900)
+    await check_rate_limit(
+        request, max_requests=5, window_seconds=300, lockout_seconds=900
+    )
 
 
 @router.get("", response_model=list[UserListResponse])

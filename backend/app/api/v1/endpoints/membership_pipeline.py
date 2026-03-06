@@ -5,7 +5,6 @@ Endpoints for managing prospective member pipelines, prospects,
 step progression, and transfer to full membership.
 """
 
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -202,9 +201,7 @@ async def delete_pipeline(
             str(pipeline_id), current_user.organization_id
         )
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found"
@@ -1204,9 +1201,7 @@ def _interview_to_response(interview) -> InterviewResponse:
         interviewer_role=interview.interviewer_role,
         notes=interview.notes,
         recommendation=(
-            interview.recommendation.value
-            if interview.recommendation
-            else None
+            interview.recommendation.value if interview.recommendation else None
         ),
         recommendation_notes=interview.recommendation_notes,
         interview_date=interview.interview_date,
@@ -1253,9 +1248,7 @@ async def create_interview(
     prospect_id: UUID,
     data: InterviewCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("prospective_members.manage")
-    ),
+    current_user: User = Depends(require_permission("prospective_members.manage")),
 ):
     """
     Create a new interview record for a prospect.
@@ -1290,9 +1283,7 @@ async def update_interview(
     interview_id: UUID,
     data: InterviewUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("prospective_members.manage")
-    ),
+    current_user: User = Depends(require_permission("prospective_members.manage")),
 ):
     """
     Update an interview record. Only the original interviewer can update.
@@ -1325,9 +1316,7 @@ async def update_interview(
 async def delete_interview(
     interview_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("prospective_members.manage")
-    ),
+    current_user: User = Depends(require_permission("prospective_members.manage")),
 ):
     """
     Delete an interview record.

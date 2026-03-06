@@ -5,7 +5,6 @@ Endpoints for creating and managing training sessions and approvals.
 """
 
 from datetime import datetime
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status

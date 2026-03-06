@@ -542,9 +542,7 @@ class FacilityMaintenanceTypeResponse(FacilityMaintenanceTypeBase):
 
 class FacilityMaintenanceBase(BaseModel):
     facility_id: str = Field(..., description="Facility ID")
-    maintenance_type_id: Optional[str] = Field(
-        None, description="Maintenance type ID"
-    )
+    maintenance_type_id: Optional[str] = Field(None, description="Maintenance type ID")
     system_id: Optional[str] = Field(
         None, description="Building system this maintenance targets"
     )

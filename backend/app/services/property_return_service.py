@@ -250,7 +250,10 @@ class PropertyReturnService:
         Prefers the physical address when it differs from the mailing
         address; otherwise falls back to the mailing address.
         """
-        if not getattr(org, "physical_address_same", True) and org.physical_address_line1:
+        if (
+            not getattr(org, "physical_address_same", True)
+            and org.physical_address_line1
+        ):
             line1 = org.physical_address_line1
             line2 = org.physical_address_line2
             city = org.physical_city

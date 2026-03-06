@@ -7,8 +7,6 @@ user adoption, module usage, operational activity, system health, and content me
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import List
-
 from fastapi import APIRouter, Depends
 from sqlalchemy import cast, func, select, Date
 from sqlalchemy.ext.asyncio import AsyncSession
