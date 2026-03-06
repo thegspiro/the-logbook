@@ -101,14 +101,14 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
       const payload: MaintenanceRecordCreate = {
         facility_id: formData.facility_id,
         description: formData.description.trim(),
-        maintenance_type_id: formData.maintenance_type_id || undefined,
-        scheduled_date: formData.scheduled_date || undefined,
-        due_date: formData.due_date || undefined,
-        performed_by: formData.performed_by.trim() || undefined,
-        cost: formData.cost ? Number(formData.cost) : undefined,
-        vendor: formData.vendor.trim() || undefined,
-        work_order_number: formData.work_order_number.trim() || undefined,
-        notes: formData.notes.trim() || undefined,
+        ...(formData.maintenance_type_id ? { maintenance_type_id: formData.maintenance_type_id } : {}),
+        ...(formData.scheduled_date ? { scheduled_date: formData.scheduled_date } : {}),
+        ...(formData.due_date ? { due_date: formData.due_date } : {}),
+        ...(formData.performed_by.trim() ? { performed_by: formData.performed_by.trim() } : {}),
+        ...(formData.cost ? { cost: Number(formData.cost) } : {}),
+        ...(formData.vendor.trim() ? { vendor: formData.vendor.trim() } : {}),
+        ...(formData.work_order_number.trim() ? { work_order_number: formData.work_order_number.trim() } : {}),
+        ...(formData.notes.trim() ? { notes: formData.notes.trim() } : {}),
       };
       if (editingRecord) {
         await facilitiesService.updateMaintenanceRecord(editingRecord.id, payload);
