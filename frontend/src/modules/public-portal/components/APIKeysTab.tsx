@@ -127,7 +127,7 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
                 value={formData.expires_at || ''}
                 onChange={(e) => setFormData({
                   ...formData,
-                  expires_at: e.target.value ?? undefined
+                  expires_at: e.target.value || undefined
                 })}
                 className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
               />

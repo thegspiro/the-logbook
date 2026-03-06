@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { getErrorMessage } from '@/utils/errorHandling';
 import {
   FormInput,
   Plus,
@@ -319,7 +320,7 @@ const FormsPage: React.FC = () => {
       setForms(formsRes.forms);
       setSummary(summaryRes);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to load forms';
+      const message = getErrorMessage(err, 'Failed to load forms');
       setError(message);
     } finally {
       setLoading(false);
@@ -336,7 +337,7 @@ const FormsPage: React.FC = () => {
     try {
       await formsService.createForm({
         name: formData.name,
-        description: formData.description ?? undefined,
+        description: formData.description || undefined,
         category: formData.category,
         is_public: formData.is_public,
       });
@@ -344,8 +345,7 @@ const FormsPage: React.FC = () => {
       setFormData({ name: '', description: '', category: 'Operations', is_public: false });
       await loadData();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to create form';
-      setError(message);
+      setError(getErrorMessage(err, 'Failed to create form'));
     } finally {
       setCreating(false);
     }
@@ -375,7 +375,7 @@ const FormsPage: React.FC = () => {
       setActiveTab('forms');
       await loadData();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to create from template';
+      const message = getErrorMessage(err, 'Failed to create from template');
       setError(message);
     } finally {
       setCreating(false);
@@ -387,7 +387,7 @@ const FormsPage: React.FC = () => {
       await formsService.publishForm(formId);
       await loadData();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to publish form';
+      const message = getErrorMessage(err, 'Failed to publish form');
       setError(message);
     }
   };
@@ -397,7 +397,7 @@ const FormsPage: React.FC = () => {
       await formsService.archiveForm(formId);
       await loadData();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to archive form';
+      const message = getErrorMessage(err, 'Failed to archive form');
       setError(message);
     }
   };
@@ -407,7 +407,7 @@ const FormsPage: React.FC = () => {
       await formsService.deleteForm(formId);
       await loadData();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to delete form';
+      const message = getErrorMessage(err, 'Failed to delete form');
       setError(message);
     }
   };
@@ -417,7 +417,7 @@ const FormsPage: React.FC = () => {
       await formsService.updateForm(form.id, { is_public: !form.is_public });
       await loadData();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to update form';
+      const message = getErrorMessage(err, 'Failed to update form');
       setError(message);
     }
   };
@@ -433,7 +433,7 @@ const FormsPage: React.FC = () => {
       setEditingForm(detail);
       setDetailTab('builder');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to load form';
+      const message = getErrorMessage(err, 'Failed to load form');
       setError(message);
     }
   };
@@ -477,7 +477,7 @@ const FormsPage: React.FC = () => {
       setIntegrationHealth({ total: subsData.total, processed, succeeded, failed });
       setShowIntegrationModal(true);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to load form details';
+      const message = getErrorMessage(err, 'Failed to load form details');
       setError(message);
     }
   };
@@ -516,7 +516,7 @@ const FormsPage: React.FC = () => {
       setSelectedFormDetail(detail);
       setFieldMappings({});
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to add integration';
+      const message = getErrorMessage(err, 'Failed to add integration');
       setError(message);
     }
   };
@@ -528,7 +528,7 @@ const FormsPage: React.FC = () => {
       const detail = await formsService.getForm(selectedFormId);
       setSelectedFormDetail(detail);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to delete integration';
+      const message = getErrorMessage(err, 'Failed to delete integration');
       setError(message);
     }
   };

@@ -12,6 +12,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '@/utils/errorHandling';
 import { useApparatusStore } from '../store/apparatusStore';
 import { apparatusService } from '../services/api';
 import type { ApparatusCreate, ApparatusUpdate, FuelType } from '../types';
@@ -235,9 +236,8 @@ export const ApparatusFormPage: React.FC = () => {
       }
 
       navigate('/apparatus');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to save apparatus';
-      toast.error(message);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save apparatus'));
     } finally {
       setIsSubmitting(false);
     }

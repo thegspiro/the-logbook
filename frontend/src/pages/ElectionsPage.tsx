@@ -629,7 +629,9 @@ export const ElectionsPage: React.FC = () => {
                     id="election-voting-method"
                     value={`${formData.voting_method}|${formData.victory_condition}`}
                     onChange={(e) => {
-                      const [method, condition = 'most_votes'] = e.target.value.split('|') as [VotingMethod, VictoryCondition];
+                      const parts = e.target.value.split('|');
+                      const method = (parts[0] ?? 'simple_majority') as VotingMethod;
+                      const condition = (parts[1] ?? 'most_votes') as VictoryCondition;
                       setFormData({ ...formData, voting_method: method, victory_condition: condition, victory_percentage: undefined, victory_threshold: undefined });
                     }}
                     className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-white focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"

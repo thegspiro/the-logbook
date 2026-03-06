@@ -337,7 +337,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (user.permissions.includes(permission)) return true;
     // Module wildcard: "settings.*" matches "settings.manage", etc.
     if (permission.includes('.')) {
-      const module = permission.split('.')[0];
+      const module = permission.split('.')[0] ?? '';
       if (user.permissions.includes(`${module}.*`)) return true;
     }
     return false;

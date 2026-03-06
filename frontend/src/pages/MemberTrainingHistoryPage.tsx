@@ -253,7 +253,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
             <select
               value={`${sortField}-${sortOrder}`}
               onChange={(e) => {
-                const [field, order = 'asc'] = e.target.value.split('-');
+                const [field = 'date', order = 'asc'] = e.target.value.split('-');
                 setSortField(field as SortField);
                 setSortOrder(order as SortOrder);
               }}
