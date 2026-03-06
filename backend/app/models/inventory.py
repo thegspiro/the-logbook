@@ -290,6 +290,7 @@ class InventoryItem(Base):
     quantity = Column(Integer, default=1)  # On-hand / available count
     quantity_issued = Column(Integer, default=0)  # Currently issued to members
     unit_of_measure = Column(String(50))  # "each", "pair", "box", etc.
+    reorder_point = Column(Integer, nullable=True)  # Alert when quantity <= this value
 
     # Maintenance
     last_inspection_date = Column(Date)
@@ -1598,4 +1599,106 @@ class ReturnRequest(Base):
     __table_args__ = (
         Index("idx_return_requests_org_status", "organization_id", "status"),
         Index("idx_return_requests_requester", "requester_id", "status"),
+    )
+
+
+class ReorderStatus(str, enum.Enum):
+    """Status of a reorder request"""
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    ORDERED = "ordered"
+    RECEIVED = "received"
+    CANCELLED = "cancelled"
+
+
+class ReorderUrgency(str, enum.Enum):
+    """Urgency of a reorder request"""
+
+    LOW = "low"
+    NORMAL = "normal"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class ReorderRequest(Base):
+    """
+    Tracks reorder requests for inventory items that have dropped below
+    their reorder point or low stock threshold.  Admins/quartermasters
+    create requests, track ordering status, and record receipt of goods.
+    """
+
+    __tablename__ = "reorder_requests"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # What to reorder
+    item_id = Column(
+        String(36),
+        ForeignKey("inventory_items.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    category_id = Column(
+        String(36),
+        ForeignKey("inventory_categories.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    item_name = Column(String(255), nullable=False)
+    quantity_requested = Column(Integer, nullable=False, default=1)
+    quantity_received = Column(Integer, nullable=True)
+
+    # Vendor / ordering details
+    vendor = Column(String(255))
+    vendor_contact = Column(String(255))
+    estimated_unit_cost = Column(Numeric(10, 2))
+    actual_unit_cost = Column(Numeric(10, 2))
+    purchase_order_number = Column(String(255))
+    expected_delivery_date = Column(Date)
+
+    # Status workflow
+    status = Column(
+        Enum(ReorderStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=ReorderStatus.PENDING,
+        index=True,
+    )
+    urgency = Column(
+        Enum(ReorderUrgency, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=ReorderUrgency.NORMAL,
+    )
+    notes = Column(Text)
+
+    # Audit trail
+    requested_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    approved_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    approved_at = Column(DateTime(timezone=True))
+    ordered_at = Column(DateTime(timezone=True))
+    received_at = Column(DateTime(timezone=True))
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    item = relationship("InventoryItem", foreign_keys=[item_id])
+    category = relationship("InventoryCategory", foreign_keys=[category_id])
+    requester = relationship("User", foreign_keys=[requested_by])
+    approver = relationship("User", foreign_keys=[approved_by])
+
+    __table_args__ = (
+        Index("idx_reorder_org_status", "organization_id", "status"),
+        Index("idx_reorder_item", "item_id"),
     )

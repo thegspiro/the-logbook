@@ -49,7 +49,7 @@ interface FD {
   serial_number: string; asset_tag: string; barcode: string; size: string; color: string;
   purchase_price: string; current_value: string; purchase_date: string; vendor: string; warranty_expiration: string;
   replacement_cost: string; location_id: string; storage_area_id: string;
-  quantity: string; unit_of_measure: string; inspection_interval_days: string;
+  quantity: string; unit_of_measure: string; reorder_point: string; inspection_interval_days: string;
   condition: string; notes: string;
 }
 const EMPTY: FD = {
@@ -57,7 +57,7 @@ const EMPTY: FD = {
   serial_number: '', asset_tag: '', barcode: '', size: '', color: '',
   purchase_price: '', current_value: '', purchase_date: '', vendor: '', warranty_expiration: '',
   replacement_cost: '', location_id: '', storage_area_id: '',
-  quantity: '1', unit_of_measure: '', inspection_interval_days: '',
+  quantity: '1', unit_of_measure: '', reorder_point: '', inspection_interval_days: '',
   condition: 'good', notes: '',
 };
 
@@ -88,6 +88,7 @@ const ItemFormModal: React.FC<FormProps> = ({
         replacement_cost: editItem.replacement_cost != null ? String(editItem.replacement_cost) : '',
         location_id: editItem.location_id ?? '', storage_area_id: editItem.storage_area_id ?? '',
         quantity: String(editItem.quantity), unit_of_measure: editItem.unit_of_measure ?? '',
+        reorder_point: editItem.reorder_point != null ? String(editItem.reorder_point) : '',
         inspection_interval_days: editItem.inspection_interval_days != null
           ? String(editItem.inspection_interval_days) : '',
         condition: editItem.condition, notes: editItem.notes ?? '',
@@ -130,6 +131,7 @@ const ItemFormModal: React.FC<FormProps> = ({
         storage_area_id: f.storage_area_id || undefined,
         quantity: f.quantity ? Number(f.quantity) : undefined,
         unit_of_measure: f.unit_of_measure.trim() || undefined,
+        reorder_point: f.reorder_point ? Number(f.reorder_point) : undefined,
         inspection_interval_days: f.inspection_interval_days ? Number(f.inspection_interval_days) : undefined,
         condition: f.condition || undefined,
         notes: f.notes.trim() || undefined,
@@ -247,10 +249,15 @@ const ItemFormModal: React.FC<FormProps> = ({
         {/* Quantity (pool) */}
         {f.tracking_type === 'pool' && (
           <fieldset>
-            <legend className="text-sm font-semibold text-theme-text-primary mb-2">Quantity</legend>
+            <legend className="text-sm font-semibold text-theme-text-primary mb-2">Quantity &amp; Reorder</legend>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div><label className={lbl}>Quantity</label><input type="number" min="0" className={inp} value={f.quantity} onChange={(e) => up('quantity', e.target.value)} /></div>
               <div><label className={lbl}>Unit of Measure</label><input className={inp} placeholder="e.g. pairs, boxes" value={f.unit_of_measure} onChange={(e) => up('unit_of_measure', e.target.value)} /></div>
+              <div>
+                <label className={lbl}>Reorder Point</label>
+                <input type="number" min="0" className={inp} value={f.reorder_point} onChange={(e) => up('reorder_point', e.target.value)} placeholder="Alert when qty falls to this level" />
+                <p className="text-xs text-theme-text-muted mt-1">Leave empty to disable item-level alerts</p>
+              </div>
             </div>
           </fieldset>
         )}

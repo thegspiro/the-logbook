@@ -29,6 +29,8 @@ from app.models.inventory import (
     ItemStatus,
     ItemType,
     MaintenanceRecord,
+    ReorderRequest,
+    ReorderStatus,
     ReturnRequest,
     ReturnRequestStatus,
     ReturnRequestType,
@@ -3688,3 +3690,118 @@ class InventoryService:
                 })
 
         return items_due
+
+    # ------------------------------------------------------------------
+    # Reorder Requests
+    # ------------------------------------------------------------------
+
+    async def list_reorder_requests(
+        self,
+        organization_id: UUID,
+        status: Optional[str] = None,
+        urgency: Optional[str] = None,
+        search: Optional[str] = None,
+    ) -> List[ReorderRequest]:
+        """List reorder requests for an organization with optional filters."""
+        q = (
+            select(ReorderRequest)
+            .where(ReorderRequest.organization_id == str(organization_id))
+            .order_by(ReorderRequest.created_at.desc())
+        )
+        if status:
+            q = q.where(ReorderRequest.status == status)
+        if urgency:
+            q = q.where(ReorderRequest.urgency == urgency)
+        if search:
+            q = q.where(ReorderRequest.item_name.ilike(f"%{search}%"))
+        q = q.options(
+            selectinload(ReorderRequest.requester),
+            selectinload(ReorderRequest.approver),
+        )
+        result = await self.db.execute(q)
+        return list(result.scalars().all())
+
+    async def get_reorder_request(
+        self, request_id: UUID, organization_id: UUID
+    ) -> Optional[ReorderRequest]:
+        """Get a single reorder request."""
+        result = await self.db.execute(
+            select(ReorderRequest)
+            .where(ReorderRequest.id == str(request_id))
+            .where(ReorderRequest.organization_id == str(organization_id))
+            .options(
+                selectinload(ReorderRequest.requester),
+                selectinload(ReorderRequest.approver),
+            )
+        )
+        return result.scalars().first()
+
+    async def create_reorder_request(
+        self,
+        organization_id: UUID,
+        data: Dict[str, Any],
+        requested_by: str,
+    ) -> Tuple[Optional[ReorderRequest], Optional[str]]:
+        """Create a new reorder request."""
+        try:
+            reorder = ReorderRequest(
+                organization_id=str(organization_id),
+                requested_by=requested_by,
+                **data,
+            )
+            self.db.add(reorder)
+            await self.db.flush()
+            await self.db.refresh(reorder)
+            return reorder, None
+        except Exception as e:
+            logger.error(f"Error creating reorder request: {e}")
+            return None, str(e)
+
+    async def update_reorder_request(
+        self,
+        request_id: UUID,
+        organization_id: UUID,
+        data: Dict[str, Any],
+        current_user_id: str,
+    ) -> Tuple[Optional[ReorderRequest], Optional[str]]:
+        """Update a reorder request and handle status transitions."""
+        try:
+            reorder = await self.get_reorder_request(request_id, organization_id)
+            if not reorder:
+                return None, "Reorder request not found"
+
+            now = datetime.now(timezone.utc)
+            new_status = data.get("status")
+
+            # Handle status transitions
+            if new_status and new_status != reorder.status.value:
+                if new_status == "approved":
+                    data["approved_by"] = current_user_id
+                    data["approved_at"] = now
+                elif new_status == "ordered":
+                    data["ordered_at"] = now
+                elif new_status == "received":
+                    data["received_at"] = now
+
+            for key, value in data.items():
+                setattr(reorder, key, value)
+
+            await self.db.flush()
+            await self.db.refresh(reorder)
+            return reorder, None
+        except Exception as e:
+            logger.error(f"Error updating reorder request: {e}")
+            return None, str(e)
+
+    async def delete_reorder_request(
+        self, request_id: UUID, organization_id: UUID
+    ) -> Optional[str]:
+        """Delete a reorder request (only if pending)."""
+        reorder = await self.get_reorder_request(request_id, organization_id)
+        if not reorder:
+            return "Reorder request not found"
+        if reorder.status != ReorderStatus.PENDING:
+            return "Only pending reorder requests can be deleted"
+        await self.db.delete(reorder)
+        await self.db.flush()
+        return None

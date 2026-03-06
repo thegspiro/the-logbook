@@ -109,6 +109,9 @@ from app.schemas.inventory import (
     IssuanceChargeRequest,
     ChargeManagementResponse,
     IssuanceChargeListItem,
+    ReorderRequestCreate,
+    ReorderRequestResponse,
+    ReorderRequestUpdate,
     ReturnRequestCreate,
     ReturnRequestReview,
     ReturnRequestResponse,
@@ -4196,3 +4199,173 @@ async def get_user_issuance_history(
         organization_id=current_user.organization_id,
     )
     return [ItemIssuanceResponse.model_validate(iss) for iss in issuances]
+
+
+# ------------------------------------------------------------------
+# Reorder Requests
+# ------------------------------------------------------------------
+
+
+@router.get("/reorder-requests", response_model=list[ReorderRequestResponse])
+async def list_reorder_requests(
+    status: str | None = Query(None, description="Filter by status"),
+    urgency: str | None = Query(None, description="Filter by urgency"),
+    search: str | None = Query(None, description="Search by item name"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    List reorder requests for the organization.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    requests = await service.list_reorder_requests(
+        organization_id=current_user.organization_id,
+        status=status,
+        urgency=urgency,
+        search=search,
+    )
+    results = []
+    for req in requests:
+        resp = ReorderRequestResponse.model_validate(req)
+        if req.requester:
+            resp.requester_name = f"{req.requester.first_name or ''} {req.requester.last_name or ''}".strip()
+        if req.approver:
+            resp.approver_name = f"{req.approver.first_name or ''} {req.approver.last_name or ''}".strip()
+        results.append(resp)
+    return results
+
+
+@router.get("/reorder-requests/{request_id}", response_model=ReorderRequestResponse)
+async def get_reorder_request(
+    request_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Get a single reorder request.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    req = await service.get_reorder_request(request_id, current_user.organization_id)
+    if not req:
+        raise HTTPException(status_code=404, detail="Reorder request not found")
+    resp = ReorderRequestResponse.model_validate(req)
+    if req.requester:
+        resp.requester_name = f"{req.requester.first_name or ''} {req.requester.last_name or ''}".strip()
+    if req.approver:
+        resp.approver_name = f"{req.approver.first_name or ''} {req.approver.last_name or ''}".strip()
+    return resp
+
+
+@router.post(
+    "/reorder-requests",
+    response_model=ReorderRequestResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_reorder_request(
+    data: ReorderRequestCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Create a new reorder request.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    reorder, error = await service.create_reorder_request(
+        organization_id=current_user.organization_id,
+        data=data.model_dump(exclude_unset=True),
+        requested_by=current_user.id,
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        user_id=current_user.id,
+        action="reorder_request_created",
+        resource_type="reorder_request",
+        resource_id=reorder.id,
+        organization_id=str(current_user.organization_id),
+        details={"item_name": reorder.item_name, "quantity": reorder.quantity_requested},
+    )
+
+    return ReorderRequestResponse.model_validate(reorder)
+
+
+@router.patch("/reorder-requests/{request_id}", response_model=ReorderRequestResponse)
+async def update_reorder_request(
+    request_id: UUID,
+    data: ReorderRequestUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Update a reorder request (status, vendor info, costs, etc.).
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    reorder, error = await service.update_reorder_request(
+        request_id=request_id,
+        organization_id=current_user.organization_id,
+        data=data.model_dump(exclude_unset=True),
+        current_user_id=current_user.id,
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        user_id=current_user.id,
+        action="reorder_request_updated",
+        resource_type="reorder_request",
+        resource_id=reorder.id,
+        organization_id=str(current_user.organization_id),
+        details={"status": reorder.status.value if hasattr(reorder.status, 'value') else reorder.status},
+    )
+
+    resp = ReorderRequestResponse.model_validate(reorder)
+    if reorder.requester:
+        resp.requester_name = f"{reorder.requester.first_name or ''} {reorder.requester.last_name or ''}".strip()
+    if reorder.approver:
+        resp.approver_name = f"{reorder.approver.first_name or ''} {reorder.approver.last_name or ''}".strip()
+    return resp
+
+
+@router.delete("/reorder-requests/{request_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_reorder_request(
+    request_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Delete a pending reorder request.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    error = await service.delete_reorder_request(request_id, current_user.organization_id)
+    if error:
+        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        user_id=current_user.id,
+        action="reorder_request_deleted",
+        resource_type="reorder_request",
+        resource_id=str(request_id),
+        organization_id=str(current_user.organization_id),
+    )

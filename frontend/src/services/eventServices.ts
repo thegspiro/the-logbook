@@ -427,6 +427,7 @@ export interface InventoryItem {
   quantity: number;
   quantity_issued: number;
   unit_of_measure?: string;
+  reorder_point?: number;
   last_inspection_date?: string;
   next_inspection_due?: string;
   inspection_interval_days?: number;
@@ -595,6 +596,7 @@ export interface InventoryItemCreate {
   tracking_type?: string | undefined;
   quantity?: number | undefined;
   unit_of_measure?: string | undefined;
+  reorder_point?: number | undefined;
   inspection_interval_days?: number | undefined;
   min_rank_order?: number | null | undefined;
   restricted_to_positions?: string[] | null | undefined;
@@ -728,6 +730,63 @@ export interface InventoryCategoryCreate {
   requires_maintenance?: boolean | undefined;
   low_stock_threshold?: number | undefined;
   nfpa_tracking_enabled?: boolean | undefined;
+}
+
+// Reorder Request Types
+export interface ReorderRequest {
+  id: string;
+  organization_id: string;
+  item_id?: string;
+  category_id?: string;
+  item_name: string;
+  quantity_requested: number;
+  quantity_received?: number;
+  vendor?: string;
+  vendor_contact?: string;
+  estimated_unit_cost?: number;
+  actual_unit_cost?: number;
+  purchase_order_number?: string;
+  expected_delivery_date?: string;
+  status: string;
+  urgency: string;
+  notes?: string;
+  requested_by?: string;
+  requester_name?: string;
+  approved_by?: string;
+  approver_name?: string;
+  approved_at?: string;
+  ordered_at?: string;
+  received_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReorderRequestCreate {
+  item_id?: string | undefined;
+  category_id?: string | undefined;
+  item_name: string;
+  quantity_requested: number;
+  vendor?: string | undefined;
+  vendor_contact?: string | undefined;
+  estimated_unit_cost?: number | undefined;
+  expected_delivery_date?: string | undefined;
+  urgency?: string | undefined;
+  notes?: string | undefined;
+}
+
+export interface ReorderRequestUpdate {
+  item_name?: string | undefined;
+  quantity_requested?: number | undefined;
+  quantity_received?: number | undefined;
+  vendor?: string | undefined;
+  vendor_contact?: string | undefined;
+  estimated_unit_cost?: number | undefined;
+  actual_unit_cost?: number | undefined;
+  purchase_order_number?: string | undefined;
+  expected_delivery_date?: string | undefined;
+  status?: string | undefined;
+  urgency?: string | undefined;
+  notes?: string | undefined;
 }
 
 // Scan / Quick-Action Types

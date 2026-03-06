@@ -13,6 +13,7 @@ import type {
   NFPASummary, NFPARetirementDueItem, MembersInventoryListResponse, InventoryImportResult,
   SizeVariantCreate, BulkIssuanceTarget, BulkIssuanceResponse, IssuanceAllowance, AllowanceCheck,
   ChargeManagementResponse, ReturnRequestItem, LocationInventorySummary,
+  ReorderRequest, ReorderRequestCreate, ReorderRequestUpdate,
 } from './eventServices';
 
 export const inventoryService = {
@@ -432,6 +433,31 @@ export const inventoryService = {
   async getUserIssuanceHistory(userId: string): Promise<ItemIssuance[]> {
     const response = await api.get<ItemIssuance[]>(`/inventory/users/${userId}/issuance-history`);
     return response.data;
+  },
+
+  // Reorder Requests
+  async getReorderRequests(params?: { status?: string | undefined; urgency?: string | undefined; search?: string | undefined }): Promise<ReorderRequest[]> {
+    const response = await api.get<ReorderRequest[]>('/inventory/reorder-requests', { params });
+    return response.data;
+  },
+
+  async getReorderRequest(id: string): Promise<ReorderRequest> {
+    const response = await api.get<ReorderRequest>(`/inventory/reorder-requests/${id}`);
+    return response.data;
+  },
+
+  async createReorderRequest(data: ReorderRequestCreate): Promise<ReorderRequest> {
+    const response = await api.post<ReorderRequest>('/inventory/reorder-requests', data);
+    return response.data;
+  },
+
+  async updateReorderRequest(id: string, data: ReorderRequestUpdate): Promise<ReorderRequest> {
+    const response = await api.patch<ReorderRequest>(`/inventory/reorder-requests/${id}`, data);
+    return response.data;
+  },
+
+  async deleteReorderRequest(id: string): Promise<void> {
+    await api.delete(`/inventory/reorder-requests/${id}`);
   },
 };
 
