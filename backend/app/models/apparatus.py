@@ -422,6 +422,9 @@ class Apparatus(Base):
     seating_capacity = Column(Integer, nullable=True)
     gvwr = Column(Integer, nullable=True)  # Gross Vehicle Weight Rating (lbs)
 
+    # Staffing
+    min_staffing = Column(Integer, default=1, nullable=False, server_default="1")
+
     # ===========================================
     # Fire/EMS Specific Specifications
     # ===========================================

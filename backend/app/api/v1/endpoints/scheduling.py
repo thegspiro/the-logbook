@@ -1403,6 +1403,7 @@ async def list_apparatus_options(
                         unit_number=apparatus.unit_number,
                         apparatus_type=type_name.lower(),
                         source="apparatus",
+                        min_staffing=apparatus.min_staffing,
                     )
                 )
             source = "apparatus"

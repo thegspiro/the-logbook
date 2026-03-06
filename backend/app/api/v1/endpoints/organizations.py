@@ -508,6 +508,7 @@ async def get_setup_checklist(
 
     **Authentication required**
     """
+    from app.models.apparatus import Apparatus
     from app.models.forms import Form
     from app.models.inventory import InventoryCategory
     from app.models.location import Location
@@ -534,7 +535,8 @@ async def get_setup_checklist(
         )
     ).scalar() or 0
 
-    apparatus_count = (
+    # Count from both BasicApparatus and full Apparatus tables
+    basic_apparatus_count = (
         await db.execute(
             select(func.count())
             .select_from(BasicApparatus)
@@ -544,6 +546,23 @@ async def get_setup_checklist(
             )  # noqa: E712
         )
     ).scalar() or 0
+
+    full_apparatus_count = 0
+    try:
+        full_apparatus_count = (
+            await db.execute(
+                select(func.count())
+                .select_from(Apparatus)
+                .where(
+                    Apparatus.organization_id == org_id,
+                    Apparatus.is_archived == False,
+                )  # noqa: E712
+            )
+        ).scalar() or 0
+    except Exception as e:
+        logger.warning(f"Failed to query full apparatus count for setup checklist: {e}")
+
+    apparatus_count = basic_apparatus_count + full_apparatus_count
 
     location_count = (
         await db.execute(

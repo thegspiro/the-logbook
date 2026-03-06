@@ -219,6 +219,9 @@ export interface Apparatus {
   seatingCapacity: number | null;
   gvwr: number | null;
 
+  // Staffing
+  minStaffing: number;
+
   // Fire/EMS Specifications
   pumpCapacityGpm: number | null;
   tankCapacityGallons: number | null;
@@ -316,6 +319,7 @@ export interface ApparatusListItem {
   primaryStationId: string | null;
   currentMileage: number | null;
   currentHours: number | null;
+  minStaffing: number;
   isArchived: boolean;
   apparatusType?: ApparatusType;
   statusRecord?: ApparatusStatus;
@@ -341,6 +345,7 @@ export interface ApparatusCreate {
   fuelCapacityGallons?: number | undefined;
   seatingCapacity?: number | undefined;
   gvwr?: number | undefined;
+  minStaffing?: number | undefined;
   pumpCapacityGpm?: number | undefined;
   tankCapacityGallons?: number | undefined;
   foamCapacityGallons?: number | undefined;

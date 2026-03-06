@@ -88,6 +88,10 @@ export const ApparatusOverviewTab: React.FC<ApparatusOverviewTabProps> = ({
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
+              <p className="text-theme-text-muted text-xs uppercase">Minimum Staffing</p>
+              <p className="text-theme-text-primary">{currentApparatus.minStaffing} crew</p>
+            </div>
+            <div>
               <p className="text-theme-text-muted text-xs uppercase">Fuel Type</p>
               <p className="text-theme-text-primary capitalize">{currentApparatus.fuelType?.replace('_', ' ') || '-'}</p>
             </div>

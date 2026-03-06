@@ -55,6 +55,7 @@ export const ApparatusFormPage: React.FC = () => {
     fuelCapacityGallons: undefined,
     seatingCapacity: undefined,
     gvwr: undefined,
+    minStaffing: 1,
     pumpCapacityGpm: undefined,
     tankCapacityGallons: undefined,
     foamCapacityGallons: undefined,
@@ -125,6 +126,7 @@ export const ApparatusFormPage: React.FC = () => {
         fuelCapacityGallons: currentApparatus.fuelCapacityGallons ?? undefined,
         seatingCapacity: currentApparatus.seatingCapacity ?? undefined,
         gvwr: currentApparatus.gvwr ?? undefined,
+        minStaffing: currentApparatus.minStaffing ?? 1,
         pumpCapacityGpm: currentApparatus.pumpCapacityGpm ?? undefined,
         tankCapacityGallons: currentApparatus.tankCapacityGallons ?? undefined,
         foamCapacityGallons: currentApparatus.foamCapacityGallons ?? undefined,
@@ -487,10 +489,47 @@ export const ApparatusFormPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Specifications */}
+          {/* Staffing & Specifications */}
           <div className="card p-6">
-            <h2 className="text-theme-text-primary font-bold mb-6">Specifications</h2>
+            <h2 className="text-theme-text-primary font-bold mb-6">Staffing & Specifications</h2>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div>
+                <label className="block text-sm text-theme-text-secondary mb-1">
+                  Minimum Staffing <span className="text-red-700 dark:text-red-400">*</span>
+                </label>
+                <input
+                  type="number"
+                  name="minStaffing"
+                  value={formData.minStaffing ?? 1}
+                  onChange={handleChange}
+                  className="form-input"
+                  min={1}
+                  max={50}
+                />
+                <p className="text-theme-text-muted text-xs mt-1">
+                  Minimum crew members required to staff this apparatus
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm text-theme-text-secondary mb-1">Seating Capacity</label>
+                <input
+                  type="number"
+                  name="seatingCapacity"
+                  value={formData.seatingCapacity ?? ''}
+                  onChange={handleChange}
+                  className="form-input"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-theme-text-secondary mb-1">GVWR (lbs)</label>
+                <input
+                  type="number"
+                  name="gvwr"
+                  value={formData.gvwr ?? ''}
+                  onChange={handleChange}
+                  className="form-input"
+                />
+              </div>
               <div>
                 <label className="block text-sm text-theme-text-secondary mb-1">Fuel Type</label>
                 <select
@@ -513,26 +552,6 @@ export const ApparatusFormPage: React.FC = () => {
                   type="number"
                   name="fuelCapacityGallons"
                   value={formData.fuelCapacityGallons ?? ''}
-                  onChange={handleChange}
-                  className="form-input"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-theme-text-secondary mb-1">Seating Capacity</label>
-                <input
-                  type="number"
-                  name="seatingCapacity"
-                  value={formData.seatingCapacity ?? ''}
-                  onChange={handleChange}
-                  className="form-input"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-theme-text-secondary mb-1">GVWR (lbs)</label>
-                <input
-                  type="number"
-                  name="gvwr"
-                  value={formData.gvwr ?? ''}
                   onChange={handleChange}
                   className="form-input"
                 />
