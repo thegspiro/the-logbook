@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { facilitiesService } from '../../services/api';
+import type { InspectionCreate } from '../../services/facilitiesServices';
 import type { Inspection, Facility, INSPECTION_TYPES } from './types';
 import { enumLabel } from './types';
 import { useTimezone } from '../../hooks/useTimezone';
@@ -47,7 +48,7 @@ export default function InspectionsTab({ facilities, filterFacilityId, onClearFi
       const params: Record<string, unknown> = {};
       if (filterFacilityId) params.facility_id = filterFacilityId;
       const data = await facilitiesService.getInspections(params as { facility_id?: string });
-      setInspections(data as unknown as Inspection[]);
+      setInspections(data);
     } catch {
       toast.error('Failed to load inspections');
     } finally {
@@ -105,7 +106,7 @@ export default function InspectionsTab({ facilities, filterFacilityId, onClearFi
     if (!formData.inspection_date) { toast.error('Inspection date is required'); return; }
     setIsSaving(true);
     try {
-      const payload: Record<string, unknown> = {
+      const payload: InspectionCreate = {
         facility_id: formData.facility_id,
         inspection_type: formData.inspection_type,
         title: formData.title.trim(),

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { facilitiesService } from '../../services/api';
+import type { MaintenanceRecordCreate } from '../../services/facilitiesServices';
 import type { MaintenanceRecord, MaintenanceType, Facility } from './types';
 import { useTimezone } from '../../hooks/useTimezone';
 import { getTodayLocalDate } from '../../utils/dateFormatting';
@@ -43,8 +44,8 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
         facilitiesService.getMaintenanceRecords(params as { facility_id?: string }),
         facilitiesService.getMaintenanceTypes(),
       ]);
-      setRecords(data as unknown as MaintenanceRecord[]);
-      setMaintenanceTypes(types as unknown as MaintenanceType[]);
+      setRecords(data);
+      setMaintenanceTypes(types);
     } catch {
       toast.error('Failed to load maintenance records');
     } finally {
@@ -97,7 +98,7 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
     if (!formData.description.trim()) { toast.error('Description is required'); return; }
     setIsSaving(true);
     try {
-      const payload: Record<string, unknown> = {
+      const payload: MaintenanceRecordCreate = {
         facility_id: formData.facility_id,
         description: formData.description.trim(),
         maintenance_type_id: formData.maintenance_type_id || undefined,
