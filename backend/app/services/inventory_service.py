@@ -12,7 +12,7 @@ from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -315,6 +315,7 @@ class InventoryService:
         condition: Optional[ItemCondition] = None,
         item_type: Optional[ItemType] = None,
         assigned_to: Optional[UUID] = None,
+        location_id: Optional[UUID] = None,
         storage_area_id: Optional[UUID] = None,
         search: Optional[str] = None,
         active_only: bool = True,
@@ -356,6 +357,9 @@ class InventoryService:
 
         if assigned_to:
             query = query.where(InventoryItem.assigned_to_user_id == assigned_to)
+
+        if location_id:
+            query = query.where(InventoryItem.location_id == str(location_id))
 
         if storage_area_id:
             query = query.where(InventoryItem.storage_area_id == str(storage_area_id))
@@ -1540,6 +1544,81 @@ class InventoryService:
             "overdue_checkouts": overdue_checkouts or 0,
             "maintenance_due_count": len(maintenance_due) + items_in_maintenance,
         }
+
+    async def get_summary_by_location(
+        self, organization_id: UUID
+    ) -> List[Dict[str, Any]]:
+        """Get inventory summary grouped by location"""
+        from app.models.location import Location
+
+        result = await self.db.execute(
+            select(
+                Location.id,
+                Location.name,
+                func.count(InventoryItem.id).label("item_count"),
+                func.coalesce(
+                    func.sum(InventoryItem.quantity), 0
+                ).label("total_quantity"),
+                func.coalesce(
+                    func.sum(InventoryItem.current_value * InventoryItem.quantity), 0
+                ).label("total_value"),
+            )
+            .join(
+                InventoryItem,
+                and_(
+                    InventoryItem.location_id == Location.id,
+                    InventoryItem.organization_id == str(organization_id),
+                    InventoryItem.active == True,  # noqa: E712
+                ),
+            )
+            .where(Location.organization_id == str(organization_id))
+            .group_by(Location.id, Location.name)
+            .order_by(func.count(InventoryItem.id).desc())
+        )
+        rows = result.all()
+
+        # Also get items with no location
+        unassigned_result = await self.db.execute(
+            select(
+                func.count(InventoryItem.id).label("item_count"),
+                func.coalesce(
+                    func.sum(InventoryItem.quantity), 0
+                ).label("total_quantity"),
+                func.coalesce(
+                    func.sum(InventoryItem.current_value * InventoryItem.quantity), 0
+                ).label("total_value"),
+            )
+            .where(
+                InventoryItem.organization_id == str(organization_id),
+                InventoryItem.active == True,  # noqa: E712
+                InventoryItem.location_id.is_(None),
+            )
+        )
+        unassigned = unassigned_result.one()
+
+        locations = [
+            {
+                "location_id": row.id,
+                "location_name": row.name,
+                "item_count": row.item_count,
+                "total_quantity": row.total_quantity,
+                "total_value": float(row.total_value),
+            }
+            for row in rows
+        ]
+
+        if unassigned.item_count > 0:
+            locations.append(
+                {
+                    "location_id": None,
+                    "location_name": "Unassigned",
+                    "item_count": unassigned.item_count,
+                    "total_quantity": unassigned.total_quantity,
+                    "total_value": float(unassigned.total_value),
+                }
+            )
+
+        return locations
 
     async def get_user_inventory(
         self, user_id: UUID, organization_id: UUID

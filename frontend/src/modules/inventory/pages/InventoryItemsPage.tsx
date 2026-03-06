@@ -7,7 +7,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft, RefreshCw, Search, ChevronUp, ChevronDown, Printer, Download,
-  Archive, ArrowUpDown, Plus, Package, AlertTriangle, Wrench, ChevronRight,
+  Archive, ArrowUpDown, Plus, Package, AlertTriangle, Wrench, ChevronRight, MapPin,
 } from 'lucide-react';
 import { inventoryService, locationsService } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
@@ -18,7 +18,7 @@ import { MobileItemCard } from '../../../components/ux/MobileItemCard';
 import { FloatingActionButton } from '../../../components/ux/FloatingActionButton';
 import { Modal } from '../../../components/Modal';
 import type {
-  InventoryItem, InventoryCategory, InventorySummary,
+  InventoryItem, InventoryCategory, InventorySummary, LocationInventorySummary,
   InventoryItemCreate, StorageAreaResponse, Location,
 } from '../types';
 import {
@@ -294,6 +294,7 @@ const InventoryItemsPage: React.FC = () => {
   const [locations, setLocations] = useState<Location[]>([]);
   const [storageAreas, setStorageAreas] = useState<StorageAreaResponse[]>([]);
   const [summary, setSummary] = useState<InventorySummary | null>(null);
+  const [locSummary, setLocSummary] = useState<LocationInventorySummary[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -302,6 +303,7 @@ const InventoryItemsPage: React.FC = () => {
   const [fStatus, setFStatus] = useState('');
   const [fCond, setFCond] = useState('');
   const [fType, setFType] = useState('');
+  const [fLoc, setFLoc] = useState('');
   const [sortBy, setSortBy] = useState<SortKey>('name');
   const [sortOrd, setSortOrd] = useState<'asc' | 'desc'>('asc');
   const [skip, setSkip] = useState(0);
@@ -320,9 +322,10 @@ const InventoryItemsPage: React.FC = () => {
     status: fStatus || undefined,
     condition: fCond || undefined,
     item_type: fType || undefined,
+    location_id: fLoc || undefined,
     sort_by: sortBy,
     sort_order: sortOrd,
-  }), [search, fCat, fStatus, fCond, fType, sortBy, sortOrd]);
+  }), [search, fCat, fStatus, fCond, fType, fLoc, sortBy, sortOrd]);
 
   const loadItems = useCallback(async (reset = false) => {
     const s = reset ? 0 : skip;
@@ -335,7 +338,14 @@ const InventoryItemsPage: React.FC = () => {
   }, [filterParams, skip]);
 
   const loadSummary = useCallback(async () => {
-    try { setSummary(await inventoryService.getSummary()); } catch { /* non-critical */ }
+    try {
+      const [s, ls] = await Promise.all([
+        inventoryService.getSummary(),
+        inventoryService.getSummaryByLocation(),
+      ]);
+      setSummary(s);
+      setLocSummary(ls);
+    } catch { /* non-critical */ }
   }, []);
 
   const loadRef = useCallback(async () => {
@@ -486,9 +496,32 @@ const InventoryItemsPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Location summary */}
+      {locSummary.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
+          {locSummary.map((loc) => (
+            <button
+              key={loc.location_id ?? 'unassigned'}
+              onClick={() => { setFLoc(loc.location_id ?? ''); }}
+              className={`card-secondary p-3 text-left hover:bg-theme-surface-hover transition-colors ${fLoc === (loc.location_id ?? '') ? 'ring-2 ring-blue-500' : ''}`}
+            >
+              <div className="flex items-center gap-1.5 mb-1">
+                <MapPin className="w-3.5 h-3.5 text-theme-text-muted shrink-0" />
+                <span className="text-xs font-medium text-theme-text-primary truncate">{loc.location_name}</span>
+              </div>
+              <div className="text-lg font-bold text-theme-text-primary">{loc.total_quantity}</div>
+              <div className="text-xs text-theme-text-muted">
+                {loc.item_count} item{loc.item_count !== 1 ? 's' : ''}
+                {loc.total_value > 0 && <span className="ml-1">&middot; ${loc.total_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Filter bar */}
       <div className="card-secondary p-4 mb-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
           <div className="relative lg:col-span-2">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
             <input type="text" placeholder="Search items..." className="form-input pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -508,6 +541,10 @@ const InventoryItemsPage: React.FC = () => {
           <select className="form-input" value={fType} onChange={(e) => setFType(e.target.value)}>
             <option value="">All Types</option>
             {ITEM_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+          <select className="form-input" value={fLoc} onChange={(e) => setFLoc(e.target.value)}>
+            <option value="">All Locations</option>
+            {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
           </select>
         </div>
       </div>
@@ -555,7 +592,7 @@ const InventoryItemsPage: React.FC = () => {
           <Package className="w-12 h-12 mx-auto text-theme-text-muted mb-4" />
           <h3 className="text-lg font-medium text-theme-text-primary mb-1">No items found</h3>
           <p className="text-sm text-theme-text-muted mb-4">
-            {search || fCat || fStatus || fCond || fType ? 'Try adjusting your filters.' : 'Get started by adding your first inventory item.'}
+            {search || fCat || fStatus || fCond || fType || fLoc ? 'Try adjusting your filters.' : 'Get started by adding your first inventory item.'}
           </p>
           {canManage && <button onClick={openAdd} className="btn-info btn-md inline-flex items-center gap-2"><Plus className="w-4 h-4" /> Add Item</button>}
         </div>

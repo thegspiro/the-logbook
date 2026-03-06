@@ -12,6 +12,7 @@ export type {
   InventoryItemCreate,
   InventoryCategoryCreate,
   InventorySummary,
+  LocationInventorySummary,
   InventoryItemsListResponse,
   InventoryImportResult,
   ItemIssuance,
