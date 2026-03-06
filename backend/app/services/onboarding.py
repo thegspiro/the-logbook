@@ -8,6 +8,7 @@ This module guides users through initial setup and can be disabled once complete
 from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional
 
+from loguru import logger
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -483,6 +484,10 @@ class OnboardingService:
         Uses the physical address (or mailing address if same) from onboarding
         to auto-create the primary station/headquarters as a facility record,
         so the Facilities module is pre-populated with the station's address.
+
+        Falls back to mailing address when physical address is selected but
+        fields are missing, ensuring the facility always has address data when
+        the organization has a mailing address on file.
         """
         # Determine address source: physical address if different, else mailing
         if org.physical_address_same:
@@ -497,6 +502,20 @@ class OnboardingService:
             city = org.physical_city
             state = org.physical_state
             zip_code = org.physical_zip
+
+            # Fall back to mailing address if physical fields are missing.
+            # This guards against direct API calls that set
+            # physical_address_same=False without providing the actual address.
+            if not addr_line1 and org.mailing_address_line1:
+                logger.warning(
+                    "Physical address selected but missing — falling back to "
+                    "mailing address for headquarters facility"
+                )
+                addr_line1 = org.mailing_address_line1
+                addr_line2 = org.mailing_address_line2
+                city = org.mailing_city
+                state = org.mailing_state
+                zip_code = org.mailing_zip
 
         # Pick a default type that matches the organization type
         default_type_name = (
@@ -533,7 +552,12 @@ class OnboardingService:
             facility_type = type_result.scalar_one_or_none()
 
         if not facility_type:
-            return  # No facility types available, skip
+            logger.warning(
+                "No facility types available for org %s — skipping "
+                "headquarters facility creation",
+                org.id,
+            )
+            return
 
         # Look up the system "Operational" status
         status_result = await self.db.execute(
@@ -549,7 +573,27 @@ class OnboardingService:
         facility_status = status_result.scalar_one_or_none()
 
         if not facility_status:
-            return  # No statuses available, skip
+            # Fallback to any active status
+            status_result = await self.db.execute(
+                select(FacilityStatus)
+                .where(
+                    or_(
+                        FacilityStatus.organization_id == org.id,
+                        FacilityStatus.organization_id.is_(None),
+                    ),
+                    FacilityStatus.is_active.is_(True),
+                )
+                .limit(1)
+            )
+            facility_status = status_result.scalar_one_or_none()
+
+        if not facility_status:
+            logger.warning(
+                "No facility statuses available for org %s — skipping "
+                "headquarters facility creation",
+                org.id,
+            )
+            return
 
         facility = Facility(
             id=generate_uuid(),
