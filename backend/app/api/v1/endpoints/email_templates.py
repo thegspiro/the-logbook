@@ -168,14 +168,16 @@ async def preview_email_template(
 
     # Build context: start with per-type sample data, overlay any
     # explicit values the admin sent so preview always looks realistic.
-    template_type_key = template.template_type.value if hasattr(template.template_type, "value") else str(template.template_type)
+    template_type_key = (
+        template.template_type.value
+        if hasattr(template.template_type, "value")
+        else str(template.template_type)
+    )
     context = {**SAMPLE_CONTEXT.get(template_type_key, {}), **preview_data.context}
 
     # --- Inject live organization data ---
     org_result = await db.execute(
-        select(Organization).where(
-            Organization.id == current_user.organization_id
-        )
+        select(Organization).where(Organization.id == current_user.organization_id)
     )
     organization = org_result.scalar_one_or_none()
     if organization:
@@ -301,6 +303,42 @@ async def upload_attachment(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"File type '{ext}' is not allowed. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
         )
+
+    # SEC: Validate actual file content via magic bytes, not just extension
+    ALLOWED_EMAIL_MIME_TYPES = {
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "text/plain",
+        "text/csv",
+        "text/calendar",
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/bmp",
+        "image/svg+xml",
+        "application/zip",
+        "application/x-zip-compressed",
+    }
+    try:
+        import magic
+
+        detected_mime = magic.from_buffer(contents[:2048], mime=True)
+        if detected_mime not in ALLOWED_EMAIL_MIME_TYPES:
+            logger.warning(
+                f"Email attachment rejected: detected MIME '{detected_mime}' "
+                f"(claimed: '{file.content_type}') for file '{file.filename}'"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File content type '{detected_mime}' is not allowed.",
+            )
+    except ImportError:
+        pass  # magic library optional — fall back to extension check only
 
     # Store file with UUID name (prevents path traversal)
     attachment_dir = os.path.join(
