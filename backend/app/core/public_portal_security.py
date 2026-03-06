@@ -116,6 +116,12 @@ async def check_rate_limit(
         cleanup_rate_limit_cache()
     hour_timestamp = await get_current_hour_timestamp()
 
+    # Prune stale hour-buckets for this key to prevent unbounded growth
+    if api_key_id in rate_limit_cache:
+        stale = [ts for ts in rate_limit_cache[api_key_id] if ts < hour_timestamp - 3600]
+        for ts in stale:
+            del rate_limit_cache[api_key_id][ts]
+
     # Quick check in memory cache
     current_count = rate_limit_cache[api_key_id][hour_timestamp]
 
@@ -165,6 +171,12 @@ async def check_ip_rate_limit(
         cleanup_rate_limit_cache()
 
     minute_timestamp = await get_current_minute_timestamp()
+
+    # Prune stale minute-buckets for this IP to prevent unbounded growth
+    if ip_address in ip_rate_limit_cache:
+        stale = [ts for ts in ip_rate_limit_cache[ip_address] if ts < minute_timestamp - 120]
+        for ts in stale:
+            del ip_rate_limit_cache[ip_address][ts]
 
     # Check memory cache
     current_count = ip_rate_limit_cache[ip_address][minute_timestamp]
@@ -409,8 +421,9 @@ def cleanup_rate_limit_cache():
     """
     Clean up old entries from the rate limit cache.
 
-    Should be called periodically (e.g., every hour) to prevent
-    memory bloat.
+    Called automatically when either cache exceeds its maximum key count.
+    Removes stale time-buckets first, then force-evicts the oldest keys
+    if the cache is still over the limit.
     """
     current_hour = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
     current_hour_ts = int(current_hour.timestamp())
@@ -428,6 +441,17 @@ def cleanup_rate_limit_cache():
         if not rate_limit_cache[api_key_id]:
             del rate_limit_cache[api_key_id]
 
+    # Force-evict oldest keys if still over limit
+    if len(rate_limit_cache) > _MAX_RATE_LIMIT_KEYS:
+        # Sort by most recent timestamp (ascending), evict oldest first
+        by_recency = sorted(
+            rate_limit_cache.keys(),
+            key=lambda k: max(rate_limit_cache[k].keys(), default=0),
+        )
+        to_remove = len(rate_limit_cache) - _MAX_RATE_LIMIT_KEYS
+        for key in by_recency[:to_remove]:
+            del rate_limit_cache[key]
+
     # Clean up minute cache (keep current and last minute)
     for ip_address in list(ip_rate_limit_cache.keys()):
         timestamps = list(ip_rate_limit_cache[ip_address].keys())
@@ -438,3 +462,13 @@ def cleanup_rate_limit_cache():
         # Remove empty entries
         if not ip_rate_limit_cache[ip_address]:
             del ip_rate_limit_cache[ip_address]
+
+    # Force-evict oldest IP keys if still over limit
+    if len(ip_rate_limit_cache) > _MAX_IP_RATE_LIMIT_KEYS:
+        by_recency = sorted(
+            ip_rate_limit_cache.keys(),
+            key=lambda k: max(ip_rate_limit_cache[k].keys(), default=0),
+        )
+        to_remove = len(ip_rate_limit_cache) - _MAX_IP_RATE_LIMIT_KEYS
+        for key in by_recency[:to_remove]:
+            del ip_rate_limit_cache[key]
