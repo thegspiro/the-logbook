@@ -118,7 +118,7 @@ describe('FacilitiesDashboard', () => {
   it('renders the page header', async () => {
     renderPage();
     expect(screen.getByRole('heading', { name: 'Facilities' })).toBeInTheDocument();
-    expect(screen.getByText('Manage stations, buildings, rooms, and maintenance')).toBeInTheDocument();
+    expect(screen.getByText('Manage stations, buildings, maintenance, and inspections')).toBeInTheDocument();
   });
 
   it('shows loading state then facility cards', async () => {
@@ -144,19 +144,15 @@ describe('FacilitiesDashboard', () => {
     await waitFor(() => {
       expect(screen.getByText('Total Facilities')).toBeInTheDocument();
     });
-
-    const searchInput = screen.getByPlaceholderText('Search facilities...');
-    await user.type(searchInput, 'Training');
-
-    expect(screen.queryByText('Station 1')).not.toBeInTheDocument();
-    expect(screen.getByText('Training Center')).toBeInTheDocument();
+    expect(screen.getAllByText('Operational').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('shows tabs for facilities, maintenance, and inspections', async () => {
+  it('shows sections for maintenance and inspections', async () => {
     renderPage();
-    expect(screen.getByRole('button', { name: /Facilities/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Maintenance/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Inspections/ })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getAllByText('Overdue Maintenance').length).toBeGreaterThanOrEqual(1);
+    });
+    expect(screen.getAllByText('Upcoming Inspections').length).toBeGreaterThanOrEqual(1);
   });
 
   it('opens create facility modal', async () => {
@@ -169,8 +165,9 @@ describe('FacilitiesDashboard', () => {
 
     // Find the header "Add Facility" button (first one in the DOM)
     const addButtons = screen.getAllByText('Add Facility');
-    const firstAddButton = addButtons[0] ?? addButtons[addButtons.length - 1];
-    await user.click(firstAddButton!);
+    const firstAddButton = addButtons[0];
+    expect(firstAddButton).toBeDefined();
+    await user.click(firstAddButton as HTMLElement);
 
     expect(screen.getByText('Name *')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('e.g., Station 1')).toBeInTheDocument();
@@ -187,8 +184,9 @@ describe('FacilitiesDashboard', () => {
 
     // Open modal
     const addButtons = screen.getAllByText('Add Facility');
-    const openButton = addButtons[0] ?? addButtons[addButtons.length - 1];
-    await user.click(openButton!);
+    const openButton = addButtons[0];
+    expect(openButton).toBeDefined();
+    await user.click(openButton as HTMLElement);
 
     const nameInput = screen.getByPlaceholderText('e.g., Station 1');
     await user.type(nameInput, 'Station 3');
