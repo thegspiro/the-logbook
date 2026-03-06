@@ -508,6 +508,22 @@ class FacilitiesService:
         facility_dict = facility_data.model_dump()
         extra = {}
 
+        # Auto-assign "Fire Station" type if none provided
+        if not facility_dict.get("facility_type_id"):
+            type_result = await self.db.execute(
+                select(FacilityType).where(
+                    or_(
+                        FacilityType.organization_id == organization_id,
+                        FacilityType.organization_id.is_(None),
+                    ),
+                    FacilityType.is_active.is_(True),
+                    FacilityType.name == "Fire Station",
+                )
+            )
+            default_type = type_result.scalar_one_or_none()
+            if default_type:
+                facility_dict["facility_type_id"] = default_type.id
+
         # Auto-assign "Operational" status if none provided
         if not facility_dict.get("status_id"):
             op_result = await self.db.execute(
