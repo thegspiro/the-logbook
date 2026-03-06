@@ -155,6 +155,7 @@ class FacilityType(Base):
     """
     Facility types (e.g. Fire Station, Meeting Hall, Training Center).
     Organizations get default types on creation and can add custom ones.
+    System types (is_system=True) have organization_id=NULL.
     """
 
     __tablename__ = "facility_types"
@@ -163,7 +164,7 @@ class FacilityType(Base):
     organization_id = Column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
 
@@ -203,6 +204,7 @@ class FacilityStatus(Base):
     """
     Facility statuses (e.g. Operational, Under Renovation).
     Organizations get defaults and can add custom ones.
+    System statuses (is_system=True) have organization_id=NULL.
     """
 
     __tablename__ = "facility_statuses"
@@ -211,7 +213,7 @@ class FacilityStatus(Base):
     organization_id = Column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
 
@@ -512,6 +514,7 @@ class FacilityMaintenanceType(Base):
     """
     Types of maintenance work that can be performed on facilities.
     Organizations get defaults and can add custom ones.
+    System types (is_system=True) have organization_id=NULL.
     """
 
     __tablename__ = "facility_maintenance_types"
@@ -520,7 +523,7 @@ class FacilityMaintenanceType(Base):
     organization_id = Column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
 

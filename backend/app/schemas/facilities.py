@@ -257,7 +257,7 @@ class FacilityTypeUpdate(BaseModel):
 
 class FacilityTypeResponse(FacilityTypeBase):
     id: str
-    organization_id: str
+    organization_id: Optional[str] = None
     is_system: bool
     is_active: bool
     created_at: datetime
@@ -300,7 +300,7 @@ class FacilityStatusUpdate(BaseModel):
 
 class FacilityStatusResponse(FacilityStatusBase):
     id: str
-    organization_id: str
+    organization_id: Optional[str] = None
     is_system: bool
     is_active: bool
     created_at: datetime
@@ -524,7 +524,7 @@ class FacilityMaintenanceTypeUpdate(BaseModel):
 
 class FacilityMaintenanceTypeResponse(FacilityMaintenanceTypeBase):
     id: str
-    organization_id: str
+    organization_id: Optional[str] = None
     is_system: bool
     is_active: bool
     created_at: datetime
