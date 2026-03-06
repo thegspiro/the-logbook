@@ -7,7 +7,7 @@ GET  /my-training     - Member's aggregated training data (respects visibility c
 """
 
 from datetime import date
-from typing import Any, Dict, List
+from typing import Any
 
 from fastapi import APIRouter, Depends
 from loguru import logger

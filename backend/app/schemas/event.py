@@ -84,6 +84,7 @@ class EventSettingsUpdate(BaseModel):
     request_pipeline: Optional[RequestPipelineUpdate] = None
     defaults: Optional[EventDefaultsUpdate] = None
 
+
 # Event Schemas
 
 

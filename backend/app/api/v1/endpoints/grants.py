@@ -7,14 +7,14 @@ pledges, fundraising events, and reporting.
 """
 
 from datetime import date
-from typing import List, Optional
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import require_permission
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.user import User
@@ -71,7 +71,9 @@ router = APIRouter()
 async def list_opportunities(
     category: Optional[str] = Query(None, description="Filter by grant category"),
     active_only: bool = Query(True, description="Only return active opportunities"),
-    search: Optional[str] = Query(None, description="Search by name, agency, or description"),
+    search: Optional[str] = Query(
+        None, description="Search by name, agency, or description"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("fundraising.view")),
 ):
@@ -256,7 +258,9 @@ async def delete_opportunity(
 
 @router.get("/applications", response_model=list[GrantApplicationListResponse])
 async def list_applications(
-    status_filter: Optional[str] = Query(None, alias="status", description="Filter by application status"),
+    status_filter: Optional[str] = Query(
+        None, alias="status", description="Filter by application status"
+    ),
     priority: Optional[str] = Query(None, description="Filter by priority"),
     assigned_to: Optional[UUID] = Query(None, description="Filter by assigned user"),
     db: AsyncSession = Depends(get_db),
@@ -764,8 +768,12 @@ async def delete_expenditure(
 @router.get("/compliance-tasks", response_model=list[GrantComplianceTaskResponse])
 async def list_compliance_tasks(
     application_id: Optional[UUID] = Query(None, description="Filter by application"),
-    status_filter: Optional[str] = Query(None, alias="status", description="Filter by task status"),
-    due_before: Optional[date] = Query(None, description="Filter tasks due before this date"),
+    status_filter: Optional[str] = Query(
+        None, alias="status", description="Filter by task status"
+    ),
+    due_before: Optional[date] = Query(
+        None, description="Filter tasks due before this date"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("fundraising.view")),
 ):
@@ -991,7 +999,9 @@ async def create_note(
 
 @router.get("/campaigns", response_model=list[CampaignResponse])
 async def list_campaigns(
-    status_filter: Optional[str] = Query(None, alias="status", description="Filter by campaign status"),
+    status_filter: Optional[str] = Query(
+        None, alias="status", description="Filter by campaign status"
+    ),
     campaign_type: Optional[str] = Query(None, description="Filter by campaign type"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("fundraising.view")),
@@ -1176,7 +1186,9 @@ async def delete_campaign(
 
 @router.get("/donors", response_model=list[DonorResponse])
 async def list_donors(
-    search: Optional[str] = Query(None, description="Search by name, email, or company"),
+    search: Optional[str] = Query(
+        None, description="Search by name, email, or company"
+    ),
     donor_type: Optional[str] = Query(None, description="Filter by donor type"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("fundraising.view")),
@@ -1328,8 +1340,12 @@ async def update_donor(
 async def list_donations(
     campaign_id: Optional[UUID] = Query(None, description="Filter by campaign"),
     donor_id: Optional[UUID] = Query(None, description="Filter by donor"),
-    start_date: Optional[date] = Query(None, description="Filter donations from this date"),
-    end_date: Optional[date] = Query(None, description="Filter donations until this date"),
+    start_date: Optional[date] = Query(
+        None, description="Filter donations from this date"
+    ),
+    end_date: Optional[date] = Query(
+        None, description="Filter donations until this date"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("fundraising.view")),
 ):
@@ -1447,7 +1463,9 @@ async def update_donation(
 
 @router.get("/pledges", response_model=list[PledgeResponse])
 async def list_pledges(
-    status_filter: Optional[str] = Query(None, alias="status", description="Filter by pledge status"),
+    status_filter: Optional[str] = Query(
+        None, alias="status", description="Filter by pledge status"
+    ),
     campaign_id: Optional[UUID] = Query(None, description="Filter by campaign"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("fundraising.view")),
@@ -1565,7 +1583,9 @@ async def update_pledge(
 @router.get("/fundraising-events", response_model=list[FundraisingEventResponse])
 async def list_fundraising_events(
     campaign_id: Optional[UUID] = Query(None, description="Filter by campaign"),
-    status_filter: Optional[str] = Query(None, alias="status", description="Filter by event status"),
+    status_filter: Optional[str] = Query(
+        None, alias="status", description="Filter by event status"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("fundraising.view")),
 ):

@@ -42,6 +42,7 @@ export const EventAttendanceRenderer: React.FC<Props> = ({ data }) => {
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function getEventAttendanceExportData(data: EventAttendanceReport) {
   const columns = [
     { key: 'event_title', header: 'Event' },

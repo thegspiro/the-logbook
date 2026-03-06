@@ -60,6 +60,7 @@ export const InventoryStatusRenderer: React.FC<Props> = ({ data }) => {
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function getInventoryStatusExportData(data: InventoryStatusReport) {
   const columns = [
     { key: 'name', header: 'Item' },

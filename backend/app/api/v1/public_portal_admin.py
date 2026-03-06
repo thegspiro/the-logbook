@@ -6,7 +6,6 @@ Requires authentication and appropriate permissions.
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from loguru import logger

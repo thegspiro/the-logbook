@@ -77,6 +77,7 @@ export const AnnualTrainingRenderer: React.FC<Props> = ({ data, formatRank }) =>
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function getAnnualTrainingExportData(data: AnnualTrainingReport) {
   const columns = [
     { key: 'member_name', header: 'Member' },

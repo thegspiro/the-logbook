@@ -13,7 +13,6 @@ DELETE /training/waivers/{id}     - Deactivate a waiver (training officers)
 """
 
 from datetime import date, datetime, timezone
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel

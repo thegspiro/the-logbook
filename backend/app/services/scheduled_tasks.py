@@ -56,7 +56,7 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user import Organization
+from app.models.user import Organization, User
 
 # Schedule definitions (for documentation and frontend display)
 SCHEDULE = {
@@ -1207,12 +1207,11 @@ async def run_scheduled_emails(db: AsyncSession) -> Dict[str, Any]:
             )
 
             # Merge template default CC/BCC with per-email overrides
-            cc = list(set(
-                (template.default_cc or []) + (item.cc_emails or [])
-            )) or None
-            bcc = list(set(
-                (template.default_bcc or []) + (item.bcc_emails or [])
-            )) or None
+            cc = list(set((template.default_cc or []) + (item.cc_emails or []))) or None
+            bcc = (
+                list(set((template.default_bcc or []) + (item.bcc_emails or [])))
+                or None
+            )
 
             success_count, _ = await email_svc.send_email(
                 to_emails=item.to_emails,
@@ -1311,7 +1310,8 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
                 .where(User.email.isnot(None))
             )
             admins = [
-                u for u in admin_result.scalars().all()
+                u
+                for u in admin_result.scalars().all()
                 if u.role in ("admin", "owner", "quartermaster")
             ]
             admin_emails = [a.email for a in admins if a.email]
@@ -1381,7 +1381,11 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
                 items_list = ""
                 for co in user_checkouts:
                     item_name = co.item.name if co.item else "Unknown"
-                    due_date = co.expected_return_at.strftime("%B %d, %Y") if co.expected_return_at else "N/A"
+                    due_date = (
+                        co.expected_return_at.strftime("%B %d, %Y")
+                        if co.expected_return_at
+                        else "N/A"
+                    )
                     items_list += f"<li><strong>{_html.escape(item_name)}</strong> — due {due_date}</li>"
 
                 html_body = f"""
@@ -1403,7 +1407,13 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
                 if success_count > 0:
                     total_alerts += 1
 
-            results.append({"org_id": str(org.id), "overdue": len(overdue), "members_notified": len(by_user)})
+            results.append(
+                {
+                    "org_id": str(org.id),
+                    "overdue": len(overdue),
+                    "members_notified": len(by_user),
+                }
+            )
 
         except Exception as e:
             logger.error(f"Overdue alerts failed for org {org.id}: {e}")
@@ -1447,7 +1457,9 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
             past_due = [i for i in items_due if i["days_until_retirement"] <= 0]
             within_30 = [i for i in items_due if 0 < i["days_until_retirement"] <= 30]
             within_90 = [i for i in items_due if 30 < i["days_until_retirement"] <= 90]
-            within_180 = [i for i in items_due if 90 < i["days_until_retirement"] <= 180]
+            within_180 = [
+                i for i in items_due if 90 < i["days_until_retirement"] <= 180
+            ]
 
             def _build_section(title: str, items: list, color: str) -> str:
                 if not items:
@@ -1499,7 +1511,8 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
                 .where(User.email.isnot(None))
             )
             admins = [
-                u for u in admin_result.scalars().all()
+                u
+                for u in admin_result.scalars().all()
                 if u.role in ("admin", "owner", "quartermaster")
             ]
             admin_emails = [a.email for a in admins if a.email]

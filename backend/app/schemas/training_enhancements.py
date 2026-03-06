@@ -12,7 +12,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 # ============================================
 # Recertification Pathway Schemas
 # ============================================
@@ -353,9 +352,7 @@ class ParticipatingOrganization(BaseModel):
     """Participating organization in multi-agency training"""
 
     name: str = Field(..., min_length=1, max_length=255)
-    role: str = Field(
-        "participant", pattern=r"^(host|participant|observer|evaluator)$"
-    )
+    role: str = Field("participant", pattern=r"^(host|participant|observer|evaluator)$")
     contact_name: Optional[str] = None
     contact_email: Optional[str] = None
     participant_count: Optional[int] = Field(None, ge=0)

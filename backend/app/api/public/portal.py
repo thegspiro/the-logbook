@@ -7,7 +7,6 @@ All endpoints require API key authentication and are subject to rate limiting.
 
 import time
 from datetime import datetime, timezone
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import and_, func, select

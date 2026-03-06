@@ -135,18 +135,14 @@ async def _send_to_integration(
     elif itype == "generic-webhook":
         from app.services.integration_services import webhook_service
 
-        url = integration.get_secret("url") or (integration.config or {}).get(
-            "url", ""
-        )
+        url = integration.get_secret("url") or (integration.config or {}).get("url", "")
         secret = integration.get_secret("secret")
         if not url:
             return
         await webhook_service.send_webhook(url, event_type, payload, secret)
 
 
-def _format_for_slack(
-    event_type: str, payload: dict[str, Any]
-) -> dict[str, Any]:
+def _format_for_slack(event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Route to the appropriate Slack formatter."""
     from app.services.integration_services import slack_service
 
@@ -156,12 +152,12 @@ def _format_for_slack(
         return slack_service.format_shift_notification(payload)
     if event_type.startswith("training."):
         return slack_service.format_training_notification(payload)
-    return {"text": f"[{event_type}] {payload.get('title', payload.get('message', ''))}"}
+    return {
+        "text": f"[{event_type}] {payload.get('title', payload.get('message', ''))}"
+    }
 
 
-def _format_for_discord(
-    event_type: str, payload: dict[str, Any]
-) -> dict[str, Any]:
+def _format_for_discord(event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Route to the appropriate Discord formatter."""
     from app.services.integration_services import discord_service
 
@@ -174,12 +170,12 @@ def _format_for_discord(
     if event_type.startswith("training."):
         embed = discord_service.format_training_embed(payload)
         return {"content": "", "embeds": [embed]}
-    return {"content": f"[{event_type}] {payload.get('title', payload.get('message', ''))}"}
+    return {
+        "content": f"[{event_type}] {payload.get('title', payload.get('message', ''))}"
+    }
 
 
-def _format_for_teams(
-    event_type: str, payload: dict[str, Any]
-) -> dict[str, Any]:
+def _format_for_teams(event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Route to the appropriate Teams formatter."""
     from app.services.integration_services import teams_service
 

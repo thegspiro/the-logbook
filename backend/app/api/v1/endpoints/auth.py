@@ -4,8 +4,6 @@ Authentication API Endpoints
 Endpoints for user authentication, registration, and session management.
 """
 
-from typing import Optional
-
 from loguru import logger
 from fastapi import (
     APIRouter,
@@ -113,9 +111,7 @@ async def _build_current_user_dict(user: User, db: AsyncSession) -> dict:
 
     # Eager-load positions if the relationship wasn't already loaded
     user_result = await db.execute(
-        select(User)
-        .where(User.id == user.id)
-        .options(selectinload(User.positions))
+        select(User).where(User.id == user.id).options(selectinload(User.positions))
     )
     user = user_result.scalar_one()
 

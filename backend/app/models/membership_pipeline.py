@@ -241,7 +241,9 @@ class ProspectiveMember(Base):
     # Application details
     interest_reason = Column(Text)
     referral_source = Column(String(255))
-    referred_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    referred_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     desired_membership_type = Column(
         String(50), nullable=True, default=None
     )  # e.g., "probationary", "administrative"
@@ -348,7 +350,9 @@ class ProspectStepProgress(Base):
         nullable=False,
     )
     completed_at = Column(DateTime(timezone=True))
-    completed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    completed_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     notes = Column(Text)
     action_result = Column(JSON)
 
@@ -389,7 +393,9 @@ class ProspectActivityLog(Base):
     )
     action = Column(String(100), nullable=False)
     details = Column(JSON)
-    performed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    performed_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -437,7 +443,9 @@ class ProspectDocument(Base):
     file_size = Column(Integer, default=0)
     mime_type = Column(String(100))
 
-    uploaded_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    uploaded_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships

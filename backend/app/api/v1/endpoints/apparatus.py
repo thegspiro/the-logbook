@@ -6,7 +6,6 @@ maintenance tracking, equipment, operators, and fleet management.
 """
 
 from datetime import date, datetime
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -419,16 +418,12 @@ async def delete_apparatus_status(
 
 @router.get("", response_model=PaginatedApparatusList, tags=["Apparatus"])
 async def list_apparatus(
-    apparatus_type_id: str | None = Query(
-        None, description="Filter by apparatus type"
-    ),
+    apparatus_type_id: str | None = Query(None, description="Filter by apparatus type"),
     status_id: str | None = Query(None, description="Filter by status"),
     primary_station_id: str | None = Query(
         None, description="Filter by primary station"
     ),
-    is_archived: bool | None = Query(
-        False, description="Include archived apparatus"
-    ),
+    is_archived: bool | None = Query(False, description="Include archived apparatus"),
     year_min: int | None = Query(None, description="Minimum year"),
     year_max: int | None = Query(None, description="Maximum year"),
     make: str | None = Query(None, description="Filter by make"),
@@ -1047,9 +1042,7 @@ async def list_maintenance_records(
     maintenance_type_id: str | None = Query(
         None, description="Filter by maintenance type"
     ),
-    is_completed: bool | None = Query(
-        None, description="Filter by completion status"
-    ),
+    is_completed: bool | None = Query(None, description="Filter by completion status"),
     is_overdue: bool | None = Query(None, description="Filter by overdue status"),
     is_historic: bool | None = Query(
         None,
@@ -2165,9 +2158,7 @@ async def list_service_providers(
         True,
         description="Filter by active status. Set to false to see archived providers, or omit for all.",
     ),
-    is_preferred: bool | None = Query(
-        None, description="Filter preferred providers"
-    ),
+    is_preferred: bool | None = Query(None, description="Filter preferred providers"),
     specialty: str | None = Query(None, description="Filter by component specialty"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),

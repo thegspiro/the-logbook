@@ -188,10 +188,12 @@ class MembershipPipelineService:
         active_count_result = await self.db.execute(
             select(func.count()).where(
                 ProspectiveMember.pipeline_id == pipeline_id,
-                ProspectiveMember.status.in_([
-                    ProspectStatus.ACTIVE,
-                    ProspectStatus.ON_HOLD,
-                ]),
+                ProspectiveMember.status.in_(
+                    [
+                        ProspectStatus.ACTIVE,
+                        ProspectStatus.ON_HOLD,
+                    ]
+                ),
             )
         )
         active_count = active_count_result.scalar() or 0
@@ -389,10 +391,12 @@ class MembershipPipelineService:
         stranded_result = await self.db.execute(
             select(ProspectiveMember).where(
                 ProspectiveMember.current_step_id == step_id,
-                ProspectiveMember.status.in_([
-                    ProspectStatus.ACTIVE,
-                    ProspectStatus.ON_HOLD,
-                ]),
+                ProspectiveMember.status.in_(
+                    [
+                        ProspectStatus.ACTIVE,
+                        ProspectStatus.ON_HOLD,
+                    ]
+                ),
             )
         )
         stranded = list(stranded_result.scalars().all())
@@ -412,9 +416,7 @@ class MembershipPipelineService:
                 fallback_step = None
 
             for prospect in stranded:
-                prospect.current_step_id = (
-                    fallback_step.id if fallback_step else None
-                )
+                prospect.current_step_id = fallback_step.id if fallback_step else None
                 await self._log_activity(
                     prospect_id=prospect.id,
                     action="step_deleted_auto_moved",
@@ -1744,9 +1746,7 @@ class MembershipPipelineService:
         )
 
         # ---- Direct path: stamp integration_type on the form ----
-        form_result = await self.db.execute(
-            select(Form).where(Form.id == str(form_id))
-        )
+        form_result = await self.db.execute(select(Form).where(Form.id == str(form_id)))
         form = form_result.scalars().first()
         if form is None:
             logger.warning(
@@ -1757,9 +1757,7 @@ class MembershipPipelineService:
         if not form.integration_type:
             form.integration_type = IntegrationType.MEMBERSHIP_INTEREST
             await self.db.commit()
-            logger.info(
-                f"Set integration_type=membership_interest on form {form_id}"
-            )
+            logger.info(f"Set integration_type=membership_interest on form {form_id}")
             return
 
         if form.integration_type == IntegrationType.MEMBERSHIP_INTEREST:
@@ -1823,7 +1821,9 @@ class MembershipPipelineService:
             form_field_ids = {str(f.id) for f in fields}
             current_targets = set(current_mappings.values())
             covers_required = self._REQUIRED_PROSPECT_FIELDS <= current_targets
-            has_valid_ids = bool(current_field_ids) and current_field_ids <= form_field_ids
+            has_valid_ids = (
+                bool(current_field_ids) and current_field_ids <= form_field_ids
+            )
 
             if covers_required and has_valid_ids:
                 return
@@ -2648,11 +2648,8 @@ class MembershipPipelineService:
             id=generate_uuid(),
             prospect_id=prospect_id,
             pipeline_id=str(prospect.pipeline_id) if prospect.pipeline_id else None,
-            step_id=step_id or (
-                str(prospect.current_step_id)
-                if prospect.current_step_id
-                else None
-            ),
+            step_id=step_id
+            or (str(prospect.current_step_id) if prospect.current_step_id else None),
             interviewer_id=interviewer_id,
             interviewer_role=interviewer_role,
             notes=notes,
@@ -2703,9 +2700,7 @@ class MembershipPipelineService:
             try:
                 interview.recommendation = InterviewRecommendation(recommendation)
             except ValueError:
-                raise ValueError(
-                    f"Invalid recommendation: {recommendation}"
-                )
+                raise ValueError(f"Invalid recommendation: {recommendation}")
         if recommendation_notes is not None:
             interview.recommendation_notes = recommendation_notes
         if interviewer_role is not None:
@@ -2739,9 +2734,7 @@ class MembershipPipelineService:
 
         prospect_id = str(interview.prospect_id)
         await self.db.execute(
-            delete(ProspectInterview).where(
-                ProspectInterview.id == interview_id
-            )
+            delete(ProspectInterview).where(ProspectInterview.id == interview_id)
         )
 
         await self._log_activity(

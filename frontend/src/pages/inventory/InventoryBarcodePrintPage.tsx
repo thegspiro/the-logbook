@@ -53,22 +53,24 @@ interface LabelPreset {
   columns: number;
 }
 
+const DEFAULT_LABEL_PRESET: LabelPreset = {
+  id: 'dymo-30252',
+  name: 'Dymo 30252',
+  description: '1.125" x 3.5" — Standard address label',
+  width: '3.5in',
+  height: '1.125in',
+  barcodeHeight: 40,
+  barcodeWidth: 1.5,
+  nameFontSize: '9pt',
+  subtitleFontSize: '7pt',
+  padding: '0.06in 0.1in',
+  pageWidth: '3.5in',
+  pageHeight: '1.125in',
+  columns: 1,
+};
+
 const LABEL_PRESETS: LabelPreset[] = [
-  {
-    id: 'dymo-30252',
-    name: 'Dymo 30252',
-    description: '1.125" x 3.5" — Standard address label',
-    width: '3.5in',
-    height: '1.125in',
-    barcodeHeight: 40,
-    barcodeWidth: 1.5,
-    nameFontSize: '9pt',
-    subtitleFontSize: '7pt',
-    padding: '0.06in 0.1in',
-    pageWidth: '3.5in',
-    pageHeight: '1.125in',
-    columns: 1,
-  },
+  DEFAULT_LABEL_PRESET,
   {
     id: 'dymo-30336',
     name: 'Dymo 30336',
@@ -240,7 +242,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const [copies, setCopies] = useState(1);
   const [showSettings, setShowSettings] = useState(false);
 
-  const preset = LABEL_PRESETS.find((p) => p.id === presetId) ?? LABEL_PRESETS[0]!;
+  const preset = LABEL_PRESETS.find((p) => p.id === presetId) ?? LABEL_PRESETS[0] ?? DEFAULT_LABEL_PRESET;
   const isThermal = preset.columns === 1;
 
   const fetchItems = useCallback(async () => {

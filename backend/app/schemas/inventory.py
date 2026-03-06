@@ -1186,8 +1186,8 @@ class SizeVariantCreate(BaseModel):
     )
     colors: Optional[List[str]] = Field(
         None,
-        description='Colors to create variants for (creates size×color matrix). '
-        'If empty, only size variants are created.',
+        description="Colors to create variants for (creates size×color matrix). "
+        "If empty, only size variants are created.",
     )
     category_id: Optional[UUID] = None
     quantity_per_variant: int = Field(

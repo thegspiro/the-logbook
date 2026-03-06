@@ -9,7 +9,7 @@ import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from functools import partial
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from loguru import logger
@@ -684,9 +684,7 @@ async def start_onboarding(
     response_model=SystemInfoResponse,
     dependencies=[Depends(check_rate_limit)],
 )
-async def get_system_info(
-    request: Request, db: AsyncSession = Depends(get_db)
-):
+async def get_system_info(request: Request, db: AsyncSession = Depends(get_db)):
     """
     Get system information for display during onboarding
 
@@ -703,9 +701,7 @@ async def get_system_info(
     response_model=SecurityCheckResponse,
     dependencies=[Depends(check_rate_limit)],
 )
-async def verify_security(
-    request: Request, db: AsyncSession = Depends(get_db)
-):
+async def verify_security(request: Request, db: AsyncSession = Depends(get_db)):
     """
     Verify security configuration
 
@@ -737,9 +733,7 @@ async def verify_security(
     response_model=DatabaseCheckResponse,
     dependencies=[Depends(check_rate_limit)],
 )
-async def verify_database(
-    request: Request, db: AsyncSession = Depends(get_db)
-):
+async def verify_database(request: Request, db: AsyncSession = Depends(get_db)):
     """
     Verify database connectivity and configuration
 

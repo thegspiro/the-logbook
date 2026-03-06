@@ -89,6 +89,7 @@ export const TrainingProgressRenderer: React.FC<Props> = ({ data }) => {
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function getTrainingProgressExportData(data: TrainingProgressReport) {
   const columns = [
     { key: 'member_name', header: 'Member' },

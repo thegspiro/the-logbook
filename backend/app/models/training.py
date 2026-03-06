@@ -274,7 +274,10 @@ class TrainingRecord(Base):
         index=True,
     )
     course_id = Column(
-        String(36), ForeignKey("training_courses.id", ondelete="SET NULL"), nullable=True, index=True
+        String(36),
+        ForeignKey("training_courses.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
     # Training Details
@@ -1753,7 +1756,9 @@ class ExternalTrainingProvider(Base):
 
     # Default Category Mapping
     default_category_id = Column(
-        String(36), ForeignKey("training_categories.id", ondelete="SET NULL"), nullable=True
+        String(36),
+        ForeignKey("training_categories.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     # Status
@@ -1833,7 +1838,9 @@ class ExternalCategoryMapping(Base):
 
     # Internal Category Mapping
     internal_category_id = Column(
-        String(36), ForeignKey("training_categories.id", ondelete="SET NULL"), nullable=True
+        String(36),
+        ForeignKey("training_categories.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     # Mapping Status
@@ -1892,7 +1899,9 @@ class ExternalUserMapping(Base):
     external_name = Column(String(255))  # Full name from external system
 
     # Internal User Mapping
-    internal_user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    internal_user_id = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Mapping Status
     is_mapped = Column(Boolean, default=False)
@@ -2036,10 +2045,16 @@ class ExternalTrainingImport(Base):
 
     # Internal Record Link
     training_record_id = Column(
-        String(36), ForeignKey("training_records.id", ondelete="SET NULL"), nullable=True, index=True
+        String(36),
+        ForeignKey("training_records.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     user_id = Column(
-        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )  # Mapped internal user
 
     # Import Status
@@ -2336,7 +2351,9 @@ class ShiftTemplate(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     __table_args__ = (Index("idx_shift_template_org", "organization_id"),)
 
@@ -2367,7 +2384,11 @@ class ShiftPattern(Base):
 
     name = Column(String(200), nullable=False)
     description = Column(Text)
-    pattern_type = Column(Enum(PatternType, values_callable=lambda x: [e.value for e in x]), nullable=False, default=PatternType.WEEKLY)
+    pattern_type = Column(
+        Enum(PatternType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=PatternType.WEEKLY,
+    )
 
     # Pattern definition
     template_id = Column(
@@ -2398,7 +2419,9 @@ class ShiftPattern(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     __table_args__ = (Index("idx_shift_pattern_org", "organization_id"),)
 
@@ -2446,7 +2469,9 @@ class ShiftAssignment(Base):
     )
 
     # Tracking
-    assigned_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    assigned_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     confirmed_at = Column(DateTime(timezone=True))
     notes = Column(Text)
 
@@ -2500,7 +2525,9 @@ class ShiftSwapRequest(Base):
         String(36), ForeignKey("shifts.id", ondelete="SET NULL"), nullable=True
     )
     # The member they want to swap with (optional — can be open request)
-    target_user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    target_user_id = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     status = Column(
         Enum(SwapRequestStatus), nullable=False, default=SwapRequestStatus.PENDING
@@ -2508,7 +2535,9 @@ class ShiftSwapRequest(Base):
     reason = Column(Text)
 
     # Review
-    reviewed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewed_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     reviewed_at = Column(DateTime(timezone=True))
     reviewer_notes = Column(Text)
 
@@ -2561,7 +2590,9 @@ class ShiftTimeOff(Base):
     reason = Column(Text)
 
     status = Column(Enum(TimeOffStatus), nullable=False, default=TimeOffStatus.PENDING)
-    approved_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    approved_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     approved_at = Column(DateTime(timezone=True))
     reviewer_notes = Column(Text)
 
@@ -2855,9 +2886,7 @@ class RenewalTask(Base):
     # Progress
     hours_completed = Column(Float, default=0)
     courses_completed = Column(JSON)  # List of completed course IDs
-    category_hours_completed = Column(
-        JSON
-    )  # {"category_id": hours_completed} tracking
+    category_hours_completed = Column(JSON)  # {"category_id": hours_completed} tracking
     assessment_passed = Column(Boolean, default=False)
     progress_percentage = Column(Float, default=0.0)
 
@@ -2924,9 +2953,7 @@ class CompetencyMatrix(Base):
     position = Column(
         String(100), nullable=False, index=True
     )  # firefighter, driver, officer, etc.
-    role_id = Column(
-        String(36), nullable=True, index=True
-    )  # Optional link to role
+    role_id = Column(String(36), nullable=True, index=True)  # Optional link to role
 
     # Requirements: list of skill/competency pairs
     # Format: [{"skill_evaluation_id": "...", "required_level": "competent", "priority": "required"}]
@@ -2994,9 +3021,7 @@ class MemberCompetency(Base):
 
     # Evaluation history
     last_evaluated_at = Column(DateTime(timezone=True))
-    last_evaluator_id = Column(
-        String(36), ForeignKey("users.id"), nullable=True
-    )
+    last_evaluator_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     evaluation_count = Column(Integer, default=0)
     last_score = Column(Float)
 
@@ -3196,9 +3221,7 @@ class TrainingEffectivenessEvaluation(Base):
     results_notes = Column(Text)
 
     # Evaluator
-    evaluated_by = Column(
-        String(36), ForeignKey("users.id"), nullable=True
-    )
+    evaluated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     evaluated_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Timestamps
@@ -3278,7 +3301,9 @@ class MultiAgencyTraining(Base):
     )  # [{"position": "IC", "user_id": "...", "agency": "..."}]
     nims_compliant = Column(Boolean, default=False)
     after_action_report = Column(Text)
-    lessons_learned = Column(JSON)  # [{"area": "communication", "finding": "...", "recommendation": "..."}]
+    lessons_learned = Column(
+        JSON
+    )  # [{"area": "communication", "finding": "...", "recommendation": "..."}]
 
     # Agreement tracking
     mutual_aid_agreement_id = Column(String(100))

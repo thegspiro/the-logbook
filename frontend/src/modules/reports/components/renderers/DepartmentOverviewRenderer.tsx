@@ -73,6 +73,7 @@ export const DepartmentOverviewRenderer: React.FC<Props> = ({ data }) => {
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function getDepartmentOverviewExportData(data: DepartmentOverviewReport) {
   const rows = [
     { metric: 'Total Members', value: data.members.total },

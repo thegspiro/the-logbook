@@ -158,7 +158,9 @@ class InventoryCategory(Base):
 
     # Organization
     parent_category_id = Column(
-        String(36), ForeignKey("inventory_categories.id", ondelete="SET NULL"), nullable=True
+        String(36),
+        ForeignKey("inventory_categories.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     # Settings
@@ -244,7 +246,9 @@ class InventoryItem(Base):
     # Depreciation
     expected_lifetime_years = Column(Integer)
     current_value = Column(Numeric(10, 2))
-    replacement_cost = Column(Numeric(10, 2))  # Cost to charge member for lost/damaged item
+    replacement_cost = Column(
+        Numeric(10, 2)
+    )  # Cost to charge member for lost/damaged item
 
     # Physical Details
     size = Column(String(50))  # Small, Medium, Large, or specific measurements
@@ -253,13 +257,19 @@ class InventoryItem(Base):
 
     # Location
     location_id = Column(
-        String(36), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True, index=True
+        String(36),
+        ForeignKey("locations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )  # Room reference
     storage_location = Column(
         String(255)
     )  # Free-text storage area (legacy, e.g., Shelf B-3)
     storage_area_id = Column(
-        String(36), ForeignKey("storage_areas.id", ondelete="SET NULL"), nullable=True, index=True
+        String(36),
+        ForeignKey("storage_areas.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )  # Structured storage area
     station = Column(String(100))  # Which station it's assigned to
 
@@ -553,9 +563,7 @@ class IssuanceAllowance(Base):
 
     # Limits
     max_quantity = Column(Integer, nullable=False)  # Max units per period
-    period_type = Column(
-        String(20), default="annual"
-    )  # "annual", "career", "one_time"
+    period_type = Column(String(20), default="annual")  # "annual", "career", "one_time"
     is_active = Column(Boolean, default=True)
 
     # Timestamps
@@ -867,7 +875,9 @@ class DepartureClearanceItem(Base):
     )  # ID of the ItemAssignment / CheckOutRecord / ItemIssuance
 
     # Snapshot of item info at clearance creation (so it remains readable even if item is later retired)
-    item_id = Column(String(36), ForeignKey("inventory_items.id", ondelete="SET NULL"), nullable=True)
+    item_id = Column(
+        String(36), ForeignKey("inventory_items.id", ondelete="SET NULL"), nullable=True
+    )
     item_name = Column(String(255), nullable=False)
     item_serial_number = Column(String(255))
     item_asset_tag = Column(String(255))
@@ -945,7 +955,9 @@ class InventoryNotificationQueue(Base):
     )
 
     # Item snapshot (readable even if item is later retired)
-    item_id = Column(String(36), ForeignKey("inventory_items.id", ondelete="SET NULL"), nullable=True)
+    item_id = Column(
+        String(36), ForeignKey("inventory_items.id", ondelete="SET NULL"), nullable=True
+    )
     item_name = Column(String(255), nullable=False)
     item_serial_number = Column(String(255))
     item_asset_tag = Column(String(255))
@@ -1066,7 +1078,9 @@ class EquipmentRequest(Base):
         String(36), ForeignKey("inventory_items.id", ondelete="SET NULL"), nullable=True
     )  # Specific item (optional)
     category_id = Column(
-        String(36), ForeignKey("inventory_categories.id", ondelete="SET NULL"), nullable=True
+        String(36),
+        ForeignKey("inventory_categories.id", ondelete="SET NULL"),
+        nullable=True,
     )  # Category (optional)
     quantity = Column(Integer, nullable=False, default=1)
     request_type = Column(
@@ -1088,7 +1102,9 @@ class EquipmentRequest(Base):
         default=RequestStatus.PENDING,
         index=True,
     )
-    reviewed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewed_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     reviewed_at = Column(DateTime(timezone=True))
     review_notes = Column(Text)
 
@@ -1163,7 +1179,10 @@ class StorageArea(Base):
 
     # Room/location this storage area belongs to (top-level only; children inherit)
     location_id = Column(
-        String(36), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True, index=True
+        String(36),
+        ForeignKey("locations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
     # Optional: barcode or QR code for scanning
@@ -1234,7 +1253,9 @@ class WriteOffRequest(Base):
     )
 
     # The item being written off
-    item_id = Column(String(36), ForeignKey("inventory_items.id", ondelete="SET NULL"), nullable=True)
+    item_id = Column(
+        String(36), ForeignKey("inventory_items.id", ondelete="SET NULL"), nullable=True
+    )
     item_name = Column(String(255), nullable=False)
     item_serial_number = Column(String(255))
     item_asset_tag = Column(String(255))
@@ -1260,13 +1281,17 @@ class WriteOffRequest(Base):
     requested_by = Column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
-    reviewed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewed_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     reviewed_at = Column(DateTime(timezone=True))
     review_notes = Column(Text)
 
     # Optional link to departure clearance
     clearance_id = Column(
-        String(36), ForeignKey("departure_clearances.id", ondelete="SET NULL"), nullable=True
+        String(36),
+        ForeignKey("departure_clearances.id", ondelete="SET NULL"),
+        nullable=True,
     )
     clearance_item_id = Column(String(36))
 
@@ -1560,9 +1585,19 @@ class ReturnRequest(Base):
     item_name = Column(String(255), nullable=False)  # Snapshot for display
 
     # Link to specific record being returned
-    assignment_id = Column(String(36), ForeignKey("item_assignments.id", ondelete="SET NULL"), nullable=True)
-    issuance_id = Column(String(36), ForeignKey("item_issuances.id", ondelete="SET NULL"), nullable=True)
-    checkout_id = Column(String(36), ForeignKey("checkout_records.id", ondelete="SET NULL"), nullable=True)
+    assignment_id = Column(
+        String(36),
+        ForeignKey("item_assignments.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    issuance_id = Column(
+        String(36), ForeignKey("item_issuances.id", ondelete="SET NULL"), nullable=True
+    )
+    checkout_id = Column(
+        String(36),
+        ForeignKey("checkout_records.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     # Member-reported details
     quantity_returning = Column(Integer, nullable=False, default=1)
@@ -1580,7 +1615,9 @@ class ReturnRequest(Base):
         default=ReturnRequestStatus.PENDING,
         index=True,
     )
-    reviewed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewed_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     reviewed_at = Column(DateTime(timezone=True))
     review_notes = Column(Text)
 

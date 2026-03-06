@@ -949,9 +949,7 @@ class EventService:
         training_session = None
         if event.event_type == EventType.TRAINING:
             session_result = await self.db.execute(
-                select(TrainingSession).where(
-                    TrainingSession.event_id == event.id
-                )
+                select(TrainingSession).where(TrainingSession.event_id == event.id)
             )
             training_session = session_result.scalar_one_or_none()
 
@@ -961,9 +959,7 @@ class EventService:
             if not check_in_time:
                 continue
 
-            duration_minutes = (
-                effective_end - check_in_time
-            ).total_seconds() / 60
+            duration_minutes = (effective_end - check_in_time).total_seconds() / 60
             duration_minutes = max(0, int(duration_minutes))
             rsvp.attendance_duration_minutes = duration_minutes
             updated_count += 1
@@ -973,23 +969,16 @@ class EventService:
                 record_result = await self.db.execute(
                     select(TrainingRecord).where(
                         TrainingRecord.user_id == str(rsvp.user_id),
-                        TrainingRecord.course_name
-                        == training_session.course_name,
-                        TrainingRecord.scheduled_date
-                        == event.start_datetime.date(),
+                        TrainingRecord.course_name == training_session.course_name,
+                        TrainingRecord.scheduled_date == event.start_datetime.date(),
                     )
                 )
                 training_record = record_result.scalar_one_or_none()
-                if (
-                    training_record
-                    and (
-                        training_record.hours_completed is None
-                        or training_record.hours_completed == 0
-                    )
+                if training_record and (
+                    training_record.hours_completed is None
+                    or training_record.hours_completed == 0
                 ):
-                    training_record.hours_completed = round(
-                        duration_minutes / 60.0, 2
-                    )
+                    training_record.hours_completed = round(duration_minutes / 60.0, 2)
 
         await self.db.commit()
 

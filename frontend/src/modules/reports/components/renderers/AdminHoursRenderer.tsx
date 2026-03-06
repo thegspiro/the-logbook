@@ -67,6 +67,7 @@ export const AdminHoursRenderer: React.FC<Props> = ({ data }) => {
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function getAdminHoursExportData(data: AdminHoursReport) {
   const columns = [
     { key: 'member_name', header: 'Member' },

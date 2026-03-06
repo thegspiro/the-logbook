@@ -3104,7 +3104,9 @@ class InventoryService:
                 "period_type": allowance.period_type,
             }
 
-        issued_q = select(func.coalesce(func.sum(ItemIssuance.quantity_issued), 0)).where(
+        issued_q = select(
+            func.coalesce(func.sum(ItemIssuance.quantity_issued), 0)
+        ).where(
             ItemIssuance.organization_id == str(organization_id),
             ItemIssuance.user_id == str(user_id),
             ItemIssuance.item_id.in_(item_ids),
@@ -3150,9 +3152,7 @@ class InventoryService:
                 reason=reason,
             )
             if error:
-                results.append(
-                    {"user_id": user_id, "success": False, "error": error}
-                )
+                results.append({"user_id": user_id, "success": False, "error": error})
             else:
                 results.append(
                     {
@@ -3204,12 +3204,20 @@ class InventoryService:
                 quantity_issued=0,
                 condition=ItemCondition.GOOD,
                 status=ItemStatus.AVAILABLE,
-                category_id=str(kwargs["category_id"]) if kwargs.get("category_id") else None,
+                category_id=(
+                    str(kwargs["category_id"]) if kwargs.get("category_id") else None
+                ),
                 replacement_cost=kwargs.get("replacement_cost"),
                 purchase_price=kwargs.get("purchase_price"),
                 unit_of_measure=kwargs.get("unit_of_measure"),
-                location_id=str(kwargs["location_id"]) if kwargs.get("location_id") else None,
-                storage_area_id=str(kwargs["storage_area_id"]) if kwargs.get("storage_area_id") else None,
+                location_id=(
+                    str(kwargs["location_id"]) if kwargs.get("location_id") else None
+                ),
+                storage_area_id=(
+                    str(kwargs["storage_area_id"])
+                    if kwargs.get("storage_area_id")
+                    else None
+                ),
                 station=kwargs.get("station"),
                 notes=kwargs.get("notes"),
                 created_by=str(created_by),
@@ -3285,7 +3293,9 @@ class InventoryService:
         for iss in issuances:
             user_name = ""
             if iss.user:
-                user_name = f"{iss.user.first_name or ''} {iss.user.last_name or ''}".strip()
+                user_name = (
+                    f"{iss.user.first_name or ''} {iss.user.last_name or ''}".strip()
+                )
             item_name = iss.item.name if iss.item else "Unknown"
 
             cost = iss.charge_amount or (
@@ -3299,21 +3309,25 @@ class InventoryService:
             elif iss.charge_status == "waived":
                 total_waived += 1
 
-            items.append({
-                "issuance_id": iss.id,
-                "item_id": iss.item_id,
-                "item_name": item_name,
-                "user_id": iss.user_id,
-                "user_name": user_name,
-                "quantity_issued": iss.quantity_issued,
-                "issued_at": iss.issued_at,
-                "returned_at": iss.returned_at,
-                "is_returned": iss.is_returned,
-                "return_condition": iss.return_condition.value if iss.return_condition else None,
-                "unit_cost_at_issuance": iss.unit_cost_at_issuance,
-                "charge_status": iss.charge_status,
-                "charge_amount": iss.charge_amount,
-            })
+            items.append(
+                {
+                    "issuance_id": iss.id,
+                    "item_id": iss.item_id,
+                    "item_name": item_name,
+                    "user_id": iss.user_id,
+                    "user_name": user_name,
+                    "quantity_issued": iss.quantity_issued,
+                    "issued_at": iss.issued_at,
+                    "returned_at": iss.returned_at,
+                    "is_returned": iss.is_returned,
+                    "return_condition": (
+                        iss.return_condition.value if iss.return_condition else None
+                    ),
+                    "unit_cost_at_issuance": iss.unit_cost_at_issuance,
+                    "charge_status": iss.charge_status,
+                    "charge_amount": iss.charge_amount,
+                }
+            )
 
         return {
             "items": items,
@@ -3363,7 +3377,11 @@ class InventoryService:
         if dupe_result.scalar_one_or_none():
             return None, "You already have a pending return request for this item"
 
-        condition_enum = ItemCondition(reported_condition) if reported_condition else ItemCondition.GOOD
+        condition_enum = (
+            ItemCondition(reported_condition)
+            if reported_condition
+            else ItemCondition.GOOD
+        )
         type_enum = ReturnRequestType(return_type)
 
         request = ReturnRequest(
@@ -3598,14 +3616,16 @@ class InventoryService:
             item = item_result.scalar_one_or_none()
             if item and item.active:
                 days_until = (rec.retirement_date - date.today()).days
-                items_due.append({
-                    "item_id": item.id,
-                    "item_name": item.name,
-                    "serial_number": item.serial_number,
-                    "asset_tag": item.asset_tag,
-                    "retirement_date": rec.retirement_date.isoformat(),
-                    "days_until_retirement": days_until,
-                    "assigned_to": item.assigned_to_user_id,
-                })
+                items_due.append(
+                    {
+                        "item_id": item.id,
+                        "item_name": item.name,
+                        "serial_number": item.serial_number,
+                        "asset_tag": item.asset_tag,
+                        "retirement_date": rec.retirement_date.isoformat(),
+                        "days_until_retirement": days_until,
+                        "assigned_to": item.assigned_to_user_id,
+                    }
+                )
 
         return items_due

@@ -13,7 +13,6 @@ their workflow.
 
 import html as _html
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
@@ -142,11 +141,7 @@ async def _send_request_notification(
                     else ""
                 ),
                 "decline_reason": event_request.decline_reason or "",
-                "message": (
-                    extra_context.get("message", "")
-                    if extra_context
-                    else ""
-                ),
+                "message": (extra_context.get("message", "") if extra_context else ""),
                 "organization_name": org_name,
             }
 

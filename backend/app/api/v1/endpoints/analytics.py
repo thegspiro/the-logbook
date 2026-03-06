@@ -4,8 +4,6 @@ Analytics API Endpoints
 Endpoints for tracking and retrieving analytics data.
 """
 
-from typing import Optional
-
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import extract, func, select

@@ -133,7 +133,7 @@ describe('usePullToRefresh', () => {
     expect(result.current.refreshing).toBe(true);
 
     await act(async () => {
-      resolveRefresh!();
+      resolveRefresh?.();
       await pendingRefresh;
     });
 

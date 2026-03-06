@@ -332,7 +332,10 @@ class Document(Base):
         index=True,
     )
     folder_id = Column(
-        String(36), ForeignKey("document_folders.id", ondelete="SET NULL"), nullable=True, index=True
+        String(36),
+        ForeignKey("document_folders.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
     # Document Information

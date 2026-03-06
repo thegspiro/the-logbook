@@ -8,7 +8,6 @@ import calendar
 import csv
 import io
 from datetime import date, datetime, timedelta, timezone
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status

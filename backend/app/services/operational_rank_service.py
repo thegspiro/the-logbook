@@ -69,9 +69,7 @@ class OperationalRankService:
         await self.db.flush()
         # Refresh server-computed timestamps to prevent MissingGreenlet
         for rank in ranks:
-            await self.db.refresh(
-                rank, attribute_names=["created_at", "updated_at"]
-            )
+            await self.db.refresh(rank, attribute_names=["created_at", "updated_at"])
         return ranks
 
     # ------------------------------------------------------------------

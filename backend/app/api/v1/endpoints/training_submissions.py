@@ -5,8 +5,6 @@ Handles self-reported training from members, officer review/approval,
 and self-report configuration management.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 

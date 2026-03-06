@@ -7,7 +7,7 @@ Accessible by admins via the membership module admin area.
 
 import os
 import uuid
-from typing import List
+
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from loguru import logger

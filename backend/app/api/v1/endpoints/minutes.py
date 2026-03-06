@@ -6,7 +6,6 @@ motions, action items, and full-text search.
 """
 
 import logging
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status

@@ -6,7 +6,6 @@ attendance tracking, and calendar views.
 """
 
 from datetime import date, timedelta
-from typing import Dict, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status

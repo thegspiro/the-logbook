@@ -6,13 +6,11 @@ budget management, expenditure logging, compliance task tracking,
 and grant reporting.
 """
 
-from datetime import date, datetime, timezone
+from datetime import date
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
-from uuid import UUID
 
-from loguru import logger
-from sqlalchemy import and_, case, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -351,9 +349,11 @@ class GrantService:
                         "grant funds. Include serial numbers, location, and "
                         "condition."
                     ),
-                    due_date=application.grant_end_date
-                    if application.grant_end_date
-                    else date.today(),
+                    due_date=(
+                        application.grant_end_date
+                        if application.grant_end_date
+                        else date.today()
+                    ),
                     status=ComplianceTaskStatus.PENDING,
                     priority="medium",
                     reminder_days_before=30,
@@ -513,7 +513,10 @@ class GrantService:
         # Recalculate budget item totals
         if old_budget_item_id:
             await self._update_budget_item_spent(old_budget_item_id)
-        if expenditure.budget_item_id and expenditure.budget_item_id != old_budget_item_id:
+        if (
+            expenditure.budget_item_id
+            and expenditure.budget_item_id != old_budget_item_id
+        ):
             await self._update_budget_item_spent(expenditure.budget_item_id)
 
         return expenditure
@@ -562,9 +565,7 @@ class GrantService:
         query = select(GrantComplianceTask).join(GrantApplication)
         query = query.where(GrantApplication.organization_id == organization_id)
         if application_id:
-            query = query.where(
-                GrantComplianceTask.application_id == application_id
-            )
+            query = query.where(GrantComplianceTask.application_id == application_id)
         if status:
             query = query.where(GrantComplianceTask.status == status)
         if due_before:
@@ -676,9 +677,7 @@ class GrantService:
     # Dashboard & Reporting
     # ------------------------------------------------------------------
 
-    async def get_dashboard_data(
-        self, organization_id: str
-    ) -> Dict[str, Any]:
+    async def get_dashboard_data(self, organization_id: str) -> Dict[str, Any]:
         """Aggregate data for the grants dashboard."""
         today = date.today()
 
@@ -714,12 +713,18 @@ class GrantService:
 
         # Total grant funding (awarded)
         funding_result = await self.db.execute(
-            select(
-                func.coalesce(func.sum(GrantApplication.amount_awarded), 0)
-            ).where(
+            select(func.coalesce(func.sum(GrantApplication.amount_awarded), 0)).where(
                 GrantApplication.organization_id == organization_id,
                 GrantApplication.application_status.in_(
-                    [s.value for s in [ApplicationStatus.AWARDED, ApplicationStatus.ACTIVE, ApplicationStatus.REPORTING, ApplicationStatus.CLOSED]]
+                    [
+                        s.value
+                        for s in [
+                            ApplicationStatus.AWARDED,
+                            ApplicationStatus.ACTIVE,
+                            ApplicationStatus.REPORTING,
+                            ApplicationStatus.CLOSED,
+                        ]
+                    ]
                 ),
             )
         )
@@ -751,7 +756,10 @@ class GrantService:
             .where(
                 GrantApplication.organization_id == organization_id,
                 GrantComplianceTask.status.in_(
-                    [ComplianceTaskStatus.PENDING.value, ComplianceTaskStatus.IN_PROGRESS.value]
+                    [
+                        ComplianceTaskStatus.PENDING.value,
+                        ComplianceTaskStatus.IN_PROGRESS.value,
+                    ]
                 ),
                 GrantComplianceTask.due_date <= compliance_cutoff,
             )
@@ -812,9 +820,7 @@ class GrantService:
         )
         applications = list(result.scalars().unique().all())
 
-        total_requested = sum(
-            float(a.amount_requested or 0) for a in applications
-        )
+        total_requested = sum(float(a.amount_requested or 0) for a in applications)
         total_awarded = sum(
             float(a.amount_awarded or 0)
             for a in applications
@@ -845,9 +851,7 @@ class GrantService:
             1 for a in applications if a.application_status == ApplicationStatus.DENIED
         )
         total_decided = awarded_count + denied_count
-        success_rate = (
-            (awarded_count / total_decided * 100) if total_decided > 0 else 0
-        )
+        success_rate = (awarded_count / total_decided * 100) if total_decided > 0 else 0
 
         # Compliance task summary
         all_tasks = []
@@ -870,7 +874,11 @@ class GrantService:
         spending_by_category: Dict[str, float] = {}
         for a in applications:
             for item in a.budget_items:
-                cat = item.category.value if hasattr(item.category, "value") else item.category
+                cat = (
+                    item.category.value
+                    if hasattr(item.category, "value")
+                    else item.category
+                )
                 spending_by_category[cat] = spending_by_category.get(cat, 0) + float(
                     item.amount_spent or 0
                 )

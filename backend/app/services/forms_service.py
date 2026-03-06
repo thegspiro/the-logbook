@@ -8,7 +8,7 @@ fields, submissions, public forms, integrations, and reporting.
 import html as html_lib
 import re
 from datetime import date, datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy import delete, func, or_, select
@@ -28,6 +28,9 @@ from app.models.forms import (
     IntegrationType,
 )
 from app.models.user import User, UserStatus
+
+if TYPE_CHECKING:
+    from app.models.membership_pipeline import ProspectiveMember
 
 
 class FormsService:
@@ -581,18 +584,14 @@ class FormsService:
                     MembershipPipelineStep.name,
                 ).where(
                     func.json_unquote(
-                        func.json_extract(
-                            MembershipPipelineStep.config, "$.form_id"
-                        )
+                        func.json_extract(MembershipPipelineStep.config, "$.form_id")
                     )
                     == str(form_id)
                 )
             )
             referencing_steps = step_result.all()
             if referencing_steps:
-                step_names = ", ".join(
-                    s.name or s.id for s in referencing_steps
-                )
+                step_names = ", ".join(s.name or s.id for s in referencing_steps)
                 return False, (
                     f"This form cannot be deleted because it is used by "
                     f"pipeline step(s): {step_names}. Remove the form "
@@ -1085,9 +1084,7 @@ class FormsService:
                 return None, "Invalid target module"
 
             try:
-                integration_type = IntegrationType(
-                    integration_data["integration_type"]
-                )
+                integration_type = IntegrationType(integration_data["integration_type"])
             except (ValueError, KeyError):
                 return None, "Invalid integration type"
 
@@ -1454,9 +1451,7 @@ class FormsService:
             # reassign it to the correct one so reprocessing actually
             # fixes the problem for the user.
             if pipeline_id and str(existing_prospect.pipeline_id or "") != pipeline_id:
-                await self._reassign_prospect_pipeline(
-                    existing_prospect, pipeline_id
-                )
+                await self._reassign_prospect_pipeline(existing_prospect, pipeline_id)
 
             # Auto-complete the form_submission step so coordinators
             # can see the original answers and the prospect advances.
@@ -1485,14 +1480,18 @@ class FormsService:
             # columns.  This avoids duplicating PII in the JSON blob
             # and keeps metadata lean.
             _PII_COLUMNS = {
-                "first_name", "last_name", "email", "phone", "mobile",
-                "date_of_birth", "address_street", "address_city",
-                "address_state", "address_zip",
+                "first_name",
+                "last_name",
+                "email",
+                "phone",
+                "mobile",
+                "date_of_birth",
+                "address_street",
+                "address_city",
+                "address_state",
+                "address_zip",
             }
-            metadata = {
-                k: v for k, v in mapped_data.items()
-                if k not in _PII_COLUMNS
-            }
+            metadata = {k: v for k, v in mapped_data.items() if k not in _PII_COLUMNS}
 
             # Guard against excessively large metadata (max 64 KB).
             import json as _json
@@ -1635,9 +1634,7 @@ class FormsService:
                 MembershipPipeline.organization_id == organization_id,
                 MembershipPipeline.is_active.is_(True),
                 func.json_unquote(
-                    func.json_extract(
-                        MembershipPipelineStep.config, "$.form_id"
-                    )
+                    func.json_extract(MembershipPipelineStep.config, "$.form_id")
                 )
                 == str(form_id),
             )
@@ -1698,9 +1695,7 @@ class FormsService:
 
             # 2. Resolve the first step of the new pipeline
             pipeline_service = MembershipPipelineService(self.db)
-            first_step_id = await pipeline_service._get_first_step_id(
-                pipeline_id
-            )
+            first_step_id = await pipeline_service._get_first_step_id(pipeline_id)
 
             if not first_step_id:
                 raise ValueError(
@@ -1816,9 +1811,7 @@ class FormsService:
 
         # Advance the prospect to the next step.
         try:
-            await pipeline_service._advance_current_step(
-                prospect, str(target_step.id)
-            )
+            await pipeline_service._advance_current_step(prospect, str(target_step.id))
         except Exception as e:
             logger.warning(
                 f"Failed to advance prospect {prospect.id} past "
@@ -1859,11 +1852,7 @@ class FormsService:
             )
 
         # Validate required fields for equipment assignment
-        missing = [
-            f
-            for f in ("member_id", "item_id")
-            if not mapped_data.get(f)
-        ]
+        missing = [f for f in ("member_id", "item_id") if not mapped_data.get(f)]
         if missing:
             return {
                 "success": False,
@@ -2027,9 +2016,7 @@ class FormsService:
         contact_email = mapped_data.get("contact_email", "")
         if not contact_name or not contact_email:
             missing = [
-                f
-                for f in ("contact_name", "contact_email")
-                if not mapped_data.get(f)
+                f for f in ("contact_name", "contact_email") if not mapped_data.get(f)
             ]
             return {
                 "success": False,

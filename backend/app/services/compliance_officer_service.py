@@ -173,9 +173,7 @@ class ISOReadinessService:
             total_hours = sum(member_hours.values())
             avg_hours = total_hours / total_members
             members_meeting = sum(
-                1
-                for h in member_hours.values()
-                if h >= cat["required_hours"]
+                1 for h in member_hours.values() if h >= cat["required_hours"]
             )
             compliance_pct = round(members_meeting / total_members * 100, 1)
             category_compliance_pcts.append(compliance_pct)
@@ -478,9 +476,7 @@ class RecordCompletenessService:
                         "course_name": r.course_name or "Unknown",
                         "user_id": str(r.user_id),
                         "completion_date": (
-                            r.completion_date.isoformat()
-                            if r.completion_date
-                            else None
+                            r.completion_date.isoformat() if r.completion_date else None
                         ),
                         "missing_fields": missing,
                     }
@@ -600,13 +596,10 @@ class AnnualComplianceReportService:
             certs = [
                 r
                 for r in user_records
-                if r.certification_number
-                and r.status == TrainingStatus.COMPLETED
+                if r.certification_number and r.status == TrainingStatus.COMPLETED
             ]
             expired = sum(
-                1
-                for r in certs
-                if r.expiration_date and r.expiration_date < today
+                1 for r in certs if r.expiration_date and r.expiration_date < today
             )
             active = len(certs) - expired
             total_certs_active += active
@@ -681,9 +674,7 @@ class AnnualComplianceReportService:
         recert_summary = await self._get_recertification_summary(organization_id)
 
         # Instructor summary
-        instructor_summary = await self._get_instructor_summary(
-            organization_id, today
-        )
+        instructor_summary = await self._get_instructor_summary(organization_id, today)
 
         # Multi-agency summary
         multi_agency_summary = await self._get_multi_agency_summary(
@@ -735,12 +726,8 @@ class AnnualComplianceReportService:
                 "records_with_instructor": field_lookup.get("instructor", 0),
                 "records_with_location": field_lookup.get("location", 0),
                 "records_with_hours": field_lookup.get("hours_completed", 0),
-                "records_with_certification": field_lookup.get(
-                    "course_name", 0
-                ),
-                "completeness_pct": record_completeness[
-                    "overall_completeness_pct"
-                ],
+                "records_with_certification": field_lookup.get("course_name", 0),
+                "completeness_pct": record_completeness["overall_completeness_pct"],
             },
         }
 
@@ -763,23 +750,15 @@ class AnnualComplianceReportService:
         )
         task_counts: Dict[str, int] = {}
         for row in tasks_result:
-            status_val = (
-                row[0].value if hasattr(row[0], "value") else str(row[0])
-            )
+            status_val = row[0].value if hasattr(row[0], "value") else str(row[0])
             task_counts[status_val] = row[1]
 
         return {
             "active_pathways": active_pathways,
-            "tasks_completed": task_counts.get(
-                RenewalTaskStatus.COMPLETED.value, 0
-            ),
-            "tasks_pending": task_counts.get(
-                RenewalTaskStatus.PENDING.value, 0
-            )
+            "tasks_completed": task_counts.get(RenewalTaskStatus.COMPLETED.value, 0),
+            "tasks_pending": task_counts.get(RenewalTaskStatus.PENDING.value, 0)
             + task_counts.get(RenewalTaskStatus.IN_PROGRESS.value, 0),
-            "tasks_expired": task_counts.get(
-                RenewalTaskStatus.EXPIRED.value, 0
-            )
+            "tasks_expired": task_counts.get(RenewalTaskStatus.EXPIRED.value, 0)
             + task_counts.get(RenewalTaskStatus.LAPSED.value, 0),
         }
 
@@ -844,17 +823,14 @@ class AnnualComplianceReportService:
 
         evals_result = await self.db.execute(
             select(TrainingEffectivenessEvaluation).where(
-                TrainingEffectivenessEvaluation.organization_id
-                == organization_id,
+                TrainingEffectivenessEvaluation.organization_id == organization_id,
                 TrainingEffectivenessEvaluation.created_at >= year_start,
                 TrainingEffectivenessEvaluation.created_at < year_end,
             )
         )
         evals = evals_result.scalars().all()
 
-        ratings = [
-            e.overall_rating for e in evals if e.overall_rating is not None
-        ]
+        ratings = [e.overall_rating for e in evals if e.overall_rating is not None]
         gains = [
             e.knowledge_gain_percentage
             for e in evals

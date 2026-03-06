@@ -120,9 +120,7 @@ def _build_crew_section(pcr: Element, call: dict[str, Any]) -> None:
         if isinstance(member, dict):
             SubElement(member_el, "eCrew.01").text = member.get("name", "")
             if member.get("certification_level"):
-                SubElement(member_el, "eCrew.02").text = member[
-                    "certification_level"
-                ]
+                SubElement(member_el, "eCrew.02").text = member["certification_level"]
         elif isinstance(member, str):
             SubElement(member_el, "eCrew.01").text = member
 

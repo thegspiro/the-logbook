@@ -40,14 +40,10 @@ class ReportsService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def _get_rank_display_map(
-        self, organization_id: UUID
-    ) -> Dict[str, str]:
+    async def _get_rank_display_map(self, organization_id: UUID) -> Dict[str, str]:
         """Build a rank_code → display_name mapping for the organization."""
         result = await self.db.execute(
-            select(
-                OperationalRank.rank_code, OperationalRank.display_name
-            ).where(
+            select(OperationalRank.rank_code, OperationalRank.display_name).where(
                 OperationalRank.organization_id == str(organization_id),
                 OperationalRank.is_active == True,  # noqa: E712
             )

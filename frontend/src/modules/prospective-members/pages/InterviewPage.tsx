@@ -330,7 +330,7 @@ const InterviewForm: React.FC<InterviewFormProps> = ({
   );
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
       {/* Interviewer role */}
       <div>
         <label className={labelClass}>Your Role / Title</label>
@@ -502,7 +502,7 @@ const InterviewCard: React.FC<InterviewCardProps> = ({
               </button>
               <button
                 type="button"
-                onClick={handleDelete}
+                onClick={() => void handleDelete()}
                 disabled={isDeleting}
                 className="rounded p-1 text-theme-text-tertiary hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
                 title="Delete"

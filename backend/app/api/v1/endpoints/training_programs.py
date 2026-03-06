@@ -5,7 +5,6 @@ Endpoints for managing training programs, enrollments, and member progress track
 """
 
 from datetime import date
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -233,9 +232,7 @@ async def create_training_program(
 
 @router.get("/programs", response_model=list[TrainingProgramResponse])
 async def get_training_programs(
-    target_position: str | None = Query(
-        None, description="Filter by target position"
-    ),
+    target_position: str | None = Query(None, description="Filter by target position"),
     is_template: bool | None = Query(None, description="Filter by template status"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),

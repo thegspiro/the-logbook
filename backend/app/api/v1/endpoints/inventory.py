@@ -3823,9 +3823,7 @@ async def update_allowance(
     result = await db.execute(
         select(IssuanceAllowance)
         .where(IssuanceAllowance.id == str(allowance_id))
-        .where(
-            IssuanceAllowance.organization_id == str(current_user.organization_id)
-        )
+        .where(IssuanceAllowance.organization_id == str(current_user.organization_id))
     )
     allowance = result.scalar_one_or_none()
     if not allowance:
@@ -3853,9 +3851,7 @@ async def delete_allowance(
     result = await db.execute(
         select(IssuanceAllowance)
         .where(IssuanceAllowance.id == str(allowance_id))
-        .where(
-            IssuanceAllowance.organization_id == str(current_user.organization_id)
-        )
+        .where(IssuanceAllowance.organization_id == str(current_user.organization_id))
     )
     allowance = result.scalar_one_or_none()
     if not allowance:
@@ -3877,9 +3873,7 @@ async def check_member_allowance(
 ):
     """Check a member's remaining issuance allowance for a category."""
     # Get user's role for role-specific allowances
-    user_result = await db.execute(
-        select(User).where(User.id == str(user_id))
-    )
+    user_result = await db.execute(select(User).where(User.id == str(user_id)))
     user = user_result.scalar_one_or_none()
     role_id = user.role_id if user else None
 
@@ -4054,7 +4048,9 @@ async def create_return_request(
 
     # Build response with requester name
     resp = ReturnRequestResponse.model_validate(request_obj)
-    resp.requester_name = f"{current_user.first_name or ''} {current_user.last_name or ''}".strip()
+    resp.requester_name = (
+        f"{current_user.first_name or ''} {current_user.last_name or ''}".strip()
+    )
     return resp
 
 
@@ -4147,7 +4143,11 @@ async def review_return_request(
         {"request_id": str(request_id), "status": data.status},
     )
 
-    return {"id": str(request_id), "status": data.status, "message": f"Return request {data.status}"}
+    return {
+        "id": str(request_id),
+        "status": data.status,
+        "message": f"Return request {data.status}",
+    }
 
 
 # ============================================
