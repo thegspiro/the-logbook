@@ -39,7 +39,7 @@ export default function FacilitiesPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [newFacility, setNewFacility] = useState({
     name: '', facility_number: '', address_line1: '', city: '', state: '', zip_code: '',
-    facility_type_id: '', notes: '',
+    facility_type_id: '', status_id: '', phone: '', email: '', notes: '',
   });
   // Filter state for maintenance/inspections tabs
   const [filterFacilityId, setFilterFacilityId] = useState<string | null>(null);
@@ -92,11 +92,14 @@ export default function FacilitiesPage() {
         ...(newFacility.state.trim() ? { state: newFacility.state.trim() } : {}),
         ...(newFacility.zip_code.trim() ? { zip_code: newFacility.zip_code.trim() } : {}),
         ...(newFacility.facility_type_id ? { facility_type_id: newFacility.facility_type_id } : {}),
+        ...(newFacility.status_id ? { status_id: newFacility.status_id } : {}),
+        ...(newFacility.phone.trim() ? { phone: newFacility.phone.trim() } : {}),
+        ...(newFacility.email.trim() ? { email: newFacility.email.trim() } : {}),
         ...(newFacility.notes.trim() ? { notes: newFacility.notes.trim() } : {}),
       });
       toast.success('Facility created');
       setShowCreateModal(false);
-      setNewFacility({ name: '', facility_number: '', address_line1: '', city: '', state: '', zip_code: '', facility_type_id: '', notes: '' });
+      setNewFacility({ name: '', facility_number: '', address_line1: '', city: '', state: '', zip_code: '', facility_type_id: '', status_id: '', phone: '', email: '', notes: '' });
       void loadFacilities();
     } catch {
       toast.error('Failed to create facility');
@@ -417,21 +420,48 @@ export default function FacilitiesPage() {
                   <input type="text" value={newFacility.zip_code} onChange={(e) => setNewFacility(prev => ({ ...prev, zip_code: e.target.value }))} className={inputCls} />
                 </div>
               </div>
-              {facilityTypes.length > 0 && (
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Type</label>
-                  <select
-                    value={newFacility.facility_type_id}
-                    onChange={(e) => setNewFacility(prev => ({ ...prev, facility_type_id: e.target.value }))}
-                    className={inputCls}
-                  >
-                    <option value="">Select type...</option>
-                    {facilityTypes.map(t => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Phone</label>
+                  <input type="tel" value={newFacility.phone} onChange={(e) => setNewFacility(prev => ({ ...prev, phone: e.target.value }))} placeholder="(555) 123-4567" className={inputCls} />
                 </div>
-              )}
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Email</label>
+                  <input type="email" value={newFacility.email} onChange={(e) => setNewFacility(prev => ({ ...prev, email: e.target.value }))} placeholder="station@example.com" className={inputCls} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {facilityTypes.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">Type</label>
+                    <select
+                      value={newFacility.facility_type_id}
+                      onChange={(e) => setNewFacility(prev => ({ ...prev, facility_type_id: e.target.value }))}
+                      className={inputCls}
+                    >
+                      <option value="">Select type...</option>
+                      {facilityTypes.map(t => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {facilityStatuses.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">Status</label>
+                    <select
+                      value={newFacility.status_id}
+                      onChange={(e) => setNewFacility(prev => ({ ...prev, status_id: e.target.value }))}
+                      className={inputCls}
+                    >
+                      <option value="">Select status...</option>
+                      {facilityStatuses.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-1">Notes</label>
                 <textarea

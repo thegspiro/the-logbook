@@ -90,6 +90,15 @@ class FacilitySystemType(str, enum.Enum):
     PAINTING = "painting"
     LANDSCAPING = "landscaping"
     PARKING = "parking"
+    # Fire-service-critical systems
+    EXHAUST_EXTRACTION = "exhaust_extraction"
+    CASCADE_AIR = "cascade_air"
+    DECONTAMINATION = "decontamination"
+    BAY_DOOR = "bay_door"
+    AIR_QUALITY_MONITOR = "air_quality_monitor"
+    PPE_CLEANING = "ppe_cleaning"
+    ALERTING_SYSTEM = "alerting_system"
+    SHORE_POWER = "shore_power"
     OTHER = "other"
 
 
@@ -717,6 +726,18 @@ class FacilitySystem(Base):
     last_serviced_date = Column(Date, nullable=True)
     last_inspected_date = Column(Date, nullable=True)
 
+    # Certification / testing (NFPA compliance tracking)
+    last_tested_date = Column(Date, nullable=True)
+    next_test_due = Column(Date, nullable=True)
+    test_result = Column(
+        String(50), nullable=True
+    )  # e.g. "pass", "fail", "conditional"
+    certification_number = Column(String(100), nullable=True)
+    certified_by = Column(String(200), nullable=True)
+    test_frequency_days = Column(
+        Integer, nullable=True
+    )  # Interval between required tests
+
     # Notes
     notes = Column(Text, nullable=True)
 
@@ -798,12 +819,15 @@ class FacilityInspection(Base):
     inspector_name = Column(String(200), nullable=True)
     inspector_organization = Column(String(200), nullable=True)
     certificate_number = Column(String(100), nullable=True)
+    inspector_license_number = Column(String(100), nullable=True)
+    inspector_agency = Column(String(200), nullable=True)
 
     # Findings / deficiencies
     findings = Column(Text, nullable=True)
     corrective_actions = Column(Text, nullable=True)
     corrective_action_deadline = Column(Date, nullable=True)
     corrective_action_completed = Column(Boolean, default=False, nullable=False)
+    corrective_action_completed_date = Column(Date, nullable=True)
 
     # Attachments (inspection reports, certificates)
     attachments = Column(JSON, nullable=True)
@@ -872,6 +896,15 @@ class KeyType(str, enum.Enum):
     BIOMETRIC = "biometric"
     COMBINATION = "combination"
     OTHER = "other"
+
+
+class ZoneClassification(str, enum.Enum):
+    """NFPA 1500/1585 contamination control zone classification"""
+
+    HOT = "hot"  # Red zone — apparatus bays, PPE storage, decon areas
+    TRANSITION = "transition"  # Yellow zone — buffer/decon between hot and cold
+    COLD = "cold"  # Green zone — living quarters, kitchen, offices
+    UNCLASSIFIED = "unclassified"
 
 
 class RoomType(str, enum.Enum):
@@ -1189,6 +1222,13 @@ class FacilityRoom(Base):
     room_type = Column(
         Enum(RoomType, values_callable=lambda x: [e.value for e in x]),
         default=RoomType.OTHER,
+        nullable=False,
+    )
+    zone_classification = Column(
+        Enum(
+            ZoneClassification, values_callable=lambda x: [e.value for e in x]
+        ),
+        default=ZoneClassification.UNCLASSIFIED,
         nullable=False,
     )
 

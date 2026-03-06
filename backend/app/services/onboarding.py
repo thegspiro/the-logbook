@@ -498,7 +498,13 @@ class OnboardingService:
             state = org.physical_state
             zip_code = org.physical_zip
 
-        # Look up the system "Fire Station" type (or first available station type)
+        # Pick a default type that matches the organization type
+        default_type_name = (
+            "EMS Station"
+            if org.organization_type == OrganizationType.EMS_ONLY
+            else "Fire Station"
+        )
+
         type_result = await self.db.execute(
             select(FacilityType).where(
                 or_(
@@ -506,7 +512,7 @@ class OnboardingService:
                     FacilityType.organization_id.is_(None),
                 ),
                 FacilityType.is_active.is_(True),
-                FacilityType.name == "Fire Station",
+                FacilityType.name == default_type_name,
             )
         )
         facility_type = type_result.scalar_one_or_none()

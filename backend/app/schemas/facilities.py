@@ -50,6 +50,14 @@ class FacilitySystemTypeEnum(str, Enum):
     PAINTING = "painting"
     LANDSCAPING = "landscaping"
     PARKING = "parking"
+    EXHAUST_EXTRACTION = "exhaust_extraction"
+    CASCADE_AIR = "cascade_air"
+    DECONTAMINATION = "decontamination"
+    BAY_DOOR = "bay_door"
+    AIR_QUALITY_MONITOR = "air_quality_monitor"
+    PPE_CLEANING = "ppe_cleaning"
+    ALERTING_SYSTEM = "alerting_system"
+    SHORE_POWER = "shore_power"
     OTHER = "other"
 
 
@@ -115,6 +123,13 @@ class KeyTypeEnum(str, Enum):
     BIOMETRIC = "biometric"
     COMBINATION = "combination"
     OTHER = "other"
+
+
+class ZoneClassificationEnum(str, Enum):
+    HOT = "hot"
+    TRANSITION = "transition"
+    COLD = "cold"
+    UNCLASSIFIED = "unclassified"
 
 
 class RoomTypeEnum(str, Enum):
@@ -634,6 +649,13 @@ class FacilitySystemBase(BaseModel):
     last_serviced_date: Optional[date] = None
     last_inspected_date: Optional[date] = None
 
+    last_tested_date: Optional[date] = None
+    next_test_due: Optional[date] = None
+    test_result: Optional[str] = Field(None, max_length=50)
+    certification_number: Optional[str] = Field(None, max_length=100)
+    certified_by: Optional[str] = Field(None, max_length=200)
+    test_frequency_days: Optional[int] = Field(None, ge=1)
+
     notes: Optional[str] = None
     sort_order: int = 0
     is_active: bool = True
@@ -659,6 +681,13 @@ class FacilitySystemUpdate(BaseModel):
     condition: Optional[FacilitySystemConditionEnum] = None
     last_serviced_date: Optional[date] = None
     last_inspected_date: Optional[date] = None
+
+    last_tested_date: Optional[date] = None
+    next_test_due: Optional[date] = None
+    test_result: Optional[str] = Field(None, max_length=50)
+    certification_number: Optional[str] = Field(None, max_length=100)
+    certified_by: Optional[str] = Field(None, max_length=200)
+    test_frequency_days: Optional[int] = Field(None, ge=1)
 
     notes: Optional[str] = None
     sort_order: Optional[int] = None
@@ -694,11 +723,14 @@ class FacilityInspectionBase(BaseModel):
     inspector_name: Optional[str] = Field(None, max_length=200)
     inspector_organization: Optional[str] = Field(None, max_length=200)
     certificate_number: Optional[str] = Field(None, max_length=100)
+    inspector_license_number: Optional[str] = Field(None, max_length=100)
+    inspector_agency: Optional[str] = Field(None, max_length=200)
 
     findings: Optional[str] = None
     corrective_actions: Optional[str] = None
     corrective_action_deadline: Optional[date] = None
     corrective_action_completed: bool = False
+    corrective_action_completed_date: Optional[date] = None
 
     attachments: Optional[List[FileAttachment]] = None
     notes: Optional[str] = None
@@ -720,11 +752,14 @@ class FacilityInspectionUpdate(BaseModel):
     inspector_name: Optional[str] = Field(None, max_length=200)
     inspector_organization: Optional[str] = Field(None, max_length=200)
     certificate_number: Optional[str] = Field(None, max_length=100)
+    inspector_license_number: Optional[str] = Field(None, max_length=100)
+    inspector_agency: Optional[str] = Field(None, max_length=200)
 
     findings: Optional[str] = None
     corrective_actions: Optional[str] = None
     corrective_action_deadline: Optional[date] = None
     corrective_action_completed: Optional[bool] = None
+    corrective_action_completed_date: Optional[date] = None
 
     attachments: Optional[List[FileAttachment]] = None
     notes: Optional[str] = None
@@ -882,6 +917,7 @@ class FacilityRoomBase(BaseModel):
     room_number: Optional[str] = Field(None, max_length=50)
     floor: Optional[int] = None
     room_type: RoomTypeEnum = RoomTypeEnum.OTHER
+    zone_classification: ZoneClassificationEnum = ZoneClassificationEnum.UNCLASSIFIED
     square_footage: Optional[int] = Field(None, ge=0)
     capacity: Optional[int] = Field(None, ge=0)
     description: Optional[str] = None
@@ -900,6 +936,7 @@ class FacilityRoomUpdate(BaseModel):
     room_number: Optional[str] = Field(None, max_length=50)
     floor: Optional[int] = None
     room_type: Optional[RoomTypeEnum] = None
+    zone_classification: Optional[ZoneClassificationEnum] = None
     square_footage: Optional[int] = Field(None, ge=0)
     capacity: Optional[int] = Field(None, ge=0)
     description: Optional[str] = None
