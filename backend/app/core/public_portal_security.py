@@ -24,11 +24,15 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 # In-memory rate limit tracking (for quick checks before DB)
 # Structure: {api_key_id: {hour_timestamp: request_count}}
-rate_limit_cache = defaultdict(lambda: defaultdict(int))
+rate_limit_cache: dict[str, dict[int, int]] = defaultdict(lambda: defaultdict(int))
 
 # In-memory IP tracking (for secondary limits)
 # Structure: {ip_address: {minute_timestamp: request_count}}
-ip_rate_limit_cache = defaultdict(lambda: defaultdict(int))
+ip_rate_limit_cache: dict[str, dict[int, int]] = defaultdict(lambda: defaultdict(int))
+
+# Maximum tracked keys before forced cleanup
+_MAX_RATE_LIMIT_KEYS = 5_000
+_MAX_IP_RATE_LIMIT_KEYS = 10_000
 
 
 def hash_api_key(api_key: str) -> str:
@@ -107,6 +111,9 @@ async def check_rate_limit(
     Returns:
         Tuple of (is_allowed, current_count, limit)
     """
+    # Auto-cleanup when cache grows too large
+    if len(rate_limit_cache) > _MAX_RATE_LIMIT_KEYS:
+        cleanup_rate_limit_cache()
     hour_timestamp = await get_current_hour_timestamp()
 
     # Quick check in memory cache
@@ -153,6 +160,10 @@ async def check_ip_rate_limit(
     Returns:
         Tuple of (is_allowed, current_count, limit)
     """
+    # Auto-cleanup when cache grows too large
+    if len(ip_rate_limit_cache) > _MAX_IP_RATE_LIMIT_KEYS:
+        cleanup_rate_limit_cache()
+
     minute_timestamp = await get_current_minute_timestamp()
 
     # Check memory cache
