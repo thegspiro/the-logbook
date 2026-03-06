@@ -979,12 +979,16 @@ class SecurityMonitoringMiddleware(BaseHTTPMiddleware):
                     except UnicodeDecodeError:
                         pass  # Binary data, skip
 
-                # Re-wrap body for handler
+                # Re-wrap body for handler so downstream can read it again.
+                # ASGI requires `receive` to be an async callable.
                 from starlette.requests import Request as StarletteRequest
+
+                async def _replay_body() -> Message:
+                    return {"type": "http.request", "body": body}
 
                 request = StarletteRequest(
                     scope=request.scope,
-                    receive=lambda: {"type": "http.request", "body": body},
+                    receive=_replay_body,
                 )
             except Exception as e:
                 logger.debug(f"Could not read request body: {e}")

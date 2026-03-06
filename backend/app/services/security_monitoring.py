@@ -97,6 +97,11 @@ class SecurityMonitoringService:
     Comprehensive security monitoring and intrusion detection
     """
 
+    # Caps to prevent unbounded in-memory growth under sustained traffic.
+    _MAX_IN_MEMORY_ALERTS = 500
+    _MAX_TRACKING_KEYS = 5_000
+    _MAX_EXTERNAL_ENDPOINTS = 200
+
     def __init__(self):
         self.thresholds = AnomalyThresholds()
         self.alerts: List[SecurityAlert] = []
@@ -149,6 +154,54 @@ class SecurityMonitoringService:
             ],
         }
 
+        self._last_eviction: float = 0.0
+
+    def _evict_stale_tracking_keys(self) -> None:
+        """Remove stale keys from in-memory tracking dicts to bound memory.
+
+        Runs at most once per 60 seconds to avoid overhead.
+        """
+        import time as _time
+
+        now = _time.monotonic()
+        if now - self._last_eviction < 60:
+            return
+        self._last_eviction = now
+
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=2)
+
+        # Evict _api_calls keys with no recent entries
+        for key in list(self._api_calls):
+            entries = self._api_calls[key]
+            if not entries or entries[-1] < cutoff:
+                del self._api_calls[key]
+
+        # Evict _login_attempts keys with no recent entries
+        for key in list(self._login_attempts):
+            entries = self._login_attempts[key]
+            if not entries or entries[-1] < cutoff:
+                del self._login_attempts[key]
+
+        # Evict _session_ips keys with no recent entries
+        for key in list(self._session_ips):
+            entries = self._session_ips[key]
+            if not entries or entries[-1][1] < cutoff:
+                del self._session_ips[key]
+
+        # Evict _data_transfers keys with no recent entries
+        day_cutoff = datetime.now(timezone.utc) - timedelta(days=2)
+        for key in list(self._data_transfers):
+            entries = self._data_transfers[key]
+            if not entries or entries[-1][1] < day_cutoff:
+                del self._data_transfers[key]
+
+        # Cap _external_endpoints
+        if len(self._external_endpoints) > self._MAX_EXTERNAL_ENDPOINTS:
+            # Keep only the most recent entries (set is unordered, so just trim)
+            excess = len(self._external_endpoints) - self._MAX_EXTERNAL_ENDPOINTS
+            for _ in range(excess):
+                self._external_endpoints.pop()
+
     async def _add_alert(
         self,
         db: AsyncSession,
@@ -156,6 +209,9 @@ class SecurityMonitoringService:
     ) -> None:
         """Add alert to in-memory cache and persist to database."""
         self.alerts.append(alert)
+        # Trim oldest in-memory alerts to prevent unbounded growth
+        if len(self.alerts) > self._MAX_IN_MEMORY_ALERTS:
+            self.alerts = self.alerts[-self._MAX_IN_MEMORY_ALERTS:]
         try:
             from app.models.security_alert import (
                 AlertType as DBAlertType,
@@ -271,6 +327,9 @@ class SecurityMonitoringService:
         """
         Check for rate limit violations that might indicate attacks
         """
+        # Periodically evict stale keys to bound memory usage
+        self._evict_stale_tracking_keys()
+
         now = datetime.now(timezone.utc)
         minute_ago = now - timedelta(minutes=1)
 

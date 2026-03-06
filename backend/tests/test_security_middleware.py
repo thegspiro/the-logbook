@@ -370,96 +370,123 @@ class TestInputSanitizer:
 # ---------------------------------------------------------------------------
 
 class TestSecurityHeadersMiddleware:
+    """Tests for SecurityHeadersMiddleware (pure ASGI middleware).
+
+    The middleware operates at the ASGI level: it wraps the ``send``
+    callable to inject headers into ``http.response.start`` messages.
+    These tests simulate the ASGI lifecycle by calling the middleware
+    with a scope, a no-op ``receive``, and a recording ``send``.
+    """
+
+    @staticmethod
+    def _make_scope(path: str) -> dict:
+        """Create a minimal ASGI HTTP scope for *path*."""
+        return {"type": "http", "path": path}
+
+    @staticmethod
+    async def _noop_receive():
+        return {"type": "http.request", "body": b""}
+
+    @staticmethod
+    def _make_app(status: int = 200):
+        """Return a minimal ASGI app that sends a response with *status*."""
+        async def app(scope, receive, send):
+            await send({
+                "type": "http.response.start",
+                "status": status,
+                "headers": [],
+            })
+            await send({
+                "type": "http.response.body",
+                "body": b"",
+            })
+        return app
+
+    @staticmethod
+    def _headers_dict(messages: list) -> dict[str, str]:
+        """Extract headers from recorded ``http.response.start`` messages
+        into a ``{name: value}`` dict (both decoded from bytes)."""
+        for msg in messages:
+            if msg["type"] == "http.response.start":
+                return {
+                    k.decode(): v.decode()
+                    for k, v in msg.get("headers", [])
+                }
+        return {}
 
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_api_path_includes_cache_control(self):
         """API paths should get cache-busting headers."""
-        app = MagicMock()
-        middleware = SecurityHeadersMiddleware(app)
+        sent: list = []
+        middleware = SecurityHeadersMiddleware(self._make_app())
 
-        # Build a mock request for an API path
-        request = MagicMock()
-        request.url.path = "/api/v1/users"
+        await middleware(self._make_scope("/api/v1/users"), self._noop_receive, sent.append)
 
-        # Build a mock response that call_next returns
-        response = MagicMock()
-        response.headers = {}
-
-        async def call_next(req):
-            return response
-
-        result = await middleware.dispatch(request, call_next)
-        assert result.headers["Cache-Control"] == "no-store, no-cache, must-revalidate, proxy-revalidate"
-        assert result.headers["Pragma"] == "no-cache"
-        assert result.headers["Expires"] == "0"
+        headers = self._headers_dict(sent)
+        assert headers["cache-control"] == "no-store, no-cache, must-revalidate, proxy-revalidate"
+        assert headers["pragma"] == "no-cache"
+        assert headers["expires"] == "0"
 
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_non_api_path_no_cache_control(self):
         """Non-API paths should NOT get cache-busting headers."""
-        app = MagicMock()
-        middleware = SecurityHeadersMiddleware(app)
+        sent: list = []
+        middleware = SecurityHeadersMiddleware(self._make_app())
 
-        request = MagicMock()
-        request.url.path = "/static/logo.png"
+        await middleware(self._make_scope("/static/logo.png"), self._noop_receive, sent.append)
 
-        response = MagicMock()
-        response.headers = {}
-
-        async def call_next(req):
-            return response
-
-        result = await middleware.dispatch(request, call_next)
-        assert "Cache-Control" not in result.headers
+        headers = self._headers_dict(sent)
+        assert "cache-control" not in headers
 
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_security_headers_always_set(self):
         """Security headers should be set on every response."""
-        app = MagicMock()
-        middleware = SecurityHeadersMiddleware(app)
+        sent: list = []
+        middleware = SecurityHeadersMiddleware(self._make_app())
 
-        request = MagicMock()
-        request.url.path = "/api/v1/data"
+        await middleware(self._make_scope("/api/v1/data"), self._noop_receive, sent.append)
 
-        response = MagicMock()
-        response.headers = {}
-
-        async def call_next(req):
-            return response
-
-        result = await middleware.dispatch(request, call_next)
-
-        assert result.headers["Strict-Transport-Security"] == "max-age=31536000; includeSubDomains"
-        assert result.headers["X-Content-Type-Options"] == "nosniff"
-        assert result.headers["X-Frame-Options"] == "DENY"
-        assert result.headers["X-XSS-Protection"] == "1; mode=block"
-        assert result.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
-        assert "geolocation=()" in result.headers["Permissions-Policy"]
-        assert "Content-Security-Policy" in result.headers
+        headers = self._headers_dict(sent)
+        assert headers["strict-transport-security"] == "max-age=31536000; includeSubDomains"
+        assert headers["x-content-type-options"] == "nosniff"
+        assert headers["x-frame-options"] == "DENY"
+        assert headers["x-xss-protection"] == "1; mode=block"
+        assert headers["referrer-policy"] == "strict-origin-when-cross-origin"
+        assert "geolocation=()" in headers["permissions-policy"]
+        assert "content-security-policy" in headers
 
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_csp_header_content(self):
         """Content-Security-Policy header should include expected directives."""
-        app = MagicMock()
-        middleware = SecurityHeadersMiddleware(app)
+        sent: list = []
+        middleware = SecurityHeadersMiddleware(self._make_app())
 
-        request = MagicMock()
-        request.url.path = "/api/v1/resource"
+        await middleware(self._make_scope("/api/v1/resource"), self._noop_receive, sent.append)
 
-        response = MagicMock()
-        response.headers = {}
-
-        async def call_next(req):
-            return response
-
-        result = await middleware.dispatch(request, call_next)
-        csp = result.headers["Content-Security-Policy"]
+        headers = self._headers_dict(sent)
+        csp = headers["content-security-policy"]
         assert "default-src 'self'" in csp
         assert "script-src 'self'" in csp
         assert "frame-ancestors 'none'" in csp
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_non_http_scope_passes_through(self):
+        """Non-HTTP scopes (e.g. lifespan) should pass through without modification."""
+        inner_called = False
+
+        async def inner_app(scope, receive, send):
+            nonlocal inner_called
+            inner_called = True
+
+        middleware = SecurityHeadersMiddleware(inner_app)
+        await middleware({"type": "lifespan"}, self._noop_receive, lambda msg: None)
+
+        assert inner_called
 
 
 # ---------------------------------------------------------------------------
