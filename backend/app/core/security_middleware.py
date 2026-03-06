@@ -37,15 +37,25 @@ class RateLimiter:
     # Maximum number of tracked keys before forced eviction
     _MAX_KEYS = 10_000
 
+    # Minimum interval between eviction scans (seconds)
+    _EVICTION_INTERVAL = 60
+
     def __init__(self):
         self.requests: dict[str, list[float]] = defaultdict(list)
         self.lockouts: dict[str, float] = {}
         self._last_eviction: float = 0.0
 
     def _evict_stale(self, now: float, window_seconds: int) -> None:
-        """Remove entries that have no recent requests and expired lockouts."""
-        # Only run eviction at most once per minute to avoid overhead
-        if now - self._last_eviction < 60:
+        """Remove entries that have no recent requests and expired lockouts.
+
+        Also enforces ``_MAX_KEYS`` by force-evicting the oldest entries
+        when the key count exceeds the limit (prevents unbounded memory
+        growth under DDoS with many unique source IPs).
+        """
+        # Only run eviction at most once per _EVICTION_INTERVAL to avoid overhead,
+        # unless the key count exceeds the safety limit.
+        over_limit = len(self.requests) > self._MAX_KEYS
+        if not over_limit and now - self._last_eviction < self._EVICTION_INTERVAL:
             return
         self._last_eviction = now
 
@@ -62,6 +72,18 @@ class RateLimiter:
         ]
         for k in stale_keys:
             del self.requests[k]
+
+        # Enforce _MAX_KEYS: if still over the limit after removing stale
+        # entries, force-evict the keys with the oldest last-request time.
+        if len(self.requests) > self._MAX_KEYS:
+            by_recency = sorted(
+                self.requests.items(),
+                key=lambda kv: kv[1][-1] if kv[1] else 0.0,
+            )
+            to_remove = len(self.requests) - self._MAX_KEYS
+            for key, _ in by_recency[:to_remove]:
+                del self.requests[key]
+                self.lockouts.pop(key, None)
 
     def is_rate_limited(
         self,
@@ -494,7 +516,7 @@ async def verify_csrf_token(request: HTTPConnection) -> None:
         return
 
     # Skip CSRF for safe methods
-    if request.method in ["GET", "HEAD", "OPTIONS"]:
+    if request.method in {"GET", "HEAD", "OPTIONS"}:
         return
 
     # Double-submit cookie pattern: compare header value against cookie

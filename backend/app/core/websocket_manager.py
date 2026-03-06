@@ -50,7 +50,7 @@ class ConnectionManager:
         if not connections:
             return
 
-        dead = []
+        dead: list[WebSocket] = []
         data = json.dumps(message)
         for ws in connections:
             try:
@@ -60,6 +60,30 @@ class ConnectionManager:
 
         for ws in dead:
             self.disconnect(ws, organization_id)
+
+    async def cleanup_dead_connections(self) -> int:
+        """Remove WebSocket connections whose client state is DISCONNECTED.
+
+        Returns the number of connections removed.  Should be called
+        periodically (e.g. every 60 seconds) to prevent memory leaks
+        from clients that closed without a proper close frame.
+        """
+        removed = 0
+        for org_id in list(self._connections):
+            dead: list[WebSocket] = []
+            for ws in self._connections[org_id]:
+                # Starlette sets client_state to DISCONNECTED after close
+                try:
+                    if ws.client_state.name == "DISCONNECTED":
+                        dead.append(ws)
+                except Exception:
+                    dead.append(ws)
+            for ws in dead:
+                self.disconnect(ws, org_id)
+                removed += 1
+        if removed:
+            logger.debug(f"WS cleanup: removed {removed} dead connection(s)")
+        return removed
 
     async def publish_event(self, organization_id: str, event: dict):
         """
@@ -98,6 +122,7 @@ class ConnectionManager:
 
     async def _listen(self):
         """Background task that reads from Redis pub/sub and broadcasts."""
+        cleanup_counter = 0
         try:
             while True:
                 message = await self._pubsub.get_message(
@@ -114,6 +139,12 @@ class ConnectionManager:
                         pass
                 else:
                     await asyncio.sleep(0.1)
+
+                # Periodically clean up dead connections (~every 60 seconds)
+                cleanup_counter += 1
+                if cleanup_counter >= 600:  # ~600 iterations × 0.1s sleep
+                    cleanup_counter = 0
+                    await self.cleanup_dead_connections()
         except asyncio.CancelledError:
             pass
         except Exception as e:

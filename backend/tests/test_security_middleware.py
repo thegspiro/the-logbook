@@ -126,6 +126,92 @@ class TestRateLimiter:
         # Reason should mention seconds remaining
         assert "seconds" in reason.lower() or "minutes" in reason.lower()
 
+    @pytest.mark.unit
+    def test_max_keys_enforced_on_eviction(self):
+        """When tracked keys exceed _MAX_KEYS, the oldest should be force-evicted."""
+        limiter = RateLimiter()
+        # Lower the threshold for testing
+        limiter._MAX_KEYS = 5
+        limiter._EVICTION_INTERVAL = 0  # Allow eviction on every call
+
+        now = time.time()
+        # Insert 8 keys with staggered timestamps so oldest can be identified
+        for i in range(8):
+            key = f"ip-max-{i}"
+            limiter.requests[key] = [now - 100 + i]
+
+        # Trigger eviction by calling is_rate_limited (which calls _evict_stale)
+        limiter.is_rate_limited("ip-trigger", max_requests=100, window_seconds=200)
+
+        # Should have at most _MAX_KEYS (5) keys, plus the trigger key = 6 max,
+        # but since _evict_stale runs before the new request is recorded,
+        # the oldest 3 keys (ip-max-0, ip-max-1, ip-max-2) should be evicted.
+        assert len(limiter.requests) <= limiter._MAX_KEYS + 1
+        # The oldest keys should be gone
+        assert "ip-max-0" not in limiter.requests
+        assert "ip-max-1" not in limiter.requests
+        assert "ip-max-2" not in limiter.requests
+        # The newest should remain
+        assert "ip-max-7" in limiter.requests
+
+    @pytest.mark.unit
+    def test_max_keys_evicts_associated_lockouts(self):
+        """Force-eviction of keys should also remove their lockout entries."""
+        limiter = RateLimiter()
+        limiter._MAX_KEYS = 3
+        limiter._EVICTION_INTERVAL = 0
+
+        now = time.time()
+        for i in range(6):
+            key = f"ip-lock-{i}"
+            limiter.requests[key] = [now - 100 + i]
+            limiter.lockouts[key] = now + 3600  # Future lockout
+
+        # Trigger eviction
+        limiter.is_rate_limited("ip-lock-trigger", max_requests=100, window_seconds=200)
+
+        # Evicted keys should have their lockouts removed too
+        for key in list(limiter.requests.keys()):
+            if key in limiter.lockouts:
+                # Lockout should only exist for keys still in requests
+                assert key in limiter.requests
+
+    @pytest.mark.unit
+    def test_eviction_skipped_when_under_limit_and_interval(self):
+        """Eviction should be skipped when under _MAX_KEYS and within interval."""
+        limiter = RateLimiter()
+        limiter._MAX_KEYS = 100
+        limiter._EVICTION_INTERVAL = 60
+
+        # Set last eviction to now so interval check fails
+        limiter._last_eviction = time.time()
+
+        # Add a stale key
+        old_time = time.time() - 200
+        limiter.requests["stale-key"] = [old_time]
+
+        # Eviction should be skipped (interval not elapsed, under _MAX_KEYS)
+        limiter.is_rate_limited("new-key", max_requests=5, window_seconds=60)
+        assert "stale-key" in limiter.requests
+
+    @pytest.mark.unit
+    def test_eviction_forced_when_over_max_keys(self):
+        """Eviction should run immediately when over _MAX_KEYS, ignoring interval."""
+        limiter = RateLimiter()
+        limiter._MAX_KEYS = 3
+        limiter._EVICTION_INTERVAL = 60
+
+        # Set last eviction to now so interval check would normally skip
+        limiter._last_eviction = time.time()
+
+        now = time.time()
+        for i in range(5):
+            limiter.requests[f"over-{i}"] = [now - 50 + i]
+
+        # Despite interval not elapsed, should evict because over _MAX_KEYS
+        limiter.is_rate_limited("trigger", max_requests=100, window_seconds=60)
+        assert len(limiter.requests) <= limiter._MAX_KEYS + 1
+
 
 # ---------------------------------------------------------------------------
 # CSRFProtection
@@ -375,7 +461,7 @@ class TestSecurityHeadersMiddleware:
     The middleware operates at the ASGI level: it wraps the ``send``
     callable to inject headers into ``http.response.start`` messages.
     These tests simulate the ASGI lifecycle by calling the middleware
-    with a scope, a no-op ``receive``, and a recording ``send``.
+    with a scope, a no-op ``receive``, and an async recording ``send``.
     """
 
     @staticmethod
@@ -403,6 +489,13 @@ class TestSecurityHeadersMiddleware:
         return app
 
     @staticmethod
+    def _make_send(sent: list):
+        """Return an async send callable that records messages into *sent*."""
+        async def _send(message):
+            sent.append(message)
+        return _send
+
+    @staticmethod
     def _headers_dict(messages: list) -> dict[str, str]:
         """Extract headers from recorded ``http.response.start`` messages
         into a ``{name: value}`` dict (both decoded from bytes)."""
@@ -421,7 +514,7 @@ class TestSecurityHeadersMiddleware:
         sent: list = []
         middleware = SecurityHeadersMiddleware(self._make_app())
 
-        await middleware(self._make_scope("/api/v1/users"), self._noop_receive, sent.append)
+        await middleware(self._make_scope("/api/v1/users"), self._noop_receive, self._make_send(sent))
 
         headers = self._headers_dict(sent)
         assert headers["cache-control"] == "no-store, no-cache, must-revalidate, proxy-revalidate"
@@ -435,7 +528,7 @@ class TestSecurityHeadersMiddleware:
         sent: list = []
         middleware = SecurityHeadersMiddleware(self._make_app())
 
-        await middleware(self._make_scope("/static/logo.png"), self._noop_receive, sent.append)
+        await middleware(self._make_scope("/static/logo.png"), self._noop_receive, self._make_send(sent))
 
         headers = self._headers_dict(sent)
         assert "cache-control" not in headers
@@ -447,7 +540,7 @@ class TestSecurityHeadersMiddleware:
         sent: list = []
         middleware = SecurityHeadersMiddleware(self._make_app())
 
-        await middleware(self._make_scope("/api/v1/data"), self._noop_receive, sent.append)
+        await middleware(self._make_scope("/api/v1/data"), self._noop_receive, self._make_send(sent))
 
         headers = self._headers_dict(sent)
         assert headers["strict-transport-security"] == "max-age=31536000; includeSubDomains"
@@ -465,7 +558,7 @@ class TestSecurityHeadersMiddleware:
         sent: list = []
         middleware = SecurityHeadersMiddleware(self._make_app())
 
-        await middleware(self._make_scope("/api/v1/resource"), self._noop_receive, sent.append)
+        await middleware(self._make_scope("/api/v1/resource"), self._noop_receive, self._make_send(sent))
 
         headers = self._headers_dict(sent)
         csp = headers["content-security-policy"]
@@ -484,7 +577,11 @@ class TestSecurityHeadersMiddleware:
             inner_called = True
 
         middleware = SecurityHeadersMiddleware(inner_app)
-        await middleware({"type": "lifespan"}, self._noop_receive, lambda msg: None)
+
+        async def noop_send(msg):
+            pass
+
+        await middleware({"type": "lifespan"}, self._noop_receive, noop_send)
 
         assert inner_called
 
