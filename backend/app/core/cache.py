@@ -53,13 +53,29 @@ class CacheManager:
                     f"Redis connection attempt {attempt}/{settings.REDIS_CONNECT_RETRIES}..."
                 )
 
-                # Create Redis client with timeout
+                # Build optional SSL context for TLS connections
+                ssl_kwargs: dict = {}
+                if settings.REDIS_SSL:
+                    import ssl as _ssl
+
+                    ssl_ctx = _ssl.create_default_context(
+                        cafile=settings.REDIS_SSL_CA
+                        if settings.REDIS_SSL_CA
+                        else None,
+                    )
+                    if not settings.REDIS_SSL_CA:
+                        ssl_ctx.check_hostname = False
+                        ssl_ctx.verify_mode = _ssl.CERT_NONE
+                    ssl_kwargs["ssl"] = ssl_ctx
+
+                # Create Redis client with timeout (and optional TLS)
                 self.redis_client = redis.Redis.from_url(
                     settings.REDIS_URL,
                     encoding="utf-8",
                     decode_responses=True,
                     socket_connect_timeout=settings.REDIS_CONNECT_TIMEOUT,
                     socket_timeout=settings.REDIS_CONNECT_TIMEOUT,
+                    **ssl_kwargs,
                 )
 
                 # Test connection with timeout

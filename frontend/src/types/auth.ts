@@ -17,8 +17,8 @@ export interface RegisterData {
 }
 
 export interface TokenResponse {
-  access_token: string;
-  refresh_token: string;
+  // SEC: Tokens are no longer included in response bodies — they are
+  // transported exclusively via httpOnly cookies to prevent XSS exfiltration.
   token_type: string;
   expires_in: number;
   user?: CurrentUser;

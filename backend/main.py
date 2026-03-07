@@ -1288,11 +1288,16 @@ async def lifespan(app: FastAPI):
     logger.info("Running preflight environment checks...")
 
     # Check critical environment variables
+    _insecure = ("INSECURE_DEFAULT", "CHANGE_ME", "change_me")
     preflight_warnings = []
-    if settings.SECRET_KEY == "change_me_in_production":
-        preflight_warnings.append("SECRET_KEY is using default value")
-    if settings.ENCRYPTION_KEY == "change_me_in_production":
-        preflight_warnings.append("ENCRYPTION_KEY is using default value")
+    if not settings.SECRET_KEY or any(p in settings.SECRET_KEY for p in _insecure):
+        preflight_warnings.append("SECRET_KEY is not set or uses an insecure value")
+    if not settings.ENCRYPTION_KEY or any(
+        p in settings.ENCRYPTION_KEY for p in _insecure
+    ):
+        preflight_warnings.append(
+            "ENCRYPTION_KEY is not set or uses an insecure value"
+        )
 
     if preflight_warnings and settings.ENVIRONMENT == "production":
         for warning in preflight_warnings:
