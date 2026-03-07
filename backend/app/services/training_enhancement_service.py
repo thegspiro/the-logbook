@@ -29,7 +29,7 @@ from app.models.training import (
     TrainingStatus,
     XAPIStatement,
 )
-from app.models.user import User
+from app.models.user import User, UserStatus
 
 
 class RecertificationService:
@@ -795,11 +795,12 @@ class ReportExportService:
         if not start_date:
             start_date = date(end_date.year, 1, 1)
 
-        # Get all members
+        # Get all active members
         users_result = await self.db.execute(
             select(User)
             .where(User.organization_id == organization_id)
-            .where(User.is_active == True)  # noqa: E712
+            .where(User.status == UserStatus.ACTIVE)
+            .where(User.deleted_at.is_(None))
         )
         users = users_result.scalars().all()
 
@@ -931,7 +932,8 @@ class ReportExportService:
         users_result = await self.db.execute(
             select(User).where(
                 User.organization_id == organization_id,
-                User.is_active == True,  # noqa: E712
+                User.status == UserStatus.ACTIVE,
+                User.deleted_at.is_(None),
             )
         )
         users = users_result.scalars().all()
@@ -1047,7 +1049,8 @@ class ReportExportService:
         users_result = await self.db.execute(
             select(User)
             .where(User.organization_id == organization_id)
-            .where(User.is_active == True)  # noqa: E712
+            .where(User.status == UserStatus.ACTIVE)
+            .where(User.deleted_at.is_(None))
         )
         users = users_result.scalars().all()
 
