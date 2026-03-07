@@ -1027,3 +1027,231 @@ class ReportExportService:
             )
 
         return forecasts
+
+    async def generate_compliance_pdf(
+        self,
+        organization_id: str,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+    ) -> io.BytesIO:
+        """Generate a compliance report as a PDF document."""
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.units import inch
+        from reportlab.pdfgen import canvas
+
+        if not end_date:
+            end_date = date.today()
+        if not start_date:
+            start_date = date(end_date.year, 1, 1)
+
+        users_result = await self.db.execute(
+            select(User)
+            .where(User.organization_id == organization_id)
+            .where(User.is_active == True)  # noqa: E712
+        )
+        users = users_result.scalars().all()
+
+        req_result = await self.db.execute(
+            select(TrainingRequirement)
+            .where(TrainingRequirement.organization_id == organization_id)
+            .where(TrainingRequirement.active == True)  # noqa: E712
+        )
+        requirements = req_result.scalars().all()
+
+        buf = io.BytesIO()
+        c = canvas.Canvas(buf, pagesize=letter)
+        page_w, page_h = letter
+        margin = 0.75 * inch
+
+        # Title
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(margin, page_h - margin, "Training Compliance Report")
+        c.setFont("Helvetica", 10)
+        c.drawString(
+            margin,
+            page_h - margin - 18,
+            f"Period: {start_date} to {end_date}  |  Generated: {date.today()}",
+        )
+
+        # Table header
+        y = page_h - margin - 50
+        col_x = [margin, margin + 160, margin + 280, margin + 370]
+        headers = ["Member Name", "Email", "Total Hours", "Completed"]
+        req_col_start = margin + 450
+        c.setFont("Helvetica-Bold", 8)
+        for i, h in enumerate(headers):
+            c.drawString(col_x[i], y, h)
+        for i, req in enumerate(requirements):
+            x = req_col_start + i * 70
+            if x + 60 > page_w - margin:
+                break
+            name = req.name[:10] + ("..." if len(req.name) > 10 else "")
+            c.drawString(x, y, name)
+
+        y -= 4
+        c.setLineWidth(0.5)
+        c.line(margin, y, page_w - margin, y)
+        y -= 12
+
+        c.setFont("Helvetica", 8)
+        for user in users:
+            if y < margin + 20:
+                c.showPage()
+                y = page_h - margin
+                c.setFont("Helvetica", 8)
+
+            records_result = await self.db.execute(
+                select(TrainingRecord)
+                .where(TrainingRecord.user_id == str(user.id))
+                .where(TrainingRecord.organization_id == organization_id)
+                .where(TrainingRecord.status == TrainingStatus.COMPLETED)
+                .where(TrainingRecord.completion_date >= start_date)
+                .where(TrainingRecord.completion_date <= end_date)
+            )
+            records = records_result.scalars().all()
+            total_hours = sum(r.hours_completed or 0 for r in records)
+
+            c.drawString(
+                col_x[0], y, f"{user.first_name} {user.last_name}"[:25]
+            )
+            c.drawString(col_x[1], y, (user.email or "")[:20])
+            c.drawString(col_x[2], y, f"{total_hours:.1f}")
+            c.drawString(col_x[3], y, str(len(records)))
+
+            for i, req in enumerate(requirements):
+                x = req_col_start + i * 70
+                if x + 60 > page_w - margin:
+                    break
+                from app.services.training_service import TrainingService
+
+                detail = TrainingService.evaluate_requirement_detail(
+                    req, records, date.today()
+                )
+                status_text = "Met" if detail["is_met"] else "Not Met"
+                if not detail["is_met"]:
+                    c.setFillColorRGB(0.8, 0, 0)
+                c.drawString(x, y, status_text)
+                c.setFillColorRGB(0, 0, 0)
+
+            y -= 14
+
+        c.save()
+        buf.seek(0)
+        return buf
+
+    async def generate_individual_pdf(
+        self,
+        user_id: str,
+        organization_id: str,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+    ) -> io.BytesIO:
+        """Generate an individual training history PDF."""
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.units import inch
+        from reportlab.pdfgen import canvas
+
+        if not end_date:
+            end_date = date.today()
+        if not start_date:
+            start_date = date(end_date.year - 1, 1, 1)
+
+        # Get user info
+        user_result = await self.db.execute(
+            select(User).where(User.id == user_id)
+        )
+        user = user_result.scalar_one_or_none()
+        user_name = (
+            f"{user.first_name} {user.last_name}" if user else "Unknown"
+        )
+
+        records_result = await self.db.execute(
+            select(TrainingRecord)
+            .where(TrainingRecord.user_id == user_id)
+            .where(TrainingRecord.organization_id == organization_id)
+            .where(TrainingRecord.status == TrainingStatus.COMPLETED)
+            .where(TrainingRecord.completion_date >= start_date)
+            .where(TrainingRecord.completion_date <= end_date)
+            .order_by(TrainingRecord.completion_date.desc())
+        )
+        records = records_result.scalars().all()
+
+        buf = io.BytesIO()
+        c = canvas.Canvas(buf, pagesize=letter)
+        page_w, page_h = letter
+        margin = 0.75 * inch
+
+        # Title
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(margin, page_h - margin, "Individual Training Report")
+        c.setFont("Helvetica", 10)
+        c.drawString(margin, page_h - margin - 18, f"Member: {user_name}")
+        c.drawString(
+            margin,
+            page_h - margin - 32,
+            f"Period: {start_date} to {end_date}  |  "
+            f"Total Records: {len(records)}",
+        )
+
+        # Table header
+        y = page_h - margin - 60
+        col_x = [
+            margin,
+            margin + 150,
+            margin + 230,
+            margin + 300,
+            margin + 360,
+            margin + 420,
+        ]
+        headers = [
+            "Course Name",
+            "Type",
+            "Completed",
+            "Hours",
+            "Cert #",
+            "Expires",
+        ]
+        c.setFont("Helvetica-Bold", 8)
+        for i, h in enumerate(headers):
+            c.drawString(col_x[i], y, h)
+
+        y -= 4
+        c.setLineWidth(0.5)
+        c.line(margin, y, page_w - margin, y)
+        y -= 12
+
+        c.setFont("Helvetica", 8)
+        for r in records:
+            if y < margin + 20:
+                c.showPage()
+                y = page_h - margin
+                c.setFont("Helvetica", 8)
+
+            training_type = (
+                r.training_type.value
+                if hasattr(r.training_type, "value")
+                else str(r.training_type)
+            )
+            c.drawString(col_x[0], y, (r.course_name or "")[:25])
+            c.drawString(col_x[1], y, training_type[:12])
+            c.drawString(
+                col_x[2],
+                y,
+                str(r.completion_date) if r.completion_date else "",
+            )
+            c.drawString(
+                col_x[3],
+                y,
+                f"{r.hours_completed:.1f}" if r.hours_completed else "0",
+            )
+            c.drawString(col_x[4], y, (r.certification_number or "")[:15])
+            c.drawString(
+                col_x[5],
+                y,
+                str(r.expiration_date) if r.expiration_date else "",
+            )
+            y -= 14
+
+        c.save()
+        buf.seek(0)
+        return buf
