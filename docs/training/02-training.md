@@ -15,10 +15,21 @@ The Training module tracks courses, certifications, training requirements, progr
 7. [Reviewing Submissions](#reviewing-submissions)
 8. [Compliance Matrix](#compliance-matrix)
 9. [Expiring Certifications](#expiring-certifications)
-10. [Shift Completion Reports](#shift-completion-reports)
-11. [External Training Integrations](#external-training-integrations)
-12. [Historical Import](#historical-import)
-13. [Troubleshooting](#troubleshooting)
+10. [Waiver Management](#waiver-management)
+11. [Compliance Summary](#compliance-summary)
+12. [Shift Completion Reports](#shift-completion-reports)
+13. [External Training Integrations](#external-training-integrations)
+14. [Historical Import](#historical-import)
+15. [Competency Matrix](#competency-matrix)
+16. [Recertification Tracking](#recertification-tracking)
+17. [Instructor Management](#instructor-management)
+18. [Training Effectiveness Scoring](#training-effectiveness-scoring)
+19. [Multi-Agency Training](#multi-agency-training)
+20. [xAPI (Tin Can) Integration](#xapi-tin-can-integration)
+21. [Compliance Officer Dashboard](#compliance-officer-dashboard)
+22. [Training Record Attachments](#training-record-attachments)
+23. [Troubleshooting](#troubleshooting)
+24. [Skills Testing](#skills-testing)
 
 ---
 
@@ -363,6 +374,271 @@ Navigate to **Training Admin > Import History** to import historical training re
 
 > **Screenshot placeholder:**
 > _[Screenshot of the historical import page showing the file upload area, a parsed data preview table, and a confirmation button]_
+
+---
+
+## Competency Matrix
+
+**Required Permission:** `training.manage`
+
+Navigate to **Training Admin > Compliance Matrix** and select the **Competency** view to see a department-wide readiness heat-map.
+
+The competency matrix provides a visual representation of skills and qualifications across all members. Each cell shows a proficiency level using color-coded indicators:
+
+- **Dark green** — Expert / fully qualified
+- **Green** — Proficient
+- **Yellow** — Developing / partially trained
+- **Red** — Not trained / gap identified
+- **Gray** — Not applicable to this member's role
+
+> **Screenshot placeholder:**
+> _[Screenshot of the Competency Matrix showing a heat-map grid with member names on rows, competency areas on columns, and color-coded cells. Include the filter bar at the top for filtering by station, rank, or competency category]_
+
+### Edge Cases
+
+- The competency heat-map is cached for approximately 5 minutes. Changes to training records or skill test results may not appear immediately — wait for cache expiry or refresh the page.
+- Members whose roles do not include a particular competency area show gray (N/A) cells, not red. This prevents false negatives in department readiness views.
+- If a member has a waiver active for a competency-related requirement, their cell reflects the waiver-adjusted status, not the full requirement.
+
+---
+
+## Recertification Tracking
+
+**Required Permission:** `training.manage`
+
+The system automatically tracks certification expiration dates and generates recertification reminders with configurable lead times.
+
+### Recertification Pathways
+
+Navigate to **Training Admin > Enhancements > Recertification** to configure recertification pathways. Each pathway defines:
+
+- **Certification type** — Which certification this pathway applies to
+- **Lead time** — How far in advance to begin sending reminders (e.g., 90 days before expiry)
+- **Renewal tasks** — Specific steps required for recertification (courses, exams, documentation)
+- **Auto-generation** — Whether to automatically create renewal tasks for members
+
+> **Screenshot placeholder:**
+> _[Screenshot of the Recertification Pathways configuration page showing a list of configured pathways with certification type, lead time, and task count columns. Show one pathway expanded to reveal the renewal task checklist]_
+
+### Member View
+
+Members can view their upcoming recertification tasks at **Training > My Training** in the recertification section. Each task shows:
+
+- The certification requiring renewal
+- Days until expiration
+- Required renewal steps and their completion status
+- Links to relevant courses or submission forms
+
+> **Screenshot placeholder:**
+> _[Screenshot of the member's My Training page showing the recertification section with a certification expiring in 45 days, renewal tasks with checkmarks for completed steps, and a progress indicator]_
+
+### Edge Cases
+
+- Recertification reminders require `EMAIL_ENABLED=true` in the environment and an active Celery beat scheduler running the `process_recertification_reminders` task.
+- If a member holds multiple certifications of the same type (e.g., from different issuers), the system tracks each independently. The earliest expiration triggers reminders first.
+- Permanent waivers do not suppress recertification reminders — certifications must still be maintained even if training hour requirements are waived.
+- If a certification is renewed before the recertification pathway tasks are completed, the tasks are automatically closed and marked as superseded.
+
+---
+
+## Instructor Management
+
+**Required Permission:** `training.manage`
+
+Navigate to **Training Admin > Enhancements > Instructors** to manage instructor qualifications and availability.
+
+### Instructor Qualifications
+
+Each instructor qualification record tracks:
+
+| Field | Description |
+|-------|-------------|
+| **Member** | The qualified instructor |
+| **Qualification type** | instructor, evaluator, lead_instructor, or mentor |
+| **Course** | Which course(s) the instructor is qualified to teach |
+| **Certification date** | When the qualification was earned |
+| **Expiration date** | When the qualification expires (if applicable) |
+
+> **Screenshot placeholder:**
+> _[Screenshot of the Instructor Qualifications page showing a table of instructors with columns for member name, qualification type badge, qualified courses, certification date, and expiration status indicator]_
+
+### Assigning Instructors to Sessions
+
+When creating a training session, you can assign a qualified instructor. The system validates that the instructor holds a valid qualification for the course being taught.
+
+### Edge Cases
+
+- Instructor availability is tracked separately from member scheduling. An instructor may be available for training but assigned to a shift — check both the instructor availability calendar and the scheduling module.
+- If an instructor's qualification expires between session creation and the session date, the system displays a warning but does not automatically remove the assignment. The training officer should reassign.
+- The `GET /training/instructors/validate/{userId}/{courseId}` endpoint can programmatically verify whether a member is qualified to instruct a specific course.
+
+---
+
+## Training Effectiveness Scoring
+
+**Required Permission:** `training.manage`
+
+Navigate to **Training Admin > Enhancements > Effectiveness** to view and manage training effectiveness evaluations.
+
+The system uses the **Kirkpatrick Model** to measure training effectiveness across four levels:
+
+| Level | Name | What It Measures |
+|-------|------|-----------------|
+| 1 | **Reaction** | How participants felt about the training |
+| 2 | **Learning** | Knowledge or skills gained |
+| 3 | **Behavior** | On-the-job application of training |
+| 4 | **Results** | Organizational impact of the training |
+
+### Submitting Evaluations
+
+After a training session, evaluations can be submitted to capture participant feedback and learning outcomes. Navigate to **Training Admin > Effectiveness** and click **Submit Evaluation**.
+
+> **Screenshot placeholder:**
+> _[Screenshot of the Effectiveness Evaluation form showing fields for training session selection, evaluation level dropdown (Reaction/Learning/Behavior/Results), score slider, and notes textarea. Show a summary dashboard below with average scores per level displayed as a bar chart]_
+
+### Viewing Summaries
+
+The effectiveness summary for a course aggregates all evaluations and displays:
+- Average score per Kirkpatrick level
+- Number of evaluations submitted
+- Trend over time
+
+### Edge Cases
+
+- Effectiveness scoring requires post-training evaluations to be submitted. Scores will not appear until the evaluation period configured on the training session has elapsed and at least one evaluation has been submitted.
+- Level 3 (Behavior) and Level 4 (Results) evaluations are typically submitted weeks or months after training. The system allows backdated evaluation submissions.
+- If no evaluations exist for a course, the effectiveness summary returns empty data rather than zeros, to distinguish "not measured" from "scored zero."
+
+---
+
+## Multi-Agency Training
+
+Navigate to **Training Admin > Enhancements > Multi-Agency** to coordinate joint training sessions with other departments.
+
+Multi-agency training sessions allow:
+- Scheduling joint training events across departments
+- Sharing training records between participating organizations
+- Mutual aid tracking and documentation
+- xAPI statement delivery to external Learning Record Stores (LRS)
+
+> **Screenshot placeholder:**
+> _[Screenshot of the Multi-Agency Training page showing a list of joint training sessions with participating organization names, session date, participant count from each org, and status badges (planned, in_progress, completed)]_
+
+### Creating a Multi-Agency Session
+
+1. Click **Create Multi-Agency Session**.
+2. Enter the session details (title, date, location, description).
+3. Add participating organizations by name or code.
+4. Assign the lead organization responsible for reporting.
+5. Click **Save**.
+
+### Edge Cases
+
+- Multi-agency training records are sent asynchronously via Celery. If xAPI statements are not appearing in the external LRS, check Celery worker logs for delivery failures and verify the LRS endpoint URL and API key in training integration settings.
+- Data sharing between organizations is limited to training session metadata, completion status, and hours. Member PII (names, contact info) is not shared unless explicitly configured by both organizations.
+- If a participating organization does not use The Logbook, their members' training records can still be logged manually with organization attribution.
+
+---
+
+## xAPI (Tin Can) Integration
+
+Navigate to **Training Admin > Integrations** to configure xAPI Learning Record Store (LRS) connections.
+
+xAPI integration enables standardized training activity tracking using the Experience API specification. Training activities generate xAPI statements that are delivered to configured LRS endpoints.
+
+### Configuration
+
+| Setting | Description |
+|---------|-------------|
+| **LRS Endpoint URL** | The URL of the Learning Record Store |
+| **API Key** | Authentication key for the LRS |
+| **Statement types** | Which training activities generate xAPI statements |
+| **Delivery mode** | Synchronous or asynchronous (via Celery) |
+
+### Edge Cases
+
+- xAPI statements are delivered asynchronously via Celery by default. Delivery failures are retried with exponential backoff.
+- If the LRS endpoint is unreachable, statements are queued and retried. Check the Celery dead-letter queue if statements consistently fail.
+- Batch processing is supported via `POST /training/xapi/statements/batch` for bulk statement delivery.
+
+---
+
+## Compliance Officer Dashboard
+
+**Required Permission:** `training.manage`
+
+Navigate to **Training Admin > Enhancements > Compliance** for a specialized compliance officer view.
+
+This dashboard provides:
+
+### ISO Readiness
+
+Track organizational readiness against ISO standards with:
+- Overall readiness score
+- Category-by-category assessment
+- Gap identification and remediation tracking
+
+> **Screenshot placeholder:**
+> _[Screenshot of the ISO Readiness dashboard showing an overall readiness percentage gauge, a breakdown by ISO category with progress bars, and a list of identified gaps with priority indicators]_
+
+### Compliance Attestations
+
+Officers can submit and track compliance attestations — formal declarations that specific compliance requirements have been verified.
+
+> **Screenshot placeholder:**
+> _[Screenshot of the Compliance Attestations page showing a table of submitted attestations with columns for attestation type, submitted by, date, status, and a "Create Attestation" button]_
+
+### Annual Compliance Report
+
+Generate a comprehensive annual compliance report covering:
+- Department-wide training completion rates
+- Certification status across all members
+- Waiver summary and impact
+- Requirement-by-requirement breakdown
+- Year-over-year comparison
+
+The report can be exported as a formatted document for regulatory submissions.
+
+> **Screenshot placeholder:**
+> _[Screenshot of the Annual Compliance Report page showing summary statistics at the top (overall compliance %, members compliant, certifications current), a department-wide breakdown table, and an "Export Report" button]_
+
+### Compliance Forecast
+
+The compliance forecast projects future compliance trends based on:
+- Current training completion rates and trajectories
+- Upcoming certification expirations
+- Scheduled training sessions
+- Historical compliance patterns
+
+> **Screenshot placeholder:**
+> _[Screenshot of the Compliance Forecast view showing a line chart projecting compliance percentage over the next 6 months, with annotations for upcoming certification expirations and scheduled training sessions]_
+
+### Edge Cases
+
+- The compliance forecast uses historical data to project trends. Forecasts are less reliable for organizations with fewer than 6 months of data.
+- Annual compliance reports include waiver-adjusted requirements. If a waiver end date changes retroactively (e.g., a member returns from leave early), the report reflects the updated adjustments.
+- Record completeness checks (`GET /compliance/record-completeness`) identify training records missing key fields (hours, certification numbers, completion dates). Incomplete records may not count toward compliance.
+
+---
+
+## Training Record Attachments
+
+Members and officers can attach supporting documents (certificates, transcripts, completion letters) to training records.
+
+### Uploading Attachments
+
+1. Navigate to a training record detail view.
+2. Click **Add Attachment**.
+3. Upload the file (PDF, image, or document).
+4. The attachment is linked to the training record for verification purposes.
+
+> **Screenshot placeholder:**
+> _[Screenshot of a training record detail view showing the record information (course, date, hours, status) with an "Attachments" section below containing uploaded certificate thumbnails and an "Add Attachment" button]_
+
+### Edge Cases
+
+- Attachments are stored via the configured file storage backend (local, S3-compatible, or MinIO). If file storage is not configured, attachment uploads will fail with a clear error message.
+- Maximum file size is determined by the server configuration. Large files (>10MB) may time out on slower connections — the system displays a progress indicator during upload.
 
 ---
 
