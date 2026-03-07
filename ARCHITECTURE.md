@@ -1,6 +1,6 @@
 # The Logbook — Complete Architecture Reference
 
-> **Generated:** 2026-03-04
+> **Generated:** 2026-03-07
 > **Purpose:** Master reference for all connection points, data models, API routes, frontend pages, services, stores, data paths, and data sharing across the application.
 
 ---
@@ -118,6 +118,14 @@ All routes registered in `backend/app/api/v1/api.py`:
 | `/api/v1/training/module-config` | `training_module_config.py` | training-module-config | 4 |
 | `/api/v1/training/skills-testing` | `skills_testing.py` | skills-testing | 16 |
 | `/api/v1/training/shift-reports` | `shift_completion.py` | shift-completion | 11 |
+| `/api/v1/training/recertification` | `training_enhancements.py` | training-recertification | 5 |
+| `/api/v1/training/instructors` | `training_enhancements.py` | training-instructors | 5 |
+| `/api/v1/training/effectiveness` | `training_enhancements.py` | training-effectiveness | 3 |
+| `/api/v1/training/multi-agency` | `training_enhancements.py` | training-multi-agency | 3 |
+| `/api/v1/training/xapi` | `training_enhancements.py` | training-xapi | 3 |
+| `/api/v1/training/competency` | `training_enhancements.py` | training-competency | 5 |
+| `/api/v1/training/reports` | `training_enhancements.py` | training-reports | 2 |
+| `/api/v1/compliance` | `training_enhancements.py` | compliance-officer | 7 |
 | `/api/v1/elections` | `elections.py` | elections | ~34 |
 | `/api/v1/inventory` | `inventory.py` | inventory | ~52 + 1 WS |
 | `/api/v1/forms` | `forms.py` | forms | 21 |
@@ -155,7 +163,13 @@ These endpoints bridge data across modules:
 | `/meetings/from-event/{event_id}` | POST | Create meeting from event | Events → Meetings |
 | `/minutes-records/from-meeting/{meeting_id}` | POST | Create minutes from meeting | Meetings → Minutes |
 | `/training/compliance-matrix` | GET | Member compliance grid | Training + Users |
+| `/training/competency-matrix` | GET | Department readiness heat-map | Training + Users |
 | `/training/certifications/expiring` | GET | Cross-member cert expiry | Training + Users |
+| `/training/multi-agency` | GET/POST | Joint training across departments | Training + Organizations |
+| `/training/xapi/statements` | POST | xAPI statement delivery to LRS | Training + External LRS |
+| `/training/reports/compliance-forecast` | GET | Projected compliance trends | Training + Users |
+| `/compliance/iso-readiness` | GET | ISO compliance readiness | Training + Compliance |
+| `/compliance/annual-report` | GET | Annual compliance report | Training + Users + Compliance |
 | `/reports/generate` | POST | Cross-module report generation | All modules |
 | `/users/{user_id}/property-return-report` | GET | Property return preview | Users + Inventory |
 
@@ -330,6 +344,7 @@ All services in `backend/app/services/`:
 | `training_module_config_service.py` | TrainingModuleConfigService | — | get_config, update_config, get_visibility |
 | `external_training_service.py` | ExternalTrainingService | ExternalTrainingProvider, ExternalTrainingSyncLog | create_provider, test_connection, trigger_sync, import_records |
 | `shift_completion_service.py` | ShiftCompletionService | ShiftCompletionReport | create_report, review_report, get_reports |
+| `skills_testing_service.py` | SkillsTestingService | SkillTemplate, SkillTest | create_template, publish_template, create_test, complete_test, calculate_score |
 | `scheduling_service.py` | SchedulingService | Shift, ShiftAttendance, ShiftCall, ShiftTemplate, ShiftPattern, ShiftAssignment, ShiftSwapRequest, ShiftTimeOff | create_shift, manage_attendance, create_template, create_pattern, generate_shifts, manage_assignments, manage_swap_requests, manage_time_off, get_reports |
 | `election_service.py` | ElectionService | Election, Candidate, Vote, VotingToken | create_election, open_election, close_election, cast_vote, get_results, verify_integrity, manage_proxy_voting |
 | `inventory_service.py` | InventoryService | InventoryItem, InventoryCategory, ItemAssignment, CheckOutRecord | create_item, assign_item, checkout, checkin, get_summary, import_csv, generate_labels |
@@ -357,7 +372,8 @@ All services in `backend/app/services/`:
 | Service File | Class | Purpose |
 |-------------|-------|---------|
 | `competency_matrix_service.py` | CompetencyMatrixService | Skills/competency tracking matrix computation |
-| `cert_alert_service.py` | CertAlertService | Certification expiry alerting logic |
+| `cert_alert_service.py` | CertAlertService | Certification expiry alerting logic (tiered: 90/60/30/7 days + expired escalation) |
+| `recertification_service.py` | RecertificationService | Automated recertification pathway generation and reminders |
 | `struggling_member_service.py` | StrugglingMemberService | Detects members at risk of disengagement |
 | `departure_clearance_service.py` | DepartureClearanceService | Exit procedure checklists |
 | `property_return_service.py` | PropertyReturnService | Department property return tracking |
@@ -413,6 +429,7 @@ All Pydantic schemas in `backend/app/schemas/`:
 | `public_portal.py` | PortalConfigResponse, APIKeyCreate, WhitelistEntry | Response/Create |
 | `operational_rank.py` | RankCreate, RankUpdate, RankResponse | Create/Update/Response |
 | `training_module_config.py` | ModuleConfigResponse, ModuleConfigUpdate | Response/Update |
+| `training_enhancements.py` | RecertificationPathway, InstructorQualification, TrainingEffectiveness, MultiAgencyTraining, XAPIStatement, CompetencyMatrix, ComplianceAttestation, ISOReadiness | Create/Response |
 
 All Response schemas use `ConfigDict(from_attributes=True, alias_generator=to_camel, populate_by_name=True)` for automatic camelCase JSON serialization.
 
@@ -653,7 +670,7 @@ All routes below are inside `<AppLayout>` + `<ProtectedRoute>`. All non-Dashboar
 | `api.ts` | `analyticsService` (ref) | trackEvent, getMetrics, exportAnalytics | `/analytics` |
 | `api.ts` | `scheduledTasksService` | listTasks, runTask | `/scheduled` |
 | `eventServices.ts` | `eventService` | getEvents, createEvent, updateEvent, manageRSVPs, checkIn, manageTemplates, manageAttachments, manageExternalAttendees | `/events` |
-| `trainingServices.ts` | `trainingService` | getCourses, getRecords, createRecord, getRequirements, getStats, managePrograms, manageSessions, manageSubmissions, manageWaivers, manageExternalProviders, getComplianceMatrix | `/training` |
+| `trainingServices.ts` | `trainingService`, `externalTrainingService`, `trainingProgramService`, `trainingSessionService`, `trainingSubmissionService`, `trainingModuleConfigService`, `skillsTestingService`, `recertificationService`, `competencyService`, `instructorService`, `effectivenessService`, `multiAgencyService`, `xapiService`, `reportExportService`, `documentService`, `complianceOfficerService` | getCourses, getRecords, createRecord, getRequirements, getStats, managePrograms, manageSessions, manageSubmissions, manageWaivers, manageExternalProviders, getComplianceMatrix, manageSkillTemplates, manageSkillTests, manageRecertification, manageCompetency, manageInstructors, trackEffectiveness, coordinateMultiAgency, sendXAPIStatements, exportReports, manageCompliance | `/training`, `/compliance` |
 | `electionService.ts` | `electionService` | getElections, createElection, manageCandidates, castVote, getResults, manageBallots, manageProxyVoting | `/elections` |
 | `inventoryService.ts` | `inventoryService` | getItems, createItem, assignItem, checkout, checkin, manageCategories, manageMaintenance, manageStorageAreas | `/inventory` |
 | `documentsService.ts` | `documentsService` | getDocuments, uploadDocument, manageFolders | `/documents` |
@@ -730,7 +747,7 @@ Creates axios instances with:
 | `member.ts` | Member, MemberStatus, MemberLeave, MembershipTier |
 | `role.ts` | Role, Permission, PermissionCategory |
 | `event.ts` | Event, EventRSVP, EventTemplate, EventSettings, ExternalAttendee |
-| `training.ts` | TrainingRecord, TrainingCourse, TrainingRequirement, TrainingSession, TrainingProgram, ProgramPhase, ProgramEnrollment |
+| `training.ts` | TrainingRecord, TrainingCourse, TrainingRequirement, TrainingSession, TrainingProgram, ProgramPhase, ProgramEnrollment, RecertificationPathway, CompetencyMatrix, InstructorQualification, TrainingEffectivenessEvaluation, MultiAgencyTraining, XAPIStatement, ComplianceForecast, ISOReadiness, ComplianceAttestation, AnnualComplianceReport |
 | `scheduling.ts` | Shift, ShiftTemplate, ShiftPattern, ShiftAssignment, SwapRequest, TimeOff |
 | `election.ts` | Election, Candidate, Vote, ElectionResults, BallotItem |
 | `document.ts` | Document, DocumentFolder |
@@ -784,7 +801,7 @@ Creates axios instances with:
 | reports | Y | Y | Y (1) | Y | Y | Y | Y | — |
 | scheduling | Y | Y | — | Y (2) | Y | Y | Y | 1 file |
 | settings | Y | Y | — | — | — | — | — | — |
-| training | Y | Y | — | — | — | — | — | — |
+| training | Y | Y | Y (36) | Y (9) | — | Y | — | 10 files |
 
 Modules with only `index.ts` + `routes.tsx` use pages from `frontend/src/pages/` and global services from `frontend/src/services/`.
 
@@ -857,6 +874,9 @@ HIPAA exclusions (UNCACHEABLE_PREFIXES):
 | Events | Analytics | Event stats | `GET /events/{id}/analytics` |
 | Training | Users | Compliance per member | `GET /training/compliance-summary/{user_id}` |
 | Training | Scheduling | Shift completion reports | `POST /training/shift-reports` |
+| Training | Training (Multi-Agency) | Joint training sessions across orgs | `POST /training/multi-agency` |
+| Training | External LRS | xAPI statement delivery | `POST /training/xapi/statements` |
+| Training | Compliance | ISO readiness, attestations, annual reports | `GET /compliance/iso-readiness`, `POST /compliance/attestations` |
 | Inventory | Users | Item assignments | `GET /inventory/users/{user_id}/assignments` |
 | Inventory | Users | Departure clearance | `POST /inventory/clearances` |
 | Locations | Facilities | Location → Facility bridge | `location.facility_id` FK |
@@ -908,6 +928,9 @@ Location (universal "place picker")
 | Training submission | Training | in_app, email |
 | Training approved/rejected | Training | in_app, email |
 | Certification expiring | Training | in_app, email |
+| Recertification reminder | Training | in_app, email |
+| Training effectiveness evaluation due | Training | in_app |
+| Multi-agency training invitation | Training | in_app, email |
 | Shift assigned | Scheduling | in_app, email |
 | Swap request | Scheduling | in_app |
 | Election opened | Elections | in_app, email |
@@ -926,6 +949,10 @@ The Reports module (`/reports`) generates cross-module reports:
 | Training Summary | training_records, training_requirements, users |
 | Event Attendance | events, event_attendees, users |
 | Compliance Report | training_records, training_requirements, users |
+| Compliance Forecast | training_records, training_requirements, users, training_waivers |
+| Annual Compliance Report | training_records, training_requirements, certifications, waivers, users |
+| Competency Matrix | training_records, training_requirements, skill_tests, users |
+| Training Effectiveness | training_records, effectiveness_evaluations, users |
 | Shift Coverage | shifts, shift_attendance, users |
 | Inventory Summary | inventory_items, item_assignments, inventory_categories |
 | Department Overview | All modules (aggregated KPIs) |
@@ -1133,6 +1160,8 @@ The `WebSocketManager` (`core/websocket_manager.py`) manages connections per org
 | Task | Schedule | Description |
 |------|----------|-------------|
 | `check_expiring_certifications` | Daily | Scans for certifications expiring within 30/60/90 days, generates notifications |
+| `process_recertification_reminders` | Daily | Sends tiered recertification reminders based on configured lead times (Celery beat) |
+| `send_xapi_statements` | Async (Celery) | Delivers xAPI statements to configured LRS endpoints for multi-agency training records |
 | `process_property_return_reminders` | Daily | Sends reminders for overdue property returns |
 | `close_stale_sessions` | Hourly | Auto-closes admin hours sessions that have been open too long |
 | `advance_membership_tiers` | Weekly | Checks and advances member tier progression |

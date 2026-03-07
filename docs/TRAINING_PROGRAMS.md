@@ -24,6 +24,9 @@ The Training Programs module provides a comprehensive system for managing member
 16. [Member Training Page](#member-training-page-my-training)
 17. [Member Visibility Configuration](#member-visibility-configuration)
 18. [Training Reports](#training-reports)
+19. [Cross-Module Integration Points](#cross-module-integration-points)
+20. [Edge Cases & Special Handling](#edge-cases--special-handling)
+21. [Recently Implemented Features](#recently-implemented-features)
 
 ---
 
@@ -1398,16 +1401,131 @@ Navigate to **Reports** page and use the **Reporting Period** section above the 
 
 ---
 
-## Future Enhancements
+## Cross-Module Integration Points
 
-### Planned Features
-- **Training Session Integration**: Auto-populate hours from training sessions
-- **Automated Reporting**: Schedule automatic progress reports
-- **Email Notifications**: Automated emails for milestones and deadlines
-- **Mobile App**: View progress and complete checklist items on mobile
+The Training Programs module connects with several other modules:
+
+### Events Module
+
+Training sessions can be linked to events via the `training_session.event_id` foreign key. When a training session is created from an event:
+- Event RSVP data pre-populates the session attendee list
+- Event QR code check-ins can be used for attendance verification
+- Event location is inherited by the training session
+
+> **Screenshot placeholder:**
+> _[Screenshot of the Create Training Session form showing the "Link to Event" dropdown with a list of upcoming events, and the auto-populated attendee list from the event's RSVPs]_
+
+### Scheduling Module
+
+Shift completion reports (`POST /training/shift-reports`) auto-progress program requirements when linked to an enrollment:
+- **SHIFTS** requirements: Incremented by 1 per report
+- **CALLS** requirements: Incremented by the number of calls responded
+- **HOURS** requirements: Incremented by hours on shift
+
+> **Edge Case:** If a shift report is filed for a member who is enrolled in multiple programs with overlapping requirements, the system credits all matching requirements across all active enrollments. This means a single shift can progress multiple program requirements simultaneously.
+
+### Member Leaves & Waivers
+
+When a member has an active Leave of Absence with an auto-linked training waiver:
+- Proportional requirements (hours, shifts, calls) within programs are adjusted using the waiver formula: `adjusted = base × (active_months / total_months)`
+- Course completion and certification requirements are NOT adjusted (they are binary)
+- The member's program enrollment remains in `active` status during the leave
+- Progress percentages reflect the adjusted targets
+
+> **Edge Case:** If a waiver covers exactly 15 days of a month, that month IS waived. If it covers 14 days, it is NOT waived. A single day can change the adjusted requirement significantly. See [Training Compliance Calculations](./training-compliance-calculations.md#edge-case-near-the-15-day-threshold) for a detailed example.
+
+### Skills Testing Module
+
+Skills test results can be linked to program requirements of type `skills_evaluation`:
+- When a candidate passes a skills test for a template referenced by a program requirement, progress is automatically updated
+- Failed tests do not regress progress but are logged for the officer's review
+- Practice mode tests do NOT count toward program requirement progress
+
+### Compliance Officer Dashboard
+
+The compliance officer dashboard at `/compliance` aggregates program data for:
+- ISO readiness assessments using program completion data
+- Annual compliance reports incorporating program enrollment statistics
+- Compliance forecasting based on program progress trajectories
+
+### Multi-Agency Training
+
+Multi-agency training sessions can count toward program requirements when:
+- The session is properly linked to the organization's training records
+- The participating member is enrolled in a program with matching requirements
+- The hours, shifts, or calls from the joint session match the requirement type
+
+> **Edge Case:** Multi-agency training records are delivered to external LRS endpoints asynchronously via Celery. There may be a delay between training completion and the record appearing in the external system. Local program progress updates happen synchronously.
+
+### Instructor Qualification Validation
+
+When creating a training session linked to a program:
+- The system can validate that the assigned instructor holds a valid qualification for the course being taught
+- If the instructor's qualification expires before the session date, a warning is displayed
+- Use `GET /training/instructors/validate/{userId}/{courseId}` to programmatically check
+
+---
+
+## Edge Cases & Special Handling
+
+### Enrollment Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Member already enrolled in same program | Duplicate enrollment is prevented; system returns a clear error |
+| Member withdrawn from program, re-enrollment attempted | Re-enrollment is allowed; a new enrollment record is created with fresh progress |
+| Program deactivated while members are enrolled | Active enrollments remain; enrolled members can still complete requirements, but no new enrollments are accepted |
+| All requirements completed but phase requires manual advancement | Enrollment stays at current phase; officer must manually advance to next phase |
+| Shift report filed for member not enrolled in any program | Report is saved but no auto-progression occurs; report is available for manual review |
+| Concurrent enrollment in programs with overlapping requirements | A single training record or shift report credits all matching requirements across all active enrollments |
+
+### Requirement Progress Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Required hours set to 0 | Member automatically shows 100% for that requirement (division by zero protection) |
+| Rolling period spans calendar year boundary | The rolling window is calculated from today minus N months, crossing year boundaries correctly |
+| Biannual requirement with expired certification | Status shows `expired` regardless of hours completed — certification must be renewed |
+| Requirement changed from annual to quarterly mid-year | Existing progress is recalculated against the new frequency; members may see progress reset |
+| Category-based requirement with deleted category | Records already tagged with the category still count; new records cannot be tagged with the deleted category |
+
+### Waiver Interaction Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Overlapping waivers (e.g., maternity leave + medical waiver) | Months are deduplicated — a month waived by multiple waivers counts only once |
+| Targeted waiver (specific requirements only) | Only listed requirements are adjusted; other program requirements retain full targets |
+| Permanent waiver (no end date) | Uses far-future sentinel (9999-12-31); only months within the evaluation period are counted as waived |
+| Waiver end date changed retroactively | Compliance recalculates with the new dates; previously-compliant members may become non-compliant |
+
+### Duplicate Detection Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Same member + same course name + completion date within ±1 day | System flags as potential duplicate with a warning |
+| Same member + same course name but different case (e.g., "EMT" vs "emt") | Detected as duplicate (case-insensitive comparison) |
+| Bulk import with duplicates in the batch | Each record checked independently; duplicates within the same batch are also detected |
+| Override duplicate warning | User can proceed with the duplicate if it's intentional (e.g., retake) |
+
+---
+
+## Recently Implemented Features
+
+The following features, previously listed as planned, are now available:
+
+- **Training Session Integration** — Sessions auto-populate hours from events and training sessions
+- **Automated Reporting** — Compliance forecast and annual compliance reports
+- **Email Notifications** — Automated emails for certification expiry (90/60/30/7 day tiers), recertification reminders, and submission decisions
+- **Mobile & PWA** — Full training module access via PWA with responsive layouts; QR code check-in for training events
+- **Analytics Dashboard** — Competency matrix, compliance officer dashboard, effectiveness scoring
+- **Instructor Management** — Track qualifications, validate assignments, manage availability
+- **Multi-Agency Training** — Coordinate joint sessions across departments with shared records
+- **xAPI Integration** — Learning Record Store connectivity for standardized training activity tracking
+
+### Remaining Planned Features
 - **Skill Videos**: Embed training videos for skill requirements
 - **Digital Signatures**: Sign off on checklist items digitally
-- **Analytics Dashboard**: Department-wide training analytics
+- **Offline Test Administration**: Full offline support for skills testing via PWA IndexedDB
 
 ---
 
@@ -1420,4 +1538,4 @@ For questions or issues with the Training Programs module:
 
 ---
 
-*Last Updated: February 14, 2026*
+*Last Updated: March 7, 2026*
