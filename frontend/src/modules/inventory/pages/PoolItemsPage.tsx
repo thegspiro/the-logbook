@@ -15,6 +15,7 @@ import type { MemberInventorySummary } from '../../../services/eventServices';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { RETURN_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
+import { Pagination } from '../../../components/ux/Pagination';
 import toast from 'react-hot-toast';
 
 interface SummaryCardProps {
@@ -108,7 +109,9 @@ const PoolCard: React.FC<PoolCardProps> = ({
       {/* Meta row */}
       <div className="flex flex-wrap gap-2 text-xs text-theme-text-muted">
         {item.unit_of_measure && <span className="bg-theme-surface px-2 py-0.5 rounded">{item.unit_of_measure}</span>}
-        {item.size && <span className="bg-theme-surface px-2 py-0.5 rounded">Size: {item.size}</span>}
+        {item.standard_size && <span className="bg-theme-surface px-2 py-0.5 rounded">Size: {item.standard_size.toUpperCase()}</span>}
+        {!item.standard_size && item.size && <span className="bg-theme-surface px-2 py-0.5 rounded">Size: {item.size}</span>}
+        {item.style && <span className="bg-theme-surface px-2 py-0.5 rounded">Style: {item.style.replace(/_/g, ' ')}</span>}
         {item.color && <span className="bg-theme-surface px-2 py-0.5 rounded">Color: {item.color}</span>}
       </div>
 
@@ -198,6 +201,10 @@ const PoolItemsPage: React.FC = () => {
   const [returnNotes, setReturnNotes] = useState('');
   const [returnQty, setReturnQty] = useState(1);
   const [returnSubmitting, setReturnSubmitting] = useState(false);
+
+  /* Pagination */
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(24);
 
   /* Bulk issue modal state */
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
@@ -463,24 +470,40 @@ const PoolItemsPage: React.FC = () => {
           <p className="text-lg font-medium">No pool items found</p>
           <p className="text-sm mt-1">Adjust your filters or add pool-tracked items in the inventory admin.</p>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filtered.map(item => (
-            <PoolCard
-              key={item.id}
-              item={item}
-              categoryName={catLookup[item.category_id ?? ''] ?? 'Uncategorized'}
-              onIssue={openIssueModal}
-              onReturn={openReturnModal}
-              issuances={issuancesMap[item.id] ?? []}
-              loadingIssuances={loadingIssuancesFor === item.id}
-              expanded={expandedCard === item.id}
-              onToggle={() => setExpandedCard(prev => prev === item.id ? null : item.id)}
-              onLoadIssuances={() => { void loadIssuances(item.id); }}
-            />
-          ))}
-        </div>
-      )}
+      ) : (() => {
+        const paginatedItems = filtered.slice((page - 1) * pageSize, page * pageSize);
+        return (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {paginatedItems.map(item => (
+                <PoolCard
+                  key={item.id}
+                  item={item}
+                  categoryName={catLookup[item.category_id ?? ''] ?? 'Uncategorized'}
+                  onIssue={openIssueModal}
+                  onReturn={openReturnModal}
+                  issuances={issuancesMap[item.id] ?? []}
+                  loadingIssuances={loadingIssuancesFor === item.id}
+                  expanded={expandedCard === item.id}
+                  onToggle={() => setExpandedCard(prev => prev === item.id ? null : item.id)}
+                  onLoadIssuances={() => { void loadIssuances(item.id); }}
+                />
+              ))}
+            </div>
+            {filtered.length > pageSize && (
+              <Pagination
+                currentPage={page}
+                totalItems={filtered.length}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
+                pageSizeOptions={[12, 24, 48, 96]}
+                className="mt-4"
+              />
+            )}
+          </>
+        );
+      })()}
 
       {/* Quick Issue Modal */}
       <Modal isOpen={issueModalOpen} onClose={() => setIssueModalOpen(false)} title={`Issue — ${issueItem?.name ?? ''}`} size="md">

@@ -436,6 +436,9 @@ export interface InventoryItem {
   min_rank_order?: number | null;
   restricted_to_positions?: string[] | null;
   notes?: string;
+  standard_size?: string;
+  style?: string;
+  variant_group_id?: string;
   active: boolean;
   created_at: string;
   updated_at: string;
@@ -601,6 +604,103 @@ export interface InventoryItemCreate {
   min_rank_order?: number | null | undefined;
   restricted_to_positions?: string[] | null | undefined;
   notes?: string | undefined;
+  standard_size?: string | undefined;
+  style?: string | undefined;
+  variant_group_id?: string | undefined;
+}
+
+export interface ItemVariantGroup {
+  id: string;
+  organization_id: string;
+  name: string;
+  description?: string;
+  category_id?: string;
+  base_price?: number;
+  base_replacement_cost?: number;
+  unit_of_measure?: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+  items?: InventoryItem[];
+}
+
+export interface ItemVariantGroupCreate {
+  name: string;
+  description?: string | undefined;
+  category_id?: string | undefined;
+  base_price?: number | undefined;
+  base_replacement_cost?: number | undefined;
+  unit_of_measure?: string | undefined;
+}
+
+export interface EquipmentKit {
+  id: string;
+  organization_id: string;
+  name: string;
+  description?: string;
+  restricted_to_roles?: string[];
+  min_rank_order?: number;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  line_items?: EquipmentKitItem[];
+}
+
+export interface EquipmentKitItem {
+  id: string;
+  kit_id: string;
+  item_id?: string;
+  category_id?: string;
+  item_name: string;
+  quantity: number;
+  size_selectable: boolean;
+  sort_order: number;
+}
+
+export interface EquipmentKitCreate {
+  name: string;
+  description?: string | undefined;
+  restricted_to_roles?: string[] | undefined;
+  min_rank_order?: number | undefined;
+  line_items: Array<{
+    item_id?: string | undefined;
+    category_id?: string | undefined;
+    item_name: string;
+    quantity?: number | undefined;
+    size_selectable?: boolean | undefined;
+  }>;
+}
+
+export interface MemberSizePreferences {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  shirt_size?: string;
+  shirt_style?: string;
+  pant_waist?: string;
+  pant_inseam?: string;
+  jacket_size?: string;
+  boot_size?: string;
+  boot_width?: string;
+  glove_size?: string;
+  hat_size?: string;
+  custom_sizes?: Record<string, string>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MemberSizePreferencesCreate {
+  shirt_size?: string | undefined;
+  shirt_style?: string | undefined;
+  pant_waist?: string | undefined;
+  pant_inseam?: string | undefined;
+  jacket_size?: string | undefined;
+  boot_size?: string | undefined;
+  boot_width?: string | undefined;
+  glove_size?: string | undefined;
+  hat_size?: string | undefined;
+  custom_sizes?: Record<string, string> | undefined;
 }
 
 export interface ItemIssuance {

@@ -116,6 +116,16 @@ from app.schemas.inventory import (
     ReturnRequestReview,
     ReturnRequestResponse,
     LocationInventorySummary,
+    ItemVariantGroupCreate,
+    ItemVariantGroupUpdate,
+    ItemVariantGroupResponse,
+    ItemVariantGroupDetailResponse,
+    EquipmentKitCreate,
+    EquipmentKitUpdate,
+    EquipmentKitResponse,
+    EquipmentKitDetailResponse,
+    MemberSizePreferencesCreate,
+    MemberSizePreferencesResponse,
 )
 from app.services.departure_clearance_service import DepartureClearanceService
 from app.services.inventory_service import InventoryService
@@ -4381,3 +4391,376 @@ async def delete_reorder_request(
         resource_id=str(request_id),
         organization_id=str(current_user.organization_id),
     )
+
+
+# ============================================
+# Variant Group Endpoints
+# ============================================
+
+
+@router.get("/variant-groups", response_model=List[ItemVariantGroupResponse])
+async def list_variant_groups(
+    active_only: bool = Query(True),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    List all variant groups.
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    groups = await service.get_variant_groups(
+        current_user.organization_id, active_only=active_only
+    )
+    return [ItemVariantGroupResponse.model_validate(g) for g in groups]
+
+
+@router.post(
+    "/variant-groups",
+    response_model=ItemVariantGroupResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_variant_group(
+    data: ItemVariantGroupCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Create a variant group for grouping pool item variants.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    group, error = await service.create_variant_group(
+        organization_id=current_user.organization_id,
+        data=data.model_dump(),
+        created_by=UUID(current_user.id),
+    )
+    if error:
+        raise HTTPException(
+            status_code=400, detail=sanitize_error_message(error)
+        )
+    await db.commit()
+    await db.refresh(group)
+    return ItemVariantGroupResponse.model_validate(group)
+
+
+@router.get(
+    "/variant-groups/{group_id}",
+    response_model=ItemVariantGroupDetailResponse,
+)
+async def get_variant_group(
+    group_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get a variant group with its member items.
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    group = await service.get_variant_group_by_id(
+        group_id, current_user.organization_id
+    )
+    if not group:
+        raise HTTPException(status_code=404, detail="Variant group not found")
+    return ItemVariantGroupDetailResponse.model_validate(group)
+
+
+@router.patch(
+    "/variant-groups/{group_id}",
+    response_model=ItemVariantGroupResponse,
+)
+async def update_variant_group(
+    group_id: UUID,
+    data: ItemVariantGroupUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Update a variant group.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    group, error = await service.update_variant_group(
+        group_id,
+        current_user.organization_id,
+        data.model_dump(exclude_unset=True),
+    )
+    if error:
+        raise HTTPException(
+            status_code=400, detail=sanitize_error_message(error)
+        )
+    await db.commit()
+    await db.refresh(group)
+    return ItemVariantGroupResponse.model_validate(group)
+
+
+# ============================================
+# Equipment Kit Endpoints
+# ============================================
+
+
+@router.get("/kits", response_model=List[EquipmentKitResponse])
+async def list_equipment_kits(
+    active_only: bool = Query(True),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    List all equipment kit templates.
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    kits = await service.get_equipment_kits(
+        current_user.organization_id, active_only=active_only
+    )
+    return [EquipmentKitResponse.model_validate(k) for k in kits]
+
+
+@router.post(
+    "/kits",
+    response_model=EquipmentKitDetailResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_equipment_kit(
+    data: EquipmentKitCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Create an equipment kit template.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    kit, error = await service.create_equipment_kit(
+        organization_id=current_user.organization_id,
+        data=data.model_dump(),
+        created_by=UUID(current_user.id),
+    )
+    if error:
+        raise HTTPException(
+            status_code=400, detail=sanitize_error_message(error)
+        )
+    await db.commit()
+    # Re-fetch with relationships
+    kit = await service.get_equipment_kit_by_id(
+        UUID(kit.id), current_user.organization_id
+    )
+    return EquipmentKitDetailResponse.model_validate(kit)
+
+
+@router.get("/kits/{kit_id}", response_model=EquipmentKitDetailResponse)
+async def get_equipment_kit(
+    kit_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get a kit with its items.
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    kit = await service.get_equipment_kit_by_id(
+        kit_id, current_user.organization_id
+    )
+    if not kit:
+        raise HTTPException(status_code=404, detail="Equipment kit not found")
+    return EquipmentKitDetailResponse.model_validate(kit)
+
+
+@router.patch("/kits/{kit_id}", response_model=EquipmentKitResponse)
+async def update_equipment_kit(
+    kit_id: UUID,
+    data: EquipmentKitUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Update a kit's metadata.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    kit, error = await service.update_equipment_kit(
+        kit_id,
+        current_user.organization_id,
+        data.model_dump(exclude_unset=True),
+    )
+    if error:
+        raise HTTPException(
+            status_code=400, detail=sanitize_error_message(error)
+        )
+    await db.commit()
+    await db.refresh(kit)
+    return EquipmentKitResponse.model_validate(kit)
+
+
+@router.post("/kits/{kit_id}/issue/{user_id}")
+async def issue_kit_to_member(
+    kit_id: UUID,
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Issue all items in a kit to a member.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    issuances, error = await service.issue_kit_to_member(
+        kit_id=kit_id,
+        user_id=user_id,
+        organization_id=current_user.organization_id,
+        issued_by=UUID(current_user.id),
+    )
+    if error:
+        raise HTTPException(
+            status_code=400, detail=sanitize_error_message(error)
+        )
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        user_id=current_user.id,
+        action="kit_issued",
+        resource_type="equipment_kit",
+        resource_id=str(kit_id),
+        organization_id=str(current_user.organization_id),
+        details={"target_user_id": str(user_id), "items_count": len(issuances)},
+    )
+
+    return {"message": "Kit issued successfully", "items_issued": len(issuances)}
+
+
+# ============================================
+# Member Size Preferences Endpoints
+# ============================================
+
+
+@router.get(
+    "/members/{user_id}/size-preferences",
+    response_model=MemberSizePreferencesResponse,
+)
+async def get_member_size_preferences(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get a member's size preferences.
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    prefs = await service.get_member_size_preferences(
+        user_id, current_user.organization_id
+    )
+    if not prefs:
+        raise HTTPException(
+            status_code=404, detail="Size preferences not found for this member"
+        )
+    return MemberSizePreferencesResponse.model_validate(prefs)
+
+
+@router.put(
+    "/members/{user_id}/size-preferences",
+    response_model=MemberSizePreferencesResponse,
+)
+async def upsert_member_size_preferences(
+    user_id: UUID,
+    data: MemberSizePreferencesCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Create or update a member's size preferences.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    prefs, error = await service.upsert_member_size_preferences(
+        user_id=user_id,
+        organization_id=current_user.organization_id,
+        data=data.model_dump(exclude_unset=True),
+    )
+    if error:
+        raise HTTPException(
+            status_code=400, detail=sanitize_error_message(error)
+        )
+    await db.commit()
+    await db.refresh(prefs)
+    return MemberSizePreferencesResponse.model_validate(prefs)
+
+
+@router.get(
+    "/my/size-preferences",
+    response_model=MemberSizePreferencesResponse,
+)
+async def get_my_size_preferences(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get the current user's own size preferences.
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    prefs = await service.get_member_size_preferences(
+        UUID(current_user.id), current_user.organization_id
+    )
+    if not prefs:
+        raise HTTPException(
+            status_code=404, detail="Size preferences not set"
+        )
+    return MemberSizePreferencesResponse.model_validate(prefs)
+
+
+@router.put(
+    "/my/size-preferences",
+    response_model=MemberSizePreferencesResponse,
+)
+async def upsert_my_size_preferences(
+    data: MemberSizePreferencesCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Create or update the current user's own size preferences.
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    prefs, error = await service.upsert_member_size_preferences(
+        user_id=UUID(current_user.id),
+        organization_id=current_user.organization_id,
+        data=data.model_dump(exclude_unset=True),
+    )
+    if error:
+        raise HTTPException(
+            status_code=400, detail=sanitize_error_message(error)
+        )
+    await db.commit()
+    await db.refresh(prefs)
+    return MemberSizePreferencesResponse.model_validate(prefs)

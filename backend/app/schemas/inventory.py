@@ -108,6 +108,23 @@ NFPARecommendationLiteral = Literal["pass", "repair", "advanced_cleaning", "reti
 
 ClearanceSourceTypeLiteral = Literal["assignment", "checkout", "issuance"]
 
+DepartureTypeLiteral = Literal[
+    "dropped_voluntary", "dropped_involuntary", "retired"
+]
+
+StandardSizeLiteral = Literal[
+    "xxs", "xs", "s", "m", "l", "xl", "xxl", "xxxl", "xxxxl",
+    "6", "6.5", "7", "7.5", "8", "8.5", "9", "9.5", "10", "10.5",
+    "11", "11.5", "12", "12.5", "13", "14", "15",
+    "28", "30", "32", "34", "36", "38", "40", "42", "44", "46",
+    "one_size", "custom",
+]
+
+GarmentStyleLiteral = Literal[
+    "short_sleeve", "long_sleeve", "mens", "womens", "unisex",
+    "v_neck", "crew_neck", "polo", "button_down", "quarter_zip",
+]
+
 # ============================================
 # Category Schemas
 # ============================================
@@ -209,6 +226,9 @@ class InventoryItemBase(BaseModel):
     notes: Optional[str] = None
     custom_fields: Optional[Dict[str, Any]] = None
     attachments: Optional[List[str]] = None
+    standard_size: Optional[StandardSizeLiteral] = None
+    style: Optional[GarmentStyleLiteral] = None
+    variant_group_id: Optional[UUID] = None
 
 
 class InventoryItemCreate(InventoryItemBase):
@@ -256,6 +276,9 @@ class InventoryItemUpdate(BaseModel):
     notes: Optional[str] = None
     custom_fields: Optional[Dict[str, Any]] = None
     attachments: Optional[List[str]] = None
+    standard_size: Optional[StandardSizeLiteral] = None
+    style: Optional[GarmentStyleLiteral] = None
+    variant_group_id: Optional[UUID] = None
     active: Optional[bool] = None
 
 
@@ -694,9 +717,7 @@ class DepartureClearanceCreate(BaseModel):
     """Schema for initiating a departure clearance"""
 
     user_id: UUID
-    departure_type: Optional[str] = (
-        None  # "dropped_voluntary", "dropped_involuntary", "retired"
-    )
+    departure_type: Optional[DepartureTypeLiteral] = None
     return_deadline_days: int = Field(default=14, ge=1, le=90)
     notes: Optional[str] = None
 
@@ -741,7 +762,7 @@ class DepartureClearanceResponse(BaseModel):
     return_deadline: Optional[datetime] = None
     initiated_by: Optional[UUID] = None
     completed_by: Optional[UUID] = None
-    departure_type: Optional[str] = None
+    departure_type: Optional[DepartureTypeLiteral] = None
     notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -765,7 +786,7 @@ class DepartureClearanceSummaryResponse(BaseModel):
     initiated_at: datetime
     completed_at: Optional[datetime] = None
     return_deadline: Optional[datetime] = None
-    departure_type: Optional[str] = None
+    departure_type: Optional[DepartureTypeLiteral] = None
 
 
 class ResolveClearanceItemRequest(BaseModel):
@@ -1492,6 +1513,183 @@ class ReorderRequestResponse(BaseModel):
     approved_at: Optional[datetime] = None
     ordered_at: Optional[datetime] = None
     received_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================
+# Variant Group Schemas
+# ============================================
+
+
+class ItemVariantGroupCreate(BaseModel):
+    """Schema for creating a variant group (groups pool items by product)"""
+
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = None
+    category_id: Optional[UUID] = None
+    base_price: Optional[Decimal] = Field(None, ge=0)
+    base_replacement_cost: Optional[Decimal] = Field(None, ge=0)
+    unit_of_measure: Optional[str] = Field(None, max_length=50)
+
+
+class ItemVariantGroupUpdate(BaseModel):
+    """Schema for updating a variant group"""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = None
+    category_id: Optional[UUID] = None
+    base_price: Optional[Decimal] = Field(None, ge=0)
+    base_replacement_cost: Optional[Decimal] = Field(None, ge=0)
+    unit_of_measure: Optional[str] = Field(None, max_length=50)
+    active: Optional[bool] = None
+
+
+class ItemVariantGroupResponse(BaseModel):
+    """Schema for variant group response"""
+
+    id: UUID
+    organization_id: UUID
+    name: str
+    description: Optional[str] = None
+    category_id: Optional[UUID] = None
+    base_price: Optional[Decimal] = None
+    base_replacement_cost: Optional[Decimal] = None
+    unit_of_measure: Optional[str] = None
+    active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ItemVariantGroupDetailResponse(ItemVariantGroupResponse):
+    """Variant group with its member items"""
+
+    items: List[InventoryItemResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================
+# Equipment Kit Schemas
+# ============================================
+
+
+class EquipmentKitItemCreate(BaseModel):
+    """Schema for an item entry within a kit"""
+
+    item_id: Optional[UUID] = None
+    category_id: Optional[UUID] = None
+    item_name: str = Field(..., min_length=1, max_length=255)
+    quantity: int = Field(default=1, ge=1)
+    size_selectable: bool = False
+
+
+class EquipmentKitCreate(BaseModel):
+    """Schema for creating an equipment kit template"""
+
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = None
+    restricted_to_roles: Optional[List[str]] = None
+    min_rank_order: Optional[int] = None
+    line_items: List[EquipmentKitItemCreate] = Field(
+        ..., min_length=1, description="At least one item in the kit"
+    )
+
+
+class EquipmentKitUpdate(BaseModel):
+    """Schema for updating an equipment kit"""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = None
+    restricted_to_roles: Optional[List[str]] = None
+    min_rank_order: Optional[int] = None
+    active: Optional[bool] = None
+
+
+class EquipmentKitItemResponse(BaseModel):
+    """Schema for kit item response"""
+
+    id: UUID
+    kit_id: UUID
+    item_id: Optional[UUID] = None
+    category_id: Optional[UUID] = None
+    item_name: str
+    quantity: int
+    size_selectable: bool = False
+    sort_order: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class EquipmentKitResponse(BaseModel):
+    """Schema for equipment kit response"""
+
+    id: UUID
+    organization_id: UUID
+    name: str
+    description: Optional[str] = None
+    restricted_to_roles: Optional[List[str]] = None
+    min_rank_order: Optional[int] = None
+    active: bool
+    created_at: datetime
+    updated_at: datetime
+    created_by: Optional[UUID] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class EquipmentKitDetailResponse(EquipmentKitResponse):
+    """Kit with its line items"""
+
+    line_items: List[EquipmentKitItemResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================
+# Member Size Preferences Schemas
+# ============================================
+
+
+class MemberSizePreferencesCreate(BaseModel):
+    """Schema for creating/setting member size preferences"""
+
+    shirt_size: Optional[str] = Field(None, max_length=20)
+    shirt_style: Optional[str] = Field(None, max_length=30)
+    pant_waist: Optional[str] = Field(None, max_length=10)
+    pant_inseam: Optional[str] = Field(None, max_length=10)
+    jacket_size: Optional[str] = Field(None, max_length=20)
+    boot_size: Optional[str] = Field(None, max_length=10)
+    boot_width: Optional[str] = Field(None, max_length=10)
+    glove_size: Optional[str] = Field(None, max_length=10)
+    hat_size: Optional[str] = Field(None, max_length=10)
+    custom_sizes: Optional[Dict[str, Any]] = None
+
+
+class MemberSizePreferencesUpdate(MemberSizePreferencesCreate):
+    """Schema for updating member size preferences (same fields, all optional)"""
+
+
+class MemberSizePreferencesResponse(BaseModel):
+    """Schema for member size preferences response"""
+
+    id: UUID
+    organization_id: UUID
+    user_id: UUID
+    shirt_size: Optional[str] = None
+    shirt_style: Optional[str] = None
+    pant_waist: Optional[str] = None
+    pant_inseam: Optional[str] = None
+    jacket_size: Optional[str] = None
+    boot_size: Optional[str] = None
+    boot_width: Optional[str] = None
+    glove_size: Optional[str] = None
+    hat_size: Optional[str] = None
+    custom_sizes: Optional[Dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime
 
