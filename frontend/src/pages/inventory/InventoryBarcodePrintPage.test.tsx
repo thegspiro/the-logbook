@@ -138,9 +138,14 @@ describe('InventoryBarcodePrintPage', () => {
     renderPage('?ids=item-1');
     await screen.findByText('SCBA Mask');
 
-    await user.click(screen.getByText('Print Labels'));
-    // handlePrint uses requestAnimationFrame before calling window.print
-    await new Promise((resolve) => requestAnimationFrame(resolve));
+    // Wait for barcode SVG useEffect callbacks to fire and enable the button
+    const printBtn = await screen.findByRole('button', { name: /Print Labels/ });
+    // The onRendered callback fires after JsBarcode useEffect, enabling the button
+    await vi.waitFor(() => {
+      expect(printBtn).not.toBeDisabled();
+    });
+
+    await user.click(printBtn);
     expect(window.print).toHaveBeenCalled();
   });
 

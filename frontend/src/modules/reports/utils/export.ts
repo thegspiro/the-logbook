@@ -4,6 +4,15 @@
  * Client-side CSV and PDF generation for report data.
  */
 
+/** Escape HTML special characters to prevent XSS in generated HTML. */
+const escapeHtml = (s: string): string =>
+  s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
 /** Safely convert any unknown value to a display string. */
 export const toStr = (v: unknown, fallback = ''): string => {
   if (v === null || v === undefined) return fallback;
@@ -106,21 +115,22 @@ export function exportReportAsPrintablePdf(
       header: key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
     }));
 
+  const safeTitle = escapeHtml(reportTitle);
   const headerRow = cols
     .map(
       (c) =>
-        `<th style="padding:6px 10px;border:1px solid #ddd;background:#f5f5f5;text-align:left;font-size:12px;">${c.header}</th>`
+        `<th style="padding:6px 10px;border:1px solid #ddd;background:#f5f5f5;text-align:left;font-size:12px;">${escapeHtml(c.header)}</th>`
     )
     .join('');
   const bodyRows = rows
     .map(
       (row) =>
-        `<tr>${cols.map((c) => `<td style="padding:4px 10px;border:1px solid #eee;font-size:11px;">${toStr(row[c.key])}</td>`).join('')}</tr>`
+        `<tr>${cols.map((c) => `<td style="padding:4px 10px;border:1px solid #eee;font-size:11px;">${escapeHtml(toStr(row[c.key]))}</td>`).join('')}</tr>`
     )
     .join('');
 
   const html = `<!DOCTYPE html>
-<html><head><title>${reportTitle}</title>
+<html><head><title>${safeTitle}</title>
 <style>
   @media print { body { margin: 0.5in; } @page { size: landscape; } }
   body { font-family: Arial, sans-serif; color: #333; }
@@ -128,7 +138,7 @@ export function exportReportAsPrintablePdf(
   .meta { font-size: 11px; color: #666; margin-bottom: 16px; }
   table { border-collapse: collapse; width: 100%; }
 </style></head><body>
-<h1>${reportTitle}</h1>
+<h1>${safeTitle}</h1>
 <div class="meta">Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}</div>
 ${summaryHtml ? `<div style="margin-bottom:16px">${summaryHtml}</div>` : ''}
 <table><thead><tr>${headerRow}</tr></thead><tbody>${bodyRows}</tbody></table>

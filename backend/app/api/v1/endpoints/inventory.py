@@ -2196,6 +2196,11 @@ async def generate_barcode_labels(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=safe_error_detail(e),
         )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
 
     filename = f"inventory-labels-{request.label_format}.pdf"
     return StreamingResponse(

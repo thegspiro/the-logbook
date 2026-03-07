@@ -2380,10 +2380,21 @@ class InventoryService:
         """
 
         items = []
+        missing_ids = []
         for item_id in item_ids:
             item = await self.get_item_by_id(item_id, organization_id)
             if item:
                 items.append(item)
+            else:
+                missing_ids.append(str(item_id))
+
+        if missing_ids:
+            logger.warning(
+                "Label generation: %d of %d items not found or inaccessible: %s",
+                len(missing_ids),
+                len(item_ids),
+                ", ".join(missing_ids[:10]),
+            )
 
         if not items:
             raise ValueError("No valid items found for label generation")

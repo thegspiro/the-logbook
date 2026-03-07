@@ -567,10 +567,40 @@ async def export_report(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(require_permission("training.manage")),
 ):
-    """Generate and download a training report"""
+    """Generate and download a training report as CSV or PDF"""
+    from fastapi.responses import StreamingResponse
+
     try:
         service = ReportExportService(db)
 
+        if data.format == "pdf":
+            if data.report_type == "individual":
+                if not data.user_id:
+                    raise ValueError(
+                        "user_id is required for individual reports"
+                    )
+                pdf_buf = await service.generate_individual_pdf(
+                    str(data.user_id),
+                    current_user.organization_id,
+                    start_date=data.start_date,
+                    end_date=data.end_date,
+                )
+            else:
+                pdf_buf = await service.generate_compliance_pdf(
+                    current_user.organization_id,
+                    start_date=data.start_date,
+                    end_date=data.end_date,
+                )
+            filename = f"training_report_{data.report_type}.pdf"
+            return StreamingResponse(
+                pdf_buf,
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f"attachment; filename={filename}"
+                },
+            )
+
+        # CSV format (default)
         if data.report_type == "compliance":
             csv_content = await service.generate_compliance_csv(
                 current_user.organization_id,
