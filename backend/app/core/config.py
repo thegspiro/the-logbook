@@ -184,10 +184,14 @@ class Settings(BaseSettings):
     TRUSTED_PROXY_IPS: str = ""  # Comma-separated list of trusted proxy IPs
 
     # Security enforcement
+    # SEC: HTTPS enforcement is checked at validation time (see below).
+    # Defaults to False for local development; production/staging validation
+    # will warn if not enabled.
     SECURITY_ENFORCE_HTTPS: bool = False  # Set to True in production
-    SECURITY_BLOCK_INSECURE_DEFAULTS: bool = (
-        True  # Block startup with default keys in production
-    )
+    # SEC: When True, blocks startup in ANY environment if critical security
+    # issues are detected (missing secrets, etc.).  Production and staging
+    # ALWAYS block regardless of this flag.  Set to False for local dev only.
+    SECURITY_BLOCK_INSECURE_DEFAULTS: bool = False
 
     def validate_security_config(self) -> list[str]:
         """
@@ -265,14 +269,28 @@ class Settings(BaseSettings):
             if self.DEBUG:
                 warnings.append("WARNING: DEBUG mode should be disabled in production")
 
+            if self.DB_ECHO:
+                warnings.append(
+                    "CRITICAL: DB_ECHO must be False in production — SQL logging "
+                    "can expose PII/PHI in query parameters to log aggregators"
+                )
+
             if self.ENABLE_DOCS:
                 warnings.append(
                     "WARNING: API documentation should be disabled in production"
                 )
 
+            if self.MODULE_ELECTIONS_ENABLED and not self.VOTE_SIGNING_KEY:
+                warnings.append(
+                    "WARNING: VOTE_SIGNING_KEY should be set when elections module "
+                    "is enabled. Without it, vote signatures use SECRET_KEY and "
+                    "will be invalidated if SECRET_KEY is rotated."
+                )
+
             if not self.SECURITY_ENFORCE_HTTPS:
                 warnings.append(
-                    "WARNING: HTTPS enforcement should be enabled in production"
+                    "CRITICAL: SECURITY_ENFORCE_HTTPS must be True in production "
+                    "to prevent cookies and credentials from being sent over HTTP"
                 )
 
         return warnings

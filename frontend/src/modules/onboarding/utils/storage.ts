@@ -222,21 +222,19 @@ export const clearOnboardingData = () => {
 
 /**
  * Remove any legacy sensitive data that may have been stored
- * Call this on app initialization for security
+ * SEC: Runs automatically on module load — does not just warn,
+ * actively removes deprecated keys containing secrets/PII.
  */
 export const clearLegacySensitiveData = () => {
-  let cleared = false;
   DEPRECATED_SENSITIVE_KEYS.forEach((key) => {
-    if (sessionStorage.getItem(key)) {
-      sessionStorage.removeItem(key);
-      cleared = true;
-    }
+    sessionStorage.removeItem(key);
   });
-
-  if (cleared) {
-    console.warn('SECURITY: Cleared legacy sensitive data from session storage');
-  }
+  // Also clean up legacy localStorage CSRF token from pre-cookie migration
+  localStorage.removeItem('csrf_token');
 };
+
+// SEC: Proactively clear deprecated sensitive keys on module load
+clearLegacySensitiveData();
 
 /**
  * Get department name

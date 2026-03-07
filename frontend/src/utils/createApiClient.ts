@@ -14,7 +14,7 @@
 
 import axios, { type AxiosError, type AxiosInstance } from 'axios';
 import { API_TIMEOUT_MS } from '../constants/config';
-import { getTempAccessToken, performSharedRefresh } from '../services/apiClient';
+import { performSharedRefresh } from '../services/apiClient';
 
 declare module 'axios' {
   export interface InternalAxiosRequestConfig {
@@ -42,16 +42,11 @@ export function createApiClient(baseURL = '/api/v1'): AxiosInstance {
     headers: { 'Content-Type': 'application/json' },
   });
 
-  // --- Request interceptor: attach Bearer token bridge + CSRF token ---
+  // --- Request interceptor: attach CSRF token ---
   api.interceptors.request.use(
     (config) => {
-      // Temporary Bearer token bridge: if cookies haven't been established
-      // yet (right after login), use the in-memory token from the global client.
-      const tempToken = getTempAccessToken();
-      if (tempToken && !config.headers['Authorization']) {
-        config.headers['Authorization'] = `Bearer ${tempToken}`;
-      }
-
+      // SEC: Auth is handled exclusively via httpOnly cookies (withCredentials).
+      // No Authorization header bridge — tokens are never exposed to JS.
       const method = (config.method || '').toUpperCase();
       if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
         const csrf = getCookie('csrf_token');

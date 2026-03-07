@@ -5,7 +5,6 @@
  */
 
 import { formatValidationErrors } from '../utils/errorHandler';
-import { obfuscate, deobfuscate } from '../utils/security';
 
 interface ApiResponse<T> {
   data?: T | undefined;
@@ -68,15 +67,31 @@ class SecureApiClient {
     this.loadSession();
   }
 
+  /** Read a cookie value by name. */
+  private getCookie(name: string): string | null {
+    const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+    return match?.[1] ? decodeURIComponent(match[1]) : null;
+  }
+
+  /** Set a SameSite=Strict cookie (JS-readable, for double-submit pattern). */
+  private setCookie(name: string, value: string): void {
+    document.cookie = `${name}=${encodeURIComponent(value)}; path=/; SameSite=Strict`;
+  }
+
+  /** Delete a cookie by name. */
+  private deleteCookie(name: string): void {
+    document.cookie = `${name}=; path=/; SameSite=Strict; max-age=0`;
+  }
+
   /**
    * Load session from localStorage (NOT sessionStorage for persistence across tabs)
    * SECURITY: Only session ID stored, not sensitive data
    */
   private loadSession(): void {
     this.sessionId = localStorage.getItem('onboarding_session_id');
-    // SEC: CSRF token is obfuscated in localStorage to prevent casual inspection
-    const raw = localStorage.getItem('csrf_token');
-    this.csrfToken = raw ? deobfuscate(raw) : null;
+    // SEC: CSRF token stored in a SameSite=Strict cookie (double-submit pattern)
+    // instead of localStorage to limit XSS exposure.
+    this.csrfToken = this.getCookie('onboarding_csrf_token');
   }
 
   /**
@@ -88,8 +103,8 @@ class SecureApiClient {
 
     if (csrfToken) {
       this.csrfToken = csrfToken;
-      // SEC: Obfuscate CSRF token before storing in localStorage
-      localStorage.setItem('csrf_token', obfuscate(csrfToken));
+      // SEC: Store CSRF token in a SameSite=Strict cookie (not localStorage)
+      this.setCookie('onboarding_csrf_token', csrfToken);
     }
   }
 
@@ -100,6 +115,8 @@ class SecureApiClient {
     this.sessionId = null;
     this.csrfToken = null;
     localStorage.removeItem('onboarding_session_id');
+    this.deleteCookie('onboarding_csrf_token');
+    // Clean up legacy localStorage CSRF token if it exists
     localStorage.removeItem('csrf_token');
     localStorage.removeItem('onboarding_data');
     // Clear auth session flag so Welcome.tsx doesn't redirect to /dashboard
@@ -237,8 +254,8 @@ class SecureApiClient {
       const newCsrfToken = response.headers.get('X-CSRF-Token');
       if (newCsrfToken) {
         this.csrfToken = newCsrfToken;
-        // SEC: Obfuscate CSRF token before storing in localStorage
-        localStorage.setItem('csrf_token', obfuscate(newCsrfToken));
+        // SEC: Store in SameSite=Strict cookie (not localStorage)
+        this.setCookie('onboarding_csrf_token', newCsrfToken);
       }
 
       if (!response.ok) {
