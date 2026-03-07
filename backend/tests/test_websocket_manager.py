@@ -8,7 +8,6 @@ Covers:
 """
 
 import sys
-from types import ModuleType
 from unittest.mock import MagicMock
 
 # Stub out heavy transitive imports not available in the test environment

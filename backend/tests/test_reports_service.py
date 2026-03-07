@@ -14,16 +14,16 @@ from app.services.reports_service import ReportsService
 
 
 @pytest.fixture
-def db_session():
-    """Create a mock async session."""
+def mock_db_session():
+    """Create a mock async session for reports tests."""
     session = AsyncMock()
     return session
 
 
 @pytest.fixture
-def service(db_session):
+def service(mock_db_session):
     """Create a ReportsService instance with a mock db."""
-    return ReportsService(db_session)
+    return ReportsService(mock_db_session)
 
 
 @pytest.fixture

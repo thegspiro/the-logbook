@@ -6,10 +6,8 @@ It sets up test database, async sessions, and common test data.
 """
 
 import pytest
-import asyncio
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
 
 from app.core.database import async_session_factory, database_manager
 

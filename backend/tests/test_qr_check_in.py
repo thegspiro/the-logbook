@@ -21,10 +21,9 @@ Test Coverage:
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
-from unittest.mock import AsyncMock, MagicMock, patch
-from sqlalchemy.ext.asyncio import AsyncSession
+from unittest.mock import AsyncMock, MagicMock
 
 from app.services.event_service import EventService
 from app.models.event import Event, EventRSVP, EventType, RSVPStatus
@@ -38,7 +37,7 @@ class TestQRCheckInTimeValidation:
     async def test_qr_data_available_within_time_window(self):
         """Test that QR code data is available when within valid time window"""
         # Arrange
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         event_id = uuid4()
         org_id = uuid4()
 
@@ -79,7 +78,7 @@ class TestQRCheckInTimeValidation:
     async def test_qr_data_not_available_before_window(self):
         """Test that QR code is not valid before the time window"""
         # Arrange
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         event_id = uuid4()
         org_id = uuid4()
 
@@ -118,7 +117,7 @@ class TestQRCheckInTimeValidation:
     async def test_qr_data_not_available_after_scheduled_end(self):
         """Test that QR code is not valid after scheduled end time"""
         # Arrange
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         event_id = uuid4()
         org_id = uuid4()
 
@@ -157,7 +156,7 @@ class TestQRCheckInTimeValidation:
     async def test_qr_data_respects_actual_end_time(self):
         """Test that actual_end_time takes precedence over scheduled end_datetime"""
         # Arrange
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         event_id = uuid4()
         org_id = uuid4()
 
@@ -198,7 +197,7 @@ class TestQRCheckInTimeValidation:
     async def test_qr_data_cancelled_event(self):
         """Test that cancelled events return an error"""
         # Arrange
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         event_id = uuid4()
         org_id = uuid4()
 
@@ -240,7 +239,7 @@ class TestSelfCheckIn:
     async def test_self_check_in_creates_rsvp(self):
         """Test that self-check-in creates RSVP if it doesn't exist"""
         # Arrange
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         event_id = uuid4()
         user_id = uuid4()
         org_id = uuid4()
@@ -314,7 +313,7 @@ class TestSelfCheckIn:
     async def test_self_check_in_duplicate_check_in(self):
         """Test that duplicate check-in attempts return an error"""
         # Arrange
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         event_id = uuid4()
         user_id = uuid4()
         org_id = uuid4()
@@ -396,7 +395,7 @@ class TestSelfCheckIn:
     async def test_self_check_in_before_time_window(self):
         """Test that check-in before time window returns an error"""
         # Arrange
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         event_id = uuid4()
         user_id = uuid4()
         org_id = uuid4()
@@ -460,7 +459,7 @@ class TestSelfCheckIn:
     async def test_self_check_in_after_scheduled_end(self):
         """Test that check-in after scheduled end time returns an error"""
         # Arrange
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         event_id = uuid4()
         user_id = uuid4()
         org_id = uuid4()
@@ -524,7 +523,7 @@ class TestSelfCheckIn:
     async def test_self_check_in_after_actual_end_time(self):
         """Test that check-in respects actual_end_time when set"""
         # Arrange
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         event_id = uuid4()
         user_id = uuid4()
         org_id = uuid4()
@@ -589,7 +588,7 @@ class TestSelfCheckIn:
     async def test_self_check_in_cancelled_event(self):
         """Test that check-in to cancelled event returns an error"""
         # Arrange
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         event_id = uuid4()
         user_id = uuid4()
         org_id = uuid4()
@@ -653,7 +652,7 @@ class TestSelfCheckIn:
     async def test_self_check_in_user_not_in_organization(self):
         """Test that users from different organizations cannot check in"""
         # Arrange
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         event_id = uuid4()
         user_id = uuid4()
         org_id = uuid4()

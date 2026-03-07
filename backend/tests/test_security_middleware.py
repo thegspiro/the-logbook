@@ -13,7 +13,6 @@ import pytest
 import time
 import secrets
 from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime, timezone
 
 from app.core.security_middleware import (
     RateLimiter,
@@ -275,11 +274,10 @@ class TestCSRFProtection:
     @pytest.mark.unit
     def test_validate_uses_constant_time_comparison(self):
         """The validation should use secrets.compare_digest (constant-time)."""
-        # We can verify this by checking CSRFProtection.validate_token
-        # uses secrets.compare_digest. A functional test: matching tokens
-        # should return True, which confirms the code path works.
         token = "test-csrf-token-value"
-        assert CSRFProtection.validate_token(token, token) is True
+        with patch.object(secrets, 'compare_digest', wraps=secrets.compare_digest) as mock_compare:
+            CSRFProtection.validate_token(token, token)
+            mock_compare.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -449,6 +447,12 @@ class TestInputSanitizer:
         """A malformed URL should raise ValueError."""
         with pytest.raises(ValueError):
             InputSanitizer.validate_url("https://")
+
+    @pytest.mark.unit
+    def test_validate_url_javascript_protocol_rejected(self):
+        """A javascript: URL (XSS vector) should be rejected."""
+        with pytest.raises(ValueError):
+            InputSanitizer.validate_url("javascript:alert(1)")
 
 
 # ---------------------------------------------------------------------------
@@ -687,6 +691,21 @@ class TestVerifyCSRFTokenDependency:
 
         request = MagicMock()
         request.method = "DELETE"
+        request.headers = {"X-CSRF-Token": "bad"}
+        request.cookies = {"csrf_token": "good"}
+
+        with pytest.raises(HTTPException) as exc_info:
+            await verify_csrf_token(request)
+        assert exc_info.value.status_code == 403
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_patch_method_requires_csrf(self):
+        """PATCH requests should also be subject to CSRF validation."""
+        from fastapi import HTTPException
+
+        request = MagicMock()
+        request.method = "PATCH"
         request.headers = {"X-CSRF-Token": "bad"}
         request.cookies = {"csrf_token": "good"}
 

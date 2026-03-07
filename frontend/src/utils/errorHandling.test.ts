@@ -86,6 +86,41 @@ describe('errorHandling', () => {
       expect(result.details).toEqual({ field: 'email' });
     });
 
+    it('handles FastAPI 422 array-format detail (validation errors)', () => {
+      // FastAPI returns 422 errors as { detail: [{ loc: [...], msg: "..." }] }
+      const axiosError = {
+        response: {
+          data: {
+            detail: [
+              { loc: ['body', 'email'], msg: 'field required', type: 'value_error.missing' },
+              { loc: ['body', 'name'], msg: 'ensure this value has at least 1 characters', type: 'value_error.any_str.min_length' },
+            ],
+          },
+          status: 422,
+          statusText: 'Unprocessable Entity',
+        },
+      };
+
+      const result = toAppError(axiosError);
+
+      // The detail array should be serialized into a readable message
+      expect(result.status).toBe(422);
+      expect(result.message).toBeTruthy();
+      // Should not be "Request failed" - should extract something from the array
+      expect(result.message).not.toBe('Request failed');
+    });
+
+    it('handles Axios network error (request but no response)', () => {
+      const axiosError = {
+        message: 'Network Error',
+        request: {},
+        // No response property
+      };
+
+      const result = toAppError(axiosError);
+      expect(result.message).toBeTruthy();
+    });
+
     it('uses statusText when no data detail or message', () => {
       const axiosError = {
         response: {
