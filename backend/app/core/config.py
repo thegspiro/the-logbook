@@ -188,9 +188,10 @@ class Settings(BaseSettings):
     # Defaults to False for local development; production/staging validation
     # will warn if not enabled.
     SECURITY_ENFORCE_HTTPS: bool = False  # Set to True in production
-    SECURITY_BLOCK_INSECURE_DEFAULTS: bool = (
-        True  # Block startup with default keys in production
-    )
+    # SEC: When True, blocks startup in ANY environment if critical security
+    # issues are detected (missing secrets, etc.).  Production and staging
+    # ALWAYS block regardless of this flag.  Set to False for local dev only.
+    SECURITY_BLOCK_INSECURE_DEFAULTS: bool = False
 
     def validate_security_config(self) -> list[str]:
         """

@@ -32,11 +32,8 @@ from app.core.database import database_manager
 from app.core.logging import setup_logging, setup_sentry
 
 # Create rate limiter instance (uses Redis if available, falls back to in-memory)
-_rate_limit_storage_uri = (
-    f"redis://:{settings.REDIS_PASSWORD}@{settings.REDIS_HOST}:{settings.REDIS_PORT}/1"
-    if settings.REDIS_PASSWORD
-    else "memory://"
-)
+# SEC: Use settings.REDIS_URL which respects REDIS_SSL (rediss:// scheme).
+_rate_limit_storage_uri = settings.REDIS_URL if settings.REDIS_PASSWORD else "memory://"
 limiter = Limiter(
     key_func=get_remote_address,
     default_limits=[settings.RATE_LIMIT_DEFAULT],
@@ -1251,18 +1248,25 @@ def validate_security_configuration():
                 logger.warning(f"  {warning}")
         logger.warning("=" * 60)
 
-        # Block startup in production if critical issues exist
+        # SEC: Block startup in production AND staging when critical security
+        # issues exist.  In development, only block if SECURITY_BLOCK_INSECURE_DEFAULTS
+        # is explicitly True (it defaults to True, but can be overridden for local dev).
         critical_warnings = [w for w in warnings if "CRITICAL" in w]
-        if critical_warnings and settings.ENVIRONMENT == "production":
+        if critical_warnings and settings.ENVIRONMENT in ("production", "staging"):
             raise RuntimeError(
-                "SECURITY FAILURE: Cannot start in production with insecure defaults. "
+                "SECURITY FAILURE: Cannot start in "
+                f"{settings.ENVIRONMENT} with insecure defaults. "
                 f"{len(critical_warnings)} critical issue(s) found. "
                 "Set required environment variables before deploying."
             )
         elif critical_warnings and settings.SECURITY_BLOCK_INSECURE_DEFAULTS:
-            logger.error(
-                f"SECURITY WARNING: {len(critical_warnings)} critical issue(s) found. "
-                "These MUST be resolved before deploying to production."
+            # Block even in development when the flag is set — this catches
+            # misconfigured environments that accidentally start with defaults.
+            raise RuntimeError(
+                "SECURITY FAILURE: SECURITY_BLOCK_INSECURE_DEFAULTS is True but "
+                f"{len(critical_warnings)} critical issue(s) found. "
+                "Set required environment variables or set "
+                "SECURITY_BLOCK_INSECURE_DEFAULTS=False for local development."
             )
 
 
