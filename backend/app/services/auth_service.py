@@ -11,7 +11,7 @@ from typing import Optional, Tuple
 from uuid import UUID, uuid4
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -323,6 +323,11 @@ class AuthService:
         Used when refresh token replay is detected (potential theft)
         or when a user's password is changed/account is deactivated.
 
+        Uses a single bulk DELETE to minimise lock duration on the sessions
+        table.  The previous row-by-row approach held locks across multiple
+        round-trips and caused InnoDB lock-wait timeouts when concurrent
+        refresh requests were in flight.
+
         Args:
             user_id: User ID as string (matches String(36) DB column)
 
@@ -330,12 +335,9 @@ class AuthService:
             Number of sessions revoked
         """
         result = await self.db.execute(
-            select(UserSession).where(UserSession.user_id == str(user_id))
+            delete(UserSession).where(UserSession.user_id == str(user_id))
         )
-        sessions = result.scalars().all()
-        count = len(sessions)
-        for session in sessions:
-            await self.db.delete(session)
+        count = result.rowcount
         if count:
             await self.db.flush()
             logger.info(f"Revoked {count} session(s) for user {user_id}")

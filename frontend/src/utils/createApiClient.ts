@@ -14,7 +14,7 @@
 
 import axios, { type AxiosError, type AxiosInstance } from 'axios';
 import { API_TIMEOUT_MS } from '../constants/config';
-import { getTempAccessToken, getTempRefreshToken, updateTempTokens } from '../services/apiClient';
+import { getTempAccessToken, performSharedRefresh } from '../services/apiClient';
 
 declare module 'axios' {
   export interface InternalAxiosRequestConfig {
@@ -66,8 +66,10 @@ export function createApiClient(baseURL = '/api/v1'): AxiosInstance {
   );
 
   // --- Response interceptor: auto-refresh on 401 ---
-  let refreshPromise: Promise<void> | null = null;
-
+  // Uses the globally shared refresh promise from apiClient.ts to
+  // prevent concurrent refresh requests across independent axios
+  // instances (which would trigger the backend's replay detection
+  // and revoke all sessions).
   api.interceptors.response.use(
     (response) => response,
     async (error: AxiosError) => {
@@ -79,29 +81,7 @@ export function createApiClient(baseURL = '/api/v1'): AxiosInstance {
       ) {
         originalRequest._retry = true;
         try {
-          if (!refreshPromise) {
-            const csrfToken = getCookie('csrf_token');
-            const headers: Record<string, string> = {};
-            if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
-            const refreshBody = getTempRefreshToken()
-              ? { refresh_token: getTempRefreshToken() }
-              : undefined;
-            refreshPromise = axios
-              .post(`${baseURL}/auth/refresh`, refreshBody, {
-                withCredentials: true,
-                headers,
-              })
-              .then((res) => {
-                const data = res.data as Record<string, unknown> | undefined;
-                if (data && typeof data.access_token === 'string' && typeof data.refresh_token === 'string') {
-                  updateTempTokens(data.access_token, data.refresh_token);
-                }
-              })
-              .finally(() => {
-                refreshPromise = null;
-              });
-          }
-          await refreshPromise;
+          await performSharedRefresh();
           return api(originalRequest);
         } catch {
           localStorage.removeItem('has_session');
