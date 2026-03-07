@@ -2,6 +2,8 @@ import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 import { reactRefresh } from 'eslint-plugin-react-refresh';
+import vitest from '@vitest/eslint-plugin';
+import testingLibrary from 'eslint-plugin-testing-library';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import globals from 'globals';
 
@@ -98,12 +100,48 @@ export default tseslint.config(
         ...globals.jest,
       },
     },
+    plugins: {
+      vitest,
+    },
     rules: {
       '@typescript-eslint/unbound-method': 'off',
       '@typescript-eslint/no-require-imports': 'off',
       '@typescript-eslint/require-await': 'off',
       '@typescript-eslint/prefer-promise-reject-errors': 'off',
       'no-console': 'off',
+
+      // Vitest test quality rules
+      'vitest/expect-expect': 'warn',
+      'vitest/no-conditional-expect': 'error',
+      'vitest/no-conditional-in-test': 'warn',
+      'vitest/no-focused-tests': 'error',
+      'vitest/no-disabled-tests': 'warn',
+      'vitest/no-standalone-expect': 'error',
+      'vitest/prefer-called-with': 'warn',
+      'vitest/no-restricted-matchers': [
+        'error',
+        {
+          toBeTruthy:
+            'Avoid toBeTruthy — use toBe(true), toBeTypeOf(), or a more specific assertion',
+          toBeFalsy:
+            'Avoid toBeFalsy — use toBe(false), toBeNull(), toBeUndefined(), or a more specific assertion',
+        },
+      ],
+    },
+  },
+
+  // Testing Library rules for component tests
+  {
+    files: ['src/**/*.test.tsx', 'src/**/*.spec.tsx'],
+    ...testingLibrary.configs['flat/react'],
+    rules: {
+      ...testingLibrary.configs['flat/react'].rules,
+      // Downgrade structural rules to warn — these require incremental refactoring
+      // from DOM traversal (querySelector) to accessible queries (getByRole, etc.)
+      'testing-library/no-node-access': 'warn',
+      'testing-library/no-container': 'warn',
+      'testing-library/no-wait-for-multiple-assertions': 'warn',
+      'testing-library/prefer-presence-queries': 'warn',
     },
   },
 

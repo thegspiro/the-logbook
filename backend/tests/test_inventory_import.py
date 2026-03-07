@@ -23,6 +23,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.inventory_service import InventoryService
 
+pytestmark = [pytest.mark.integration]
+
 # ── Helpers ──────────────────────────────────────────────────────────
 
 

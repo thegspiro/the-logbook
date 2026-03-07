@@ -24,6 +24,7 @@ export default defineConfig({
         functions: 80,
         branches: 75,
         statements: 80,
+        autoUpdate: true,
       },
     },
     include: ['src/**/*.{test,spec}.{ts,tsx}'],

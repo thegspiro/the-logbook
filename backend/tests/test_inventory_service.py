@@ -27,7 +27,6 @@ from app.models.inventory import (
     ItemStatus,
     ItemCondition,
     TrackingType,
-    AssignmentType,
 )
 
 

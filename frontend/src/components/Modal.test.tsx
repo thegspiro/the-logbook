@@ -60,7 +60,7 @@ describe('Modal', () => {
     // The handler checks e.target === e.currentTarget, so we need to click
     // the exact element that has the onClick handler.
     const backdrop = screen.getByRole('dialog').querySelector('.flex.items-center');
-    expect(backdrop).toBeTruthy();
+    expect(backdrop).toBeInTheDocument();
 
     // fireEvent.click on the container triggers handler with target === currentTarget
     if (backdrop) fireEvent.click(backdrop);
@@ -72,7 +72,7 @@ describe('Modal', () => {
     render(<Modal {...defaultProps} closeOnClickOutside={false} />);
 
     const backdrop = screen.getByRole('dialog').querySelector('.flex.items-center');
-    expect(backdrop).toBeTruthy();
+    expect(backdrop).toBeInTheDocument();
     if (backdrop) fireEvent.click(backdrop);
 
     expect(defaultProps.onClose).not.toHaveBeenCalled();

@@ -22,6 +22,8 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+pytestmark = [pytest.mark.integration]
+
 from app.models.training import AssignmentStatus, PatternType, SwapRequestStatus, TimeOffStatus
 from app.services.scheduling_service import SchedulingService
 

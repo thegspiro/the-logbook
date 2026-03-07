@@ -128,6 +128,11 @@ describe('eventHelpers', () => {
     it('returns "Maybe" for maybe status', () => {
       expect(getRSVPStatusLabel('maybe')).toBe('Maybe');
     });
+
+    it('returns undefined for an unknown RSVP status', () => {
+      const result = getRSVPStatusLabel('unknown_status' as RSVPStatus);
+      expect(result).toBeUndefined();
+    });
   });
 
   // ---- getRSVPStatusColor ----
@@ -157,6 +162,11 @@ describe('eventHelpers', () => {
         const result = getRSVPStatusColor(status);
         expect(result).toMatch(/dark:/);
       }
+    });
+
+    it('returns undefined for an unknown RSVP status', () => {
+      const result = getRSVPStatusColor('unknown' as RSVPStatus);
+      expect(result).toBeUndefined();
     });
   });
 

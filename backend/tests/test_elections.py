@@ -7,11 +7,9 @@ ballot prevention, and other hardening features.
 """
 
 import hashlib
-import hmac as hmac_module
 import secrets
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from typing import Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 

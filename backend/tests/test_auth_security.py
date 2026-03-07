@@ -18,10 +18,8 @@ Covers:
 """
 
 import pytest
-import time
 import jwt as pyjwt
 from datetime import timedelta, datetime, timezone
-from unittest.mock import patch, MagicMock
 
 
 # ---------------------------------------------------------------------------
@@ -309,13 +307,14 @@ class TestJWTTokens:
         """decode_token should raise when the signature is invalid."""
         from app.core.security import decode_token
         from app.core.config import settings
+        from jwt.exceptions import InvalidSignatureError
 
         bad_token = pyjwt.encode(
             {"sub": "user-123", "exp": datetime.now(timezone.utc) + timedelta(hours=1)},
             "wrong-secret",
             algorithm=settings.ALGORITHM,
         )
-        with pytest.raises(Exception):
+        with pytest.raises(InvalidSignatureError):
             decode_token(bad_token)
 
     @pytest.mark.unit
@@ -328,7 +327,7 @@ class TestJWTTokens:
         # Tamper with the payload section
         parts[1] = parts[1][::-1]
         tampered = ".".join(parts)
-        with pytest.raises(Exception):
+        with pytest.raises(pyjwt.exceptions.DecodeError):
             decode_token(tampered)
 
     @pytest.mark.unit
@@ -336,7 +335,7 @@ class TestJWTTokens:
         """decode_token should raise for total garbage input."""
         from app.core.security import decode_token
 
-        with pytest.raises(Exception):
+        with pytest.raises(pyjwt.exceptions.DecodeError):
             decode_token("not.a.jwt.at.all")
 
     @pytest.mark.unit
@@ -626,7 +625,7 @@ class TestJWTEdgeCases:
         """decode_token with an empty string should raise."""
         from app.core.security import decode_token
 
-        with pytest.raises(Exception):
+        with pytest.raises(pyjwt.exceptions.DecodeError):
             decode_token("")
 
 

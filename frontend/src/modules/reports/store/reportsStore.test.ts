@@ -117,7 +117,7 @@ describe('useReportsStore', () => {
 
       await useReportsStore.getState().fetchAvailableReports();
 
-      expect(useReportsStore.getState().error).toBeTruthy();
+      expect(useReportsStore.getState().error).toBeTypeOf('string');
       expect(useReportsStore.getState().availableReportsLoading).toBe(false);
     });
   });
@@ -142,7 +142,7 @@ describe('useReportsStore', () => {
         'Generation failed'
       );
 
-      expect(useReportsStore.getState().error).toBeTruthy();
+      expect(useReportsStore.getState().error).toBeTypeOf('string');
       expect(useReportsStore.getState().generatingReportType).toBeNull();
     });
   });

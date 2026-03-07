@@ -205,7 +205,7 @@ describe('adminHoursStore', () => {
 
       const state = getState();
       expect(state.categoriesLoading).toBe(false);
-      expect(state.error).toBeTruthy();
+      expect(state.error).toBeTypeOf('string');
       expect(state.categories).toEqual([]);
     });
   });
@@ -229,7 +229,7 @@ describe('adminHoursStore', () => {
 
       await expect(getState().createCategory({ name: 'Bad' })).rejects.toThrow('Create failed');
 
-      expect(getState().error).toBeTruthy();
+      expect(getState().error).toBeTypeOf('string');
     });
   });
 
@@ -249,7 +249,7 @@ describe('adminHoursStore', () => {
 
       await expect(getState().updateCategory('cat1', { name: 'X' })).rejects.toThrow('Update failed');
 
-      expect(getState().error).toBeTruthy();
+      expect(getState().error).toBeTypeOf('string');
     });
   });
 
@@ -269,7 +269,7 @@ describe('adminHoursStore', () => {
 
       await expect(getState().deleteCategory('cat1')).rejects.toThrow('Delete failed');
 
-      expect(getState().error).toBeTruthy();
+      expect(getState().error).toBeTypeOf('string');
     });
   });
 
@@ -295,7 +295,7 @@ describe('adminHoursStore', () => {
 
       await expect(getState().clockIn('cat1')).rejects.toThrow('Clock in failed');
 
-      expect(getState().error).toBeTruthy();
+      expect(getState().error).toBeTypeOf('string');
     });
   });
 
@@ -317,7 +317,7 @@ describe('adminHoursStore', () => {
 
       await expect(getState().clockOut('entry1')).rejects.toThrow('Clock out failed');
 
-      expect(getState().error).toBeTruthy();
+      expect(getState().error).toBeTypeOf('string');
     });
   });
 
@@ -339,7 +339,7 @@ describe('adminHoursStore', () => {
 
       await expect(getState().clockOutByCategory('cat1')).rejects.toThrow('Clock out failed');
 
-      expect(getState().error).toBeTruthy();
+      expect(getState().error).toBeTypeOf('string');
     });
   });
 
@@ -411,7 +411,7 @@ describe('adminHoursStore', () => {
 
       const state = getState();
       expect(state.entriesLoading).toBe(false);
-      expect(state.error).toBeTruthy();
+      expect(state.error).toBeTypeOf('string');
     });
   });
 
@@ -449,7 +449,7 @@ describe('adminHoursStore', () => {
 
       const state = getState();
       expect(state.entriesLoading).toBe(false);
-      expect(state.error).toBeTruthy();
+      expect(state.error).toBeTypeOf('string');
     });
   });
 
@@ -470,7 +470,7 @@ describe('adminHoursStore', () => {
 
       await expect(getState().editEntry('entry1', { description: 'X' })).rejects.toThrow('Edit failed');
 
-      expect(getState().error).toBeTruthy();
+      expect(getState().error).toBeTypeOf('string');
     });
   });
 
@@ -502,7 +502,7 @@ describe('adminHoursStore', () => {
 
       await expect(getState().reviewEntry('entry1', 'approve')).rejects.toThrow('Review failed');
 
-      expect(getState().error).toBeTruthy();
+      expect(getState().error).toBeTypeOf('string');
     });
   });
 
@@ -525,7 +525,7 @@ describe('adminHoursStore', () => {
 
       await expect(getState().bulkApprove(['e1'])).rejects.toThrow('Bulk approve failed');
 
-      expect(getState().error).toBeTruthy();
+      expect(getState().error).toBeTypeOf('string');
     });
   });
 
@@ -554,7 +554,7 @@ describe('adminHoursStore', () => {
 
       await getState().fetchSummary();
 
-      expect(getState().error).toBeTruthy();
+      expect(getState().error).toBeTypeOf('string');
     });
   });
 
@@ -619,7 +619,7 @@ describe('adminHoursStore', () => {
 
       const state = getState();
       expect(state.activeSessionsLoading).toBe(false);
-      expect(state.error).toBeTruthy();
+      expect(state.error).toBeTypeOf('string');
     });
   });
 
@@ -641,7 +641,7 @@ describe('adminHoursStore', () => {
 
       await expect(getState().forceClockOut('entry1')).rejects.toThrow('Force clock out failed');
 
-      expect(getState().error).toBeTruthy();
+      expect(getState().error).toBeTypeOf('string');
     });
   });
 

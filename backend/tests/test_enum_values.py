@@ -11,6 +11,8 @@ import pytest
 from sqlalchemy import text
 from app.models.user import Organization, OrganizationType, IdentifierType, UserStatus
 
+pytestmark = [pytest.mark.integration]
+
 
 def test_organization_type_enum_values():
     """Test that OrganizationType enum has correct lowercase values"""

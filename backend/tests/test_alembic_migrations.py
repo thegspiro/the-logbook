@@ -194,3 +194,105 @@ class TestMigrationFileQuality:
             "Migration files missing downgrade() function:\n"
             + "\n".join(f"  - {m}" for m in missing)
         )
+
+    def test_filename_matches_revision_id(self):
+        """Migration filenames should start with their revision ID.
+
+        Uses a date-based naming convention: YYYYMMDD_NNNN_description.py
+        where the revision ID is the YYYYMMDD_NNNN prefix.
+        """
+        mismatches = []
+        # Only check migrations that use date-based revision IDs (YYYYMMDD_NNNN)
+        date_rev_re = re.compile(r"^\d{8}_\d{4}$")
+        for m in MIGRATIONS:
+            if date_rev_re.match(m["revision"]):
+                if not m["file"].startswith(m["revision"]):
+                    mismatches.append(
+                        f"{m['file']}: revision='{m['revision']}' "
+                        f"does not match filename prefix"
+                    )
+
+        assert mismatches == [], (
+            "Migration filenames don't match their revision IDs:\n"
+            + "\n".join(f"  - {m}" for m in mismatches)
+        )
+
+    def test_downgrade_is_not_empty_pass(self):
+        """Downgrade functions should contain real rollback logic, not just pass."""
+        empty_downgrades = []
+        downgrade_re = re.compile(
+            r"def downgrade\(\)[^:]*:\s*\n(\s+)pass\s*$",
+            re.MULTILINE,
+        )
+
+        for path in sorted(VERSIONS_DIR.glob("*.py")):
+            content = path.read_text(encoding="utf-8")
+            if downgrade_re.search(content):
+                empty_downgrades.append(path.name)
+
+        assert empty_downgrades == [], (
+            "Migrations with empty downgrade() (just 'pass') — these are "
+            "not reversible:\n"
+            + "\n".join(f"  - {f}" for f in empty_downgrades)
+        )
+
+    def test_no_drop_table_without_if_exists(self):
+        """DROP TABLE in migrations should use IF EXISTS to be idempotent."""
+        violations = []
+        # Match op.execute containing DROP TABLE without IF EXISTS
+        drop_re = re.compile(
+            r'DROP\s+TABLE\s+(?!IF\s+EXISTS)',
+            re.IGNORECASE,
+        )
+
+        for path in sorted(VERSIONS_DIR.glob("*.py")):
+            content = path.read_text(encoding="utf-8")
+            for i, line in enumerate(content.splitlines(), 1):
+                if drop_re.search(line):
+                    violations.append(f"{path.name}:{i}")
+
+        assert violations == [], (
+            "Migrations using DROP TABLE without IF EXISTS "
+            "(not idempotent on re-run):\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
+
+    def test_date_based_revisions_are_chronologically_ordered(self):
+        """Date-based revision IDs should be in chronological order.
+
+        Only checks revisions on different dates — same-date ordering
+        varies due to historical numbering conventions.
+        """
+        date_rev_re = re.compile(r"^(\d{8})_(\d{4})$")
+        rev_to_file = {m["revision"]: m for m in MIGRATIONS}
+        down_to_child = {}
+        for m in MIGRATIONS:
+            if m["down_revision"] is not None:
+                down_to_child[m["down_revision"]] = m["revision"]
+
+        bases = [m for m in MIGRATIONS if m["is_base"]]
+        if not bases:
+            pytest.skip("No base migration found")
+
+        # Walk the chain; only flag when a later date has a lower date prefix
+        out_of_order = []
+        current = bases[0]["revision"]
+        while current in down_to_child:
+            child = down_to_child[current]
+            cur_match = date_rev_re.match(current)
+            child_match = date_rev_re.match(child)
+            if cur_match and child_match:
+                cur_date = cur_match.group(1)
+                child_date = child_match.group(1)
+                if child_date < cur_date:
+                    out_of_order.append(
+                        f"{rev_to_file[child]['file']} (rev={child}) comes "
+                        f"after {rev_to_file[current]['file']} (rev={current}) "
+                        f"but has an earlier date"
+                    )
+            current = child
+
+        assert out_of_order == [], (
+            "Migration revision IDs are not in chronological order:\n"
+            + "\n".join(f"  - {o}" for o in out_of_order)
+        )

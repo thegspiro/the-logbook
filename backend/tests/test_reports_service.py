@@ -14,16 +14,16 @@ from app.services.reports_service import ReportsService
 
 
 @pytest.fixture
-def db_session():
-    """Create a mock async session."""
+def mock_db_session():
+    """Create a mock async session for reports tests."""
     session = AsyncMock()
     return session
 
 
 @pytest.fixture
-def service(db_session):
+def service(mock_db_session):
     """Create a ReportsService instance with a mock db."""
-    return ReportsService(db_session)
+    return ReportsService(mock_db_session)
 
 
 @pytest.fixture
@@ -180,9 +180,13 @@ class TestComplianceStatusReport:
             []
         )
 
-        # First call: requirements, second: users, third: enrollments
+        # rank_map query returns iterable of rows
+        mock_rank_result = MagicMock()
+        mock_rank_result.__iter__ = MagicMock(return_value=iter([]))
+
+        # Call order: requirements, users, rank_map, enrollments
         service.db.execute = AsyncMock(
-            side_effect=[mock_result, mock_result, mock_unique_result]
+            side_effect=[mock_result, mock_result, mock_rank_result, mock_unique_result]
         )
 
         result = await service._generate_compliance_status(org_id)

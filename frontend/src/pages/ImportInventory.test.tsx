@@ -62,7 +62,7 @@ describe('ImportInventory', () => {
     renderWithRouter(<ImportInventory />);
 
     const input = document.querySelector('input[type="file"][accept=".csv"]');
-    expect(input).toBeTruthy();
+    expect(input).toBeInTheDocument();
   });
 
   it('calls downloadImportTemplate when template button clicked', async () => {

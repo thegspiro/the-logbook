@@ -83,6 +83,7 @@ build/
 .coverage
 .pytest_cache/
 htmlcov/
+.hypothesis/
 
 # Jupyter Notebooks
 .ipynb_checkpoints

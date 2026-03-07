@@ -15,7 +15,6 @@ the database had UPPERCASE values but the application sent lowercase values.
 import pytest
 import re
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
 
 
 class TestEnumConsistency:

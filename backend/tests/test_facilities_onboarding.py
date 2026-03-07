@@ -15,6 +15,8 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+pytestmark = [pytest.mark.integration]
+
 from app.models.facilities import (
     Facility,
     FacilityStatus,

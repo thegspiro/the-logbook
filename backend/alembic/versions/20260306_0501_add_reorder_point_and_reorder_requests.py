@@ -1,16 +1,16 @@
 """add reorder_point to inventory_items and reorder_requests table
 
-Revision ID: 20260306_0500
-Revises: 20260306_0400
-Create Date: 2026-03-06 05:00:00.000000
+Revision ID: 20260306_0501
+Revises: 20260306_0500
+Create Date: 2026-03-06 05:01:00.000000
 
 """
 from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = "20260306_0500"
-down_revision = "20260306_0400"
+revision = "20260306_0501"
+down_revision = "20260306_0500"
 branch_labels = None
 depends_on = None
 

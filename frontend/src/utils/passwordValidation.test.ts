@@ -33,11 +33,9 @@ describe('validatePassword', () => {
     expect(result.strength).toBe('good');
   });
 
-  it('returns strength "fair" for a valid 12-char password', () => {
-    // Exactly 12 chars with all requirements met gives score 1(length) + 1(upper) + 1(lower) + 1(number) + 1(special) = 5
-    // Actually that's >= 5 so "good". Let's use custom requirements to get "fair".
-    const result = validatePassword(STRONG_PASSWORD);
+  it('returns strength "good" for a valid 12-char password with all character classes', () => {
     // Score: 1 (length >= 12) + 1 (upper) + 1 (lower) + 1 (number) + 1 (special) = 5 -> "good"
+    const result = validatePassword(STRONG_PASSWORD);
     expect(result.isValid).toBe(true);
     expect(result.strength).toBe('good');
   });
