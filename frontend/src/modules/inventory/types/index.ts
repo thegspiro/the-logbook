@@ -51,6 +51,13 @@ export type {
   UserInventoryItem,
   UserIssuedItem,
   IssuanceChargeListItem,
+  ItemVariantGroup,
+  ItemVariantGroupCreate,
+  EquipmentKit,
+  EquipmentKitItem,
+  EquipmentKitCreate,
+  MemberSizePreferences,
+  MemberSizePreferencesCreate,
 } from '../../../services/eventServices';
 
 export type { Location } from '../../../services/communicationsServices';
@@ -88,6 +95,41 @@ export const STORAGE_TYPES = [
   { value: 'drawer', label: 'Drawer' },
   { value: 'bin', label: 'Bin / Container' },
   { value: 'other', label: 'Other' },
+] as const;
+
+/** Standard size options for garments and footwear */
+export const STANDARD_SIZES = [
+  { value: 'xxs', label: 'XXS' },
+  { value: 'xs', label: 'XS' },
+  { value: 's', label: 'S' },
+  { value: 'm', label: 'M' },
+  { value: 'l', label: 'L' },
+  { value: 'xl', label: 'XL' },
+  { value: 'xxl', label: 'XXL' },
+  { value: 'xxxl', label: '3XL' },
+  { value: 'xxxxl', label: '4XL' },
+  { value: 'one_size', label: 'One Size' },
+  { value: 'custom', label: 'Custom' },
+] as const;
+
+/** Shoe/boot size options */
+export const SHOE_SIZES = [
+  '6', '6.5', '7', '7.5', '8', '8.5', '9', '9.5',
+  '10', '10.5', '11', '11.5', '12', '12.5', '13', '14', '15',
+] as const;
+
+/** Garment style options */
+export const GARMENT_STYLES = [
+  { value: 'short_sleeve', label: 'Short Sleeve' },
+  { value: 'long_sleeve', label: 'Long Sleeve' },
+  { value: 'mens', label: "Men's" },
+  { value: 'womens', label: "Women's" },
+  { value: 'unisex', label: 'Unisex' },
+  { value: 'v_neck', label: 'V-Neck' },
+  { value: 'crew_neck', label: 'Crew Neck' },
+  { value: 'polo', label: 'Polo' },
+  { value: 'button_down', label: 'Button Down' },
+  { value: 'quarter_zip', label: 'Quarter Zip' },
 ] as const;
 
 /** Fields shown per item type category */

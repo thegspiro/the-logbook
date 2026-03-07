@@ -23,9 +23,11 @@ import {
   Upload,
   MapPin,
   Barcode,
+  BoxSelect,
+  Ruler,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
-import type { InventorySummary, LowStockAlert } from '../types';
+import type { InventorySummary, LowStockAlert, ReturnRequestItem } from '../types';
 interface NavCardProps {
   to: string;
   icon: React.ReactNode;
@@ -60,17 +62,24 @@ const NavCard: React.FC<NavCardProps> = ({ to, icon, title, description, badge, 
 export const InventoryAdminHub: React.FC = () => {
   const [summary, setSummary] = useState<InventorySummary | null>(null);
   const [lowStockAlerts, setLowStockAlerts] = useState<LowStockAlert[]>([]);
+  const [pendingReturns, setPendingReturns] = useState(0);
+  const [pendingRequests, setPendingRequests] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const loadSummary = useCallback(async () => {
     setLoading(true);
     try {
-      const [summaryData, lowStock] = await Promise.all([
+      const [summaryData, lowStock, returns, requests] = await Promise.all([
         inventoryService.getSummary(),
         inventoryService.getLowStockItems().catch(() => [] as LowStockAlert[]),
+        inventoryService.getReturnRequests({ status: 'pending' }).catch(() => [] as ReturnRequestItem[]),
+        inventoryService.getEquipmentRequests({ status: 'pending' }).catch(() => ({ requests: [] as unknown[], total: 0 })),
       ]);
       setSummary(summaryData);
       setLowStockAlerts(lowStock);
+      setPendingReturns(Array.isArray(returns) ? returns.length : 0);
+      const reqResult = requests as { requests: unknown[]; total: number };
+      setPendingRequests(reqResult.total ?? 0);
     } catch {
       // Non-critical — page still navigable
     } finally {
@@ -230,6 +239,8 @@ export const InventoryAdminHub: React.FC = () => {
             icon={<CornerDownLeft className="w-5 h-5" />}
             title="Return Requests"
             description="Review and process member return requests"
+            badge={pendingReturns > 0 ? pendingReturns : undefined}
+            badgeColor="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
           />
           <NavCard
             to="/inventory/storage-areas"
@@ -248,6 +259,8 @@ export const InventoryAdminHub: React.FC = () => {
             icon={<ClipboardList className="w-5 h-5" />}
             title="Equipment Requests"
             description="Review member requests for equipment"
+            badge={pendingRequests > 0 ? pendingRequests : undefined}
+            badgeColor="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
           />
           <NavCard
             to="/inventory/admin/write-offs"
@@ -262,6 +275,18 @@ export const InventoryAdminHub: React.FC = () => {
             description="Track and manage supply reorder requests"
             badge={lowStockAlerts.length > 0 ? lowStockAlerts.length : undefined}
             badgeColor="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
+          />
+          <NavCard
+            to="/inventory/admin/kits"
+            icon={<BoxSelect className="w-5 h-5" />}
+            title="Equipment Kits"
+            description="Create and manage kit templates for multi-item issuance"
+          />
+          <NavCard
+            to="/inventory/admin/variant-groups"
+            icon={<Ruler className="w-5 h-5" />}
+            title="Variant Groups"
+            description="Group pool item variants by size, style, and color"
           />
         </div>
       </div>

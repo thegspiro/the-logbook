@@ -14,6 +14,9 @@ import type {
   SizeVariantCreate, BulkIssuanceTarget, BulkIssuanceResponse, IssuanceAllowance, AllowanceCheck,
   ChargeManagementResponse, ReturnRequestItem, LocationInventorySummary,
   ReorderRequest, ReorderRequestCreate, ReorderRequestUpdate,
+  ItemVariantGroup, ItemVariantGroupCreate,
+  EquipmentKit, EquipmentKitCreate,
+  MemberSizePreferences, MemberSizePreferencesCreate,
 } from './eventServices';
 
 export const inventoryService = {
@@ -458,6 +461,78 @@ export const inventoryService = {
 
   async deleteReorderRequest(id: string): Promise<void> {
     await api.delete(`/inventory/reorder-requests/${id}`);
+  },
+
+  // Variant Groups
+  async getVariantGroups(activeOnly = true): Promise<ItemVariantGroup[]> {
+    const response = await api.get<ItemVariantGroup[]>('/inventory/variant-groups', {
+      params: { active_only: activeOnly },
+    });
+    return response.data;
+  },
+
+  async getVariantGroup(id: string): Promise<ItemVariantGroup> {
+    const response = await api.get<ItemVariantGroup>(`/inventory/variant-groups/${id}`);
+    return response.data;
+  },
+
+  async createVariantGroup(data: ItemVariantGroupCreate): Promise<ItemVariantGroup> {
+    const response = await api.post<ItemVariantGroup>('/inventory/variant-groups', data);
+    return response.data;
+  },
+
+  async updateVariantGroup(id: string, data: Partial<ItemVariantGroupCreate> & { active?: boolean }): Promise<ItemVariantGroup> {
+    const response = await api.patch<ItemVariantGroup>(`/inventory/variant-groups/${id}`, data);
+    return response.data;
+  },
+
+  // Equipment Kits
+  async getEquipmentKits(activeOnly = true): Promise<EquipmentKit[]> {
+    const response = await api.get<EquipmentKit[]>('/inventory/kits', {
+      params: { active_only: activeOnly },
+    });
+    return response.data;
+  },
+
+  async getEquipmentKit(id: string): Promise<EquipmentKit> {
+    const response = await api.get<EquipmentKit>(`/inventory/kits/${id}`);
+    return response.data;
+  },
+
+  async createEquipmentKit(data: EquipmentKitCreate): Promise<EquipmentKit> {
+    const response = await api.post<EquipmentKit>('/inventory/kits', data);
+    return response.data;
+  },
+
+  async updateEquipmentKit(id: string, data: Partial<EquipmentKitCreate> & { active?: boolean }): Promise<EquipmentKit> {
+    const response = await api.patch<EquipmentKit>(`/inventory/kits/${id}`, data);
+    return response.data;
+  },
+
+  async issueKitToMember(kitId: string, userId: string): Promise<{ message: string; items_issued: number }> {
+    const response = await api.post<{ message: string; items_issued: number }>(`/inventory/kits/${kitId}/issue/${userId}`);
+    return response.data;
+  },
+
+  // Member Size Preferences
+  async getMemberSizePreferences(userId: string): Promise<MemberSizePreferences> {
+    const response = await api.get<MemberSizePreferences>(`/inventory/members/${userId}/size-preferences`);
+    return response.data;
+  },
+
+  async upsertMemberSizePreferences(userId: string, data: MemberSizePreferencesCreate): Promise<MemberSizePreferences> {
+    const response = await api.put<MemberSizePreferences>(`/inventory/members/${userId}/size-preferences`, data);
+    return response.data;
+  },
+
+  async getMySizePreferences(): Promise<MemberSizePreferences> {
+    const response = await api.get<MemberSizePreferences>('/inventory/my/size-preferences');
+    return response.data;
+  },
+
+  async upsertMySizePreferences(data: MemberSizePreferencesCreate): Promise<MemberSizePreferences> {
+    const response = await api.put<MemberSizePreferences>('/inventory/my/size-preferences', data);
+    return response.data;
   },
 };
 

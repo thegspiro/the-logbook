@@ -14,6 +14,7 @@ import {
   Radio, Shirt, HardHat, Cog,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
+import { facilitiesService } from '../../../services/facilitiesServices';
 import type {
   InventoryItem, InventoryCategory, ItemHistoryEvent,
   MaintenanceRecord, NFPACompliance, NFPAExposureRecord,
@@ -110,6 +111,9 @@ const ItemDetailPage: React.FC = () => {
   const [exposures, setExposures] = useState<NFPAExposureRecord[]>([]);
   const [tabLoading, setTabLoading] = useState(false);
 
+  // Location name resolution
+  const [locationName, setLocationName] = useState<string | null>(null);
+
   // Assign modal
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assignUserId, setAssignUserId] = useState('');
@@ -132,6 +136,16 @@ const ItemDetailPage: React.FC = () => {
       setItem(fetched);
       const cat = cats.find(c => c.id === fetched.category_id) ?? null;
       setCategory(cat);
+      // Resolve location name
+      if (fetched.location_id) {
+        try {
+          const locations = await facilitiesService.getLocations();
+          const loc = locations.find(l => l.id === fetched.location_id);
+          setLocationName(loc?.name ?? null);
+        } catch {
+          setLocationName(null);
+        }
+      }
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to load item'));
     } finally {
@@ -293,7 +307,7 @@ const ItemDetailPage: React.FC = () => {
         {/* Location — always shown */}
         <Card title="Location" icon={<MapPin className="w-4 h-4" />}>
           <Field label="Station" value={item.station || '--'} />
-          <Field label="Location ID" value={item.location_id || '--'} />
+          <Field label="Location" value={locationName || item.location_id || '--'} />
           <Field label="Storage Area" value={item.storage_location || '--'} />
         </Card>
 
@@ -327,7 +341,9 @@ const ItemDetailPage: React.FC = () => {
         {/* Physical — uniform, ppe */}
         {['uniform', 'ppe'].includes(itemType) && (
           <Card title="Physical" icon={<Shirt className="w-4 h-4" />}>
-            <Field label="Size" value={item.size || '--'} />
+            <Field label="Standard Size" value={item.standard_size ? item.standard_size.toUpperCase() : '--'} />
+            <Field label="Style" value={item.style ? item.style.replace(/_/g, ' ') : '--'} />
+            <Field label="Size (legacy)" value={item.size || '--'} />
             <Field label="Color" value={item.color || '--'} />
           </Card>
         )}

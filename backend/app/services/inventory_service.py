@@ -19,6 +19,8 @@ from sqlalchemy.orm import selectinload
 from app.models.inventory import (
     AssignmentType,
     CheckOutRecord,
+    EquipmentKit,
+    EquipmentKitItem,
     InventoryActionType,
     InventoryCategory,
     InventoryItem,
@@ -28,7 +30,9 @@ from app.models.inventory import (
     ItemIssuance,
     ItemStatus,
     ItemType,
+    ItemVariantGroup,
     MaintenanceRecord,
+    MemberSizePreferences,
     ReorderRequest,
     ReorderStatus,
     ReturnRequest,
@@ -3102,7 +3106,10 @@ class InventoryService:
                         if (m.completed_date or m.scheduled_date)
                         else m.created_at.isoformat()
                     ),
-                    "summary": f"{mtype.replace('_', ' ').title()}{' — completed' if m.is_completed else ' — scheduled'}",
+                    "summary": (
+                        f"{mtype.replace('_', ' ').title()}"
+                        f"{' — completed' if m.is_completed else ' — scheduled'}"
+                    ),
                     "details": {
                         "maintenance_type": mtype,
                         "description": m.description,
@@ -3836,3 +3843,257 @@ class InventoryService:
         await self.db.delete(reorder)
         await self.db.flush()
         return None
+
+    # ============================================
+    # Variant Group Methods
+    # ============================================
+
+    async def create_variant_group(
+        self,
+        organization_id: UUID,
+        data: dict,
+        created_by: Optional[UUID] = None,
+    ) -> Tuple[Optional[ItemVariantGroup], Optional[str]]:
+        """Create a variant group for grouping pool item variants."""
+        try:
+            group = ItemVariantGroup(
+                organization_id=str(organization_id),
+                name=data["name"],
+                description=data.get("description"),
+                category_id=str(data["category_id"]) if data.get("category_id") else None,
+                base_price=data.get("base_price"),
+                base_replacement_cost=data.get("base_replacement_cost"),
+                unit_of_measure=data.get("unit_of_measure"),
+                created_by=str(created_by) if created_by else None,
+            )
+            self.db.add(group)
+            await self.db.flush()
+            await self.db.refresh(group)
+            return group, None
+        except Exception as e:
+            logger.error(f"Error creating variant group: {e}")
+            return None, str(e)
+
+    async def get_variant_groups(
+        self, organization_id: UUID, active_only: bool = True
+    ) -> List[ItemVariantGroup]:
+        """List variant groups for an organization."""
+        query = select(ItemVariantGroup).where(
+            ItemVariantGroup.organization_id == str(organization_id)
+        )
+        if active_only:
+            query = query.where(ItemVariantGroup.active.is_(True))
+        query = query.order_by(ItemVariantGroup.name)
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_variant_group_by_id(
+        self, group_id: UUID, organization_id: UUID
+    ) -> Optional[ItemVariantGroup]:
+        """Get a variant group with its member items."""
+        query = (
+            select(ItemVariantGroup)
+            .where(
+                ItemVariantGroup.id == str(group_id),
+                ItemVariantGroup.organization_id == str(organization_id),
+            )
+            .options(selectinload(ItemVariantGroup.items))
+        )
+        result = await self.db.execute(query)
+        return result.scalar_one_or_none()
+
+    async def update_variant_group(
+        self, group_id: UUID, organization_id: UUID, data: dict
+    ) -> Tuple[Optional[ItemVariantGroup], Optional[str]]:
+        """Update a variant group."""
+        try:
+            group = await self.get_variant_group_by_id(group_id, organization_id)
+            if not group:
+                return None, "Variant group not found"
+            for key, value in data.items():
+                setattr(group, key, value)
+            await self.db.flush()
+            await self.db.refresh(group)
+            return group, None
+        except Exception as e:
+            logger.error(f"Error updating variant group: {e}")
+            return None, str(e)
+
+    # ============================================
+    # Equipment Kit Methods
+    # ============================================
+
+    async def create_equipment_kit(
+        self,
+        organization_id: UUID,
+        data: dict,
+        created_by: Optional[UUID] = None,
+    ) -> Tuple[Optional[EquipmentKit], Optional[str]]:
+        """Create an equipment kit template with its items."""
+        try:
+            kit = EquipmentKit(
+                organization_id=str(organization_id),
+                name=data["name"],
+                description=data.get("description"),
+                restricted_to_roles=data.get("restricted_to_roles"),
+                min_rank_order=data.get("min_rank_order"),
+                created_by=str(created_by) if created_by else None,
+            )
+            self.db.add(kit)
+            await self.db.flush()
+
+            line_items_data = data.get("line_items", [])
+            for idx, item_data in enumerate(line_items_data):
+                kit_item = EquipmentKitItem(
+                    kit_id=kit.id,
+                    item_id=str(item_data["item_id"]) if item_data.get("item_id") else None,
+                    category_id=str(item_data["category_id"]) if item_data.get("category_id") else None,
+                    item_name=item_data["item_name"],
+                    quantity=item_data.get("quantity", 1),
+                    size_selectable=item_data.get("size_selectable", False),
+                    sort_order=idx,
+                )
+                self.db.add(kit_item)
+
+            await self.db.flush()
+            await self.db.refresh(kit)
+            return kit, None
+        except Exception as e:
+            logger.error(f"Error creating equipment kit: {e}")
+            return None, str(e)
+
+    async def get_equipment_kits(
+        self, organization_id: UUID, active_only: bool = True
+    ) -> List[EquipmentKit]:
+        """List equipment kits for an organization."""
+        query = select(EquipmentKit).where(
+            EquipmentKit.organization_id == str(organization_id)
+        )
+        if active_only:
+            query = query.where(EquipmentKit.active.is_(True))
+        query = query.order_by(EquipmentKit.name)
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_equipment_kit_by_id(
+        self, kit_id: UUID, organization_id: UUID
+    ) -> Optional[EquipmentKit]:
+        """Get a kit with its items."""
+        query = (
+            select(EquipmentKit)
+            .where(
+                EquipmentKit.id == str(kit_id),
+                EquipmentKit.organization_id == str(organization_id),
+            )
+            .options(selectinload(EquipmentKit.line_items))
+        )
+        result = await self.db.execute(query)
+        return result.scalar_one_or_none()
+
+    async def update_equipment_kit(
+        self, kit_id: UUID, organization_id: UUID, data: dict
+    ) -> Tuple[Optional[EquipmentKit], Optional[str]]:
+        """Update a kit's metadata (not its items)."""
+        try:
+            kit = await self.get_equipment_kit_by_id(kit_id, organization_id)
+            if not kit:
+                return None, "Equipment kit not found"
+            for key, value in data.items():
+                setattr(kit, key, value)
+            await self.db.flush()
+            await self.db.refresh(kit)
+            return kit, None
+        except Exception as e:
+            logger.error(f"Error updating equipment kit: {e}")
+            return None, str(e)
+
+    async def issue_kit_to_member(
+        self,
+        kit_id: UUID,
+        user_id: UUID,
+        organization_id: UUID,
+        issued_by: Optional[UUID] = None,
+    ) -> Tuple[Optional[List[ItemIssuance]], Optional[str]]:
+        """Issue all items in a kit to a member."""
+        try:
+            kit = await self.get_equipment_kit_by_id(kit_id, organization_id)
+            if not kit:
+                return None, "Equipment kit not found"
+
+            issuances = []
+            for kit_item in kit.line_items:
+                if kit_item.item_id:
+                    item = await self.get_item_by_id(
+                        UUID(kit_item.item_id), organization_id
+                    )
+                    if not item:
+                        if not kit_item.optional:
+                            return None, f"Required kit item not found: {kit_item.item_id}"
+                        continue
+
+                    if item.tracking_type == TrackingType.POOL:
+                        result, err = await self.issue_from_pool(
+                            item_id=UUID(item.id),
+                            user_id=user_id,
+                            organization_id=organization_id,
+                            quantity=kit_item.quantity,
+                            issued_by=issued_by,
+                        )
+                    else:
+                        result, err = await self.assign_item_to_user(
+                            item_id=UUID(item.id),
+                            user_id=user_id,
+                            organization_id=organization_id,
+                            assigned_by=issued_by,
+                        )
+
+                    if err and not kit_item.optional:
+                        return None, f"Failed to issue kit item: {err}"
+                    if result:
+                        issuances.append(result)
+
+            return issuances, None
+        except Exception as e:
+            logger.error(f"Error issuing kit: {e}")
+            return None, str(e)
+
+    # ============================================
+    # Member Size Preferences Methods
+    # ============================================
+
+    async def get_member_size_preferences(
+        self, user_id: UUID, organization_id: UUID
+    ) -> Optional[MemberSizePreferences]:
+        """Get a member's size preferences."""
+        query = select(MemberSizePreferences).where(
+            MemberSizePreferences.user_id == str(user_id),
+            MemberSizePreferences.organization_id == str(organization_id),
+        )
+        result = await self.db.execute(query)
+        return result.scalar_one_or_none()
+
+    async def upsert_member_size_preferences(
+        self,
+        user_id: UUID,
+        organization_id: UUID,
+        data: dict,
+    ) -> Tuple[Optional[MemberSizePreferences], Optional[str]]:
+        """Create or update a member's size preferences."""
+        try:
+            prefs = await self.get_member_size_preferences(user_id, organization_id)
+            if prefs:
+                for key, value in data.items():
+                    setattr(prefs, key, value)
+            else:
+                prefs = MemberSizePreferences(
+                    user_id=str(user_id),
+                    organization_id=str(organization_id),
+                    **data,
+                )
+                self.db.add(prefs)
+            await self.db.flush()
+            await self.db.refresh(prefs)
+            return prefs, None
+        except Exception as e:
+            logger.error(f"Error upserting member size preferences: {e}")
+            return None, str(e)
