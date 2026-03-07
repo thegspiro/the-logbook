@@ -301,9 +301,11 @@ services:
     image: mailhog/mailhog:latest
     container_name: intranet-mailhog
     restart: unless-stopped
+    # SEC: Bind to localhost only — Mailhog has no authentication and may
+    # display password reset tokens, PII, etc. in captured emails.
     ports:
-      - "${MAILHOG_SMTP_PORT:-1025}:1025"
-      - "${MAILHOG_UI_PORT:-8025}:8025"
+      - "127.0.0.1:${MAILHOG_SMTP_PORT:-1025}:1025"
+      - "127.0.0.1:${MAILHOG_UI_PORT:-8025}:8025"
     networks:
       - intranet-network
     profiles:

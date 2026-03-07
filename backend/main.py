@@ -32,15 +32,26 @@ from app.core.database import database_manager
 from app.core.logging import setup_logging, setup_sentry
 
 # Create rate limiter instance (uses Redis if available, falls back to in-memory)
+_rate_limit_storage_uri = (
+    f"redis://:{settings.REDIS_PASSWORD}@{settings.REDIS_HOST}:{settings.REDIS_PORT}/1"
+    if settings.REDIS_PASSWORD
+    else "memory://"
+)
 limiter = Limiter(
     key_func=get_remote_address,
     default_limits=[settings.RATE_LIMIT_DEFAULT],
-    storage_uri=(
-        f"redis://:{settings.REDIS_PASSWORD}@{settings.REDIS_HOST}:{settings.REDIS_PORT}/1"
-        if settings.REDIS_PASSWORD
-        else "memory://"
-    ),
+    storage_uri=_rate_limit_storage_uri,
 )
+
+# SEC: In-memory rate limiting is per-process — with multiple workers,
+# each has independent counters, effectively multiplying the rate limit.
+if _rate_limit_storage_uri == "memory://":
+    import logging as _logging
+
+    _logging.getLogger("security").warning(
+        "Rate limiter using in-memory storage (per-process). "
+        "Set REDIS_PASSWORD to use Redis for shared rate limiting across workers."
+    )
 
 setup_logging(
     log_level=settings.LOG_LEVEL,
@@ -674,11 +685,18 @@ def _fast_path_init(engine, alembic_cfg, base_dir, head_revision=None):
             result = conn.execute(text("SHOW TABLES"))
             tables_to_drop = [row[0] for row in result if row[0] != "alembic_version"]
             if tables_to_drop:
-                # Drop tables individually to avoid SQL injection via
-                # malicious table names containing backtick escapes.
+                import re
+
+                _TABLE_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
                 for tname in tables_to_drop:
-                    safe_name = tname.replace("`", "``")
-                    conn.execute(text(f"DROP TABLE IF EXISTS `{safe_name}`"))
+                    # SEC: Validate table name against strict allowlist pattern
+                    # to prevent SQL injection via crafted table names.
+                    if not _TABLE_NAME_RE.match(tname):
+                        logger.warning(
+                            "Skipping table with suspicious name: %r", tname
+                        )
+                        continue
+                    conn.execute(text(f"DROP TABLE IF EXISTS `{tname}`"))
             logger.info(f"Dropped {len(tables_to_drop)} existing tables")
 
             # 3. Create ALL tables from current model definitions.
@@ -1785,102 +1803,83 @@ app.include_router(public_display_router, prefix="/api")
 @app.get("/health")
 async def health_check():
     """
-    Comprehensive health check endpoint
+    Minimal health check endpoint for load balancers and Docker healthchecks.
 
-    Checks:
-    - API status
-    - Database connectivity
-    - Redis connectivity
-    - Configuration validation
-    - Schema validation status
+    SEC: Returns only status and ready flag — no version, environment, or
+    internal service state that could help attackers fingerprint the system.
+    Use /health/detailed (authenticated, non-production) for diagnostics.
     """
-    health_status = {
-        "status": "healthy",
-        "version": settings.VERSION,
-        "environment": settings.ENVIRONMENT,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "checks": {},
-    }
+    from fastapi.responses import JSONResponse
 
-    # Check if startup had schema validation errors
+    overall_status = "healthy"
+    db_status = "connected"
+    redis_status = "connected"
+    schema_error = None
+
+    # Check if startup had fatal errors
     if startup_status.phase == "error" or any(
         "schema" in e.lower() for e in startup_status.errors
     ):
-        health_status["status"] = "unhealthy"
-        health_status["checks"]["schema"] = "invalid"
-        health_status["schema_error"] = (
+        overall_status = "unhealthy"
+        schema_error = (
             "Database schema is inconsistent. "
             "Run 'docker compose down -v' then 'docker compose up --build' to fix."
         )
 
-    # Check database — actually ping MySQL instead of just checking
-    # whether the engine object exists in memory.
+    # Check database connectivity
     try:
-        from sqlalchemy import text
+        from sqlalchemy import text as sa_text
 
         from app.core.database import database_manager
 
         if database_manager.is_connected:
             async with database_manager.session_factory() as session:
-                await session.execute(text("SELECT 1"))
-            health_status["checks"]["database"] = "connected"
+                await session.execute(sa_text("SELECT 1"))
         else:
-            health_status["checks"]["database"] = "disconnected"
-            health_status["status"] = "degraded"
+            db_status = "disconnected"
+            overall_status = "degraded"
     except Exception as e:
-        # Log details internally but don't expose to clients
         logger.error(f"Health check - database error: {e}")
-        health_status["checks"]["database"] = "error"
-        health_status["status"] = "unhealthy"
+        db_status = "error"
+        overall_status = "unhealthy"
 
-    # Check Redis
+    # Check Redis connectivity
     try:
         from app.core.cache import cache_manager
 
         if cache_manager.is_connected:
             await cache_manager.redis.ping()
-            health_status["checks"]["redis"] = "connected"
         else:
-            health_status["checks"]["redis"] = "disconnected"
-            health_status["status"] = "degraded"
+            redis_status = "disconnected"
+            if overall_status == "healthy":
+                overall_status = "degraded"
     except Exception as e:
         logger.error(f"Health check - redis error: {e}")
-        health_status["checks"]["redis"] = "error"
-        health_status["status"] = "degraded"  # Redis is not critical
+        redis_status = "error"
+        if overall_status == "healthy":
+            overall_status = "degraded"
 
-    # Security configuration validation
-    security_warnings = settings.validate_security_config()
+    body: dict = {
+        "status": overall_status,
+        "ready": startup_status.ready,
+    }
 
-    if security_warnings:
-        # Only expose warning count, not details (security)
-        critical_count = len([w for w in security_warnings if "CRITICAL" in w])
-        warning_count = len(security_warnings) - critical_count
-
-        health_status["checks"]["security"] = {
-            "status": "issues_detected",
-            "critical_issues": critical_count,
-            "warnings": warning_count,
+    # SEC: Expose detailed service state only during startup (for the
+    # onboarding UI which displays startup progress).  Once the app is
+    # ready, the endpoint returns only status + ready flag to prevent
+    # information leakage about internal services and configuration.
+    if not startup_status.ready:
+        body["version"] = settings.VERSION
+        body["startup"] = startup_status.to_dict()
+        body["checks"] = {
+            "database": db_status,
+            "redis": redis_status,
         }
+        if schema_error:
+            body["schema_error"] = schema_error
 
-        if critical_count > 0:
-            health_status["status"] = "unhealthy"
-        elif warning_count > 0 and health_status["status"] == "healthy":
-            health_status["status"] = "degraded"
-    else:
-        health_status["checks"]["security"] = {"status": "ok"}
-
-    # Include startup status for frontend progress display
-    health_status["startup"] = startup_status.to_dict()
-
-    # Return 503 when the database is unreachable so Docker healthchecks
-    # and load balancers can detect the degraded state.  The JSON body
-    # still contains the full diagnostics for debugging.
-    from fastapi.responses import JSONResponse
-
-    if health_status["status"] == "unhealthy":
-        return JSONResponse(content=health_status, status_code=503)
-
-    return health_status
+    status_code = 503 if overall_status == "unhealthy" else 200
+    return JSONResponse(content=body, status_code=status_code)
 
 
 @app.get("/health/detailed")

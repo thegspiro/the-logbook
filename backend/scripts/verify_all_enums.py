@@ -48,13 +48,17 @@ def verify_enum_values():
                 continue
 
             # Get column definition
-            result = conn.execute(text(f"""
-                SELECT COLUMN_TYPE
-                FROM INFORMATION_SCHEMA.COLUMNS
-                WHERE TABLE_SCHEMA = DATABASE()
-                AND TABLE_NAME = '{table_name}'
-                AND COLUMN_NAME = '{column_name}'
-            """))
+            # SEC: Use parameterized query to prevent SQL injection
+            result = conn.execute(
+                text("""
+                    SELECT COLUMN_TYPE
+                    FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE()
+                    AND TABLE_NAME = :table_name
+                    AND COLUMN_NAME = :column_name
+                """),
+                {"table_name": table_name, "column_name": column_name},
+            )
 
             row = result.fetchone()
             if not row:
