@@ -13,8 +13,8 @@ Welcome to the training documentation for The Logbook. These guides are designed
 | 2 | [Training & Certification](./02-training.md) | Courses, programs, requirements, submissions, compliance, external integrations |
 | 3 | [Shifts & Scheduling](./03-scheduling.md) | Calendar, assignments, attendance, time-off, swaps, templates, platoon rotations, compliance, shift settings |
 | 4 | [Events & Meetings](./04-events-meetings.md) | Events, QR check-in, meetings, minutes, action items, elections, public outreach pipeline |
-| 5 | [Inventory Management](./05-inventory.md) | Items (individual & pool), categories, assignments, checkout, batch operations, scanning, label printing, NFPA 1851 lifecycle, departure clearance |
-| 6 | [Apparatus & Facilities](./06-apparatus-facilities.md) | Vehicles, maintenance, fuel, NFPA compliance, stations, inspections, utilities, capital projects |
+| 5 | [Inventory Management](./05-inventory.md) | Items (individual & pool), variant groups, equipment kits, member size preferences, reorder requests, categories, assignments, checkout, batch operations, scanning, label printing, NFPA 1851 lifecycle, departure clearance |
+| 6 | [Apparatus & Facilities](./06-apparatus-facilities.md) | Vehicles, maintenance, fuel, NFPA compliance, facilities dashboard, facility detail (sidebar nav), rooms, systems, inspections, utilities, capital projects |
 | 7 | [Documents, Forms & Communications](./07-documents-forms.md) | File storage, form builder, notifications, messages, integrations |
 | 8 | [Administration & Reports](./08-admin-reports.md) | Settings, roles, modules, reports, analytics, public portal, security, first-time setup |
 | 9 | [Skills Testing & Psychomotor Evaluations](./09-skills-testing.md) | Skill sheet templates, NREMT-style evaluations, point-based scoring, statement criteria, practice mode, test visibility, post-completion review, test deletion, pass/fail, realistic example |
@@ -56,10 +56,10 @@ All guides in their entirety, with special attention to:
 
 Throughout these guides you will find screenshot placeholder lines formatted as:
 
-> **Screenshot placeholder:**
+> **Screenshot placeholder:** or **Screenshot needed:**
 > _[Description of what the screenshot should show]_
 
-These indicate where a screenshot should be inserted. The description explains what should be captured. To add screenshots:
+These indicate where a screenshot should be inserted. The description explains what should be captured. Lines marked **Screenshot needed:** are newly added sections that particularly require visual documentation. To add screenshots:
 
 1. Take the screenshot as described.
 2. Save it to the `docs/training/images/` directory.
@@ -92,4 +92,4 @@ Not all modules are enabled by default. Your department administrator controls w
 | Training, Facilities, Prospective Pipeline, Admin Hours | **Off** (Optional, enable in Settings > Modules) |
 | Incidents, HR, Grants, Public Info | **Off** (Optional, enable in Settings > Modules) |
 
-> **Note (2026-03-05):** Standard modules now default to enabled on fresh installations. The Settings UI has been redesigned with module cards for better visibility. If modules appear missing after an update, check **Settings > Organization > Modules**. Recent additions: Grants & Fundraising module (grant applications, campaigns, donor management), compliance officer dashboard (ISO readiness, attestations, NFPA 1401), training enhancements (recertification tracking, competency matrix, instructor management, xAPI integration), inventory improvements (charges, return requests, quarantine, pool item size variants, mobile card views, barcode printing). Mobile member ID scanning is available for inventory checkout. PWA shortcuts provide quick access to Dashboard, Events, and Scheduling from the home screen icon.
+> **Note (2026-03-07):** Standard modules now default to enabled on fresh installations. The Settings UI has been redesigned with module cards for better visibility. If modules appear missing after an update, check **Settings > Organization > Modules**. Recent additions: Grants & Fundraising module (grant applications, campaigns, donor management), compliance officer dashboard (ISO readiness, attestations, NFPA 1401), training enhancements (recertification tracking, competency matrix, instructor management, xAPI integration), inventory improvements (variant groups, equipment kits, member size preferences, reorder requests with SMS alerts, item detail page, cost tracking, charges, return requests, quarantine, pool item size variants, mobile card views, barcode printing), facilities module rewrite (dashboard, full-page detail with sidebar nav, FacilityRoomPicker), comprehensive security audit with 25-issue remediation, test infrastructure (vitest-axe, hypothesis, schemathesis, coverage ratcheting). Mobile member ID scanning is available for inventory checkout. PWA shortcuts provide quick access to Dashboard, Events, and Scheduling from the home screen icon.

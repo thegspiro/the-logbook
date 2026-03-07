@@ -161,17 +161,12 @@ Requires `events.manage` permission. Tab-based admin interface.
 
 | URL | Page | Permission |
 |-----|------|------------|
-| `/facilities` | Facilities Management | `facilities.view` |
+| `/facilities` | Facilities Dashboard | `facilities.view` |
+| `/facilities/:id` | Facility Detail | `facilities.view` |
+| `/facilities/maintenance` | Cross-Facility Maintenance | `facilities.view` |
+| `/facilities/inspections` | Cross-Facility Inspections | `facilities.view` |
 
-Tab-based interface with the following views:
-
-| Tab | Label |
-|-----|-------|
-| `facilities` | Facilities |
-| `maintenance` | Maintenance |
-| `inspections` | Inspections |
-
-> Full building management including maintenance scheduling, utility tracking, inspections, key management, compliance, and capital projects. Replaces the Locations page when enabled. Locations created through either module are linked via `facility_id` so all event/training location references remain consistent.
+> The **Dashboard** shows summary statistics (total facilities, pending maintenance, upcoming inspections), a recent activity feed, and a searchable facility card grid. The **Facility Detail** page uses sidebar navigation to sections: overview, rooms, building systems, maintenance, inspections, utilities, emergency contacts, access keys, shutoff locations, capital projects, insurance, occupants, and compliance checklists. Rooms auto-sync linked Location records for Events and QR check-in. Cross-facility **Maintenance** and **Inspections** pages provide department-wide views. Replaces the Locations page when enabled. Locations created through either module are linked via `facility_id` so all event/training location references remain consistent.
 
 ---
 
@@ -233,18 +228,35 @@ Requires `training.manage` permission. Tab-based admin interface.
 
 | URL | Page | Permission |
 |-----|------|------------|
-| `/inventory` | Inventory Browse | Authenticated |
+| `/inventory` | Inventory Items List | Authenticated |
+| `/inventory/my-equipment` | My Equipment | Authenticated |
+| `/inventory/items/:id` | Item Detail | Authenticated |
+| `/inventory/storage-areas` | Storage Areas | Authenticated |
 
 ### Inventory Admin Hub (`/inventory/admin`)
 
-Requires `inventory.manage` permission. Tab-based admin interface.
+Requires `inventory.manage` permission. Dashboard with summary stats (total items, low stock, overdue checkouts, pending requests) and navigation to admin sub-pages.
 
-| Tab | Label |
-|-----|-------|
-| `manage` | Manage Inventory |
-| `members` | Members |
+### Inventory Admin Pages
 
-> The Manage Inventory tab provides full item/category CRUD. The Members tab shows per-member inventory assignments with barcode check-out/return capability.
+| URL | Page | Permission |
+|-----|------|------------|
+| `/inventory/admin` | Admin Dashboard | `inventory.manage` |
+| `/inventory/admin/items` | Manage Items | `inventory.manage` |
+| `/inventory/admin/pool` | Pool Items | `inventory.manage` |
+| `/inventory/admin/categories` | Categories | `inventory.manage` |
+| `/inventory/admin/maintenance` | Maintenance Records | `inventory.manage` |
+| `/inventory/admin/members` | Members Inventory | `inventory.manage` |
+| `/inventory/admin/charges` | Charges & Fees | `inventory.manage` |
+| `/inventory/admin/returns` | Return Requests | `inventory.manage` |
+| `/inventory/admin/requests` | Equipment Requests | `inventory.manage` |
+| `/inventory/admin/write-offs` | Write-Off Requests | `inventory.manage` |
+| `/inventory/admin/reorder` | Reorder Requests | `inventory.manage` |
+| `/inventory/checkouts` | Active Checkouts | `inventory.manage` |
+| `/inventory/import` | CSV Import | `inventory.manage` |
+| `/inventory/print-labels` | Barcode Label Printing | Authenticated |
+
+> The admin dashboard provides summary statistics and quick-link navigation. Individual sub-pages handle items, pool items, categories, maintenance, members, charges, return/equipment/write-off/reorder requests. The Item Detail page (`/inventory/items/:id`) has a two-column layout with barcode sidebar and tabbed content (overview, history, maintenance, NFPA compliance).
 
 ---
 
@@ -347,4 +359,4 @@ Tab-based interface with the following views:
 
 ---
 
-**Total: ~80 direct routes + 25 admin hub tabs across 16 modules**
+**Total: ~95 direct routes + 25 admin hub tabs across 16 modules**

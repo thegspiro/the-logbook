@@ -29,6 +29,15 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 - **Pool Item Enhancements** — *(2026-03-05)* Size variants (S/M/L/XL with per-size stock), bulk issuance to multiple members, per-member issuance allowances with override capability
 - **Mobile Card Views & FAB** — *(2026-03-05)* Responsive card layouts on mobile with floating action button for quick actions (add item, scan barcode, import CSV)
 - **CSV Import** — *(2026-03-02)* Bulk import items via CSV upload with downloadable template, header validation, duplicate serial detection
+- **Variant Groups** — *(2026-03-07)* Link related items that differ by size/style (e.g., coat in S/M/L/XL). Each variant tracks its own stock while sharing a base product description
+- **Equipment Kits** — *(2026-03-07)* Named bundles of items (e.g., "New Recruit PPE Kit") for single-operation issuance with per-component tracking
+- **Member Size Preferences** — *(2026-03-07)* Members record preferred sizes (coat, pants, gloves, boots, helmet) for auto-selection during kit issuance and ordering
+- **Reorder Requests** — *(2026-03-07)* Full workflow (pending → approved → ordered → received) with vendor/PO tracking and audit logging
+- **Item Reorder Points** — *(2026-03-07)* Per-item threshold for low-stock alerts. Triggers email and SMS (Twilio) notifications
+- **Low Stock SMS Alerts** — *(2026-03-07)* Twilio SMS notifications for low-stock items alongside existing email alerts
+- **Location Filter Dashboard** — *(2026-03-07)* Cascading Facility → Room → Storage Area filter on inventory dashboard
+- **Item Detail Page** — *(2026-03-06)* Dedicated detail page (`/inventory/items/:id`) with two-column layout: barcode sidebar + tabbed content (overview, history, maintenance, NFPA)
+- **Cost Data** — *(2026-03-06)* Purchase cost, replacement cost, and cost recovery tracking in item views and admin dashboard
 
 ---
 
@@ -36,16 +45,24 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 
 | URL | Page | Permission |
 |-----|------|------------|
-| `/inventory` | Inventory Browse | Authenticated |
-| `/inventory/admin` | Inventory Admin Hub | `inventory.manage` |
-
-### Admin Tabs
-
-| Tab | Description |
-|-----|-------------|
-| Items | Full item CRUD, bulk actions, label printing, CSV export |
-| Categories | Category CRUD with maintenance/assignment/serial requirements |
-| Members | Per-member inventory with expandable details, barcode assign/return |
+| `/inventory` | Inventory Items List | Authenticated |
+| `/inventory/my-equipment` | My Equipment | Authenticated |
+| `/inventory/items/:id` | Item Detail | Authenticated |
+| `/inventory/storage-areas` | Storage Areas | Authenticated |
+| `/inventory/admin` | Admin Dashboard | `inventory.manage` |
+| `/inventory/admin/items` | Manage Items | `inventory.manage` |
+| `/inventory/admin/pool` | Pool Items | `inventory.manage` |
+| `/inventory/admin/categories` | Categories | `inventory.manage` |
+| `/inventory/admin/maintenance` | Maintenance Records | `inventory.manage` |
+| `/inventory/admin/members` | Members Inventory | `inventory.manage` |
+| `/inventory/admin/charges` | Charges & Fees | `inventory.manage` |
+| `/inventory/admin/returns` | Return Requests | `inventory.manage` |
+| `/inventory/admin/requests` | Equipment Requests | `inventory.manage` |
+| `/inventory/admin/write-offs` | Write-Off Requests | `inventory.manage` |
+| `/inventory/admin/reorder` | Reorder Requests | `inventory.manage` |
+| `/inventory/checkouts` | Active Checkouts | `inventory.manage` |
+| `/inventory/import` | CSV Import | `inventory.manage` |
+| `/inventory/print-labels` | Barcode Label Printing | Authenticated |
 
 ---
 
@@ -73,6 +90,16 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 | `inventory_notification_queue` | Delayed notification consolidation queue |
 | `property_return_reminders` | Tracks reminder notices sent to departed members |
 
+### Variant & Kit Tables *(2026-03-07)*
+
+| Table | Purpose |
+|-------|---------|
+| `variant_groups` | Groups related items that differ by size/style |
+| `equipment_kits` | Named bundles of items for single-operation issuance |
+| `equipment_kit_items` | Component items within a kit with per-component quantity |
+| `member_size_preferences` | Member garment size preferences (coat, pants, gloves, boots, helmet) |
+| `reorder_requests` | Reorder request workflow with status lifecycle |
+
 ### Key Enums
 
 | Enum | Values |
@@ -83,6 +110,9 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 | MaintenanceType | inspection, repair, cleaning, testing, calibration, replacement, preventive |
 | ClearanceLineDisposition | pending, returned, returned_damaged, written_off, waived |
 | WriteOffStatus | pending, approved, denied |
+| StandardSize | xs, s, m, l, xl, 2xl, 3xl, 4xl, 5xl |
+| GarmentStyle | regular, long, short, tall |
+| ReorderRequestStatus | pending, approved, ordered, received |
 
 ---
 
@@ -199,6 +229,33 @@ GET    /api/v1/inventory/write-offs                      # List write-off reques
 PUT    /api/v1/inventory/write-offs/{id}/review           # Approve/deny write-off
 ```
 
+### Variant Groups & Equipment Kits *(2026-03-07)*
+
+```
+GET    /api/v1/inventory/variant-groups                    # List variant groups
+POST   /api/v1/inventory/variant-groups                    # Create variant group
+GET    /api/v1/inventory/variant-groups/{id}               # Get variant group
+PATCH  /api/v1/inventory/variant-groups/{id}               # Update variant group
+
+GET    /api/v1/inventory/equipment-kits                    # List equipment kits
+POST   /api/v1/inventory/equipment-kits                    # Create equipment kit
+GET    /api/v1/inventory/equipment-kits/{id}               # Get equipment kit
+PATCH  /api/v1/inventory/equipment-kits/{id}               # Update equipment kit
+POST   /api/v1/inventory/equipment-kits/{id}/issue         # Issue kit to member
+
+GET    /api/v1/inventory/users/{id}/size-preferences       # Get member size preferences
+PUT    /api/v1/inventory/users/{id}/size-preferences       # Upsert member size preferences
+```
+
+### Reorder Requests *(2026-03-07)*
+
+```
+POST   /api/v1/inventory/reorder-requests                  # Create reorder request
+GET    /api/v1/inventory/reorder-requests                  # List reorder requests
+PATCH  /api/v1/inventory/reorder-requests/{id}             # Update request status
+GET    /api/v1/inventory/reorder-requests/{id}/history     # Request status history
+```
+
 ### NFPA 1851/1852 Compliance
 
 ```
@@ -271,6 +328,21 @@ Frontend tests in `src/pages/InventoryMembersTab.test.tsx` and `src/constants/en
 - Condition constant consistency
 
 ---
+
+## Recent Changes (2026-03-07)
+
+- **Variant Groups** — Items can be grouped as variants of a base product (e.g., coat in sizes S/M/L/XL). Each variant has independent stock, serials, and assignments
+- **Equipment Kits** — Named bundles for single-operation issuance with per-component tracking
+- **Member Size Preferences** — Record preferred garment sizes for auto-selection during kit issuance
+- **Reorder Requests** — Full lifecycle (pending → approved → ordered → received) with audit logging
+- **Item Reorder Points** — Per-pool-item threshold triggers low-stock dashboard alerts, email, and SMS notifications
+- **Low Stock SMS via Twilio** — SMS alerts for low-stock items when `TWILIO_ENABLED=True`
+- **Location Filter Dashboard** — Cascading Facility → Room → Storage Area filter on inventory views
+- **Item Detail Page** — `/inventory/items/:id` with two-column layout (barcode sidebar + tabbed content)
+- **Cost Data** — Purchase cost, replacement cost, and cost recovery in item views and dashboard
+- **Module Rewrite** — Individual focused pages replace monolithic admin hub: items, pool, categories, maintenance, members, charges, returns, requests, write-offs, reorder
+- **Barcode Race Condition Fix** — SVG barcodes fully rendered via `requestAnimationFrame` before print
+- **Storage Areas Room Filter** — Filters by `facility_room_id` to prevent station rooms leaking into pickers
 
 ## Recent Changes (2026-03-04)
 

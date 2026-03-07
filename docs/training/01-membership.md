@@ -241,11 +241,30 @@ The pipeline offers two views:
 
 ### Working with Prospects
 
-1. **Add a Prospect** - Click **Add Prospect** and fill in their basic information (name, email, phone, interest reason).
+1. **Add a Prospect** - Click **Add Prospect** and fill in their basic information (name, email, phone, interest reason, and **desired membership type** — regular or administrative).
 2. **Complete Steps** - Each pipeline stage has steps (action items, checkboxes, notes). Mark steps as completed as the prospect progresses.
 3. **Advance** - Move the prospect to the next stage when all required steps are complete.
 4. **Upload Documents** - Attach application documents, ID copies, or other requirements to the prospect's record.
-5. **Transfer to Member** - When the prospect is approved, click **Transfer to Membership** to convert them to a full member account.
+5. **Transfer to Member** - When the prospect is approved, click **Transfer to Membership** to convert them to a full member account. The membership type is pre-filled from the prospect's desired type.
+
+### Desired Membership Type
+
+Prospective members can indicate their preferred membership type when applying:
+
+| Type | Description |
+|------|-------------|
+| **Regular** | Standard active membership (starts as probationary) |
+| **Administrative** | Non-operational administrative role |
+
+- The desired type is captured on the **Membership Interest Form** template (if used as the intake form)
+- Coordinators can change the desired type inline at any pipeline stage by clicking the type badge
+- During conversion to full member, the system pre-fills "Regular" or "Administrative" based on the prospect's selection
+- Regular members start with probationary status; administrative members start with active status
+
+> **Screenshot needed:**
+> _[Screenshot of the Prospective Members pipeline showing a prospect card with the "Regular" membership type badge visible. Also show the inline dropdown that appears when clicking the badge to change it to "Administrative"]_
+
+> **Edge case:** If a prospect's desired membership type is changed from "Regular" to "Administrative" after they have already passed an election/vote stage, the system does not retroactively invalidate the vote. The coordinator should verify that the voting requirements for administrative members were met.
 
 > **Screenshot placeholder:**
 > _[Screenshot of a prospect detail drawer showing the prospect's info at the top, the current pipeline stage, step checklist with some items completed, and the "Transfer to Membership" button]_

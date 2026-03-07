@@ -57,4 +57,12 @@ DELETE /api/v1/scheduling/apparatus/{id}     # Delete basic apparatus
 
 ---
 
+## Recent Fixes (2026-03-06)
+
+- **`min_staffing` field missing from list endpoint**: The apparatus list API was returning partial data that excluded `min_staffing`, causing shift scheduling to show incorrect staffing calculations. Fixed serialization to include the full Apparatus record
+- **Setup checklist showing 0 apparatus**: When the Apparatus module was enabled, the setup checklist was counting the wrong table. Fixed to count the correct apparatus records
+- **geoip2 dependency**: Added `geoip2` package to resolve missing-package warning at backend startup
+
+---
+
 **See also:** [Scheduling Module](Module-Scheduling) | [Inventory Module](Module-Inventory)
