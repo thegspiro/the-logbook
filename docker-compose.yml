@@ -252,8 +252,8 @@ services:
       - discovery.type=single-node
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
       - xpack.security.enabled=true
-      # SEC: Override this default with a strong password in .env for production
-      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-changeme}
+      # SEC: Require explicit password — no insecure default
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:?ELASTIC_PASSWORD must be set in .env}
     # SEC: Elasticsearch port NOT exposed to host by default.
     # Uncomment for local development with direct ES access.
     # ports:
@@ -281,9 +281,9 @@ services:
       - no-new-privileges:true
     command: server /data --console-address ":9001"
     environment:
-      # SEC: Override these defaults with strong credentials in .env for production
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      # SEC: Require explicit credentials — no insecure defaults
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER must be set in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set in .env}
     # SEC: Ports are NOT exposed to the host by default.
     # Uncomment for local development if you need direct MinIO access.
     # ports:

@@ -161,12 +161,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // trigger a refresh cascade and kick the user back to login.
       await waitForLoginCookies(csrfBefore);
 
-      // Tell the 401 interceptor that a login just completed and
-      // provide the access_token from the response body.  The request
-      // interceptor will attach it as an Authorization: Bearer header
-      // until httpOnly cookies are established — this bridges the gap
-      // where the browser hasn't processed Set-Cookie headers yet.
-      markLoginComplete(loginResponse?.access_token, loginResponse?.refresh_token);
+      // Tell the 401 interceptor that a login just completed.
+      // SEC: Tokens are no longer sent in the response body — auth is
+      // handled exclusively via httpOnly cookies set by the backend.
+      markLoginComplete();
 
       // Use user data from the login response if available. This avoids
       // a separate GET /auth/me call which can fail due to a race condition

@@ -127,6 +127,8 @@ class Settings(BaseSettings):
     # Empty defaults force configuration — the app will refuse to start
     # until these are explicitly set (validated in validate_security_config).
     SECRET_KEY: str = ""
+    # SEC: Only HS256 is accepted by decode_token(). Do not change without
+    # updating the hardcoded allowlist in security.py:decode_token().
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = (
         30  # Short-lived access tokens (use refresh flow)
@@ -200,6 +202,15 @@ class Settings(BaseSettings):
         warnings = []
 
         # --- Checks that apply in ALL environments ---
+
+        # SEC: Reject weak or dangerous JWT algorithms
+        _dangerous_algorithms = {"none", "None", "NONE", ""}
+        if self.ALGORITHM in _dangerous_algorithms:
+            warnings.append(
+                "CRITICAL: ALGORITHM is set to a dangerous value "
+                f"({self.ALGORITHM!r}). Only 'HS256' is supported."
+            )
+
         _insecure_patterns = ("INSECURE_DEFAULT", "CHANGE_ME", "change_me")
 
         if (

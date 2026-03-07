@@ -38,7 +38,6 @@ from app.schemas.auth import (
     PasswordReset,
     PasswordResetRequest,
     TokenRefresh,
-    TokenResponse,
     UserLogin,
     UserRegister,
     ValidateResetToken,
@@ -57,12 +56,26 @@ def _set_auth_cookies(
     """Set httpOnly, Secure, SameSite auth cookies on *response*."""
     import secrets as _secrets
 
-    is_production = settings.ENVIRONMENT == "production"
+    # SEC: Default Secure=True. Only relax for localhost development to
+    # avoid sending auth cookies over plain HTTP on staging/QA environments.
+    is_localhost_dev = (
+        settings.ENVIRONMENT == "development"
+        and any(
+            origin.startswith(("http://localhost", "http://127.0.0.1"))
+            for origin in (
+                settings.ALLOWED_ORIGINS
+                if isinstance(settings.ALLOWED_ORIGINS, list)
+                else [settings.ALLOWED_ORIGINS]
+            )
+        )
+    )
+    use_secure = not is_localhost_dev
+
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=is_production,
+        secure=use_secure,
         samesite="strict",
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
@@ -71,17 +84,17 @@ def _set_auth_cookies(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=is_production,
+        secure=use_secure,
         samesite="strict",
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        path="/api/v1/auth",  # Only sent to auth endpoints
+        path="/api/v1/auth/",  # Only sent to auth endpoints (trailing slash for path matching)
     )
     # Double-submit CSRF token (readable by JS, validated server-side)
     response.set_cookie(
         key="csrf_token",
         value=_secrets.token_urlsafe(32),
         httponly=False,  # Must be readable by JavaScript
-        secure=is_production,
+        secure=use_secure,
         samesite="strict",
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
@@ -230,7 +243,6 @@ async def get_oauth_config(
 
 @router.post(
     "/register",
-    response_model=TokenResponse,
     status_code=status.HTTP_201_CREATED,
     dependencies=[rate_limit_register()],
 )
@@ -299,19 +311,19 @@ async def register(
         user_agent=request.headers.get("user-agent"),
     )
 
-    body = TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        token_type="bearer",
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-    ).model_dump()
+    # SEC: Tokens are transported exclusively via httpOnly cookies.
+    # Do not include tokens in the JSON body to prevent XSS exfiltration.
+    body = {
+        "token_type": "bearer",
+        "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    }
 
     response = JSONResponse(content=body)
     _set_auth_cookies(response, access_token, refresh_token)
     return response
 
 
-@router.post("/login", response_model=TokenResponse, dependencies=[rate_limit_login()])
+@router.post("/login", dependencies=[rate_limit_login()])
 async def login(
     credentials: UserLogin,
     request: Request,
@@ -367,12 +379,12 @@ async def login(
             detail="Service temporarily unavailable. Please try again in a few moments.",
         )
 
-    body = TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        token_type="bearer",
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-    ).model_dump()
+    # SEC: Tokens are transported exclusively via httpOnly cookies.
+    # Do not include tokens in the JSON body to prevent XSS exfiltration.
+    body: dict = {
+        "token_type": "bearer",
+        "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    }
 
     # Include user data so the frontend can skip the GET /auth/me call.
     # This avoids a race condition where the access_token cookie may not
@@ -433,9 +445,9 @@ async def refresh_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # SEC: Tokens are transported exclusively via httpOnly cookies.
+    # Do not include tokens in the JSON body to prevent XSS exfiltration.
     body = {
-        "access_token": new_access_token,
-        "refresh_token": new_refresh_token,
         "token_type": "bearer",
         "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     }

@@ -525,7 +525,10 @@ def decode_token(token: str) -> dict[str, Any]:
     Raises:
         JWTError: If token is invalid or expired
     """
-    payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    # SEC: Hardcode accepted algorithms to prevent algorithm confusion attacks.
+    # Never allow "none" or asymmetric algorithms when using symmetric signing.
+    _ALLOWED_ALGORITHMS = ["HS256"]
+    payload = jwt.decode(token, settings.SECRET_KEY, algorithms=_ALLOWED_ALGORITHMS)
     return payload
 
 
