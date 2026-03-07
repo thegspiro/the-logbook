@@ -95,6 +95,6 @@ describe('SubmitTrainingPage', () => {
     await waitFor(() => {
       expect(mockGetConfig).toHaveBeenCalled();
     });
-    expect(document.body).toBeTruthy();
+    expect(document.body).toBeInTheDocument();
   });
 });

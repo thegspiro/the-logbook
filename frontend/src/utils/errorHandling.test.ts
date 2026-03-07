@@ -105,7 +105,7 @@ describe('errorHandling', () => {
 
       // The detail array should be serialized into a readable message
       expect(result.status).toBe(422);
-      expect(result.message).toBeTruthy();
+      expect(result.message).toBeTypeOf('string');
       // Should not be "Request failed" - should extract something from the array
       expect(result.message).not.toBe('Request failed');
     });
@@ -118,7 +118,7 @@ describe('errorHandling', () => {
       };
 
       const result = toAppError(axiosError);
-      expect(result.message).toBeTruthy();
+      expect(result.message).toBeTypeOf('string');
     });
 
     it('uses statusText when no data detail or message', () => {

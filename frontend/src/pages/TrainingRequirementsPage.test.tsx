@@ -72,7 +72,7 @@ describe('TrainingRequirementsPage', () => {
   it('handles empty requirements list', async () => {
     mockGetRequirements.mockResolvedValue([]);
     const { container } = renderWithRouter(<TrainingRequirementsPage />);
-    expect(container).toBeTruthy();
+    expect(container).toBeInTheDocument();
   });
 
   it('handles API errors gracefully', async () => {
@@ -81,6 +81,6 @@ describe('TrainingRequirementsPage', () => {
     await waitFor(() => {
       expect(mockGetRequirements).toHaveBeenCalled();
     });
-    expect(document.body).toBeTruthy();
+    expect(document.body).toBeInTheDocument();
   });
 });

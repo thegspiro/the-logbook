@@ -51,13 +51,13 @@ describe('TrainingAdminPage', () => {
     renderWithRouter(<TrainingAdminPage />);
     await waitFor(() => {
       // Should show main navigation sections
-      expect(screen.getByText(/dashboard/i) || screen.getByText(/training/i)).toBeTruthy();
+      expect(screen.getAllByText(/dashboard|training/i).length).toBeGreaterThan(0);
     });
   });
 
   it('renders without crashing', () => {
     const { container } = renderWithRouter(<TrainingAdminPage />);
-    expect(container).toBeTruthy();
+    expect(container).toBeInTheDocument();
   });
 
   it('shows the default tab content', async () => {

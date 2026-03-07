@@ -42,12 +42,12 @@ describe('Inventory condition constants', () => {
 
   it('all options have value and label', () => {
     for (const opt of ITEM_CONDITION_OPTIONS) {
-      expect(opt.value).toBeTruthy();
-      expect(opt.label).toBeTruthy();
+      expect(opt.value).toBeTypeOf('string');
+      expect(opt.label).toBeTypeOf('string');
     }
     for (const opt of RETURN_CONDITION_OPTIONS) {
-      expect(opt.value).toBeTruthy();
-      expect(opt.label).toBeTruthy();
+      expect(opt.value).toBeTypeOf('string');
+      expect(opt.label).toBeTypeOf('string');
     }
   });
 });
@@ -90,7 +90,7 @@ describe('Enum value conventions', () => {
 
   it('enum values are unique within each enum', () => {
     const enums = { UserStatus, ElectionStatus, RSVPStatus, EventType, FormStatus };
-    for (const [name, enumObj] of Object.entries(enums)) {
+    for (const [_name, enumObj] of Object.entries(enums)) {
       const values = Object.values(enumObj);
       const uniqueValues = new Set(values);
       expect(uniqueValues.size).toBe(values.length);

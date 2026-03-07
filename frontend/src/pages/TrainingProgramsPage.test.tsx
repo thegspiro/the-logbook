@@ -79,6 +79,6 @@ describe('TrainingProgramsPage', () => {
   it('renders without crashing on empty data', async () => {
     mockGetPrograms.mockResolvedValue([]);
     const { container } = renderWithRouter(<TrainingProgramsPage />);
-    expect(container).toBeTruthy();
+    expect(container).toBeInTheDocument();
   });
 });
