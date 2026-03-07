@@ -17,6 +17,9 @@ vi.mock('../services/api', () => ({
     createTest: vi.fn(),
     updateTest: vi.fn(),
     completeTest: vi.fn(),
+    deleteTest: vi.fn(),
+    discardPracticeTest: vi.fn(),
+    emailTestResults: vi.fn(),
     getSummary: vi.fn(),
   },
   userService: {
@@ -213,6 +216,57 @@ describe('skillsTestingStore', () => {
 
       expect(result.id).toBe('tpl-2');
     });
+
+    it('should handle single template loading error', async () => {
+      vi.mocked(skillsTestingService.getTemplate).mockRejectedValue(new Error('Not found'));
+
+      await useSkillsTestingStore.getState().loadTemplate('tpl-1');
+
+      expect(useSkillsTestingStore.getState().error).toBeTruthy();
+      expect(useSkillsTestingStore.getState().templateLoading).toBe(false);
+    });
+
+    it('should handle create template error and re-throw', async () => {
+      vi.mocked(skillsTestingService.createTemplate).mockRejectedValue(new Error('Validation error'));
+
+      await expect(useSkillsTestingStore.getState().createTemplate({
+        name: 'Bad Template',
+        sections: [],
+      })).rejects.toThrow();
+
+      expect(useSkillsTestingStore.getState().error).toBeTruthy();
+    });
+
+    it('should handle update template error and re-throw', async () => {
+      vi.mocked(skillsTestingService.updateTemplate).mockRejectedValue(new Error('Update failed'));
+
+      await expect(useSkillsTestingStore.getState().updateTemplate('tpl-1', {
+        name: 'Updated Name',
+      })).rejects.toThrow();
+
+      expect(useSkillsTestingStore.getState().error).toBeTruthy();
+    });
+
+    it('should handle delete template error and re-throw', async () => {
+      vi.mocked(skillsTestingService.deleteTemplate).mockRejectedValue(new Error('Delete failed'));
+
+      await expect(useSkillsTestingStore.getState().deleteTemplate('tpl-1')).rejects.toThrow();
+      expect(useSkillsTestingStore.getState().error).toBeTruthy();
+    });
+
+    it('should handle publish template error and re-throw', async () => {
+      vi.mocked(skillsTestingService.publishTemplate).mockRejectedValue(new Error('Publish failed'));
+
+      await expect(useSkillsTestingStore.getState().publishTemplate('tpl-1')).rejects.toThrow();
+      expect(useSkillsTestingStore.getState().error).toBeTruthy();
+    });
+
+    it('should handle duplicate template error and re-throw', async () => {
+      vi.mocked(skillsTestingService.duplicateTemplate).mockRejectedValue(new Error('Duplicate failed'));
+
+      await expect(useSkillsTestingStore.getState().duplicateTemplate('tpl-1')).rejects.toThrow();
+      expect(useSkillsTestingStore.getState().error).toBeTruthy();
+    });
   });
 
   describe('Test actions', () => {
@@ -264,6 +318,54 @@ describe('skillsTestingStore', () => {
 
       expect(result.result).toBe('pass');
       expect(useSkillsTestingStore.getState().activeTestRunning).toBe(false);
+    });
+
+    it('should delete a test and remove it from the list', async () => {
+      useSkillsTestingStore.setState({
+        tests: [{ id: 'test-1', template_name: 'T', candidate_name: 'C', examiner_name: 'E', status: 'completed', result: 'pass', created_at: '' }],
+        currentTest: mockTest,
+      });
+      vi.mocked(skillsTestingService.deleteTest).mockResolvedValue(undefined);
+
+      await useSkillsTestingStore.getState().deleteTest('test-1');
+
+      expect(useSkillsTestingStore.getState().tests).toHaveLength(0);
+      expect(useSkillsTestingStore.getState().currentTest).toBeNull();
+    });
+
+    it('should discard a practice test', async () => {
+      useSkillsTestingStore.setState({
+        tests: [{ id: 'test-1', template_name: 'T', candidate_name: 'C', examiner_name: 'E', status: 'in_progress', result: 'incomplete', created_at: '' }],
+        currentTest: mockTest,
+      });
+      vi.mocked(skillsTestingService.discardPracticeTest).mockResolvedValue(undefined);
+
+      await useSkillsTestingStore.getState().discardPracticeTest('test-1');
+
+      expect(useSkillsTestingStore.getState().tests).toHaveLength(0);
+      expect(useSkillsTestingStore.getState().currentTest).toBeNull();
+    });
+
+    it('should email test results', async () => {
+      vi.mocked(skillsTestingService.emailTestResults).mockResolvedValue({ message: 'Email sent' });
+
+      const result = await useSkillsTestingStore.getState().emailTestResults('test-1');
+
+      expect(result).toBe('Email sent');
+    });
+
+    it('should handle delete test error', async () => {
+      vi.mocked(skillsTestingService.deleteTest).mockRejectedValue(new Error('Delete failed'));
+
+      await expect(useSkillsTestingStore.getState().deleteTest('test-1')).rejects.toThrow();
+      expect(useSkillsTestingStore.getState().error).toBeTruthy();
+    });
+
+    it('should handle email test results error', async () => {
+      vi.mocked(skillsTestingService.emailTestResults).mockRejectedValue(new Error('Email failed'));
+
+      await expect(useSkillsTestingStore.getState().emailTestResults('test-1')).rejects.toThrow();
+      expect(useSkillsTestingStore.getState().error).toBeTruthy();
     });
   });
 
@@ -332,6 +434,51 @@ describe('skillsTestingStore', () => {
 
       expect(useSkillsTestingStore.getState().summary?.pass_rate).toBe(85);
       expect(useSkillsTestingStore.getState().summaryLoading).toBe(false);
+    });
+
+    it('should handle summary loading error', async () => {
+      vi.mocked(skillsTestingService.getSummary).mockRejectedValue(new Error('Summary error'));
+
+      await useSkillsTestingStore.getState().loadSummary();
+
+      expect(useSkillsTestingStore.getState().error).toBeTruthy();
+      expect(useSkillsTestingStore.getState().summaryLoading).toBe(false);
+    });
+
+    it('should handle test loading error', async () => {
+      vi.mocked(skillsTestingService.getTests).mockRejectedValue(new Error('Tests error'));
+
+      await useSkillsTestingStore.getState().loadTests();
+
+      expect(useSkillsTestingStore.getState().error).toBeTruthy();
+      expect(useSkillsTestingStore.getState().testsLoading).toBe(false);
+    });
+
+    it('should handle single test loading error', async () => {
+      vi.mocked(skillsTestingService.getTest).mockRejectedValue(new Error('Test error'));
+
+      await useSkillsTestingStore.getState().loadTest('test-1');
+
+      expect(useSkillsTestingStore.getState().error).toBeTruthy();
+      expect(useSkillsTestingStore.getState().testLoading).toBe(false);
+    });
+
+    it('should handle create test error and re-throw', async () => {
+      vi.mocked(skillsTestingService.createTest).mockRejectedValue(new Error('Create error'));
+
+      await expect(useSkillsTestingStore.getState().createTest({
+        template_id: 'tpl-1',
+        candidate_id: 'user-1',
+      })).rejects.toThrow();
+
+      expect(useSkillsTestingStore.getState().error).toBeTruthy();
+    });
+
+    it('should handle complete test error and re-throw', async () => {
+      vi.mocked(skillsTestingService.completeTest).mockRejectedValue(new Error('Complete error'));
+
+      await expect(useSkillsTestingStore.getState().completeTest('test-1')).rejects.toThrow();
+      expect(useSkillsTestingStore.getState().error).toBeTruthy();
     });
   });
 

@@ -30,20 +30,13 @@ describe('formatDate', () => {
     expect(result).toBe('6/15/2024');
   });
 
-  it('returns "N/A" for null', () => {
-    expect(formatDate(null)).toBe('N/A');
-  });
-
-  it('returns "N/A" for undefined', () => {
-    expect(formatDate(undefined)).toBe('N/A');
-  });
-
-  it('returns "N/A" for empty string', () => {
-    expect(formatDate('')).toBe('N/A');
-  });
-
-  it('returns "N/A" for an invalid date string', () => {
-    expect(formatDate('not-a-date')).toBe('N/A');
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['empty string', ''],
+    ['invalid date string', 'not-a-date'],
+  ] as const)('returns "N/A" for %s', (_label, input) => {
+    expect(formatDate(input)).toBe('N/A');
   });
 
   it('respects timezone parameter', () => {
@@ -73,16 +66,12 @@ describe('formatDateTime', () => {
     expect(result).toContain('PM');
   });
 
-  it('returns "N/A" for null', () => {
-    expect(formatDateTime(null)).toBe('N/A');
-  });
-
-  it('returns "N/A" for undefined', () => {
-    expect(formatDateTime(undefined)).toBe('N/A');
-  });
-
-  it('returns "N/A" for invalid date', () => {
-    expect(formatDateTime('garbage')).toBe('N/A');
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['invalid date', 'garbage'],
+  ] as const)('returns "N/A" for %s', (_label, input) => {
+    expect(formatDateTime(input)).toBe('N/A');
   });
 
   it('accepts a Date object', () => {
@@ -107,16 +96,12 @@ describe('formatShortDateTime', () => {
     expect(result).toContain('PM');
   });
 
-  it('returns "N/A" for null', () => {
-    expect(formatShortDateTime(null)).toBe('N/A');
-  });
-
-  it('returns "N/A" for undefined', () => {
-    expect(formatShortDateTime(undefined)).toBe('N/A');
-  });
-
-  it('returns "N/A" for invalid date', () => {
-    expect(formatShortDateTime('xyz')).toBe('N/A');
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['invalid date', 'xyz'],
+  ] as const)('returns "N/A" for %s', (_label, input) => {
+    expect(formatShortDateTime(input)).toBe('N/A');
   });
 
   it('accepts a Date object', () => {
@@ -131,16 +116,12 @@ describe('formatTime', () => {
     expect(result).toBe('6:30 PM');
   });
 
-  it('returns "N/A" for null', () => {
-    expect(formatTime(null)).toBe('N/A');
-  });
-
-  it('returns "N/A" for undefined', () => {
-    expect(formatTime(undefined)).toBe('N/A');
-  });
-
-  it('returns "N/A" for invalid date', () => {
-    expect(formatTime('bad')).toBe('N/A');
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['invalid date', 'bad'],
+  ] as const)('returns "N/A" for %s', (_label, input) => {
+    expect(formatTime(input)).toBe('N/A');
   });
 
   it('respects timezone parameter', () => {
@@ -167,16 +148,12 @@ describe('formatForDateTimeInput', () => {
     expect(result).toBe('2024-06-15T18:30');
   });
 
-  it('returns empty string for null', () => {
-    expect(formatForDateTimeInput(null)).toBe('');
-  });
-
-  it('returns empty string for undefined', () => {
-    expect(formatForDateTimeInput(undefined)).toBe('');
-  });
-
-  it('returns empty string for invalid date', () => {
-    expect(formatForDateTimeInput('not-valid')).toBe('');
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['invalid date', 'not-valid'],
+  ] as const)('returns empty string for %s', (_label, input) => {
+    expect(formatForDateTimeInput(input)).toBe('');
   });
 
   it('respects timezone parameter', () => {

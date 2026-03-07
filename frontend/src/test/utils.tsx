@@ -128,23 +128,3 @@ export const createMockEventService = () => ({
   recordActualTimes: vi.fn(),
 });
 
-/**
- * Wait for async operations
- */
-export const waitFor = (callback: () => void, timeout = 1000) => {
-  return new Promise((resolve, reject) => {
-    const startTime = Date.now();
-    const interval = setInterval(() => {
-      try {
-        callback();
-        clearInterval(interval);
-        resolve(true);
-      } catch (error) {
-        if (Date.now() - startTime > timeout) {
-          clearInterval(interval);
-          reject(error instanceof Error ? error : new Error(String(error)));
-        }
-      }
-    }, 50);
-  });
-};
