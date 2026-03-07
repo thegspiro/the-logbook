@@ -180,9 +180,13 @@ class TestComplianceStatusReport:
             []
         )
 
-        # First call: requirements, second: users, third: enrollments
+        # rank_map query returns iterable of rows
+        mock_rank_result = MagicMock()
+        mock_rank_result.__iter__ = MagicMock(return_value=iter([]))
+
+        # Call order: requirements, users, rank_map, enrollments
         service.db.execute = AsyncMock(
-            side_effect=[mock_result, mock_result, mock_unique_result]
+            side_effect=[mock_result, mock_result, mock_rank_result, mock_unique_result]
         )
 
         result = await service._generate_compliance_status(org_id)

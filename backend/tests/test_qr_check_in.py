@@ -34,6 +34,14 @@ from app.models.user import User
 
 # ---- Factory helpers to reduce duplication ----
 
+def _make_org(org_id=None, timezone_val=None):
+    """Create a mock organization with a timezone attribute."""
+    org = MagicMock()
+    org.id = org_id or uuid4()
+    org.timezone = timezone_val
+    return org
+
+
 def _make_event(org_id=None, **overrides):
     """Create a test Event with sensible defaults."""
     now = datetime.now(timezone.utc)
@@ -203,7 +211,8 @@ class TestSelfCheckIn:
             end_datetime=now + timedelta(hours=2),
         )
         user = _make_user(org_id=org_id)
-        mock_db = _mock_db_returning(event, user, None)
+        org = _make_org(org_id=org_id)
+        mock_db = _mock_db_returning(event, user, org, None)
 
         service = EventService(mock_db)
         rsvp, error = await service.self_check_in(event.id, user.id, org_id)
@@ -240,7 +249,8 @@ class TestSelfCheckIn:
             checked_in=True,
             checked_in_at=now - timedelta(minutes=30),
         )
-        mock_db = _mock_db_returning(event, user, existing_rsvp)
+        org = _make_org(org_id=org_id)
+        mock_db = _mock_db_returning(event, user, org, existing_rsvp)
 
         service = EventService(mock_db)
         rsvp, error = await service.self_check_in(event.id, user.id, org_id)
@@ -260,7 +270,8 @@ class TestSelfCheckIn:
             end_datetime=now + timedelta(hours=3),
         )
         user = _make_user(org_id=org_id)
-        mock_db = _mock_db_returning(event, user)
+        org = _make_org(org_id=org_id)
+        mock_db = _mock_db_returning(event, user, org)
 
         service = EventService(mock_db)
         rsvp, error = await service.self_check_in(event.id, user.id, org_id)
@@ -292,7 +303,8 @@ class TestSelfCheckIn:
             **extra_kwargs,
         )
         user = _make_user(org_id=org_id)
-        mock_db = _mock_db_returning(event, user)
+        org = _make_org(org_id=org_id)
+        mock_db = _mock_db_returning(event, user, org)
 
         service = EventService(mock_db)
         rsvp, error = await service.self_check_in(event.id, user.id, org_id)
@@ -314,7 +326,7 @@ class TestSelfCheckIn:
             cancellation_reason="Weather conditions",
         )
         user = _make_user(org_id=org_id)
-        mock_db = _mock_db_returning(event, user)
+        mock_db = _mock_db_returning(event)
 
         service = EventService(mock_db)
         rsvp, error = await service.self_check_in(event.id, user.id, org_id)

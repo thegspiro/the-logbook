@@ -36,8 +36,13 @@ class TestEndpointPermissions:
                         dep_names = []
                         for dep in deps.dependencies:
                             call = dep.call
-                            # require_permission returns a closure; check its name
-                            name = getattr(call, "__name__", str(call))
+                            # PermissionChecker instances store permissions in
+                            # required_permissions; include those in the name
+                            perms = getattr(call, "required_permissions", None)
+                            if perms:
+                                name = f"PermissionChecker({','.join(perms)})"
+                            else:
+                                name = getattr(call, "__name__", str(call))
                             dep_names.append(name)
                         return dep_names
         return None

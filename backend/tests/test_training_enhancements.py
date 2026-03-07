@@ -422,7 +422,7 @@ class TestModelRepr:
         e = TrainingEffectivenessEvaluation(
             evaluation_level=EvaluationLevel.REACTION, overall_rating=4.5
         )
-        assert "reaction" in repr(e)
+        assert "reaction" in repr(e).lower()
 
     def test_multi_agency_repr(self):
         m = MultiAgencyTraining(

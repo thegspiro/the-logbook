@@ -11,6 +11,8 @@ Run with:
     pytest tests/test_database_schema.py -v
 """
 
+import enum
+
 import pytest
 from sqlalchemy import inspect as sa_inspect, String, Integer, BigInteger, Boolean
 from sqlalchemy.orm import RelationshipProperty
@@ -745,10 +747,17 @@ class TestEnumConsistency:
         for mf in migration_files:
             text = mf.read_text()
             if "ALL_TYPES" in text or "ALL_TEMPLATE_TYPES" in text:
-                # Import the module dynamically to read the tuple
+                # Import the module dynamically to read the tuple.
+                # Migration files import `alembic.op` which is only available
+                # inside an Alembic context, so we mock it before importing.
+                import unittest.mock
                 spec = importlib.util.spec_from_file_location(mf.stem, mf)
                 mod = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(mod)
+                with unittest.mock.patch.dict(
+                    "sys.modules",
+                    {"alembic": unittest.mock.MagicMock(), "alembic.op": unittest.mock.MagicMock()},
+                ):
+                    spec.loader.exec_module(mod)
                 migration_values = set(
                     getattr(mod, "ALL_TYPES", None)
                     or getattr(mod, "ALL_TEMPLATE_TYPES", None)
