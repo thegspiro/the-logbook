@@ -23,6 +23,7 @@ from app.api.v1.endpoints import (
     external_training,
     facilities,
     compliance_officer,
+    ip_security,
     training_enhancements,
     forms,
     grants,
@@ -72,6 +73,9 @@ api_router.include_router(apparatus.router, prefix="/apparatus", tags=["apparatu
 api_router.include_router(facilities.router, prefix="/facilities", tags=["facilities"])
 api_router.include_router(
     security_monitoring.router, prefix="/security", tags=["security"]
+)
+api_router.include_router(
+    ip_security.router, prefix="/ip-security", tags=["ip-security"]
 )
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
@@ -183,6 +187,7 @@ async def api_root():
             "apparatus": "/api/v1/apparatus",
             "facilities": "/api/v1/facilities",
             "security": "/api/v1/security",
+            "ip_security": "/api/v1/ip-security",
             "email_templates": "/api/v1/email-templates",
             "forms": "/api/v1/forms",
             "documents": "/api/v1/documents",
