@@ -257,18 +257,19 @@ const InventoryBarcodePrintPage: React.FC = () => {
     void fetchItems();
   }, [fetchItems]);
 
-  // Track barcode rendering - reset when items or copies change
-  useEffect(() => {
-    const labelItems: InventoryItem[] = [];
-    for (let c = 0; c < copies; c++) {
-      for (const item of items) {
-        labelItems.push(item);
-      }
-    }
-    totalLabelsRef.current = labelItems.length;
+  // Track barcode rendering — compute expected total synchronously during
+  // render so it's set before child useEffects fire onRendered callbacks.
+  const expectedLabelCount = items.length * copies;
+  totalLabelsRef.current = expectedLabelCount;
+
+  // Reset rendered count when items or copies change.
+  const prevItemsRef = useRef(items);
+  const prevCopiesRef = useRef(copies);
+  if (prevItemsRef.current !== items || prevCopiesRef.current !== copies) {
     renderedCountRef.current = 0;
-    setBarcodesReady(labelItems.length === 0);
-  }, [items, copies]);
+    prevItemsRef.current = items;
+    prevCopiesRef.current = copies;
+  }
 
   const handleLabelRendered = useCallback(() => {
     renderedCountRef.current += 1;
