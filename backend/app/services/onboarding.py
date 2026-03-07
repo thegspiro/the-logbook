@@ -222,12 +222,15 @@ class OnboardingService:
         passed = True
 
         # Check SECRET_KEY
-        if "INSECURE_DEFAULT" in settings.SECRET_KEY:
+        _insecure = ("INSECURE_DEFAULT", "CHANGE_ME", "change_me")
+        if not settings.SECRET_KEY or any(
+            p in settings.SECRET_KEY for p in _insecure
+        ):
             issues.append(
                 {
                     "field": "SECRET_KEY",
                     "severity": "critical",
-                    "message": "SECRET_KEY is using the insecure default value. Generate a secure key in your .env file.",
+                    "message": "SECRET_KEY is not set or uses an insecure default. Generate a secure key in your .env file.",
                     "fix": 'Run: python -c "import secrets; print(secrets.token_urlsafe(64))" and set SECRET_KEY in .env',
                 }
             )
@@ -244,19 +247,23 @@ class OnboardingService:
             passed = False
 
         # Check ENCRYPTION_KEY
-        if "INSECURE_DEFAULT" in settings.ENCRYPTION_KEY:
+        if not settings.ENCRYPTION_KEY or any(
+            p in settings.ENCRYPTION_KEY for p in _insecure
+        ):
             issues.append(
                 {
                     "field": "ENCRYPTION_KEY",
                     "severity": "critical",
-                    "message": "ENCRYPTION_KEY is using the insecure default value. Generate a secure key in your .env file.",
+                    "message": "ENCRYPTION_KEY is not set or uses an insecure default. Generate a secure key in your .env file.",
                     "fix": 'Run: python -c "import secrets; print(secrets.token_hex(32))" and set ENCRYPTION_KEY in .env',
                 }
             )
             passed = False
 
         # Check database password
-        if settings.DB_PASSWORD == "change_me_in_production":
+        if not settings.DB_PASSWORD or any(
+            p in settings.DB_PASSWORD for p in _insecure
+        ):
             issues.append(
                 {
                     "field": "DB_PASSWORD",

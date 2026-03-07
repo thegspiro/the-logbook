@@ -61,7 +61,7 @@ class DatabaseManager:
                     f"Database connection attempt {attempt}/{settings.DB_CONNECT_RETRIES}..."
                 )
 
-                # Create async engine with connection timeout
+                # Create async engine with connection timeout and optional SSL
                 self.engine = create_async_engine(
                     settings.DATABASE_URL,
                     echo=settings.DB_ECHO,
@@ -69,9 +69,7 @@ class DatabaseManager:
                     max_overflow=settings.DB_POOL_MAX * 2,
                     pool_pre_ping=True,  # Verify connections before using
                     pool_recycle=3600,  # Recycle connections after 1 hour
-                    connect_args={
-                        "connect_timeout": settings.DB_CONNECT_TIMEOUT,
-                    },
+                    connect_args=settings.get_db_connect_args(),
                 )
 
                 # Create session factory

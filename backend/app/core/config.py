@@ -38,8 +38,11 @@ class Settings(BaseSettings):
     DB_PORT: int = 3306
     DB_NAME: str = "intranet_db"
     DB_USER: str = "intranet_user"
-    DB_PASSWORD: str = "change_me_in_production"
+    DB_PASSWORD: str = ""
     DB_SSL: bool = False
+    # Path to CA certificate for verifying MySQL server identity over TLS.
+    # Required when DB_SSL=True for full MITM protection.
+    DB_SSL_CA: str = ""
     DB_POOL_MIN: int = 2
     DB_POOL_MAX: int = 10
     DB_ECHO: bool = False  # SQL logging
@@ -65,6 +68,32 @@ class Settings(BaseSettings):
         """Construct synchronous MySQL database URL (for Alembic)"""
         return f"mysql+pymysql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}?charset={self.DB_CHARSET}"
 
+    def get_db_connect_args(self) -> dict:
+        """Build connect_args dict including SSL context when DB_SSL is enabled.
+
+        SEC: When DB_SSL=True, all traffic between the application and MySQL
+        is encrypted.  If DB_SSL_CA is also set, the server certificate is
+        verified against that CA (full MITM protection).  Without a CA the
+        connection is still encrypted but the server identity is not verified
+        (equivalent to MySQL ssl-mode=REQUIRED).
+        """
+        args: dict = {
+            "connect_timeout": self.DB_CONNECT_TIMEOUT,
+        }
+        if self.DB_SSL:
+            import ssl
+
+            ssl_ctx = ssl.create_default_context(
+                cafile=self.DB_SSL_CA if self.DB_SSL_CA else None,
+            )
+            if not self.DB_SSL_CA:
+                # Encrypt traffic but don't verify server certificate.
+                # For full MITM protection, set DB_SSL_CA.
+                ssl_ctx.check_hostname = False
+                ssl_ctx.verify_mode = ssl.CERT_NONE
+            args["ssl"] = ssl_ctx
+        return args
+
     # ============================================
     # Redis
     # ============================================
@@ -72,6 +101,8 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
     REDIS_PASSWORD: str | None = None
     REDIS_DB: int = 0
+    REDIS_SSL: bool = False  # Use TLS for Redis connections (rediss:// scheme)
+    REDIS_SSL_CA: str = ""  # Path to CA cert for Redis TLS verification
     REDIS_TTL: int = 3600  # Default cache TTL in seconds
     REDIS_CONNECT_TIMEOUT: int = 5  # Connection timeout in seconds
     REDIS_CONNECT_RETRIES: int = 3  # Number of connection retry attempts
@@ -79,17 +110,23 @@ class Settings(BaseSettings):
 
     @property
     def REDIS_URL(self) -> str:
-        """Construct Redis URL"""
+        """Construct Redis URL.
+
+        SEC: When REDIS_SSL=True, uses the ``rediss://`` scheme so all
+        traffic between the application and Redis is encrypted.
+        """
+        scheme = "rediss" if self.REDIS_SSL else "redis"
         if self.REDIS_PASSWORD:
-            return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
-        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+            return f"{scheme}://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+        return f"{scheme}://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
     # ============================================
     # Security
     # ============================================
     # CRITICAL: These MUST be set via environment variables.
-    # The application will refuse to start if these contain known-insecure values.
-    SECRET_KEY: str = "INSECURE_DEFAULT_KEY_CHANGE_IN_PRODUCTION"
+    # Empty defaults force configuration — the app will refuse to start
+    # until these are explicitly set (validated in validate_security_config).
+    SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = (
         30  # Short-lived access tokens (use refresh flow)
@@ -125,7 +162,7 @@ class Settings(BaseSettings):
     VOTE_SIGNING_KEY: str = ""
 
     # Encryption - CRITICAL: Must be set via ENCRYPTION_KEY env var
-    ENCRYPTION_KEY: str = "INSECURE_DEFAULT_KEY_CHANGE_ME"
+    ENCRYPTION_KEY: str = ""
 
     # Installation-specific salt for key derivation
     # CRITICAL: Must be unique per installation, set via ENCRYPTION_SALT env var
@@ -166,7 +203,8 @@ class Settings(BaseSettings):
         _insecure_patterns = ("INSECURE_DEFAULT", "CHANGE_ME", "change_me")
 
         if (
-            any(p in self.SECRET_KEY for p in _insecure_patterns)
+            not self.SECRET_KEY
+            or any(p in self.SECRET_KEY for p in _insecure_patterns)
             or len(self.SECRET_KEY) < 32
         ):
             warnings.append(
@@ -174,7 +212,9 @@ class Settings(BaseSettings):
                 'Generate one with: python3 -c "import secrets; print(secrets.token_urlsafe(64))"'
             )
 
-        if any(p in self.ENCRYPTION_KEY for p in _insecure_patterns):
+        if not self.ENCRYPTION_KEY or any(
+            p in self.ENCRYPTION_KEY for p in _insecure_patterns
+        ):
             warnings.append(
                 "CRITICAL: ENCRYPTION_KEY must be set to a secure random value. "
                 'Generate one with: python3 -c "import secrets; print(secrets.token_hex(32))"'
@@ -186,13 +226,30 @@ class Settings(BaseSettings):
                 'Generate one with: python3 -c "import secrets; print(secrets.token_hex(16))"'
             )
 
-        if any(p in self.DB_PASSWORD for p in _insecure_patterns):
-            warnings.append("CRITICAL: DB_PASSWORD must be changed from default")
+        if not self.DB_PASSWORD or any(
+            p in self.DB_PASSWORD for p in _insecure_patterns
+        ):
+            warnings.append(
+                "CRITICAL: DB_PASSWORD must be set to a secure value. "
+                "Set it via the DB_PASSWORD environment variable."
+            )
 
-        # --- Additional production-only checks ---
-        if self.ENVIRONMENT == "production":
+        # --- Additional production/staging checks ---
+        if self.ENVIRONMENT in ("production", "staging"):
             if not self.REDIS_PASSWORD:
                 warnings.append("CRITICAL: REDIS_PASSWORD must be set in production")
+
+            if not self.DB_SSL:
+                warnings.append(
+                    "WARNING: DB_SSL should be enabled in production to encrypt "
+                    "database traffic and prevent man-in-the-middle attacks"
+                )
+
+            if not self.REDIS_SSL:
+                warnings.append(
+                    "WARNING: REDIS_SSL should be enabled in production to encrypt "
+                    "Redis traffic and prevent man-in-the-middle attacks"
+                )
 
             if self.DEBUG:
                 warnings.append("WARNING: DEBUG mode should be disabled in production")
