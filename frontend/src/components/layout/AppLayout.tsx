@@ -99,12 +99,12 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const content = children ?? <Outlet />;
 
   const footer = (
-    <footer className="bg-theme-input-bg backdrop-blur-xs border-t border-theme-surface-border mt-auto" role="contentinfo">
+    <footer className="bg-theme-input-bg/80 backdrop-blur-sm border-t border-theme-surface-border mt-auto" role="contentinfo">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <p className="text-center text-theme-text-secondary text-sm">
           &copy; {new Date().getFullYear()} {departmentName}. All rights reserved.
         </p>
-        <p className="text-center text-theme-text-muted text-xs mt-1">
+        <p className="text-center text-theme-text-muted text-xs mt-1.5 tracking-wide">
           Powered by The Logbook
         </p>
       </div>

@@ -30,7 +30,7 @@ export const Skeleton: React.FC<SkeletonProps> = ({
 
   return (
     <div
-      className={`animate-pulse bg-theme-surface-hover ${roundedClasses[rounded]} ${className}`}
+      className={`shimmer-skeleton ${roundedClasses[rounded]} ${className}`}
       style={{ width, height }}
       aria-hidden="true"
     />
@@ -48,7 +48,7 @@ export const SkeletonRow: React.FC<{ columns?: number }> = ({ columns = 5 }) => 
 
 /** Skeleton card for grid loading states */
 export const SkeletonCard: React.FC = () => (
-  <div className="card p-5 space-y-3">
+  <div className="card p-5 space-y-3 animate-fade-in">
     <Skeleton className="h-5 w-3/4" />
     <Skeleton className="h-3 w-1/2" />
     <div className="flex gap-2 pt-2">

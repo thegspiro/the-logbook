@@ -116,6 +116,102 @@ class ExposureType(str, enum.Enum):
     OTHER = "other"
 
 
+class ChargeStatus(str, enum.Enum):
+    """Cost recovery status for lost/damaged items"""
+
+    NONE = "none"
+    PENDING = "pending"
+    CHARGED = "charged"
+    WAIVED = "waived"
+
+
+class DepartureType(str, enum.Enum):
+    """Type of member departure"""
+
+    DROPPED_VOLUNTARY = "dropped_voluntary"
+    DROPPED_INVOLUNTARY = "dropped_involuntary"
+    RETIRED = "retired"
+
+
+class WriteOffReason(str, enum.Enum):
+    """Reason for writing off an item"""
+
+    LOST = "lost"
+    DAMAGED_BEYOND_REPAIR = "damaged_beyond_repair"
+    OBSOLETE = "obsolete"
+    STOLEN = "stolen"
+    OTHER = "other"
+
+
+class NFPARecommendation(str, enum.Enum):
+    """Overall recommendation from an NFPA inspection"""
+
+    PASS = "pass"
+    REPAIR = "repair"
+    ADVANCED_CLEANING = "advanced_cleaning"
+    RETIRE = "retire"
+
+
+class StandardSize(str, enum.Enum):
+    """Standard clothing/equipment sizes"""
+
+    XXS = "xxs"
+    XS = "xs"
+    S = "s"
+    M = "m"
+    L = "l"
+    XL = "xl"
+    XXL = "xxl"
+    XXXL = "xxxl"
+    XXXXL = "xxxxl"
+    # Numeric sizes (for boots, gloves, etc.)
+    SIZE_6 = "6"
+    SIZE_6_5 = "6.5"
+    SIZE_7 = "7"
+    SIZE_7_5 = "7.5"
+    SIZE_8 = "8"
+    SIZE_8_5 = "8.5"
+    SIZE_9 = "9"
+    SIZE_9_5 = "9.5"
+    SIZE_10 = "10"
+    SIZE_10_5 = "10.5"
+    SIZE_11 = "11"
+    SIZE_11_5 = "11.5"
+    SIZE_12 = "12"
+    SIZE_12_5 = "12.5"
+    SIZE_13 = "13"
+    SIZE_14 = "14"
+    SIZE_15 = "15"
+    # Waist sizes
+    SIZE_28 = "28"
+    SIZE_30 = "30"
+    SIZE_32 = "32"
+    SIZE_34 = "34"
+    SIZE_36 = "36"
+    SIZE_38 = "38"
+    SIZE_40 = "40"
+    SIZE_42 = "42"
+    SIZE_44 = "44"
+    SIZE_46 = "46"
+    ONE_SIZE = "one_size"
+    CUSTOM = "custom"
+
+
+class GarmentStyle(str, enum.Enum):
+    """Style/cut for garment items"""
+
+    SHORT_SLEEVE = "short_sleeve"
+    LONG_SLEEVE = "long_sleeve"
+    MENS = "mens"
+    WOMENS = "womens"
+    UNISEX = "unisex"
+    V_NECK = "v_neck"
+    CREW_NECK = "crew_neck"
+    POLO = "polo"
+    BUTTON_DOWN = "button_down"
+    QUARTER_ZIP = "quarter_zip"
+
+
 class AssignmentType(str, enum.Enum):
     """Type of assignment"""
 
@@ -252,7 +348,15 @@ class InventoryItem(Base):
 
     # Physical Details
     size = Column(String(50))  # Small, Medium, Large, or specific measurements
+    standard_size = Column(
+        Enum(StandardSize, values_callable=lambda x: [e.value for e in x]),
+        nullable=True,
+    )  # Controlled vocabulary for sizes when applicable
     color = Column(String(50))
+    style = Column(
+        Enum(GarmentStyle, values_callable=lambda x: [e.value for e in x]),
+        nullable=True,
+    )  # Garment style (long_sleeve, short_sleeve, etc.)
     weight = Column(Float)  # Weight in pounds or kg
 
     # Location
@@ -294,6 +398,15 @@ class InventoryItem(Base):
         default=TrackingType.INDIVIDUAL,
         nullable=False,
         server_default="individual",
+    )
+
+    # Variant grouping — links pool items that are size/color/style variants
+    # of the same logical product (e.g., "Dept T-Shirt" in S/M/L/XL x Blue/Red)
+    variant_group_id = Column(
+        String(36),
+        ForeignKey("item_variant_groups.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
     # Quantity (for pool items)
@@ -357,6 +470,9 @@ class InventoryItem(Base):
     issuance_records = relationship(
         "ItemIssuance", back_populates="item", cascade="all, delete-orphan"
     )
+    variant_group = relationship(
+        "ItemVariantGroup", back_populates="items", foreign_keys=[variant_group_id]
+    )
 
     __table_args__ = (
         Index("idx_inventory_items_org_category", "organization_id", "category_id"),
@@ -365,6 +481,7 @@ class InventoryItem(Base):
         Index("idx_inventory_items_assigned_to", "assigned_to_user_id"),
         Index("idx_inventory_items_next_inspection", "next_inspection_due"),
         Index("idx_inventory_items_tracking_type", "organization_id", "tracking_type"),
+        Index("idx_inventory_items_variant_group", "variant_group_id"),
         # Barcode, asset_tag, and serial_number uniqueness scoped per organization (multi-tenant)
         UniqueConstraint("organization_id", "barcode", name="uq_item_org_barcode"),
         UniqueConstraint("organization_id", "asset_tag", name="uq_item_org_asset_tag"),
@@ -510,8 +627,10 @@ class ItemIssuance(Base):
 
     # Cost recovery for lost/damaged items
     charge_status = Column(
-        String(20), default="none"
-    )  # "none", "pending", "charged", "waived"
+        Enum(ChargeStatus, values_callable=lambda x: [e.value for e in x]),
+        default=ChargeStatus.NONE,
+        server_default="none",
+    )
     charge_amount = Column(Numeric(10, 2))  # Amount charged to member
 
     # Timestamps
@@ -820,8 +939,9 @@ class DepartureClearance(Base):
 
     # Notes / context
     departure_type = Column(
-        String(30)
-    )  # "dropped_voluntary", "dropped_involuntary", "retired"
+        Enum(DepartureType, values_callable=lambda x: [e.value for e in x]),
+        nullable=True,
+    )
     notes = Column(Text)
 
     # Timestamps
@@ -1264,10 +1384,10 @@ class WriteOffRequest(Base):
 
     # Reason / justification
     reason = Column(
-        String(50),
+        Enum(WriteOffReason, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
-        default="lost",
-    )  # lost, damaged_beyond_repair, obsolete, stolen, other
+        default=WriteOffReason.LOST,
+    )
     description = Column(Text, nullable=False)
 
     # Approval status
@@ -1447,8 +1567,9 @@ class NFPAInspectionDetail(Base):
 
     # Overall recommendation
     recommendation = Column(
-        String(50), nullable=True
-    )  # "pass", "repair", "advanced_cleaning", "retire"
+        Enum(NFPARecommendation, values_callable=lambda x: [e.value for e in x]),
+        nullable=True,
+    )
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -1738,4 +1859,220 @@ class ReorderRequest(Base):
     __table_args__ = (
         Index("idx_reorder_org_status", "organization_id", "status"),
         Index("idx_reorder_item", "item_id"),
+    )
+
+
+# ============================================
+# Variant Group & Kit Models
+# ============================================
+
+
+class ItemVariantGroup(Base):
+    """
+    Groups pool items that are size/color/style variants of the same
+    logical product.  E.g., "Dept T-Shirt" groups all size/color combos.
+
+    Quartermasters manage one group instead of hunting through a flat list.
+    """
+
+    __tablename__ = "item_variant_groups"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # Display info
+    name = Column(String(255), nullable=False)  # e.g. "Dept Polo Shirt"
+    description = Column(Text)
+    category_id = Column(
+        String(36),
+        ForeignKey("inventory_categories.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # Optional base attributes that apply to all variants
+    base_price = Column(Numeric(10, 2))
+    base_replacement_cost = Column(Numeric(10, 2))
+    unit_of_measure = Column(String(50))
+
+    # Status
+    active = Column(Boolean, default=True, index=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    created_by = Column(String(36), ForeignKey("users.id"))
+
+    # Relationships
+    items = relationship(
+        "InventoryItem",
+        back_populates="variant_group",
+        foreign_keys="InventoryItem.variant_group_id",
+    )
+    category = relationship("InventoryCategory", foreign_keys=[category_id])
+
+    __table_args__ = (
+        Index("idx_variant_groups_org", "organization_id"),
+        Index("idx_variant_groups_org_active", "organization_id", "active"),
+    )
+
+
+class EquipmentKit(Base):
+    """
+    Kit/bundle template for issuing multiple items as a set.
+
+    E.g., "New Member Uniform Kit" = 2 polo shirts + 2 pants + 1 belt + 1 cap.
+    A single "issue kit" action creates multiple issuances/assignments at once.
+    """
+
+    __tablename__ = "equipment_kits"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+
+    # Who this kit is for (optional role/rank restriction)
+    restricted_to_roles = Column(JSON, nullable=True)  # e.g. ["firefighter"]
+    min_rank_order = Column(Integer, nullable=True)
+
+    # Status
+    active = Column(Boolean, default=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    created_by = Column(String(36), ForeignKey("users.id"))
+
+    # Relationships
+    line_items = relationship(
+        "EquipmentKitItem",
+        back_populates="kit",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        Index("idx_kits_org", "organization_id"),
+        Index("idx_kits_org_active", "organization_id", "active"),
+    )
+
+
+class EquipmentKitItem(Base):
+    """
+    One line item in a kit template — specifies what item/category
+    to include and how many.
+    """
+
+    __tablename__ = "equipment_kit_items"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    kit_id = Column(
+        String(36),
+        ForeignKey("equipment_kits.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # What to include — either a specific item or a category (for pool items)
+    item_id = Column(
+        String(36),
+        ForeignKey("inventory_items.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    category_id = Column(
+        String(36),
+        ForeignKey("inventory_categories.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    item_name = Column(String(255), nullable=False)  # Display name
+
+    # How many to include
+    quantity = Column(Integer, nullable=False, default=1)
+
+    # Whether the member picks a size variant (for pool items with variants)
+    size_selectable = Column(Boolean, default=False)
+
+    # Sort order within the kit
+    sort_order = Column(Integer, default=0)
+
+    # Relationships
+    kit = relationship("EquipmentKit", back_populates="line_items")
+    item = relationship("InventoryItem", foreign_keys=[item_id])
+    category = relationship("InventoryCategory", foreign_keys=[category_id])
+
+    __table_args__ = (Index("idx_kit_items_kit", "kit_id"),)
+
+
+class MemberSizePreferences(Base):
+    """
+    Stores a member's preferred sizes for different garment types.
+
+    When issuing items, the system auto-suggests the correct size variant
+    based on the member's preferences.
+    """
+
+    __tablename__ = "member_size_preferences"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # Shirt / top sizes
+    shirt_size = Column(String(20))
+    shirt_style = Column(String(30))  # short_sleeve, long_sleeve, etc.
+
+    # Pants / bottom sizes
+    pant_waist = Column(String(10))
+    pant_inseam = Column(String(10))
+
+    # Outerwear
+    jacket_size = Column(String(20))
+
+    # Footwear
+    boot_size = Column(String(10))
+    boot_width = Column(String(10))  # regular, wide, extra-wide
+
+    # Gloves
+    glove_size = Column(String(10))
+
+    # Headwear
+    hat_size = Column(String(10))
+
+    # Generic / other
+    custom_sizes = Column(JSON)  # Flexible key-value for org-specific needs
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+
+    __table_args__ = (
+        Index("idx_member_sizes_org", "organization_id"),
     )

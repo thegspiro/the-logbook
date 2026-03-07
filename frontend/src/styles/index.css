@@ -87,6 +87,12 @@
   --animate-success-check: successCheck 0.3s ease-out 0.2s both;
   --animate-success-draw: successDraw 0.4s ease-out 0.3s both;
   --animate-page-enter: pageEnter 0.15s ease-out;
+  --animate-shimmer: shimmer 1.8s ease-in-out infinite;
+  --animate-scale-in: scaleIn 0.2s ease-out;
+  --animate-slide-in-right: slideInRight 0.25s ease-out;
+  --animate-bounce-subtle: bounceSubtle 0.4s ease-out;
+  --animate-shake: shake 0.4s ease-in-out;
+  --animate-stagger-fade: staggerFade 0.3s ease-out both;
 
   @keyframes fadeIn {
     0% {
@@ -159,6 +165,69 @@
       transform: translateY(0);
     }
   }
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+  @keyframes scaleIn {
+    0% {
+      transform: scale(0.95);
+      opacity: 0;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+  @keyframes slideInRight {
+    0% {
+      transform: translateX(8px);
+      opacity: 0;
+    }
+    100% {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+  @keyframes bounceSubtle {
+    0% {
+      transform: scale(1);
+    }
+    30% {
+      transform: scale(1.06);
+    }
+    60% {
+      transform: scale(0.97);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+  @keyframes shake {
+    0%, 100% {
+      transform: translateX(0);
+    }
+    25% {
+      transform: translateX(-4px);
+    }
+    75% {
+      transform: translateX(4px);
+    }
+  }
+  @keyframes staggerFade {
+    0% {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 }
 
 /*
@@ -204,13 +273,17 @@
    To update the look of all inputs/cards/buttons, edit here.
    ================================================================ */
 @utility form-input {
-  /* --- Form Controls --- */
+  /* --- Form Controls --- (#7 focus border color, #8 transition on focus, #9 inset shadow on focus) */
   @apply w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg
-           text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring;
+           text-theme-text-primary placeholder:text-theme-text-muted/60
+           transition-all duration-150
+           focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring;
 }
 @utility form-input-sm {
   @apply w-full px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-sm
-           text-theme-text-primary text-sm focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring;
+           text-theme-text-primary text-sm placeholder:text-theme-text-muted/60
+           transition-all duration-150
+           focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring;
 }
 @utility form-checkbox {
   @apply w-4 h-4 text-blue-700 dark:text-blue-500 bg-theme-input-bg
@@ -223,33 +296,49 @@
   @apply block text-xs font-medium text-theme-text-secondary mb-1;
 }
 @utility card {
-  /* --- Cards & Surfaces --- */
-  @apply bg-theme-surface backdrop-blur-xs rounded-lg border border-theme-surface-border;
+  /* --- Cards & Surfaces --- (#1 shadow depth, #2 hover lift, #3 smooth transitions) */
+  @apply bg-theme-surface backdrop-blur-xs rounded-lg border border-theme-surface-border
+         shadow-sm transition-shadow duration-200;
+}
+@utility card-hover {
+  /* Card with interactive hover state */
+  @apply card hover:shadow-md hover:border-theme-text-muted/20;
 }
 @utility card-secondary {
-  @apply bg-theme-surface-secondary rounded-lg border border-theme-surface-border;
+  @apply bg-theme-surface-secondary rounded-lg border border-theme-surface-border
+         shadow-sm transition-shadow duration-200;
 }
 @utility btn-primary {
-  /* --- Buttons --- */
-  @apply px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors
-           focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50;
+  /* --- Buttons --- (#4 press effect, #5 shadow elevation, #6 smooth multi-property transitions) */
+  @apply px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700
+           shadow-sm hover:shadow-md active:scale-[0.97]
+           transition-all duration-150 ease-out
+           focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:pointer-events-none;
 }
 @utility btn-secondary {
   @apply px-4 py-2 bg-theme-surface text-theme-text-primary rounded-lg
-           hover:bg-theme-surface-hover border border-theme-surface-border transition-colors
-           focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50;
+           hover:bg-theme-surface-hover border border-theme-surface-border
+           shadow-sm hover:shadow active:scale-[0.97]
+           transition-all duration-150 ease-out
+           focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:pointer-events-none;
 }
 @utility btn-success {
-  @apply px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors
-           focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50;
+  @apply px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700
+           shadow-sm hover:shadow-md active:scale-[0.97]
+           transition-all duration-150 ease-out
+           focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:pointer-events-none;
 }
 @utility btn-info {
-  @apply px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors
-           focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50;
+  @apply px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700
+           shadow-sm hover:shadow-md active:scale-[0.97]
+           transition-all duration-150 ease-out
+           focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:pointer-events-none;
 }
 @utility btn-warning {
-  @apply px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors
-           focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50;
+  @apply px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700
+           shadow-sm hover:shadow-md active:scale-[0.97]
+           transition-all duration-150 ease-out
+           focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:pointer-events-none;
 }
 @utility btn-sm {
   /* --- Standardized Button Sizes (#79) --- */
@@ -268,24 +357,25 @@
   @apply p-1.5 rounded-md min-w-[36px] min-h-[36px] inline-flex items-center justify-center;
 }
 @utility stat-card {
-  /* --- Stat Cards --- */
-  @apply bg-theme-surface backdrop-blur-xs rounded-lg p-5 border border-theme-surface-border;
+  /* --- Stat Cards --- (#10 stat card shadow + hover) */
+  @apply bg-theme-surface backdrop-blur-xs rounded-lg p-5 border border-theme-surface-border
+         shadow-sm hover:shadow-md transition-all duration-200;
 }
 @utility alert-info {
-  /* --- Alert / Info Boxes --- */
-  @apply bg-theme-alert-info-bg border border-theme-alert-info-border rounded-lg p-4;
+  /* --- Alert / Info Boxes --- (#11 left accent border on alerts) */
+  @apply bg-theme-alert-info-bg border border-theme-alert-info-border rounded-lg p-4 border-l-4 border-l-theme-alert-info-icon;
 }
 @utility alert-success {
-  @apply bg-theme-alert-success-bg border border-theme-alert-success-border rounded-lg p-4;
+  @apply bg-theme-alert-success-bg border border-theme-alert-success-border rounded-lg p-4 border-l-4 border-l-theme-alert-success-icon;
 }
 @utility alert-warning {
-  @apply bg-theme-alert-warning-bg border border-theme-alert-warning-border rounded-lg p-4;
+  @apply bg-theme-alert-warning-bg border border-theme-alert-warning-border rounded-lg p-4 border-l-4 border-l-theme-alert-warning-icon;
 }
 @utility alert-purple {
-  @apply bg-theme-alert-purple-bg border border-theme-alert-purple-border rounded-lg p-4;
+  @apply bg-theme-alert-purple-bg border border-theme-alert-purple-border rounded-lg p-4 border-l-4 border-l-theme-alert-purple-icon;
 }
 @utility alert-danger {
-  @apply bg-theme-alert-danger-bg border border-theme-alert-danger-border rounded-lg p-4;
+  @apply bg-theme-alert-danger-bg border border-theme-alert-danger-border rounded-lg p-4 border-l-4 border-l-theme-alert-danger-icon;
 }
 @utility toggle-knob {
   /* --- Toggle Switch --- */
@@ -315,11 +405,12 @@
   }
 }
 @utility drawer-panel {
-  /* --- Mobile-Responsive Patterns --- */
+  /* --- Mobile-Responsive Patterns --- (#12 drawer slide-in animation) */
 
   /* Drawer panel — full-width on mobile, capped at 32rem on sm+ */
   @apply fixed top-0 right-0 h-full w-full flex flex-col shadow-2xl z-50;
   @apply bg-theme-surface border-l border-theme-surface-border;
+  animation: slideInRight 0.25s ease-out;
   max-width: 100%;
   @media (min-width: 640px) {
     max-width: 32rem; /* ~512px, equivalent to max-w-lg */
@@ -389,6 +480,88 @@
     max-height: 90vh;
   }
 }
+@utility shimmer-skeleton {
+  /* #13 Shimmer effect skeleton loader */
+  background: linear-gradient(
+    90deg,
+    var(--surface-hover) 25%,
+    var(--surface-secondary) 50%,
+    var(--surface-hover) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+@utility badge {
+  /* #14 Polished badge/pill styling */
+  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+         transition-colors duration-150;
+}
+@utility link-underline {
+  /* #15 Animated underline for links */
+  @apply relative;
+  &::after {
+    content: '';
+    @apply absolute bottom-0 left-0 w-0 h-0.5 bg-current transition-all duration-200;
+  }
+  &:hover::after {
+    @apply w-full;
+  }
+}
+@utility nav-item-active {
+  /* #16 Active navigation indicator with left border accent */
+  @apply border-l-3 border-l-red-600 bg-red-600 text-white;
+}
+@utility glass-surface {
+  /* #17 Glassmorphism surface for overlays */
+  @apply bg-theme-surface/80 backdrop-blur-md border border-theme-surface-border/50;
+}
+@utility text-gradient {
+  /* #18 Gradient text for headings/hero elements */
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-red-600 to-red-400;
+}
+@utility focus-ring-inset {
+  /* #19 Inset focus ring for contained elements */
+  @apply focus:outline-hidden focus:ring-2 focus:ring-inset focus:ring-theme-focus-ring;
+}
+@utility divider {
+  /* #20 Styled section divider */
+  @apply border-t border-theme-surface-border my-4;
+}
+@utility mobile-touch-target {
+  /* #21 Guaranteed mobile touch target size */
+  @apply min-w-[44px] min-h-[44px] inline-flex items-center justify-center;
+}
+@utility mobile-stack {
+  /* #22 Stack layout on mobile, flex row on desktop */
+  @apply flex flex-col gap-2;
+  @media (min-width: 640px) {
+    @apply flex-row items-center;
+  }
+}
+@utility mobile-full-btn {
+  /* #23 Full-width buttons on mobile, auto on desktop */
+  @apply w-full;
+  @media (min-width: 640px) {
+    @apply w-auto;
+  }
+}
+@utility responsive-text-lg {
+  /* #24 Responsive heading that scales with viewport */
+  @apply text-lg;
+  @media (min-width: 640px) {
+    @apply text-xl;
+  }
+  @media (min-width: 1024px) {
+    @apply text-2xl;
+  }
+}
+@utility responsive-text-base {
+  /* #25 Responsive body text */
+  @apply text-sm;
+  @media (min-width: 640px) {
+    @apply text-base;
+  }
+}
 
 /* Theme CSS Custom Properties */
 :root {
@@ -422,6 +595,17 @@
 
   /* Focus ring offset */
   --ring-offset-bg: #ffffff; /* white */
+
+  /* #26 Transition timing variables */
+  --transition-fast: 100ms;
+  --transition-normal: 200ms;
+  --transition-slow: 300ms;
+
+  /* #27 Shadow scale variables for consistent depth hierarchy */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
+  --shadow-dropdown: 0 10px 25px rgba(0, 0, 0, 0.12), 0 4px 10px rgba(0, 0, 0, 0.08);
+  --shadow-modal: 0 20px 50px rgba(0, 0, 0, 0.2), 0 8px 20px rgba(0, 0, 0, 0.12);
 
   /* Accent colors – AA-compliant on light surfaces */
   --accent-red: #b91c1c; /* red-700  – 6.2:1 on #fff */
@@ -495,6 +679,12 @@
   --bg-gradient-from: #0f172a; /* slate-900 */
   --bg-gradient-via: #7f1d1d; /* red-900 */
   --bg-gradient-to: #0f172a; /* slate-900 */
+
+  /* #28 Dark mode shadow variables (subtler on dark backgrounds) */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.2);
+  --shadow-dropdown: 0 10px 25px rgba(0, 0, 0, 0.5), 0 4px 10px rgba(0, 0, 0, 0.3);
+  --shadow-modal: 0 20px 50px rgba(0, 0, 0, 0.6), 0 8px 20px rgba(0, 0, 0, 0.4);
 
   /* Surfaces */
   --surface-bg: rgba(255, 255, 255, 0.1); /* white/10 */
@@ -765,6 +955,32 @@ option {
     height: 0;
     width: 0;
   }
+
+  /* #29 Tighter padding on mobile for more content */
+  .card, .stat-card {
+    padding: 0.75rem;
+  }
+
+  /* #30 Full-width buttons on small mobile screens */
+  @media (max-width: 479px) {
+    .btn-primary, .btn-secondary, .btn-success, .btn-info, .btn-warning {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+
+  /* #31 Larger font for form inputs on mobile (prevents iOS zoom) */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="number"],
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 /* Focus visible for accessibility (#70) —
@@ -783,6 +999,54 @@ option {
 /* Skip to main content link for accessibility */
 .skip-to-main {
   @apply absolute -top-96 left-0 z-50 bg-theme-surface text-theme-text-primary px-4 py-2 rounded-br-lg focus:top-0;
+}
+
+/* #32 Smooth backdrop overlay for modals and drawers */
+.backdrop-overlay {
+  @apply fixed inset-0 bg-black/40 z-40;
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* #33 Improved selection styling */
+::selection {
+  background-color: rgba(220, 38, 38, 0.2);
+  color: inherit;
+}
+
+.dark ::selection {
+  background-color: rgba(248, 113, 113, 0.3);
+}
+
+/* #34 Smooth scrollbar gutter to prevent layout shift */
+html {
+  scrollbar-gutter: stable;
+}
+
+/* #35 Enhanced link hover states globally */
+a:not([class]) {
+  @apply text-theme-accent-blue transition-colors duration-150;
+}
+a:not([class]):hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* #36 Improved table styling */
+table {
+  @apply w-full border-collapse;
+}
+thead th {
+  @apply text-left text-xs font-semibold uppercase tracking-wider text-theme-text-muted;
+}
+tbody tr {
+  @apply border-b border-theme-surface-border transition-colors duration-100;
+}
+tbody tr:hover {
+  @apply bg-theme-surface-hover/50;
+}
+tbody tr:last-child {
+  @apply border-b-0;
 }
 
 /* Print styles (#94) */

@@ -96,7 +96,7 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, className = '' 
         <li className="flex items-center">
           <Link
             to="/dashboard"
-            className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
+            className="text-theme-text-muted hover:text-theme-text-primary transition-all duration-150 hover:scale-110"
             aria-label="Home"
           >
             <Home className="w-4 h-4" />
@@ -108,12 +108,12 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, className = '' 
             {crumb.path ? (
               <Link
                 to={crumb.path}
-                className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                className="text-theme-text-muted hover:text-theme-text-primary transition-colors duration-150 hover:underline underline-offset-2"
               >
                 {crumb.label}
               </Link>
             ) : (
-              <span className="text-theme-text-primary font-medium" aria-current="page">
+              <span className="text-theme-text-primary font-semibold" aria-current="page">
                 {crumb.label}
               </span>
             )}
