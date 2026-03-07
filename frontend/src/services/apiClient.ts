@@ -119,6 +119,10 @@ api.interceptors.request.use(
 // replay attack and the backend revokes all sessions.  By sharing a
 // single promise, only one refresh request is made and all waiting
 // callers receive the same new access token.
+//
+// IMPORTANT: This promise is shared across the global client AND every
+// module-specific axios instance (via performSharedRefresh).  Do not
+// create per-instance refresh promises.
 let refreshPromise: Promise<void> | null = null;
 
 // Timestamp (epoch ms) of the most recent successful login.  Used by
@@ -191,6 +195,37 @@ export function getTempAccessToken(): string | null {
 /** Get the current temporary refresh token (for module-specific axios instances). */
 export function getTempRefreshToken(): string | null {
   return tempRefreshToken;
+}
+
+/**
+ * Perform a token refresh, sharing a single in-flight request across
+ * all axios instances (global + module-specific).  This prevents
+ * concurrent refreshes that trigger the backend's replay detection.
+ */
+export function performSharedRefresh(): Promise<void> {
+  if (!refreshPromise) {
+    const csrfToken = getCookie('csrf_token');
+    const headers: Record<string, string> = {};
+    if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
+    const refreshBody = tempRefreshToken
+      ? { refresh_token: tempRefreshToken }
+      : undefined;
+    refreshPromise = axios
+      .post(`${API_BASE_URL}/auth/refresh`, refreshBody, {
+        withCredentials: true,
+        headers,
+      })
+      .then((res) => {
+        const data = res.data as Record<string, unknown> | undefined;
+        if (data && typeof data.access_token === 'string' && typeof data.refresh_token === 'string') {
+          updateTempTokens(data.access_token, data.refresh_token);
+        }
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
 }
 
 // Grace period (ms) after login during which 401s are retried directly
@@ -268,37 +303,7 @@ api.interceptors.response.use(
       }
 
       try {
-        // If a refresh is already in flight, wait for it
-        if (!refreshPromise) {
-          // POST to /auth/refresh — send the refresh_token in the body
-          // (the backend accepts it from either httpOnly cookie or body).
-          // Also send withCredentials so cookies are used if available.
-          const csrfToken = getCookie('csrf_token');
-          const refreshHeaders: Record<string, string> = {};
-          if (csrfToken) {
-            refreshHeaders['X-CSRF-Token'] = csrfToken;
-          }
-          const refreshBody = tempRefreshToken
-            ? { refresh_token: tempRefreshToken }
-            : undefined;
-          refreshPromise = axios
-            .post(`${API_BASE_URL}/auth/refresh`, refreshBody, {
-              withCredentials: true,
-              headers: refreshHeaders,
-            })
-            .then((res) => {
-              // Update in-memory tokens from the refresh response
-              const data = res.data as Record<string, unknown> | undefined;
-              if (data && typeof data.access_token === 'string' && typeof data.refresh_token === 'string') {
-                updateTempTokens(data.access_token, data.refresh_token);
-              }
-            })
-            .finally(() => {
-              refreshPromise = null;
-            });
-        }
-
-        await refreshPromise;
+        await performSharedRefresh();
         return api(originalRequest);
       } catch (refreshError) {
         // Refresh failed — clear session flag and redirect to login.
