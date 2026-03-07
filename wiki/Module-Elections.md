@@ -57,6 +57,8 @@ GET    /api/v1/elections/{id}/voter-overrides  # Get voter overrides
 POST   /api/v1/elections/{id}/voter-overrides  # Grant voter override
 GET    /api/v1/elections/{id}/proxy-votes      # Get proxy authorizations
 POST   /api/v1/elections/{id}/proxy-votes      # Authorize proxy vote
+GET    /api/v1/elections/settings               # Get election settings (proxy voting config)
+PATCH  /api/v1/elections/settings               # Update election settings
 ```
 
 ---

@@ -10,33 +10,42 @@ The Inventory module tracks department equipment, supplies, and gear. It support
 2. [Browsing Items](#browsing-items)
 3. [Categories](#categories)
 4. [Individual vs Pool Items](#individual-vs-pool-items)
-5. [Item Assignments](#item-assignments)
-6. [Checkout and Return](#checkout-and-return)
-7. [Batch Operations](#batch-operations)
-8. [Barcode and QR Scanning](#barcode-and-qr-scanning)
-9. [Label Printing](#label-printing)
-10. [Maintenance Tracking](#maintenance-tracking)
-11. [Low Stock Alerts](#low-stock-alerts)
-12. [Departure Clearance](#departure-clearance)
-13. [Members Inventory View (Admin)](#members-inventory-view-admin)
-14. [Realistic Example: Departure Clearance for a Retiring Member](#realistic-example-departure-clearance-for-a-retiring-member)
-15. [Realistic Example: NFPA 1851 PPE Lifecycle Tracking](#realistic-example-nfpa-1851-ppe-lifecycle-tracking)
-16. [Troubleshooting](#troubleshooting)
+5. [Variant Groups](#variant-groups)
+6. [Equipment Kits](#equipment-kits)
+7. [Member Size Preferences](#member-size-preferences)
+8. [Reorder Requests](#reorder-requests)
+9. [Item Detail Page](#item-detail-page)
+10. [Item Assignments](#item-assignments)
+11. [Checkout and Return](#checkout-and-return)
+12. [Batch Operations](#batch-operations)
+13. [Barcode and QR Scanning](#barcode-and-qr-scanning)
+14. [Label Printing](#label-printing)
+15. [Maintenance Tracking](#maintenance-tracking)
+16. [Low Stock Alerts](#low-stock-alerts)
+17. [Departure Clearance](#departure-clearance)
+18. [Members Inventory View (Admin)](#members-inventory-view-admin)
+19. [Realistic Example: Departure Clearance for a Retiring Member](#realistic-example-departure-clearance-for-a-retiring-member)
+20. [Realistic Example: NFPA 1851 PPE Lifecycle Tracking](#realistic-example-nfpa-1851-ppe-lifecycle-tracking)
+21. [Troubleshooting](#troubleshooting)
 
 ---
 
 ## Inventory Overview
 
-Navigate to **Inventory** in the sidebar. The inventory page has three tabs:
+Navigate to **Inventory** in the sidebar. The inventory landing page shows all items with search, category filters, status filters, and location filters.
 
-| Tab | Description |
-|-----|-------------|
-| **Items** | Browse and manage all equipment and supplies |
-| **Categories** | View and manage inventory categories |
-| **Maintenance** | View items due for maintenance and manage maintenance records |
+Key pages in the inventory module:
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Inventory page showing the Items tab active, with a search bar, category filter dropdown, status filter, and a grid/list of inventory items showing item name, category, condition, and status badges]_
+| Page | URL | Description |
+|------|-----|-------------|
+| **Items List** | `/inventory` | Browse all equipment and supplies with search, filters, and sorting |
+| **My Equipment** | `/inventory/my-equipment` | View your personally assigned items and active checkouts |
+| **Item Detail** | `/inventory/items/:id` | Full item record with barcode, history, maintenance, and NFPA compliance |
+| **Storage Areas** | `/inventory/storage-areas` | Hierarchical storage location management (Facility → Room → Area) |
+| **Admin Dashboard** | `/inventory/admin` | Summary statistics, low-stock alerts, and navigation to admin sub-pages |
+
+> **Screenshot needed:**
+> _[Screenshot of the Inventory Items List page showing the search bar, category filter dropdown, status filter pills, location filter cascading selectors (Facility → Room → Storage Area), and a grid of inventory item cards with name, category badge, condition indicator, and status badge]_
 
 ---
 
@@ -105,6 +114,172 @@ The inventory system supports two tracking modes:
 - Pool items must have a quantity of at least 1 when created
 
 > **Hint:** Set the tracking type when creating an item. It determines whether the item appears in the assignment workflow (individual) or the issue/return workflow (pool).
+
+---
+
+## Variant Groups
+
+Variant groups link related items that differ only in size or style — for example, a turnout coat available in sizes S, M, L, XL.
+
+### Creating a Variant Group
+
+**Required Permission:** `inventory.manage`
+
+1. Navigate to **Inventory Admin > Items**.
+2. Click **Create Variant Group**.
+3. Enter the base product name (e.g., "Globe ATHLETIX Turnout Coat").
+4. Add variants with their sizes and styles:
+   - **Size**: XS, S, M, L, XL, 2XL, 3XL, 4XL, 5XL
+   - **Style**: Regular, Long, Short, Tall
+5. Each variant is created as an individual inventory item with its own stock, serial numbers, and assignments.
+
+### How Variant Groups Work
+
+- All variants share the same category, description, and base product name
+- Each variant tracks its own quantity and assignments independently
+- The variant group view shows aggregate stock across all sizes/styles
+- When issuing from a variant group, the system prompts for size selection based on the member's size preferences (if recorded)
+
+> **Screenshot needed:**
+> _[Screenshot of the Variant Group creation form showing the base product name field, a table of variants with Size dropdown (XS–5XL), Style dropdown (Regular/Long/Short/Tall), and per-variant stock quantity fields. Show the "Add Variant" button at the bottom]_
+
+> **Edge case:** If a variant group has zero total stock across all sizes, it still appears in the inventory list but is marked as "Out of Stock." Individual variants with zero stock are dimmed but not hidden, so administrators can see which sizes need reordering.
+
+---
+
+## Equipment Kits
+
+Equipment kits bundle multiple inventory items into a named package for streamlined issuance — for example, a "New Recruit PPE Kit" containing a coat, pants, helmet, gloves, and boots.
+
+### Creating a Kit
+
+**Required Permission:** `inventory.manage`
+
+1. Navigate to **Inventory Admin > Items**.
+2. Click **Create Equipment Kit**.
+3. Enter the kit name and description.
+4. Add component items by searching for existing inventory items.
+5. Set the quantity of each component (e.g., 1 coat, 1 pants, 2 pairs of gloves).
+6. Save the kit.
+
+### Issuing a Kit
+
+1. Open the kit from the inventory list.
+2. Click **Issue Kit to Member**.
+3. Select the member.
+4. For variant group components, the system prompts for size selection — pre-filled from the member's size preferences if available.
+5. Confirm the issuance.
+6. Each component item is individually assigned/issued to the member with its own tracking record.
+
+> **Screenshot needed:**
+> _[Screenshot of the Equipment Kit detail view showing the kit name, description, a table of component items with name, category, and quantity columns, and the "Issue Kit to Member" button. Show a member's size preferences being applied to a coat variant selection]_
+
+> **Hint:** Issuing a kit creates individual assignment/issuance records for each component. Returning kit components is done individually — there is no "return entire kit" operation, since components may be returned at different times or in different conditions.
+
+> **Edge case:** If a kit component is out of stock when issuing, the system issues all available components and flags the unavailable ones. The admin receives a notification about the partial issuance.
+
+---
+
+## Member Size Preferences
+
+Members can record their preferred sizes for different garment categories, making equipment ordering and kit issuance faster and more accurate.
+
+### Recording Size Preferences
+
+1. Navigate to your **Member Profile** or have an admin navigate to the member's profile.
+2. Open the **Size Preferences** section.
+3. Record sizes for applicable categories:
+   - Coat (e.g., L Regular)
+   - Pants (e.g., 34×32)
+   - Gloves (e.g., XL)
+   - Boots (e.g., 11 Wide)
+   - Helmet (e.g., Standard)
+4. Save.
+
+### How Size Preferences Are Used
+
+- **Kit issuance**: When issuing a kit with variant group components, the member's sizes are pre-selected in the variant picker
+- **Reorder requests**: Size preferences are included in reorder request details so quartermasters know what to order
+- **Reports**: Size distribution reports help with bulk ordering (e.g., "12 members need L coats, 8 need XL")
+
+> **Screenshot needed:**
+> _[Screenshot of the Member Size Preferences panel showing dropdown selectors for Coat Size, Coat Style, Pants Size, Pants Style, Glove Size, Boot Size, and Helmet Size, with Save button]_
+
+---
+
+## Reorder Requests
+
+When stock falls below an item's reorder point, the system generates alerts and supports a formal reorder request workflow.
+
+### Setting Reorder Points
+
+**Required Permission:** `inventory.manage`
+
+1. Open any pool item's edit form.
+2. Set the **Reorder Point** — the stock level at which a reorder alert triggers.
+3. Save.
+
+When available stock drops to or below the reorder point, the item appears on the low-stock dashboard and triggers email and/or SMS notifications (if Twilio is enabled).
+
+### Creating a Reorder Request
+
+**Required Permission:** `inventory.manage`
+
+1. Navigate to **Inventory Admin > Reorder** (`/inventory/admin/reorder`).
+2. Click **Create Reorder Request**.
+3. Select the item to reorder.
+4. Enter the requested quantity and any notes.
+5. Submit the request.
+
+### Reorder Request Workflow
+
+| Status | Description |
+|--------|-------------|
+| **Pending** | Request submitted, awaiting approval |
+| **Approved** | Approved by a supervisor |
+| **Ordered** | Purchase order placed with vendor (vendor name, PO number, expected delivery tracked) |
+| **Received** | Items received and stock quantities reconciled |
+
+Each status transition is audit-logged with the user, timestamp, and any notes.
+
+> **Screenshot needed:**
+> _[Screenshot of the Reorder Requests page showing a table of reorder requests with columns for item name, requested quantity, status badge (Pending in yellow, Approved in blue, Ordered in purple, Received in green), requested by, and date. Show the Create Reorder Request button in the toolbar]_
+
+> **Edge case:** If an item's stock is replenished through a regular return or issuance reversal (not through the reorder workflow), the reorder request remains open. Admins should manually close or cancel outdated requests.
+
+### Low Stock SMS Alerts
+
+When `TWILIO_ENABLED=True` in the environment configuration, low-stock alerts are sent via SMS to configured recipients in addition to email notifications.
+
+SMS alerts include:
+- Item name
+- Current stock level
+- Reorder point threshold
+- Direct link to the reorder request page
+
+Configure SMS recipients in **Settings > Notifications > Inventory Alerts**.
+
+> **Edge case:** SMS alerts are rate-limited to one per item per 24-hour period to prevent alert fatigue. If stock continues to drop, the initial alert covers it. A new alert is sent only if stock was replenished and then dropped again.
+
+---
+
+## Item Detail Page
+
+Each inventory item has a dedicated detail page at `/inventory/items/:id` with a two-column layout:
+
+### Left Sidebar
+- **Barcode**: Visual barcode (Code128) with print button
+- **Quick Info**: Status, condition, category, tracking type, location
+- **Assignment/Issuance History**: Who has/had this item and when
+
+### Main Content (Tabbed)
+- **Overview**: Full item details, photos, purchase info, warranty
+- **History**: Chronological log of all status changes, assignments, checkouts, and returns
+- **Maintenance**: Maintenance records and upcoming scheduled maintenance
+- **NFPA Compliance**: (If NFPA tracking enabled) Lifecycle dates, ensemble info, exposures, inspections
+
+> **Screenshot needed:**
+> _[Screenshot of the Item Detail page showing the two-column layout. Left sidebar shows a Code128 barcode, quick info card (status: Available, condition: Good, category: PPE), and assignment history timeline. Right side shows tabbed content with the Overview tab active displaying item name, description, serial number, purchase date, warranty info, and storage location]_
 
 ---
 
@@ -740,6 +915,13 @@ Items that fail validation are skipped with error details. Successfully validate
 | Return request stuck in pending | Admin must approve return requests in Inventory Admin > Items. Check that the admin has `inventory.manage` permission. |
 | Quarantine item cannot be re-issued | Items in quarantine status must be inspected and cleared before re-issue. Change status from quarantine to available after inspection. |
 | Size variant stock not matching total | Each size variant tracks its own stock independently. The total shown is the sum of all variants. Verify per-size quantities in the item detail modal. |
+| Reorder request not triggering alerts | Verify the item's `reorder_point` is set (pool items only). Stock must drop to or below the threshold. Email alerts require `EMAIL_ENABLED=True`; SMS alerts require `TWILIO_ENABLED=True`. |
+| SMS alerts not sending | Verify `TWILIO_ENABLED=True`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` are configured. Check that SMS recipients are configured in Settings > Notifications. |
+| Kit issuance partially failed | If some kit components are out of stock, available items are still issued. Check the issuance result for per-component success/failure status. Reorder the missing components. |
+| Member size preferences not showing during issuance | The member must have size preferences recorded in their profile. If blank, the variant picker shows all sizes without pre-selection. |
+| Item detail page shows "Item not found" | Verify the item ID in the URL. The item may have been retired or deleted. Check that you are in the correct organization context. |
+| Barcode not printing on labels | Ensure the item has a barcode, serial number, or asset tag assigned. SVG barcodes require a modern browser (Chrome/Edge recommended). Wait for the "Ready to print" indicator before printing. |
+| Location filter shows no results | Verify that storage areas are linked to facility rooms. The cascading filter requires Facility → Room → Storage Area hierarchy to be configured. |
 
 ---
 

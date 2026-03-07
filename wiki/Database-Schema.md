@@ -83,6 +83,16 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 | `departure_clearances` | Departure clearance records |
 | `clearance_line_items` | Individual items in a departure clearance |
 | `maintenance_records` | Equipment maintenance history |
+| `equipment_requests` | Member equipment request/approval workflow |
+| `inventory_write_offs` | Write-off request/approval workflow |
+| `inventory_notification_queue` | Delayed notification consolidation queue |
+| `property_return_reminders` | Tracks reminder notices sent to departed members |
+| `storage_areas` | Hierarchical storage locations (linked to facility rooms) |
+| `variant_groups` | Groups related items by size/style *(2026-03-07)* |
+| `equipment_kits` | Named item bundles for single-operation issuance *(2026-03-07)* |
+| `equipment_kit_items` | Component items within a kit *(2026-03-07)* |
+| `member_size_preferences` | Garment size preferences per member *(2026-03-07)* |
+| `reorder_requests` | Reorder request lifecycle (pending → received) *(2026-03-07)* |
 
 ### Elections
 
@@ -123,9 +133,26 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 
 | Table | Description |
 |-------|-------------|
-| `facilities` | Building/facility records |
-| `locations` | Stations, rooms, addresses |
-| `maintenance_schedules` | Facility maintenance scheduling |
+| `facilities` | Building/facility records with type, status, NFPA fields |
+| `facility_types` | Facility type definitions (Fire Station, EMS Station, etc.) |
+| `facility_statuses` | Facility status definitions (Operational, Under Construction, etc.) |
+| `facility_rooms` | Rooms within facilities with NFPA 1500/1585 zone classification |
+| `facility_systems` | Building systems (HVAC, fire suppression, 8 fire-critical types) |
+| `facility_inspections` | Inspection records with inspector, findings, corrective actions |
+| `facility_maintenance` | Maintenance work orders with 16 NFPA-aligned types |
+| `facility_utilities` | Utility accounts and monthly usage readings |
+| `facility_emergency_contacts` | Building-specific emergency contacts |
+| `facility_compliance_items` | Compliance checklists (fire code, ADA, etc.) |
+| `locations` | Stations, rooms, addresses (auto-synced from facility rooms) |
+
+### Grants & Fundraising
+
+| Table | Description |
+|-------|-------------|
+| `grants` | Grant application records (AFG, SAFER, FP&S, USDA) |
+| `grant_notes` | Notes attached to grants |
+| `fundraising_campaigns` | Campaign records with goal tracking |
+| `donors` | Donor management mini-CRM |
 
 ---
 

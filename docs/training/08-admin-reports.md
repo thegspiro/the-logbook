@@ -343,6 +343,26 @@ The system applies rate limiting to sensitive endpoints:
 
 > **Hint:** If a member reports being locked out, check if they exceeded the login attempt limit. The lockout period is configurable in the system settings.
 
+### Security Hardening (2026-03-07)
+
+The following security measures are enforced:
+
+- **JWT algorithm restriction**: Only HS256 accepted — `none` and RS256 tokens are rejected
+- **Session invalidation on password change**: All existing sessions for a user are invalidated when their password changes
+- **File upload validation**: Magic byte validation ensures uploaded files match their declared MIME type (JPEG, PNG, GIF, WebP, PDF, CSV, DOCX, XLSX). Path traversal is blocked with `secure_filename()` and UUID prefixing
+- **Jinja2 sandboxing**: Email and report templates use `SandboxedEnvironment` with auto-escaping to prevent template injection
+- **CORS strict matching**: Origin validation uses exact match — no subdomain wildcards
+- **Parameterized LIKE queries**: Search inputs are escaped to prevent LIKE injection (`%`, `_` characters)
+- **Rate limiter thread safety**: Redis-backed rate limiting uses `asyncio.Lock` for concurrent access
+- **Database/Redis TLS**: DB connections use SSL context when `DB_SSL=True`. Redis connections use `rediss://` scheme when `REDIS_SSL=True`
+- **Health endpoint minimized**: `/health` returns only `status` + `ready` (no environment, version, or debug info)
+- **Security headers**: `Referrer-Policy: strict-origin-when-cross-origin`, `X-Permitted-Cross-Domain-Policies: none`
+
+> **Screenshot needed:**
+> _[Screenshot of the security status in the Error Monitor or a dedicated Security Dashboard showing the list of security features with green checkmarks (JWT restriction, file validation, CORS strict, TLS enabled) and any warnings in yellow]_
+
+> **Edge case:** If your deployment uses a reverse proxy (nginx, Caddy), the `DB_SSL` and `REDIS_SSL` settings refer to the connection between the backend container and the database/Redis container — not the browser-to-server connection. Browser-to-server TLS is handled by the reverse proxy.
+
 ---
 
 ## Realistic Example: Generating the Annual Training Summary Report

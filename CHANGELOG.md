@@ -7,6 +7,122 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Comprehensive Security Audit & Remediation (2026-03-07)
+
+- **25-issue security audit completed**: Full audit report (`SECURITY_AUDIT.md`) covering backend, frontend, infrastructure, and deployment. Issues prioritized across critical, high, medium, and low severity tiers
+- **Critical #1 — Database SSL enforcement**: `get_db_connect_args()` now creates SSL context when `DB_SSL=True`; verified usage in `database.py`. Rate limiter was constructing its own Redis URL bypassing `REDIS_SSL` — now uses `settings.REDIS_URL` to respect TLS config
+- **Critical #2 — Redis TLS enforcement**: `REDIS_URL` uses `rediss://` scheme when `REDIS_SSL=True`; all Redis consumers (cache, rate limiter, Celery broker) now route through the shared URL
+- **Critical #3 — Insecure defaults blocked in production/staging**: Production and staging environments now always raise `RuntimeError` on startup if default secrets are detected. `SECURITY_BLOCK_INSECURE_DEFAULTS` (default `False`) can block development environments too when explicitly enabled
+- **7 high-priority issues fixed**: (4) JWT algorithm allowlist restricted to HS256 only — reject `none`/RS256 tokens; (5) session invalidation on password change; (6) file upload path traversal blocked with `secure_filename()` + UUID prefix; (7) Jinja2 auto-escaping enforced globally with `SandboxedEnvironment`; (8) CORS origin validation uses exact match — no subdomain wildcards; (9) parameterized LIKE queries via `escape_like()` utility; (10) rate limiter thread-safety with `asyncio.Lock`
+- **Medium issues fixed**: (11) HTTPS enforcement upgraded from WARNING to CRITICAL in production; (15) scheduling module migrated from manual axios setup to shared `createApiClient()` factory for consistent CSRF/auth; (16) onboarding CSRF token moved from localStorage to SameSite=Strict cookie (double-submit pattern); (17) auto-clear deprecated sensitive sessionStorage keys on module load; (18) strict regex validation for table names in startup `DROP TABLE` loop + parameterized `INFORMATION_SCHEMA` query; (19) `/health` endpoint minimized — returns only `status` + `ready` (no environment/version info)
+- **Low issues fixed**: (20) removed `DEBUG=True` exposure in health endpoint; (21) added `Referrer-Policy: strict-origin-when-cross-origin` header; (22) added `X-Permitted-Cross-Domain-Policies: none` header
+- **Magic byte validation for file uploads**: All file upload endpoints now validate file content against magic bytes (JPEG, PNG, GIF, WebP, PDF, CSV, DOCX, XLSX) to prevent disguised malicious files
+
+### Inventory Module — Variant Groups, Equipment Kits & Size Preferences (2026-03-07)
+
+- **Variant groups**: Items can be grouped as variants of a base product (e.g., "Turnout Coat" in sizes S/M/L/XL). Each variant tracks its own stock, serial numbers, and assignments while sharing a common description and category
+- **Equipment kits**: Define named kits (e.g., "New Recruit PPE Kit") that bundle multiple inventory items. Issuing a kit assigns all component items in a single operation with individual tracking per component
+- **Member size preferences**: Members can record their preferred sizes for garment categories (coat, pants, gloves, boots, helmet). Size preferences are surfaced during kit issuance and equipment ordering to streamline fulfillment
+- **New data models**: `VariantGroup`, `EquipmentKit`, `EquipmentKitItem`, `MemberSizePreference` tables with full CRUD API endpoints
+- **New enums**: `StandardSize` (XS through 5XL), `GarmentStyle` (regular, long, short, tall)
+
+### Inventory Module — Reorder Points, Reorder Requests & SMS Alerts (2026-03-07)
+
+- **Item-level reorder points**: Each pool item can define a `reorder_point` threshold. When available stock drops to or below this value, the item appears in the low-stock dashboard and triggers alerts
+- **Reorder request workflow**: Full lifecycle — `pending` → `approved` → `ordered` → `received` — with audit logging at each transition. Admins can approve/deny requests, record order details (vendor, PO number, expected delivery), and mark items as received with quantity reconciliation
+- **Low stock SMS alerts via Twilio**: When `TWILIO_ENABLED=True`, low-stock alerts are sent via SMS to configured recipients alongside existing email notifications. SMS includes item name, current stock, and reorder point
+- **Inventory-by-location dashboard**: New location filter on the inventory dashboard showing item counts and stock levels grouped by storage location. Cascading Facility → Room → Storage Area selection
+- **New API endpoints**: `POST/GET /api/v1/inventory/reorder-requests`, `PATCH /api/v1/inventory/reorder-requests/{id}`, `GET /api/v1/inventory/reorder-requests/{id}/history`
+
+### Inventory Module Rewrite (2026-03-06)
+
+- **Focused pages replace monolithic admin hub**: Individual pages for items, pool items, categories, maintenance, members, charges, return requests, equipment requests, write-offs, and reorder requests — each with dedicated URL and navigation
+- **Type-specific views**: Pool items page with quantity tracking, variant group display, and bulk issuance. Individual items page with serial/barcode search and assignment history
+- **ItemDetailPage**: Two-column layout with sidebar (barcode, quick info, assignment/issuance history) and main content (overview, history, maintenance, NFPA compliance). Accessible at `/inventory/items/:id`
+- **Admin hub dashboard**: Summary statistics cards (total items, low stock, overdue checkouts, pending requests) with quick-link navigation to each admin sub-page
+- **Storage areas room filter**: Storage areas page filters by `facility_room_id` to prevent rooms from leaking into station location pickers
+- **Inventory test suite**: 25+ frontend tests covering page rendering, search, filters, and modal interactions
+- **Modal overlay stacking fix**: Modal backdrop z-index corrected so content is always above the overlay
+- **PDF label barcode rendering**: SVG barcodes now use `requestAnimationFrame` to ensure full rendering before `window.print()`. Added error handling and missing-item logging to barcode label generation
+
+### Test Suite Improvements (2026-03-07)
+
+- **vitest-axe for accessibility testing**: Automated WCAG compliance checks using axe-core. Example `Modal.a11y.test.tsx` demonstrates the pattern for component-level accessibility testing
+- **hypothesis for property-based testing**: 14 property-based tests for Pydantic schema validation (`test_schema_property.py`) — generates random valid/invalid inputs to find edge cases
+- **schemathesis for API contract testing**: Skeleton `test_api_contract.py` for automatic OpenAPI spec fuzzing. Validates that all documented endpoints handle edge-case inputs correctly
+- **pytest-timeout**: 30-second default timeout on all backend tests to catch hanging async tests. Configurable per-test with `@pytest.mark.timeout(60)`
+- **Coverage ratcheting**: Coverage thresholds enforce 80% lines/functions/statements and 75% branches. Ratchet script prevents coverage from decreasing between PRs
+- **Code quality ESLint plugins**: `eslint-plugin-testing-library`, `eslint-plugin-jest-dom`, `eslint-plugin-vitest` added. Fixed remaining weak assertions (e.g., `toBeTruthy()` → `toBeInTheDocument()`)
+- **Test infrastructure fixes**: Added pytest markers (`integration`, `unit`, `slow`, `docker`) to `pytest.ini`. Fixed 9 backend test failures across 5 files and 1 migration
+
+### Visual Design Improvements (2026-03-07)
+
+- **50 CSS and component enhancements**: Comprehensive visual polish across the entire application including consistent spacing, border-radius, shadow depth, and color usage
+- **Theme-aware gradients**: All hardcoded gradient colors replaced with CSS variable-based theme classes
+- **Card component standardization**: Unified card padding, border, and shadow styles across dashboard, inventory, facilities, and training pages
+- **Mobile responsive improvements**: Touch targets enlarged to 44px minimum, improved spacing on mobile breakpoints
+- **Typography refinement**: Consistent heading sizes, line heights, and font weights across all modules
+
+### PDF Generation & Print Fixes (2026-03-07)
+
+- **Barcode readiness race condition**: Print pages now wait for SVG barcode rendering via `requestAnimationFrame` before triggering `window.print()`, preventing blank barcodes on thermal labels
+- **SVG barcodes fully rendered before print/export**: Added explicit render-complete callbacks for JsBarcode SVG output
+- **Error handling for barcode label generation**: Missing items are logged with warnings instead of crashing the batch. Partial label sheets are generated for items that have valid barcodes
+- **XSS fix in print export**: User-supplied item names and descriptions are HTML-escaped before insertion into print templates
+- **Training report PDF export**: Fixed `format=pdf` parameter handling — training reports now correctly generate PDF output when requested instead of returning CSV
+
+### Auth & Session Fixes (2026-03-07)
+
+- **Concurrent token refresh replay detection**: When multiple API calls simultaneously receive 401 responses, they all shared a single refresh promise. However, the refresh endpoint's replay detection was flagging the second refresh attempt (using the same token) as a replay attack. Fixed by ensuring only one refresh request is made per token rotation cycle
+- **useIdleTimer polling storm**: The idle timer was firing `checkActivity()` every 100ms instead of the configured interval, causing thousands of unnecessary API calls. Fixed interval calculation and added debouncing
+- **WebSocket 403 rejections**: Module-specific WebSocket connections were missing auth credentials. Added `withCredentials: true` to WebSocket upgrade requests
+
+### Facilities Module Rewrite (2026-03-06)
+
+- **FacilitiesDashboard**: New landing page with summary statistics (total facilities, pending maintenance, upcoming inspections), recent activity feed, and facility card grid with search and type filtering
+- **FacilityDetailPage**: Full-page layout with sidebar navigation to sections (overview, rooms, systems, maintenance, inspections, utilities, contacts, compliance). Replaces the previous tab-based single-page layout
+- **Zustand store**: `useFacilitiesStore` manages facility CRUD, rooms, systems, maintenance, inspections, and dashboard data with proper loading/error states
+- **CRUD components**: Dedicated form components for rooms, building systems, emergency contacts, and compliance checklists with proper TypeScript interfaces (no more `Record<string, unknown>`)
+- **FacilityRoomPicker**: Reusable cascading picker (facility dropdown → room dropdown with info card) for cross-module room selection
+- **Route restructuring**: `/facilities` (dashboard), `/facilities/:id` (detail), `/facilities/maintenance` (cross-facility), `/facilities/inspections` (cross-facility). Static routes ordered before parameterized routes to prevent conflicts
+
+### Apparatus Module Fixes (2026-03-06)
+
+- **Missing `min_staffing` field**: The apparatus model had `min_staffing` but the list endpoint was not returning full Apparatus records — only partial data. Fixed serialization to include `min_staffing`, breaking staffing calculations for shift scheduling
+- **Broken setup checklist**: When the apparatus module was enabled, the setup checklist showed 0 apparatus even with vehicles configured. The checklist count query was not counting the correct table
+- **geoip2 dependency**: Added `geoip2` package to fix missing-package warning at startup
+
+### TypeScript Code Quality (2026-03-06)
+
+- **Enum constants replace string literals across 17+ files**: Replaced hardcoded string comparisons with constants from `constants/enums.ts` (e.g., `status === 'active'` → `status === MemberStatus.ACTIVE`). Covers event types, member statuses, approval statuses, training types, scheduling statuses, and inventory conditions
+- **Deduplicated enum type definitions**: Module-local enum types now re-export from `constants/enums.ts` instead of defining duplicates
+- **`getErrorMessage()` utility replaces `instanceof Error`**: All `catch (err: unknown)` blocks now use `getErrorMessage(err, 'fallback')` instead of manual `instanceof Error` checks. Consistent error handling across 40+ files
+- **Specific enum types replace generic `status: string`**: Component props and function signatures now use `MemberStatus`, `EventType`, `ApprovalStatus`, etc. instead of bare `string`
+
+### Migration & Startup Fixes (2026-03-06)
+
+- **Broken Alembic revision chain**: Multiple migration heads detected on startup due to broken `down_revision` references. Fixed revision chain to ensure linear history from initial migration to HEAD
+- **Misleading migration logs**: Startup logged "Running migrations..." even when the database was already at HEAD, causing false alarm in multi-worker deployments. Now only logs when actual migrations are applied
+- **Reduced startup noise**: Worker processes skip migration checks (only the first worker runs migrations). Suppressed redundant Redis connection and WebSocket manager log lines
+
+### Security Middleware Fix (2026-03-06)
+
+- **`UnboundLocalError` for `actual_receive` in SecurityMonitoringMiddleware**: The `actual_receive` variable was referenced before assignment when the middleware's body-inspection path was not taken. Moved variable initialization before the conditional block
+
+### Lint & Code Quality (2026-03-06)
+
+- **All outstanding lint errors resolved**: Fixed flake8 violations (F401, F811, E303, W291) across all modified Python files. Fixed ESLint violations across frontend. Zero lint errors in both backend and frontend
+
+### Prospective Members — Desired Membership Type (2026-03-06)
+
+- **Desired membership type selection**: Prospective member pipeline now includes a `desired_membership_type` field (regular or administrative). Displayed on the interest form, editable inline at any pipeline stage, and pre-filled during conversion to full member
+- **Membership Interest Form template**: The form template includes the membership type dropdown so applicants can indicate their preference at initial interest submission
+
+### Inventory — Cost Data & Item History (2026-03-06)
+
+- **Cost data added to inventory views**: Item list and detail views now display purchase cost, replacement cost, and total cost recovery. Cost summary cards on the admin dashboard show total inventory value and cost recovery percentage
+- **Item history `AttributeError` fix**: Fixed crash when loading item assignment/issuance history caused by accessing a relationship attribute on a detached SQLAlchemy instance
+
 ### Login Auth Flow & Cookie Delivery Fixes (2026-03-06)
 
 - **Login auto-refresh loop caused by conflicting Set-Cookie headers**: The login endpoint called `_clear_auth_cookies()` before `_set_auth_cookies()`, adding delete headers (`Max-Age=0`, `SameSite=lax`) followed by set headers (`SameSite=strict`, `HttpOnly`) for the same cookie names. Browsers inconsistently processed the conflicting attributes, resulting in the `access_token` never being stored and a refresh loop that kicked users back to login

@@ -4,6 +4,18 @@
 
 The Logbook is designed with security as a core principle, implementing industry-standard security practices with features aligned to HIPAA requirements, Section 508 accessibility, and general security best practices. Note: HIPAA compliance requires external review and cannot be self-declared.
 
+### Comprehensive Security Audit & Remediation (2026-03-07)
+
+- **25-issue security audit**: Full audit report identifying critical, high, medium, and low severity issues across backend, frontend, infrastructure, and deployment (`SECURITY_AUDIT.md`)
+- **Critical fixes**: (1) Database SSL enforcement — rate limiter now respects `REDIS_SSL` setting; (2) Redis TLS enforcement via `rediss://` scheme; (3) Insecure defaults blocked in production/staging with `RuntimeError` on startup
+- **High-priority fixes**: JWT algorithm restricted to HS256 only; session invalidation on password change; file upload path traversal blocked with `secure_filename()` + UUID prefix; Jinja2 auto-escaping with `SandboxedEnvironment`; CORS exact-match origin validation; parameterized LIKE queries via `escape_like()`; rate limiter thread safety with `asyncio.Lock`
+- **Medium fixes**: HTTPS enforcement upgraded to CRITICAL; scheduling module migrated to shared `createApiClient()`; onboarding CSRF token moved from localStorage to SameSite=Strict cookie; auto-clear deprecated sessionStorage keys; strict regex for table names in startup DROP TABLE; `/health` endpoint minimized
+- **Low fixes**: Removed DEBUG exposure in health endpoint; added `Referrer-Policy: strict-origin-when-cross-origin` and `X-Permitted-Cross-Domain-Policies: none` headers
+- **Magic byte file validation**: All upload endpoints validate file content against magic bytes (JPEG, PNG, GIF, WebP, PDF, CSV, DOCX, XLSX)
+- **SecurityMonitoringMiddleware fix**: `UnboundLocalError` for `actual_receive` fixed — variable initialization moved before conditional block
+- **SecurityHeaders/IPLogging converted to pure ASGI**: Prevents `BaseHTTPMiddleware` from stripping `Set-Cookie` headers
+- **Unbounded memory growth capped**: All in-memory tracking dicts have size limits and periodic eviction
+
 ### Recent Security Updates (2026-02-28)
 
 - **Brute-force protection**: Progressive rate limiting on login with IP-based and per-user lockout, exponential backoff, frontend rate limiting on login/forgot-password pages

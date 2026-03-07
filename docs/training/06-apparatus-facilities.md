@@ -141,16 +141,24 @@ The compliance section shows which standards apply and whether the apparatus is 
 
 ## Facilities Overview
 
-Navigate to **Facilities** in the sidebar. The facilities page has three tabs:
+Navigate to **Facilities** in the sidebar. The facilities module has a dashboard landing page and dedicated detail pages:
 
-| Tab | Description |
-|-----|-------------|
-| **Facilities** | List of all stations and buildings |
-| **Maintenance** | Department-wide facility maintenance tracking |
-| **Inspections** | Scheduled and completed facility inspections |
+| Page | URL | Description |
+|------|-----|-------------|
+| **Dashboard** | `/facilities` | Summary statistics, recent activity, and searchable facility card grid |
+| **Facility Detail** | `/facilities/:id` | Full-page detail with sidebar navigation to all sections |
+| **Maintenance** | `/facilities/maintenance` | Cross-facility maintenance records and work orders |
+| **Inspections** | `/facilities/inspections` | Cross-facility inspection records and scheduling |
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Facilities page showing the three tabs and the Facilities list tab active, displaying station cards with name, address, type (Fire Station, Admin Building, Training Center), and status]_
+### Dashboard
+
+The facilities dashboard shows:
+- **Summary cards**: Total facilities, pending maintenance work orders, upcoming inspections, overdue items
+- **Recent activity feed**: Latest maintenance completions, inspection results, and status changes
+- **Facility card grid**: Searchable and filterable cards showing each facility's name, type, address, and status
+
+> **Screenshot needed:**
+> _[Screenshot of the Facilities Dashboard showing four summary statistic cards at the top (Total Facilities: 3, Pending Maintenance: 2, Upcoming Inspections: 1, Overdue: 0), a recent activity feed in the left column, and a grid of facility cards on the right showing station names, types (Fire Station, Admin Building), addresses, and status badges (Operational in green)]_
 
 > **Hint:** If your department has the Facilities module disabled, you will see a simplified **Locations** page that provides basic location management for events and meetings.
 
@@ -158,26 +166,28 @@ Navigate to **Facilities** in the sidebar. The facilities page has three tabs:
 
 ## Facility Details
 
-Click on any facility to view its full record:
+Click on any facility from the dashboard to open its full-page detail view at `/facilities/:id`. The page uses a **sidebar navigation** layout with the following sections:
 
-- **Overview** - Name, type, status, address, contact info
-- **Photos** - Building photos
-- **Documents** - Floor plans, leases, permits
-- **Systems** - HVAC, electrical, plumbing, fire suppression
-- **Rooms** - Room inventory with purpose, capacity, and NFPA zone classification (hot/transition/cold). Rooms auto-create linked Location records for use in Events and QR check-in
-- **Maintenance** - Maintenance history and schedules (16 NFPA-aligned maintenance types available)
-- **Inspections** - Inspection records and schedules, with inspector license/agency tracking and corrective action dates
-- **Utilities** - Utility accounts and usage readings
-- **Access Keys** - Key and access card tracking
-- **Emergency Contacts** - Building-specific emergency contacts
-- **Shutoff Locations** - Gas, water, electrical shutoff locations
-- **Capital Projects** - Building improvement projects
-- **Insurance** - Insurance policy tracking
-- **Occupants** - Organizations or units housed in the facility
-- **Compliance** - Compliance checklists (fire code, ADA, etc.)
+| Section | Description |
+|---------|-------------|
+| **Overview** | Name, type, status, address, phone, email, fax, county, founded year |
+| **Rooms** | Room inventory with purpose, capacity, NFPA 1500/1585 zone classification (hot/transition/cold), and linked Location records for Events and QR check-in |
+| **Building Systems** | HVAC, electrical, plumbing, fire suppression, and 8 fire-critical system types (exhaust extraction, cascade air, decontamination, bay door, air quality monitor, PPE cleaning, alerting system, shore power). Each system tracks model, install date, warranty, and condition |
+| **Maintenance** | Maintenance history and work orders with 16 NFPA-aligned maintenance types. Priority badges (low/medium/high/critical) |
+| **Inspections** | Inspection records with inspector name, license number, agency, pass/fail status, deficiency tracking, and corrective action dates |
+| **Utilities** | Utility accounts (electric, gas, water, internet) with monthly usage readings and cost tracking |
+| **Emergency Contacts** | Building-specific emergency contacts with phone, role, and priority |
+| **Access Keys** | Key and access card tracking with assignment history |
+| **Shutoff Locations** | Gas, water, and electrical shutoff location descriptions and photos |
+| **Capital Projects** | Building improvement projects with budget, timeline, status, and contractor info |
+| **Insurance** | Insurance policy tracking with provider, policy number, coverage, and renewal dates |
+| **Occupants** | Organizations or units housed in the facility |
+| **Compliance** | Compliance checklists for fire code, ADA, and other standards |
 
-> **Screenshot placeholder:**
-> _[Screenshot of a facility detail page showing the building header (photo, name, type), an overview card with address and contact info, and navigation to sub-sections (Rooms, Systems, Maintenance, etc.)]_
+> **Screenshot needed:**
+> _[Screenshot of the Facility Detail page showing the sidebar navigation on the left (Overview, Rooms, Systems, Maintenance, etc. with the Rooms section highlighted) and the main content area on the right showing a list of rooms with name, purpose, capacity, and NFPA zone classification badges (Hot Zone in red, Transition Zone in yellow, Cold Zone in green)]_
+
+> **Edge case:** If a facility was created during onboarding, it is automatically linked to a Location record so it appears in the Events location picker. Rooms added later also auto-create Location records. If you delete a room, its linked Location record is preserved (with a note that the room was removed) to avoid breaking existing event references.
 
 ---
 
@@ -509,6 +519,8 @@ Over time, these readings build a usage trend that helps identify anomalies (e.g
 |-------|----------|
 | Apparatus status not updating | Verify you have `apparatus.manage` permission. Status changes are logged in the status history. |
 | Fuel efficiency showing incorrect values | Check that mileage readings are entered in the correct order (each reading should be higher than the last). |
+| Setup checklist showing 0 apparatus | Fixed in March 2026 — the checklist was counting the wrong table when the Apparatus module was enabled. Pull latest and restart. |
+| Shift scheduling not showing min staffing | Fixed in March 2026 — the apparatus list endpoint was not returning the full `min_staffing` field. Pull latest and restart. Understaffing badges (amber triangle) now appear on shift cards when `attendee_count < min_staffing`. |
 | Cannot see Facilities module | Facilities is an optional module. Your administrator must enable it in Settings > Modules. You may see the simplified Locations page instead. |
 | Inspection past due but no alert | Inspection alerts depend on notification rules being configured. Check Settings > Notifications. |
 | Room not showing on facility | Rooms must be added individually to each facility from the Rooms section of the facility detail page. |

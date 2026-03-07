@@ -120,6 +120,22 @@ docker-compose up -d
 
 ## 📊 Latest Updates
 
+### March 2026 (Mar 7) — Security Audit, Inventory Variant Groups/Kits/Reorder, Facilities Rewrite, Test Infrastructure & Visual Polish
+
+- **Comprehensive security audit**: 25-issue audit with critical/high/medium/low remediation — DB SSL enforcement, Redis TLS, JWT algorithm restriction, file upload magic byte validation, Jinja2 sandboxing, CORS exact-match, parameterized LIKE queries, rate limiter thread safety, health endpoint minimization
+- **Inventory variant groups & equipment kits**: Variant groups link size/style variants of items; equipment kits bundle items for single-operation issuance with per-component tracking
+- **Member size preferences**: Record coat, pants, glove, boot, helmet sizes for auto-selection during kit issuance
+- **Reorder request workflow**: Full lifecycle (pending → approved → ordered → received) with vendor/PO tracking, audit logging, and low-stock SMS alerts via Twilio
+- **Inventory module rewrite**: Individual focused pages replace monolithic admin hub (items, pool, categories, maintenance, members, charges, returns, requests, write-offs, reorder). Item detail page with two-column barcode sidebar layout
+- **Facilities module rewrite**: Dashboard with summary stats and activity feed; full-page facility detail with sidebar navigation; FacilityRoomPicker for cross-module room selection; Zustand store
+- **Test suite improvements**: vitest-axe for WCAG accessibility testing, hypothesis for property-based schema testing, schemathesis for API contract fuzzing, pytest-timeout (30s default), coverage ratcheting
+- **Visual design improvements**: 50 CSS and component enhancements — consistent spacing, theme-aware gradients, card standardization, mobile responsive touch targets
+- **PDF/print fixes**: Barcode race condition fixed with requestAnimationFrame; XSS in print export; training report PDF generation
+- **Auth fixes**: Concurrent token refresh replay detection; useIdleTimer polling storm; WebSocket 403 rejections
+- **TypeScript quality**: Enum constants replace string literals across 17+ files; getErrorMessage() replaces instanceof Error; specific enum types replace generic strings
+- **Apparatus fixes**: min_staffing field in list endpoint; setup checklist count query
+- **Migration fixes**: Broken Alembic revision chain; misleading migration logs in multi-worker mode
+
 ### March 2026 (Mar 3) — React 19, ESLint 9, Tailwind v4, Vitest 4, Forms Overhaul, Pipeline Enhancements & Inventory Import
 
 - **Major toolchain upgrades**: React 18 → 19, Vitest 3 → 4, Zod 3 → 4, ESLint v8 → v9 (flat config), Tailwind CSS v3.4 → v4.2; 200+ component files updated

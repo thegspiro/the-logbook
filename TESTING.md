@@ -131,7 +131,7 @@ cd frontend && npx vitest run src/pages/EventSelfCheckInPage.test.tsx
 cd frontend && npx vitest run src/pages/EventQRCodePage.test.tsx
 ```
 
-### Backend Tests (204+ tests)
+### Backend Tests (1257+ tests)
 
 The backend test suite covers models, services, and API endpoints:
 
@@ -147,9 +147,58 @@ cd backend && pytest tests/test_onboarding_integration.py -v
 
 # Run with coverage
 cd backend && pytest --cov=app --cov-report=term-missing
+
+# Run by marker
+cd backend && pytest -m unit         # Unit tests only
+cd backend && pytest -m integration  # Integration tests only
+cd backend && pytest -m "not slow"   # Skip slow tests
 ```
 
 **Note**: Some backend tests require a MySQL database connection and will show as errors if the database is unavailable. This is expected in local development without Docker.
+
+### New Testing Tools (2026-03-07)
+
+| Tool | Purpose | Usage |
+|------|---------|-------|
+| **vitest-axe** | Automated WCAG accessibility checks | `import { axe } from 'vitest-axe'` in component tests |
+| **hypothesis** | Property-based testing for Pydantic schemas | `@given(st.text())` generates random inputs to find edge cases |
+| **schemathesis** | API contract testing from OpenAPI spec | `cd backend && pytest tests/test_api_contract.py` |
+| **pytest-timeout** | Prevents hanging async tests | 30s default; override with `@pytest.mark.timeout(60)` |
+
+### Coverage Ratcheting
+
+Coverage thresholds are enforced and cannot decrease between PRs:
+- **Lines**: 80% minimum
+- **Functions**: 80% minimum
+- **Statements**: 80% minimum
+- **Branches**: 75% minimum
+
+The ratchet script compares coverage against the previous run and fails CI if any metric decreases.
+
+### Accessibility Testing Pattern (Frontend)
+
+```typescript
+import { axe, toHaveNoViolations } from 'vitest-axe';
+expect.extend(toHaveNoViolations);
+
+it('should have no accessibility violations', async () => {
+  const { container } = render(<MyComponent />);
+  const results = await axe(container);
+  expect(results).toHaveNoViolations();
+});
+```
+
+### Property-Based Testing Pattern (Backend)
+
+```python
+from hypothesis import given, strategies as st
+
+@given(name=st.text(min_size=1, max_size=255))
+def test_item_name_validation(name):
+    """Any non-empty string up to 255 chars should be valid."""
+    schema = InventoryItemCreate(name=name, category_id="cat-1")
+    assert schema.name == name
+```
 
 ### Running All Tests (Makefile)
 
