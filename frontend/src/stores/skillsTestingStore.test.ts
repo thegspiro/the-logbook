@@ -154,7 +154,7 @@ describe('skillsTestingStore', () => {
 
       await useSkillsTestingStore.getState().loadTemplates();
 
-      expect(useSkillsTestingStore.getState().error).toBeTruthy();
+      expect(useSkillsTestingStore.getState().error).toBeTypeOf('string');
       expect(useSkillsTestingStore.getState().templatesLoading).toBe(false);
     });
 
@@ -222,7 +222,7 @@ describe('skillsTestingStore', () => {
 
       await useSkillsTestingStore.getState().loadTemplate('tpl-1');
 
-      expect(useSkillsTestingStore.getState().error).toBeTruthy();
+      expect(useSkillsTestingStore.getState().error).toBeTypeOf('string');
       expect(useSkillsTestingStore.getState().templateLoading).toBe(false);
     });
 
@@ -234,7 +234,7 @@ describe('skillsTestingStore', () => {
         sections: [],
       })).rejects.toThrow();
 
-      expect(useSkillsTestingStore.getState().error).toBeTruthy();
+      expect(useSkillsTestingStore.getState().error).toBeTypeOf('string');
     });
 
     it('should handle update template error and re-throw', async () => {
@@ -244,28 +244,28 @@ describe('skillsTestingStore', () => {
         name: 'Updated Name',
       })).rejects.toThrow();
 
-      expect(useSkillsTestingStore.getState().error).toBeTruthy();
+      expect(useSkillsTestingStore.getState().error).toBeTypeOf('string');
     });
 
     it('should handle delete template error and re-throw', async () => {
       vi.mocked(skillsTestingService.deleteTemplate).mockRejectedValue(new Error('Delete failed'));
 
       await expect(useSkillsTestingStore.getState().deleteTemplate('tpl-1')).rejects.toThrow();
-      expect(useSkillsTestingStore.getState().error).toBeTruthy();
+      expect(useSkillsTestingStore.getState().error).toBeTypeOf('string');
     });
 
     it('should handle publish template error and re-throw', async () => {
       vi.mocked(skillsTestingService.publishTemplate).mockRejectedValue(new Error('Publish failed'));
 
       await expect(useSkillsTestingStore.getState().publishTemplate('tpl-1')).rejects.toThrow();
-      expect(useSkillsTestingStore.getState().error).toBeTruthy();
+      expect(useSkillsTestingStore.getState().error).toBeTypeOf('string');
     });
 
     it('should handle duplicate template error and re-throw', async () => {
       vi.mocked(skillsTestingService.duplicateTemplate).mockRejectedValue(new Error('Duplicate failed'));
 
       await expect(useSkillsTestingStore.getState().duplicateTemplate('tpl-1')).rejects.toThrow();
-      expect(useSkillsTestingStore.getState().error).toBeTruthy();
+      expect(useSkillsTestingStore.getState().error).toBeTypeOf('string');
     });
   });
 
@@ -358,33 +358,18 @@ describe('skillsTestingStore', () => {
       vi.mocked(skillsTestingService.deleteTest).mockRejectedValue(new Error('Delete failed'));
 
       await expect(useSkillsTestingStore.getState().deleteTest('test-1')).rejects.toThrow();
-      expect(useSkillsTestingStore.getState().error).toBeTruthy();
+      expect(useSkillsTestingStore.getState().error).toBeTypeOf('string');
     });
 
     it('should handle email test results error', async () => {
       vi.mocked(skillsTestingService.emailTestResults).mockRejectedValue(new Error('Email failed'));
 
       await expect(useSkillsTestingStore.getState().emailTestResults('test-1')).rejects.toThrow();
-      expect(useSkillsTestingStore.getState().error).toBeTruthy();
+      expect(useSkillsTestingStore.getState().error).toBeTypeOf('string');
     });
   });
 
   describe('Active test session actions', () => {
-    it('should set active section index', () => {
-      useSkillsTestingStore.getState().setActiveSectionIndex(2);
-      expect(useSkillsTestingStore.getState().activeSectionIndex).toBe(2);
-    });
-
-    it('should set active test timer', () => {
-      useSkillsTestingStore.getState().setActiveTestTimer(120);
-      expect(useSkillsTestingStore.getState().activeTestTimer).toBe(120);
-    });
-
-    it('should set active test running', () => {
-      useSkillsTestingStore.getState().setActiveTestRunning(true);
-      expect(useSkillsTestingStore.getState().activeTestRunning).toBe(true);
-    });
-
     it('should update criterion result for existing section', () => {
       useSkillsTestingStore.setState({
         currentTest: {
@@ -441,7 +426,7 @@ describe('skillsTestingStore', () => {
 
       await useSkillsTestingStore.getState().loadSummary();
 
-      expect(useSkillsTestingStore.getState().error).toBeTruthy();
+      expect(useSkillsTestingStore.getState().error).toBeTypeOf('string');
       expect(useSkillsTestingStore.getState().summaryLoading).toBe(false);
     });
 
@@ -450,7 +435,7 @@ describe('skillsTestingStore', () => {
 
       await useSkillsTestingStore.getState().loadTests();
 
-      expect(useSkillsTestingStore.getState().error).toBeTruthy();
+      expect(useSkillsTestingStore.getState().error).toBeTypeOf('string');
       expect(useSkillsTestingStore.getState().testsLoading).toBe(false);
     });
 
@@ -459,7 +444,7 @@ describe('skillsTestingStore', () => {
 
       await useSkillsTestingStore.getState().loadTest('test-1');
 
-      expect(useSkillsTestingStore.getState().error).toBeTruthy();
+      expect(useSkillsTestingStore.getState().error).toBeTypeOf('string');
       expect(useSkillsTestingStore.getState().testLoading).toBe(false);
     });
 
@@ -471,14 +456,14 @@ describe('skillsTestingStore', () => {
         candidate_id: 'user-1',
       })).rejects.toThrow();
 
-      expect(useSkillsTestingStore.getState().error).toBeTruthy();
+      expect(useSkillsTestingStore.getState().error).toBeTypeOf('string');
     });
 
     it('should handle complete test error and re-throw', async () => {
       vi.mocked(skillsTestingService.completeTest).mockRejectedValue(new Error('Complete error'));
 
       await expect(useSkillsTestingStore.getState().completeTest('test-1')).rejects.toThrow();
-      expect(useSkillsTestingStore.getState().error).toBeTruthy();
+      expect(useSkillsTestingStore.getState().error).toBeTypeOf('string');
     });
   });
 

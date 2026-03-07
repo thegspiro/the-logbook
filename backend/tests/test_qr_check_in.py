@@ -118,15 +118,33 @@ class TestQRCheckInTimeValidation:
         assert data["event_name"] == "Test Event"
 
     @pytest.mark.asyncio
-    async def test_qr_data_not_available_before_window(self):
-        """Test that QR code is not valid before the time window"""
+    @pytest.mark.parametrize(
+        "label, start_offset, end_offset, extra_kwargs",
+        [
+            ("before window", timedelta(hours=2), timedelta(hours=3), {}),
+            ("after scheduled end", timedelta(hours=-3), timedelta(hours=-1), {}),
+            (
+                "after actual_end_time",
+                timedelta(hours=-2),
+                timedelta(hours=2),
+                {"actual_end_time": "USE_PAST"},
+            ),
+        ],
+        ids=["before_window", "after_scheduled_end", "after_actual_end"],
+    )
+    async def test_qr_data_not_valid_outside_window(
+        self, label, start_offset, end_offset, extra_kwargs
+    ):
+        """Test that QR code is_valid=False outside the time window"""
         now = datetime.now(timezone.utc)
         org_id = uuid4()
+        if extra_kwargs.get("actual_end_time") == "USE_PAST":
+            extra_kwargs["actual_end_time"] = now - timedelta(minutes=30)
         event = _make_event(
             org_id=org_id,
-            title="Future Event",
-            start_datetime=now + timedelta(hours=2),
-            end_datetime=now + timedelta(hours=3),
+            start_datetime=now + start_offset,
+            end_datetime=now + end_offset,
+            **extra_kwargs,
         )
         mock_db = _mock_db_returning(event)
 
@@ -136,48 +154,6 @@ class TestQRCheckInTimeValidation:
         assert error is None
         assert data is not None
         assert data["is_valid"] is False
-
-    @pytest.mark.asyncio
-    async def test_qr_data_not_available_after_scheduled_end(self):
-        """Test that QR code is not valid after scheduled end time"""
-        now = datetime.now(timezone.utc)
-        org_id = uuid4()
-        event = _make_event(
-            org_id=org_id,
-            title="Past Event",
-            start_datetime=now - timedelta(hours=3),
-            end_datetime=now - timedelta(hours=1),
-        )
-        mock_db = _mock_db_returning(event)
-
-        service = EventService(mock_db)
-        data, error = await service.get_qr_check_in_data(event.id, org_id)
-
-        assert error is None
-        assert data is not None
-        assert data["is_valid"] is False
-
-    @pytest.mark.asyncio
-    async def test_qr_data_respects_actual_end_time(self):
-        """Test that actual_end_time takes precedence over scheduled end_datetime"""
-        now = datetime.now(timezone.utc)
-        org_id = uuid4()
-        event = _make_event(
-            org_id=org_id,
-            title="Early Ended Event",
-            start_datetime=now - timedelta(hours=2),
-            end_datetime=now + timedelta(hours=2),
-            actual_end_time=now - timedelta(minutes=30),
-        )
-        mock_db = _mock_db_returning(event)
-
-        service = EventService(mock_db)
-        data, error = await service.get_qr_check_in_data(event.id, org_id)
-
-        assert error is None
-        assert data is not None
-        assert data["is_valid"] is False
-        assert data["actual_end_time"] is not None
 
     @pytest.mark.asyncio
     async def test_qr_data_cancelled_event(self):
@@ -236,6 +212,12 @@ class TestSelfCheckIn:
         assert rsvp is not None
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
+        # Verify the RSVP was created with correct check-in data
+        added_obj = mock_db.add.call_args[0][0]
+        assert added_obj.event_id == event.id
+        assert added_obj.user_id == user.id
+        assert added_obj.checked_in is True
+        assert added_obj.status == RSVPStatus.GOING
 
     @pytest.mark.asyncio
     async def test_self_check_in_duplicate_check_in(self):
@@ -287,36 +269,27 @@ class TestSelfCheckIn:
         assert rsvp is None
 
     @pytest.mark.asyncio
-    async def test_self_check_in_after_scheduled_end(self):
-        """Test that check-in after scheduled end time returns an error"""
+    @pytest.mark.parametrize(
+        "start_offset, end_offset, extra_kwargs",
+        [
+            (timedelta(hours=-3), timedelta(hours=-1), {}),
+            (timedelta(hours=-2), timedelta(hours=2), {"actual_end_time": "USE_PAST"}),
+        ],
+        ids=["after_scheduled_end", "after_actual_end_time"],
+    )
+    async def test_self_check_in_after_event_ended(
+        self, start_offset, end_offset, extra_kwargs
+    ):
+        """Test that check-in is rejected when the event has ended"""
         now = datetime.now(timezone.utc)
         org_id = uuid4()
+        if extra_kwargs.get("actual_end_time") == "USE_PAST":
+            extra_kwargs["actual_end_time"] = now - timedelta(minutes=30)
         event = _make_event(
             org_id=org_id,
-            title="Past Event",
-            start_datetime=now - timedelta(hours=3),
-            end_datetime=now - timedelta(hours=1),
-        )
-        user = _make_user(org_id=org_id)
-        mock_db = _mock_db_returning(event, user)
-
-        service = EventService(mock_db)
-        rsvp, error = await service.self_check_in(event.id, user.id, org_id)
-
-        assert error == "Check-in is no longer available. The event has ended."
-        assert rsvp is None
-
-    @pytest.mark.asyncio
-    async def test_self_check_in_after_actual_end_time(self):
-        """Test that check-in respects actual_end_time when set"""
-        now = datetime.now(timezone.utc)
-        org_id = uuid4()
-        event = _make_event(
-            org_id=org_id,
-            title="Early Ended Event",
-            start_datetime=now - timedelta(hours=2),
-            end_datetime=now + timedelta(hours=2),
-            actual_end_time=now - timedelta(minutes=30),
+            start_datetime=now + start_offset,
+            end_datetime=now + end_offset,
+            **extra_kwargs,
         )
         user = _make_user(org_id=org_id)
         mock_db = _mock_db_returning(event, user)

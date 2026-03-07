@@ -352,7 +352,7 @@ describe('apparatusStore', () => {
 
       const state = getState();
       expect(state.isLoading).toBe(false);
-      expect(state.error).toBeTruthy();
+      expect(state.error).toBeTypeOf('string');
       expect(state.apparatusList).toEqual([]);
     });
   });
@@ -386,7 +386,7 @@ describe('apparatusStore', () => {
 
       const state = getState();
       expect(state.isLoading).toBe(false);
-      expect(state.error).toBeTruthy();
+      expect(state.error).toBeTypeOf('string');
     });
   });
 
@@ -422,7 +422,7 @@ describe('apparatusStore', () => {
 
       const state = getState();
       expect(state.isLoadingTypes).toBe(false);
-      expect(state.error).toBeTruthy();
+      expect(state.error).toBeTypeOf('string');
     });
   });
 
@@ -458,7 +458,7 @@ describe('apparatusStore', () => {
 
       const state = getState();
       expect(state.isLoadingStatuses).toBe(false);
-      expect(state.error).toBeTruthy();
+      expect(state.error).toBeTypeOf('string');
     });
   });
 
@@ -489,7 +489,7 @@ describe('apparatusStore', () => {
 
       const state = getState();
       expect(state.isLoadingSummary).toBe(false);
-      expect(state.error).toBeTruthy();
+      expect(state.error).toBeTypeOf('string');
     });
   });
 
@@ -521,7 +521,7 @@ describe('apparatusStore', () => {
 
       await getState().fetchMaintenanceDue();
 
-      expect(getState().error).toBeTruthy();
+      expect(getState().error).toBeTypeOf('string');
     });
   });
 

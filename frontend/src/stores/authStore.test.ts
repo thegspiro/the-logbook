@@ -153,7 +153,7 @@ describe('authStore', () => {
         act(async () => {
           await getState().login({ username: 'bad', password: 'wrong' });
         }),
-      ).rejects.toBeDefined();
+      ).rejects.toThrow();
 
       const state = getState();
       expect(state.isLoading).toBe(false);
@@ -171,7 +171,7 @@ describe('authStore', () => {
           act(async () => {
             await getState().login({ username: 'bad', password: 'wrong' });
           }),
-        ).rejects.toBeDefined();
+        ).rejects.toThrow();
       }
 
       expect(getState().loginAttempts).toBe(5);
@@ -193,7 +193,7 @@ describe('authStore', () => {
         act(async () => {
           await getState().login({ username: 'bad', password: 'wrong' });
         }),
-      ).rejects.toBeDefined();
+      ).rejects.toThrow();
 
       const stored = sessionStorage.getItem('login_lockout');
       expect(stored).not.toBeNull();
@@ -224,7 +224,7 @@ describe('authStore', () => {
         act(async () => {
           await getState().login({ username: 'bad', password: 'wrong' });
         }),
-      ).rejects.toBeDefined();
+      ).rejects.toThrow();
 
       expect(getState().loginAttempts).toBe(1);
 
@@ -276,7 +276,7 @@ describe('authStore', () => {
             last_name: 'U',
           });
         }),
-      ).rejects.toBeDefined();
+      ).rejects.toThrow();
 
       expect(getState().error).toBe('Email already taken');
     });

@@ -12,7 +12,7 @@ Covers:
 import pytest
 import time
 import secrets
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 from app.core.security_middleware import (
     RateLimiter,
@@ -276,8 +276,9 @@ class TestCSRFProtection:
         """The validation should use secrets.compare_digest (constant-time)."""
         token = "test-csrf-token-value"
         with patch.object(secrets, 'compare_digest', wraps=secrets.compare_digest) as mock_compare:
-            CSRFProtection.validate_token(token, token)
-            mock_compare.assert_called_once()
+            result = CSRFProtection.validate_token(token, token)
+            assert result is True
+            mock_compare.assert_called_once_with(token, token)
 
 
 # ---------------------------------------------------------------------------

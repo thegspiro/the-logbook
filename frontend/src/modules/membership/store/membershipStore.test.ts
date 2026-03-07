@@ -130,7 +130,7 @@ describe('membershipStore', () => {
 
       const state = getState();
       expect(state.isLoading).toBe(false);
-      expect(state.error).toBeTruthy();
+      expect(state.error).toBeTypeOf('string');
       expect(state.members).toEqual([]);
     });
 
@@ -257,7 +257,7 @@ describe('membershipStore', () => {
 
       const state = getState();
       expect(state.isLoadingMember).toBe(false);
-      expect(state.error).toBeTruthy();
+      expect(state.error).toBeTypeOf('string');
     });
   });
 
