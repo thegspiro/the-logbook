@@ -679,7 +679,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                       {!collapsed ? (
                         <div className="pt-5 pb-2 px-4">
                           <div className="border-t border-theme-surface-border" />
-                          <span className="block mt-3 text-[10px] font-semibold uppercase tracking-widest text-theme-text-muted">
+                          <span className="block mt-3 text-[10px] font-bold uppercase tracking-widest text-theme-text-muted/70">
                             {item.label}
                           </span>
                         </div>
@@ -741,14 +741,14 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                       aria-controls={
                         hasSubItems ? `submenu-${item.label}` : undefined
                       }
-                      className={`w-full flex items-center rounded-lg transition-all focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                      className={`w-full flex items-center rounded-lg transition-all duration-150 focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
                         collapsed ? "justify-center p-3" : "px-4 py-3"
                       } ${
                         parentActive && !hasSubItems
-                          ? "bg-red-600 text-white"
+                          ? "bg-red-600 text-white shadow-sm"
                           : parentActive && hasSubItems
                             ? "bg-theme-surface-secondary text-theme-text-primary"
-                            : "text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary"
+                            : "text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary active:scale-[0.98]"
                       }`}
                       title={collapsed ? item.label : undefined}
                       aria-label={collapsed ? item.label : undefined}
@@ -794,10 +794,10 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                                 onMouseEnter={() => prefetchRoute(subItem.path)}
                                 onFocus={() => prefetchRoute(subItem.path)}
                                 aria-current={subActive ? "page" : undefined}
-                                className={`w-full flex items-center px-4 py-2 rounded-lg transition-all focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                                className={`w-full flex items-center px-4 py-2 rounded-lg transition-all duration-150 focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
                                   subActive
-                                    ? "bg-red-600 text-white"
-                                    : "text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary"
+                                    ? "bg-red-600 text-white shadow-sm"
+                                    : "text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary active:scale-[0.98]"
                                 }`}
                               >
                                 <SubIcon

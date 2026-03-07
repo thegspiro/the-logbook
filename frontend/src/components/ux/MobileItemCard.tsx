@@ -97,7 +97,7 @@ export const MobileItemCard: React.FC<MobileItemCardProps> = ({
 }) => {
   return (
     <div
-      className="bg-theme-surface rounded-lg border border-theme-surface-border p-4 active:bg-theme-surface-hover transition-colors"
+      className="bg-theme-surface rounded-lg border border-theme-surface-border p-4 shadow-sm active:bg-theme-surface-hover active:scale-[0.99] hover:shadow-md transition-all duration-200"
       role="button"
       tabIndex={0}
       onClick={onTap}

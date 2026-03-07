@@ -61,7 +61,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
         <div
           id={tooltipId.current}
           role="tooltip"
-          className={`absolute z-50 px-2.5 py-1.5 text-xs font-medium text-white bg-slate-900 dark:bg-slate-700 rounded-md shadow-lg whitespace-nowrap pointer-events-none ${positionClasses[position]}`}
+          className={`absolute z-50 px-2.5 py-1.5 text-xs font-medium text-white bg-slate-900 dark:bg-slate-700 rounded-md shadow-lg whitespace-nowrap pointer-events-none animate-scale-in ${positionClasses[position]}`}
         >
           {content}
           <span

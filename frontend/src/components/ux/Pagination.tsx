@@ -91,7 +91,7 @@ export const Pagination: React.FC<PaginationProps> = ({
           <button
             onClick={() => onPageChange(1)}
             disabled={currentPage === 1}
-            className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-sm text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-md text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-150 active:scale-95"
             aria-label="First page"
           >
             <ChevronsLeft className="w-4 h-4" />
@@ -99,7 +99,7 @@ export const Pagination: React.FC<PaginationProps> = ({
           <button
             onClick={() => onPageChange(currentPage - 1)}
             disabled={currentPage === 1}
-            className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-sm text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-md text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-150 active:scale-95"
             aria-label="Previous page"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -114,10 +114,10 @@ export const Pagination: React.FC<PaginationProps> = ({
               <button
                 key={page}
                 onClick={() => onPageChange(page)}
-                className={`min-w-[36px] h-9 sm:min-w-[40px] sm:h-10 rounded text-sm font-medium transition-colors ${
+                className={`min-w-[36px] h-9 sm:min-w-[40px] sm:h-10 rounded-md text-sm font-medium transition-all duration-150 ${
                   page === currentPage
-                    ? 'bg-red-600 text-white'
-                    : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
+                    ? 'bg-red-600 text-white shadow-sm scale-105'
+                    : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover hover:shadow-sm active:scale-95'
                 }`}
                 aria-current={page === currentPage ? 'page' : undefined}
               >
@@ -129,7 +129,7 @@ export const Pagination: React.FC<PaginationProps> = ({
           <button
             onClick={() => onPageChange(currentPage + 1)}
             disabled={currentPage === totalPages}
-            className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-sm text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-md text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-150 active:scale-95"
             aria-label="Next page"
           >
             <ChevronRight className="w-4 h-4" />
@@ -137,7 +137,7 @@ export const Pagination: React.FC<PaginationProps> = ({
           <button
             onClick={() => onPageChange(totalPages)}
             disabled={currentPage === totalPages}
-            className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-sm text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-md text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-150 active:scale-95"
             aria-label="Last page"
           >
             <ChevronsRight className="w-4 h-4" />
