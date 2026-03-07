@@ -1,6 +1,11 @@
-import { afterEach, vi, beforeAll, afterAll } from 'vitest';
+import { afterEach, vi, expect, beforeAll, afterAll } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
+import * as matchers from 'vitest-axe/matchers';
+import 'vitest-axe/extend-expect';
+
+// Add vitest-axe matchers for accessibility testing
+expect.extend(matchers);
 
 // Cleanup after each test case
 afterEach(() => {
