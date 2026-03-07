@@ -140,9 +140,10 @@ const DEFAULT_PRESET_ID = 'dymo-30252';
 interface BarcodeLabelProps {
   item: InventoryItem;
   preset: LabelPreset;
+  onRendered?: () => void;
 }
 
-const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset }) => {
+const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, onRendered }) => {
   const svgRef = useRef<SVGSVGElement>(null);
 
   const barcodeValue = item.barcode || item.asset_tag || item.serial_number || item.id.slice(0, 12);
@@ -164,7 +165,8 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset }) => {
         // Invalid barcode value — will show empty SVG
       }
     }
-  }, [barcodeValue, preset.barcodeWidth, preset.barcodeHeight]);
+    onRendered?.();
+  }, [barcodeValue, preset.barcodeWidth, preset.barcodeHeight, onRendered]);
 
   const subtitle = item.asset_tag
     ? `AT: ${item.asset_tag}`
@@ -241,6 +243,9 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const [presetId, setPresetId] = useState(DEFAULT_PRESET_ID);
   const [copies, setCopies] = useState(1);
   const [showSettings, setShowSettings] = useState(false);
+  const [barcodesReady, setBarcodesReady] = useState(false);
+  const renderedCountRef = useRef(0);
+  const totalLabelsRef = useRef(0);
 
   const preset = LABEL_PRESETS.find((p) => p.id === presetId) ?? LABEL_PRESETS[0] ?? DEFAULT_LABEL_PRESET;
   const isThermal = preset.columns === 1;
@@ -276,11 +281,24 @@ const InventoryBarcodePrintPage: React.FC = () => {
     void fetchItems();
   }, [fetchItems]);
 
+  // Track barcode rendering — reset when items or copies change
+  useEffect(() => {
+    const total = items.length * copies;
+    totalLabelsRef.current = total;
+    renderedCountRef.current = 0;
+    setBarcodesReady(total === 0);
+  }, [items, copies]);
+
+  const handleLabelRendered = useCallback(() => {
+    renderedCountRef.current += 1;
+    if (renderedCountRef.current >= totalLabelsRef.current) {
+      setBarcodesReady(true);
+    }
+  }, []);
+
   const handlePrint = () => {
-    // Small delay to ensure JsBarcode useEffect has rendered all SVGs
-    requestAnimationFrame(() => {
-      window.print();
-    });
+    if (!barcodesReady) return;
+    window.print();
   };
 
   // Build the repeated items list based on copies
@@ -418,7 +436,8 @@ const InventoryBarcodePrintPage: React.FC = () => {
               </button>
               <button
                 onClick={handlePrint}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition-colors"
+                disabled={!barcodesReady}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
               >
                 <Printer className="h-4 w-4" />
                 Print Labels
@@ -514,6 +533,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
                   key={`${item.id}-${index}`}
                   item={item}
                   preset={preset}
+                  onRendered={handleLabelRendered}
                 />
               ))}
             </div>

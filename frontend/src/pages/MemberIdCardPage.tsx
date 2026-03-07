@@ -46,6 +46,7 @@ export const MemberIdCardPage: React.FC = () => {
   const { user: currentUser } = useAuthStore();
   const { formatRank } = useRanks();
   const barcodeRef = useRef<SVGSVGElement>(null);
+  const [barcodeReady, setBarcodeReady] = useState(false);
 
   const [member, setMember] = useState<UserWithRoles | null>(null);
   const [org, setOrg] = useState<OrganizationProfile | null>(null);
@@ -90,7 +91,11 @@ export const MemberIdCardPage: React.FC = () => {
         // If the membership number contains invalid characters, skip the barcode
       }
     }
-  }, [member?.membership_number]);
+    // Mark barcode as ready once the effect has run (even if no barcode was needed)
+    if (member) {
+      setBarcodeReady(true);
+    }
+  }, [member?.membership_number, member]);
 
   /** Build the QR payload — a JSON string with the member's ID and membership number. */
   const getQRValue = (): string => {
@@ -306,7 +311,8 @@ export const MemberIdCardPage: React.FC = () => {
       <div className="mt-6 print:hidden">
         <button
           onClick={() => window.print()}
-          className="btn-info font-medium gap-2 inline-flex items-center px-5 text-sm transition"
+          disabled={!barcodeReady}
+          className="btn-info font-medium gap-2 inline-flex items-center px-5 text-sm transition disabled:opacity-50"
         >
           <Printer className="h-4 w-4" />
           Print ID Card
