@@ -20,6 +20,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.onboarding import OnboardingService
+
+pytestmark = [pytest.mark.integration]
 from app.models.user import Organization, User, Position
 from app.models.onboarding import OnboardingStatus
 

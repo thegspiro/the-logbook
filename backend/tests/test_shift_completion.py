@@ -18,6 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.shift_completion_service import ShiftCompletionService
 
+pytestmark = [pytest.mark.integration]
+
 
 # ── Helpers ──────────────────────────────────────────────────────────
 

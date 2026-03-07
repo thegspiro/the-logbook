@@ -21,6 +21,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.inventory_service import InventoryService
+
+pytestmark = [pytest.mark.integration]
 from app.services.departure_clearance_service import DepartureClearanceService
 from app.services.inventory_notification_service import InventoryNotificationService
 from app.models.inventory import (
