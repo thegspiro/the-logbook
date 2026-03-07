@@ -319,3 +319,61 @@ export const NFPA_ENSEMBLE_ROLE_OPTIONS = [
   { value: 'boots', label: 'Boots' },
   { value: 'hood', label: 'Hood' },
 ] as const;
+
+// ============================================
+// IP Exception Approval Status
+// ============================================
+export const IPExceptionApprovalStatus = {
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
+  EXPIRED: 'expired',
+  REVOKED: 'revoked',
+} as const;
+export type IPExceptionApprovalStatus = (typeof IPExceptionApprovalStatus)[keyof typeof IPExceptionApprovalStatus];
+
+export const IP_EXCEPTION_STATUS_COLORS: Record<string, string> = {
+  pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+  approved: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
+  rejected: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
+  expired: 'bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/20',
+  revoked: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
+};
+
+// ============================================
+// IP Exception Use Case
+// ============================================
+export const IPExceptionUseCase = {
+  TRAVEL: 'travel',
+  REMOTE_WORK: 'remote_work',
+  VPN: 'vpn',
+  PARTNER_ACCESS: 'partner_access',
+  OTHER: 'other',
+} as const;
+export type IPExceptionUseCase = (typeof IPExceptionUseCase)[keyof typeof IPExceptionUseCase];
+
+export const IP_EXCEPTION_USE_CASE_LABELS: Record<string, string> = {
+  travel: 'Travel',
+  remote_work: 'Remote Work',
+  vpn: 'VPN',
+  partner_access: 'Partner Access',
+  other: 'Other',
+};
+
+// ============================================
+// Country Risk Level
+// ============================================
+export const CountryRiskLevel = {
+  LOW: 'low',
+  MEDIUM: 'medium',
+  HIGH: 'high',
+  CRITICAL: 'critical',
+} as const;
+export type CountryRiskLevel = (typeof CountryRiskLevel)[keyof typeof CountryRiskLevel];
+
+export const COUNTRY_RISK_LEVEL_COLORS: Record<string, string> = {
+  low: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
+  medium: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+  high: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
+  critical: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
+};

@@ -45,6 +45,7 @@ import { getAdminRoutes } from './modules/admin';
 import { getSettingsRoutes } from './modules/settings';
 import { getReportsRoutes } from './modules/reports';
 import { getGrantsFundraisingRoutes } from './modules/grants-fundraising';
+import { getIPSecurityRoutes } from './modules/ip-security';
 
 // Loading fallback component
 const PageLoadingFallback = () => (
@@ -138,6 +139,9 @@ function App() {
 
                   {/* Reports */}
                   {getReportsRoutes()}
+
+                  {/* IP Security */}
+                  {getIPSecurityRoutes()}
 
                   {/* Admin & Settings */}
                   {getAdminRoutes()}
