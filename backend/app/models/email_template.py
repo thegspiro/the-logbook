@@ -7,7 +7,7 @@ Templates are managed by admins and used by the email service.
 
 import enum
 
-from sqlalchemy import JSON, Boolean, Column, DateTime
+from sqlalchemy import JSON, Boolean, Column, DateTime, Integer
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Index, String, Text
 from sqlalchemy.orm import relationship
@@ -237,3 +237,68 @@ class ScheduledEmail(Base):
 
     def __repr__(self):
         return f"<ScheduledEmail {self.id} status={self.status.value}>"
+
+
+class MessageHistoryStatus(str, enum.Enum):
+    """Delivery status of a sent message"""
+
+    SENT = "sent"
+    FAILED = "failed"
+
+
+class MessageHistory(Base):
+    """
+    Log of every email sent by the application.
+
+    Each row represents a single send attempt (one per recipient).
+    Populated automatically by ``EmailService.send_email()``.
+    """
+
+    __tablename__ = "message_history"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+
+    # Recipient info
+    to_email = Column(String(320), nullable=False)
+    cc_emails = Column(JSON, nullable=True)
+    bcc_emails = Column(JSON, nullable=True)
+
+    # Content snapshot
+    subject = Column(String(500), nullable=False)
+    template_type = Column(String(50), nullable=True)
+
+    # Delivery tracking
+    status = Column(
+        SQLEnum(
+            MessageHistoryStatus,
+            values_callable=lambda x: [e.value for e in x],
+        ),
+        nullable=False,
+        default=MessageHistoryStatus.SENT,
+    )
+    error_message = Column(Text, nullable=True)
+    recipient_count = Column(Integer, nullable=False, default=1)
+
+    # Audit
+    sent_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    sent_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # Relationships
+    organization = relationship("Organization")
+
+    __table_args__ = (
+        Index("idx_message_history_org", "organization_id", "sent_at"),
+        Index("idx_message_history_status", "status", "sent_at"),
+    )
+
+    def __repr__(self):
+        return f"<MessageHistory {self.id} to={self.to_email} status={self.status.value}>"

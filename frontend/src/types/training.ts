@@ -346,10 +346,11 @@ export interface ComplianceSummary {
   requirements_total: number;
   certs_expiring_soon: number;
   certs_expired: number;
-  compliance_status: 'green' | 'yellow' | 'red';
+  compliance_status: 'green' | 'yellow' | 'red' | 'exempt';
   compliance_label: string;
   hours_this_year: number;
   active_certifications: number;
+  is_exempt?: boolean | undefined;
 }
 
 export interface TrainingRequirement {

@@ -23,6 +23,7 @@ import type { TrainingRequirement } from '../types/training';
 
 interface DashboardStats {
   totalMembers: number;
+  trackedMembers: number; // Active, non-exempt members evaluated for compliance
   compliantMembers: number;
   compliancePercentage: number;
   expiringCount: number;
@@ -70,6 +71,7 @@ const TrainingOfficerDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<DashboardStats>({
     totalMembers: 0,
+    trackedMembers: 0,
     compliantMembers: 0,
     compliancePercentage: 0,
     expiringCount: 0,
@@ -172,8 +174,10 @@ const TrainingOfficerDashboard: React.FC = () => {
       // Use the server-side compliance matrix which correctly evaluates ALL
       // requirement types (hours, courses, certifications, shifts, calls, etc.)
       // with proper waiver adjustments and frequency windows.
+      // The compliance matrix only includes active, non-exempt members.
+      const trackedCount = complianceMatrix.members.length;
       const compliantCount = (() => {
-        if (complianceMatrix.members.length > 0) {
+        if (trackedCount > 0) {
           // A member is fully compliant when their completion_pct is 100
           return complianceMatrix.members.filter((m) => m.completion_pct >= 100).length;
         }
@@ -188,10 +192,15 @@ const TrainingOfficerDashboard: React.FC = () => {
         return members.filter((m) => !expiredByMember.has(m.id)).length;
       })();
 
+      // Use tracked (active, non-exempt) members as the denominator for
+      // compliance percentage so exempt/retired members don't dilute it.
+      const complianceDenominator = trackedCount > 0 ? trackedCount : members.length;
+
       setStats({
         totalMembers: members.length,
+        trackedMembers: trackedCount > 0 ? trackedCount : members.length,
         compliantMembers: compliantCount,
-        compliancePercentage: members.length > 0 ? Math.round((compliantCount / members.length) * 100) : 0,
+        compliancePercentage: complianceDenominator > 0 ? Math.round((compliantCount / complianceDenominator) * 100) : 0,
         expiringCount: expiringItems.length,
         completionsThisMonth: recentRecords.length,
         totalHoursThisYear: totalHours,
@@ -553,7 +562,7 @@ const ComplianceOverviewWidget: React.FC<ComplianceOverviewWidgetProps> = ({ sta
       <ComplianceBar
         label="Member Compliance"
         percentage={stats.compliancePercentage}
-        detail={`${stats.compliantMembers} of ${stats.totalMembers} members`}
+        detail={`${stats.compliantMembers} of ${stats.trackedMembers} tracked members`}
       />
       <ComplianceBar
         label="Training Hours Goal"

@@ -90,11 +90,12 @@ class CompetencyMatrixService:
         req_result = await self.db.execute(req_query)
         requirements = list(req_result.scalars().all())
 
-        # Get active members
+        # Get active, non-exempt members
         user_query = (
             select(User)
             .where(User.organization_id == str(organization_id))
             .where(User.status == UserStatus.ACTIVE)
+            .where(User.compliance_exempt == False)  # noqa: E712
             .where(User.deleted_at.is_(None))
         )
         if user_ids:

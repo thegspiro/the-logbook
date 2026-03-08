@@ -195,11 +195,12 @@ class ReportsService:
         records_result = await self.db.execute(records_query)
         records = records_result.scalars().all()
 
-        # Get active (non-deleted) users
+        # Get active, non-exempt users
         users_result = await self.db.execute(
             select(User).where(
                 User.organization_id == str(organization_id),
                 User.status == UserStatus.ACTIVE,
+                User.compliance_exempt == False,  # noqa: E712
                 User.deleted_at.is_(None),
             )
         )
@@ -591,12 +592,13 @@ class ReportsService:
         if not end_date:
             end_date = date(int(year), 12, 31)
 
-        # Get members
+        # Get active, non-exempt members
         users_result = await self.db.execute(
             select(User)
             .where(
                 User.organization_id == organization_id,
                 User.status == UserStatus.ACTIVE,
+                User.compliance_exempt == False,  # noqa: E712
             )
             .order_by(User.last_name, User.first_name)
         )
@@ -755,6 +757,7 @@ class ReportsService:
             select(User).where(
                 User.organization_id == str(organization_id),
                 User.status == UserStatus.ACTIVE,
+                User.compliance_exempt == False,  # noqa: E712
                 User.deleted_at.is_(None),
             )
         )
@@ -1054,6 +1057,7 @@ class ReportsService:
             select(User).where(
                 User.organization_id == str(organization_id),
                 User.status == UserStatus.ACTIVE,
+                User.compliance_exempt == False,  # noqa: E712
                 User.deleted_at.is_(None),
             )
         )

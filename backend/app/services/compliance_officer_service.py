@@ -119,11 +119,12 @@ class ISOReadinessService:
         start_date = date(year, 1, 1)
         end_date = date(year, 12, 31)
 
-        # Get active members
+        # Get active members (exclude compliance-exempt)
         members_result = await self.db.execute(
             select(User).where(
                 User.organization_id == organization_id,
                 User.status == UserStatus.ACTIVE,
+                User.compliance_exempt == False,  # noqa: E712
                 User.deleted_at.is_(None),
             )
         )
@@ -506,11 +507,12 @@ class AnnualComplianceReportService:
         end_date = date(year, 12, 31)
         today = date.today()
 
-        # Get active members
+        # Get active members (exclude compliance-exempt)
         members_result = await self.db.execute(
             select(User).where(
                 User.organization_id == organization_id,
                 User.status == UserStatus.ACTIVE,
+                User.compliance_exempt == False,  # noqa: E712
                 User.deleted_at.is_(None),
             )
         )

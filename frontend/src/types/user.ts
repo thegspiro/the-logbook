@@ -22,6 +22,7 @@ export interface User {
   station?: string | undefined;
   status: UserStatus;
   membership_type?: string | undefined;
+  compliance_exempt?: boolean | undefined;
   date_of_birth?: string | undefined;
   hire_date?: string | undefined;
   address_street?: string | undefined;
@@ -212,6 +213,29 @@ export interface PropertyReturnReport {
   total_value: number;
   html?: string;
   items: unknown[];
+}
+
+export interface MemberStatusChangeRequest {
+  new_status: string;
+  reason?: string | undefined;
+  send_property_return_email?: boolean | undefined;
+  return_deadline_days?: number | undefined;
+  custom_instructions?: string | undefined;
+}
+
+export interface MemberStatusChangeResponse {
+  user_id: string;
+  previous_status: string;
+  new_status: string;
+  property_return_report?: {
+    member_name: string;
+    drop_type: string;
+    item_count: number;
+    total_value: number;
+    return_deadline: string;
+  };
+  document_id?: string;
+  email_sent?: boolean;
 }
 
 export interface DeletionImpact {
