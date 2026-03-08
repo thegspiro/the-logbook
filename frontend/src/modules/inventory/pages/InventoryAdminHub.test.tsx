@@ -5,11 +5,15 @@ import { renderWithRouter } from '../../../test/utils';
 
 const mockGetSummary = vi.fn();
 const mockGetLowStockItems = vi.fn();
+const mockGetReturnRequests = vi.fn();
+const mockGetEquipmentRequests = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
     getSummary: (...args: unknown[]) => mockGetSummary(...args) as unknown,
     getLowStockItems: (...args: unknown[]) => mockGetLowStockItems(...args) as unknown,
+    getReturnRequests: (...args: unknown[]) => mockGetReturnRequests(...args) as unknown,
+    getEquipmentRequests: (...args: unknown[]) => mockGetEquipmentRequests(...args) as unknown,
   },
 }));
 
@@ -33,6 +37,8 @@ describe('InventoryAdminHub', () => {
     vi.clearAllMocks();
     mockGetSummary.mockResolvedValue(mockSummary);
     mockGetLowStockItems.mockResolvedValue(mockLowStockAlerts);
+    mockGetReturnRequests.mockResolvedValue([]);
+    mockGetEquipmentRequests.mockResolvedValue({ requests: [], total: 0 });
   });
 
   it('renders the page title and subtitle', async () => {
@@ -98,7 +104,7 @@ describe('InventoryAdminHub', () => {
       'Items', 'Pool Items', 'Categories', 'Members',
       'Maintenance', 'Checkouts', 'Charges', 'Return Requests',
       'Storage Areas', 'Import / Export', 'Equipment Requests', 'Write-Offs',
-      'Reorder Requests',
+      'Reorder Requests', 'Equipment Kits', 'Variant Groups',
     ];
     for (const title of navTitles) {
       expect(screen.getByText(title)).toBeInTheDocument();

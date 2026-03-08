@@ -795,11 +795,12 @@ class ReportExportService:
         if not start_date:
             start_date = date(end_date.year, 1, 1)
 
-        # Get all active members
+        # Get all active, non-exempt members
         users_result = await self.db.execute(
             select(User)
             .where(User.organization_id == organization_id)
             .where(User.status == UserStatus.ACTIVE)
+            .where(User.compliance_exempt == False)  # noqa: E712
             .where(User.deleted_at.is_(None))
         )
         users = users_result.scalars().all()
@@ -933,6 +934,7 @@ class ReportExportService:
             select(User).where(
                 User.organization_id == organization_id,
                 User.status == UserStatus.ACTIVE,
+                User.compliance_exempt == False,  # noqa: E712
                 User.deleted_at.is_(None),
             )
         )
@@ -1050,6 +1052,7 @@ class ReportExportService:
             select(User)
             .where(User.organization_id == organization_id)
             .where(User.status == UserStatus.ACTIVE)
+            .where(User.compliance_exempt == False)  # noqa: E712
             .where(User.deleted_at.is_(None))
         )
         users = users_result.scalars().all()
