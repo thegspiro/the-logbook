@@ -343,6 +343,11 @@ export interface NotificationsSummary {
 }
 
 export const memberStatusService = {
+  async changeStatus(userId: string, data: import('../types/user').MemberStatusChangeRequest): Promise<import('../types/user').MemberStatusChangeResponse> {
+    const response = await api.patch<import('../types/user').MemberStatusChangeResponse>(`/users/${userId}/status`, data);
+    return response.data;
+  },
+
   async getArchivedMembers(): Promise<{ members: import('../types/user').ArchivedMember[] }> {
     const response = await api.get<{ members: import('../types/user').ArchivedMember[] }>('/users/archived');
     return response.data;
