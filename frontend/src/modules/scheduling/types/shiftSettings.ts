@@ -84,6 +84,13 @@ export interface ResourceTypeDefaults {
   label: string;
 }
 
+export interface EquipmentCheckSettings {
+  enabled: boolean;
+  requireSignature: boolean;
+  defaultExpirationWarningDays: number;
+  blockShiftStartOnFail: boolean;
+}
+
 export interface ShiftSettings {
   defaultDurationHours: number;
   defaultMinStaffing: number;
@@ -93,6 +100,7 @@ export interface ShiftSettings {
   customPositions: CustomPosition[];
   apparatusTypeDefaults: Record<string, ApparatusTypeDefaults>;
   resourceTypeDefaults: Record<string, ResourceTypeDefaults>;
+  equipmentCheckSettings: EquipmentCheckSettings;
 }
 
 export const SETTINGS_KEY = "scheduling_settings";
@@ -113,4 +121,10 @@ export const DEFAULT_SETTINGS: ShiftSettings = {
   customPositions: [],
   apparatusTypeDefaults: { ...DEFAULT_APPARATUS_TYPE_POSITIONS },
   resourceTypeDefaults: { ...DEFAULT_RESOURCE_TYPE_POSITIONS },
+  equipmentCheckSettings: {
+    enabled: false,
+    requireSignature: false,
+    defaultExpirationWarningDays: 30,
+    blockShiftStartOnFail: false,
+  },
 };
