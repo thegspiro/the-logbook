@@ -262,7 +262,7 @@ const MyEquipmentPage: React.FC = () => {
   };
 
   /* ---------- Shared styles ---------- */
-  const inputClass = 'w-full rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring';
+  const inputClass = 'w-full rounded-md border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring';
   const selectClass = inputClass;
   const labelClass = 'block text-sm font-medium text-theme-text-secondary mb-1';
 

@@ -450,14 +450,14 @@ export const GrantApplicationsPage: React.FC = () => {
               placeholder="Search programs, agencies, assignees..."
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              className="w-full rounded-lg border border-theme-surface-border bg-theme-surface py-2 pl-10 pr-4 text-sm text-theme-text-primary placeholder:text-theme-text-secondary focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+              className="w-full rounded-lg border border-theme-input-border bg-theme-input-bg py-2 pl-10 pr-4 text-sm text-theme-text-primary placeholder:text-theme-text-secondary focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
             />
           </div>
 
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none"
+            className="rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none"
           >
             <option value="">All Statuses</option>
             {PIPELINE_COLUMNS.map((s) => (
@@ -470,7 +470,7 @@ export const GrantApplicationsPage: React.FC = () => {
           <select
             value={priorityFilter}
             onChange={(e) => setPriorityFilter(e.target.value)}
-            className="rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none"
+            className="rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none"
           >
             <option value="">All Priorities</option>
             {Object.entries(PRIORITY_LABELS).map(([value, label]) => (

@@ -50,9 +50,9 @@ const EMPTY_FORM: CategoryFormData = {
 };
 
 const inputClass =
-  'form-input w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-muted focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
+  'form-input w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-muted focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
 const selectClass =
-  'form-input w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
+  'form-input w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
 const labelClass = 'block text-sm font-medium text-theme-text-secondary mb-1';
 
 const InventoryCategoriesPage: React.FC = () => {
