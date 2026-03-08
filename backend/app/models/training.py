@@ -3420,3 +3420,127 @@ class XAPIStatement(Base):
 
     def __repr__(self):
         return f"<XAPIStatement(actor={self.actor_email}, verb={self.verb_display})>"
+
+
+# =============================================================================
+# Shift Equipment Checks
+# =============================================================================
+
+
+class ShiftEquipmentCheck(Base):
+    """
+    A completed equipment checklist submission for a shift.
+
+    Links to the template that was used, the shift, and the member
+    who performed the check. Stores aggregate counts for quick display.
+    """
+
+    __tablename__ = "shift_equipment_checks"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    shift_id = Column(
+        String(36),
+        ForeignKey("shifts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    template_id = Column(
+        String(36),
+        ForeignKey("equipment_check_templates.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    apparatus_id = Column(
+        String(36),
+        ForeignKey("apparatus.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    checked_by = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    checked_at = Column(DateTime(timezone=True), server_default=func.now())
+    check_timing = Column(
+        String(30), nullable=False
+    )  # start_of_shift, end_of_shift
+    overall_status = Column(
+        String(30), nullable=False
+    )  # pass, fail, incomplete
+    total_items = Column(Integer, nullable=False, default=0)
+    completed_items = Column(Integer, nullable=False, default=0)
+    failed_items = Column(Integer, nullable=False, default=0)
+    notes = Column(Text, nullable=True)
+    signature_data = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    items = relationship(
+        "ShiftEquipmentCheckItem",
+        back_populates="check",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        Index("idx_shift_equip_check_shift", "shift_id"),
+        Index("idx_shift_equip_check_org", "organization_id"),
+        Index("idx_shift_equip_check_user", "checked_by"),
+        Index("idx_shift_equip_check_template", "template_id"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<ShiftEquipmentCheck(shift_id={self.shift_id}, "
+            f"status={self.overall_status})>"
+        )
+
+
+class ShiftEquipmentCheckItem(Base):
+    """
+    Individual item result within a completed equipment check.
+
+    Snapshots the compartment and item name at the time of the check
+    so historical records remain accurate even if the template changes.
+    """
+
+    __tablename__ = "shift_equipment_check_items"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    check_id = Column(
+        String(36),
+        ForeignKey("shift_equipment_checks.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    template_item_id = Column(
+        String(36),
+        ForeignKey("check_template_items.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    compartment_name = Column(String(200), nullable=False)
+    item_name = Column(String(200), nullable=False)
+    status = Column(String(30), nullable=False)  # pass, fail, not_checked
+    quantity_found = Column(Integer, nullable=True)
+    required_quantity = Column(Integer, nullable=True)
+    is_expired = Column(Boolean, default=False, nullable=False)
+    expiration_date = Column(Date, nullable=True)
+    notes = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    check = relationship("ShiftEquipmentCheck", back_populates="items")
+
+    __table_args__ = (
+        Index("idx_shift_equip_check_item_check", "check_id"),
+        Index("idx_shift_equip_check_item_tmpl", "template_item_id"),
+    )

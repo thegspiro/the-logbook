@@ -38,11 +38,26 @@ import type {
   ReportFilters,
   AvailabilityFilters,
   MemberHoursReport,
+  EquipmentCheckTemplateCreate,
+  EquipmentCheckTemplateUpdate,
+  CheckTemplateCompartmentCreate,
+  CheckTemplateCompartmentUpdate,
+  CheckTemplateItemCreate,
+  CheckTemplateItemUpdate,
+  ShiftEquipmentCheckCreate,
   CoverageReport,
   CallVolumeReport,
   AvailabilityRecord,
   ShiftSignupResponse,
 } from '../types';
+import type {
+  EquipmentCheckTemplate,
+  ShiftEquipmentCheckRecord,
+  ShiftCheckSummary,
+  CheckTemplateCompartment,
+  CheckTemplateItem,
+  CheckItemHistory,
+} from '../types/equipmentCheck';
 
 declare module 'axios' {
   export interface InternalAxiosRequestConfig {
@@ -449,6 +464,108 @@ export const schedulingService = {
   // --- Shift Compliance ---
   async getComplianceReport(params?: { reference_date?: string }): Promise<ShiftComplianceResponse> {
     const response = await api.get<ShiftComplianceResponse>('/scheduling/reports/compliance', { params });
+    return response.data;
+  },
+
+  // =====================================================================
+  // Equipment Check Templates
+  // =====================================================================
+
+  async createEquipmentCheckTemplate(data: EquipmentCheckTemplateCreate): Promise<EquipmentCheckTemplate> {
+    const response = await api.post<EquipmentCheckTemplate>('/equipment-checks/templates', data);
+    return response.data;
+  },
+  async getEquipmentCheckTemplates(params?: { apparatus_id?: string; apparatus_type?: string; check_timing?: string }): Promise<EquipmentCheckTemplate[]> {
+    const response = await api.get<EquipmentCheckTemplate[]>('/equipment-checks/templates', { params });
+    return response.data;
+  },
+  async getEquipmentCheckTemplate(templateId: string): Promise<EquipmentCheckTemplate> {
+    const response = await api.get<EquipmentCheckTemplate>(`/equipment-checks/templates/${templateId}`);
+    return response.data;
+  },
+  async updateEquipmentCheckTemplate(templateId: string, data: EquipmentCheckTemplateUpdate): Promise<EquipmentCheckTemplate> {
+    const response = await api.put<EquipmentCheckTemplate>(`/equipment-checks/templates/${templateId}`, data);
+    return response.data;
+  },
+  async deleteEquipmentCheckTemplate(templateId: string): Promise<void> {
+    await api.delete(`/equipment-checks/templates/${templateId}`);
+  },
+  async cloneEquipmentCheckTemplate(templateId: string, targetApparatusId: string): Promise<EquipmentCheckTemplate> {
+    const response = await api.post<EquipmentCheckTemplate>(
+      `/equipment-checks/templates/${templateId}/clone`,
+      null,
+      { params: { target_apparatus_id: targetApparatusId } },
+    );
+    return response.data;
+  },
+
+  // --- Compartment CRUD ---
+  async addCompartment(templateId: string, data: CheckTemplateCompartmentCreate): Promise<CheckTemplateCompartment> {
+    const response = await api.post<CheckTemplateCompartment>(`/equipment-checks/templates/${templateId}/compartments`, data);
+    return response.data;
+  },
+  async updateCompartment(compartmentId: string, data: CheckTemplateCompartmentUpdate): Promise<CheckTemplateCompartment> {
+    const response = await api.put<CheckTemplateCompartment>(`/equipment-checks/compartments/${compartmentId}`, data);
+    return response.data;
+  },
+  async deleteCompartment(compartmentId: string): Promise<void> {
+    await api.delete(`/equipment-checks/compartments/${compartmentId}`);
+  },
+  async reorderCompartments(templateId: string, orderedIds: string[]): Promise<void> {
+    await api.put(`/equipment-checks/templates/${templateId}/compartments/reorder`, { ordered_ids: orderedIds });
+  },
+
+  // --- Item CRUD ---
+  async addCheckItem(compartmentId: string, data: CheckTemplateItemCreate): Promise<CheckTemplateItem> {
+    const response = await api.post<CheckTemplateItem>(`/equipment-checks/compartments/${compartmentId}/items`, data);
+    return response.data;
+  },
+  async updateCheckItem(itemId: string, data: CheckTemplateItemUpdate): Promise<CheckTemplateItem> {
+    const response = await api.put<CheckTemplateItem>(`/equipment-checks/items/${itemId}`, data);
+    return response.data;
+  },
+  async deleteCheckItem(itemId: string): Promise<void> {
+    await api.delete(`/equipment-checks/items/${itemId}`);
+  },
+
+  // =====================================================================
+  // Shift Equipment Checks
+  // =====================================================================
+
+  async getShiftChecklists(shiftId: string): Promise<ShiftCheckSummary[]> {
+    const response = await api.get<ShiftCheckSummary[]>(`/equipment-checks/shifts/${shiftId}/checklists`);
+    return response.data;
+  },
+  async submitEquipmentCheck(shiftId: string, data: ShiftEquipmentCheckCreate): Promise<ShiftEquipmentCheckRecord> {
+    const response = await api.post<ShiftEquipmentCheckRecord>(`/equipment-checks/shifts/${shiftId}/checks`, data);
+    return response.data;
+  },
+  async getShiftChecks(shiftId: string, checkTiming?: string): Promise<ShiftEquipmentCheckRecord[]> {
+    const response = await api.get<ShiftEquipmentCheckRecord[]>(
+      `/equipment-checks/shifts/${shiftId}/checks`,
+      { params: checkTiming ? { check_timing: checkTiming } : undefined },
+    );
+    return response.data;
+  },
+  async getEquipmentCheck(checkId: string): Promise<ShiftEquipmentCheckRecord> {
+    const response = await api.get<ShiftEquipmentCheckRecord>(`/equipment-checks/checks/${checkId}`);
+    return response.data;
+  },
+  async getItemCheckHistory(itemId: string, limit?: number): Promise<CheckItemHistory[]> {
+    const response = await api.get<CheckItemHistory[]>(
+      `/equipment-checks/items/${itemId}/history`,
+      { params: limit ? { limit } : undefined },
+    );
+    return response.data;
+  },
+
+  // --- My Checklists ---
+  async getMyChecklists(): Promise<unknown[]> {
+    const response = await api.get<unknown[]>('/equipment-checks/my-checklists');
+    return response.data;
+  },
+  async getMyChecklistHistory(params?: { start_date?: string; end_date?: string; limit?: number; offset?: number }): Promise<ShiftEquipmentCheckRecord[]> {
+    const response = await api.get<ShiftEquipmentCheckRecord[]>('/equipment-checks/my-checklists/history', { params });
     return response.data;
   },
 };

@@ -314,3 +314,22 @@ export interface ShiftSignupResponse {
   position: string;
   status: AssignmentStatus;
 }
+
+// Re-export equipment check types
+export type {
+  CheckTemplateItem,
+  CheckTemplateItemCreate,
+  CheckTemplateItemUpdate,
+  CheckTemplateCompartment,
+  CheckTemplateCompartmentCreate,
+  CheckTemplateCompartmentUpdate,
+  EquipmentCheckTemplate,
+  EquipmentCheckTemplateCreate,
+  EquipmentCheckTemplateUpdate,
+  CheckItemResultSubmit,
+  ShiftEquipmentCheckCreate,
+  ShiftEquipmentCheckItemRecord,
+  ShiftEquipmentCheckRecord,
+  ShiftCheckSummary,
+  CheckItemHistory,
+} from './equipmentCheck';

@@ -50,12 +50,16 @@ const PatternsTab = lazyWithRetry(() => import("./scheduling/PatternsTab"));
 const ShiftReportsTab = lazyWithRetry(
   () => import("./scheduling/ShiftReportsTab"),
 );
+const MyChecklistsPage = lazyWithRetry(
+  () => import("./scheduling/MyChecklistsPage"),
+);
 
 type TabId =
   | "schedule"
   | "my-shifts"
   | "open-shifts"
   | "requests"
+  | "equipment-checks"
   | "templates"
   | "patterns"
   | "shift-reports"
@@ -160,6 +164,7 @@ const TAB_CONFIG: {
   { id: "my-shifts", label: "My Shifts", icon: Clock },
   { id: "open-shifts", label: "Open Shifts", icon: UserPlus },
   { id: "requests", label: "Requests", icon: ArrowLeftRight },
+  { id: "equipment-checks", label: "Equipment Checks", icon: ClipboardList },
   { id: "templates", label: "Templates", icon: ClipboardList, adminOnly: true },
   { id: "patterns", label: "Patterns", icon: Repeat, adminOnly: true },
   { id: "shift-reports", label: "Shift Reports", icon: FileText },
@@ -1069,6 +1074,7 @@ const SchedulingPage: React.FC = () => {
               <OpenShiftsTab onViewShift={handleShiftClick} />
             )}
             {activeTab === "requests" && <RequestsTab />}
+            {activeTab === "equipment-checks" && <MyChecklistsPage />}
             {activeTab === "templates" && <ShiftTemplatesPage />}
             {activeTab === "patterns" && <PatternsTab />}
             {activeTab === "shift-reports" && <ShiftReportsTab />}

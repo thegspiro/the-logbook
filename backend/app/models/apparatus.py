@@ -1887,3 +1887,177 @@ class ApparatusComponentNote(Base):
         Index("idx_component_notes_type", "note_type"),
         Index("idx_component_notes_provider", "service_provider_id"),
     )
+
+
+# =============================================================================
+# Equipment Check Templates
+# =============================================================================
+
+
+class EquipmentCheckTemplate(Base):
+    """
+    Master template for an equipment checklist.
+
+    Multiple templates can exist per apparatus (e.g., start-of-shift driver
+    vehicle check, start-of-shift officer medical check, end-of-shift check).
+    Templates can be defined at the apparatus-type level (defaults) or for a
+    specific apparatus (overrides).
+    """
+
+    __tablename__ = "equipment_check_templates"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    apparatus_id = Column(
+        String(36),
+        ForeignKey("apparatus.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    apparatus_type = Column(String(50), nullable=True)
+
+    name = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    check_timing = Column(String(30), nullable=False)  # start_of_shift, end_of_shift
+    assigned_positions = Column(JSON, nullable=True)  # e.g. ["officer","driver"]
+    is_active = Column(Boolean, default=True, nullable=False)
+    sort_order = Column(Integer, default=0, nullable=False)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # Relationships
+    compartments = relationship(
+        "CheckTemplateCompartment",
+        back_populates="template",
+        cascade="all, delete-orphan",
+        order_by="CheckTemplateCompartment.sort_order",
+    )
+
+    __table_args__ = (
+        Index("idx_equip_check_tmpl_org", "organization_id"),
+        Index("idx_equip_check_tmpl_apparatus", "apparatus_id"),
+        Index("idx_equip_check_tmpl_type", "apparatus_type"),
+    )
+
+    def __repr__(self):
+        return f"<EquipmentCheckTemplate(name={self.name})>"
+
+
+class CheckTemplateCompartment(Base):
+    """
+    A named section/area within a checklist template.
+
+    Represents a physical compartment on the apparatus (e.g.,
+    "Officer Door Entry", "Driver Side Action Area", "Cabinets").
+    Supports nesting via parent_compartment_id.
+    """
+
+    __tablename__ = "check_template_compartments"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    template_id = Column(
+        String(36),
+        ForeignKey("equipment_check_templates.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    sort_order = Column(Integer, default=0, nullable=False)
+    image_url = Column(String(500), nullable=True)
+    parent_compartment_id = Column(
+        String(36),
+        ForeignKey("check_template_compartments.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    template = relationship("EquipmentCheckTemplate", back_populates="compartments")
+    items = relationship(
+        "CheckTemplateItem",
+        back_populates="compartment",
+        cascade="all, delete-orphan",
+        order_by="CheckTemplateItem.sort_order",
+    )
+    children = relationship(
+        "CheckTemplateCompartment",
+        backref="parent",
+        remote_side="CheckTemplateCompartment.id",
+        cascade="all, delete-orphan",
+        single_parent=True,
+    )
+
+    __table_args__ = (
+        Index("idx_check_compartment_template", "template_id"),
+        Index("idx_check_compartment_parent", "parent_compartment_id"),
+    )
+
+    def __repr__(self):
+        return f"<CheckTemplateCompartment(name={self.name})>"
+
+
+class CheckTemplateItem(Base):
+    """
+    An individual item to check within a compartment.
+
+    Supports pass/fail, quantity (with state-mandated minimums),
+    and reading check types. Items can track expiration dates
+    and include reference images.
+    """
+
+    __tablename__ = "check_template_items"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    compartment_id = Column(
+        String(36),
+        ForeignKey("check_template_compartments.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    equipment_id = Column(
+        String(36),
+        ForeignKey("apparatus_equipment.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    name = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    sort_order = Column(Integer, default=0, nullable=False)
+    check_type = Column(
+        String(30), nullable=False, default="pass_fail"
+    )  # pass_fail, quantity, reading
+    is_required = Column(Boolean, default=False, nullable=False)
+    required_quantity = Column(Integer, nullable=True)
+    image_url = Column(String(500), nullable=True)
+    has_expiration = Column(Boolean, default=False, nullable=False)
+    expiration_date = Column(Date, nullable=True)
+    expiration_warning_days = Column(Integer, default=30, nullable=False)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    compartment = relationship("CheckTemplateCompartment", back_populates="items")
+
+    __table_args__ = (
+        Index("idx_check_item_compartment", "compartment_id"),
+        Index("idx_check_item_equipment", "equipment_id"),
+    )

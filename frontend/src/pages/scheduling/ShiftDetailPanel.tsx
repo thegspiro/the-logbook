@@ -16,6 +16,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   X, Users, Clock, MapPin, Truck, UserPlus, Check, XCircle,
   Loader2, Phone, ChevronDown, ChevronUp, Pencil, Trash2, Save, Palette, FileText,
+  ClipboardCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { userService } from '../../services/api';
@@ -23,6 +24,7 @@ import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ShiftRecord } from '../../modules/scheduling/services/api';
 import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
 import type { Assignment, ShiftCall } from '../../types/scheduling';
+import type { ShiftCheckSummary } from '../../modules/scheduling/types/equipmentCheck';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatTime, getTodayLocalDate } from '../../utils/dateFormatting';
@@ -55,6 +57,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const [calls, setCalls] = useState<ShiftCall[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCalls, setShowCalls] = useState(false);
+  const [showEquipmentChecks, setShowEquipmentChecks] = useState(false);
+  const [equipmentCheckSummaries, setEquipmentCheckSummaries] = useState<ShiftCheckSummary[]>([]);
 
   /** Extract HH:MM from an ISO datetime or time string. */
   const toTimeValue = (v?: string): string => {
@@ -144,13 +148,15 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     const load = async () => {
       setLoading(true);
       try {
-        const [assignData, callData] = await Promise.all([
+        const [assignData, callData, checkData] = await Promise.all([
           schedulingService.getShiftAssignments(shift.id),
           schedulingService.getShiftCalls(shift.id),
+          schedulingService.getShiftChecklists(shift.id).catch(() => [] as ShiftCheckSummary[]),
         ]);
         if (!cancelled) {
           setAssignments(assignData);
           setCalls(callData);
+          setEquipmentCheckSummaries(checkData);
         }
       } catch (err) {
         if (!cancelled) {
@@ -1055,6 +1061,68 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               )
             )}
           </div>
+
+          {/* Equipment Checks */}
+          {equipmentCheckSummaries.length > 0 && (
+            <div>
+              <button onClick={() => setShowEquipmentChecks(!showEquipmentChecks)}
+                className="flex items-center justify-between w-full text-left py-2"
+              >
+                <h3 className="text-base font-semibold text-theme-text-primary flex items-center gap-2">
+                  <ClipboardCheck className="w-4 h-4" /> Equipment Checks ({equipmentCheckSummaries.length})
+                </h3>
+                {showEquipmentChecks ? <ChevronUp className="w-4 h-4 text-theme-text-muted" /> : <ChevronDown className="w-4 h-4 text-theme-text-muted" />}
+              </button>
+              {showEquipmentChecks && (
+                <div className="space-y-2 mt-2">
+                  {(['start_of_shift', 'end_of_shift'] as const).map(timing => {
+                    const checksForTiming = equipmentCheckSummaries.filter(s => s.checkTiming === timing);
+                    if (checksForTiming.length === 0) return null;
+                    return (
+                      <div key={timing}>
+                        <p className="text-xs font-medium text-theme-text-muted uppercase tracking-wide mb-1">
+                          {timing === 'start_of_shift' ? 'Start of Shift' : 'End of Shift'}
+                        </p>
+                        {checksForTiming.map(summary => (
+                          <div key={summary.templateId} className="p-3 bg-theme-surface-hover/30 rounded-lg border border-theme-surface-border mb-2">
+                            <div className="flex items-center justify-between">
+                              <p className="text-sm font-medium text-theme-text-primary">{summary.templateName}</p>
+                              {summary.isCompleted ? (
+                                summary.overallStatus === 'pass' ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                                    <Check className="w-3 h-3" /> Pass
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                                    <XCircle className="w-3 h-3" /> Fail ({summary.failedItems})
+                                  </span>
+                                )
+                              ) : (
+                                summary.completedItems > 0 ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                                    In Progress {summary.completedItems}/{summary.totalItems}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+                                    Not Started
+                                  </span>
+                                )
+                              )}
+                            </div>
+                            {summary.checkedByName && (
+                              <p className="text-xs text-theme-text-muted mt-1">
+                                Checked by {summary.checkedByName}{summary.checkedAt ? ` at ${formatTime(summary.checkedAt, tz)}` : ''}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </>
