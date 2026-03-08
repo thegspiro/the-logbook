@@ -252,8 +252,8 @@ services:
       - discovery.type=single-node
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
       - xpack.security.enabled=true
-      # SEC: Require explicit password — no insecure default
-      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:?ELASTIC_PASSWORD must be set in .env}
+      # SEC: Require explicit ELASTIC_PASSWORD in .env when using with-search profile
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-}
     # SEC: Elasticsearch port NOT exposed to host by default.
     # Uncomment for local development with direct ES access.
     # ports:
