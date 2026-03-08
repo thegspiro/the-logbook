@@ -241,6 +241,60 @@ export const scheduledEmailsService = {
 };
 
 // ============================================
+// Message History
+// ============================================
+
+export interface MessageHistoryRecord {
+  id: string;
+  organization_id?: string;
+  to_email: string;
+  cc_emails?: string[];
+  bcc_emails?: string[];
+  subject: string;
+  template_type?: string;
+  status: 'sent' | 'failed';
+  error_message?: string;
+  recipient_count: number;
+  sent_at: string;
+  sent_by?: string;
+}
+
+export interface MessageHistoryListResponse {
+  items: MessageHistoryRecord[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
+export interface SendTestEmailRequest {
+  to_email: string;
+  template_id?: string | undefined;
+}
+
+export const messageHistoryService = {
+  async list(params?: {
+    skip?: number | undefined;
+    limit?: number | undefined;
+    status_filter?: string | undefined;
+    search?: string | undefined;
+  }): Promise<MessageHistoryListResponse> {
+    const response = await api.get<MessageHistoryListResponse>(
+      '/message-history',
+      { params },
+    );
+    return response.data;
+  },
+
+  async sendTestEmail(data: SendTestEmailRequest): Promise<MessageHistoryRecord> {
+    const response = await api.post<MessageHistoryRecord>(
+      '/message-history/test-email',
+      data,
+    );
+    return response.data;
+  },
+};
+
+// ============================================
 // Locations Service
 // ============================================
 

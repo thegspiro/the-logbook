@@ -81,7 +81,7 @@ export interface FieldEditorProps {
 }
 
 const inputClass =
-  'w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-pink-500 focus:border-pink-500';
+  'w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-pink-500 focus:border-pink-500';
 
 const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields = [], editingFieldId }: FieldEditorProps) => {
   const isEditing = !!field;

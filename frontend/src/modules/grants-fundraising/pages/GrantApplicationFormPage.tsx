@@ -14,7 +14,7 @@ import type { GrantApplication, GrantOpportunity } from '../types';
 import { ApplicationStatus, GrantPriority } from '../types';
 
 const inputClass =
-  'w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-secondary focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500';
+  'w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-secondary focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500';
 const selectClass = inputClass;
 const labelClass = 'block text-sm font-medium text-theme-text-secondary mb-1';
 

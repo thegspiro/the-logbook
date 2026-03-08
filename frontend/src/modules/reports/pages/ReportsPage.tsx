@@ -467,14 +467,14 @@ export const ReportsPage: React.FC = () => {
                 type="date"
                 value={startDate}
                 onChange={(e) => setCustomDates(e.target.value, endDate)}
-                className="form-input bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring rounded-sm border px-3 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring rounded-sm border px-3 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
               />
               <span className="text-theme-text-muted text-sm">to</span>
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => setCustomDates(startDate, e.target.value)}
-                className="form-input bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring rounded-sm border px-3 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring rounded-sm border px-3 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
               />
             </div>
           </div>

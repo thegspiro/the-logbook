@@ -3,3 +3,4 @@ export { TemplateEditor } from './TemplateEditor';
 export { TemplatePreview } from './TemplatePreview';
 export { default as ScheduleEmailForm } from './ScheduleEmailForm';
 export { default as ScheduledEmailList } from './ScheduledEmailList';
+export { default as MessageHistoryList } from './MessageHistoryList';

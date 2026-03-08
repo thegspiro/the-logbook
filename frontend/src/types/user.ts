@@ -22,6 +22,7 @@ export interface User {
   station?: string | undefined;
   status: UserStatus;
   membership_type?: string | undefined;
+  compliance_exempt?: boolean | undefined;
   date_of_birth?: string | undefined;
   hire_date?: string | undefined;
   address_street?: string | undefined;

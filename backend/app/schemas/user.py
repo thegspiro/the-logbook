@@ -140,6 +140,7 @@ class UserResponse(UserBase):
     personal_email: Optional[str] = None
     status: str
     membership_type: Optional[str] = None
+    compliance_exempt: bool = False
     email_verified: bool
     mfa_enabled: bool
     last_login_at: Optional[datetime] = None
@@ -193,6 +194,7 @@ class UserListResponse(BaseModel):
     photo_url: Optional[str] = None
     status: str
     membership_type: Optional[str] = None
+    compliance_exempt: bool = False
     hire_date: Optional[date] = None
 
     # Department info
