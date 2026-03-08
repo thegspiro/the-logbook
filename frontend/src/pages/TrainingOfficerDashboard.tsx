@@ -508,7 +508,7 @@ const StatCard: React.FC<StatCardProps> = ({ icon: Icon, label, value, subtitle,
           {subtitle && <p className="text-theme-text-muted text-xs mt-1">{subtitle}</p>}
         </div>
         <div className={`${colorClasses[color]} rounded-full p-3`}>
-          <Icon className="w-6 h-6 text-theme-text-primary" />
+          <Icon className="w-6 h-6 text-white" />
         </div>
       </div>
     </div>
@@ -541,7 +541,7 @@ const NavigationCard: React.FC<NavigationCardProps> = ({ icon: Icon, title, desc
       className="card group hover:bg-theme-surface-hover p-6 text-left transition-all"
     >
       <div className={`bg-linear-to-br ${colorClasses[color]} rounded-lg p-3 w-fit mb-4 group-hover:scale-110 transition-transform`}>
-        <Icon className="w-6 h-6 text-theme-text-primary" />
+        <Icon className="w-6 h-6 text-white" />
       </div>
       <h3 className="text-theme-text-primary font-bold text-lg mb-2">{title}</h3>
       <p className="text-theme-text-muted text-sm">{description}</p>

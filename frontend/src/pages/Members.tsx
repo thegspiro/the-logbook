@@ -248,7 +248,7 @@ const Members: React.FC = () => {
         <div className="flex items-center justify-between mb-6 sm:mb-8">
           <div className="flex items-center space-x-3">
             <div className="bg-blue-600 rounded-lg p-2">
-              <Users className="w-6 h-6 text-theme-text-primary" />
+              <Users className="w-6 h-6 text-white" />
             </div>
             <div>
               <h1 className="text-theme-text-primary text-xl sm:text-2xl font-bold">Membership Management</h1>

@@ -108,7 +108,7 @@ export const ApparatusListPage: React.FC = () => {
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center space-x-3 min-w-0">
               <div className="bg-red-600 rounded-lg p-2 shrink-0">
-                <Truck className="w-6 h-6 text-theme-text-primary" />
+                <Truck className="w-6 h-6 text-white" />
               </div>
               <div className="min-w-0">
                 <h1 className="text-theme-text-primary text-lg sm:text-xl font-bold truncate">Apparatus Management</h1>

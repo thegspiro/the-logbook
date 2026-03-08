@@ -191,7 +191,7 @@ const MinutesPage: React.FC = () => {
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center space-x-3">
           <div className="bg-cyan-600 rounded-lg p-2">
-            <ClipboardList className="w-6 h-6 text-theme-text-primary" aria-hidden="true" />
+            <ClipboardList className="w-6 h-6 text-white" aria-hidden="true" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-theme-text-primary">Meeting Minutes</h1>

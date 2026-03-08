@@ -271,7 +271,7 @@ export const ApparatusFormPage: React.FC = () => {
               </button>
               <div className="flex items-center space-x-3">
                 <div className="bg-red-600 rounded-lg p-2">
-                  <Truck className="w-6 h-6 text-theme-text-primary" />
+                  <Truck className="w-6 h-6 text-white" />
                 </div>
                 <div>
                   <h1 className="text-theme-text-primary text-xl font-bold">

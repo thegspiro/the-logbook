@@ -180,9 +180,9 @@ const CreateTrainingSessionPage: React.FC = () => {
                       }`}
                     >
                       {isComplete ? (
-                        <CheckCircle className="w-6 h-6 text-theme-text-primary" />
+                        <CheckCircle className="w-6 h-6 text-white" />
                       ) : (
-                        <Icon className={`w-6 h-6 ${isActive ? 'text-theme-text-primary' : 'text-theme-text-muted'}`} />
+                        <Icon className={`w-6 h-6 ${isActive ? 'text-white' : 'text-theme-text-muted'}`} />
                       )}
                     </div>
                     <p
