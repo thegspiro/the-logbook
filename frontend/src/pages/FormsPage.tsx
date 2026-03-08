@@ -1307,7 +1307,7 @@ const FormsPage: React.FC = () => {
                                 <QrCode className="w-4 h-4" aria-hidden="true" />
                                 <span>QR Code</span>
                               </label>
-                              <div className="flex flex-col items-center p-4 bg-white dark:bg-slate-900 rounded-lg border border-theme-surface-border">
+                              <div className="flex flex-col items-center p-4 bg-theme-surface rounded-lg border border-theme-surface-border">
                                 <QRCodeSVG
                                   id={`qr-${form.public_slug}`}
                                   value={getPublicUrl(form.public_slug)}

@@ -70,7 +70,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({ formData, onChange, onSubmi
               type="checkbox"
               checked={formData.require_approval ?? true}
               onChange={(e) => onChange({ ...formData, require_approval: e.target.checked })}
-              className="w-4 h-4 rounded-sm border-gray-300"
+              className="w-4 h-4 rounded-sm border-theme-input-border"
             />
             <span className="text-sm text-theme-text-secondary">Require approval</span>
           </label>

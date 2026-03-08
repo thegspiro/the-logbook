@@ -51,7 +51,7 @@ interface ItemResult {
 // ============================================================================
 
 const inputClass =
-  'w-full rounded-md border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
+  'w-full rounded-md border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:border-theme-focus-ring focus:outline-none focus:ring-1 focus:ring-theme-focus-ring';
 
 // ============================================================================
 // Helpers
@@ -357,10 +357,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             <input
               type="number"
               min="0"
-              className={`w-24 rounded-md border px-2 py-1 text-sm text-theme-text-primary bg-theme-surface focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+              className={`w-24 rounded-md border px-2 py-1 text-sm text-theme-text-primary bg-theme-surface focus:outline-none focus:ring-1 focus:ring-theme-focus-ring ${
                 quantityBelowRequired
                   ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
-                  : 'border-theme-surface-border focus:border-blue-500'
+                  : 'border-theme-surface-border focus:border-theme-focus-ring'
               }`}
               value={result?.quantityFound ?? ''}
               onChange={(e) => {
