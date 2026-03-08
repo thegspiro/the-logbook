@@ -21,7 +21,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   Settings,
-  Loader2,
   Shield,
   Send,
   BarChart3,
@@ -32,6 +31,8 @@ import { useTimezone } from '../hooks/useTimezone';
 import { SubmissionStatus } from '../constants/enums';
 import type { MyTrainingSummary, TrainingModuleConfig as TMConfig, RequirementDetail } from '../types/training';
 import { getErrorMessage } from '../utils/errorHandling';
+import { SkeletonPage } from '../components/ux/Skeleton';
+import { getProgressBarColor, getPercentageBarColor } from '../utils/trainingColors';
 
 // ==================== Helpers ====================
 
@@ -76,10 +77,10 @@ const Section: React.FC<{ title: string; icon: React.ElementType; children: Reac
         className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-theme-surface-hover transition-colors"
       >
         <div className="flex items-center space-x-3">
-          <Icon className="w-5 h-5 text-red-500" />
+          <Icon className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />
           <h2 className="text-lg font-semibold text-theme-text-primary">{title}</h2>
         </div>
-        {open ? <ChevronUp className="w-5 h-5 text-theme-text-muted" /> : <ChevronDown className="w-5 h-5 text-theme-text-muted" />}
+        {open ? <ChevronUp className="w-5 h-5 text-theme-text-muted" aria-hidden="true" /> : <ChevronDown className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />}
       </button>
       {open && <div className="px-5 pb-5">{children}</div>}
     </div>
@@ -357,9 +358,7 @@ const MyTrainingPage: React.FC = () => {
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="w-8 h-8 text-red-500 animate-spin" />
-        </div>
+        <SkeletonPage rows={5} showStats />
       </div>
     );
   }
@@ -517,12 +516,7 @@ const MyTrainingPage: React.FC = () => {
                         {/* Progress bar */}
                         <div className="w-full bg-theme-surface-hover rounded-full h-2 mb-2">
                           <div
-                            className={`h-2 rounded-full transition-all ${
-                              req.is_met ? 'bg-green-500' :
-                              isOverdue ? 'bg-red-500' :
-                              req.progress_percentage >= 50 ? 'bg-blue-500' :
-                              'bg-yellow-500'
-                            }`}
+                            className={`h-2 rounded-full transition-all ${getProgressBarColor(req.progress_percentage, req.is_met, isOverdue)}`}
                             style={{ width: `${Math.min(req.progress_percentage, 100)}%` }}
                           />
                         </div>
@@ -621,11 +615,7 @@ const MyTrainingPage: React.FC = () => {
                     </div>
                     <div className="w-full bg-theme-surface-hover rounded-full h-2 mb-2">
                       <div
-                        className={`h-2 rounded-full transition-all ${
-                          e.progress_percentage >= 75 ? 'bg-green-500' :
-                          e.progress_percentage >= 50 ? 'bg-blue-500' :
-                          e.progress_percentage >= 25 ? 'bg-yellow-500' : 'bg-red-500'
-                        }`}
+                        className={`h-2 rounded-full transition-all ${getPercentageBarColor(e.progress_percentage)}`}
                         style={{ width: `${e.progress_percentage}%` }}
                       />
                     </div>

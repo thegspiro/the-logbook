@@ -13,6 +13,9 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { trainingService } from '../services/api';
+import { SkeletonCardGrid } from '../components/ux/Skeleton';
+import { Pagination } from '../components/ux/Pagination';
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '../constants/config';
 import type {
   TrainingCourse,
   TrainingCourseCreate,
@@ -299,14 +302,9 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
                   onClick={() => toggleCategory(cat.id)}
                   className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                     formData.category_ids.includes(cat.id)
-                      ? 'text-theme-text-primary'
+                      ? 'bg-red-600 text-white'
                       : 'bg-theme-surface text-theme-text-muted hover:bg-theme-surface-hover'
                   }`}
-                  style={
-                    formData.category_ids.includes(cat.id)
-                      ? { backgroundColor: cat.color || '#DC2626' }
-                      : undefined
-                  }
                 >
                   {cat.name}
                 </button>
@@ -387,6 +385,10 @@ const CourseLibraryPage: React.FC = () => {
   const [filterCategory, setFilterCategory] = useState<string>('');
   const [showFilters, setShowFilters] = useState(false);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+
   // Modal state
   const [showModal, setShowModal] = useState(false);
   const [editCourse, setEditCourse] = useState<TrainingCourse | null>(null);
@@ -437,6 +439,16 @@ const CourseLibraryPage: React.FC = () => {
     });
   }, [courses, searchTerm, filterType, filterCategory]);
 
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterType, filterCategory]);
+
+  const paginatedCourses = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredCourses.slice(start, start + pageSize);
+  }, [filteredCourses, currentPage, pageSize]);
+
   const parentCategories = categories.filter((c) => !c.parent_category_id);
 
   // Category lookup for display
@@ -473,7 +485,7 @@ const CourseLibraryPage: React.FC = () => {
         <div className="mb-6 space-y-3">
           <div className="flex items-center space-x-3">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" aria-hidden="true" />
               <input
                 type="text"
                 value={searchTerm}
@@ -530,13 +542,10 @@ const CourseLibraryPage: React.FC = () => {
 
         {/* Course Grid */}
         {loading ? (
-          <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-red-500" />
-            <p className="text-theme-text-muted mt-4">Loading courses...</p>
-          </div>
+          <SkeletonCardGrid count={6} />
         ) : filteredCourses.length === 0 ? (
           <div className="text-center py-16 bg-theme-surface-secondary rounded-lg">
-            <BookOpen className="w-16 h-16 text-theme-text-secondary mx-auto mb-4" />
+            <BookOpen className="w-16 h-16 text-theme-text-secondary mx-auto mb-4" aria-hidden="true" />
             <p className="text-theme-text-muted text-lg mb-2">
               {searchTerm || filterType || filterCategory ? 'No courses match your filters' : 'No courses in your library yet'}
             </p>
@@ -550,8 +559,9 @@ const CourseLibraryPage: React.FC = () => {
             )}
           </div>
         ) : (
+          <>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {filteredCourses.map((course) => (
+            {paginatedCourses.map((course) => (
               <div
                 key={course.id}
                 className="card-secondary hover:bg-theme-surface-hover p-5 transition-colors"
@@ -621,8 +631,7 @@ const CourseLibraryPage: React.FC = () => {
                       return (
                         <span
                           key={catId}
-                          className="px-2 py-0.5 text-xs rounded-full text-theme-text-primary"
-                          style={{ backgroundColor: (cat.color || '#6B7280') + '40' }}
+                          className="px-2 py-0.5 text-xs rounded-full bg-theme-surface-secondary text-theme-text-secondary border border-theme-surface-border"
                         >
                           {cat.name}
                         </span>
@@ -633,6 +642,18 @@ const CourseLibraryPage: React.FC = () => {
               </div>
             ))}
           </div>
+          {filteredCourses.length > pageSize && (
+            <Pagination
+              currentPage={currentPage}
+              totalItems={filteredCourses.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }}
+              pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
+              className="mt-6"
+            />
+          )}
+          </>
         )}
       </main>
 

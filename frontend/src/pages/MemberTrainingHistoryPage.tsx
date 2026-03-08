@@ -9,8 +9,9 @@
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { trainingService, userService } from '../services/api';
+import { Breadcrumbs } from '../components/ux/Breadcrumbs';
 import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import type { TrainingRecord } from '../types/training';
@@ -22,7 +23,6 @@ type SortOrder = 'asc' | 'desc';
 
 export const MemberTrainingHistoryPage: React.FC = () => {
   const { userId } = useParams<{ userId: string }>();
-  const navigate = useNavigate();
   const tz = useTimezone();
 
   const [user, setUser] = useState<UserWithRoles | null>(null);
@@ -79,13 +79,13 @@ export const MemberTrainingHistoryPage: React.FC = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
-        return 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400';
+        return 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400';
       case 'in_progress':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400';
+        return 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400';
       case 'scheduled':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400';
+        return 'bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400';
       case 'failed':
-        return 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400';
+        return 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400';
       case 'cancelled':
         return 'bg-theme-surface-secondary text-theme-text-muted';
       default:
@@ -192,12 +192,11 @@ export const MemberTrainingHistoryPage: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-6">
-          <button
-            onClick={() => navigate(`/members/${userId}`)}
-            className="text-sm text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center gap-1"
-          >
-            &larr; Back to Profile
-          </button>
+          <Breadcrumbs items={[
+            { label: 'Members', path: '/members' },
+            { label: user.full_name || user.username, path: `/members/${userId}` },
+            { label: 'Training History' },
+          ]} />
 
           <div className="flex items-center justify-between">
             <div>
@@ -359,12 +358,12 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                             {training.status.replace('_', ' ')}
                           </span>
                           {isExpired(training) && (
-                            <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium w-fit bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400">
+                            <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium w-fit bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400">
                               expired
                             </span>
                           )}
                           {!isExpired(training) && isExpiringSoon(training) && (
-                            <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium w-fit bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400">
+                            <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium w-fit bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400">
                               expiring soon
                             </span>
                           )}
