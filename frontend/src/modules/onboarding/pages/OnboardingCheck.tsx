@@ -274,6 +274,16 @@ const OnboardingCheck: React.FC = () => {
 
     const health = healthResponse.data;
 
+    // When the backend is already fully started, the /health endpoint returns
+    // a minimal response: {status, ready} without checks/version/startup.
+    // Treat this as all services ready — skip individual service checks.
+    if (health.ready && !health.checks) {
+      updateServiceStatus('Backend API', ConnectionStatus.CONNECTED);
+      updateServiceStatus('Database', ConnectionStatus.CONNECTED);
+      updateServiceStatus('Cache (Redis)', ConnectionStatus.CONNECTED);
+      return true;
+    }
+
     // Check for schema errors
     if (health.schema_error) {
       setSchemaError(health.schema_error);
