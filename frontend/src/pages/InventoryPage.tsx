@@ -930,7 +930,7 @@ const InventoryPage: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div className="flex items-center space-x-3 min-w-0">
             <div className="bg-emerald-600 rounded-lg p-2 shrink-0">
-              <Package className="w-6 h-6 text-theme-text-primary" aria-hidden="true" />
+              <Package className="w-6 h-6 text-white" aria-hidden="true" />
             </div>
             <div className="min-w-0">
               <h1 className="text-theme-text-primary text-xl sm:text-2xl font-bold">Equipment & Inventory</h1>

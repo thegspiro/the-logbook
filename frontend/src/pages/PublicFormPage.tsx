@@ -341,7 +341,7 @@ const PublicFormPage = () => {
             {form.organization_name && (
               <p className="text-blue-100 text-sm mb-1">{clean(form.organization_name)}</p>
             )}
-            <h1 className="text-2xl font-bold text-theme-text-primary">{clean(form.name)}</h1>
+            <h1 className="text-2xl font-bold text-white">{clean(form.name)}</h1>
             {form.description && (
               <p className="text-blue-100 mt-2">{clean(form.description)}</p>
             )}

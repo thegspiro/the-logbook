@@ -471,7 +471,7 @@ const IntegrationsPage: React.FC = () => {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-3">
             <div className="bg-indigo-600 rounded-lg p-2">
-              <Plug className="w-6 h-6 text-theme-text-primary" aria-hidden="true" />
+              <Plug className="w-6 h-6 text-white" aria-hidden="true" />
             </div>
             <div>
               <h1 className="text-theme-text-primary text-2xl font-bold">External Integrations</h1>
