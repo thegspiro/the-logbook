@@ -285,7 +285,7 @@ const PipelineSummary: React.FC<PipelineSummaryProps> = ({ items }) => {
           const item = statusMap.get(status);
           const count = item?.count ?? 0;
           const colorClass =
-            APPLICATION_STATUS_COLORS[status] ?? 'bg-gray-100 text-gray-800';
+            APPLICATION_STATUS_COLORS[status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400';
 
           return (
             <Link
@@ -417,7 +417,7 @@ const ComplianceTasksDue: React.FC<ComplianceTasksProps> = ({
         {tasks.map((task) => {
           const statusColor =
             COMPLIANCE_STATUS_COLORS[task.status] ??
-            'bg-gray-100 text-gray-800';
+            'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400';
           const days = daysUntil(task.dueDate);
           const urgentClass =
             !isNaN(days) && days < 7 ? 'text-red-600' : 'text-theme-text-secondary';

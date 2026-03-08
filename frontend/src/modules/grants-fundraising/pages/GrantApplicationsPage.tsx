@@ -143,7 +143,7 @@ const PipelineCard: React.FC<PipelineCardProps> = ({ application, timezone }) =>
 
       <div className="mt-2 flex items-center gap-2">
         <span
-          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[application.priority] ?? 'bg-gray-100 text-gray-700'}`}
+          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[application.priority] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400'}`}
         >
           {PRIORITY_LABELS[application.priority] ?? application.priority}
         </span>
@@ -174,7 +174,7 @@ const PipelineColumn: React.FC<PipelineColumnProps> = ({
   timezone,
 }) => {
   const colorClasses =
-    APPLICATION_STATUS_COLORS[status] ?? 'bg-gray-100 text-gray-800';
+    APPLICATION_STATUS_COLORS[status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400';
 
   return (
     <div className="flex h-full w-72 flex-shrink-0 flex-col rounded-lg border border-theme-surface-border bg-theme-bg">
@@ -632,7 +632,7 @@ export const GrantApplicationsPage: React.FC = () => {
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <span
-                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${APPLICATION_STATUS_COLORS[app.applicationStatus] ?? 'bg-gray-100 text-gray-800'}`}
+                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${APPLICATION_STATUS_COLORS[app.applicationStatus] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
                         >
                           {APPLICATION_STATUS_LABELS[app.applicationStatus] ??
                             app.applicationStatus}
@@ -651,7 +651,7 @@ export const GrantApplicationsPage: React.FC = () => {
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <span
-                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[app.priority] ?? 'bg-gray-100 text-gray-700'}`}
+                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[app.priority] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400'}`}
                         >
                           {PRIORITY_LABELS[app.priority] ?? app.priority}
                         </span>

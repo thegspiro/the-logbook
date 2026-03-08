@@ -512,13 +512,13 @@ export const GrantDetailPage: React.FC = () => {
                   {application.grantProgramName}
                 </h1>
                 <span
-                  className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${APPLICATION_STATUS_COLORS[application.applicationStatus] ?? 'bg-gray-100 text-gray-800'}`}
+                  className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${APPLICATION_STATUS_COLORS[application.applicationStatus] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
                 >
                   {APPLICATION_STATUS_LABELS[application.applicationStatus] ??
                     application.applicationStatus}
                 </span>
                 <span
-                  className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${PRIORITY_COLORS[application.priority] ?? 'bg-gray-100 text-gray-700'}`}
+                  className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${PRIORITY_COLORS[application.priority] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400'}`}
                 >
                   {PRIORITY_LABELS[application.priority] ?? application.priority}
                 </span>
@@ -1027,7 +1027,7 @@ export const GrantDetailPage: React.FC = () => {
                             {task.title}
                           </h4>
                           <span
-                            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[task.priority] ?? 'bg-gray-100 text-gray-700'}`}
+                            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[task.priority] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400'}`}
                           >
                             {PRIORITY_LABELS[task.priority] ?? task.priority}
                           </span>
@@ -1065,7 +1065,7 @@ export const GrantDetailPage: React.FC = () => {
                               e.target.value as ComplianceTaskStatus,
                             )
                           }
-                          className={`rounded-full border-0 px-2.5 py-0.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-red-500 ${COMPLIANCE_STATUS_COLORS[task.status] ?? 'bg-gray-100 text-gray-800'}`}
+                          className={`rounded-full border-0 px-2.5 py-0.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-red-500 ${COMPLIANCE_STATUS_COLORS[task.status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
                         >
                           {Object.entries(COMPLIANCE_STATUS_LABELS).map(
                             ([value, label]) => (

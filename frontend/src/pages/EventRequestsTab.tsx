@@ -1076,7 +1076,7 @@ const EventRequestsTab: React.FC = () => {
                                       ) : (
                                         <p className="text-theme-text-primary">
                                           {entry.new_status && (
-                                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-sm text-xs font-medium mr-1 ${STATUS_CONFIG[entry.new_status as EventRequestStatus]?.color || 'bg-gray-100 text-gray-800'}`}>
+                                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-sm text-xs font-medium mr-1 ${STATUS_CONFIG[entry.new_status as EventRequestStatus]?.color || 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}>
                                               {STATUS_CONFIG[entry.new_status as EventRequestStatus]?.label || entry.new_status}
                                             </span>
                                           )}

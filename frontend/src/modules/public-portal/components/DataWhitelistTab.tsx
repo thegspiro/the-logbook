@@ -198,8 +198,8 @@ export const DataWhitelistTab: React.FC = () => {
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-md p-4">
-        <p className="text-red-800">Error loading data whitelist: {error}</p>
+      <div className="bg-red-50 border border-red-200 dark:bg-red-500/10 dark:border-red-500/30 rounded-md p-4">
+        <p className="text-red-800 dark:text-red-400">Error loading data whitelist: {error}</p>
       </div>
     );
   }

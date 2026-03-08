@@ -41,11 +41,11 @@ const DONOR_TYPE_LABELS: Record<string, string> = {
 };
 
 const DONOR_TYPE_COLORS: Record<string, string> = {
-  individual: 'bg-blue-100 text-blue-800',
-  business: 'bg-purple-100 text-purple-800',
-  foundation: 'bg-green-100 text-green-800',
-  government: 'bg-indigo-100 text-indigo-800',
-  other: 'bg-gray-100 text-gray-800',
+  individual: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
+  business: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400',
+  foundation: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+  government: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-400',
+  other: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
 };
 
 const DONOR_TYPE_OPTIONS: { value: DonorType; label: string }[] = [
@@ -510,7 +510,7 @@ export const DonorsPage: React.FC = () => {
                     {/* Type Badge */}
                     <td className="px-4 py-3">
                       <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${DONOR_TYPE_COLORS[donor.donorType] ?? 'bg-gray-100 text-gray-800'}`}
+                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${DONOR_TYPE_COLORS[donor.donorType] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
                       >
                         {DONOR_TYPE_LABELS[donor.donorType] ?? donor.donorType}
                       </span>

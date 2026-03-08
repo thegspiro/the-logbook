@@ -51,15 +51,15 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  equipment: 'bg-blue-100 text-blue-800',
-  staffing: 'bg-purple-100 text-purple-800',
-  training: 'bg-green-100 text-green-800',
-  prevention: 'bg-orange-100 text-orange-800',
-  facilities: 'bg-indigo-100 text-indigo-800',
-  vehicles: 'bg-red-100 text-red-800',
-  wellness: 'bg-teal-100 text-teal-800',
-  community: 'bg-yellow-100 text-yellow-800',
-  other: 'bg-gray-100 text-gray-800',
+  equipment: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
+  staffing: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400',
+  training: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+  prevention: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
+  facilities: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-400',
+  vehicles: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+  wellness: 'bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-400',
+  community: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
+  other: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
 };
 
 interface FederalProgram {
@@ -278,7 +278,7 @@ export const GrantOpportunitiesPage: React.FC = () => {
                   </p>
                 </div>
                 <span
-                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${CATEGORY_COLORS[program.category] ?? 'bg-gray-100 text-gray-800'}`}
+                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${CATEGORY_COLORS[program.category] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
                 >
                   {CATEGORY_LABELS[program.category] ?? program.category}
                 </span>
@@ -330,7 +330,7 @@ export const GrantOpportunitiesPage: React.FC = () => {
                       </p>
                     </div>
                     <span
-                      className={`inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${CATEGORY_COLORS[opp.category] ?? 'bg-gray-100 text-gray-800'}`}
+                      className={`inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${CATEGORY_COLORS[opp.category] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
                     >
                       {CATEGORY_LABELS[opp.category] ?? opp.category}
                     </span>

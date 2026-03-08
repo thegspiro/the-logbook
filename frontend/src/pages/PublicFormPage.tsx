@@ -351,8 +351,8 @@ const PublicFormPage = () => {
         {/* Form */}
         <form onSubmit={(e) => { void handleSubmit(e); }} className="bg-theme-surface rounded-xl shadow-lg p-8">
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-red-700 text-sm">{error}</p>
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 dark:bg-red-500/10 dark:border-red-500/30 rounded-lg">
+              <p className="text-red-700 dark:text-red-400 text-sm">{error}</p>
             </div>
           )}
 
