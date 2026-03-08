@@ -35,13 +35,13 @@ const CAMPAIGN_TYPE_LABELS: Record<string, string> = {
 };
 
 const CAMPAIGN_TYPE_COLORS: Record<string, string> = {
-  general: 'bg-gray-100 text-gray-700',
-  equipment: 'bg-blue-100 text-blue-700',
-  training: 'bg-green-100 text-green-700',
-  community: 'bg-yellow-100 text-yellow-700',
-  memorial: 'bg-purple-100 text-purple-700',
-  event: 'bg-indigo-100 text-indigo-700',
-  other: 'bg-gray-100 text-gray-600',
+  general: 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400',
+  equipment: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
+  training: 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400',
+  community: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400',
+  memorial: 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400',
+  event: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400',
+  other: 'bg-gray-100 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -459,13 +459,13 @@ const CampaignsPage: React.FC = () => {
                   </h3>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
                     <span
-                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${CAMPAIGN_TYPE_COLORS[campaign.campaignType] ?? 'bg-gray-100 text-gray-700'}`}
+                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${CAMPAIGN_TYPE_COLORS[campaign.campaignType] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400'}`}
                     >
                       {CAMPAIGN_TYPE_LABELS[campaign.campaignType] ??
                         campaign.campaignType}
                     </span>
                     <span
-                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${CAMPAIGN_STATUS_COLORS[campaign.status] ?? 'bg-gray-100 text-gray-800'}`}
+                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${CAMPAIGN_STATUS_COLORS[campaign.status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
                     >
                       {STATUS_LABELS[campaign.status] ?? campaign.status}
                     </span>

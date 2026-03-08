@@ -171,7 +171,7 @@ const ActionItemsPage: React.FC = () => {
                     {item.description}
                   </p>
                   <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium ${STATUS_BADGES[item.status] || 'bg-gray-100 text-gray-800'}`}>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium ${STATUS_BADGES[item.status] || 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}>
                       {item.status.replace('_', ' ')}
                     </span>
                     {item.priority && (
