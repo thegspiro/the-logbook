@@ -207,8 +207,8 @@ async def get_or_create_positions(
             await session.execute(
                 text(
                     "INSERT INTO positions (id, organization_id, name, slug, "
-                    "is_system, priority) "
-                    "VALUES (:id, :oid, :name, :slug, 1, :priority)"
+                    "is_system, priority, permissions) "
+                    "VALUES (:id, :oid, :name, :slug, 1, :priority, '[]')"
                 ),
                 {
                     "id": pid,
