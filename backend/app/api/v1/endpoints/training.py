@@ -897,6 +897,24 @@ async def get_compliance_summary(
             detail="User not found",
         )
     user_role_ids = [str(r.id) for r in target_user.roles] if target_user.roles else []
+    member_membership_type = target_user.membership_type or "active"
+
+    # Check if member is exempt from compliance tracking
+    is_exempt = bool(target_user.compliance_exempt)
+
+    if is_exempt:
+        return ComplianceSummary(
+            user_id=user_id,
+            requirements_met=0,
+            requirements_total=0,
+            certs_expiring_soon=0,
+            certs_expired=0,
+            compliance_status="exempt",
+            compliance_label="Exempt",
+            hours_this_year=stats.hours_this_year,
+            active_certifications=stats.active_certifications,
+            is_exempt=True,
+        )
 
     # Get all active requirements
     requirements_result = await db.execute(
@@ -909,6 +927,11 @@ async def get_compliance_summary(
     # Filter to requirements applicable to this user
     requirements = []
     for req in all_requirements:
+        # Check membership type applicability first
+        if req.required_membership_types:
+            if member_membership_type not in req.required_membership_types:
+                continue
+
         if req.applies_to_all:
             requirements.append(req)
         elif req.required_roles and any(
@@ -1853,12 +1876,13 @@ async def get_compliance_matrix(
     """
     org_id = current_user.organization_id
 
-    # Get all active members
+    # Get all active members (exclude compliance-exempt members)
     members_result = await db.execute(
         select(User)
         .where(
             User.organization_id == org_id,
             User.status == UserStatus.ACTIVE,
+            User.compliance_exempt == False,  # noqa: E712
             User.deleted_at.is_(None),
         )
         .order_by(User.last_name, User.first_name)
@@ -1906,10 +1930,16 @@ async def get_compliance_matrix(
     for member in members:
         member_records = records_by_user.get(member.id, [])
         member_waivers = waivers_by_user.get(str(member.id), [])
+        member_membership_type = member.membership_type or "active"
         req_statuses = []
         completed_count = 0
 
         for req in requirements:
+            # Skip requirements not applicable to this member's membership type
+            if req.required_membership_types:
+                if member_membership_type not in req.required_membership_types:
+                    continue
+
             req_status, comp_date, exp_date = _evaluate_member_requirement(
                 req, member_records, today, waivers=member_waivers
             )

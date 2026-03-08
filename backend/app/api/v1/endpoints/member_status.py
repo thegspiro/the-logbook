@@ -844,3 +844,77 @@ async def update_membership_tier_config(
         "message": "Membership tier configuration updated",
         "tiers": tiers,
     }
+
+
+class ComplianceExemptionRequest(BaseModel):
+    """Request body for toggling a member's compliance exemption."""
+
+    exempt: bool = Field(
+        ..., description="True to exempt the member from compliance tracking"
+    )
+    reason: str | None = Field(None, description="Reason for the change")
+
+
+@router.patch("/{user_id}/compliance-exempt")
+async def set_compliance_exemption(
+    user_id: UUID,
+    request: ComplianceExemptionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Mark or unmark a member as exempt from compliance tracking.
+
+    Exempt members are not evaluated against training requirements,
+    shift minimums, admin-hour targets, or certificate maintenance.
+    They will not appear as non-compliant in reports or dashboards.
+
+    Typical use: retired members, honorary members, or members on
+    extended leave.
+
+    Requires ``members.manage`` permission.
+    """
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == current_user.organization_id)
+        .where(User.deleted_at.is_(None))
+    )
+    member = result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Member not found"
+        )
+
+    previous = bool(member.compliance_exempt)
+    if previous == request.exempt:
+        label = "exempt" if request.exempt else "not exempt"
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Member is already {label}",
+        )
+
+    member.compliance_exempt = request.exempt
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="compliance_exemption_changed",
+        event_category="user_management",
+        severity="warning",
+        event_data={
+            "target_user_id": str(user_id),
+            "member_name": member.full_name,
+            "previous_exempt": previous,
+            "new_exempt": request.exempt,
+            "reason": request.reason,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return {
+        "user_id": str(user_id),
+        "member_name": member.full_name,
+        "compliance_exempt": request.exempt,
+    }

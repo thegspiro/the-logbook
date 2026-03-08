@@ -429,11 +429,12 @@ async def compute_org_compliance_pct(db: AsyncSession, org_id: str) -> float:
     If there are no active requirements, returns 100.0 (nothing to comply with).
     If there are no active members, returns 0.0.
     """
-    # Get active members
+    # Get active members (exclude compliance-exempt members)
     members_result = await db.execute(
         select(User).where(
             User.organization_id == org_id,
             User.status == UserStatus.ACTIVE,
+            User.compliance_exempt == False,  # noqa: E712
             User.deleted_at.is_(None),
         )
     )
