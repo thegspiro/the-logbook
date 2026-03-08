@@ -18,11 +18,13 @@ import { locationsService } from '../../../services/facilitiesServices';
 import type {
   InventoryItem, InventoryCategory, ItemHistoryEvent,
   MaintenanceRecord, NFPACompliance, NFPAExposureRecord,
+  StorageAreaResponse, Location,
 } from '../types';
 import { getStatusStyle, getConditionColor } from '../types';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
+import { ItemFormModal } from '../components/ItemFormModal';
 import { useTimezone } from '../../../hooks/useTimezone';
 import toast from 'react-hot-toast';
 
@@ -114,6 +116,12 @@ const ItemDetailPage: React.FC = () => {
   // Location name resolution
   const [locationName, setLocationName] = useState<string | null>(null);
 
+  // Edit modal data
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [categories, setCategories] = useState<InventoryCategory[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [storageAreas, setStorageAreas] = useState<StorageAreaResponse[]>([]);
+
   // Assign modal
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assignUserId, setAssignUserId] = useState('');
@@ -129,22 +137,22 @@ const ItemDetailPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [fetched, cats] = await Promise.all([
+      const [fetched, cats, locs, areas] = await Promise.all([
         inventoryService.getItem(id),
         inventoryService.getCategories(),
+        locationsService.getLocations(),
+        inventoryService.getStorageAreas({ flat: true }),
       ]);
       setItem(fetched);
+      setCategories(cats);
+      setLocations(locs);
+      setStorageAreas(areas);
       const cat = cats.find(c => c.id === fetched.category_id) ?? null;
       setCategory(cat);
       // Resolve location name
       if (fetched.location_id) {
-        try {
-          const locations = await locationsService.getLocations();
-          const loc = locations.find((l: { id: string }) => l.id === fetched.location_id);
-          setLocationName(loc?.name ?? null);
-        } catch {
-          setLocationName(null);
-        }
+        const loc = locs.find((l: { id: string }) => l.id === fetched.location_id);
+        setLocationName(loc?.name ?? null);
       }
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to load item'));
@@ -282,12 +290,12 @@ const ItemDetailPage: React.FC = () => {
           >
             <Printer className="w-4 h-4" /> Print Barcode
           </Link>
-          <Link
-            to={`/inventory/items/${id ?? ''}/edit`}
+          <button
+            onClick={() => setShowEditModal(true)}
             className="btn-primary text-sm inline-flex items-center gap-1"
           >
             <Pencil className="w-4 h-4" /> Edit
-          </Link>
+          </button>
         </div>
       </div>
 
@@ -473,6 +481,17 @@ const ItemDetailPage: React.FC = () => {
           </div>
         </Modal>
       )}
+
+      {/* Edit Item Modal */}
+      <ItemFormModal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        onSaved={() => void loadItem()}
+        categories={categories}
+        locations={locations}
+        storageAreas={storageAreas}
+        editItem={item}
+      />
     </div>
   );
 };
