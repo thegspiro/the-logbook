@@ -90,7 +90,7 @@ export const InlineEdit: React.FC<InlineEditProps> = ({
             <button
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => { void handleSave(); }}
-              className="p-0.5 text-green-600 hover:text-green-700"
+              className="p-0.5 text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
               aria-label="Save"
             >
               <Check className="w-3.5 h-3.5" />
@@ -98,7 +98,7 @@ export const InlineEdit: React.FC<InlineEditProps> = ({
             <button
               onMouseDown={(e) => e.preventDefault()}
               onClick={handleCancel}
-              className="p-0.5 text-red-600 hover:text-red-700"
+              className="p-0.5 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
               aria-label="Cancel"
             >
               <X className="w-3.5 h-3.5" />

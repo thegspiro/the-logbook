@@ -282,7 +282,7 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
                   value={confirmName}
                   onChange={(e) => setConfirmName(e.target.value)}
                   disabled={deleting}
-                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50"
+                  className="w-full px-3 py-2 border border-theme-input-border rounded-md text-sm text-theme-text-primary bg-theme-input-bg focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50"
                   placeholder={memberDisplayName}
                   autoComplete="off"
                 />
