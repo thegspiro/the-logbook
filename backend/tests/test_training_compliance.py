@@ -382,6 +382,62 @@ class TestEvaluateRequirementDetailHours:
         assert result["completed_hours"] == 0
         assert result["is_met"] is False
 
+    def test_hours_cross_year_gap_completion_does_not_satisfy_previous_cycle(self):
+        """Completion during the Feb-Oct gap does NOT count for the previous Nov-Jan cycle."""
+        req = _make_requirement(
+            required_hours=10.0,
+            period_start_month=11,
+            period_start_day=1,
+            period_end_month=1,
+            period_end_day=31,
+        )
+        records = [
+            _make_record(hours_completed=20.0, completion_date=date(2026, 5, 15)),
+        ]
+        result = TrainingService.evaluate_requirement_detail(
+            req, records, date(2026, 5, 20)
+        )
+        assert result["completed_hours"] == 0
+        assert result["is_met"] is False
+
+    def test_hours_cross_year_gap_completion_does_not_satisfy_next_cycle(self):
+        """Completion during the Feb-Oct gap does NOT count for the upcoming Nov-Jan cycle."""
+        req = _make_requirement(
+            required_hours=10.0,
+            period_start_month=11,
+            period_start_day=1,
+            period_end_month=1,
+            period_end_day=31,
+        )
+        records = [
+            _make_record(hours_completed=20.0, completion_date=date(2026, 5, 15)),
+        ]
+        # Evaluate once the next window opens — the May record should not count
+        result = TrainingService.evaluate_requirement_detail(
+            req, records, date(2026, 11, 5)
+        )
+        assert result["completed_hours"] == 0
+        assert result["is_met"] is False
+
+    def test_hours_cross_year_previous_cycle_still_compliant_in_gap(self):
+        """A completion within the Nov-Jan window keeps the member compliant during the Feb-Oct gap."""
+        req = _make_requirement(
+            required_hours=10.0,
+            period_start_month=11,
+            period_start_day=1,
+            period_end_month=1,
+            period_end_day=31,
+        )
+        records = [
+            _make_record(hours_completed=12.0, completion_date=date(2025, 12, 10)),
+        ]
+        # Evaluated in June — should still show as met from the previous cycle
+        result = TrainingService.evaluate_requirement_detail(
+            req, records, date(2026, 6, 15)
+        )
+        assert result["completed_hours"] == 12.0
+        assert result["is_met"] is True
+
     def test_hours_with_waiver_adjustment(self):
         """Waived months reduce the required hours proportionally."""
         req = _make_requirement(required_hours=24.0)
