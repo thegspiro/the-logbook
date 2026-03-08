@@ -519,7 +519,7 @@ const FormBuilder = ({
   if (loading) {
     return (
       <div className="bg-theme-surface-secondary rounded-lg p-8 text-center">
-        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-red-700 dark:text-red-400" />
+        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-theme-text-muted" />
         <p className="text-sm text-theme-text-muted">Loading form builder...</p>
       </div>
     );
@@ -534,7 +534,7 @@ const FormBuilder = ({
             {fields.length} {fields.length === 1 ? 'field' : 'fields'}
           </span>
           {saving && (
-            <span className="flex items-center gap-1 text-xs text-red-700 dark:text-red-400">
+            <span className="flex items-center gap-1 text-xs text-theme-text-muted">
               <RefreshCw className="w-3 h-3 animate-spin" />
               Saving...
             </span>

@@ -620,7 +620,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm text-theme-text-muted hover:text-theme-text-primary transition-colors"
+            className="btn-secondary"
           >
             Cancel
           </button>

@@ -1184,7 +1184,7 @@ const FormsPage: React.FC = () => {
                 <div className="bg-theme-input-bg px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
                   <button
                     onClick={() => setShowCreateModal(false)}
-                    className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-input-bg transition-colors"
+                    className="btn-secondary"
                   >
                     Cancel
                   </button>

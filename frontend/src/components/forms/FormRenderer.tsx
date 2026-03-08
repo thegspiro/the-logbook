@@ -313,7 +313,7 @@ const FormRenderer = ({
   if (loading) {
     return (
       <div className="bg-theme-surface-secondary rounded-lg p-8 text-center">
-        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-red-700 dark:text-red-400" />
+        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-theme-text-muted" />
         <p className="text-sm text-theme-text-muted">Loading form...</p>
       </div>
     );
@@ -457,7 +457,7 @@ const FormRenderer = ({
             <button
               type="button"
               onClick={onCancel}
-              className="px-5 py-2.5 rounded-lg font-medium text-sm transition-colors text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover"
+              className="btn-secondary"
             >
               Cancel
             </button>
