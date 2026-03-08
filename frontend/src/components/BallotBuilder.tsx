@@ -90,7 +90,7 @@ const VICTORY_CONDITION_OPTIONS: { value: VictoryCondition; label: string }[] = 
 ];
 
 const inputClass =
-  'block w-full rounded-md border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:border-red-500 focus:outline-hidden focus:ring-1 focus:ring-red-500';
+  'block w-full rounded-md border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:border-theme-focus-ring focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring';
 const selectClass = inputClass;
 const labelClass = 'block text-sm font-medium text-theme-text-secondary mb-1';
 
