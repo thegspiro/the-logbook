@@ -71,7 +71,7 @@ const statusBadge = (status: string) => {
       );
     default:
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700/40 dark:text-gray-400">
+        <span className="inline-flex items-center gap-1 rounded-full bg-theme-surface-secondary px-2 py-0.5 text-xs font-medium text-theme-text-secondary">
           <Clock className="h-3 w-3" />
           Not Started
         </span>

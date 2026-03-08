@@ -129,7 +129,7 @@ const Toggle: React.FC<{
 }> = ({ checked, onChange, disabled, label, color = 'blue' }) => {
   const bg = checked
     ? color === 'red' ? 'bg-theme-accent-red' : 'bg-theme-accent-blue'
-    : 'bg-slate-600';
+    : 'bg-theme-surface-hover';
   return (
     <button
       type="button"

@@ -59,15 +59,15 @@ const getCategoryColors = (category: ApparatusCategory) => {
       };
     case 'admin':
       return {
-        background: 'bg-slate-500/10',
+        background: 'bg-theme-surface-secondary',
         text: 'text-theme-text-muted',
-        border: 'border-theme-input-border/30',
+        border: 'border-theme-surface-border',
       };
     default:
       return {
-        background: 'bg-slate-500/10',
+        background: 'bg-theme-surface-secondary',
         text: 'text-theme-text-muted',
-        border: 'border-theme-input-border/30',
+        border: 'border-theme-surface-border',
       };
   }
 };

@@ -531,7 +531,7 @@ const Dashboard: React.FC = () => {
                       Active Members
                     </p>
                     {loadingAdmin ? (
-                      <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded-sm"></div>
+                      <div className="mt-1 h-8 w-14 bg-theme-surface-hover animate-pulse rounded-sm"></div>
                     ) : (
                       <p className="text-theme-text-primary text-2xl font-bold mt-1">
                         {adminSummary?.active_members ?? 0}
@@ -552,7 +552,7 @@ const Dashboard: React.FC = () => {
                       Training Compliance
                     </p>
                     {loadingAdmin ? (
-                      <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded-sm"></div>
+                      <div className="mt-1 h-8 w-14 bg-theme-surface-hover animate-pulse rounded-sm"></div>
                     ) : (
                       <p className="text-theme-text-primary text-2xl font-bold mt-1">
                         {adminSummary?.training_completion_pct ?? 0}%
@@ -573,7 +573,7 @@ const Dashboard: React.FC = () => {
                       Upcoming Events
                     </p>
                     {loadingAdmin ? (
-                      <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded-sm"></div>
+                      <div className="mt-1 h-8 w-14 bg-theme-surface-hover animate-pulse rounded-sm"></div>
                     ) : (
                       <p className="text-theme-text-primary text-2xl font-bold mt-1">
                         {adminSummary?.upcoming_events_count ?? 0}
@@ -595,7 +595,7 @@ const Dashboard: React.FC = () => {
                       Action Items
                     </p>
                     {loadingAdmin ? (
-                      <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded-sm"></div>
+                      <div className="mt-1 h-8 w-14 bg-theme-surface-hover animate-pulse rounded-sm"></div>
                     ) : (
                       <p className="text-theme-text-primary text-2xl font-bold mt-1">
                         {adminSummary?.open_action_items ?? 0}
@@ -625,7 +625,7 @@ const Dashboard: React.FC = () => {
                       Admin Hours
                     </p>
                     {loadingAdmin ? (
-                      <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded-sm"></div>
+                      <div className="mt-1 h-8 w-14 bg-theme-surface-hover animate-pulse rounded-sm"></div>
                     ) : (
                       <p className="text-theme-text-primary text-2xl font-bold mt-1">
                         {adminSummary?.recent_admin_hours ?? 0}
@@ -657,7 +657,7 @@ const Dashboard: React.FC = () => {
                   Total Hours
                 </p>
                 {loadingHours ? (
-                  <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded-sm"></div>
+                  <div className="mt-1 h-8 w-14 bg-theme-surface-hover animate-pulse rounded-sm"></div>
                 ) : (
                   <p className="text-theme-text-primary text-2xl font-bold mt-1">
                     {totalHours}
@@ -676,7 +676,7 @@ const Dashboard: React.FC = () => {
                   Training
                 </p>
                 {loadingHours ? (
-                  <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded-sm"></div>
+                  <div className="mt-1 h-8 w-14 bg-theme-surface-hover animate-pulse rounded-sm"></div>
                 ) : (
                   <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">
                     {hours.training}
@@ -695,7 +695,7 @@ const Dashboard: React.FC = () => {
                   Standby
                 </p>
                 {loadingHours ? (
-                  <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded-sm"></div>
+                  <div className="mt-1 h-8 w-14 bg-theme-surface-hover animate-pulse rounded-sm"></div>
                 ) : (
                   <p className="text-yellow-700 dark:text-yellow-400 text-2xl font-bold mt-1">
                     {hours.standby}
@@ -722,7 +722,7 @@ const Dashboard: React.FC = () => {
                   Administrative
                 </p>
                 {loadingHours ? (
-                  <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded-sm"></div>
+                  <div className="mt-1 h-8 w-14 bg-theme-surface-hover animate-pulse rounded-sm"></div>
                 ) : (
                   <p className="text-purple-400 text-2xl font-bold mt-1">
                     {hours.administrative}
@@ -872,7 +872,7 @@ const Dashboard: React.FC = () => {
                 {[1, 2, 3].map((i) => (
                   <div
                     key={i}
-                    className="h-14 bg-slate-700/30 animate-pulse rounded-lg"
+                    className="h-14 bg-theme-surface-hover animate-pulse rounded-lg"
                   ></div>
                 ))}
               </div>
@@ -946,7 +946,7 @@ const Dashboard: React.FC = () => {
                 {[1, 2, 3].map((i) => (
                   <div
                     key={i}
-                    className="h-14 bg-slate-700/30 animate-pulse rounded-lg"
+                    className="h-14 bg-theme-surface-hover animate-pulse rounded-lg"
                   ></div>
                 ))}
               </div>
@@ -1008,7 +1008,7 @@ const Dashboard: React.FC = () => {
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className="h-14 bg-slate-700/30 animate-pulse rounded-lg"
+                  className="h-14 bg-theme-surface-hover animate-pulse rounded-lg"
                 ></div>
               ))}
             </div>
@@ -1081,7 +1081,7 @@ const Dashboard: React.FC = () => {
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className="h-8 bg-slate-700/30 animate-pulse rounded-sm"
+                  className="h-8 bg-theme-surface-hover animate-pulse rounded-sm"
                 ></div>
               ))}
             </div>
@@ -1239,7 +1239,7 @@ const Dashboard: React.FC = () => {
                       </span>
                     </div>
 
-                    <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mb-3">
+                    <div className="w-full bg-theme-surface-secondary rounded-full h-2 mb-3">
                       <div
                         className={`h-2 rounded-full transition-all ${getProgressBarColor(enrollment.progress_percentage)}`}
                         style={{ width: `${enrollment.progress_percentage}%` }}

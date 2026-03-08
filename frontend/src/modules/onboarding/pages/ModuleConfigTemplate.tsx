@@ -259,7 +259,7 @@ const ModuleConfigTemplate: React.FC = () => {
           </button>
           <button
             onClick={handleSkip}
-            className="sm:w-auto px-6 py-3 bg-transparent border border-theme-surface-border hover:border-slate-400 text-theme-text-secondary hover:text-theme-text-primary rounded-lg font-semibold transition-all"
+            className="sm:w-auto px-6 py-3 bg-transparent border border-theme-surface-border hover:border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary rounded-lg font-semibold transition-all"
           >
             Use Defaults
           </button>

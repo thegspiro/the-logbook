@@ -87,9 +87,9 @@ export const MemberTrainingHistoryPage: React.FC = () => {
       case 'failed':
         return 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400';
       case 'cancelled':
-        return 'bg-gray-100 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400';
+        return 'bg-theme-surface-secondary text-theme-text-muted';
       default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400';
+        return 'bg-theme-surface-secondary text-theme-text-secondary';
     }
   };
 
@@ -231,7 +231,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                 placeholder="Search courses..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="form-input dark:placeholder-slate-400 placeholder-slate-500"
+                className="form-input placeholder-theme-text-muted"
               />
             </div>
 

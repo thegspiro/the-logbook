@@ -557,7 +557,7 @@ export const ReportsPage: React.FC = () => {
         {/* Empty State */}
         {filteredReports.length === 0 && (
           <div className="py-12 text-center">
-            <FileText className="mx-auto mb-4 h-16 w-16 text-slate-600" aria-hidden="true" />
+            <FileText className="mx-auto mb-4 h-16 w-16 text-theme-text-muted" aria-hidden="true" />
             <h3 className="text-theme-text-primary mb-2 text-xl font-semibold">No reports found</h3>
             <p className="text-theme-text-muted">Try selecting a different category</p>
           </div>

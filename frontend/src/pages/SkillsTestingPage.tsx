@@ -30,7 +30,7 @@ const ResultBadge: React.FC<{ result: string }> = ({ result }) => {
   const styles: Record<string, string> = {
     pass: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
     fail: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
-    incomplete: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300',
+    incomplete: 'bg-theme-surface-secondary text-theme-text-primary',
     in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
     completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
   };

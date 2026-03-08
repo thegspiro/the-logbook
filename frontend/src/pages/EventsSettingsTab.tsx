@@ -957,7 +957,7 @@ const EventsSettingsTab: React.FC = () => {
                 className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:cursor-not-allowed ${
                   settings.request_pipeline.public_progress_visible
                     ? 'bg-green-500'
-                    : 'bg-gray-300 dark:bg-gray-600'
+                    : 'bg-theme-surface-hover'
                 }`}
                 role="switch"
                 aria-checked={settings.request_pipeline.public_progress_visible}
@@ -1131,7 +1131,7 @@ const EventsSettingsTab: React.FC = () => {
                         onClick={() => void toggleEmailTrigger(key)}
                         disabled={saving}
                         className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:cursor-not-allowed ${
-                          config.enabled ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
+                          config.enabled ? 'bg-green-500' : 'bg-theme-surface-hover'
                         }`}
                         role="switch"
                         aria-checked={config.enabled}

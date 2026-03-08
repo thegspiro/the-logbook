@@ -775,7 +775,7 @@ export const ReportsPage: React.FC = () => {
       {/* Empty State */}
       {filteredReports.length === 0 && (
         <div className="text-center py-12">
-          <FileText className="w-16 h-16 text-slate-600 mx-auto mb-4" aria-hidden="true" />
+          <FileText className="w-16 h-16 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
           <h3 className="text-xl font-semibold text-theme-text-primary mb-2">
             No reports found
           </h3>

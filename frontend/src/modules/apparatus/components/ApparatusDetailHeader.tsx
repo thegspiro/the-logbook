@@ -45,7 +45,7 @@ export const ApparatusDetailHeader: React.FC<ApparatusDetailHeaderProps> = ({
                 <h1 className="text-theme-text-primary text-xl font-bold">{currentApparatus.unitNumber}</h1>
                 {status && <StatusBadge status={status} />}
                 {isArchived && (
-                  <span className="px-2 py-1 bg-slate-500/20 text-theme-text-muted text-xs rounded-sm border border-theme-surface-border">
+                  <span className="px-2 py-1 bg-theme-surface-hover text-theme-text-muted text-xs rounded-sm border border-theme-surface-border">
                     ARCHIVED
                   </span>
                 )}

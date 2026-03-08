@@ -306,7 +306,7 @@ const MinutesPage: React.FC = () => {
                           meeting.status === 'approved'
                             ? 'bg-green-500/10 text-green-700 border border-green-500/30'
                             : meeting.status === 'draft'
-                            ? 'bg-slate-500/10 text-theme-text-muted border border-slate-500/30'
+                            ? 'bg-theme-surface-secondary text-theme-text-muted border border-theme-surface-border'
                             : 'bg-yellow-500/10 text-yellow-700 border border-yellow-500/30'
                         }`}>
                           {meeting.status.charAt(0).toUpperCase() + meeting.status.slice(1)}

@@ -37,7 +37,7 @@ const PAYMENT_STATUS_COLORS: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
   completed: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
   failed: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
-  refunded: 'bg-gray-100 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
+  refunded: 'bg-theme-surface-secondary text-theme-text-secondary',
   cancelled: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
 };
 
@@ -218,7 +218,7 @@ const DonationsPage: React.FC = () => {
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
                       <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_STATUS_COLORS[donation.paymentStatus] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
+                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_STATUS_COLORS[donation.paymentStatus] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
                       >
                         {donation.paymentStatus}
                       </span>

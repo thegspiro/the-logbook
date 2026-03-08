@@ -20,7 +20,7 @@ const CyclePreview: React.FC<{ pattern: PresetPatternDef }> = ({ pattern }) => {
   return (
     <div className="flex gap-0.5 mt-2">
       {entries.map((entry, i) => {
-        let bg = 'bg-gray-300 dark:bg-gray-600';
+        let bg = 'bg-theme-surface-hover';
         let title = 'Off';
         if (entry === 'on') {
           bg = 'bg-violet-500';
@@ -70,7 +70,7 @@ const PresetPatterns: React.FC<PresetPatternsProps> = ({ onSelect, selectedId })
           <div className="w-3 h-2 rounded-xs bg-indigo-500 dark:bg-indigo-400" /> Night shift
         </span>
         <span className="flex items-center gap-1">
-          <div className="w-3 h-2 rounded-xs bg-gray-300 dark:bg-gray-600" /> Off duty
+          <div className="w-3 h-2 rounded-xs bg-theme-surface-hover" /> Off duty
         </span>
       </div>
 

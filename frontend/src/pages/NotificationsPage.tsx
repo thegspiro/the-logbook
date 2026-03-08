@@ -345,7 +345,7 @@ const NotificationsPage: React.FC = () => {
                   placeholder="Search notification rules..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="form-input dark:placeholder-slate-400 pl-10 placeholder-slate-500 pr-4"
+                  className="form-input pl-10 placeholder-theme-text-muted pr-4"
                 />
               </div>
             </div>
@@ -384,7 +384,7 @@ const NotificationsPage: React.FC = () => {
                         <div>
                           <div className="flex items-center space-x-2">
                             <h3 className="text-theme-text-primary font-semibold">{rule.name}</h3>
-                            <span className="px-2 py-0.5 text-xs bg-slate-500/10 text-theme-text-muted rounded-sm">
+                            <span className="px-2 py-0.5 text-xs bg-theme-surface-secondary text-theme-text-muted rounded-sm">
                               {formatCategory(rule.category)}
                             </span>
                           </div>
@@ -499,7 +499,7 @@ const NotificationsPage: React.FC = () => {
                         )}
                       </div>
                       <div className="col-span-2">
-                        <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-sm bg-slate-500/10 text-theme-text-muted">
+                        <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-sm bg-theme-surface-secondary text-theme-text-muted">
                           {log.channel === 'in_app' ? 'In-App' : log.channel === 'email' ? 'Email' : log.channel}
                         </span>
                       </div>

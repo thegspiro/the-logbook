@@ -40,7 +40,7 @@ export const AccessLogsTab: React.FC = () => {
       case 'PUT': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400';
       case 'PATCH': return 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400';
       case 'DELETE': return 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400';
-      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400';
+      default: return 'bg-theme-surface-secondary text-theme-text-muted';
     }
   };
 
@@ -247,7 +247,7 @@ export const AccessLogsTab: React.FC = () => {
                 {logs.map((log) => (
                   <React.Fragment key={log.id}>
                     <tr
-                      className={`hover:bg-theme-surface-hover ${log.flagged_suspicious ? 'bg-red-50' : ''}`}
+                      className={`hover:bg-theme-surface-hover ${log.flagged_suspicious ? 'bg-red-500/10' : ''}`}
                     >
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-muted">
                         {formatDateTime(log.timestamp, tz)}

@@ -1637,7 +1637,7 @@ const InventoryPage: React.FC = () => {
                                     </span>
                                   )}
                                   {item.asset_tag && (
-                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[11px] font-mono bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[11px] font-mono bg-theme-surface-secondary text-theme-text-secondary">
                                       {item.asset_tag}
                                     </span>
                                   )}

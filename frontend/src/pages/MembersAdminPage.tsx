@@ -526,7 +526,7 @@ export const MembersAdminPage: React.FC = () => {
                       className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                         user.status === UserStatus.ACTIVE
                           ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
-                          : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
+                          : 'bg-theme-surface-secondary text-theme-text-secondary'
                       }`}
                     >
                       {user.status}
