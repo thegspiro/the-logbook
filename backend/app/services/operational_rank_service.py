@@ -34,6 +34,7 @@ DEFAULT_RANKS = [
     ("lieutenant", "Lieutenant", 4),
     ("engineer", "Engineer", 5),
     ("firefighter", "Firefighter", 6),
+    ("emt", "EMT", 7),
 ]
 
 
