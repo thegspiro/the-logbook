@@ -26,12 +26,62 @@ from app.services.training_waiver_service import (
 )
 
 
+def _get_custom_annual_window(req, today: date):
+    """Compute a custom annual compliance window from period_start/end fields.
+
+    Supports cross-year windows (e.g. Nov 1 -> Jan 31) where
+    ``period_start_month`` > ``period_end_month``.  In that case the window
+    spans from the *previous* year's start month to the current year's end
+    month.  The function determines which cycle ``today`` falls in and
+    returns the appropriate (start_date, end_date) pair, or *None* if no
+    custom period end is configured so the caller can fall back to the
+    default Jan 1 – Dec 31 window.
+    """
+    end_month = getattr(req, "period_end_month", None)
+    if not end_month:
+        return None
+
+    start_month = getattr(req, "period_start_month", None) or 1
+    start_day = getattr(req, "period_start_day", None) or 1
+    end_day = getattr(req, "period_end_day", None)
+    if not end_day:
+        end_day = calendar.monthrange(today.year, end_month)[1]
+
+    crosses_year = start_month > end_month
+
+    if crosses_year:
+        # Example: start_month=11 (Nov), end_month=1 (Jan)
+        # Two candidate cycles:
+        #   Cycle A: Nov <year-1> -> Jan <year>
+        #   Cycle B: Nov <year>   -> Jan <year+1>
+        cycle_end_a = date(today.year, end_month, end_day)
+        cycle_start_a = date(today.year - 1, start_month, start_day)
+        cycle_end_b = date(today.year + 1, end_month, end_day)
+        cycle_start_b = date(today.year, start_month, start_day)
+
+        if cycle_start_a <= today <= cycle_end_a:
+            return cycle_start_a, cycle_end_a
+        if cycle_start_b <= today <= cycle_end_b:
+            return cycle_start_b, cycle_end_b
+
+        # Outside both windows — use the most recently ended cycle
+        return cycle_start_a, cycle_end_a
+    else:
+        # Same-year window (e.g. Mar 1 -> Jun 30)
+        yr = req.year if req.year else today.year
+        return date(yr, start_month, start_day), date(yr, end_month, end_day)
+
+
 def get_requirement_date_window(req, today: date):
     """Return (start_date, end_date) for evaluating a requirement's compliance window.
 
     Handles rolling periods: when ``due_date_type`` is ``rolling`` and
     ``rolling_period_months`` is set, the window spans from
     ``today - rolling_period_months`` to ``today``.
+
+    For annual requirements with ``period_end_month`` set, supports custom
+    completion windows — including cross-year windows where
+    ``period_start_month`` > ``period_end_month`` (e.g. November to January).
     """
     # Check for rolling period first (overrides frequency-based window)
     due_date_type = getattr(req, "due_date_type", None)
@@ -72,7 +122,10 @@ def get_requirement_date_window(req, today: date):
         end_day = calendar.monthrange(current_year, today.month)[1]
         return start_date, date(current_year, today.month, end_day)
     else:
-        # Annual (default)
+        # Annual (default) — check for custom period window first
+        custom = _get_custom_annual_window(req, today)
+        if custom:
+            return custom
         yr = req.year if req.year else current_year
         return date(yr, 1, 1), date(yr, 12, 31)
 

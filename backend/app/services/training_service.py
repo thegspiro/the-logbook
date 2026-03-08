@@ -316,7 +316,12 @@ class TrainingService:
             end_day = calendar.monthrange(current_year, today.month)[1]
             return start_date, date(current_year, today.month, end_day)
         else:
-            # Annual (default)
+            # Annual (default) — check for custom period window first
+            from app.services.training_compliance import _get_custom_annual_window
+
+            custom = _get_custom_annual_window(requirement, today)
+            if custom:
+                return custom
             yr = requirement.year if requirement.year else current_year
             return date(yr, 1, 1), date(yr, 12, 31)
 

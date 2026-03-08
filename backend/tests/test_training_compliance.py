@@ -9,8 +9,7 @@ Tests cover the pure calculation logic in:
 All tests run without a database by using mock requirement/record objects.
 """
 
-import pytest
-from datetime import date, timedelta
+from datetime import date
 from types import SimpleNamespace
 
 from app.services.training_service import TrainingService
@@ -57,6 +56,10 @@ def _make_requirement(**kwargs):
         "active": True,
         "registry_code": None,
         "registry_name": None,
+        "period_start_month": None,
+        "period_start_day": None,
+        "period_end_month": None,
+        "period_end_day": None,
     }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
@@ -177,6 +180,69 @@ class TestGetDateWindow:
         assert start == date(2025, 3, 1)
         assert end == today
 
+    def test_annual_custom_window_same_year(self):
+        """Custom period end within same year (e.g. Mar 1 – Jun 30)."""
+        req = _make_requirement(
+            frequency=SimpleNamespace(value="annual"),
+            period_start_month=3,
+            period_start_day=1,
+            period_end_month=6,
+            period_end_day=30,
+        )
+        start, end = TrainingService._get_date_window(req, date(2026, 4, 15))
+        assert start == date(2026, 3, 1)
+        assert end == date(2026, 6, 30)
+
+    def test_annual_custom_window_cross_year_in_end_month(self):
+        """Cross-year window (Nov -> Jan), today is in January (end portion)."""
+        req = _make_requirement(
+            frequency=SimpleNamespace(value="annual"),
+            period_start_month=11,
+            period_start_day=1,
+            period_end_month=1,
+            period_end_day=31,
+        )
+        start, end = TrainingService._get_date_window(req, date(2026, 1, 15))
+        assert start == date(2025, 11, 1)
+        assert end == date(2026, 1, 31)
+
+    def test_annual_custom_window_cross_year_in_start_month(self):
+        """Cross-year window (Nov -> Jan), today is in November (start portion)."""
+        req = _make_requirement(
+            frequency=SimpleNamespace(value="annual"),
+            period_start_month=11,
+            period_start_day=1,
+            period_end_month=1,
+            period_end_day=31,
+        )
+        start, end = TrainingService._get_date_window(req, date(2026, 11, 15))
+        assert start == date(2026, 11, 1)
+        assert end == date(2027, 1, 31)
+
+    def test_annual_custom_window_cross_year_in_december(self):
+        """Cross-year window (Nov -> Jan), today is in December (middle of window)."""
+        req = _make_requirement(
+            frequency=SimpleNamespace(value="annual"),
+            period_start_month=11,
+            period_start_day=1,
+            period_end_month=1,
+            period_end_day=31,
+        )
+        start, end = TrainingService._get_date_window(req, date(2026, 12, 1))
+        assert start == date(2026, 11, 1)
+        assert end == date(2027, 1, 31)
+
+    def test_annual_no_custom_end_uses_default(self):
+        """Without period_end_month, falls back to standard Jan 1 – Dec 31."""
+        req = _make_requirement(
+            frequency=SimpleNamespace(value="annual"),
+            period_start_month=3,
+            period_start_day=1,
+        )
+        start, end = TrainingService._get_date_window(req, date(2026, 6, 15))
+        assert start == date(2026, 1, 1)
+        assert end == date(2026, 12, 31)
+
     def test_rolling_period_not_set_falls_back(self):
         """If due_date_type is rolling but rolling_period_months is None, fall back to frequency."""
         req = _make_requirement(
@@ -276,6 +342,42 @@ class TestEvaluateRequirementDetailHours:
         ]
         result = TrainingService.evaluate_requirement_detail(
             req, records, date(2026, 6, 15)
+        )
+        assert result["completed_hours"] == 0
+        assert result["is_met"] is False
+
+    def test_hours_cross_year_window_includes_prior_year(self):
+        """Cross-year window (Nov -> Jan): Nov records count toward Jan requirement."""
+        req = _make_requirement(
+            required_hours=10.0,
+            period_start_month=11,
+            period_start_day=1,
+            period_end_month=1,
+            period_end_day=31,
+        )
+        records = [
+            _make_record(hours_completed=12.0, completion_date=date(2025, 11, 15)),
+        ]
+        result = TrainingService.evaluate_requirement_detail(
+            req, records, date(2026, 1, 10)
+        )
+        assert result["completed_hours"] == 12.0
+        assert result["is_met"] is True
+
+    def test_hours_cross_year_window_excludes_outside(self):
+        """Cross-year window (Nov -> Jan): October records should NOT count."""
+        req = _make_requirement(
+            required_hours=10.0,
+            period_start_month=11,
+            period_start_day=1,
+            period_end_month=1,
+            period_end_day=31,
+        )
+        records = [
+            _make_record(hours_completed=20.0, completion_date=date(2025, 10, 15)),
+        ]
+        result = TrainingService.evaluate_requirement_detail(
+            req, records, date(2026, 1, 10)
         )
         assert result["completed_hours"] == 0
         assert result["is_met"] is False
