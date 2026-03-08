@@ -225,7 +225,7 @@ const AdminHoursPage: React.FC = () => {
             <button
               onClick={() => { void handleClockOut(); }}
               disabled={clockingOut}
-              className="btn-primary flex items-center justify-center gap-2 w-full md:w-auto px-8 py-4 text-lg font-semibold rounded-xl transition focus:ring-offset-2 disabled:bg-gray-500 disabled:cursor-not-allowed"
+              className="btn-primary flex items-center justify-center gap-2 w-full md:w-auto px-8 py-4 text-lg font-semibold rounded-xl transition focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <LogOut className="w-5 h-5" />
               {clockingOut ? 'Clocking Out...' : 'Clock Out'}
@@ -345,7 +345,7 @@ const AdminHoursPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={!manualFormValid || isSubmitting}
-                className="btn-info disabled:bg-gray-500 disabled:cursor-not-allowed transition"
+                className="btn-info disabled:opacity-50 disabled:cursor-not-allowed transition"
               >
                 {isSubmitting ? 'Submitting...' : 'Submit'}
               </button>

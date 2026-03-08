@@ -418,7 +418,7 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                     onUpdateItem(item.id, { require_attendance: e.target.checked })
                   }
                   disabled={isClosed}
-                  className="h-4 w-4 text-red-600 rounded border-gray-300"
+                  className="h-4 w-4 text-red-600 rounded border-theme-input-border"
                 />
                 <label
                   htmlFor={`attendance_${item.id}`}
@@ -453,7 +453,7 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                     }
                   }}
                   disabled={isClosed}
-                  className="h-4 w-4 text-red-600 rounded border-gray-300"
+                  className="h-4 w-4 text-red-600 rounded border-theme-input-border"
                 />
                 <label
                   htmlFor={`override_${item.id}`}
@@ -1205,7 +1205,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                         require_attendance: e.target.checked,
                       }))
                     }
-                    className="h-4 w-4 text-red-600 rounded border-gray-300"
+                    className="h-4 w-4 text-red-600 rounded border-theme-input-border"
                   />
                   <label
                     htmlFor="custom_require_attendance"

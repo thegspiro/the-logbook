@@ -344,15 +344,15 @@ export const ElectionDetailPage: React.FC = () => {
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
       case ElectionStatus.OPEN:
-        return 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400';
+        return 'bg-green-500/10 text-green-700 dark:text-green-400';
       case ElectionStatus.CLOSED:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400';
+        return 'bg-gray-500/10 text-gray-700 dark:text-gray-400';
       case ElectionStatus.DRAFT:
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400';
+        return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400';
       case ElectionStatus.CANCELLED:
-        return 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400';
+        return 'bg-red-500/10 text-red-700 dark:text-red-400';
       default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400';
+        return 'bg-gray-500/10 text-gray-700 dark:text-gray-400';
     }
   };
 
@@ -983,9 +983,9 @@ export const ElectionDetailPage: React.FC = () => {
                                 <td className="px-3 py-2 text-xs">{entry.event_type}</td>
                                 <td className="px-3 py-2">
                                   <span className={`text-xs px-2 py-0.5 rounded ${
-                                    entry.severity === 'critical' ? 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400' :
-                                    entry.severity === 'warning' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400' :
-                                    'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
+                                    entry.severity === 'critical' ? 'bg-red-500/10 text-red-700 dark:text-red-400' :
+                                    entry.severity === 'warning' ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400' :
+                                    'bg-gray-500/10 text-gray-700 dark:text-gray-400'
                                   }`}>
                                     {entry.severity || 'info'}
                                   </span>
@@ -1487,7 +1487,7 @@ export const ElectionDetailPage: React.FC = () => {
                         )}
 
                         <div className="flex items-center gap-3 p-3 rounded-lg border border-theme-surface-border">
-                          <input type="radio" disabled className="w-4 h-4 text-gray-400" />
+                          <input type="radio" disabled className="w-4 h-4 text-theme-text-muted" />
                           <span className="text-theme-text-muted">Abstain (Do not vote on this item)</span>
                         </div>
                       </div>
@@ -1581,7 +1581,7 @@ export const ElectionDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowPreview(false)}
-                className="px-6 py-2 bg-slate-700 text-white rounded-md hover:bg-slate-800"
+                className="px-6 py-2 bg-theme-surface-secondary text-theme-text-primary border border-theme-surface-border rounded-md hover:bg-theme-surface-hover"
               >
                 Close Preview
               </button>

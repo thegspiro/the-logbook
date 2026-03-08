@@ -28,7 +28,7 @@ const ENTRY_LABELS: Record<CycleEntry, string> = {
 };
 
 const ENTRY_STYLES: Record<CycleEntry, string> = {
-  off: 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 border-gray-300 dark:border-gray-600',
+  off: 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border',
   day: 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 border-amber-400 dark:border-amber-600',
   night: 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border-indigo-400 dark:border-indigo-500',
   on: 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 border-violet-400 dark:border-violet-500',

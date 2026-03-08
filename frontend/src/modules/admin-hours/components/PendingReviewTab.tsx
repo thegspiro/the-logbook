@@ -149,7 +149,7 @@ const PendingReviewTab: React.FC = () => {
                 type="checkbox"
                 checked={selectedEntryIds.size === allEntries.length && allEntries.length > 0}
                 onChange={toggleSelectAll}
-                className="w-4 h-4 rounded-sm border-gray-300"
+                className="w-4 h-4 rounded-sm border-theme-input-border"
               />
               Select All
             </label>
@@ -259,7 +259,7 @@ const PendingReviewTab: React.FC = () => {
                         type="checkbox"
                         checked={selectedEntryIds.has(entry.id)}
                         onChange={() => toggleEntrySelection(entry.id)}
-                        className="w-4 h-4 rounded-sm border-gray-300 mt-1"
+                        className="w-4 h-4 rounded-sm border-theme-input-border mt-1"
                       />
                       <div>
                         <div className="flex items-center gap-2 mb-1">
