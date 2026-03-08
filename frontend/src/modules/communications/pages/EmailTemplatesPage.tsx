@@ -59,6 +59,7 @@ const EmailTemplatesPage: React.FC = () => {
     selectTemplate,
     updateTemplate,
     previewTemplate,
+    clearPreview,
     clearError,
   } = useEmailTemplatesStore();
 
@@ -108,12 +109,13 @@ const EmailTemplatesPage: React.FC = () => {
       if (!selectedTemplate) return;
       try {
         await updateTemplate(selectedTemplate.id, data);
+        clearPreview();
         toast.success('Template saved successfully');
       } catch {
         toast.error('Failed to save template');
       }
     },
-    [selectedTemplate, updateTemplate],
+    [selectedTemplate, updateTemplate, clearPreview],
   );
 
   const handlePreview = useCallback(
@@ -348,9 +350,7 @@ const EmailTemplatesPage: React.FC = () => {
                   <button
                     onClick={() => {
                       setEditorView('preview');
-                      if (!preview) {
-                        void previewTemplate(selectedTemplate.id, undefined, undefined, previewMemberId ?? undefined);
-                      }
+                      void previewTemplate(selectedTemplate.id, undefined, undefined, previewMemberId ?? undefined);
                     }}
                     className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${
                       editorView === 'preview'
