@@ -25,11 +25,11 @@ const STATUS_COLORS: Record<string, string> = {
   approved: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
   ordered: 'bg-purple-500/10 text-purple-700 dark:text-purple-400',
   received: 'bg-green-500/10 text-green-700 dark:text-green-400',
-  cancelled: 'bg-gray-500/10 text-gray-500 dark:text-gray-400',
+  cancelled: 'bg-theme-surface-secondary text-theme-text-muted',
 };
 
 const URGENCY_COLORS: Record<string, string> = {
-  low: 'bg-gray-500/10 text-gray-600 dark:text-gray-400',
+  low: 'bg-theme-surface-secondary text-theme-text-muted',
   normal: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
   high: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
   critical: 'bg-red-500/10 text-red-700 dark:text-red-400',

@@ -216,7 +216,7 @@ const CustomPatternBuilder: React.FC<CustomPatternBuilderProps> = ({ cyclePatter
             {Array.from({ length: Math.min(cycleDays * 3, 84) }, (_, i) => {
               const entry = cyclePattern[i % cycleDays] ?? 'off';
               const isCycleBoundary = i > 0 && i % cycleDays === 0;
-              let bg = 'bg-gray-200 dark:bg-gray-700';
+              let bg = 'bg-theme-surface-hover';
               if (entry === 'on') bg = 'bg-violet-500';
               else if (entry === 'day') bg = 'bg-amber-400 dark:bg-amber-500';
               else if (entry === 'night') bg = 'bg-indigo-500 dark:bg-indigo-400';

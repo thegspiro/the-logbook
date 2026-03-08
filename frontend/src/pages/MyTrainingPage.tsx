@@ -44,7 +44,7 @@ const getStatusColor = (status: string) => {
     case SubmissionStatus.PENDING_REVIEW: return 'bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400';
     case SubmissionStatus.REJECTED: return 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400';
     case SubmissionStatus.REVISION_REQUESTED: return 'bg-orange-500/10 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400';
-    default: return 'bg-gray-500/10 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400';
+    default: return 'bg-theme-surface-secondary text-theme-text-secondary';
   }
 };
 
@@ -515,7 +515,7 @@ const MyTrainingPage: React.FC = () => {
                         </div>
 
                         {/* Progress bar */}
-                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mb-2">
+                        <div className="w-full bg-theme-surface-hover rounded-full h-2 mb-2">
                           <div
                             className={`h-2 rounded-full transition-all ${
                               req.is_met ? 'bg-green-500' :
@@ -619,7 +619,7 @@ const MyTrainingPage: React.FC = () => {
                       </span>
                       <span className="text-sm text-theme-text-primary font-semibold">{Math.round(e.progress_percentage)}%</span>
                     </div>
-                    <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mb-2">
+                    <div className="w-full bg-theme-surface-hover rounded-full h-2 mb-2">
                       <div
                         className={`h-2 rounded-full transition-all ${
                           e.progress_percentage >= 75 ? 'bg-green-500' :
@@ -723,7 +723,7 @@ const MyTrainingPage: React.FC = () => {
                     {v?.show_skills_observed && sr.skills_observed && (sr.skills_observed as Array<{ skill_name?: string; demonstrated?: boolean }>).length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-2">
                         {(sr.skills_observed as Array<{ skill_name?: string; demonstrated?: boolean }>).map((s, i) => (
-                          <span key={i} className={`text-xs px-2 py-0.5 rounded-sm ${s.demonstrated ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-theme-text-muted'}`}>
+                          <span key={i} className={`text-xs px-2 py-0.5 rounded-sm ${s.demonstrated ? 'bg-green-500/20 text-green-400' : 'bg-theme-surface-secondary text-theme-text-muted'}`}>
                             {s.skill_name}
                           </span>
                         ))}

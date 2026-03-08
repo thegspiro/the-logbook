@@ -26,11 +26,11 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
     pass: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
     fail: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
-    incomplete: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300',
+    incomplete: 'bg-theme-surface-secondary text-theme-text-primary',
   };
 
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300'}`}>
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[status] ?? 'bg-theme-surface-secondary text-theme-text-primary'}`}>
       {status.replace('_', ' ')}
     </span>
   );

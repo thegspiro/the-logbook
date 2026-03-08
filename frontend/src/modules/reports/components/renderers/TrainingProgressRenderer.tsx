@@ -48,10 +48,10 @@ export const TrainingProgressRenderer: React.FC<Props> = ({ data }) => {
           active: 'bg-green-500/20 text-green-300',
           completed: 'bg-blue-500/20 text-blue-300',
           expired: 'bg-red-500/20 text-red-300',
-          withdrawn: 'bg-gray-500/20 text-gray-300',
+          withdrawn: 'bg-theme-surface-secondary text-theme-text-muted',
         };
         return (
-          <span className={`rounded-sm px-2 py-0.5 text-xs capitalize ${colors[s] ?? 'bg-gray-500/20 text-gray-300'}`}>
+          <span className={`rounded-sm px-2 py-0.5 text-xs capitalize ${colors[s] ?? 'bg-theme-surface-secondary text-theme-text-muted'}`}>
             {s}
           </span>
         );

@@ -747,8 +747,8 @@ const RequirementStatusItem: React.FC<RequirementStatusItemProps> = ({ name, sta
     <div className="p-3 bg-theme-input-bg/50 rounded-sm">
       <div className="flex items-center justify-between">
         <span className="text-theme-text-primary text-sm font-medium truncate flex-1 mr-2">{name}</span>
-        <span className={`text-xs font-semibold px-2 py-1 rounded-sm ${(statusConfig[status] ?? { color: 'bg-gray-600', label: status }).color} text-theme-text-primary whitespace-nowrap`}>
-          {(statusConfig[status] ?? { color: 'bg-gray-600', label: status }).label}
+        <span className={`text-xs font-semibold px-2 py-1 rounded-sm ${(statusConfig[status] ?? { color: 'bg-theme-surface-hover', label: status }).color} text-theme-text-primary whitespace-nowrap`}>
+          {(statusConfig[status] ?? { color: 'bg-theme-surface-hover', label: status }).label}
         </span>
       </div>
     </div>

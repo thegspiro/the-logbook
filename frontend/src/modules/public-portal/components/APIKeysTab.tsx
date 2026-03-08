@@ -192,7 +192,7 @@ const KeyDisplayModal: React.FC<KeyDisplayModalProps> = ({ isOpen, apiKey, onClo
         </div>
 
         {/* Warning Banner */}
-        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+        <div className="bg-yellow-500/10 border-l-4 border-yellow-400 p-4 mb-4">
           <div className="flex">
             <div className="shrink-0">
               <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
@@ -200,7 +200,7 @@ const KeyDisplayModal: React.FC<KeyDisplayModalProps> = ({ isOpen, apiKey, onClo
               </svg>
             </div>
             <div className="ml-3">
-              <p className="text-sm text-yellow-700">
+              <p className="text-sm text-yellow-700 dark:text-yellow-300">
                 <strong>IMPORTANT:</strong> This is the only time the full API key will be displayed.
                 Copy it now and store it securely. You will not be able to see it again.
               </p>
@@ -234,13 +234,13 @@ const KeyDisplayModal: React.FC<KeyDisplayModalProps> = ({ isOpen, apiKey, onClo
         </div>
 
         {/* Instructions */}
-        <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
-          <h4 className="text-sm font-semibold text-blue-900 mb-2">Usage Instructions</h4>
-          <p className="text-sm text-blue-800 mb-2">
-            Include this API key in the <code className="bg-blue-100 px-1 py-0.5 rounded-sm">X-API-Key</code> header
+        <div className="bg-blue-500/10 border border-blue-500/30 rounded-md p-4 mb-4">
+          <h4 className="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-2">Usage Instructions</h4>
+          <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">
+            Include this API key in the <code className="bg-blue-500/20 px-1 py-0.5 rounded-sm">X-API-Key</code> header
             when making requests to the public API:
           </p>
-          <pre className="bg-blue-100 p-2 rounded-sm text-xs overflow-x-auto">
+          <pre className="bg-blue-500/20 p-2 rounded-sm text-xs overflow-x-auto">
 {`curl -H "X-API-Key: ${apiKey}" \\
   https://your-domain.com/api/public/v1/organization/info`}
           </pre>
@@ -250,7 +250,7 @@ const KeyDisplayModal: React.FC<KeyDisplayModalProps> = ({ isOpen, apiKey, onClo
         <div className="flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800"
+            className="px-4 py-2 bg-theme-nav-bg text-white rounded-md hover:bg-theme-surface-hover"
           >
             I've Saved the Key
           </button>

@@ -1021,7 +1021,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                               ) : isCurrent ? (
                                 <div className="w-5 h-5 rounded-full border-2 border-red-500 bg-red-500/20 shrink-0" />
                               ) : (
-                                <Circle className="w-5 h-5 text-slate-400 dark:text-slate-600 shrink-0" />
+                                <Circle className="w-5 h-5 text-theme-text-muted shrink-0" />
                               )}
                               {idx < applicant.stage_history.length - 1 && (
                                 <div className="w-px h-full min-h-[24px] bg-theme-surface-border my-1" />

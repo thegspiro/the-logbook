@@ -141,7 +141,7 @@ const RecertificationSection: React.FC = () => {
                   className={`px-2 py-0.5 text-xs rounded-sm ${
                     pathway.active
                       ? 'bg-green-500/10 text-green-700 dark:text-green-400'
-                      : 'bg-gray-500/10 text-gray-600'
+                      : 'bg-theme-surface-secondary text-theme-text-muted'
                   }`}
                 >
                   {pathway.active ? 'Active' : 'Inactive'}
@@ -210,7 +210,7 @@ const CompetencySection: React.FC = () => {
   }
 
   const competencyLevels = [
-    { level: 'novice', label: 'Novice', color: 'bg-gray-400' },
+    { level: 'novice', label: 'Novice', color: 'bg-theme-text-muted' },
     { level: 'advanced_beginner', label: 'Advanced Beginner', color: 'bg-blue-400' },
     { level: 'competent', label: 'Competent', color: 'bg-green-400' },
     { level: 'proficient', label: 'Proficient', color: 'bg-yellow-400' },

@@ -1103,7 +1103,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                                     In Progress {summary.completedItems}/{summary.totalItems}
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-theme-surface-secondary text-theme-text-muted">
                                     Not Started
                                   </span>
                                 )

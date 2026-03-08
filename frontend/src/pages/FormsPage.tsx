@@ -559,8 +559,8 @@ const FormsPage: React.FC = () => {
     switch (s) {
       case FormStatus.PUBLISHED: return 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30';
       case FormStatus.DRAFT: return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30';
-      case FormStatus.ARCHIVED: return 'bg-slate-500/10 text-theme-text-muted border-slate-500/30';
-      default: return 'bg-slate-500/10 text-theme-text-muted border-slate-500/30';
+      case FormStatus.ARCHIVED: return 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border';
+      default: return 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border';
     }
   };
 

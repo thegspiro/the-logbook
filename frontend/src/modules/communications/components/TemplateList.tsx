@@ -51,10 +51,10 @@ const TEMPLATE_TYPE_DISPLAY: Record<
   inactivity_warning: { icon: AlertTriangle, label: 'Inactivity Warning', color: 'text-yellow-500' },
   election_rollback: { icon: RotateCcw, label: 'Election Rollback', color: 'text-orange-600' },
   election_deleted: { icon: Trash2, label: 'Election Deleted', color: 'text-red-500' },
-  member_archived: { icon: Archive, label: 'Member Archived', color: 'text-slate-600' },
+  member_archived: { icon: Archive, label: 'Member Archived', color: 'text-theme-text-muted' },
   event_request_status: { icon: CalendarCheck, label: 'Event Request Status', color: 'text-cyan-500' },
   it_password_notification: { icon: Lock, label: 'IT Password Reset', color: 'text-blue-600' },
-  custom: { icon: FileText, label: 'Custom', color: 'text-slate-500' },
+  custom: { icon: FileText, label: 'Custom', color: 'text-theme-text-muted' },
 };
 
 function getTemplateDisplay(type: string) {

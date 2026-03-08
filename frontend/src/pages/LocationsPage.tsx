@@ -774,7 +774,7 @@ function RoomCard({ room, onEdit, onDelete }: { room: Location; onEdit: (r: Loca
         </button>
       )}
       {showQR && kioskUrl && (
-        <div className="mt-3 flex flex-col items-center gap-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-theme-surface-border">
+        <div className="mt-3 flex flex-col items-center gap-2 p-3 bg-white rounded-lg border border-theme-surface-border"> {/* bg-white intentional for QR code readability */}
           <QRCodeSVG value={kioskUrl} size={140} level="H" includeMargin />
           <p className="text-[10px] text-theme-text-muted font-mono break-all text-center">{kioskUrl}</p>
         </div>

@@ -166,7 +166,7 @@ const INTEGRATION_UI: Record<string, { icon: React.ReactNode; color: string; bgC
 const DEFAULT_UI = {
   icon: <Plug className="w-6 h-6" />,
   color: 'text-theme-text-muted',
-  bgColor: 'bg-slate-500/10',
+  bgColor: 'bg-theme-surface-secondary',
   features: [] as string[],
 };
 
@@ -557,7 +557,7 @@ const IntegrationsPage: React.FC = () => {
                       </span>
                     )}
                     {integration.status === 'coming_soon' && (
-                      <span className="px-2 py-0.5 text-xs bg-slate-500/10 text-theme-text-muted border border-slate-500/30 rounded-sm">
+                      <span className="px-2 py-0.5 text-xs bg-theme-surface-secondary text-theme-text-muted border border-theme-surface-border rounded-sm">
                         Coming Soon
                       </span>
                     )}

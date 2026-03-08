@@ -298,9 +298,9 @@ export const MemberProfilePage: React.FC = () => {
       case "failed":
         return "bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400";
       case "cancelled":
-        return "bg-gray-100 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400";
+        return "bg-theme-surface-secondary text-theme-text-muted";
       default:
-        return "bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400";
+        return "bg-theme-surface-secondary text-theme-text-secondary";
     }
   };
 
@@ -678,7 +678,7 @@ export const MemberProfilePage: React.FC = () => {
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                           role.is_system
                             ? "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400"
-                            : "bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400"
+                            : "bg-theme-surface-secondary text-theme-text-secondary"
                         }`}
                       >
                         {role.name}
@@ -699,10 +699,10 @@ export const MemberProfilePage: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleOpenStatusModal}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1 text-sm font-semibold rounded-full cursor-pointer transition hover:ring-2 hover:ring-offset-1 hover:ring-blue-400 dark:hover:ring-offset-gray-900 ${
+                    className={`inline-flex items-center gap-1.5 px-3 py-1 text-sm font-semibold rounded-full cursor-pointer transition hover:ring-2 hover:ring-offset-1 hover:ring-blue-400 ${
                       user.status === UserStatus.ACTIVE
                         ? "bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400"
-                        : "bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400"
+                        : "bg-theme-surface-secondary text-theme-text-secondary"
                     }`}
                     title="Change member status"
                   >
@@ -714,7 +714,7 @@ export const MemberProfilePage: React.FC = () => {
                     className={`px-3 py-1 text-sm font-semibold rounded-full ${
                       user.status === UserStatus.ACTIVE
                         ? "bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400"
-                        : "bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400"
+                        : "bg-theme-surface-secondary text-theme-text-secondary"
                     }`}
                   >
                     {user.status}
@@ -738,7 +738,7 @@ export const MemberProfilePage: React.FC = () => {
                     <div
                       className={`rounded-lg p-4 border ${
                         complianceSummary.compliance_status === "exempt"
-                          ? "border-slate-500/30 bg-slate-500/5"
+                          ? "border-theme-surface-border bg-theme-surface-secondary"
                           : complianceSummary.compliance_status === "green"
                             ? "border-green-500/30 bg-green-500/5"
                             : complianceSummary.compliance_status === "yellow"
@@ -753,7 +753,7 @@ export const MemberProfilePage: React.FC = () => {
                         <span
                           className={`px-3 py-1 rounded-full text-xs font-bold ${
                             complianceSummary.compliance_status === "exempt"
-                              ? "bg-slate-500/20 text-slate-400"
+                              ? "bg-theme-surface-secondary text-theme-text-muted"
                               : complianceSummary.compliance_status === "green"
                                 ? "bg-green-500/20 text-green-400"
                                 : complianceSummary.compliance_status === "yellow"

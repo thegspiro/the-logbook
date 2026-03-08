@@ -401,7 +401,7 @@ export const BallotVotingPage: React.FC = () => {
                       name={`item-${item.id}`}
                       checked={itemChoice?.choice === 'abstain'}
                       onChange={() => updateChoice(item.id, 'abstain')}
-                      className="w-4 h-4 text-theme-text-muted focus:ring-gray-500"
+                      className="w-4 h-4 text-theme-text-muted focus:ring-theme-focus-ring"
                     />
                     <span className="text-theme-text-muted">Abstain (Do not vote on this item)</span>
                   </label>

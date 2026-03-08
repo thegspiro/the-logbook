@@ -260,7 +260,7 @@ export const RoleManagementPage: React.FC = () => {
                     disabled={editingRole?.is_system}
                     required
                     aria-required="true"
-                    className="mt-1 block w-full rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-xs focus:border-theme-focus-ring focus:ring-theme-focus-ring sm:text-sm disabled:bg-slate-700"
+                    className="mt-1 block w-full rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-xs focus:border-theme-focus-ring focus:ring-theme-focus-ring sm:text-sm disabled:bg-theme-surface-hover"
                   />
                 </div>
 

@@ -346,13 +346,13 @@ export const ElectionDetailPage: React.FC = () => {
       case ElectionStatus.OPEN:
         return 'bg-green-500/10 text-green-700 dark:text-green-400';
       case ElectionStatus.CLOSED:
-        return 'bg-gray-500/10 text-gray-700 dark:text-gray-400';
+        return 'bg-theme-surface-secondary text-theme-text-muted';
       case ElectionStatus.DRAFT:
         return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400';
       case ElectionStatus.CANCELLED:
         return 'bg-red-500/10 text-red-700 dark:text-red-400';
       default:
-        return 'bg-gray-500/10 text-gray-700 dark:text-gray-400';
+        return 'bg-theme-surface-secondary text-theme-text-muted';
     }
   };
 
@@ -587,7 +587,7 @@ export const ElectionDetailPage: React.FC = () => {
                   onClick={() => setShowDeleteModal(true)}
                   className={`px-4 py-2 rounded-md ${
                     isDraft
-                      ? 'bg-gray-600 text-white hover:bg-gray-700 dark:bg-gray-500 dark:hover:bg-gray-400'
+                      ? 'bg-theme-surface-hover text-theme-text-primary hover:bg-theme-surface-secondary'
                       : 'bg-red-800 text-white hover:bg-red-900'
                   }`}
                 >
@@ -985,7 +985,7 @@ export const ElectionDetailPage: React.FC = () => {
                                   <span className={`text-xs px-2 py-0.5 rounded ${
                                     entry.severity === 'critical' ? 'bg-red-500/10 text-red-700 dark:text-red-400' :
                                     entry.severity === 'warning' ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400' :
-                                    'bg-gray-500/10 text-gray-700 dark:text-gray-400'
+                                    'bg-theme-surface-secondary text-theme-text-muted'
                                   }`}>
                                     {entry.severity || 'info'}
                                   </span>
@@ -1225,7 +1225,7 @@ export const ElectionDetailPage: React.FC = () => {
                   disabled={isDeleting || (!isDraft && deleteReason.trim().length < 10)}
                   className={`px-4 py-2 text-white rounded-md disabled:opacity-50 ${
                     isDraft
-                      ? 'bg-gray-600 hover:bg-gray-700 dark:bg-gray-500 dark:hover:bg-gray-400'
+                      ? 'bg-theme-surface-hover hover:bg-theme-surface-secondary'
                       : 'bg-red-800 hover:bg-red-900'
                   }`}
                 >

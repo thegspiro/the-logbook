@@ -486,7 +486,7 @@ export const ShiftReportsTab: React.FC = () => {
                     <div key={i}>
                       <span className={`inline-block px-2 py-0.5 text-xs rounded-full border ${skill.demonstrated
                         ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20'
-                        : 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/20'
+                        : 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border'
                       }`}>
                         {skill.demonstrated ? '✓' : '○'} {skill.skill_name}
                       </span>

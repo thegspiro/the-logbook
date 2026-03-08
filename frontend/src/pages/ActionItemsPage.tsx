@@ -25,11 +25,11 @@ const STATUS_BADGES: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
   in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
   completed: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
-  cancelled: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
+  cancelled: 'bg-theme-surface-secondary text-theme-text-primary',
 };
 
 const PRIORITY_BADGES: Record<string, string> = {
-  low: 'bg-gray-100 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
+  low: 'bg-theme-surface-secondary text-theme-text-secondary',
   medium: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
   high: 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
   urgent: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
@@ -171,7 +171,7 @@ const ActionItemsPage: React.FC = () => {
                     {item.description}
                   </p>
                   <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium ${STATUS_BADGES[item.status] || 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium ${STATUS_BADGES[item.status] || 'bg-theme-surface-secondary text-theme-text-primary'}`}>
                       {item.status.replace('_', ' ')}
                     </span>
                     {item.priority && (

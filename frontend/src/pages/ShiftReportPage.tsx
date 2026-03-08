@@ -47,7 +47,7 @@ const StarRating: React.FC<{
           className="focus:outline-hidden"
         >
           <Star
-            className={`${sizeClass} ${star <= value ? 'text-yellow-400 fill-yellow-400' : 'text-gray-600'}`}
+            className={`${sizeClass} ${star <= value ? 'text-yellow-400 fill-yellow-400' : 'text-theme-text-muted'}`}
           />
         </button>
       ))}
@@ -677,7 +677,7 @@ const ShiftReportPage: React.FC = () => {
               </div>
             ) : filedReports.length === 0 ? (
               <div className="text-center py-12 bg-theme-surface rounded-lg">
-                <ClipboardList className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                <ClipboardList className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
                 <p className="text-theme-text-muted">No reports filed yet.</p>
               </div>
             ) : (
@@ -697,7 +697,7 @@ const ShiftReportPage: React.FC = () => {
               </div>
             ) : receivedReports.length === 0 ? (
               <div className="text-center py-12 bg-theme-surface rounded-lg">
-                <TrendingUp className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                <TrendingUp className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
                 <p className="text-theme-text-muted">No shift reports about you yet.</p>
               </div>
             ) : (

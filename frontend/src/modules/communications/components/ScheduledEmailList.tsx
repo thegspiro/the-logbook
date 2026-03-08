@@ -21,7 +21,7 @@ const STATUS_CONFIG: Record<string, { icon: React.ElementType; color: string; la
   pending: { icon: Clock, color: 'text-yellow-500', label: 'Pending' },
   sent: { icon: CheckCircle2, color: 'text-green-500', label: 'Sent' },
   failed: { icon: AlertTriangle, color: 'text-red-500', label: 'Failed' },
-  cancelled: { icon: XCircle, color: 'text-gray-400', label: 'Cancelled' },
+  cancelled: { icon: XCircle, color: 'text-theme-text-muted', label: 'Cancelled' },
 };
 
 const ScheduledEmailList: React.FC = () => {
@@ -135,7 +135,7 @@ const ScheduledEmailList: React.FC = () => {
                       ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
                       : email.status === 'failed'
                         ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-                        : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                        : 'bg-theme-surface-secondary text-theme-text-muted'
                 }`}
               >
                 {statusInfo.label}

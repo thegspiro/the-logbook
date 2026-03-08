@@ -92,9 +92,9 @@ const getDeadlineColor = (deadlineDate: string | null): string => {
 };
 
 const getDeadlineBadgeColor = (deadlineDate: string | null): string => {
-  if (!deadlineDate) return 'bg-gray-100 text-gray-600';
+  if (!deadlineDate) return 'bg-theme-surface-secondary text-theme-text-secondary';
   const days = daysUntil(deadlineDate);
-  if (isNaN(days)) return 'bg-gray-100 text-gray-600';
+  if (isNaN(days)) return 'bg-theme-surface-secondary text-theme-text-secondary';
   if (days < 14) return 'bg-red-100 text-red-700';
   if (days < 30) return 'bg-yellow-100 text-yellow-700';
   return 'bg-green-100 text-green-700';
@@ -285,7 +285,7 @@ const PipelineSummary: React.FC<PipelineSummaryProps> = ({ items }) => {
           const item = statusMap.get(status);
           const count = item?.count ?? 0;
           const colorClass =
-            APPLICATION_STATUS_COLORS[status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400';
+            APPLICATION_STATUS_COLORS[status] ?? 'bg-theme-surface-secondary text-theme-text-secondary';
 
           return (
             <Link
@@ -417,7 +417,7 @@ const ComplianceTasksDue: React.FC<ComplianceTasksProps> = ({
         {tasks.map((task) => {
           const statusColor =
             COMPLIANCE_STATUS_COLORS[task.status] ??
-            'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400';
+            'bg-theme-surface-secondary text-theme-text-secondary';
           const days = daysUntil(task.dueDate);
           const urgentClass =
             !isNaN(days) && days < 7 ? 'text-red-600' : 'text-theme-text-secondary';

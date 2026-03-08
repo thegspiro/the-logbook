@@ -59,7 +59,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   vehicles: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
   wellness: 'bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-400',
   community: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
-  other: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
+  other: 'bg-theme-surface-secondary text-theme-text-secondary',
 };
 
 interface FederalProgram {
@@ -121,7 +121,7 @@ function getDeadlineUrgency(deadlineDate: string | null): {
   );
 
   if (daysLeft < 0) {
-    return { label: 'Expired', color: 'text-gray-400', isUrgent: false };
+    return { label: 'Expired', color: 'text-theme-text-muted', isUrgent: false };
   }
   if (daysLeft <= 14) {
     return {
@@ -278,7 +278,7 @@ export const GrantOpportunitiesPage: React.FC = () => {
                   </p>
                 </div>
                 <span
-                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${CATEGORY_COLORS[program.category] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
+                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${CATEGORY_COLORS[program.category] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
                 >
                   {CATEGORY_LABELS[program.category] ?? program.category}
                 </span>
@@ -330,7 +330,7 @@ export const GrantOpportunitiesPage: React.FC = () => {
                       </p>
                     </div>
                     <span
-                      className={`inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${CATEGORY_COLORS[opp.category] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
+                      className={`inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${CATEGORY_COLORS[opp.category] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
                     >
                       {CATEGORY_LABELS[opp.category] ?? opp.category}
                     </span>

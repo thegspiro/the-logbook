@@ -161,7 +161,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                   }}
                   disabled={isCreating}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ${
-                    enabled ? "bg-violet-600" : "bg-gray-300 dark:bg-gray-600"
+                    enabled ? "bg-violet-600" : "bg-theme-surface-border"
                   } ${isCreating ? "opacity-50" : ""}`}
                 >
                   <span
