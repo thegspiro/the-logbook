@@ -6,7 +6,7 @@ Used by both the dashboard admin-summary and the training compliance-matrix endp
 """
 
 import calendar
-from datetime import date
+from datetime import date, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -64,8 +64,11 @@ def _get_custom_annual_window(req, today: date):
         if cycle_start_b <= today <= cycle_end_b:
             return cycle_start_b, cycle_end_b
 
-        # Outside both windows — use the most recently ended cycle
-        return cycle_start_a, cycle_end_a
+        # Gap between cycles (e.g. Feb-Oct for a Nov-Jan window).
+        # Extend the most recently ended cycle through the gap so that
+        # late completions still satisfy the current year's requirement.
+        gap_end = cycle_start_b - timedelta(days=1)
+        return cycle_start_a, gap_end
     else:
         # Same-year window (e.g. Mar 1 -> Jun 30)
         yr = req.year if req.year else today.year

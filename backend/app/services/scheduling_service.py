@@ -2157,8 +2157,12 @@ class SchedulingService:
                         period_start = cycle_start_b
                         period_end = cycle_end_b
                     else:
+                        # Gap between cycles — extend to cover
+                        # late completions for the current year
                         period_start = cycle_start_a
-                        period_end = cycle_end_a
+                        period_end = (
+                            cycle_start_b - timedelta(days=1)
+                        )
                 else:
                     yr = reference_date.year
                     period_start = date(yr, start_month, start_day)

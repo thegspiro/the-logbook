@@ -232,6 +232,19 @@ class TestGetDateWindow:
         assert start == date(2026, 11, 1)
         assert end == date(2027, 1, 31)
 
+    def test_annual_custom_window_cross_year_gap_extends_to_next_cycle(self):
+        """During the Feb-Oct gap, the window extends from the previous cycle start to the day before the next cycle."""
+        req = _make_requirement(
+            frequency=SimpleNamespace(value="annual"),
+            period_start_month=11,
+            period_start_day=1,
+            period_end_month=1,
+            period_end_day=31,
+        )
+        start, end = TrainingService._get_date_window(req, date(2026, 6, 15))
+        assert start == date(2025, 11, 1)
+        assert end == date(2026, 10, 31)
+
     def test_annual_no_custom_end_uses_default(self):
         """Without period_end_month, falls back to standard Jan 1 – Dec 31."""
         req = _make_requirement(
@@ -382,8 +395,8 @@ class TestEvaluateRequirementDetailHours:
         assert result["completed_hours"] == 0
         assert result["is_met"] is False
 
-    def test_hours_cross_year_gap_completion_does_not_satisfy_previous_cycle(self):
-        """Completion during the Feb-Oct gap does NOT count for the previous Nov-Jan cycle."""
+    def test_hours_cross_year_gap_completion_satisfies_current_year(self):
+        """Completion during the Feb-Oct gap counts for the current year's requirement."""
         req = _make_requirement(
             required_hours=10.0,
             period_start_month=11,
@@ -397,8 +410,8 @@ class TestEvaluateRequirementDetailHours:
         result = TrainingService.evaluate_requirement_detail(
             req, records, date(2026, 5, 20)
         )
-        assert result["completed_hours"] == 0
-        assert result["is_met"] is False
+        assert result["completed_hours"] == 20.0
+        assert result["is_met"] is True
 
     def test_hours_cross_year_gap_completion_does_not_satisfy_next_cycle(self):
         """Completion during the Feb-Oct gap does NOT count for the upcoming Nov-Jan cycle."""
