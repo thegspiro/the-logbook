@@ -26,7 +26,7 @@ import {
 import { adminHoursEntryService } from "../modules/admin-hours/services/api";
 import type { AdminHoursSummary } from "../modules/admin-hours/types";
 import type { LeaveOfAbsenceResponse } from "../services/api";
-import { CreditCard } from "lucide-react";
+import { CreditCard, Pencil } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 import { getErrorMessage } from "../utils/errorHandling";
 import { useTimezone } from "../hooks/useTimezone";
@@ -122,6 +122,12 @@ export const MemberProfilePage: React.FC = () => {
   const [adminHoursSummary, setAdminHoursSummary] =
     useState<AdminHoursSummary | null>(null);
   const [adminHoursLoading, setAdminHoursLoading] = useState(false);
+
+  // Status change modal state
+  const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [statusChanging, setStatusChanging] = useState(false);
+  const [newStatus, setNewStatus] = useState<string>("");
+  const [statusReason, setStatusReason] = useState("");
 
   // Module enablement checks
   const trainingEnabled = isModuleEnabled("training");
@@ -248,6 +254,38 @@ export const MemberProfilePage: React.FC = () => {
     fetchTrainingRecords,
     fetchComplianceSummary,
   ]);
+
+  const canManageMembers = checkPermission("members.manage");
+
+  const handleOpenStatusModal = () => {
+    if (!user) return;
+    setNewStatus(user.status);
+    setStatusReason("");
+    setStatusModalOpen(true);
+  };
+
+  const handleStatusChange = async () => {
+    if (!userId || !newStatus || !user) return;
+    if (newStatus === user.status) return;
+
+    try {
+      setStatusChanging(true);
+      setError(null);
+      await memberStatusService.changeStatus(userId, {
+        new_status: newStatus,
+        reason: statusReason.trim() || undefined,
+      });
+      // Re-fetch user to get the updated status
+      await fetchUserData(userId);
+      setStatusModalOpen(false);
+    } catch (err: unknown) {
+      setError(
+        getErrorMessage(err, "Unable to change member status. Please try again."),
+      );
+    } finally {
+      setStatusChanging(false);
+    }
+  };
 
   const getTrainingStatusColor = (status: string) => {
     switch (status) {
@@ -657,15 +695,31 @@ export const MemberProfilePage: React.FC = () => {
                   <CreditCard className="h-4 w-4" />
                   ID Card
                 </Link>
-                <span
-                  className={`px-3 py-1 text-sm font-semibold rounded-full ${
-                    user.status === UserStatus.ACTIVE
-                      ? "bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400"
-                      : "bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400"
-                  }`}
-                >
-                  {user.status}
-                </span>
+                {canManageMembers ? (
+                  <button
+                    type="button"
+                    onClick={handleOpenStatusModal}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1 text-sm font-semibold rounded-full cursor-pointer transition hover:ring-2 hover:ring-offset-1 hover:ring-blue-400 dark:hover:ring-offset-gray-900 ${
+                      user.status === UserStatus.ACTIVE
+                        ? "bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400"
+                        : "bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400"
+                    }`}
+                    title="Change member status"
+                  >
+                    {user.status}
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                ) : (
+                  <span
+                    className={`px-3 py-1 text-sm font-semibold rounded-full ${
+                      user.status === UserStatus.ACTIVE
+                        ? "bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400"
+                        : "bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400"
+                    }`}
+                  >
+                    {user.status}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -1526,9 +1580,21 @@ export const MemberProfilePage: React.FC = () => {
                   <p className="text-xs text-theme-text-muted uppercase font-medium">
                     Status
                   </p>
-                  <p className="text-sm text-theme-text-primary mt-1 capitalize">
-                    {user.status}
-                  </p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="text-sm text-theme-text-primary capitalize">
+                      {user.status.replace(/_/g, " ")}
+                    </p>
+                    {canManageMembers && (
+                      <button
+                        type="button"
+                        onClick={handleOpenStatusModal}
+                        className="text-theme-text-muted hover:text-blue-500 transition"
+                        title="Change status"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {user.hire_date && (
                   <div>
@@ -1651,6 +1717,75 @@ export const MemberProfilePage: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* Status Change Modal */}
+        {statusModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="bg-theme-surface rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+              <h3 className="text-lg font-semibold text-theme-text-primary mb-4">
+                Change Member Status
+              </h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                    New Status
+                  </label>
+                  <select
+                    value={newStatus}
+                    onChange={(e) => setNewStatus(e.target.value)}
+                    className="w-full rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {Object.values(UserStatus).map((s) => (
+                      <option key={s} value={s}>
+                        {s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                    Reason (optional)
+                  </label>
+                  <textarea
+                    value={statusReason}
+                    onChange={(e) => setStatusReason(e.target.value)}
+                    rows={3}
+                    placeholder="Reason for the status change..."
+                    className="w-full rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                {(newStatus === UserStatus.DROPPED_VOLUNTARY ||
+                  newStatus === UserStatus.DROPPED_INVOLUNTARY) && (
+                  <p className="text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded-md p-2">
+                    Dropping a member will generate a property return report and may send
+                    an email notification.
+                  </p>
+                )}
+                {error && (
+                  <p className="text-sm text-red-500">{error}</p>
+                )}
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => void handleStatusChange()}
+                  disabled={statusChanging || newStatus === user?.status}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                >
+                  {statusChanging ? "Saving..." : "Update Status"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusModalOpen(false)}
+                  disabled={statusChanging}
+                  className="flex-1 px-4 py-2 bg-theme-surface text-theme-text-secondary text-sm font-medium border border-theme-surface-border rounded-md hover:bg-theme-surface-hover disabled:opacity-50 transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
