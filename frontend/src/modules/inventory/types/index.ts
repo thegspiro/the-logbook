@@ -144,6 +144,14 @@ export const ITEM_TYPE_FIELDS: Record<string, string[]> = {
   other: [],
 };
 
+/** Shared request/workflow status badge colors (pending/approved/denied/completed) */
+export const REQUEST_STATUS_BADGES: Record<string, string> = {
+  pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/30',
+  approved: 'bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/30',
+  denied: 'bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/30',
+  completed: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/30',
+};
+
 /** Get the display style for an item status */
 export function getStatusStyle(status: string): string {
   const found = STATUS_OPTIONS.find(s => s.value === status);

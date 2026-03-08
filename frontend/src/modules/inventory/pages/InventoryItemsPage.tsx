@@ -316,7 +316,7 @@ const InventoryItemsPage: React.FC = () => {
           <span className="text-sm font-medium text-theme-text-primary">{selIds.size} selected</span>
           <button onClick={printLabels} className="btn-secondary btn-sm inline-flex items-center gap-1.5"><Printer className="w-3.5 h-3.5" /> Print Labels</button>
           <button onClick={() => setBulkStatusOpen(true)} className="btn-secondary btn-sm inline-flex items-center gap-1.5"><ArrowUpDown className="w-3.5 h-3.5" /> Change Status</button>
-          {canManage && <button onClick={() => void bulkRetire()} className="btn-sm px-2.5 py-1.5 text-xs rounded-md bg-red-600 text-white hover:bg-red-700 inline-flex items-center gap-1.5"><Archive className="w-3.5 h-3.5" /> Retire</button>}
+          {canManage && <button onClick={() => void bulkRetire()} className="btn-primary btn-sm inline-flex items-center gap-1.5"><Archive className="w-3.5 h-3.5" /> Retire</button>}
           <button onClick={() => setSelIds(new Set())} className="text-xs text-theme-text-muted hover:text-theme-text-primary ml-auto">Clear</button>
         </div>
       )}
