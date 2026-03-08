@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import {
   ArrowLeft, Users, RefreshCw, Search, ChevronDown, ChevronUp,
   Package, AlertTriangle, User, Loader2, ArrowUpDown,
+  ArrowDownToLine, ArrowUpFromLine, ScanLine,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import type {
@@ -17,8 +18,9 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate } from '../../../utils/dateFormatting';
 import { useInventoryWebSocket } from '../../../hooks/useInventoryWebSocket';
-import { Modal } from '../../../components/Modal';
-import toast from 'react-hot-toast';
+import { InventoryScanModal } from '../../../components/InventoryScanModal';
+import { ReturnItemsModal } from '../../../components/ReturnItemsModal';
+import { MemberIdScannerModal } from '../../../components/MemberIdScannerModal';
 
 type SortOption = 'name' | 'total_items' | 'overdue' | 'assigned';
 
@@ -52,13 +54,23 @@ const InventoryMembersPage: React.FC = () => {
   const [memberDetail, setMemberDetail] = useState<UserInventoryResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  const [assignModal, setAssignModal] = useState<{ open: boolean; userId: string; memberName: string }>(
-    { open: false, userId: '', memberName: '' }
-  );
-  const [assignSearch, setAssignSearch] = useState('');
-  const [assignItems, setAssignItems] = useState<{ id: string; name: string; serial_number?: string | undefined }[]>([]);
-  const [assignItemsLoading, setAssignItemsLoading] = useState(false);
-  const [assigningItemId, setAssigningItemId] = useState<string | null>(null);
+  // Barcode scan modal (assign / checkout)
+  const [scanModal, setScanModal] = useState<{
+    isOpen: boolean;
+    mode: 'checkout' | 'return';
+    userId: string;
+    memberName: string;
+  }>({ isOpen: false, mode: 'checkout', userId: '', memberName: '' });
+
+  // Return modal
+  const [returnModal, setReturnModal] = useState<{
+    isOpen: boolean;
+    userId: string;
+    memberName: string;
+  }>({ isOpen: false, userId: '', memberName: '' });
+
+  // Member ID scanner modal
+  const [memberScannerOpen, setMemberScannerOpen] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setSearchDebounce(searchQuery), 300);
@@ -94,43 +106,45 @@ const InventoryMembersPage: React.FC = () => {
     finally { setDetailLoading(false); }
   };
 
-  const openAssignModal = (m: MemberInventorySummary) => {
-    setAssignModal({ open: true, userId: m.user_id, memberName: m.full_name || m.username });
-    setAssignSearch(''); setAssignItems([]);
-  };
-  const closeAssignModal = () => {
-    setAssignModal((p) => ({ ...p, open: false }));
-    setAssignSearch(''); setAssignItems([]); setAssigningItemId(null);
+  const openScanModal = (m: MemberInventorySummary) => {
+    setScanModal({
+      isOpen: true,
+      mode: 'checkout',
+      userId: m.user_id,
+      memberName: m.full_name || m.username,
+    });
   };
 
-  useEffect(() => {
-    if (!assignModal.open || !assignSearch.trim()) { setAssignItems([]); return; }
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      setAssignItemsLoading(true);
-      void inventoryService.getItems({ search: assignSearch.trim() || undefined, status: 'available', limit: 20 })
-        .then((res) => {
-          if (!cancelled) setAssignItems(res.items.map((i) => ({ id: i.id, name: i.name, ...(i.serial_number ? { serial_number: i.serial_number } : {}) })));
-        })
-        .catch(() => { if (!cancelled) setAssignItems([]); })
-        .finally(() => { if (!cancelled) setAssignItemsLoading(false); });
-    }, 300);
-    return () => { cancelled = true; clearTimeout(timer); };
-  }, [assignModal.open, assignSearch]);
+  const handleMemberScanned = (scanned: { userId: string; memberName: string }) => {
+    setMemberScannerOpen(false);
+    setScanModal({
+      isOpen: true,
+      mode: 'checkout',
+      userId: scanned.userId,
+      memberName: scanned.memberName,
+    });
+  };
 
-  const handleAssignItem = async (itemId: string) => {
-    setAssigningItemId(itemId);
-    try {
-      await inventoryService.assignItem(itemId, assignModal.userId);
-      toast.success('Item assigned successfully.');
-      void loadMembers();
-      if (expandedUserId === assignModal.userId) {
-        try { setMemberDetail(await inventoryService.getUserInventory(assignModal.userId)); } catch { /* ignore */ }
+  const openReturnModal = (m: MemberInventorySummary) => {
+    setReturnModal({
+      isOpen: true,
+      userId: m.user_id,
+      memberName: m.full_name || m.username,
+    });
+  };
+
+  const handleScanComplete = async () => {
+    await loadMembers();
+    if (expandedUserId) {
+      setDetailLoading(true);
+      try {
+        setMemberDetail(await inventoryService.getUserInventory(expandedUserId));
+      } catch {
+        setMemberDetail(null);
+      } finally {
+        setDetailLoading(false);
       }
-      setAssignItems((prev) => prev.filter((i) => i.id !== itemId));
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to assign item.'));
-    } finally { setAssigningItemId(null); }
+    }
   };
 
   const sortedMembers = useMemo(() => {
@@ -161,10 +175,21 @@ const InventoryMembersPage: React.FC = () => {
             <p className="text-sm text-theme-text-muted">View and manage equipment assigned to members</p>
           </div>
         </div>
-        <button onClick={() => { void loadMembers(); }} className="flex items-center gap-1.5 px-3 py-2 text-sm text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface-hover transition-colors" title="Refresh">
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          <span className="hidden sm:inline">Refresh</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {canManage && (
+            <button
+              onClick={() => setMemberScannerOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
+              title="Scan a member's digital ID to start assigning items"
+            >
+              <ScanLine className="w-4 h-4" /> Scan Member ID
+            </button>
+          )}
+          <button onClick={() => { void loadMembers(); }} className="flex items-center gap-1.5 px-3 py-2 text-sm text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface-hover transition-colors" title="Refresh">
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -261,9 +286,26 @@ const InventoryMembersPage: React.FC = () => {
                     <p className="text-xs text-theme-text-muted">items</p>
                   </div>
                   {canManage && (
-                    <button type="button" className="shrink-0 btn-info px-3 py-1.5 text-xs font-medium rounded-lg" onClick={(e) => { e.stopPropagation(); openAssignModal(member); }}>
-                      Assign
-                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
+                        onClick={() => openScanModal(member)}
+                        title="Assign items to this member"
+                      >
+                        <ArrowDownToLine className="w-3.5 h-3.5" /> Assign
+                      </button>
+                      {member.total_items > 0 && (
+                        <button
+                          type="button"
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+                          onClick={() => openReturnModal(member)}
+                          title="Return items from this member"
+                        >
+                          <ArrowUpFromLine className="w-3.5 h-3.5" /> Return
+                        </button>
+                      )}
+                    </div>
                   )}
                 </button>
 
@@ -353,39 +395,31 @@ const InventoryMembersPage: React.FC = () => {
         </div>
       )}
 
-      {/* Assign Modal */}
-      <Modal isOpen={assignModal.open} onClose={closeAssignModal} title={`Assign Item to ${assignModal.memberName}`}>
-        <div className="space-y-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
-            <input type="text" value={assignSearch} onChange={(e) => setAssignSearch(e.target.value)} placeholder="Search available items..." className="form-input pl-10 pr-4 text-sm placeholder-theme-text-muted" autoFocus />
-          </div>
-          <div className="max-h-72 overflow-y-auto space-y-2">
-            {assignItemsLoading ? (
-              <div className="flex items-center justify-center py-6">
-                <Loader2 className="w-5 h-5 animate-spin text-theme-text-muted mr-2" />
-                <span className="text-sm text-theme-text-muted">Searching...</span>
-              </div>
-            ) : assignItems.length > 0 ? (
-              assignItems.map((item) => (
-                <div key={item.id} className="card-secondary p-3 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-theme-text-primary truncate">{item.name}</p>
-                    {item.serial_number && <p className="text-xs text-theme-text-muted font-mono">SN: {item.serial_number}</p>}
-                  </div>
-                  <button type="button" disabled={assigningItemId === item.id} onClick={() => { void handleAssignItem(item.id); }} className="shrink-0 btn-info px-3 py-1.5 text-xs font-medium rounded-lg disabled:opacity-50">
-                    {assigningItemId === item.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Assign'}
-                  </button>
-                </div>
-              ))
-            ) : assignSearch.trim() ? (
-              <p className="text-sm text-theme-text-muted text-center py-6">No available items match your search.</p>
-            ) : (
-              <p className="text-sm text-theme-text-muted text-center py-6">Type to search for items to assign.</p>
-            )}
-          </div>
-        </div>
-      </Modal>
+      {/* Barcode Scan Modal (Assign) */}
+      <InventoryScanModal
+        isOpen={scanModal.isOpen}
+        onClose={() => setScanModal((prev) => ({ ...prev, isOpen: false }))}
+        mode={scanModal.mode}
+        userId={scanModal.userId}
+        memberName={scanModal.memberName}
+        onComplete={() => { void handleScanComplete(); }}
+      />
+
+      {/* Return Items Modal */}
+      <ReturnItemsModal
+        isOpen={returnModal.isOpen}
+        onClose={() => setReturnModal((prev) => ({ ...prev, isOpen: false }))}
+        userId={returnModal.userId}
+        memberName={returnModal.memberName}
+        onComplete={() => { void handleScanComplete(); }}
+      />
+
+      {/* Member ID Scanner Modal */}
+      <MemberIdScannerModal
+        isOpen={memberScannerOpen}
+        onClose={() => setMemberScannerOpen(false)}
+        onMemberIdentified={handleMemberScanned}
+      />
     </div>
   );
 };
