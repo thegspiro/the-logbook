@@ -20,6 +20,7 @@ import {
   Plus,
   Pencil,
   Eye,
+  History,
 } from 'lucide-react';
 import { Breadcrumbs, SkeletonPage } from '../../../components/ux';
 import { useEmailTemplatesStore } from '../store/emailTemplatesStore';
@@ -29,6 +30,7 @@ import { TemplateEditor } from '../components/TemplateEditor';
 import { TemplatePreview } from '../components/TemplatePreview';
 import ScheduleEmailForm from '../components/ScheduleEmailForm';
 import ScheduledEmailList from '../components/ScheduledEmailList';
+import MessageHistoryList from '../components/MessageHistoryList';
 import type { EmailTemplateUpdate, EmailAttachment } from '../types';
 import toast from 'react-hot-toast';
 
@@ -66,7 +68,7 @@ const EmailTemplatesPage: React.FC = () => {
   const [isTogglingActive, setIsTogglingActive] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [, setIsDirty] = useState(false);
-  const [activeTab, setActiveTab] = useState<'templates' | 'scheduled'>('templates');
+  const [activeTab, setActiveTab] = useState<'templates' | 'scheduled' | 'history'>('templates');
   const [editorView, setEditorView] = useState<'edit' | 'preview'>('edit');
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [members, setMembers] = useState<PreviewMember[]>([]);
@@ -244,6 +246,17 @@ const EmailTemplatesPage: React.FC = () => {
             <CalendarClock className="h-4 w-4" />
             Scheduled
           </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'history'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-theme-text-secondary hover:text-theme-text-primary'
+            }`}
+          >
+            <History className="h-4 w-4" />
+            History
+          </button>
         </div>
 
         {/* Error Banner */}
@@ -287,6 +300,11 @@ const EmailTemplatesPage: React.FC = () => {
 
             <ScheduledEmailList />
           </div>
+        )}
+
+        {/* History Tab */}
+        {activeTab === 'history' && (
+          <MessageHistoryList templates={templates} />
         )}
 
         {/* Templates Tab: Main Layout: Sidebar + Main (tabbed editor/preview) */}

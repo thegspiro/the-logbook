@@ -87,11 +87,13 @@ export {
   emailTemplatesService,
   scheduledEmailsService,
   messagesService,
+  messageHistoryService,
 } from './communicationsServices';
 export type {
   DashboardStats, AdminSummary, ActionItemSummary, CommunityEngagement,
   ComplianceMatrixMember, ComplianceMatrix, ExpiringCertification,
   ScheduledEmail, ScheduledEmailCreate, ScheduledEmailUpdate,
+  MessageHistoryRecord, MessageHistoryListResponse, SendTestEmailRequest,
   Location, LocationCreate,
 } from './communicationsServices';
 
