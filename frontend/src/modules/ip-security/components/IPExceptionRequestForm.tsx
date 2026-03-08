@@ -30,12 +30,13 @@ export const IPExceptionRequestForm: React.FC<IPExceptionRequestFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const trimmedDescription = description.trim();
     await onSubmit({
       ipAddress: ipAddress.trim(),
       reason: reason.trim(),
       useCase: useCase.trim(),
       requestedDurationDays: durationDays,
-      description: description.trim() || undefined,
+      ...(trimmedDescription ? { description: trimmedDescription } : {}),
     });
     setIpAddress('');
     setReason('');

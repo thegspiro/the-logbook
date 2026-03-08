@@ -14,7 +14,7 @@ import {
   Radio, Shirt, HardHat, Cog,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
-import { facilitiesService } from '../../../services/facilitiesServices';
+import { locationsService } from '../../../services/facilitiesServices';
 import type {
   InventoryItem, InventoryCategory, ItemHistoryEvent,
   MaintenanceRecord, NFPACompliance, NFPAExposureRecord,
@@ -139,8 +139,8 @@ const ItemDetailPage: React.FC = () => {
       // Resolve location name
       if (fetched.location_id) {
         try {
-          const locations = await facilitiesService.getLocations();
-          const loc = locations.find(l => l.id === fetched.location_id);
+          const locations = await locationsService.getLocations();
+          const loc = locations.find((l: { id: string }) => l.id === fetched.location_id);
           setLocationName(loc?.name ?? null);
         } catch {
           setLocationName(null);

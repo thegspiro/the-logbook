@@ -87,9 +87,10 @@ const IPSecurityAdminPage: React.FC = () => {
 
   const handleApprove = async () => {
     try {
+      const trimmedNotes = approvalNotes.trim();
       await approveException(approveModal.id, {
-        approvedDurationDays: approvedDays || undefined,
-        approvalNotes: approvalNotes.trim() || undefined,
+        ...(approvedDays ? { approvedDurationDays: approvedDays } : {}),
+        ...(trimmedNotes ? { approvalNotes: trimmedNotes } : {}),
       });
       toast.success('Exception approved');
       setApproveModal({ open: false, id: '' });
@@ -127,11 +128,12 @@ const IPSecurityAdminPage: React.FC = () => {
   const handleAddCountry = async () => {
     if (!newCountry.countryCode.trim() || !newCountry.reason.trim()) return;
     try {
+      const trimmedCountryName = newCountry.countryName?.trim();
       await addBlockedCountry({
-        ...newCountry,
         countryCode: newCountry.countryCode.trim().toUpperCase(),
         reason: newCountry.reason.trim(),
-        countryName: newCountry.countryName?.trim() || undefined,
+        riskLevel: newCountry.riskLevel,
+        ...(trimmedCountryName ? { countryName: trimmedCountryName } : {}),
       });
       toast.success('Country added to block list');
       setCountryModal(false);
