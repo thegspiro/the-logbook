@@ -189,8 +189,8 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
   };
 
   const inputClass = isDark
-    ? `w-full px-3 py-2 bg-theme-surface-secondary border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-pink-500 focus:border-pink-500 ${
-        error ? 'border-red-500/50' : 'border-theme-surface-border'
+    ? `w-full px-3 py-2 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-pink-500 focus:border-pink-500 ${
+        error ? 'border-red-500/50' : 'border-theme-input-border'
       } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`
     : `w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring ${
         error ? 'border-red-300 dark:border-red-500/50' : 'border-theme-input-border'

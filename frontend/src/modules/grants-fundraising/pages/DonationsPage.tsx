@@ -130,7 +130,7 @@ const DonationsPage: React.FC = () => {
           <select
             value={methodFilter}
             onChange={(e) => setMethodFilter(e.target.value)}
-            className="rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none"
+            className="rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none"
           >
             <option value="">All Methods</option>
             {Object.entries(PAYMENT_METHOD_LABELS).map(([key, label]) => (
