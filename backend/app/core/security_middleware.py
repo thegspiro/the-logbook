@@ -520,6 +520,14 @@ async def verify_csrf_token(request: HTTPConnection) -> None:
     if request.method in {"GET", "HEAD", "OPTIONS"}:
         return
 
+    # Skip for onboarding endpoints — they implement their own session-based
+    # CSRF validation via validate_session().  The global double-submit check
+    # conflicts after createSystemOwner sets the auth csrf_token cookie while
+    # the onboarding client continues sending its own session CSRF token.
+    request_path = request.scope.get("path", "")
+    if "/onboarding/" in request_path or request_path.endswith("/onboarding"):
+        return
+
     # Double-submit cookie pattern: compare header value against cookie
     request_token = request.headers.get("X-CSRF-Token")
     cookie_token = request.cookies.get("csrf_token")
