@@ -10,7 +10,7 @@
  */
 
 import React, { useState, useMemo } from "react";
-import { Settings, Truck } from "lucide-react";
+import { Settings, Truck, ClipboardCheck } from "lucide-react";
 import type { ShiftTemplateRecord } from "../services/api";
 import type { ShiftSettings } from "../types/shiftSettings";
 import {
@@ -170,6 +170,121 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
 
       {/* Scheduling Notifications */}
       <SchedulingNotificationsPanel />
+
+      {/* Equipment Check Settings */}
+      <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5">
+        <h3 className="text-base font-semibold text-theme-text-primary mb-3 flex items-center gap-2">
+          <ClipboardCheck className="w-4 h-4" /> Equipment Checks
+        </h3>
+        <p className="text-sm text-theme-text-muted mb-4">
+          Configure equipment check requirements for shift start and end.
+        </p>
+        <div className="space-y-4">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={settings.equipmentCheckSettings?.enabled ?? false}
+              onChange={(e) =>
+                setSettings((s) => ({
+                  ...s,
+                  equipmentCheckSettings: {
+                    ...s.equipmentCheckSettings,
+                    enabled: e.target.checked,
+                  },
+                }))
+              }
+              className="w-4 h-4 rounded border-theme-surface-border text-violet-600 focus:ring-violet-500"
+            />
+            <span className="text-sm text-theme-text-primary">
+              Enable equipment checks for shifts
+            </span>
+          </label>
+
+          {settings.equipmentCheckSettings?.enabled && (
+            <>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={
+                    settings.equipmentCheckSettings?.requireSignature ?? false
+                  }
+                  onChange={(e) =>
+                    setSettings((s) => ({
+                      ...s,
+                      equipmentCheckSettings: {
+                        ...s.equipmentCheckSettings,
+                        requireSignature: e.target.checked,
+                      },
+                    }))
+                  }
+                  className="w-4 h-4 rounded border-theme-surface-border text-violet-600 focus:ring-violet-500"
+                />
+                <span className="text-sm text-theme-text-primary">
+                  Require signature on completion
+                </span>
+              </label>
+
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={
+                    settings.equipmentCheckSettings?.blockShiftStartOnFail ??
+                    false
+                  }
+                  onChange={(e) =>
+                    setSettings((s) => ({
+                      ...s,
+                      equipmentCheckSettings: {
+                        ...s.equipmentCheckSettings,
+                        blockShiftStartOnFail: e.target.checked,
+                      },
+                    }))
+                  }
+                  className="w-4 h-4 rounded border-theme-surface-border text-violet-600 focus:ring-violet-500"
+                />
+                <span className="text-sm text-theme-text-primary">
+                  Block shift start when required items fail
+                </span>
+              </label>
+
+              <div>
+                <label className="block text-sm text-theme-text-primary mb-1">
+                  Default expiration warning (days)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={
+                    settings.equipmentCheckSettings
+                      ?.defaultExpirationWarningDays ?? 30
+                  }
+                  onChange={(e) =>
+                    setSettings((s) => ({
+                      ...s,
+                      equipmentCheckSettings: {
+                        ...s.equipmentCheckSettings,
+                        defaultExpirationWarningDays:
+                          parseInt(e.target.value, 10) || 30,
+                      },
+                    }))
+                  }
+                  className="w-24 px-3 py-1.5 text-sm rounded-lg border border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-2 focus:ring-violet-500"
+                />
+              </div>
+
+              <div className="pt-2">
+                <a
+                  href="/scheduling/equipment-check-templates/new"
+                  className="text-sm text-violet-600 hover:text-violet-700 font-medium"
+                >
+                  Manage Equipment Check Templates →
+                </a>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
 
       {/* Save Actions */}
       <div className="flex items-center justify-between pt-2">

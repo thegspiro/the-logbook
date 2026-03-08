@@ -17,6 +17,7 @@ from app.api.v1.endpoints import (
     documents,
     elections,
     email_templates,
+    equipment_check,
     error_logs,
     event_requests,
     events,
@@ -118,6 +119,11 @@ api_router.include_router(documents.router, prefix="/documents", tags=["document
 api_router.include_router(meetings.router, prefix="/meetings", tags=["meetings"])
 api_router.include_router(minutes.router, prefix="/minutes-records", tags=["minutes"])
 api_router.include_router(scheduling.router, prefix="/scheduling", tags=["scheduling"])
+api_router.include_router(
+    equipment_check.router,
+    prefix="/equipment-checks",
+    tags=["equipment-checks"],
+)
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(
     notifications.router, prefix="/notifications", tags=["notifications"]
