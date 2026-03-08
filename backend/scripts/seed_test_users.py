@@ -207,8 +207,8 @@ async def get_or_create_positions(
             await session.execute(
                 text(
                     "INSERT INTO positions (id, organization_id, name, slug, "
-                    "is_system, priority) "
-                    "VALUES (:id, :oid, :name, :slug, 1, :priority)"
+                    "is_system, priority, permissions) "
+                    "VALUES (:id, :oid, :name, :slug, 1, :priority, '[]')"
                 ),
                 {
                     "id": pid,
@@ -259,11 +259,11 @@ async def seed_users(session: AsyncSession, org_id: str) -> None:
                 "(id, organization_id, username, email, password_hash, "
                 "first_name, last_name, `rank`, station, membership_type, "
                 "status, hire_date, membership_number, email_verified, "
-                "must_change_password) "
+                "must_change_password, mfa_enabled, emergency_contacts) "
                 "VALUES "
                 "(:id, :oid, :username, :email, :pw, "
                 ":first, :last, :rank, :station, :mtype, "
-                ":status, :hire, :mnum, 1, 0)"
+                ":status, :hire, :mnum, 1, 0, 0, '[]')"
             ),
             {
                 "id": user_id,

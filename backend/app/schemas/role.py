@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class RoleBase(BaseModel):
@@ -48,6 +48,12 @@ class RoleResponse(BaseModel):
     priority: int
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("permissions", mode="before")
+    @classmethod
+    def coerce_null_permissions(cls, v: object) -> object:
+        """Coerce NULL (from DB) to empty list so Pydantic doesn't reject it."""
+        return v if v is not None else []
 
     model_config = ConfigDict(from_attributes=True)
 
