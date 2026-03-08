@@ -18,6 +18,7 @@ export {
   TemplatePreview,
   ScheduleEmailForm,
   ScheduledEmailList,
+  MessageHistoryList,
 } from './components';
 
 // Types
@@ -30,4 +31,7 @@ export type {
   ScheduledEmail,
   ScheduledEmailCreate,
   ScheduledEmailUpdate,
+  MessageHistoryRecord,
+  MessageHistoryListResponse,
+  SendTestEmailRequest,
 } from './types';
