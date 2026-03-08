@@ -327,7 +327,7 @@ export const StartSkillTestPage: React.FC = () => {
         <button
           onClick={() => void handleStart()}
           disabled={!selectedTemplateId || !selectedCandidateId || isStarting}
-          className={`w-full flex items-center justify-center gap-3 py-4 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-xl text-lg font-bold transition-colors ${
+          className={`w-full flex items-center justify-center gap-3 py-4 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-lg font-bold transition-colors ${
             isPractice
               ? 'bg-blue-600 hover:bg-blue-700'
               : 'bg-red-600 hover:bg-red-700'

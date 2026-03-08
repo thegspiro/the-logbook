@@ -715,7 +715,7 @@ export const SettingsPage: React.FC = () => {
               <button
                 onClick={() => { void handleSaveProfile(); }}
                 disabled={savingProfile || !profileDirty}
-                className="btn-info disabled:bg-gray-400 disabled:cursor-not-allowed font-medium gap-2 inline-flex items-center rounded-md text-sm"
+                className="btn-info disabled:opacity-50 disabled:cursor-not-allowed font-medium gap-2 inline-flex items-center rounded-md text-sm"
               >
                 {savingProfile && <Loader2 className="w-4 h-4 animate-spin" />}
                 {savingProfile ? 'Saving...' : 'Save Profile'}
@@ -875,7 +875,7 @@ export const SettingsPage: React.FC = () => {
                 <button
                   onClick={() => { void handleSaveContact(); }}
                   disabled={savingContact}
-                  className="btn-info disabled:bg-gray-400 disabled:cursor-not-allowed font-medium gap-2 inline-flex items-center rounded-md text-sm"
+                  className="btn-info disabled:opacity-50 disabled:cursor-not-allowed font-medium gap-2 inline-flex items-center rounded-md text-sm"
                 >
                   {savingContact && <Loader2 className="w-4 h-4 animate-spin" />}
                   {savingContact ? 'Saving...' : 'Save'}
@@ -948,7 +948,7 @@ export const SettingsPage: React.FC = () => {
                 <button
                   onClick={() => { void handleSaveMembershipId(); }}
                   disabled={savingMembershipId}
-                  className="btn-info disabled:bg-gray-400 disabled:cursor-not-allowed font-medium gap-2 inline-flex items-center rounded-md text-sm"
+                  className="btn-info disabled:opacity-50 disabled:cursor-not-allowed font-medium gap-2 inline-flex items-center rounded-md text-sm"
                 >
                   {savingMembershipId && <Loader2 className="w-4 h-4 animate-spin" />}
                   {savingMembershipId ? 'Saving...' : 'Save'}
@@ -1031,7 +1031,7 @@ export const SettingsPage: React.FC = () => {
                     type="button"
                     onClick={() => { void (editingRank ? handleUpdateRank : handleAddRank)(); }}
                     disabled={rankSaving || !rankForm.display_name.trim() || !rankForm.rank_code.trim()}
-                    className="btn-info disabled:bg-gray-400 disabled:cursor-not-allowed font-medium gap-1 inline-flex items-center px-3 py-1.5 rounded-md text-sm"
+                    className="btn-info disabled:opacity-50 disabled:cursor-not-allowed font-medium gap-1 inline-flex items-center px-3 py-1.5 rounded-md text-sm"
                   >
                     {rankSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                     {editingRank ? 'Save' : 'Add'}
@@ -1362,7 +1362,7 @@ export const SettingsPage: React.FC = () => {
               <button
                 onClick={() => { void handleSaveEmail(); }}
                 disabled={savingEmail}
-                className="btn-info disabled:bg-gray-400 disabled:cursor-not-allowed font-medium gap-2 inline-flex items-center rounded-md text-sm"
+                className="btn-info disabled:opacity-50 disabled:cursor-not-allowed font-medium gap-2 inline-flex items-center rounded-md text-sm"
               >
                 {savingEmail && <Loader2 className="w-4 h-4 animate-spin" />}
                 {savingEmail ? 'Saving...' : 'Save Email Settings'}
@@ -1606,7 +1606,7 @@ export const SettingsPage: React.FC = () => {
               <button
                 onClick={() => { void handleSaveStorage(); }}
                 disabled={savingStorage}
-                className="btn-info disabled:bg-gray-400 disabled:cursor-not-allowed font-medium gap-2 inline-flex items-center rounded-md text-sm"
+                className="btn-info disabled:opacity-50 disabled:cursor-not-allowed font-medium gap-2 inline-flex items-center rounded-md text-sm"
               >
                 {savingStorage && <Loader2 className="w-4 h-4 animate-spin" />}
                 {savingStorage ? 'Saving...' : 'Save Storage Settings'}
@@ -1801,7 +1801,7 @@ export const SettingsPage: React.FC = () => {
               <button
                 onClick={() => { void handleSaveAuth(); }}
                 disabled={savingAuth}
-                className="btn-info disabled:bg-gray-400 disabled:cursor-not-allowed font-medium gap-2 inline-flex items-center rounded-md text-sm"
+                className="btn-info disabled:opacity-50 disabled:cursor-not-allowed font-medium gap-2 inline-flex items-center rounded-md text-sm"
               >
                 {savingAuth && <Loader2 className="w-4 h-4 animate-spin" />}
                 {savingAuth ? 'Saving...' : 'Save Authentication Settings'}

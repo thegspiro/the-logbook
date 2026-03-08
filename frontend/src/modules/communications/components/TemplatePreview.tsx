@@ -109,7 +109,7 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
           value={selectedMemberId}
           onChange={(e) => handleMemberChange(e.target.value)}
           disabled={isLoadingMembers}
-          className="flex-1 rounded-md border border-theme-surface-border bg-theme-surface px-2 py-1.5 text-xs text-theme-text-primary focus:border-blue-500 focus:outline-hidden"
+          className="flex-1 rounded-md border border-theme-surface-border bg-theme-surface px-2 py-1.5 text-xs text-theme-text-primary focus:border-theme-focus-ring focus:outline-hidden"
         >
           <option value="">Sample data (default)</option>
           {members.map((m) => {

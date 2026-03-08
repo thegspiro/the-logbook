@@ -177,7 +177,7 @@ const AdminHoursClockInPage: React.FC = () => {
               <button
                 onClick={() => { void handleClockOut(); }}
                 disabled={processing}
-                className="btn-primary disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold px-8 py-4 text-lg transition w-full"
+                className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed font-semibold px-8 py-4 text-lg transition w-full"
               >
                 {processing ? 'Clocking Out...' : 'Clock Out'}
               </button>
@@ -333,7 +333,7 @@ const AdminHoursClockInPage: React.FC = () => {
         <button
           onClick={() => { void handleClockIn(); }}
           disabled={processing}
-          className="btn-success disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold px-8 py-4 text-lg transition w-full"
+          className="btn-success disabled:opacity-50 disabled:cursor-not-allowed font-semibold px-8 py-4 text-lg transition w-full"
         >
           {processing ? 'Clocking In...' : 'Clock In'}
         </button>
