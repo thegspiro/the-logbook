@@ -1052,7 +1052,7 @@ def run_migrations():
             max_attempts = 2
             for attempt in range(1, max_attempts + 1):
                 try:
-                    with timeout_context(1200, "Fast-path database initialization"):
+                    with timeout_context(3600, "Fast-path database initialization"):
                         _fast_path_init(engine, alembic_cfg, base_dir, head_revision)
                     break  # Success
                 except Exception as init_error:
