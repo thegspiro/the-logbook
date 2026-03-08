@@ -130,9 +130,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         const existing = prev[itemId];
         const updated: Record<string, ItemResult> = { ...prev };
         updated[itemId] = {
+          ...existing,
           status,
-          quantityFound: existing?.quantityFound,
-          notes: existing?.notes,
         };
         return updated;
       });
@@ -145,9 +144,9 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       const existing = prev[itemId];
       const updated: Record<string, ItemResult> = { ...prev };
       updated[itemId] = {
+        ...existing,
         status: existing?.status || 'not_checked',
         quantityFound: quantity,
-        notes: existing?.notes,
       };
       return updated;
     });
@@ -158,8 +157,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       const existing = prev[itemId];
       const updated: Record<string, ItemResult> = { ...prev };
       updated[itemId] = {
+        ...existing,
         status: existing?.status || 'not_checked',
-        quantityFound: existing?.quantityFound,
         notes,
       };
       return updated;
