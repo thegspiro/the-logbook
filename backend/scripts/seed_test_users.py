@@ -46,56 +46,69 @@ SHARED_HASH = _hasher.hash(SHARED_PASSWORD)
 # fmt: off
 TEST_USERS = [
     # (username, first_name, last_name, rank, station, membership_type, status, position_slugs)
-    ("jthompson",   "James",     "Thompson",   "fire_chief",     "Headquarters",  "active",        "active",       ["fire_chief", "president"]),
-    ("mgarcia",     "Maria",     "Garcia",      "deputy_chief",   "Headquarters",  "active",        "active",       ["deputy_chief", "vice_president"]),
-    ("rwilliams",   "Robert",    "Williams",    "assistant_chief","Headquarters",  "active",        "active",       ["assistant_chief"]),
-    ("sjohnson",    "Sarah",     "Johnson",     "captain",        "Station 1",     "active",        "active",       ["captain", "treasurer"]),
-    ("dlee",        "David",     "Lee",         "captain",        "Station 2",     "active",        "active",       ["captain"]),
-    ("jmartinez",   "Jennifer",  "Martinez",    "captain",        "Station 3",     "active",        "active",       ["captain", "secretary"]),
-    ("mbrown",      "Michael",   "Brown",       "lieutenant",     "Station 1",     "active",        "active",       ["lieutenant"]),
-    ("awilson",     "Amanda",    "Wilson",      "lieutenant",     "Station 2",     "active",        "active",       ["lieutenant"]),
-    ("cdavis",      "Christopher","Davis",      "lieutenant",     "Station 3",     "active",        "active",       ["lieutenant"]),
-    ("krodriguez",  "Karen",     "Rodriguez",   "engineer",       "Station 1",     "active",        "active",       ["engineer"]),
-    ("banderson",   "Brian",     "Anderson",    "engineer",       "Station 2",     "active",        "active",       ["engineer"]),
-    ("ltaylor",     "Lisa",      "Taylor",      "engineer",       "Station 3",     "active",        "active",       ["engineer"]),
-    ("jwhite",      "Jason",     "White",       "firefighter",    "Station 1",     "active",        "active",       ["firefighter", "member"]),
-    ("nharris",     "Nicole",    "Harris",      "firefighter",    "Station 1",     "active",        "active",       ["firefighter", "member"]),
-    ("tmartin",     "Thomas",    "Martin",      "firefighter",    "Station 1",     "active",        "active",       ["firefighter", "member"]),
-    ("rjackson",    "Rachel",    "Jackson",     "firefighter",    "Station 2",     "active",        "active",       ["firefighter", "member"]),
-    ("dthomas",     "Daniel",    "Thomas",      "firefighter",    "Station 2",     "active",        "active",       ["firefighter", "member"]),
-    ("elewis",      "Emily",     "Lewis",       "firefighter",    "Station 2",     "active",        "active",       ["firefighter", "member"]),
-    ("mrobinson",   "Matthew",   "Robinson",    "firefighter",    "Station 3",     "active",        "active",       ["firefighter", "member"]),
-    ("aclark",      "Ashley",    "Clark",       "firefighter",    "Station 3",     "active",        "active",       ["firefighter", "member"]),
-    ("jwalker",     "Joshua",    "Walker",      "firefighter",    "Station 3",     "active",        "active",       ["firefighter", "member"]),
-    ("shernandez",  "Stephanie", "Hernandez",   "firefighter",    "Station 1",     "active",        "active",       ["firefighter", "member", "it_manager"]),
-    ("ayoung",      "Andrew",    "Young",       "firefighter",    "Station 1",     "probationary",  "probationary", ["firefighter", "member"]),
-    ("kking",       "Kimberly",  "King",        "firefighter",    "Station 2",     "probationary",  "probationary", ["firefighter", "member"]),
-    ("jwright",     "Justin",    "Wright",      "firefighter",    "Station 3",     "probationary",  "probationary", ["firefighter", "member"]),
-    ("mlopez",      "Michelle",  "Lopez",       "firefighter",    "Station 1",     "probationary",  "probationary", ["firefighter", "member"]),
-    ("rhill",       "Ryan",      "Hill",        "firefighter",    "Station 2",     "probationary",  "probationary", ["firefighter", "member"]),
-    ("sscott",      "Samantha",  "Scott",       "captain",        "Station 1",     "life",          "active",       ["captain", "member"]),
-    ("jgreen",      "Jonathan",  "Green",       "lieutenant",     "Station 2",     "life",          "active",       ["lieutenant", "member"]),
-    ("ladams",      "Laura",     "Adams",       "engineer",       "Station 3",     "life",          "active",       ["engineer", "member"]),
-    ("dbaker",      "Derek",     "Baker",       "fire_chief",     "Headquarters",  "retired",       "retired",      ["member"]),
-    ("pnelson",     "Patricia",  "Nelson",      "deputy_chief",   "Headquarters",  "retired",       "retired",      ["member"]),
-    ("scarter",     "Steven",    "Carter",      "captain",        "Station 1",     "retired",       "retired",      ["member"]),
-    ("jmitchell",   "Jessica",   "Mitchell",    "lieutenant",     "Station 2",     "retired",       "retired",      ["member"]),
-    ("cperez",      "Carlos",    "Perez",       "firefighter",    "Station 3",     "retired",       "retired",      ["member"]),
-    ("troberts",    "Tiffany",   "Roberts",     "firefighter",    "Station 1",     "honorary",      "active",       ["member"]),
-    ("aturner",     "Anthony",   "Turner",      "firefighter",    "Station 2",     "honorary",      "active",       ["member"]),
-    ("mphillips",   "Megan",     "Phillips",    "firefighter",    "Station 1",     "administrative","active",       ["member"]),
-    ("jcampbell",   "Jacob",     "Campbell",    "firefighter",    "Station 2",     "administrative","active",       ["member"]),
-    ("sparker",     "Sophia",    "Parker",      "firefighter",    "Station 1",     "active",        "leave",        ["firefighter", "member"]),
-    ("wevans",      "William",   "Evans",       "firefighter",    "Station 2",     "active",        "leave",        ["firefighter", "member"]),
-    ("hedwards",    "Hannah",    "Edwards",     "firefighter",    "Station 3",     "active",        "inactive",     ["firefighter", "member"]),
-    ("bcollins",    "Brandon",   "Collins",     "firefighter",    "Station 1",     "active",        "inactive",     ["firefighter", "member"]),
-    ("jstewart",    "Julia",     "Stewart",     "lieutenant",     "Station 1",     "active",        "active",       ["lieutenant", "member"]),
-    ("nsanchez",    "Nathan",    "Sanchez",     "engineer",       "Station 2",     "active",        "active",       ["engineer", "member"]),
-    ("amorris",     "Allison",   "Morris",      "firefighter",    "Station 3",     "active",        "active",       ["firefighter", "member"]),
-    ("mrogers",     "Marcus",    "Rogers",      "firefighter",    "Station 1",     "active",        "active",       ["firefighter", "member"]),
-    ("kreed",       "Katherine", "Reed",        "firefighter",    "Station 2",     "active",        "active",       ["firefighter", "member"]),
-    ("jcook",       "Jesse",     "Cook",        "firefighter",    "Station 3",     "active",        "active",       ["firefighter", "member"]),
-    ("dmorgan",     "Diana",     "Morgan",      "firefighter",    "Station 1",     "active",        "active",       ["firefighter", "member"]),
+    # --- Leadership ---
+    ("jthompson",   "James",     "Thompson",   "fire_chief",      "Headquarters", "active",        "active",       ["fire_chief", "president"]),
+    ("mgarcia",     "Maria",     "Garcia",     "deputy_chief",    "Headquarters", "active",        "active",       ["deputy_chief", "vice_president"]),
+    ("rwilliams",   "Robert",    "Williams",   "assistant_chief", "Headquarters", "active",        "active",       ["assistant_chief", "board_of_directors"]),
+    # --- Captains ---
+    ("sjohnson",    "Sarah",     "Johnson",    "captain",         "Headquarters", "active",        "active",       ["captain", "treasurer"]),
+    ("dlee",        "David",     "Lee",        "captain",         "Headquarters", "active",        "active",       ["captain", "training_officer"]),
+    ("jmartinez",   "Jennifer",  "Martinez",   "captain",         "Headquarters", "active",        "active",       ["captain", "secretary"]),
+    # --- Lieutenants ---
+    ("mbrown",      "Michael",   "Brown",      "lieutenant",      "Headquarters", "active",        "active",       ["lieutenant", "safety_officer"]),
+    ("awilson",     "Amanda",    "Wilson",     "lieutenant",      "Headquarters", "active",        "active",       ["lieutenant", "scheduling_officer"]),
+    ("cdavis",      "Christopher","Davis",     "lieutenant",      "Headquarters", "active",        "active",       ["lieutenant", "apparatus_officer"]),
+    # --- EMTs with officer/committee positions ---
+    ("krodriguez",  "Karen",     "Rodriguez",  "emt",             "Headquarters", "active",        "active",       ["emt", "member", "quartermaster"]),
+    ("banderson",   "Brian",     "Anderson",   "emt",             "Headquarters", "active",        "active",       ["emt", "member", "communications_officer"]),
+    ("ltaylor",     "Lisa",      "Taylor",     "emt",             "Headquarters", "active",        "active",       ["emt", "member", "historian"]),
+    ("jwhite",      "Jason",     "White",      "emt",             "Headquarters", "active",        "active",       ["emt", "member", "public_outreach"]),
+    ("nharris",     "Nicole",    "Harris",     "emt",             "Headquarters", "active",        "active",       ["emt", "member", "membership_committee_chair"]),
+    ("tmartin",     "Thomas",    "Martin",     "emt",             "Headquarters", "active",        "active",       ["emt", "member", "fundraising_chair"]),
+    ("rjackson",    "Rachel",    "Jackson",    "emt",             "Headquarters", "active",        "active",       ["emt", "member", "facilities_manager"]),
+    ("dthomas",     "Daniel",    "Thomas",     "emt",             "Headquarters", "active",        "active",       ["emt", "member", "meeting_hall_coordinator"]),
+    ("elewis",      "Emily",     "Lewis",      "emt",             "Headquarters", "active",        "active",       ["emt", "member", "assistant_secretary"]),
+    # --- EMTs (rank and file, active) ---
+    ("mrobinson",   "Matthew",   "Robinson",   "emt",             "Headquarters", "active",        "active",       ["emt", "member"]),
+    ("aclark",      "Ashley",    "Clark",      "emt",             "Headquarters", "active",        "active",       ["emt", "member"]),
+    ("jwalker",     "Joshua",    "Walker",     "emt",             "Headquarters", "active",        "active",       ["emt", "member"]),
+    ("shernandez",  "Stephanie", "Hernandez",  "emt",             "Headquarters", "active",        "active",       ["emt", "member", "it_manager"]),
+    # --- Probationary ---
+    ("ayoung",      "Andrew",    "Young",      "emt",             "Headquarters", "probationary",  "probationary", ["emt", "member"]),
+    ("kking",       "Kimberly",  "King",       "emt",             "Headquarters", "probationary",  "probationary", ["emt", "member"]),
+    ("jwright",     "Justin",    "Wright",     "emt",             "Headquarters", "probationary",  "probationary", ["emt", "member"]),
+    ("mlopez",      "Michelle",  "Lopez",      "emt",             "Headquarters", "probationary",  "probationary", ["emt", "member"]),
+    ("rhill",       "Ryan",      "Hill",       "emt",             "Headquarters", "probationary",  "probationary", ["emt", "member"]),
+    # --- Life members ---
+    ("sscott",      "Samantha",  "Scott",      "captain",         "Headquarters", "life",          "active",       ["captain", "member", "board_of_directors"]),
+    ("jgreen",      "Jonathan",  "Green",      "lieutenant",      "Headquarters", "life",          "active",       ["lieutenant", "member"]),
+    ("ladams",      "Laura",     "Adams",      "emt",             "Headquarters", "life",          "active",       ["emt", "member"]),
+    # --- Retired ---
+    ("dbaker",      "Derek",     "Baker",      "fire_chief",      "Headquarters", "retired",       "retired",      ["member"]),
+    ("pnelson",     "Patricia",  "Nelson",     "deputy_chief",    "Headquarters", "retired",       "retired",      ["member"]),
+    ("scarter",     "Steven",    "Carter",     "captain",         "Headquarters", "retired",       "retired",      ["member"]),
+    ("jmitchell",   "Jessica",   "Mitchell",   "lieutenant",      "Headquarters", "retired",       "retired",      ["member"]),
+    ("cperez",      "Carlos",    "Perez",      "emt",             "Headquarters", "retired",       "retired",      ["member"]),
+    # --- Honorary ---
+    ("troberts",    "Tiffany",   "Roberts",    "emt",             "Headquarters", "honorary",      "active",       ["member"]),
+    ("aturner",     "Anthony",   "Turner",     "emt",             "Headquarters", "honorary",      "active",       ["member"]),
+    # --- Administrative ---
+    ("mphillips",   "Megan",     "Phillips",   "emt",             "Headquarters", "administrative","active",       ["member"]),
+    ("jcampbell",   "Jacob",     "Campbell",   "emt",             "Headquarters", "administrative","active",       ["member"]),
+    # --- On leave ---
+    ("sparker",     "Sophia",    "Parker",     "emt",             "Headquarters", "active",        "leave",        ["emt", "member"]),
+    ("wevans",      "William",   "Evans",      "emt",             "Headquarters", "active",        "leave",        ["emt", "member"]),
+    # --- Inactive ---
+    ("hedwards",    "Hannah",    "Edwards",    "emt",             "Headquarters", "active",        "inactive",     ["emt", "member"]),
+    ("bcollins",    "Brandon",   "Collins",    "emt",             "Headquarters", "active",        "inactive",     ["emt", "member"]),
+    # --- More active EMTs ---
+    ("jstewart",    "Julia",     "Stewart",    "lieutenant",      "Headquarters", "active",        "active",       ["lieutenant", "member"]),
+    ("nsanchez",    "Nathan",    "Sanchez",    "emt",             "Headquarters", "active",        "active",       ["emt", "member"]),
+    ("amorris",     "Allison",   "Morris",     "emt",             "Headquarters", "active",        "active",       ["emt", "member"]),
+    ("mrogers",     "Marcus",    "Rogers",     "emt",             "Headquarters", "active",        "active",       ["emt", "member"]),
+    ("kreed",       "Katherine", "Reed",       "emt",             "Headquarters", "active",        "active",       ["emt", "member"]),
+    ("jcook",       "Jesse",     "Cook",       "emt",             "Headquarters", "active",        "active",       ["emt", "member"]),
+    ("dmorgan",     "Diana",     "Morgan",     "emt",             "Headquarters", "active",        "active",       ["emt", "member"]),
 ]
 # fmt: on
 
@@ -153,21 +166,39 @@ async def get_or_create_positions(
     )
     pos_map: dict[str, str] = {row[1]: row[0] for row in result.fetchall()}
 
-    # Default positions to create if they don't exist
+    # All positions from DEFAULT_POSITIONS in permissions.py
     defaults = [
+        # Operational ranks
         ("Fire Chief", "fire_chief", 95),
         ("Deputy Chief", "deputy_chief", 90),
         ("Assistant Chief", "assistant_chief", 85),
         ("Captain", "captain", 70),
         ("Lieutenant", "lieutenant", 60),
-        ("Engineer", "engineer", 50),
-        ("Firefighter", "firefighter", 40),
+        ("EMT", "emt", 40),
         ("Member", "member", 10),
+        # Administrative / elected positions
+        ("IT Manager", "it_manager", 92),
         ("President", "president", 80),
         ("Vice President", "vice_president", 75),
         ("Treasurer", "treasurer", 65),
         ("Secretary", "secretary", 55),
-        ("IT Manager", "it_manager", 92),
+        ("Assistant Secretary", "assistant_secretary", 50),
+        ("Board of Directors", "board_of_directors", 45),
+        # Appointed officer positions
+        ("Training Officer", "training_officer", 58),
+        ("Safety Officer", "safety_officer", 57),
+        ("Quartermaster", "quartermaster", 52),
+        ("Communications Officer / PIO", "communications_officer", 48),
+        ("Apparatus Officer", "apparatus_officer", 47),
+        ("Facilities Manager", "facilities_manager", 46),
+        ("Scheduling Officer", "scheduling_officer", 44),
+        ("Meeting Hall Coordinator", "meeting_hall_coordinator", 43),
+        # Committee chairs
+        ("Membership Committee Chair", "membership_committee_chair", 42),
+        ("Fundraising Chair", "fundraising_chair", 41),
+        # Community
+        ("Public Outreach", "public_outreach", 38),
+        ("Historian", "historian", 35),
     ]
 
     for name, slug, priority in defaults:
