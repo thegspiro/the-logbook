@@ -1054,6 +1054,7 @@ class ReportsService:
             select(User).where(
                 User.organization_id == str(organization_id),
                 User.status == UserStatus.ACTIVE,
+                User.compliance_exempt == False,  # noqa: E712
                 User.deleted_at.is_(None),
             )
         )

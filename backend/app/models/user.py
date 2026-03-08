@@ -277,6 +277,11 @@ class User(Base):
     archived_at = Column(
         DateTime(timezone=True)
     )  # When the member was archived (after all property returned)
+    # Compliance exemption — when True, the member is not evaluated against
+    # training requirements, shift minimums, admin-hour targets, or
+    # certificate maintenance.  Typical use: retired / honorary members.
+    compliance_exempt = Column(Boolean, default=False, nullable=False)
+
     email_verified = Column(Boolean, default=False)
     email_verified_at = Column(DateTime(timezone=True))
 

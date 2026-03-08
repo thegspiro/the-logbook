@@ -683,11 +683,13 @@ export const MemberProfilePage: React.FC = () => {
                   <div className="mb-6">
                     <div
                       className={`rounded-lg p-4 border ${
-                        complianceSummary.compliance_status === "green"
-                          ? "border-green-500/30 bg-green-500/5"
-                          : complianceSummary.compliance_status === "yellow"
-                            ? "border-yellow-500/30 bg-yellow-500/5"
-                            : "border-red-500/30 bg-red-500/5"
+                        complianceSummary.compliance_status === "exempt"
+                          ? "border-slate-500/30 bg-slate-500/5"
+                          : complianceSummary.compliance_status === "green"
+                            ? "border-green-500/30 bg-green-500/5"
+                            : complianceSummary.compliance_status === "yellow"
+                              ? "border-yellow-500/30 bg-yellow-500/5"
+                              : "border-red-500/30 bg-red-500/5"
                       }`}
                     >
                       <div className="flex items-center justify-between mb-3">
@@ -696,64 +698,74 @@ export const MemberProfilePage: React.FC = () => {
                         </h3>
                         <span
                           className={`px-3 py-1 rounded-full text-xs font-bold ${
-                            complianceSummary.compliance_status === "green"
-                              ? "bg-green-500/20 text-green-400"
-                              : complianceSummary.compliance_status === "yellow"
-                                ? "bg-yellow-500/20 text-yellow-400"
-                                : "bg-red-500/20 text-red-400"
+                            complianceSummary.compliance_status === "exempt"
+                              ? "bg-slate-500/20 text-slate-400"
+                              : complianceSummary.compliance_status === "green"
+                                ? "bg-green-500/20 text-green-400"
+                                : complianceSummary.compliance_status === "yellow"
+                                  ? "bg-yellow-500/20 text-yellow-400"
+                                  : "bg-red-500/20 text-red-400"
                           }`}
                         >
                           {complianceSummary.compliance_label}
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                        <div>
-                          <p className="text-xs text-theme-text-muted">
-                            Requirements
-                          </p>
-                          <p className="text-lg font-semibold text-theme-text-primary">
-                            {complianceSummary.requirements_met}/
-                            {complianceSummary.requirements_total}
-                          </p>
+                      {complianceSummary.is_exempt ? (
+                        <p className="text-sm text-theme-text-muted">
+                          This member is exempt from compliance requirements
+                          (training hours, certificates, shifts, and admin
+                          hours).
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                          <div>
+                            <p className="text-xs text-theme-text-muted">
+                              Requirements
+                            </p>
+                            <p className="text-lg font-semibold text-theme-text-primary">
+                              {complianceSummary.requirements_met}/
+                              {complianceSummary.requirements_total}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-theme-text-muted">
+                              Hours (YTD)
+                            </p>
+                            <p className="text-lg font-semibold text-theme-text-primary">
+                              {complianceSummary.hours_this_year.toFixed(1)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-theme-text-muted">
+                              Active Certs
+                            </p>
+                            <p className="text-lg font-semibold text-theme-text-primary">
+                              {complianceSummary.active_certifications}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-theme-text-muted">
+                              Expiring Soon
+                            </p>
+                            <p
+                              className={`text-lg font-semibold ${
+                                complianceSummary.certs_expiring_soon > 0
+                                  ? "text-yellow-400"
+                                  : complianceSummary.certs_expired > 0
+                                    ? "text-red-400"
+                                    : "text-theme-text-primary"
+                              }`}
+                            >
+                              {complianceSummary.certs_expiring_soon}
+                              {complianceSummary.certs_expired > 0 && (
+                                <span className="text-red-400 text-sm ml-1">
+                                  ({complianceSummary.certs_expired} expired)
+                                </span>
+                              )}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-xs text-theme-text-muted">
-                            Hours (YTD)
-                          </p>
-                          <p className="text-lg font-semibold text-theme-text-primary">
-                            {complianceSummary.hours_this_year.toFixed(1)}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-theme-text-muted">
-                            Active Certs
-                          </p>
-                          <p className="text-lg font-semibold text-theme-text-primary">
-                            {complianceSummary.active_certifications}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-theme-text-muted">
-                            Expiring Soon
-                          </p>
-                          <p
-                            className={`text-lg font-semibold ${
-                              complianceSummary.certs_expiring_soon > 0
-                                ? "text-yellow-400"
-                                : complianceSummary.certs_expired > 0
-                                  ? "text-red-400"
-                                  : "text-theme-text-primary"
-                            }`}
-                          >
-                            {complianceSummary.certs_expiring_soon}
-                            {complianceSummary.certs_expired > 0 && (
-                              <span className="text-red-400 text-sm ml-1">
-                                ({complianceSummary.certs_expired} expired)
-                              </span>
-                            )}
-                          </p>
-                        </div>
-                      </div>
+                      )}
                     </div>
                   </div>
                 )}
