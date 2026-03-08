@@ -5,6 +5,7 @@ Business logic for shift scheduling including shift management,
 attendance tracking, and calendar views.
 """
 
+import calendar
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
@@ -2126,14 +2127,59 @@ class SchedulingService:
             period_end = date(h_end_year, h_end_month, 1) - timedelta(days=1)
 
         elif freq == RequirementFrequency.ANNUAL:
-            # Annual period from start_month
-            if reference_date.month >= start_month:
-                period_start = date(reference_date.year, start_month, 1)
-                end_year = reference_date.year + 1
+            # Check for custom period end (supports cross-year windows)
+            end_month = requirement.period_end_month
+            end_day = requirement.period_end_day
+            if end_month:
+                start_day = requirement.period_start_day or 1
+                if not end_day:
+                    end_day = calendar.monthrange(
+                        reference_date.year, end_month
+                    )[1]
+                if start_month > end_month:
+                    # Cross-year window (e.g. Nov -> Jan)
+                    cycle_end_a = date(
+                        reference_date.year, end_month, end_day
+                    )
+                    cycle_start_a = date(
+                        reference_date.year - 1, start_month, start_day
+                    )
+                    cycle_start_b = date(
+                        reference_date.year, start_month, start_day
+                    )
+                    cycle_end_b = date(
+                        reference_date.year + 1, end_month, end_day
+                    )
+                    if cycle_start_a <= reference_date <= cycle_end_a:
+                        period_start = cycle_start_a
+                        period_end = cycle_end_a
+                    elif cycle_start_b <= reference_date <= cycle_end_b:
+                        period_start = cycle_start_b
+                        period_end = cycle_end_b
+                    else:
+                        # Gap between cycles — extend to cover
+                        # late completions for the current year
+                        period_start = cycle_start_a
+                        period_end = (
+                            cycle_start_b - timedelta(days=1)
+                        )
+                else:
+                    yr = reference_date.year
+                    period_start = date(yr, start_month, start_day)
+                    period_end = date(yr, end_month, end_day)
             else:
-                period_start = date(reference_date.year - 1, start_month, 1)
-                end_year = reference_date.year
-            period_end = date(end_year, start_month, 1) - timedelta(days=1)
+                # Default annual period from start_month
+                if reference_date.month >= start_month:
+                    period_start = date(reference_date.year, start_month, 1)
+                    end_year = reference_date.year + 1
+                else:
+                    period_start = date(
+                        reference_date.year - 1, start_month, 1
+                    )
+                    end_year = reference_date.year
+                period_end = date(end_year, start_month, 1) - timedelta(
+                    days=1
+                )
 
         else:
             # ONE_TIME or fallback: use requirement start_date..due_date or last 12 months

@@ -452,6 +452,12 @@ class TrainingRequirement(Base):
         Integer, default=1
     )  # Month the period starts (1=January)
     period_start_day = Column(Integer, default=1)  # Day the period starts
+    period_end_month = Column(
+        Integer
+    )  # Month the period ends (e.g., 1=January); NULL = use default for frequency
+    period_end_day = Column(
+        Integer
+    )  # Day the period ends (e.g., 31); NULL = last day of period_end_month
 
     # Categories - which training categories count towards this requirement
     category_ids = Column(

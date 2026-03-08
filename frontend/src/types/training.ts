@@ -375,6 +375,8 @@ export interface TrainingRequirement {
   rolling_period_months?: number;  // For rolling due dates: months between required completions
   period_start_month?: number;     // For calendar period: month the period starts (1-12)
   period_start_day?: number;       // For calendar period: day the period starts (1-31)
+  period_end_month?: number;       // For calendar period: month the period ends (1-12)
+  period_end_day?: number;         // For calendar period: day the period ends (1-31)
   category_ids?: string[];         // Training categories that satisfy this requirement
   active: boolean;
   created_at: string;
@@ -401,6 +403,8 @@ export interface TrainingRequirementCreate {
   rolling_period_months?: number | undefined;
   period_start_month?: number | undefined;
   period_start_day?: number | undefined;
+  period_end_month?: number | undefined;
+  period_end_day?: number | undefined;
   category_ids?: string[] | undefined;
 }
 
@@ -423,6 +427,8 @@ export interface TrainingRequirementUpdate {
   rolling_period_months?: number | undefined;
   period_start_month?: number | undefined;
   period_start_day?: number | undefined;
+  period_end_month?: number | undefined;
+  period_end_day?: number | undefined;
   category_ids?: string[] | undefined;
   active?: boolean;
 }
