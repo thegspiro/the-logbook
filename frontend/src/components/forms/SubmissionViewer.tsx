@@ -195,7 +195,7 @@ const SubmissionViewer = ({
   if (loading) {
     return (
       <div className="bg-theme-surface-secondary rounded-lg p-8 text-center">
-        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-pink-700 dark:text-pink-400" />
+        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-red-700 dark:text-red-400" />
         <p className="text-sm text-theme-text-muted">Loading submissions...</p>
       </div>
     );

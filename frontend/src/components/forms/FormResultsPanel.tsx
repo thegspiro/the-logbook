@@ -207,7 +207,7 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
   if (loading) {
     return (
       <div className="bg-theme-surface-secondary rounded-lg p-8 text-center">
-        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-pink-700 dark:text-pink-400" />
+        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-red-700 dark:text-red-400" />
         <p className="text-sm text-theme-text-muted">Analyzing responses...</p>
       </div>
     );
@@ -275,7 +275,7 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 {CHOICE_TYPES.has(summary.field.field_type) ? (
-                  <BarChart3 className="w-4 h-4 text-pink-700 dark:text-pink-400" />
+                  <BarChart3 className="w-4 h-4 text-red-700 dark:text-red-400" />
                 ) : summary.field.field_type === FieldType.NUMBER ? (
                   <Hash className="w-4 h-4 text-cyan-700 dark:text-cyan-400" />
                 ) : DATE_TYPES.has(summary.field.field_type) ? (
@@ -303,7 +303,7 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
                     </div>
                     <div className="w-full bg-theme-surface-secondary rounded-full h-2.5 overflow-hidden">
                       <div
-                        className="bg-pink-600 h-full rounded-full transition-all duration-500"
+                        className="bg-red-600 h-full rounded-full transition-all duration-500"
                         style={{ width: `${Math.max(choice.percent, choice.count > 0 ? 2 : 0)}%` }}
                       />
                     </div>
