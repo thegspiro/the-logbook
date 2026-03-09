@@ -26,8 +26,8 @@ const MAINTENANCE_TYPES = [
   { value: 'replacement', label: 'Replacement' }, { value: 'upgrade', label: 'Upgrade' },
 ] as const;
 
-const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
-const labelCls = 'block text-xs font-medium text-theme-text-muted mb-1';
+const inputCls = 'form-input w-full';
+const labelCls = 'form-label';
 const thCls = 'px-3 py-2 text-xs font-medium text-theme-text-muted';
 
 function daysUntilDue(nextDue?: string): number | null {
@@ -175,7 +175,7 @@ const InventoryMaintenancePage: React.FC = () => {
             <p className="text-theme-text-secondary text-sm mt-0.5">Track due items, log records, and schedule inspections</p>
           </div>
         </div>
-        <button onClick={() => void loadData()} className="btn-info flex items-center gap-2 text-sm" disabled={isLoading}>
+        <button onClick={() => void loadData()} className="btn-secondary btn-md flex items-center gap-2" disabled={isLoading}>
           <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} /> Refresh
         </button>
       </div>
@@ -252,7 +252,7 @@ const InventoryMaintenancePage: React.FC = () => {
                       <td className={`px-3 py-3 ${getDueColor(days)}`}>{getDueLabel(days)}</td>
                       <td className={`px-3 py-3 capitalize ${getConditionColor(item.condition)}`}>{item.condition?.replace(/_/g, ' ') ?? '--'}</td>
                       <td className="px-3 py-3">
-                        <button onClick={() => openModal(item)} className="btn-primary text-xs px-3 py-1.5">Log Maintenance</button>
+                        <button onClick={() => openModal(item)} className="btn-info btn-sm">Log Maintenance</button>
                       </td>
                     </tr>
                   );
@@ -272,7 +272,7 @@ const InventoryMaintenancePage: React.FC = () => {
         <div className="text-center py-16">
           <Wrench className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
           <p className="text-theme-text-muted">No maintenance records for {selectedItem.name}.</p>
-          <button onClick={() => openModal(selectedItem)} className="btn-primary text-sm mt-4">Log First Maintenance</button>
+          <button onClick={() => openModal(selectedItem)} className="btn-info btn-md mt-4">Log First Maintenance</button>
         </div>
       ) : (
         <div className="space-y-3">
@@ -280,7 +280,7 @@ const InventoryMaintenancePage: React.FC = () => {
             <h3 className="text-sm font-medium text-theme-text-primary">
               {selectedItem.name} — {history.length} record{history.length !== 1 ? 's' : ''}
             </h3>
-            <button onClick={() => openModal(selectedItem)} className="btn-primary text-xs px-3 py-1.5">Log Maintenance</button>
+            <button onClick={() => openModal(selectedItem)} className="btn-info btn-sm">Log Maintenance</button>
           </div>
           {history.map((rec) => (
             <div key={rec.id} className="card-secondary p-4 flex items-start gap-3">
@@ -319,8 +319,8 @@ const InventoryMaintenancePage: React.FC = () => {
         title={`Log Maintenance — ${modalItem?.name ?? ''}`} size="lg"
         footer={
           <div className="flex items-center justify-end gap-3">
-            <button onClick={() => setModalItem(null)} className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors text-sm">Cancel</button>
-            <button onClick={() => void handleSave()} disabled={isSaving} className="btn-primary flex gap-2 items-center px-5 text-sm">
+            <button onClick={() => setModalItem(null)} className="btn-secondary btn-md">Cancel</button>
+            <button onClick={() => void handleSave()} disabled={isSaving} className="btn-info btn-md flex gap-2 items-center">
               {isSaving && <Loader2 className="w-4 h-4 animate-spin" />} Save Record
             </button>
           </div>

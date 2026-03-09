@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { formatDate as formatDateUtil } from '../../../utils/dateFormatting';
 import { Modal } from '../../../components/Modal';
 import type {
   ReorderRequest, ReorderRequestCreate, ReorderRequestUpdate,
@@ -43,8 +45,8 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
   cancelled: <XCircle className="w-3.5 h-3.5" />,
 };
 
-const lbl = 'block text-sm font-medium text-theme-text-primary mb-1';
-const inp = 'w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none';
+const lbl = 'form-label';
+const inp = 'form-input';
 
 interface CreateFD {
   item_name: string;
@@ -212,8 +214,8 @@ const ReorderFormModal: React.FC<{
         </div>
 
         <div className="flex justify-end gap-2 pt-2 border-t border-theme-surface-border">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover">Cancel</button>
-          <button type="submit" disabled={saving} className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+          <button type="button" onClick={onClose} className="btn-secondary btn-md">Cancel</button>
+          <button type="submit" disabled={saving} className="btn-info btn-md disabled:opacity-50">
             {saving ? 'Saving...' : editRequest ? 'Update' : 'Create Request'}
           </button>
         </div>
@@ -297,8 +299,8 @@ const StatusUpdateModal: React.FC<{
           <textarea className={inp} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </div>
         <div className="flex justify-end gap-2 pt-2 border-t border-theme-surface-border">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover">Cancel</button>
-          <button type="submit" disabled={saving} className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+          <button type="button" onClick={onClose} className="btn-secondary btn-md">Cancel</button>
+          <button type="submit" disabled={saving} className="btn-info btn-md disabled:opacity-50">
             {saving ? 'Updating...' : 'Update Status'}
           </button>
         </div>
@@ -309,6 +311,7 @@ const StatusUpdateModal: React.FC<{
 
 // -- Main Page --
 export const ReorderRequestsPage: React.FC = () => {
+  const tz = useTimezone();
   const [requests, setRequests] = useState<ReorderRequest[]>([]);
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
   const [lowStockAlerts, setLowStockAlerts] = useState<LowStockAlert[]>([]);
@@ -355,29 +358,29 @@ export const ReorderRequestsPage: React.FC = () => {
   const formatCurrency = (val: number) =>
     val.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 
-  const formatDate = (dateStr: string | undefined) => {
+  const fmtDate = (dateStr: string | undefined) => {
     if (!dateStr) return '—';
-    return new Date(dateStr).toLocaleDateString();
+    return formatDateUtil(dateStr, tz);
   };
 
   return (
     <div className="min-h-screen">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Header */}
+        <Link to="/inventory/admin" className="text-sm text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 mb-6">
+          <ArrowLeft className="h-4 w-4" /> Back to Admin
+        </Link>
         <div className="flex items-center gap-3 mb-6">
-          <Link to="/inventory/admin" className="p-2 rounded-lg hover:bg-theme-surface-hover">
-            <ArrowLeft className="w-5 h-5 text-theme-text-muted" />
-          </Link>
           <div className="flex-1">
-            <h1 className="text-xl sm:text-2xl font-bold text-theme-text-primary">Reorder Requests</h1>
+            <h1 className="text-2xl font-bold text-theme-text-primary">Reorder Requests</h1>
             <p className="text-sm text-theme-text-muted">Track supply orders from request to receipt</p>
           </div>
-          <button onClick={() => { void load(); }} className="p-2 rounded-lg border border-theme-surface-border hover:bg-theme-surface-hover">
+          <button onClick={() => { void load(); }} className="btn-secondary btn-md">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button
             onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+            className="btn-info btn-md flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">New Request</span>
@@ -451,7 +454,7 @@ export const ReorderRequestsPage: React.FC = () => {
           <div className="text-center py-12 card-secondary rounded-lg">
             <Package className="w-12 h-12 mx-auto text-theme-text-muted mb-3" />
             <p className="text-theme-text-muted">No reorder requests found</p>
-            <button onClick={() => setShowCreate(true)} className="mt-3 px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700">
+            <button onClick={() => setShowCreate(true)} className="btn-info btn-md mt-3">
               Create First Request
             </button>
           </div>
@@ -508,7 +511,7 @@ export const ReorderRequestsPage: React.FC = () => {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-xs text-theme-text-muted">
-                        {formatDate(req.created_at)}
+                        {fmtDate(req.created_at)}
                         {req.purchase_order_number && (
                           <span className="block text-theme-text-primary">PO: {req.purchase_order_number}</span>
                         )}
@@ -564,13 +567,13 @@ export const ReorderRequestsPage: React.FC = () => {
                         Est: {formatCurrency(Number(req.estimated_unit_cost) * req.quantity_requested)}
                       </span>
                     )}
-                    <span className="text-xs text-theme-text-muted ml-auto">{formatDate(req.created_at)}</span>
+                    <span className="text-xs text-theme-text-muted ml-auto">{fmtDate(req.created_at)}</span>
                   </div>
                   <div className="flex gap-2 pt-2 border-t border-theme-surface-border">
                     {req.status !== 'received' && req.status !== 'cancelled' && (
                       <button
                         onClick={() => setStatusRequest(req)}
-                        className="flex-1 px-3 py-1.5 text-xs rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                        className="flex-1 btn-info btn-sm"
                       >
                         Update Status
                       </button>
@@ -578,7 +581,7 @@ export const ReorderRequestsPage: React.FC = () => {
                     {req.status === 'pending' && (
                       <button
                         onClick={() => { setEditRequest(req); setShowCreate(true); }}
-                        className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-theme-surface-border hover:bg-theme-surface-hover text-theme-text-primary"
+                        className="flex-1 btn-secondary btn-sm"
                       >
                         Edit
                       </button>

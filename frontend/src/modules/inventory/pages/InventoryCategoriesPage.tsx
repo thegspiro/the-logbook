@@ -49,11 +49,9 @@ const EMPTY_FORM: CategoryFormData = {
   requires_assignment: false, nfpa_tracking_enabled: false, low_stock_threshold: '',
 };
 
-const inputClass =
-  'form-input w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-muted focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
-const selectClass =
-  'form-input w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
-const labelClass = 'block text-sm font-medium text-theme-text-secondary mb-1';
+const inputClass = 'form-input w-full';
+const selectClass = 'form-input w-full';
+const labelClass = 'form-label';
 
 const InventoryCategoriesPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
@@ -139,7 +137,7 @@ const InventoryCategoriesPage: React.FC = () => {
     <>
       <button
         type="submit" form="category-form" disabled={isSaving}
-        className="btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm font-medium disabled:opacity-50"
+        className="btn-info btn-md inline-flex items-center gap-2 disabled:opacity-50"
       >
         {isSaving && <RefreshCw className="w-4 h-4 animate-spin" />}
         {editingCategory ? 'Update Category' : 'Create Category'}
@@ -163,13 +161,13 @@ const InventoryCategoriesPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-theme-text-primary">Categories</h1>
+          <h1 className="text-2xl font-bold text-theme-text-primary">Categories</h1>
           <p className="text-theme-text-secondary mt-1">
             Organize inventory items by type and configure tracking requirements.
           </p>
         </div>
         {canManage && (
-          <button onClick={openCreateModal} className="btn-primary flex gap-2 items-center py-2.5">
+          <button onClick={openCreateModal} className="btn-info btn-md flex gap-2 items-center">
             <Plus className="w-4 h-4" /> Add Category
           </button>
         )}
@@ -195,13 +193,13 @@ const InventoryCategoriesPage: React.FC = () => {
           <RefreshCw className="w-8 h-8 animate-spin text-theme-text-muted" />
         </div>
       ) : categories.length === 0 ? (
-        <div className="text-center py-16 bg-theme-surface border border-theme-surface-border rounded-xl">
+        <div className="text-center py-16 card-secondary">
           <Tag className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
           <p className="text-theme-text-muted mb-4">
             {filterType ? 'No categories match the selected type.' : 'No categories yet. Create one to get started.'}
           </p>
           {!filterType && canManage && (
-            <button onClick={openCreateModal} className="btn-primary inline-flex gap-2 items-center">
+            <button onClick={openCreateModal} className="btn-info btn-md inline-flex gap-2 items-center">
               <Plus className="w-4 h-4" /> Add Category
             </button>
           )}
@@ -209,7 +207,7 @@ const InventoryCategoriesPage: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {categories.map((cat) => (
-            <div key={cat.id} className="bg-theme-surface border border-theme-surface-border rounded-xl p-5 flex flex-col">
+            <div key={cat.id} className="card-secondary p-5 flex flex-col">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">

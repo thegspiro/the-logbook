@@ -167,11 +167,11 @@ const InventoryMembersPage: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <Link to="/inventory/admin" className="p-2 rounded-lg hover:bg-theme-surface-hover text-theme-text-muted transition-colors" title="Back to Inventory Admin">
-            <ArrowLeft className="w-5 h-5" />
+          <Link to="/inventory/admin" className="text-sm text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1" title="Back to Inventory Admin">
+            <ArrowLeft className="h-4 w-4" /> Back to Admin
           </Link>
           <div>
-            <h1 className="text-xl font-bold text-theme-text-primary">Members Equipment</h1>
+            <h1 className="text-2xl font-bold text-theme-text-primary">Members Equipment</h1>
             <p className="text-sm text-theme-text-muted">View and manage equipment assigned to members</p>
           </div>
         </div>
@@ -179,13 +179,13 @@ const InventoryMembersPage: React.FC = () => {
           {canManage && (
             <button
               onClick={() => setMemberScannerOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
+              className="btn-success btn-md flex items-center gap-2"
               title="Scan a member's digital ID to start assigning items"
             >
               <ScanLine className="w-4 h-4" /> Scan Member ID
             </button>
           )}
-          <button onClick={() => { void loadMembers(); }} className="flex items-center gap-1.5 px-3 py-2 text-sm text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface-hover transition-colors" title="Refresh">
+          <button onClick={() => { void loadMembers(); }} className="btn-secondary btn-md flex items-center gap-1.5" title="Refresh">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">Refresh</span>
           </button>
@@ -194,21 +194,21 @@ const InventoryMembersPage: React.FC = () => {
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="bg-theme-surface rounded-lg p-4 border border-theme-surface-border">
+        <div className="card-secondary p-4">
           <div className="flex items-center gap-2 mb-1">
             <Users className="w-4 h-4 text-theme-text-muted" />
             <p className="text-theme-text-muted text-xs font-medium uppercase">Members with Equipment</p>
           </div>
           <p className="text-theme-text-primary text-2xl font-bold">{membersWithEquipment}</p>
         </div>
-        <div className="bg-theme-surface rounded-lg p-4 border border-theme-surface-border">
+        <div className="card-secondary p-4">
           <div className="flex items-center gap-2 mb-1">
             <Package className="w-4 h-4 text-theme-text-muted" />
             <p className="text-theme-text-muted text-xs font-medium uppercase">Total Items Assigned</p>
           </div>
           <p className="text-theme-text-primary text-2xl font-bold">{totalAssigned}</p>
         </div>
-        <div className="bg-theme-surface rounded-lg p-4 border border-theme-surface-border">
+        <div className="card-secondary p-4">
           <div className="flex items-center gap-2 mb-1">
             <AlertTriangle className="w-4 h-4 text-theme-text-muted" />
             <p className="text-theme-text-muted text-xs font-medium uppercase">Overdue Returns</p>
@@ -244,12 +244,12 @@ const InventoryMembersPage: React.FC = () => {
 
       {/* Body */}
       {loading ? (
-        <div className="bg-theme-surface rounded-lg p-12 border border-theme-surface-border text-center">
+        <div className="card-secondary p-12 text-center">
           <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted mx-auto mb-3" />
           <p className="text-theme-text-secondary text-sm">Loading members...</p>
         </div>
       ) : members.length === 0 ? (
-        <div className="bg-theme-surface rounded-lg p-12 border border-theme-surface-border text-center">
+        <div className="card-secondary p-12 text-center">
           <Users className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
           <h3 className="text-theme-text-primary text-lg font-semibold mb-1">No Members Found</h3>
           <p className="text-theme-text-secondary text-sm">{searchQuery ? 'Try adjusting your search.' : 'No members with inventory assignments.'}</p>
@@ -260,7 +260,7 @@ const InventoryMembersPage: React.FC = () => {
             const isExpanded = expandedUserId === member.user_id;
             const name = member.full_name || member.username;
             return (
-              <div key={member.user_id} className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden">
+              <div key={member.user_id} className="card-secondary overflow-hidden">
                 {/* Row */}
                 <button type="button" className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-theme-surface-hover transition-colors" onClick={() => { void handleExpand(member.user_id); }}>
                   <div className="shrink-0 text-theme-text-muted">{isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</div>
@@ -289,7 +289,7 @@ const InventoryMembersPage: React.FC = () => {
                     <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
+                        className="btn-success btn-sm flex items-center gap-1"
                         onClick={() => openScanModal(member)}
                         title="Assign items to this member"
                       >
@@ -298,7 +298,7 @@ const InventoryMembersPage: React.FC = () => {
                       {member.total_items > 0 && (
                         <button
                           type="button"
-                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+                          className="btn-secondary btn-sm flex items-center gap-1"
                           onClick={() => openReturnModal(member)}
                           title="Return items from this member"
                         >

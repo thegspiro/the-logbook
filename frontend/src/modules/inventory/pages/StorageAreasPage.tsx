@@ -17,9 +17,9 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
 import toast from 'react-hot-toast';
 
-const inputClass = 'form-input w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-muted focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
-const selectClass = 'form-input w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
-const labelClass = 'block text-sm font-medium text-theme-text-secondary mb-1';
+const inputClass = 'form-input w-full';
+const selectClass = 'form-input w-full';
+const labelClass = 'form-label';
 
 interface AreaFormData {
   name: string; label: string; description: string; storage_type: string;
@@ -234,10 +234,10 @@ const StorageAreasPage: React.FC = () => {
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-theme-text-primary">Storage Areas</h1>
+          <h1 className="text-2xl font-bold text-theme-text-primary">Storage Areas</h1>
           <p className="text-theme-text-secondary mt-1">Manage hierarchical storage locations within rooms.</p>
         </div>
-        <button onClick={openCreateModal} className="btn-primary flex gap-2 items-center py-2.5">
+        <button onClick={openCreateModal} className="btn-info btn-md flex gap-2 items-center">
           <Plus className="w-4 h-4" /> Add Storage Area
         </button>
       </div>
@@ -287,26 +287,26 @@ const StorageAreasPage: React.FC = () => {
       {isLoading ? (
         <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" /></div>
       ) : !isShowingSearch && !selectedRoomId ? (
-        <div className="text-center py-16 bg-theme-surface border border-theme-surface-border rounded-xl">
+        <div className="text-center py-16 card-secondary">
           <Package className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
           <p className="text-theme-text-muted">Select a facility and room above to view storage areas.</p>
         </div>
       ) : displayLoading ? (
         <div className="flex items-center justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" /></div>
       ) : displayTree.length === 0 ? (
-        <div className="text-center py-16 bg-theme-surface border border-theme-surface-border rounded-xl">
+        <div className="text-center py-16 card-secondary">
           <Box className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
           <p className="text-theme-text-muted mb-4">
             {isShowingSearch ? 'No storage areas match your search.' : 'No storage areas in this room yet.'}
           </p>
           {!isShowingSearch && (
-            <button onClick={openCreateModal} className="btn-primary inline-flex gap-2 items-center">
+            <button onClick={openCreateModal} className="btn-info btn-md inline-flex gap-2 items-center">
               <Plus className="w-4 h-4" /> Add Storage Area
             </button>
           )}
         </div>
       ) : (
-        <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-2">
+        <div className="card-secondary p-2">
           {isShowingSearch && (
             <p className="text-xs text-theme-text-muted px-3 py-2 border-b border-theme-surface-border mb-1">
               {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} found
@@ -324,7 +324,7 @@ const StorageAreasPage: React.FC = () => {
         title={editingArea ? 'Edit Storage Area' : 'Add Storage Area'}
         footer={<>
           <button type="submit" form="sa-form" disabled={isSaving}
-            className="btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm font-medium disabled:opacity-50">
+            className="btn-info btn-md inline-flex items-center gap-2 disabled:opacity-50">
             {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}{editingArea ? 'Update' : 'Create'}
           </button>
           <button type="button" onClick={closeModal}
@@ -385,7 +385,7 @@ const StorageAreasPage: React.FC = () => {
       <Modal isOpen={deleteTarget !== null} onClose={() => setDeleteTarget(null)} title="Delete Storage Area"
         footer={<>
           <button type="button" onClick={() => void confirmDelete()} disabled={isDeleting}
-            className="btn-info inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50">
+            className="btn-primary btn-md inline-flex items-center gap-2 disabled:opacity-50">
             {isDeleting && <Loader2 className="w-4 h-4 animate-spin" />}Delete
           </button>
           <button type="button" onClick={() => setDeleteTarget(null)}
