@@ -16,6 +16,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
+import { Breadcrumbs } from '../components/ux/Breadcrumbs';
 import type {
   TrainingProgram,
   ProgramPhase,
@@ -287,9 +288,9 @@ const PipelineDetailPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center" role="status">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-red-500" />
+          <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-red-500" aria-hidden="true" />
           <p className="text-theme-text-muted mt-4">Loading pipeline...</p>
         </div>
       </div>
@@ -304,6 +305,12 @@ const PipelineDetailPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <Breadcrumbs items={[
+          { label: 'Training', path: '/training' },
+          { label: 'Programs', path: '/training/programs' },
+          { label: program.name },
+        ]} />
+
         {/* Header */}
         <div className="flex items-start justify-between mb-8">
           <div className="flex items-start space-x-4">
@@ -435,9 +442,11 @@ const PipelineDetailPage: React.FC = () => {
                   return (
                     <div key={phase.id} className="bg-theme-surface rounded-lg border border-theme-surface-border">
                       {/* Phase header */}
-                      <div
-                        className="flex items-center justify-between p-4 cursor-pointer hover:bg-theme-surface-hover"
+                      <button
+                        type="button"
+                        className="w-full flex items-center justify-between p-4 text-left hover:bg-theme-surface-hover transition-colors"
                         onClick={() => togglePhase(phase.id)}
+                        aria-expanded={isExpanded}
                       >
                         <div className="flex items-center space-x-3">
                           <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center text-white font-bold text-sm">
@@ -463,11 +472,11 @@ const PipelineDetailPage: React.FC = () => {
                           </div>
                         </div>
                         {isExpanded ? (
-                          <ChevronUp className="w-5 h-5 text-theme-text-muted" />
+                          <ChevronUp className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />
                         ) : (
-                          <ChevronDown className="w-5 h-5 text-theme-text-muted" />
+                          <ChevronDown className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />
                         )}
-                      </div>
+                      </button>
 
                       {/* Phase content */}
                       {isExpanded && (
