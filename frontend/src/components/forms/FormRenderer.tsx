@@ -313,7 +313,7 @@ const FormRenderer = ({
   if (loading) {
     return (
       <div className="bg-theme-surface-secondary rounded-lg p-8 text-center">
-        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-pink-700 dark:text-pink-400" />
+        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-theme-text-muted" />
         <p className="text-sm text-theme-text-muted">Loading form...</p>
       </div>
     );
@@ -329,7 +329,7 @@ const FormRenderer = ({
         {allowResubmit && (
           <button
             onClick={handleReset}
-            className="mt-4 px-4 py-2 rounded-lg text-sm font-medium bg-pink-600 hover:bg-pink-700 text-white"
+            className="btn-primary mt-4"
           >
             Submit Another Response
           </button>
@@ -439,7 +439,7 @@ const FormRenderer = ({
           <button
             type="submit"
             disabled={submitting}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-sm transition-colors bg-pink-600 hover:bg-pink-700 text-white disabled:opacity-50"
+            className="btn-primary inline-flex items-center gap-2 disabled:opacity-50"
           >
             {submitting ? (
               <>
@@ -457,7 +457,7 @@ const FormRenderer = ({
             <button
               type="button"
               onClick={onCancel}
-              className="px-5 py-2.5 rounded-lg font-medium text-sm transition-colors text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover"
+              className="btn-secondary"
             >
               Cancel
             </button>
