@@ -86,11 +86,28 @@ const RECURRENCE_PATTERNS: { value: RecurrencePattern; label: string }[] = [
   { value: 'daily', label: 'Daily' },
   { value: 'weekly', label: 'Weekly' },
   { value: 'biweekly', label: 'Every 2 Weeks' },
-  { value: 'monthly', label: 'Monthly' },
+  { value: 'monthly', label: 'Monthly (same date)' },
+  { value: 'monthly_weekday', label: 'Monthly (by weekday)' },
+  { value: 'annually', label: 'Annually (same date)' },
+  { value: 'annually_weekday', label: 'Annually (by weekday)' },
   { value: 'custom', label: 'Custom Days' },
 ];
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+const ORDINALS = [
+  { value: 1, label: '1st' },
+  { value: 2, label: '2nd' },
+  { value: 3, label: '3rd' },
+  { value: 4, label: '4th' },
+  { value: 5, label: '5th' },
+  { value: -1, label: 'Last' },
+];
+
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
 
 export const EventForm: React.FC<EventFormProps> = ({
   initialData,
@@ -136,6 +153,9 @@ export const EventForm: React.FC<EventFormProps> = ({
   const [recurrencePattern, setRecurrencePattern] = useState<RecurrencePattern>('weekly');
   const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
   const [recurrenceCustomDays, setRecurrenceCustomDays] = useState<number[]>([]);
+  const [recurrenceWeekday, setRecurrenceWeekday] = useState(0);
+  const [recurrenceWeekOrdinal, setRecurrenceWeekOrdinal] = useState(1);
+  const [recurrenceMonth, setRecurrenceMonth] = useState(1);
 
   useEffect(() => {
     void loadLocations();
@@ -288,11 +308,15 @@ export const EventForm: React.FC<EventFormProps> = ({
           setError('Select at least one day for custom recurrence');
           return;
         }
+        const needsWeekday = recurrencePattern === 'monthly_weekday' || recurrencePattern === 'annually_weekday';
         const recurringData: RecurringEventCreate = {
           ...submitData,
           recurrence_pattern: recurrencePattern,
           recurrence_end_date: localToUTC(recurrenceEndDate + 'T23:59', tz),
           recurrence_custom_days: recurrencePattern === 'custom' ? recurrenceCustomDays : undefined,
+          recurrence_weekday: needsWeekday ? recurrenceWeekday : undefined,
+          recurrence_week_ordinal: needsWeekday ? recurrenceWeekOrdinal : undefined,
+          recurrence_month: recurrencePattern === 'annually_weekday' ? recurrenceMonth : undefined,
         };
         await onSubmitRecurring(recurringData);
       } else {
@@ -548,6 +572,59 @@ export const EventForm: React.FC<EventFormProps> = ({
                         </button>
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {(recurrencePattern === 'monthly_weekday' || recurrencePattern === 'annually_weekday') && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="recurrence-ordinal" className={labelClass}>
+                        Which Occurrence
+                      </label>
+                      <select
+                        id="recurrence-ordinal"
+                        value={recurrenceWeekOrdinal}
+                        onChange={(e) => setRecurrenceWeekOrdinal(parseInt(e.target.value))}
+                        className={selectClass}
+                      >
+                        {ORDINALS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="recurrence-weekday" className={labelClass}>
+                        Day of Week
+                      </label>
+                      <select
+                        id="recurrence-weekday"
+                        value={recurrenceWeekday}
+                        onChange={(e) => setRecurrenceWeekday(parseInt(e.target.value))}
+                        className={selectClass}
+                      >
+                        {WEEKDAYS.map((day, index) => (
+                          <option key={day} value={index}>{day}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {recurrencePattern === 'annually_weekday' && (
+                  <div className="max-w-xs">
+                    <label htmlFor="recurrence-month" className={labelClass}>
+                      Month
+                    </label>
+                    <select
+                      id="recurrence-month"
+                      value={recurrenceMonth}
+                      onChange={(e) => setRecurrenceMonth(parseInt(e.target.value))}
+                      className={selectClass}
+                    >
+                      {MONTHS.map((m, index) => (
+                        <option key={m} value={index + 1}>{m}</option>
+                      ))}
+                    </select>
                   </div>
                 )}
 

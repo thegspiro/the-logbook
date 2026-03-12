@@ -243,6 +243,9 @@ class EventResponse(EventBase):
     recurrence_pattern: Optional[str] = None
     recurrence_end_date: Optional[datetime] = None
     recurrence_custom_days: Optional[List[int]] = None
+    recurrence_weekday: Optional[int] = None
+    recurrence_week_ordinal: Optional[int] = None
+    recurrence_month: Optional[int] = None
     recurrence_parent_id: Optional[UUID] = None
 
     # Additional computed fields
@@ -551,11 +554,27 @@ class RecurringEventCreate(BaseModel):
     start_datetime: datetime  # Start of first occurrence
     end_datetime: datetime  # End of first occurrence (defines duration)
     recurrence_pattern: str = Field(
-        ..., description="daily, weekly, biweekly, monthly, custom"
+        ...,
+        description=(
+            "daily, weekly, biweekly, monthly, monthly_weekday, "
+            "annually, annually_weekday, custom"
+        ),
     )
     recurrence_end_date: datetime  # When the series ends
     recurrence_custom_days: Optional[List[int]] = Field(
         None, description="For custom: weekday numbers (0=Mon, 6=Sun)"
+    )
+    recurrence_weekday: Optional[int] = Field(
+        None, ge=0, le=6,
+        description="For monthly_weekday/annually_weekday: weekday (0=Mon, 6=Sun)",
+    )
+    recurrence_week_ordinal: Optional[int] = Field(
+        None,
+        description="Which occurrence: 1=first, 2=second, ..., 5=fifth, -1=last",
+    )
+    recurrence_month: Optional[int] = Field(
+        None, ge=1, le=12,
+        description="For annually_weekday: target month (1=Jan, 12=Dec)",
     )
 
     # Event settings (same as EventCreate)
@@ -573,9 +592,23 @@ class RecurringEventCreate(BaseModel):
     template_id: Optional[UUID] = None  # Created from a template
 
     @model_validator(mode="after")
-    def validate_custom_days(self):
+    def validate_recurrence_fields(self):
         if self.recurrence_pattern == "custom" and not self.recurrence_custom_days:
             raise ValueError(
                 "recurrence_custom_days is required when recurrence_pattern is 'custom'"
             )
+        if self.recurrence_pattern in ("monthly_weekday", "annually_weekday"):
+            if self.recurrence_weekday is None:
+                raise ValueError(
+                    "recurrence_weekday is required for monthly_weekday/annually_weekday"
+                )
+            if self.recurrence_week_ordinal is None:
+                raise ValueError(
+                    "recurrence_week_ordinal is required for monthly_weekday/annually_weekday"
+                )
+        if self.recurrence_pattern == "annually_weekday":
+            if self.recurrence_month is None:
+                raise ValueError(
+                    "recurrence_month is required for annually_weekday"
+                )
         return self

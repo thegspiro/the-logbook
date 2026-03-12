@@ -51,6 +51,9 @@ class RecurrencePattern(str, Enum):
     WEEKLY = "weekly"
     BIWEEKLY = "biweekly"
     MONTHLY = "monthly"
+    MONTHLY_WEEKDAY = "monthly_weekday"  # e.g., 2nd Monday of every month
+    ANNUALLY = "annually"  # Same date every year
+    ANNUALLY_WEEKDAY = "annually_weekday"  # e.g., 4th Monday of July every year
     CUSTOM = "custom"  # Uses recurrence_custom_days
 
 
@@ -148,6 +151,15 @@ class Event(Base):
     recurrence_custom_days = Column(
         JSON, nullable=True
     )  # For CUSTOM: list of weekday numbers (0=Mon, 6=Sun)
+    recurrence_weekday = Column(
+        Integer, nullable=True
+    )  # For monthly/annual weekday: target weekday (0=Mon, 6=Sun)
+    recurrence_week_ordinal = Column(
+        Integer, nullable=True
+    )  # For monthly/annual weekday: which occurrence (1-5, -1=last)
+    recurrence_month = Column(
+        Integer, nullable=True
+    )  # For annually_weekday: target month (1-12)
     recurrence_parent_id = Column(
         String(36), ForeignKey("events.id"), nullable=True
     )  # Links instances to their parent
