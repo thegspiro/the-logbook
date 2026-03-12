@@ -56,24 +56,23 @@ def _set_auth_cookies(
     """Set httpOnly, Secure, SameSite auth cookies on *response*."""
     import secrets as _secrets
 
-    # SEC: Default Secure=True. Relax for localhost development or when
-    # the operator explicitly sets COOKIE_SECURE=false (e.g. LAN-only
-    # deployments served over plain HTTP).
+    # SEC: Determine the Secure flag for auth cookies.
+    # 1. Explicit override via COOKIE_SECURE env var always wins.
+    # 2. Auto-detect: if ANY allowed origin uses plain http://, the browser
+    #    would silently discard Secure cookies, so we must disable it.
+    #    This covers localhost dev, LAN IPs, and any other HTTP-only setup.
     if settings.COOKIE_SECURE is not None:
         use_secure = settings.COOKIE_SECURE
     else:
-        is_localhost_dev = (
-            settings.ENVIRONMENT == "development"
-            and any(
-                origin.startswith(("http://localhost", "http://127.0.0.1"))
-                for origin in (
-                    settings.ALLOWED_ORIGINS
-                    if isinstance(settings.ALLOWED_ORIGINS, list)
-                    else [settings.ALLOWED_ORIGINS]
-                )
-            )
+        origins = (
+            settings.ALLOWED_ORIGINS
+            if isinstance(settings.ALLOWED_ORIGINS, list)
+            else [settings.ALLOWED_ORIGINS]
         )
-        use_secure = not is_localhost_dev
+        has_http_origin = any(
+            origin.startswith("http://") for origin in origins
+        )
+        use_secure = not has_http_origin
 
     response.set_cookie(
         key="access_token",
