@@ -175,7 +175,7 @@ export const ShiftReportsTab: React.FC = () => {
   const handleUpdateSkillComment = (skillName: string, comment: string) => {
     setForm(prev => {
       const skills = (prev.skills_observed || []).map(s =>
-        s.skill_name === skillName ? { ...s, comment: comment ?? undefined } : s
+        s.skill_name === skillName ? { ...s, comment: comment || undefined } : s
       );
       return { ...prev, skills_observed: skills };
     });
@@ -225,12 +225,12 @@ export const ShiftReportsTab: React.FC = () => {
         hours_on_shift: form.hours_on_shift,
         calls_responded: form.calls_responded || 0,
         call_types: form.call_types?.length ? form.call_types : undefined,
-        performance_rating: form.performance_rating ?? undefined,
-        areas_of_strength: form.areas_of_strength ?? undefined,
-        areas_for_improvement: form.areas_for_improvement ?? undefined,
-        officer_narrative: form.officer_narrative ?? undefined,
+        performance_rating: form.performance_rating || undefined,
+        areas_of_strength: form.areas_of_strength || undefined,
+        areas_for_improvement: form.areas_for_improvement || undefined,
+        officer_narrative: form.officer_narrative || undefined,
         skills_observed: form.skills_observed?.length ? form.skills_observed : undefined,
-        tasks_performed: form.tasks_performed?.filter(t => t.task.trim()) ?? undefined,
+        tasks_performed: form.tasks_performed?.filter(t => t.task.trim()) || undefined,
       };
       await shiftCompletionService.createReport(payload);
       toast.success('Shift report submitted');

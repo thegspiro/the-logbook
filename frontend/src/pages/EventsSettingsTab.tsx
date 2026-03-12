@@ -522,7 +522,7 @@ const EventsSettingsTab: React.FC = () => {
         name: newTemplateName.trim(),
         subject: newTemplateSubject.trim(),
         body_html: newTemplateBody.trim(),
-        trigger: newTemplateTrigger ?? undefined,
+        trigger: newTemplateTrigger || undefined,
       });
       setEmailTemplates((prev) => [...prev, template]);
       setNewTemplateName('');

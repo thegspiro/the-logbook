@@ -244,8 +244,8 @@ const EventRequestsTab: React.FC = () => {
     try {
       await eventRequestService.updateRequestStatus(requestId, {
         status: newStatus,
-        notes: notes ?? undefined,
-        decline_reason: declineReasonValue ?? undefined,
+        notes: notes || undefined,
+        decline_reason: declineReasonValue || undefined,
       });
       toast.success(`Request ${STATUS_CONFIG[newStatus].label.toLowerCase()}.`);
       setDeclineReason('');
@@ -316,9 +316,9 @@ const EventRequestsTab: React.FC = () => {
     try {
       await eventRequestService.scheduleRequest(requestId, {
         event_date: scheduleDate,
-        event_end_date: scheduleEndDate ?? undefined,
-        location_id: scheduleLocationId ?? undefined,
-        notes: scheduleNotes ?? undefined,
+        event_end_date: scheduleEndDate || undefined,
+        location_id: scheduleLocationId || undefined,
+        notes: scheduleNotes || undefined,
         create_calendar_event: true,
       });
       toast.success('Event scheduled and added to calendar.');
@@ -340,8 +340,8 @@ const EventRequestsTab: React.FC = () => {
     setActionLoading(true);
     try {
       await eventRequestService.postponeRequest(requestId, {
-        reason: postponeReason ?? undefined,
-        new_event_date: postponeNewDate ?? undefined,
+        reason: postponeReason || undefined,
+        new_event_date: postponeNewDate || undefined,
       });
       toast.success('Request postponed.');
       setShowPostponeForm(false);
