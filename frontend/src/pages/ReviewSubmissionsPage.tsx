@@ -236,15 +236,15 @@ const EditRecordPanel: React.FC<{
       }
       if (fields.completion_date !== submission.completion_date) updates.completion_date = fields.completion_date;
       if (fields.certification_number !== (submission.certification_number || ''))
-        updates.certification_number = fields.certification_number ?? undefined;
+        updates.certification_number = fields.certification_number || undefined;
       if (fields.issuing_agency !== (submission.issuing_agency || ''))
-        updates.issuing_agency = fields.issuing_agency ?? undefined;
+        updates.issuing_agency = fields.issuing_agency || undefined;
       if (fields.expiration_date !== (submission.expiration_date || ''))
-        updates.expiration_date = fields.expiration_date ?? undefined;
+        updates.expiration_date = fields.expiration_date || undefined;
       if (fields.instructor !== (submission.instructor || ''))
-        updates.instructor = fields.instructor ?? undefined;
+        updates.instructor = fields.instructor || undefined;
       if (fields.location !== (submission.location || ''))
-        updates.location = fields.location ?? undefined;
+        updates.location = fields.location || undefined;
 
       if (Object.keys(updates).length === 0) {
         setEditing(false);
