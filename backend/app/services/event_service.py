@@ -1041,7 +1041,7 @@ class EventService:
 
         Returns: (data_dict, error_message)
         """
-        # Get event with location
+        # Get event with location and organization (for timezone)
         event_result = await self.db.execute(
             select(Event)
             .where(Event.id == str(event_id))
@@ -1052,6 +1052,13 @@ class EventService:
 
         if not event:
             return None, "Event not found"
+
+        # Fetch organization timezone for display
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        org = org_result.scalar_one_or_none()
+        org_timezone = org.timezone if org else None
 
         if event.is_cancelled:
             return None, "Event has been cancelled"
@@ -1099,6 +1106,7 @@ class EventService:
             "location_id": str(event.location_id) if event.location_id else None,
             "location_name": location_name,
             "require_checkout": event.require_checkout or False,
+            "timezone": org_timezone,
         }, None
 
     def _validate_check_in_window(

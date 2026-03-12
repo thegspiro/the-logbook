@@ -397,6 +397,9 @@ class QRCheckInData(BaseModel):
     require_checkout: bool = Field(
         default=False, description="Whether this event requires checkout"
     )
+    timezone: Optional[str] = Field(
+        default=None, description="Organization IANA timezone for display"
+    )
 
 
 class EventStats(BaseModel):

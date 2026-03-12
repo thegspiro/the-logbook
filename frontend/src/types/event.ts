@@ -211,6 +211,7 @@ export interface QRCheckInData {
   location_id?: string | undefined;
   location_name?: string | undefined;
   require_checkout?: boolean | undefined;
+  timezone?: string | undefined;
 }
 
 export interface CheckInActivity {

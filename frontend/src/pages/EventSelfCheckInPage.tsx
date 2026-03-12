@@ -18,11 +18,14 @@ import { EventType as EventTypeEnum } from '../constants/enums';
  */
 const EventSelfCheckInPage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
-  const tz = useTimezone();
+  const userTz = useTimezone();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [qrData, setQrData] = useState<QRCheckInData | null>(null);
+
+  // Prefer the organization timezone from the API so times display correctly
+  const tz = qrData?.timezone || userTz;
   const [checkingIn, setCheckingIn] = useState(false);
   const [checkedIn, setCheckedIn] = useState(false);
   const [checkInData, setCheckInData] = useState<RSVP | null>(null);
