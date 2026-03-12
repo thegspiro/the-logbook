@@ -67,6 +67,14 @@ class OutreachEventType(BaseModel):
     label: str = Field(..., min_length=1, max_length=200)
 
 
+class EventCategoryConfig(BaseModel):
+    """A custom event category with value, label, and color."""
+
+    value: str = Field(..., min_length=1, max_length=100)
+    label: str = Field(..., min_length=1, max_length=200)
+    color: str = Field(..., max_length=200)
+
+
 class EventSettingsUpdate(BaseModel):
     """
     Schema for updating event module settings.
@@ -78,7 +86,7 @@ class EventSettingsUpdate(BaseModel):
     enabled_event_types: Optional[List[str]] = None
     visible_event_types: Optional[List[str]] = None
     event_type_labels: Optional[Dict[str, str]] = None
-    custom_event_categories: Optional[List[str]] = None
+    custom_event_categories: Optional[List[EventCategoryConfig]] = None
     visible_custom_categories: Optional[List[str]] = None
     outreach_event_types: Optional[List[OutreachEventType]] = None
     request_pipeline: Optional[RequestPipelineUpdate] = None
@@ -95,7 +103,10 @@ class EventBase(BaseModel):
     description: Optional[str] = None
     event_type: str = Field(
         ...,
-        description="Event type: business_meeting, public_education, training, social, fundraiser, ceremony, other",
+        description=(
+            "Event type: business_meeting, public_education,"
+            " training, social, fundraiser, ceremony, other"
+        ),
     )
     location_id: Optional[UUID] = Field(
         None, description="FK to Location table for predefined locations"
@@ -120,7 +131,10 @@ class EventBase(BaseModel):
     send_reminders: bool = Field(default=True)
     reminder_schedule: List[int] = Field(
         default=[24],
-        description="Hours before event to send reminders (e.g. [168, 24] for 1 week + 1 day)",
+        description=(
+            "Hours before event to send reminders"
+            " (e.g. [168, 24] for 1 week + 1 day)"
+        ),
     )
     check_in_window_type: Optional[str] = Field(
         default="flexible", description="Check-in window type: flexible, strict, window"
