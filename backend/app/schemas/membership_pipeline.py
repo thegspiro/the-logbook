@@ -525,6 +525,39 @@ class InactivityCheckResponse(BaseModel):
 # --- Interview Schemas ---
 
 
+# --- Event Link Schemas ---
+
+
+class ProspectEventLinkCreate(BaseModel):
+    """Schema for linking a prospect to an event"""
+
+    event_id: UUID
+
+
+class ProspectEventLinkResponse(BaseModel):
+    """Schema for a prospect-event link"""
+
+    id: UUID
+    prospect_id: UUID
+    event_id: UUID
+    event_title: Optional[str] = None
+    event_type: Optional[str] = None
+    custom_category: Optional[str] = None
+    event_start: Optional[datetime] = None
+    event_end: Optional[datetime] = None
+    event_location: Optional[str] = None
+    is_cancelled: bool = False
+    notes: Optional[str] = None
+    linked_by: Optional[UUID] = None
+    linked_by_name: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# --- Interview Schemas ---
+
+
 class InterviewCreate(BaseModel):
     """Schema for creating an interview record"""
 

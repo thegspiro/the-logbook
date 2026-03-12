@@ -852,6 +852,27 @@ export interface BackendStepUpdatePayload {
 }
 
 // =============================================================================
+// Linked Events
+// =============================================================================
+
+export interface ProspectEventLink {
+  id: string;
+  prospect_id: string;
+  event_id: string;
+  event_title?: string | undefined;
+  event_type?: string | undefined;
+  custom_category?: string | undefined;
+  event_start?: string | undefined;
+  event_end?: string | undefined;
+  event_location?: string | undefined;
+  is_cancelled: boolean;
+  notes?: string | undefined;
+  linked_by?: string | undefined;
+  linked_by_name?: string | undefined;
+  created_at: string;
+}
+
+// =============================================================================
 // Interview Types
 // =============================================================================
 
