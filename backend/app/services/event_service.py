@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -293,6 +293,52 @@ class EventService:
 
         return event
 
+    async def cancel_series(
+        self,
+        parent_event_id: UUID,
+        organization_id: UUID,
+        reason: str,
+        cancel_future_only: bool = False,
+    ) -> int:
+        """Cancel all events in a recurring series.
+
+        Returns the number of events cancelled.
+        """
+        # Build query for all events in the series (parent + children)
+        conditions = [
+            Event.organization_id == str(organization_id),
+            Event.is_cancelled == False,  # noqa: E712
+        ]
+
+        if cancel_future_only:
+            conditions.append(Event.start_datetime >= datetime.now(dt_timezone.utc))
+
+        conditions.append(
+            or_(
+                Event.id == str(parent_event_id),
+                Event.recurrence_parent_id == str(parent_event_id),
+            )
+        )
+
+        result = await self.db.execute(
+            select(Event).where(*conditions)
+        )
+        events = result.scalars().all()
+
+        now = datetime.now(dt_timezone.utc)
+        cancelled_count = 0
+        for event in events:
+            event.is_cancelled = True
+            event.cancellation_reason = reason
+            event.cancelled_at = now
+            event.updated_at = now
+            cancelled_count += 1
+
+        if cancelled_count > 0:
+            await self.db.commit()
+
+        return cancelled_count
+
     async def duplicate_event(
         self, event_id: UUID, organization_id: UUID, created_by: UUID
     ) -> Optional[Event]:
@@ -414,7 +460,8 @@ class EventService:
         if rsvp_data.status not in allowed_statuses:
             return (
                 None,
-                f"RSVP status '{rsvp_data.status}' is not allowed for this event. Allowed statuses: {', '.join(allowed_statuses)}",
+                f"RSVP status '{rsvp_data.status}' is not allowed. "
+                f"Allowed statuses: {', '.join(allowed_statuses)}",
             )
 
         # Check if RSVP already exists
@@ -806,8 +853,8 @@ class EventService:
                 func.count(EventRSVP.id),
                 func.sum(EventRSVP.guest_count),
                 func.sum(
-                    case((EventRSVP.checked_in == True, 1), else_=0)
-                ),  # noqa: E712
+                    case((EventRSVP.checked_in.is_(True), 1), else_=0)
+                ),
             )
             .where(EventRSVP.event_id == str(event_id))
             .group_by(EventRSVP.status)
