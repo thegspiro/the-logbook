@@ -958,9 +958,9 @@ const CreatePipelinePage: React.FC = () => {
       // 1. Create the program
       const program = await trainingProgramService.createProgram({
         name: info.name,
-        description: info.description ?? undefined,
-        code: info.code ?? undefined,
-        target_position: info.target_position ?? undefined,
+        description: info.description || undefined,
+        code: info.code || undefined,
+        target_position: info.target_position || undefined,
         structure_type: info.structure_type,
         time_limit_days: info.time_limit_days ? parseInt(info.time_limit_days) : undefined,
         warning_days_before: info.warning_days_before ? parseInt(info.warning_days_before) : undefined,
@@ -973,7 +973,7 @@ const CreatePipelinePage: React.FC = () => {
           program_id: program.id,
           phase_number: phaseData.phase_number,
           name: phaseData.name,
-          description: phaseData.description ?? undefined,
+          description: phaseData.description || undefined,
           time_limit_days: phaseData.time_limit_days ? parseInt(phaseData.time_limit_days) : undefined,
           requires_manual_advancement: phaseData.requires_manual_advancement,
         });
@@ -983,7 +983,7 @@ const CreatePipelinePage: React.FC = () => {
           // First create the training requirement
           const requirement = await trainingProgramService.createRequirementEnhanced({
             name: reqData.name,
-            description: reqData.description ?? undefined,
+            description: reqData.description || undefined,
             requirement_type: reqData.requirement_type,
             source: 'department',
             frequency: reqData.frequency,
@@ -1013,11 +1013,11 @@ const CreatePipelinePage: React.FC = () => {
             program_id: program.id,
             phase_id: phase.id,
             name: msData.name,
-            description: msData.description ?? undefined,
+            description: msData.description || undefined,
             completion_percentage_threshold: msData.completion_percentage_threshold
               ? parseFloat(msData.completion_percentage_threshold)
               : 100,
-            notification_message: msData.notification_message ?? undefined,
+            notification_message: msData.notification_message || undefined,
           });
         }
       }

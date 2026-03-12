@@ -40,7 +40,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
       // Try the open shifts endpoint first, fall back to regular shifts
       try {
         const data = await schedulingService.getOpenShifts({
-          start_date: dateFilter ?? undefined,
+          start_date: dateFilter || undefined,
         });
         setShifts(data);
       } catch {

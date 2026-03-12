@@ -304,7 +304,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
     }
 
     try {
-      await advanceApplicant(applicant.id, actionNotes ?? undefined);
+      await advanceApplicant(applicant.id, actionNotes || undefined);
       toast.success('Applicant advanced to next stage');
       setActionNotes('');
       setShowNotesInput(false);
@@ -339,7 +339,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   const handleReject = async () => {
     if (!applicant) return;
     try {
-      await rejectApplicant(applicant.id, actionNotes ?? undefined);
+      await rejectApplicant(applicant.id, actionNotes || undefined);
       toast.success('Applicant rejected');
       setActionNotes('');
       setShowNotesInput(false);
@@ -374,7 +374,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   const handleReactivate = async () => {
     if (!applicant) return;
     try {
-      await reactivateApplicant(applicant.id, actionNotes ?? undefined);
+      await reactivateApplicant(applicant.id, actionNotes || undefined);
       toast.success('Application reactivated');
       setActionNotes('');
       setShowNotesInput(false);
@@ -386,7 +386,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   const handleWithdraw = async () => {
     if (!applicant) return;
     try {
-      await withdrawApplicant(applicant.id, actionNotes ?? undefined);
+      await withdrawApplicant(applicant.id, actionNotes || undefined);
       toast.success(`${applicant.first_name}'s application withdrawn`);
       setActionNotes('');
       setShowNotesInput(false);
@@ -400,8 +400,8 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
     if (!applicant || !currentElectionPackage) return;
     try {
       await updateElectionPackage(applicant.id, {
-        coordinator_notes: pkgNotes ?? undefined,
-        supporting_statement: pkgStatement ?? undefined,
+        coordinator_notes: pkgNotes || undefined,
+        supporting_statement: pkgStatement || undefined,
       });
       toast.success('Election package saved');
     } catch {

@@ -23,7 +23,6 @@ from app.models.ip_security import (
 )
 from app.models.user import User
 from app.schemas.ip_security import (
-    BlockedAccessAttemptResponse,
     BlockedAttemptsListResponse,
     CountryBlockRuleCreate,
     CountryBlockRuleResponse,
