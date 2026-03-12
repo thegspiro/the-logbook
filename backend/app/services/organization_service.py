@@ -9,8 +9,6 @@ import logging
 from typing import Any, Dict, Optional
 from uuid import UUID
 
-logger = logging.getLogger(__name__)
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +25,8 @@ from app.schemas.organization import (
     decrypt_settings_secrets,
     encrypt_settings_secrets,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class OrganizationService:
