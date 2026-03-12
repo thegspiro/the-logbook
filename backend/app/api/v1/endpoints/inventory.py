@@ -4312,12 +4312,17 @@ async def create_reorder_request(
 
     await log_audit_event(
         db=db,
-        user_id=current_user.id,
-        action="reorder_request_created",
-        resource_type="reorder_request",
-        resource_id=reorder.id,
+        event_type="reorder_request_created",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "resource_type": "reorder_request",
+            "resource_id": str(reorder.id),
+            "item_name": reorder.item_name,
+            "quantity": reorder.quantity_requested,
+        },
+        user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),
-        details={"item_name": reorder.item_name, "quantity": reorder.quantity_requested},
     )
 
     return ReorderRequestResponse.model_validate(reorder)
@@ -4349,12 +4354,16 @@ async def update_reorder_request(
 
     await log_audit_event(
         db=db,
-        user_id=current_user.id,
-        action="reorder_request_updated",
-        resource_type="reorder_request",
-        resource_id=reorder.id,
+        event_type="reorder_request_updated",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "resource_type": "reorder_request",
+            "resource_id": str(reorder.id),
+            "status": reorder.status.value if hasattr(reorder.status, 'value') else reorder.status,
+        },
+        user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),
-        details={"status": reorder.status.value if hasattr(reorder.status, 'value') else reorder.status},
     )
 
     resp = ReorderRequestResponse.model_validate(reorder)
@@ -4385,10 +4394,14 @@ async def delete_reorder_request(
 
     await log_audit_event(
         db=db,
-        user_id=current_user.id,
-        action="reorder_request_deleted",
-        resource_type="reorder_request",
-        resource_id=str(request_id),
+        event_type="reorder_request_deleted",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "resource_type": "reorder_request",
+            "resource_id": str(request_id),
+        },
+        user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),
     )
 
@@ -4638,12 +4651,17 @@ async def issue_kit_to_member(
 
     await log_audit_event(
         db=db,
-        user_id=current_user.id,
-        action="kit_issued",
-        resource_type="equipment_kit",
-        resource_id=str(kit_id),
+        event_type="kit_issued",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "resource_type": "equipment_kit",
+            "resource_id": str(kit_id),
+            "target_user_id": str(user_id),
+            "items_count": len(issuances),
+        },
+        user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),
-        details={"target_user_id": str(user_id), "items_count": len(issuances)},
     )
 
     return {"message": "Kit issued successfully", "items_issued": len(issuances)}
