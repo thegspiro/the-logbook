@@ -309,6 +309,14 @@ export const electionService = {
   },
 
   /**
+   * Get non-voters for an election (eligible voters who haven't voted yet)
+   */
+  async getNonVoters(electionId: string): Promise<{ non_voters: Array<{ id: string; full_name: string; email: string }>; count: number }> {
+    const response = await api.get<{ non_voters: Array<{ id: string; full_name: string; email: string }>; count: number }>(`/elections/${electionId}/non-voters`);
+    return response.data;
+  },
+
+  /**
    * Send a test ballot to the current user
    */
   async sendTestBallot(electionId: string): Promise<{ success: boolean; message: string }> {

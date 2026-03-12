@@ -347,6 +347,17 @@ class PropertyReturnReminderService:
                 DEFAULT_PROPERTY_RETURN_REMINDER_TEXT,
             )
 
+            import html as _html_mod
+
+            org_logo = getattr(org, "logo", None) or "" if org else ""
+            if org_logo:
+                context["organization_logo_img"] = (
+                    f'<img src="{_html_mod.escape(str(org_logo))}" alt="Logo" '
+                    f'style="max-height:80px;max-width:200px;" />'
+                )
+            else:
+                context["organization_logo_img"] = ""
+
             subject = DEFAULT_PROPERTY_RETURN_REMINDER_SUBJECT
             rendered_html = DEFAULT_PROPERTY_RETURN_REMINDER_HTML
             rendered_text = DEFAULT_PROPERTY_RETURN_REMINDER_TEXT

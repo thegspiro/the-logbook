@@ -165,6 +165,22 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             "name": "positions",
             "description": "Positions being voted on (comma-separated)",
         },
+        {
+            "name": "ballot_items_html",
+            "description": "HTML list of ballot items the voter is eligible for",
+        },
+        {
+            "name": "ballot_items_text",
+            "description": "Plain-text list of ballot items the voter is eligible for",
+        },
+        {
+            "name": "admin_contact_name",
+            "description": "Election administrator's name",
+        },
+        {
+            "name": "admin_contact_email",
+            "description": "Election administrator's email address",
+        },
     ],
     "cert_expiration": [
         {"name": "recipient_name", "description": "Recipient's display name"},
@@ -345,6 +361,18 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "voting_opens": "March 28, 2026 at 08:00 AM",
         "voting_closes": "April 1, 2026 at 05:00 PM",
         "positions": "Captain, Lieutenant",
+        "ballot_items_html": (
+            "<ul>"
+            "<li><strong>Captain</strong> — Officer Election (candidate selection)</li>"
+            "<li><strong>Lieutenant</strong> — Officer Election (candidate selection)</li>"
+            "</ul>"
+        ),
+        "ballot_items_text": (
+            "  - Captain — Officer Election (candidate selection)\n"
+            "  - Lieutenant — Officer Election (candidate selection)"
+        ),
+        "admin_contact_name": "FCVFD Secretary",
+        "admin_contact_email": "secretary@samplefd.org",
         "organization_name": "Sample Fire Department",
         "organization_logo": "https://example.com/logo.png",
         "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
@@ -630,6 +658,7 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
 
 # Default welcome email HTML body
 DEFAULT_WELCOME_HTML = """<div class="container">
+    <div class="logo">{{organization_logo_img}}</div>
     <div class="header">
         <h1>Welcome to {{organization_name}}</h1>
     </div>
@@ -678,6 +707,7 @@ DEFAULT_WELCOME_SUBJECT = "Welcome to {{organization_name}} — Your Account is 
 
 # Default password reset email
 DEFAULT_PASSWORD_RESET_HTML = """<div class="container">
+    <div class="logo">{{organization_logo_img}}</div>
     <div class="header">
         <h1>Password Reset Request</h1>
     </div>
@@ -722,6 +752,7 @@ DEFAULT_PASSWORD_RESET_SUBJECT = "Password Reset — {{organization_name}}"
 
 # Default member dropped / property return email template
 DEFAULT_MEMBER_DROPPED_HTML = """<div class="container">
+    <div class="logo">{{organization_logo_img}}</div>
     <div class="header">
         <h1>{{organization_name}}</h1>
     </div>
@@ -788,6 +819,7 @@ This is an official department notice. A copy has been placed in your member fil
 
 # Default inventory change notification email
 DEFAULT_INVENTORY_CHANGE_HTML = """<div class="container">
+    <div class="logo">{{organization_logo_img}}</div>
     <div class="header">
         <h1>{{organization_name}}</h1>
     </div>
@@ -852,6 +884,7 @@ DEFAULT_INVENTORY_CHANGE_SUBJECT = "Inventory Update — {{organization_name}}"
 
 # Default certification expiration alert email
 DEFAULT_CERT_EXPIRATION_HTML = """<div class="container">
+    <div class="logo">{{organization_logo_img}}</div>
     <div class="header">
         <h1>Certification Expiration Notice</h1>
     </div>
@@ -903,6 +936,7 @@ DEFAULT_CERT_EXPIRATION_SUBJECT = (
 
 # Default post-event validation email
 DEFAULT_POST_EVENT_VALIDATION_HTML = """<div class="container">
+    <div class="logo">{{organization_logo_img}}</div>
     <div class="header">
         <h1>Please Validate Attendance</h1>
     </div>
@@ -952,6 +986,7 @@ DEFAULT_POST_EVENT_VALIDATION_SUBJECT = "Attendance Validation Needed: {{event_t
 
 # Default post-shift validation email
 DEFAULT_POST_SHIFT_VALIDATION_HTML = """<div class="container">
+    <div class="logo">{{organization_logo_img}}</div>
     <div class="header">
         <h1>Shift Attendance Validation</h1>
     </div>
@@ -1003,6 +1038,7 @@ DEFAULT_POST_SHIFT_VALIDATION_SUBJECT = (
 
 # Default property return reminder email
 DEFAULT_PROPERTY_RETURN_REMINDER_HTML = """<div class="container">
+    <div class="logo">{{organization_logo_img}}</div>
     <div class="header">
         <h1>{{organization_name}}</h1>
     </div>
@@ -1053,6 +1089,7 @@ DEFAULT_PROPERTY_RETURN_REMINDER_SUBJECT = (
 
 # Default inactivity warning email
 DEFAULT_INACTIVITY_WARNING_HTML = """<div class="container">
+    <div class="logo">{{organization_logo_img}}</div>
     <div class="header">
         <h1>Prospective Member Inactivity Alert</h1>
     </div>
@@ -1106,6 +1143,7 @@ DEFAULT_INACTIVITY_WARNING_SUBJECT = (
 
 # Default election rollback alert email
 DEFAULT_ELECTION_ROLLBACK_HTML = """<div class="container">
+    <div class="logo">{{organization_logo_img}}</div>
     <div class="header" style="background-color: #dc2626;">
         <h1>Election Rolled Back</h1>
     </div>
@@ -1147,6 +1185,7 @@ DEFAULT_ELECTION_ROLLBACK_SUBJECT = "ALERT: Election Rolled Back — {{election_
 
 # Default election deleted alert email
 DEFAULT_ELECTION_DELETED_HTML = """<div class="container">
+    <div class="logo">{{organization_logo_img}}</div>
     <div class="header" style="background-color: #dc2626;">
         <h1>Election Deleted</h1>
     </div>
@@ -1188,6 +1227,7 @@ DEFAULT_ELECTION_DELETED_SUBJECT = "CRITICAL: Election Deleted — {{election_ti
 
 # Default member archived notification email
 DEFAULT_MEMBER_ARCHIVED_HTML = """<div class="container">
+    <div class="logo">{{organization_logo_img}}</div>
     <div class="header">
         <h1>Member Archived</h1>
     </div>
@@ -1219,6 +1259,7 @@ DEFAULT_MEMBER_ARCHIVED_SUBJECT = (
 
 # Default event request status update email
 DEFAULT_EVENT_REQUEST_STATUS_HTML = """<div class="container">
+    <div class="logo">{{organization_logo_img}}</div>
     <div class="header">
         <h1>Event Request Update</h1>
     </div>
@@ -1260,6 +1301,7 @@ DEFAULT_EVENT_REQUEST_STATUS_SUBJECT = "Event Request Update — {{status_label}
 
 # Default IT password reset notification email
 DEFAULT_IT_PASSWORD_NOTIFICATION_HTML = """<div class="container">
+    <div class="logo">{{organization_logo_img}}</div>
     <div class="header">
         <h1>IT Notice: Password Reset Requested</h1>
     </div>
@@ -1301,6 +1343,7 @@ DEFAULT_IT_PASSWORD_NOTIFICATION_SUBJECT = (
 
 # Default duplicate application notification email
 DEFAULT_DUPLICATE_APPLICATION_HTML = """<div class="container">
+    <div class="logo">{{organization_logo_img}}</div>
     <div class="header">
         <h1>Application Already on File</h1>
     </div>
@@ -1360,10 +1403,12 @@ DEFAULT_BALLOT_NOTIFICATION_HTML = """<div class="container">
         <div class="details">
             <p><strong>Election:</strong> {{election_title}}</p>
             <p><strong>Meeting Date:</strong> {{meeting_date}}</p>
-            <p><strong>Positions:</strong> {{positions}}</p>
             <p><strong>Voting Opens:</strong> {{voting_opens}}</p>
             <p><strong>Voting Closes:</strong> {{voting_closes}}</p>
         </div>
+
+        <p><strong>Your Ballot Items:</strong></p>
+        {{ballot_items_html}}
 
         {{#custom_message}}
         <p>{{custom_message}}</p>
@@ -1372,6 +1417,10 @@ DEFAULT_BALLOT_NOTIFICATION_HTML = """<div class="container">
         <p style="text-align: center;">
             <a href="{{ballot_url}}" class="button">Vote Now</a>
         </p>
+        <p style="text-align: center;"><small>(Clicking the above link will automatically log you in to vote)</small></p>
+
+        <p>If you have any questions, please contact your election administrator:<br/>
+        <strong>{{admin_contact_name}}</strong> ({{admin_contact_email}})</p>
     </div>
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
@@ -1387,13 +1436,19 @@ A ballot is now available for your review and vote.
 
 Election: {{election_title}}
 Meeting Date: {{meeting_date}}
-Positions: {{positions}}
 Voting Opens: {{voting_opens}}
 Voting Closes: {{voting_closes}}
+
+Your Ballot Items:
+{{ballot_items_text}}
 
 {{custom_message}}
 
 Vote here: {{ballot_url}}
+(This link will automatically log you in to vote.)
+
+If you have any questions, please contact your election administrator:
+{{admin_contact_name}} ({{admin_contact_email}})
 
 ---
 This is an automated message from {{organization_name}}.
@@ -1404,6 +1459,7 @@ DEFAULT_BALLOT_NOTIFICATION_SUBJECT = "Ballot Available: {{election_title}}"
 
 # Default event cancellation email
 DEFAULT_EVENT_CANCELLATION_HTML = """<div class="container">
+    <div class="logo">{{organization_logo_img}}</div>
     <div class="header" style="background-color: #dc2626;">
         <h1>Event Cancelled</h1>
     </div>
@@ -1449,6 +1505,7 @@ DEFAULT_EVENT_CANCELLATION_SUBJECT = (
 
 # Default event reminder email
 DEFAULT_EVENT_REMINDER_HTML = """<div class="container">
+    <div class="logo">{{organization_logo_img}}</div>
     <div class="header">
         <h1>Event Reminder</h1>
     </div>
@@ -1500,6 +1557,7 @@ DEFAULT_EVENT_REMINDER_SUBJECT = "Reminder: {{event_title}} — {{event_start}}"
 
 # Default training approval email
 DEFAULT_TRAINING_APPROVAL_HTML = """<div class="container">
+    <div class="logo">{{organization_logo_img}}</div>
     <div class="header" style="background-color: #7c3aed;">
         <h1>Training Approval Needed</h1>
     </div>
@@ -1910,6 +1968,7 @@ class EmailTemplateService:
         "items_issued_html",
         "items_returned_html",
         "organization_logo_img",
+        "ballot_items_html",
     }
 
     def _replace_variables(self, text: str, context: Dict[str, Any]) -> str:

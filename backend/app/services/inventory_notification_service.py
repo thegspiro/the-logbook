@@ -367,8 +367,18 @@ class InventoryNotificationService:
         if not subject:
             import html as _html_mod
 
+            # Build logo img tag for inline fallback
+            org_logo = getattr(org, "logo", None) or "" if org else ""
+            if org_logo:
+                context["organization_logo_img"] = (
+                    f'<img src="{_html_mod.escape(str(org_logo))}" alt="Logo" '
+                    f'style="max-height:80px;max-width:200px;" />'
+                )
+            else:
+                context["organization_logo_img"] = ""
+
             # Variables that are already rendered HTML and must NOT be escaped
-            _html_vars = {"items_issued_html", "items_returned_html"}
+            _html_vars = {"items_issued_html", "items_returned_html", "organization_logo_img"}
 
             def _replace(text: str) -> str:
                 def replacer(match):

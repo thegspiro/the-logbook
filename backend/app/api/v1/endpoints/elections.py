@@ -1361,6 +1361,25 @@ async def send_ballot_emails(
     )
 
 
+@router.get("/{election_id}/non-voters")
+async def get_non_voters(
+    election_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Get list of eligible voters who have not yet voted.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    non_voters = await service.get_non_voters(
+        election_id, current_user.organization_id
+    )
+    return {"non_voters": non_voters, "count": len(non_voters)}
+
+
 # ============================================
 # Vote Integrity and Audit Endpoints
 # ============================================
