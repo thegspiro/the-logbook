@@ -4,6 +4,7 @@ Election API Endpoints
 Endpoints for election management including elections, candidates, voting, and results.
 """
 
+import copy
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID, uuid4
@@ -473,7 +474,9 @@ async def update_election_settings(
             detail="Organization not found",
         )
 
-    org_settings = org.settings or {}
+    # Deep copy to avoid mutating SQLAlchemy's committed state via shared
+    # nested references, which would prevent change detection on JSON columns.
+    org_settings = copy.deepcopy(org.settings or {})
     election_defaults = org_settings.get("election_defaults", {})
     proxy_config = org_settings.get("proxy_voting", {})
 
