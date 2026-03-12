@@ -286,7 +286,7 @@ describe('adminHoursStore', () => {
       await getState().clockIn('cat1');
 
       expect(mockClockIn).toHaveBeenCalledWith('cat1');
-      expect(mockGetActiveSession).toHaveBeenCalled();
+      expect(mockGetActiveSession).toHaveBeenCalledWith();
       expect(getState().activeSession).toEqual(session);
     });
 
@@ -309,7 +309,7 @@ describe('adminHoursStore', () => {
 
       expect(mockClockOut).toHaveBeenCalledWith('entry1');
       expect(getState().activeSession).toBeNull();
-      expect(mockListMy).toHaveBeenCalled();
+      expect(mockListMy).toHaveBeenCalledWith();
     });
 
     it('should set error and re-throw on failure', async () => {
@@ -331,7 +331,7 @@ describe('adminHoursStore', () => {
 
       expect(mockClockOutByCategory).toHaveBeenCalledWith('cat1');
       expect(getState().activeSession).toBeNull();
-      expect(mockListMy).toHaveBeenCalled();
+      expect(mockListMy).toHaveBeenCalledWith();
     });
 
     it('should set error and re-throw on failure', async () => {
@@ -484,7 +484,7 @@ describe('adminHoursStore', () => {
 
       expect(mockReview).toHaveBeenCalledWith('entry1', 'approve', undefined);
       expect(mockListAll).toHaveBeenCalledWith({ status: 'pending' });
-      expect(mockGetPendingCount).toHaveBeenCalled();
+      expect(mockGetPendingCount).toHaveBeenCalledWith();
     });
 
     it('should review (reject) an entry with reason', async () => {
@@ -517,7 +517,7 @@ describe('adminHoursStore', () => {
       expect(result).toBe(3);
       expect(mockBulkApprove).toHaveBeenCalledWith(['e1', 'e2', 'e3']);
       expect(mockListAll).toHaveBeenCalledWith({ status: 'pending' });
-      expect(mockGetPendingCount).toHaveBeenCalled();
+      expect(mockGetPendingCount).toHaveBeenCalledWith();
     });
 
     it('should set error and re-throw on failure', async () => {
@@ -632,8 +632,8 @@ describe('adminHoursStore', () => {
       await getState().forceClockOut('entry1');
 
       expect(mockForceClockOut).toHaveBeenCalledWith('entry1');
-      expect(mockListActiveSessions).toHaveBeenCalled();
-      expect(mockGetPendingCount).toHaveBeenCalled();
+      expect(mockListActiveSessions).toHaveBeenCalledWith();
+      expect(mockGetPendingCount).toHaveBeenCalledWith();
     });
 
     it('should set error and re-throw on failure', async () => {

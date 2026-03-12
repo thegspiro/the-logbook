@@ -113,9 +113,7 @@ describe('ComplianceOfficerDashboard', () => {
     renderWithRouter(<ComplianceOfficerDashboard />);
 
     // The AnnualReportSection is rendered by default and shows a loading spinner
-    // The spinner uses Loader2 icon with animate-spin class
-    const spinner = document.querySelector('.animate-spin');
-    expect(spinner).toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
   it('renders Annual Report section by default', async () => {
@@ -125,7 +123,7 @@ describe('ComplianceOfficerDashboard', () => {
       expect(screen.getByText(/Annual Compliance Report/)).toBeInTheDocument();
     });
 
-    expect(mockGetAnnualReport).toHaveBeenCalled();
+    expect(mockGetAnnualReport).toHaveBeenCalledWith();
   });
 
   it('can switch to ISO Readiness section', async () => {
@@ -138,7 +136,7 @@ describe('ComplianceOfficerDashboard', () => {
       expect(screen.getByText(/ISO\/FSRS Readiness Assessment/)).toBeInTheDocument();
     });
 
-    expect(mockGetISOReadiness).toHaveBeenCalled();
+    expect(mockGetISOReadiness).toHaveBeenCalledWith();
   });
 
   it('can switch to Record Quality section', async () => {
@@ -151,7 +149,7 @@ describe('ComplianceOfficerDashboard', () => {
       expect(screen.getByText(/Training Record Quality/)).toBeInTheDocument();
     });
 
-    expect(mockGetRecordCompleteness).toHaveBeenCalled();
+    expect(mockGetRecordCompleteness).toHaveBeenCalledWith();
   });
 
   it('can switch to Attestations section', async () => {
@@ -164,7 +162,7 @@ describe('ComplianceOfficerDashboard', () => {
       expect(screen.getByText(/Compliance Attestations/)).toBeInTheDocument();
     });
 
-    expect(mockGetAttestations).toHaveBeenCalled();
+    expect(mockGetAttestations).toHaveBeenCalledWith();
   });
 
   it('can switch to Forecast section', async () => {
@@ -178,6 +176,6 @@ describe('ComplianceOfficerDashboard', () => {
       expect(screen.getByText('No forecast data available.')).toBeInTheDocument();
     });
 
-    expect(mockGetComplianceForecast).toHaveBeenCalled();
+    expect(mockGetComplianceForecast).toHaveBeenCalledWith();
   });
 });

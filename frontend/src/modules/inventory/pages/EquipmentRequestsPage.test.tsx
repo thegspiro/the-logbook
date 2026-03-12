@@ -48,14 +48,14 @@ describe('EquipmentRequestsPage', () => {
     expect(screen.getByText('Equipment Requests')).toBeInTheDocument();
     expect(screen.getByText('Review member requests for equipment')).toBeInTheDocument();
     await waitFor(() => {
-      expect(mockGetEquipmentRequests).toHaveBeenCalled();
+      expect(mockGetEquipmentRequests).toHaveBeenCalledWith();
     });
   });
 
   it('renders back link to admin', () => {
     renderWithRouter(<EquipmentRequestsPage />);
-    const backLink = screen.getByText('Back to Admin');
-    expect(backLink.closest('a')).toHaveAttribute('href', '/inventory/admin');
+    const backLink = screen.getByRole('link', { name: /Back to Admin/ });
+    expect(backLink).toHaveAttribute('href', '/inventory/admin');
   });
 
   it('loads and displays equipment requests', async () => {
@@ -153,7 +153,7 @@ describe('EquipmentRequestsPage', () => {
     await user.click(screen.getByText('Review'));
     await user.click(await screen.findByText('Approve'));
     await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalled();
+      expect(mockToastError).toHaveBeenCalledWith();
     });
   });
 

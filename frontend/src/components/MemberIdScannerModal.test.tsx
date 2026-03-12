@@ -83,8 +83,7 @@ describe('MemberIdScannerModal', () => {
   it('should show the scanner viewport', () => {
     render(<MemberIdScannerModal {...defaultProps} />);
 
-    const viewport = document.getElementById('member-scanner-viewport');
-    expect(viewport).toBeInTheDocument();
+    expect(screen.getByTestId('member-scanner-viewport')).toBeInTheDocument();
   });
 
   it('should display instruction text', () => {
@@ -109,7 +108,7 @@ describe('MemberIdScannerModal', () => {
 
     await user.click(screen.getByRole('button', { name: /close scanner/i }));
 
-    expect(defaultProps.onClose).toHaveBeenCalled();
+    expect(defaultProps.onClose).toHaveBeenCalledWith();
   });
 
   it('should auto-start the scanner when opened', async () => {
@@ -117,7 +116,7 @@ describe('MemberIdScannerModal', () => {
 
     // The start is delayed by 100ms via setTimeout in the component
     await waitFor(() => {
-      expect(mockStart).toHaveBeenCalled();
+      expect(mockStart).toHaveBeenCalledWith();
     });
   });
 });

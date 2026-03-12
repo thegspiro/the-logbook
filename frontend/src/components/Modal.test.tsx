@@ -55,15 +55,8 @@ describe('Modal', () => {
   it('calls onClose when clicking backdrop (outside modal)', async () => {
     render(<Modal {...defaultProps} />);
 
-    // The backdrop handler is on the flex container div that wraps the overlay and modal panel.
-    // We need to click the container, not the overlay itself.
-    // The handler checks e.target === e.currentTarget, so we need to click
-    // the exact element that has the onClick handler.
-    const backdrop = screen.getByRole('dialog').querySelector('.flex.items-center');
-    expect(backdrop).toBeInTheDocument();
-
-    // fireEvent.click on the container triggers handler with target === currentTarget
-    if (backdrop) fireEvent.click(backdrop);
+    const backdrop = screen.getByTestId('modal-backdrop');
+    fireEvent.click(backdrop);
 
     expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
   });
@@ -71,9 +64,8 @@ describe('Modal', () => {
   it('does not close on backdrop click when closeOnClickOutside is false', () => {
     render(<Modal {...defaultProps} closeOnClickOutside={false} />);
 
-    const backdrop = screen.getByRole('dialog').querySelector('.flex.items-center');
-    expect(backdrop).toBeInTheDocument();
-    if (backdrop) fireEvent.click(backdrop);
+    const backdrop = screen.getByTestId('modal-backdrop');
+    fireEvent.click(backdrop);
 
     expect(defaultProps.onClose).not.toHaveBeenCalled();
   });
@@ -88,10 +80,8 @@ describe('Modal', () => {
   });
 
   it('does not render footer section when not provided', () => {
-    const { container } = render(<Modal {...defaultProps} />);
-    // The footer container has a specific class; when no footer, it should not appear
-    const footerSection = container.querySelector('.bg-theme-surface-secondary');
-    expect(footerSection).not.toBeInTheDocument();
+    render(<Modal {...defaultProps} />);
+    expect(screen.queryByTestId('modal-footer')).not.toBeInTheDocument();
   });
 
   // ---- ARIA attributes ----
@@ -118,23 +108,23 @@ describe('Modal', () => {
   // ---- Size variants ----
 
   it('applies the correct size class based on size prop', () => {
-    const { rerender, container } = render(<Modal {...defaultProps} size="sm" />);
-    let panel = container.querySelector('[tabindex="-1"]');
-    expect(panel?.className).toContain('sm:max-w-md');
+    const { rerender } = render(<Modal {...defaultProps} size="sm" />);
+    let panel = screen.getByTestId('modal-panel');
+    expect(panel).toHaveClass('sm:max-w-md');
 
     rerender(<Modal {...defaultProps} size="lg" />);
-    panel = container.querySelector('[tabindex="-1"]');
-    expect(panel?.className).toContain('sm:max-w-2xl');
+    panel = screen.getByTestId('modal-panel');
+    expect(panel).toHaveClass('sm:max-w-2xl');
 
     rerender(<Modal {...defaultProps} size="xl" />);
-    panel = container.querySelector('[tabindex="-1"]');
-    expect(panel?.className).toContain('sm:max-w-4xl');
+    panel = screen.getByTestId('modal-panel');
+    expect(panel).toHaveClass('sm:max-w-4xl');
   });
 
   it('defaults to md size when size prop is not provided', () => {
-    const { container } = render(<Modal {...defaultProps} />);
-    const panel = container.querySelector('[tabindex="-1"]');
-    expect(panel?.className).toContain('sm:max-w-lg');
+    render(<Modal {...defaultProps} />);
+    const panel = screen.getByTestId('modal-panel');
+    expect(panel).toHaveClass('sm:max-w-lg');
   });
 
   // ---- Body scroll lock ----

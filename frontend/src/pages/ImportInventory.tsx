@@ -255,6 +255,7 @@ const ImportInventory: React.FC = () => {
               ref={fileInputRef}
               type="file"
               accept=".csv"
+              data-testid="csv-file-input"
               onChange={handleFileSelect}
               className="hidden"
             />

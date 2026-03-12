@@ -4,10 +4,11 @@ import { PullToRefreshIndicator } from './PullToRefreshIndicator';
 
 describe('PullToRefreshIndicator', () => {
   it('renders nothing when idle', () => {
-    const { container } = render(
+    render(
       <PullToRefreshIndicator pulling={false} refreshing={false} pullDistance={0} />
     );
-    expect(container.firstChild).toBeNull();
+    expect(screen.queryByLabelText('Pull to refresh')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Refreshing')).not.toBeInTheDocument();
   });
 
   it('renders when pulling', () => {
@@ -25,20 +26,20 @@ describe('PullToRefreshIndicator', () => {
   });
 
   it('caps arrow rotation at progress=1', () => {
-    const { container } = render(
+    render(
       <PullToRefreshIndicator pulling={true} refreshing={false} pullDistance={80} threshold={80} />
     );
-    const svg = container.querySelector('svg');
-    expect(svg).toBeInTheDocument();
+    const arrow = screen.getByTestId('pull-arrow');
+    expect(arrow).toBeInTheDocument();
     // At progress=1, rotation should be 180deg
-    expect(svg?.style.transform).toBe('rotate(180deg)');
+    expect(arrow.style.transform).toBe('rotate(180deg)');
   });
 
   it('shows spinner icon when refreshing', () => {
-    const { container } = render(
+    render(
       <PullToRefreshIndicator pulling={false} refreshing={true} pullDistance={0} />
     );
-    const spinner = container.querySelector('.animate-spin');
-    expect(spinner).toBeInTheDocument();
+    const indicator = screen.getByLabelText('Refreshing');
+    expect(indicator).toBeInTheDocument();
   });
 });

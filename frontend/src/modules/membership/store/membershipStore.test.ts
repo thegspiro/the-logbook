@@ -301,7 +301,7 @@ describe('membershipStore', () => {
       expect(getState().searchQuery).toBe('test');
       expect(getState().currentPage).toBe(1);
       // fetchMembers is called with void (fire-and-forget)
-      expect(mockGetUsers).toHaveBeenCalled();
+      expect(mockGetUsers).toHaveBeenCalledWith();
     });
   });
 
@@ -316,7 +316,7 @@ describe('membershipStore', () => {
 
       expect(getState().statusFilter).toBe('inactive');
       expect(getState().currentPage).toBe(1);
-      expect(mockGetUsers).toHaveBeenCalled();
+      expect(mockGetUsers).toHaveBeenCalledWith();
     });
   });
 

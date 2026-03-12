@@ -69,11 +69,11 @@ describe('downloadFile', () => {
 
     downloadFile('test content', 'test.csv');
 
-    expect(createObjectURL).toHaveBeenCalled();
-    expect(appendSpy).toHaveBeenCalled();
-    expect(clickSpy).toHaveBeenCalled();
-    expect(removeSpy).toHaveBeenCalled();
-    expect(revokeObjectURL).toHaveBeenCalled();
+    expect(createObjectURL).toHaveBeenCalledWith();
+    expect(appendSpy).toHaveBeenCalledWith();
+    expect(clickSpy).toHaveBeenCalledWith();
+    expect(removeSpy).toHaveBeenCalledWith();
+    expect(revokeObjectURL).toHaveBeenCalledWith();
   });
 });
 
@@ -100,8 +100,6 @@ describe('exportReportAsCsv', () => {
     exportReportAsCsv('My Report', rows);
 
     expect(capturedLink).not.toBeNull();
-    if (capturedLink) {
-      expect((capturedLink as HTMLAnchorElement).download).toMatch(/^my_report_\d{4}-\d{2}-\d{2}\.csv$/);
-    }
+    expect((capturedLink as HTMLAnchorElement).download).toMatch(/^my_report_\d{4}-\d{2}-\d{2}\.csv$/);
   });
 });
