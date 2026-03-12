@@ -173,6 +173,7 @@ async def _send_request_notification(
             if not subject:
                 import re
 
+                from app.services.email_service import build_email_logo_img
                 from app.services.email_template_service import (
                     DEFAULT_CSS,
                     DEFAULT_EVENT_REQUEST_STATUS_HTML,
@@ -180,6 +181,7 @@ async def _send_request_notification(
                     DEFAULT_EVENT_REQUEST_STATUS_TEXT,
                 )
 
+                context["organization_logo_img"] = build_email_logo_img(org)
                 subject = DEFAULT_EVENT_REQUEST_STATUS_SUBJECT
                 rendered_html = DEFAULT_EVENT_REQUEST_STATUS_HTML
                 rendered_text = DEFAULT_EVENT_REQUEST_STATUS_TEXT
@@ -205,20 +207,26 @@ async def _send_request_notification(
             )
             assignee = assignee_result.scalar_one_or_none()
             if assignee and assignee.email:
+                from app.services.email_service import build_email_logo_html
+
                 outreach_label = event_request.outreach_type.replace("_", " ").title()
                 e_assignee = _html.escape(assignee.first_name or "")
                 e_contact = _html.escape(event_request.contact_name or "")
                 e_outreach = _html.escape(outreach_label)
                 e_org_name = _html.escape(event_request.organization_name or "N/A")
+                _logo = build_email_logo_html(org)
                 subject = f"New Event Request Assigned — {outreach_label}"
-                body = f"""<p>Hello {e_assignee},</p>
+                body = f"""<div style="font-family:Arial,sans-serif;max-width:600px;">
+{_logo}
+<p>Hello {e_assignee},</p>
 <p>A new event request has been assigned to you:</p>
 <ul>
 <li><strong>Contact:</strong> {e_contact}</li>
 <li><strong>Type:</strong> {e_outreach}</li>
 <li><strong>Organization:</strong> {e_org_name}</li>
 </ul>
-<p>Please review and begin processing this request.</p>"""
+<p>Please review and begin processing this request.</p>
+</div>"""
 
                 await email_service.send_email(
                     to_emails=[assignee.email],
@@ -1152,7 +1160,7 @@ async def send_template_email(
     org = org_result.scalar_one_or_none()
 
     try:
-        from app.services.email_service import EmailService
+        from app.services.email_service import EmailService, build_email_logo_img
 
         email_service = EmailService(organization=org)
 
@@ -1161,6 +1169,7 @@ async def send_template_email(
             "contact_name": event_request.contact_name,
             "outreach_type": event_request.outreach_type.replace("_", " ").title(),
             "organization_name": event_request.organization_name or "",
+            "organization_logo_img": build_email_logo_img(org),
             "event_date": (
                 event_request.event_date.strftime("%B %d, %Y at %I:%M %p")
                 if event_request.event_date

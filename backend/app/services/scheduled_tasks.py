@@ -423,7 +423,7 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
     from app.models.event import Event, RSVPStatus
     from app.models.notification import NotificationChannel, NotificationLog
     from app.models.user import User
-    from app.services.email_service import EmailService
+    from app.services.email_service import EmailService, build_email_logo_html
 
     now = datetime.now(dt_timezone.utc)
     orgs = await db.execute(select(Organization))
@@ -669,7 +669,7 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
     from app.models.event import Event
     from app.models.notification import NotificationChannel, NotificationLog
     from app.models.user import User
-    from app.services.email_service import EmailService
+    from app.services.email_service import EmailService, build_email_logo_html
 
     now = datetime.now(dt_timezone.utc)
     # Look back 2 hours for recently ended events
@@ -759,17 +759,21 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                         full_event_url = f"{settings.FRONTEND_URL}/events/{event.id}"
                         e_first = _html.escape(creator.first_name or "")
                         e_title = _html.escape(event.title or "")
+                        _logo = build_email_logo_html(org)
                         email_service = EmailService(organization=org)
                         sent_count, _ = await email_service.send_email(
                             to_emails=[creator.email],
                             subject=subject,
                             html_body=(
+                                f'<div style="font-family:Arial,sans-serif;max-width:600px;">'
+                                f"{_logo}"
                                 f"<p>Hi {e_first},</p>"
                                 f'<p>Your event "<strong>{e_title}</strong>" has ended. '
                                 f"{checked_in_count} of {rsvp_count} attendees checked in.</p>"
                                 f"<p>Please review and confirm the attendance records and "
                                 f"event timing before finalizing.</p>"
                                 f'<p><a href="{_html.escape(full_event_url)}">Review Event</a></p>'
+                                f"</div>"
                             ),
                             text_body=(
                                 f"Hi {creator.first_name},\n\n"
@@ -938,17 +942,21 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                         full_url = f"{settings.FRONTEND_URL}/scheduling"
                         e_first = _html.escape(officer.first_name or "")
                         e_shift_date = _html.escape(shift_date_str)
+                        _logo = build_email_logo_html(org)
                         email_service = EmailService(organization=org)
                         sent_count, _ = await email_service.send_email(
                             to_emails=[officer.email],
                             subject=subject,
                             html_body=(
+                                f'<div style="font-family:Arial,sans-serif;max-width:600px;">'
+                                f"{_logo}"
                                 f"<p>Hi {e_first},</p>"
                                 f"<p>Your shift on <strong>{e_shift_date}</strong> has ended. "
                                 f"{att_count} member{'s' if att_count != 1 else ''} recorded.</p>"
                                 f"<p>Please review and confirm the attendance records and "
                                 f"shift timing before finalizing.</p>"
                                 f'<p><a href="{_html.escape(full_url)}">Review Shift</a></p>'
+                                f"</div>"
                             ),
                             text_body=(
                                 f"Hi {officer.first_name},\n\n"
