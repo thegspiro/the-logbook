@@ -27,13 +27,13 @@ The Logbook is an open-source modular intranet platform for fire departments and
 ### Frontend (`/frontend`)
 
 - **Bundler:** Vite 7.3
-- **Framework:** React 18.3 (SPA, not Next.js or React Native)
+- **Framework:** React 19.2 (SPA, not Next.js or React Native)
 - **Language:** TypeScript 5.9 (strict mode — see below)
 - **Routing:** react-router-dom 6.30
 - **State management:** Zustand 5.0
-- **Forms:** react-hook-form 7.71 + Zod 3.24 validation
-- **Styling:** Tailwind CSS 3.4 (with `tailwind-merge`, dark mode via `class` strategy)
-- **HTTP client:** Axios 1.7
+- **Forms:** react-hook-form 7.71 + Zod 4.3 validation
+- **Styling:** Tailwind CSS 4.2 (with `tailwind-merge`, dark mode via `class` strategy)
+- **HTTP client:** Axios 1.13
 - **Auth (client):** httpOnly cookies (managed by backend); no client-side JWT handling
 - **Icons:** lucide-react
 - **PWA:** vite-plugin-pwa
@@ -75,7 +75,7 @@ All frontend source files use `.ts` / `.tsx` exclusively. Path alias `@/*` maps 
 
 ### Frontend (Vitest + Testing Library)
 
-- **Runner:** Vitest 3.2 with jsdom environment
+- **Runner:** Vitest 4.0 with jsdom environment
 - **Libraries:** @testing-library/react, @testing-library/jest-dom, @testing-library/user-event
 - **E2E:** Playwright
 - **Coverage:** @vitest/coverage-v8 (thresholds: 80% lines/functions/statements, 75% branches)
@@ -128,7 +128,7 @@ beforeEach(() => {
 
 ### Frontend
 
-- ESLint 8 with @typescript-eslint (max-warnings 1500 — existing warning debt)
+- ESLint 9 with @typescript-eslint (max-warnings 10)
 - Prettier 3.4 with prettier-plugin-tailwindcss
 
 ### Backend
@@ -246,7 +246,7 @@ backend/app/
   ```
   All enums live in `constants/enums.ts` — use these constants instead of string literals. Status badge color mappings are also defined here as `Record<string, string>` with Tailwind classes
 - **Floating promises:** Use `void` prefix for intentionally unhandled promises to satisfy `@typescript-eslint/no-floating-promises`: `void fetchData()`, `void handleSubmit()`
-- **Date/time handling:** All dates and times are stored as **UTC** in the database and API layer. They must always be displayed to the user in their **local timezone** (or the organization's configured timezone). Use `utils/dateFormatting.ts` utilities (which use `Intl.DateTimeFormat` internally, not date-fns) — all formatters accept an optional `timezone` parameter for IANA timezone support. Never display raw UTC values in the UI
+- **Date/time handling:** All dates and times are stored as **UTC** in the database and API layer. They must always be displayed to the user in their **local timezone** (or the organization's configured timezone). Use `utils/dateFormatting.ts` utilities (which use `date-fns` internally) — all formatters accept an optional `timezone` parameter for IANA timezone support. Never display raw UTC values in the UI
 - **Constants:** Magic numbers and config values are centralized in `constants/config.ts` (`API_TIMEOUT_MS`, `DEFAULT_PAGE_SIZE`, `PAGE_SIZE_OPTIONS`, `AUTO_SAVE_INTERVAL_MS`, etc.). Use these instead of inline values
 
 ### Backend Patterns
