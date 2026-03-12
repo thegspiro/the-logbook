@@ -266,6 +266,7 @@ describe('StageConfigModal', () => {
 
     expect(screen.getByLabelText('Meeting Type')).toBeInTheDocument();
     expect(screen.getByText('Meeting with Chief')).toBeInTheDocument();
+    expect(screen.getByText('Meeting with President')).toBeInTheDocument();
     expect(screen.getByText('Informational Meeting')).toBeInTheDocument();
     expect(screen.getByText('Business Meeting')).toBeInTheDocument();
     expect(screen.getByText('Other')).toBeInTheDocument();
