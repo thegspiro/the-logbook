@@ -23,6 +23,7 @@ from app.api.v1.endpoints import (
     external_training,
     facilities,
     compliance_officer,
+    finance,
     ip_security,
     training_enhancements,
     forms,
@@ -148,6 +149,7 @@ api_router.include_router(
     admin_hours.router, prefix="/admin-hours", tags=["admin-hours"]
 )
 api_router.include_router(grants.router, prefix="/grants", tags=["grants"])
+api_router.include_router(finance.router, prefix="/finance", tags=["finance"])
 api_router.include_router(
     training_enhancements.router,
     prefix="/training",
