@@ -299,8 +299,7 @@ class EventService:
         """
         Duplicate an event, copying all configuration but not RSVPs or attendance data.
 
-        The duplicated event gets a new title with "Copy of " prefix and
-        resets all RSVP/attendance/cancellation state.
+        Resets RSVP/attendance/cancellation state.
         """
         # Get the source event
         result = await self.db.execute(
@@ -318,7 +317,7 @@ class EventService:
         new_event = Event(
             organization_id=organization_id,
             created_by=created_by,
-            title=f"Copy of {source_event.title}",
+            title=source_event.title,
             description=source_event.description,
             event_type=source_event.event_type,
             location_id=source_event.location_id,

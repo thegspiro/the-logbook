@@ -2,14 +2,16 @@
  * Event Create Page
  *
  * Full-page form for creating new events with all supported fields.
+ * Supports both single and recurring event creation.
  */
 
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Calendar, ArrowLeft } from 'lucide-react';
 import { eventService } from '../services/api';
-import type { EventCreate } from '../types/event';
+import type { EventCreate, RecurringEventCreate } from '../types/event';
 import { EventForm } from '../components/EventForm';
+import toast from 'react-hot-toast';
 
 export const EventCreatePage: React.FC = () => {
   const navigate = useNavigate();
@@ -27,6 +29,22 @@ export const EventCreatePage: React.FC = () => {
       setError(apiError.response?.data?.detail || 'Failed to create event. Please try again.');
       setIsSubmitting(false);
       throw err; // Re-throw so EventForm knows submission failed
+    }
+  };
+
+  const handleSubmitRecurring = async (data: RecurringEventCreate) => {
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const events = await eventService.createRecurringEvent(data);
+      const count = events.length;
+      toast.success(`Created ${count} recurring event${count !== 1 ? 's' : ''}`);
+      navigate('/events');
+    } catch (err: unknown) {
+      const apiError = err as { response?: { data?: { detail?: string } } };
+      setError(apiError.response?.data?.detail || 'Failed to create recurring events. Please try again.');
+      setIsSubmitting(false);
+      throw err;
     }
   };
 
@@ -65,9 +83,11 @@ export const EventCreatePage: React.FC = () => {
         <div className="card p-8">
           <EventForm
             onSubmit={handleSubmit}
+            onSubmitRecurring={handleSubmitRecurring}
             onCancel={handleCancel}
             submitLabel="Create Event"
             isSubmitting={isSubmitting}
+            showRecurrence
           />
         </div>
       </main>

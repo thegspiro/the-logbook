@@ -677,7 +677,6 @@ async def duplicate_event(
     Duplicate an event
 
     Creates a copy of the event with all settings but without RSVPs or attendance data.
-    The new event title is prefixed with "Copy of ".
 
     **Authentication required**
     **Requires permission: events.manage**

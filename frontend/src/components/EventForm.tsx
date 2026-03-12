@@ -15,8 +15,9 @@ import {
   Mail,
   QrCode,
   Bell,
+  Repeat,
 } from 'lucide-react';
-import type { EventCreate, EventType, EventCategoryConfig, RSVPStatus } from '../types/event';
+import type { EventCreate, RecurringEventCreate, RecurrencePattern, EventType, EventCategoryConfig, RSVPStatus } from '../types/event';
 import { eventService, locationsService } from '../services/api';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum, CheckInWindowType } from '../constants/enums';
 import type { Location } from '../services/api';
@@ -28,9 +29,11 @@ import { formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 interface EventFormProps {
   initialData?: Partial<EventCreate>;
   onSubmit: (data: EventCreate) => Promise<void>;
+  onSubmitRecurring?: (data: RecurringEventCreate) => Promise<void>;
   onCancel: () => void;
   submitLabel?: string;
   isSubmitting?: boolean;
+  showRecurrence?: boolean;
 }
 
 const EVENT_TYPES: EventType[] = [
@@ -79,12 +82,24 @@ const labelClass = 'block text-sm font-semibold text-theme-text-primary mb-2';
 const checkboxClass =
   'w-4 h-4 rounded-sm border-theme-input-border bg-theme-input-bg text-blue-600 focus:ring-theme-focus-ring';
 
+const RECURRENCE_PATTERNS: { value: RecurrencePattern; label: string }[] = [
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'biweekly', label: 'Every 2 Weeks' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'custom', label: 'Custom Days' },
+];
+
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
 export const EventForm: React.FC<EventFormProps> = ({
   initialData,
   onSubmit,
+  onSubmitRecurring,
   onCancel,
   submitLabel = 'Create Event',
   isSubmitting = false,
+  showRecurrence = false,
 }) => {
   const tz = useTimezone();
 
@@ -117,6 +132,10 @@ export const EventForm: React.FC<EventFormProps> = ({
   const [visibleTypes, setVisibleTypes] = useState<EventType[]>(EVENT_TYPES);
   const [customCategories, setCustomCategories] = useState<EventCategoryConfig[]>([]);
   const [visibleCustomCategories, setVisibleCustomCategories] = useState<string[]>([]);
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrencePattern, setRecurrencePattern] = useState<RecurrencePattern>('weekly');
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
+  const [recurrenceCustomDays, setRecurrenceCustomDays] = useState<number[]>([]);
 
   useEffect(() => {
     void loadLocations();
@@ -260,7 +279,25 @@ export const EventForm: React.FC<EventFormProps> = ({
     }
 
     try {
-      await onSubmit(submitData);
+      if (isRecurring && onSubmitRecurring) {
+        if (!recurrenceEndDate) {
+          setError('Recurrence end date is required');
+          return;
+        }
+        if (recurrencePattern === 'custom' && recurrenceCustomDays.length === 0) {
+          setError('Select at least one day for custom recurrence');
+          return;
+        }
+        const recurringData: RecurringEventCreate = {
+          ...submitData,
+          recurrence_pattern: recurrencePattern,
+          recurrence_end_date: localToUTC(recurrenceEndDate + 'T23:59', tz),
+          recurrence_custom_days: recurrencePattern === 'custom' ? recurrenceCustomDays : undefined,
+        };
+        await onSubmitRecurring(recurringData);
+      } else {
+        await onSubmit(submitData);
+      }
     } catch (err: unknown) {
       const message = getErrorMessage(err, 'An error occurred');
       setError(message);
@@ -438,6 +475,91 @@ export const EventForm: React.FC<EventFormProps> = ({
             ))}
           </div>
         </div>
+
+        {/* Recurrence */}
+        {showRecurrence && (
+          <>
+            <div className="flex items-center space-x-3 pt-2">
+              <input
+                type="checkbox"
+                id="is-recurring"
+                checked={isRecurring}
+                onChange={(e) => setIsRecurring(e.target.checked)}
+                className={checkboxClass}
+              />
+              <label htmlFor="is-recurring" className="text-sm text-theme-text-secondary flex items-center gap-2">
+                <Repeat className="w-4 h-4" />
+                Make this a recurring event
+              </label>
+            </div>
+
+            {isRecurring && (
+              <div className="space-y-4 pl-6 border-l-2 border-red-500/30">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="recurrence-pattern" className={labelClass}>
+                      Repeats <span className="text-red-700 dark:text-red-500">*</span>
+                    </label>
+                    <select
+                      id="recurrence-pattern"
+                      value={recurrencePattern}
+                      onChange={(e) => setRecurrencePattern(e.target.value as RecurrencePattern)}
+                      className={selectClass}
+                    >
+                      {RECURRENCE_PATTERNS.map((p) => (
+                        <option key={p.value} value={p.value}>{p.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="recurrence-end-date" className={labelClass}>
+                      Repeat Until <span className="text-red-700 dark:text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      id="recurrence-end-date"
+                      value={recurrenceEndDate}
+                      onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+                </div>
+
+                {recurrencePattern === 'custom' && (
+                  <div>
+                    <label className={labelClass}>Days of the Week</label>
+                    <div className="flex flex-wrap gap-2">
+                      {WEEKDAYS.map((day, index) => (
+                        <button
+                          key={day}
+                          type="button"
+                          onClick={() => {
+                            setRecurrenceCustomDays((prev) =>
+                              prev.includes(index) ? prev.filter((d) => d !== index) : [...prev, index]
+                            );
+                          }}
+                          className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+                            recurrenceCustomDays.includes(index)
+                              ? 'bg-red-700 text-white border-red-700'
+                              : 'text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary'
+                          }`}
+                        >
+                          {day}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                    Individual events will be created for each occurrence. You can edit or cancel them independently after creation.
+                  </p>
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </section>
 
       <hr className="border-theme-surface-border" />

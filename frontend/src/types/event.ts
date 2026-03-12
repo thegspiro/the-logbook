@@ -39,6 +39,7 @@ export interface Event {
   is_recurring?: boolean;
   recurrence_pattern?: 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'custom';
   recurrence_end_date?: string;
+  recurrence_custom_days?: number[];
   recurrence_parent_id?: string;
   template_id?: string;
   is_cancelled: boolean;
