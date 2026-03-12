@@ -873,6 +873,9 @@ class MembershipPipelineService:
                 )
             )
 
+        # Auto-link event if the new step requires meeting attendance
+        await self._auto_link_event_for_step(prospect, next_step)
+
         await self._log_activity(
             prospect_id=prospect_id,
             action="prospect_advanced",
@@ -919,6 +922,9 @@ class MembershipPipelineService:
             )
             if next_progress:
                 next_progress.status = StepProgressStatus.IN_PROGRESS
+
+            # Auto-link event if the new step requires meeting attendance
+            await self._auto_link_event_for_step(prospect, next_step)
 
     # =========================================================================
     # Transfer to Membership
@@ -2943,3 +2949,80 @@ class MembershipPipelineService:
 
         await self.db.commit()
         return True
+
+    async def _auto_link_event_for_step(
+        self,
+        prospect: ProspectiveMember,
+        step: MembershipPipelineStep,
+    ) -> None:
+        """
+        Auto-link the next upcoming event when a prospect enters a meeting
+        step that has a linked_event_type configured.
+
+        The event is selected based on the current date (not when the prospect
+        entered the pipeline), so even if months have passed, it always finds
+        the *next* upcoming event matching the type and optional category.
+        """
+        if not step.config or not isinstance(step.config, dict):
+            return
+
+        event_type = step.config.get("linked_event_type")
+        if not event_type:
+            return
+
+        event_category = step.config.get("linked_event_category")
+        now = datetime.now(timezone.utc)
+
+        # Build query for next upcoming event matching type (and category)
+        conditions = [
+            Event.organization_id == prospect.organization_id,
+            Event.event_type == event_type,
+            Event.end_datetime > now,
+            Event.is_cancelled.is_(False),
+        ]
+        if event_category:
+            conditions.append(Event.custom_category == event_category)
+
+        query = (
+            select(Event)
+            .where(and_(*conditions))
+            .order_by(Event.start_datetime.asc())
+            .limit(1)
+        )
+        result = await self.db.execute(query)
+        event = result.scalar_one_or_none()
+        if not event:
+            return
+
+        # Check if already linked
+        existing = await self.db.execute(
+            select(ProspectEventLink).where(
+                and_(
+                    ProspectEventLink.prospect_id == prospect.id,
+                    ProspectEventLink.event_id == event.id,
+                )
+            )
+        )
+        if existing.scalar_one_or_none():
+            return
+
+        link = ProspectEventLink(
+            id=generate_uuid(),
+            prospect_id=prospect.id,
+            event_id=event.id,
+            notes=f"Auto-linked: next {event_type}"
+            + (f" ({event_category})" if event_category else ""),
+        )
+        self.db.add(link)
+
+        await self._log_activity(
+            prospect_id=prospect.id,
+            action="event_auto_linked",
+            details={
+                "event_id": event.id,
+                "event_title": event.title,
+                "step_id": step.id,
+                "step_name": step.name,
+            },
+            performed_by="system",
+        )
