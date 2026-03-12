@@ -25,6 +25,7 @@ import type {
   TrainingModuleConfig,
 } from '../../types/training';
 import type { User } from '../../types/user';
+import { useTimezone } from '../../hooks/useTimezone';
 
 type ViewMode = 'my-reports' | 'filed-by-me' | 'create' | 'pending-review';
 
@@ -57,6 +58,7 @@ const REVIEW_STATUS_STYLES: Record<string, { bg: string; text: string; label: st
 
 export const ShiftReportsTab: React.FC = () => {
   const { user, checkPermission } = useAuthStore();
+  const tz = useTimezone();
   const canManage = checkPermission('training.manage');
 
   const [viewMode, setViewMode] = useState<ViewMode>(canManage ? 'filed-by-me' : 'my-reports');
@@ -391,7 +393,7 @@ export const ShiftReportsTab: React.FC = () => {
     const isMyReport = report.trainee_id === user?.id;
     const isReviewMode = viewMode === 'pending-review';
     const dateStr = new Date(report.shift_date + 'T12:00:00').toLocaleDateString('en-US', {
-      weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+      weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: tz,
     });
 
     const statusStyle = REVIEW_STATUS_STYLES[report.review_status] ?? { bg: 'bg-green-500/10', text: 'text-green-700 dark:text-green-400', label: 'Approved' };

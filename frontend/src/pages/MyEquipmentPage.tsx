@@ -13,6 +13,8 @@ import {
 import { useAuthStore } from '../stores/authStore';
 import { useRanks } from '../hooks/useRanks';
 import { getErrorMessage } from '../utils/errorHandling';
+import { formatDate } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 import { MobileCheckoutCard } from '../components/ux/MobileCheckoutCard';
 import toast from 'react-hot-toast';
 import { RequestStatus } from '../constants/enums';
@@ -26,13 +28,10 @@ const CONDITION_COLORS: Record<string, string> = {
   out_of_service: 'text-red-700 dark:text-red-300',
 };
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
 const MyEquipmentPage: React.FC = () => {
   const { user } = useAuthStore();
   const { ranks } = useRanks();
+  const tz = useTimezone();
   const [data, setData] = useState<UserInventoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -169,7 +168,7 @@ const MyEquipmentPage: React.FC = () => {
     setSubmitting(true);
     try {
       await inventoryService.extendCheckout(extendModal.checkoutId, new Date(extendDate).toISOString());
-      toast.success(`Return date extended to ${new Date(extendDate).toLocaleDateString()}`);
+      toast.success(`Return date extended to ${formatDate(extendDate, tz)}`);
       setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' });
       setExtendDate('');
       await loadData();
@@ -351,7 +350,7 @@ const MyEquipmentPage: React.FC = () => {
                         <p className={`text-xs capitalize ${CONDITION_COLORS[item.condition] || 'text-theme-text-secondary'}`}>
                           {item.condition.replace('_', ' ')}
                         </p>
-                        <p className="text-theme-text-muted text-xs">Assigned {formatDate(item.assigned_date)}</p>
+                        <p className="text-theme-text-muted text-xs">Assigned {formatDate(item.assigned_date, tz)}</p>
                       </div>
                       <div className="mt-3">
                         {hasPendingReturnRequest(item.item_id) ? (
@@ -393,8 +392,8 @@ const MyEquipmentPage: React.FC = () => {
                     <MobileCheckoutCard
                       key={co.checkout_id}
                       itemName={co.item_name}
-                      checkoutDate={formatDate(co.checked_out_at)}
-                      dueDate={co.expected_return_at ? formatDate(co.expected_return_at) : undefined}
+                      checkoutDate={formatDate(co.checked_out_at, tz)}
+                      dueDate={co.expected_return_at ? formatDate(co.expected_return_at, tz) : undefined}
                       isOverdue={co.is_overdue}
                       onCheckIn={() => setCheckInModal({ open: true, checkoutId: co.checkout_id, itemName: co.item_name })}
                       onExtend={() => { setExtendModal({ open: true, checkoutId: co.checkout_id, itemName: co.item_name, currentDue: co.expected_return_at || '' }); setExtendDate(''); }}
@@ -418,11 +417,11 @@ const MyEquipmentPage: React.FC = () => {
                           <td className="p-3">
                             <span className="text-theme-text-primary font-medium">{co.item_name}</span>
                           </td>
-                          <td className="hidden sm:table-cell p-3 text-theme-text-secondary">{formatDate(co.checked_out_at)}</td>
+                          <td className="hidden sm:table-cell p-3 text-theme-text-secondary">{formatDate(co.checked_out_at, tz)}</td>
                           <td className="p-3">
                             {co.expected_return_at ? (
                               <span className={co.is_overdue ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-theme-text-secondary'}>
-                                {formatDate(co.expected_return_at)}
+                                {formatDate(co.expected_return_at, tz)}
                                 {co.is_overdue && <span className="ml-1 text-xs">(overdue)</span>}
                               </span>
                             ) : '--'}
@@ -470,7 +469,7 @@ const MyEquipmentPage: React.FC = () => {
                       <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-theme-text-muted">
                         {iss.category_name && <span>{iss.category_name}</span>}
                         {iss.size && <span>Size: {iss.size}</span>}
-                        <span>Issued {formatDate(iss.issued_at)}</span>
+                        <span>Issued {formatDate(iss.issued_at, tz)}</span>
                       </div>
                       <div className="mt-2">
                         {hasPendingReturnRequest(iss.item_id) ? (
@@ -516,7 +515,7 @@ const MyEquipmentPage: React.FC = () => {
                           <td className="p-3 text-theme-text-secondary">{iss.quantity_issued}</td>
                           <td className="hidden sm:table-cell p-3 text-theme-text-secondary">{iss.category_name || '--'}</td>
                           <td className="hidden sm:table-cell p-3 text-theme-text-secondary">{iss.size || '--'}</td>
-                          <td className="hidden sm:table-cell p-3 text-theme-text-secondary">{formatDate(iss.issued_at)}</td>
+                          <td className="hidden sm:table-cell p-3 text-theme-text-secondary">{formatDate(iss.issued_at, tz)}</td>
                           <td className="p-3">
                             {hasPendingReturnRequest(iss.item_id) ? (
                               <span className="text-xs text-yellow-600 dark:text-yellow-400 flex items-center gap-1">
@@ -584,7 +583,7 @@ const MyEquipmentPage: React.FC = () => {
                     </div>
                     <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-theme-text-muted">
                       <span className="capitalize">{req.request_type}</span>
-                      <span>{new Date(req.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                      <span>{formatDate(req.created_at, tz)}</span>
                     </div>
                     {req.review_notes && <p className="text-theme-text-muted text-xs mt-1 truncate">{req.review_notes}</p>}
                   </div>
@@ -622,7 +621,7 @@ const MyEquipmentPage: React.FC = () => {
                           {req.review_notes && <p className="text-theme-text-muted text-xs mt-0.5 truncate max-w-[150px]">{req.review_notes}</p>}
                         </td>
                         <td className="hidden sm:table-cell p-3 text-theme-text-muted text-xs">
-                          {new Date(req.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          {formatDate(req.created_at, tz)}
                         </td>
                       </tr>
                     ))}
@@ -772,7 +771,7 @@ const MyEquipmentPage: React.FC = () => {
                   <h3 className="text-lg font-medium text-theme-text-primary mb-1">Extend Return Date</h3>
                   <p className="text-theme-text-muted text-sm mb-4">{extendModal.itemName}</p>
                   {extendModal.currentDue && (
-                    <p className="text-theme-text-secondary text-xs mb-3">Currently due: {formatDate(extendModal.currentDue)}</p>
+                    <p className="text-theme-text-secondary text-xs mb-3">Currently due: {formatDate(extendModal.currentDue, tz)}</p>
                   )}
                   <div>
                     <label htmlFor="extend-date" className="block text-sm font-medium text-theme-text-secondary mb-1">New return date *</label>

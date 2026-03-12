@@ -7,6 +7,7 @@
 
 import React from 'react';
 import { CheckCircle, Cloud } from 'lucide-react';
+import { formatTime } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 
 interface AutoSaveNotificationProps {
@@ -33,13 +34,7 @@ export const AutoSaveNotification: React.FC<AutoSaveNotificationProps> = ({
 }) => {
   const tz = useTimezone();
   const formatTimestamp = (isoString: string) => {
-    const date = new Date(isoString);
-    return date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-      timeZone: tz
-    });
+    return formatTime(isoString, tz);
   };
 
   return (

@@ -11,9 +11,12 @@ import { useAdminHoursStore } from '../store/adminHoursStore';
 import { formatDuration } from '../utils/formatDuration';
 import { DEFAULT_PAGE_SIZE } from '../../../constants/config';
 import type { AdminHoursEntryEdit } from '../types';
+import { formatDate } from '../../../../utils/dateFormatting';
+import { useTimezone } from '../../../../hooks/useTimezone';
 import toast from 'react-hot-toast';
 
 const PendingReviewTab: React.FC = () => {
+  const tz = useTimezone();
   const allEntries = useAdminHoursStore((s) => s.allEntries);
   const allEntriesTotal = useAdminHoursStore((s) => s.allEntriesTotal);
   const entriesLoading = useAdminHoursStore((s) => s.entriesLoading);
@@ -272,7 +275,7 @@ const PendingReviewTab: React.FC = () => {
                           <span className="text-sm text-theme-text-secondary">{entry.categoryName}</span>
                         </div>
                         <div className="text-sm text-theme-text-secondary">
-                          <span>{new Date(entry.clockInAt).toLocaleDateString()}</span>
+                          <span>{formatDate(entry.clockInAt, tz)}</span>
                           <span className="mx-2">|</span>
                           <span>{formatDuration(entry.durationMinutes)}</span>
                           <span className="mx-2">|</span>

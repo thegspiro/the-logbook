@@ -27,6 +27,8 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { complianceOfficerService, reportExportService } from '../services/trainingServices';
+import { formatDate } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 import type {
   ISOReadiness,
   AnnualComplianceReport,
@@ -88,6 +90,7 @@ const ComplianceOfficerDashboard: React.FC = () => {
 // ============================================
 
 const AnnualReportSection: React.FC = () => {
+  const tz = useTimezone();
   const [report, setReport] = useState<AnnualComplianceReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -144,7 +147,7 @@ const AnnualReportSection: React.FC = () => {
             Annual Compliance Report — {year}
           </h2>
           <p className="text-sm text-theme-text-muted mt-1">
-            Generated {new Date(report.generated_at).toLocaleDateString()}
+            Generated {formatDate(report.generated_at, tz)}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -523,6 +526,7 @@ const RecordCompletenessSection: React.FC = () => {
 // ============================================
 
 const AttestationsSection: React.FC = () => {
+  const tz = useTimezone();
   const [attestations, setAttestations] = useState<ComplianceAttestation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -642,7 +646,7 @@ const AttestationsSection: React.FC = () => {
                       {att.period_type === 'annual' ? 'Annual' : `Q${att.period_quarter}`} Attestation — {att.period_year}
                     </p>
                     <p className="text-xs text-theme-text-muted">
-                      {att.timestamp ? new Date(att.timestamp).toLocaleDateString() : att.created_at ? new Date(att.created_at).toLocaleDateString() : ''}
+                      {att.timestamp ? formatDate(att.timestamp, tz) : att.created_at ? formatDate(att.created_at, tz) : ''}
                     </p>
                   </div>
                 </div>

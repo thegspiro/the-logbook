@@ -16,6 +16,8 @@ import {
   FileText,
 } from 'lucide-react';
 import { publicStatusService } from '../services/api';
+import { formatDate } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
 
 interface StatusData {
   first_name: string;
@@ -40,6 +42,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 
 export const ApplicationStatusPage: React.FC = () => {
   const { token } = useParams<{ token: string }>();
+  const tz = useTimezone();
   const [data, setData] = useState<StatusData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -122,11 +125,7 @@ export const ApplicationStatusPage: React.FC = () => {
 
           {data.applied_at && (
             <p className="text-xs text-theme-text-muted mt-3">
-              Applied {new Date(data.applied_at).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })}
+              Applied {formatDate(data.applied_at, tz)}
             </p>
           )}
         </div>
@@ -158,11 +157,7 @@ export const ApplicationStatusPage: React.FC = () => {
                       </p>
                       {stage.completed_at && (
                         <p className="text-xs text-theme-text-muted mt-0.5">
-                          {new Date(stage.completed_at).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                          })}
+                          {formatDate(stage.completed_at, tz)}
                         </p>
                       )}
                     </div>

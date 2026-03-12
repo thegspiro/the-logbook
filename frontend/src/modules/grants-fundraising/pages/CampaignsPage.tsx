@@ -19,6 +19,8 @@ import toast from 'react-hot-toast';
 import { fundraisingService } from '../services/api';
 import type { FundraisingCampaign } from '../types';
 import { CAMPAIGN_STATUS_COLORS } from '../types';
+import { formatDate } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -66,13 +68,6 @@ const formatCurrency = (amount: number): string =>
     maximumFractionDigits: 0,
   }).format(amount);
 
-const formatDate = (dateStr: string): string =>
-  new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-
 // ---------------------------------------------------------------------------
 // Inline Create Form
 // ---------------------------------------------------------------------------
@@ -108,6 +103,7 @@ const selectClass =
 // ---------------------------------------------------------------------------
 
 const CampaignsPage: React.FC = () => {
+  const tz = useTimezone();
   const [campaigns, setCampaigns] = useState<FundraisingCampaign[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -502,9 +498,9 @@ const CampaignsPage: React.FC = () => {
                 <div className="flex items-center gap-2 text-sm text-theme-text-secondary">
                   <Calendar className="h-4 w-4 shrink-0" />
                   <span>
-                    {formatDate(campaign.startDate)}
+                    {formatDate(campaign.startDate, tz)}
                     {campaign.endDate
-                      ? ` - ${formatDate(campaign.endDate)}`
+                      ? ` - ${formatDate(campaign.endDate, tz)}`
                       : ' - Ongoing'}
                   </span>
                 </div>

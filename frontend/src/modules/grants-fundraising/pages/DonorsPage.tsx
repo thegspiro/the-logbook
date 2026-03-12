@@ -10,6 +10,8 @@ import { Users, Plus, Search, X, Mail, Phone, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { fundraisingService } from '../services/api';
 import type { Donor, DonorType } from '../types';
+import { formatDate } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -20,13 +22,6 @@ const formatCurrency = (amount: number) =>
     style: 'currency',
     currency: 'USD',
   }).format(amount);
-
-const formatDate = (dateStr: string) =>
-  new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -103,6 +98,7 @@ const labelClass = 'block text-sm font-medium text-theme-text-primary mb-1';
 // ---------------------------------------------------------------------------
 
 export const DonorsPage: React.FC = () => {
+  const tz = useTimezone();
   const [donors, setDonors] = useState<Donor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -529,7 +525,7 @@ export const DonorsPage: React.FC = () => {
                     {/* Last Donation */}
                     <td className="px-4 py-3 text-sm text-theme-text-secondary">
                       {donor.lastDonationDate
-                        ? formatDate(donor.lastDonationDate)
+                        ? formatDate(donor.lastDonationDate, tz)
                         : '--'}
                     </td>
 

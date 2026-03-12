@@ -54,16 +54,13 @@ import {
 } from '../../constants/enums';
 import { useAuthStore } from '../../stores/authStore';
 import { getErrorMessage } from '../../utils/errorHandling';
+import { formatDate, formatShortDateTime } from '../../utils/dateFormatting';
+import { useTimezone } from '../../hooks/useTimezone';
 import { Breadcrumbs } from '../../components/ux/Breadcrumbs';
 import toast from 'react-hot-toast';
 import JsBarcode from 'jsbarcode';
 
 // ── Helpers ─────────────────────────────────────────────────────
-
-function formatDate(dateStr?: string | null): string {
-  if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleDateString();
-}
 
 function daysUntil(dateStr?: string | null): number | null {
   if (!dateStr) return null;
@@ -141,6 +138,7 @@ function NFPAComplianceSection({
   item: InventoryItem;
   canManage: boolean;
 }) {
+  const tz = useTimezone();
   const [compliance, setCompliance] = useState<NFPACompliance | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -319,11 +317,11 @@ function NFPAComplianceSection({
         </h4>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
-            { label: 'Manufacture Date', value: formatDate(compliance?.manufacture_date) },
-            { label: 'First In-Service', value: formatDate(compliance?.first_in_service_date) },
+            { label: 'Manufacture Date', value: formatDate(compliance?.manufacture_date, tz) },
+            { label: 'First In-Service', value: formatDate(compliance?.first_in_service_date, tz) },
             {
               label: 'Expected Retirement',
-              value: formatDate(compliance?.expected_retirement_date),
+              value: formatDate(compliance?.expected_retirement_date, tz),
               extra: retirementDays !== null && retirementDays > 0
                 ? ` (${retirementDays}d)` : null,
             },
@@ -362,17 +360,17 @@ function NFPAComplianceSection({
           <h4 className="text-xs font-semibold uppercase tracking-wider text-theme-text-muted mb-3">SCBA (NFPA 1852)</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
-              { label: 'Cylinder Manufactured', value: formatDate(compliance.cylinder_manufacture_date) },
-              { label: 'Cylinder Expiration', value: formatDate(compliance.cylinder_expiration_date) },
+              { label: 'Cylinder Manufactured', value: formatDate(compliance.cylinder_manufacture_date, tz) },
+              { label: 'Cylinder Expiration', value: formatDate(compliance.cylinder_expiration_date, tz) },
               {
                 label: 'Hydrostatic Test',
-                value: formatDate(compliance.hydrostatic_test_date),
-                due: compliance.hydrostatic_test_due ? `(due ${formatDate(compliance.hydrostatic_test_due)})` : null,
+                value: formatDate(compliance.hydrostatic_test_date, tz),
+                due: compliance.hydrostatic_test_due ? `(due ${formatDate(compliance.hydrostatic_test_due, tz)})` : null,
               },
               {
                 label: 'Flow Test',
-                value: formatDate(compliance.flow_test_date),
-                due: compliance.flow_test_due ? `(due ${formatDate(compliance.flow_test_due)})` : null,
+                value: formatDate(compliance.flow_test_date, tz),
+                due: compliance.flow_test_due ? `(due ${formatDate(compliance.flow_test_due, tz)})` : null,
               },
             ].map((f) => (
               <div key={f.label}>
@@ -419,6 +417,7 @@ function NFPAComplianceSection({
 // ── Inspections Section ─────────────────────────────────────────
 
 function InspectionsSection({ item }: { item: InventoryItem }) {
+  const tz = useTimezone();
   const [records, setRecords] = useState<MaintenanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -482,9 +481,9 @@ function InspectionsSection({ item }: { item: InventoryItem }) {
             </div>
             <div className="text-xs text-theme-text-muted mt-1 flex gap-3">
               {r.completed_date && (
-                <span><Calendar className="inline h-3 w-3 mr-1" />{formatDate(r.completed_date)}</span>
+                <span><Calendar className="inline h-3 w-3 mr-1" />{formatDate(r.completed_date, tz)}</span>
               )}
-              {r.next_due_date && <span>Next due: {formatDate(r.next_due_date)}</span>}
+              {r.next_due_date && <span>Next due: {formatDate(r.next_due_date, tz)}</span>}
             </div>
             {r.description && <p className="text-xs text-theme-text-muted mt-1">{r.description}</p>}
           </div>
@@ -497,6 +496,7 @@ function InspectionsSection({ item }: { item: InventoryItem }) {
 // ── Exposures Section ───────────────────────────────────────────
 
 function ExposuresSection({ item, canManage }: { item: InventoryItem; canManage: boolean }) {
+  const tz = useTimezone();
   const [records, setRecords] = useState<NFPAExposureRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -643,7 +643,7 @@ function ExposuresSection({ item, canManage }: { item: InventoryItem; canManage:
                 )}
               </div>
               <div className="text-xs text-theme-text-muted mt-1">
-                <Calendar className="inline h-3 w-3 mr-1" />{formatDate(r.exposure_date)}
+                <Calendar className="inline h-3 w-3 mr-1" />{formatDate(r.exposure_date, tz)}
               </div>
               {r.description && <p className="text-xs text-theme-text-muted mt-1">{r.description}</p>}
             </div>
@@ -677,6 +677,7 @@ const EVENT_LABEL: Record<string, string> = {
 };
 
 function HistorySection({ item }: { item: InventoryItem }) {
+  const tz = useTimezone();
   const [events, setEvents] = useState<ItemHistoryEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -722,7 +723,7 @@ function HistorySection({ item }: { item: InventoryItem }) {
                   {EVENT_LABEL[event.type] ?? event.type}
                 </span>
                 <time className="text-xs text-theme-text-muted">
-                  {new Date(event.date).toLocaleString()}
+                  {formatShortDateTime(event.date, tz)}
                 </time>
               </div>
               <p className="text-sm text-theme-text-primary mt-0.5">{event.summary}</p>
@@ -759,6 +760,7 @@ function HistorySection({ item }: { item: InventoryItem }) {
 const ItemDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const tz = useTimezone();
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('inventory.manage');
 
@@ -953,10 +955,10 @@ const ItemDetailPage: React.FC = () => {
                   { icon: <Barcode className="h-3.5 w-3.5" />, label: 'Asset Tag', value: item.asset_tag },
                   { icon: <Copy className="h-3.5 w-3.5" />, label: 'Manufacturer', value: item.manufacturer ? `${item.manufacturer}${item.model_number ? ` ${item.model_number}` : ''}` : undefined },
                   { icon: <MapPin className="h-3.5 w-3.5" />, label: 'Location', value: item.storage_location || item.station },
-                  { icon: <Calendar className="h-3.5 w-3.5" />, label: 'Purchase Date', value: item.purchase_date ? formatDate(item.purchase_date) : undefined },
+                  { icon: <Calendar className="h-3.5 w-3.5" />, label: 'Purchase Date', value: item.purchase_date ? formatDate(item.purchase_date, tz) : undefined },
                   { icon: <DollarSign className="h-3.5 w-3.5" />, label: 'Purchase Price', value: item.purchase_price != null ? `$${item.purchase_price.toFixed(2)}` : undefined },
                   { icon: <DollarSign className="h-3.5 w-3.5" />, label: 'Replacement Cost', value: item.replacement_cost != null ? `$${item.replacement_cost.toFixed(2)}` : undefined },
-                  { icon: <Calendar className="h-3.5 w-3.5" />, label: 'Warranty Exp.', value: item.warranty_expiration ? formatDate(item.warranty_expiration) : undefined },
+                  { icon: <Calendar className="h-3.5 w-3.5" />, label: 'Warranty Exp.', value: item.warranty_expiration ? formatDate(item.warranty_expiration, tz) : undefined },
                 ].filter((f) => f.value).map((f) => (
                   <div key={f.label} className="flex items-start gap-2">
                     <span className="text-theme-text-muted mt-0.5 shrink-0">{f.icon}</span>
@@ -1039,6 +1041,7 @@ function OverviewSection({
   item: InventoryItem;
   category: InventoryCategory | null;
 }) {
+  const tz = useTimezone();
   // Show key details in a structured layout
   const identificationFields = [
     { label: 'Serial Number', value: item.serial_number },
@@ -1062,16 +1065,16 @@ function OverviewSection({
   ].filter((f) => f.value);
 
   const financialFields = [
-    { label: 'Purchase Date', value: item.purchase_date ? formatDate(item.purchase_date) : undefined },
+    { label: 'Purchase Date', value: item.purchase_date ? formatDate(item.purchase_date, tz) : undefined },
     { label: 'Purchase Price', value: item.purchase_price != null ? `$${item.purchase_price.toFixed(2)}` : undefined },
     { label: 'Replacement Cost', value: item.replacement_cost != null ? `$${item.replacement_cost.toFixed(2)}` : undefined },
     { label: 'Vendor', value: item.vendor },
-    { label: 'Warranty Expiration', value: item.warranty_expiration ? formatDate(item.warranty_expiration) : undefined },
+    { label: 'Warranty Expiration', value: item.warranty_expiration ? formatDate(item.warranty_expiration, tz) : undefined },
   ].filter((f) => f.value);
 
   const maintenanceFields = [
-    { label: 'Last Inspection', value: item.last_inspection_date ? formatDate(item.last_inspection_date) : undefined },
-    { label: 'Next Inspection Due', value: item.next_inspection_due ? formatDate(item.next_inspection_due) : undefined },
+    { label: 'Last Inspection', value: item.last_inspection_date ? formatDate(item.last_inspection_date, tz) : undefined },
+    { label: 'Next Inspection Due', value: item.next_inspection_due ? formatDate(item.next_inspection_due, tz) : undefined },
     {
       label: 'Inspection Interval',
       value: item.inspection_interval_days != null ? `Every ${item.inspection_interval_days} days` : undefined,

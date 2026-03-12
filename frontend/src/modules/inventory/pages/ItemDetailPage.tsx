@@ -26,6 +26,7 @@ import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
 import { ItemFormModal } from '../components/ItemFormModal';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { formatDate } from '../../../utils/dateFormatting';
 import toast from 'react-hot-toast';
 
 /* ------------------------------------------------------------------ */
@@ -51,13 +52,6 @@ function typeIcon(itemType: string) {
     case 'ppe': return <HardHat className="w-5 h-5" />;
     default: return <Cog className="w-5 h-5" />;
   }
-}
-
-function fmtDate(iso: string | undefined | null, tz: string): string {
-  if (!iso) return '--';
-  return new Date(iso).toLocaleDateString('en-US', {
-    month: 'short', day: 'numeric', year: 'numeric', timeZone: tz,
-  });
 }
 
 function fmtCurrency(val: number | undefined | null): string {
@@ -340,9 +334,9 @@ const ItemDetailPage: React.FC = () => {
             <Field label="Purchase Price" value={fmtCurrency(item.purchase_price)} />
             <Field label="Current Value" value={fmtCurrency(item.current_value)} />
             <Field label="Replacement Cost" value={fmtCurrency(item.replacement_cost)} />
-            <Field label="Purchase Date" value={fmtDate(item.purchase_date, tz)} />
+            <Field label="Purchase Date" value={formatDate(item.purchase_date, tz)} />
             <Field label="Vendor" value={item.vendor || '--'} />
-            <Field label="Warranty Exp." value={fmtDate(item.warranty_expiration, tz)} />
+            <Field label="Warranty Exp." value={formatDate(item.warranty_expiration, tz)} />
           </Card>
         )}
 
@@ -368,8 +362,8 @@ const ItemDetailPage: React.FC = () => {
         {/* Inspection — ppe or items with requires_maintenance */}
         {(itemType === 'ppe' || hasMaintenance) && (
           <Card title="Inspection" icon={<Wrench className="w-4 h-4" />}>
-            <Field label="Last Inspection" value={fmtDate(item.last_inspection_date, tz)} />
-            <Field label="Next Due" value={fmtDate(item.next_inspection_due, tz)} />
+            <Field label="Last Inspection" value={formatDate(item.last_inspection_date, tz)} />
+            <Field label="Next Due" value={formatDate(item.next_inspection_due, tz)} />
             <Field label="Interval (days)" value={item.inspection_interval_days ?? '--'} />
           </Card>
         )}
@@ -390,7 +384,7 @@ const ItemDetailPage: React.FC = () => {
                     </Link>
                   }
                 />
-                <Field label="Assigned Date" value={fmtDate(item.assigned_date, tz)} />
+                <Field label="Assigned Date" value={formatDate(item.assigned_date, tz)} />
                 <div className="col-span-full mt-1">
                   <button
                     onClick={() => void handleUnassign()}
@@ -515,7 +509,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ events, tz }) => {
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-medium text-theme-text-primary">{evt.summary}</span>
-              <span className="text-xs text-theme-text-muted whitespace-nowrap">{fmtDate(evt.date, tz)}</span>
+              <span className="text-xs text-theme-text-muted whitespace-nowrap">{formatDate(evt.date, tz)}</span>
             </div>
             {evt.details && Object.keys(evt.details).length > 0 && (
               <p className="text-xs text-theme-text-muted mt-1 truncate">
@@ -539,21 +533,21 @@ const NFPATab: React.FC<NFPATabProps> = ({ data, tz }) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <Card title="Lifecycle" icon={<Calendar className="w-4 h-4" />}>
-        <Field label="Manufacture Date" value={fmtDate(data.manufacture_date, tz)} />
-        <Field label="First In Service" value={fmtDate(data.first_in_service_date, tz)} />
-        <Field label="Expected Retirement" value={fmtDate(data.expected_retirement_date, tz)} />
+        <Field label="Manufacture Date" value={formatDate(data.manufacture_date, tz)} />
+        <Field label="First In Service" value={formatDate(data.first_in_service_date, tz)} />
+        <Field label="Expected Retirement" value={formatDate(data.expected_retirement_date, tz)} />
         <Field label="Retired by Age" value={data.is_retired_by_age ? 'Yes' : 'No'} />
         {data.retirement_reason && <Field label="Retirement Reason" value={data.retirement_reason} />}
       </Card>
       <Card title="Ensemble / SCBA" icon={<Shield className="w-4 h-4" />}>
         <Field label="Ensemble ID" value={data.ensemble_id || '--'} />
         <Field label="Ensemble Role" value={data.ensemble_role || '--'} />
-        <Field label="Cylinder Mfg Date" value={fmtDate(data.cylinder_manufacture_date, tz)} />
-        <Field label="Cylinder Exp." value={fmtDate(data.cylinder_expiration_date, tz)} />
-        <Field label="Hydrostatic Test" value={fmtDate(data.hydrostatic_test_date, tz)} />
-        <Field label="Hydrostatic Due" value={fmtDate(data.hydrostatic_test_due, tz)} />
-        <Field label="Flow Test" value={fmtDate(data.flow_test_date, tz)} />
-        <Field label="Flow Test Due" value={fmtDate(data.flow_test_due, tz)} />
+        <Field label="Cylinder Mfg Date" value={formatDate(data.cylinder_manufacture_date, tz)} />
+        <Field label="Cylinder Exp." value={formatDate(data.cylinder_expiration_date, tz)} />
+        <Field label="Hydrostatic Test" value={formatDate(data.hydrostatic_test_date, tz)} />
+        <Field label="Hydrostatic Due" value={formatDate(data.hydrostatic_test_due, tz)} />
+        <Field label="Flow Test" value={formatDate(data.flow_test_date, tz)} />
+        <Field label="Flow Test Due" value={formatDate(data.flow_test_due, tz)} />
       </Card>
       {data.contamination_level && (
         <Card title="Contamination" icon={<AlertTriangle className="w-4 h-4" />}>
@@ -598,7 +592,7 @@ const InspectionsTab: React.FC<InspectionsTabProps> = ({ records, tz, itemId }) 
               {rec.performed_by && <p className="text-xs text-theme-text-muted">By: {rec.performed_by}</p>}
             </div>
             <div className="text-right text-xs text-theme-text-muted whitespace-nowrap">
-              <p>{rec.completed_date ? fmtDate(rec.completed_date, tz) : 'Pending'}</p>
+              <p>{rec.completed_date ? formatDate(rec.completed_date, tz) : 'Pending'}</p>
               {rec.cost != null && <p>{fmtCurrency(rec.cost)}</p>}
             </div>
           </div>
@@ -624,7 +618,7 @@ const ExposuresTab: React.FC<ExposuresTabProps> = ({ records, tz }) => (
               <span className="text-sm font-medium text-theme-text-primary">
                 {rec.exposure_type.replace('_', ' ')}
               </span>
-              <span className="text-xs text-theme-text-muted">{fmtDate(rec.exposure_date, tz)}</span>
+              <span className="text-xs text-theme-text-muted">{formatDate(rec.exposure_date, tz)}</span>
             </div>
             {rec.incident_number && (
               <p className="text-xs text-theme-text-muted mt-0.5">Incident: {rec.incident_number}</p>
@@ -638,7 +632,7 @@ const ExposuresTab: React.FC<ExposuresTabProps> = ({ records, tz }) => (
               </span>
               {rec.decon_required && (
                 <span className={rec.decon_completed ? 'text-green-600' : 'text-red-600'}>
-                  {rec.decon_completed ? `Completed ${fmtDate(rec.decon_completed_date, tz)}` : 'Pending'}
+                  {rec.decon_completed ? `Completed ${formatDate(rec.decon_completed_date, tz)}` : 'Pending'}
                 </span>
               )}
             </div>

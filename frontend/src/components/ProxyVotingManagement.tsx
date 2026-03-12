@@ -10,6 +10,8 @@ import toast from 'react-hot-toast';
 import { electionService } from '../services/api';
 import type { ProxyAuthorization, ProxyAuthorizationCreate } from '../types/election';
 import { getErrorMessage } from '../utils/errorHandling';
+import { formatDate } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 
 interface ProxyVotingManagementProps {
   electionId: string;
@@ -34,6 +36,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
   electionId,
   canManage,
 }) => {
+  const tz = useTimezone();
   const [authorizations, setAuthorizations] = useState<ProxyAuthorization[]>([]);
   const [proxyVotingEnabled, setProxyVotingEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -281,7 +284,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
                   </div>
                   <p className="mt-1 text-sm text-theme-text-muted truncate">{auth.reason}</p>
                   <p className="text-xs text-theme-text-muted mt-1">
-                    Authorized {new Date(auth.authorized_at).toLocaleDateString()}
+                    Authorized {formatDate(auth.authorized_at, tz)}
                     {auth.authorized_by_name ? ` by ${auth.authorized_by_name}` : ''}
                   </p>
                 </div>
@@ -332,7 +335,7 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
                   </div>
                   <p className="mt-1 text-sm text-theme-text-muted truncate">{auth.reason}</p>
                   <p className="text-xs text-theme-text-muted mt-1">
-                    Revoked {auth.revoked_at ? new Date(auth.revoked_at).toLocaleDateString() : ''}
+                    Revoked {auth.revoked_at ? formatDate(auth.revoked_at, tz) : ''}
                   </p>
                 </div>
               ))}

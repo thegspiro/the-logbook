@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
+import { formatDate } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 import type { SkillTestListItem } from '../types/skillsTesting';
 
 // ── Sub-components ─────────────────────────────────────────────
@@ -40,7 +42,9 @@ const TestCard: React.FC<{
   test: SkillTestListItem;
   onClick: () => void;
   onDelete: () => void;
-}> = ({ test, onClick, onDelete }) => (
+}> = ({ test, onClick, onDelete }) => {
+  const tz = useTimezone();
+  return (
   <div
     role="button"
     tabIndex={0}
@@ -70,7 +74,7 @@ const TestCard: React.FC<{
             <p className="text-lg font-bold text-theme-text-primary">{Math.round(test.overall_score)}%</p>
           )}
           <p className="text-xs text-theme-text-muted">
-            {test.completed_at ? new Date(test.completed_at).toLocaleDateString() : test.started_at ? 'In Progress' : 'Not Started'}
+            {test.completed_at ? formatDate(test.completed_at, tz) : test.started_at ? 'In Progress' : 'Not Started'}
           </p>
         </div>
         <button
@@ -86,7 +90,8 @@ const TestCard: React.FC<{
       </div>
     </div>
   </div>
-);
+  );
+};
 
 // ── Main component ─────────────────────────────────────────────
 

@@ -13,6 +13,8 @@ import type {
 } from '../types';
 import type { MemberInventorySummary } from '../../../services/eventServices';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { formatDate } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
 import { RETURN_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
 import { Pagination } from '../../../components/ux/Pagination';
@@ -64,6 +66,7 @@ const PoolCard: React.FC<PoolCardProps> = ({
   item, categoryName, onIssue, onReturn,
   issuances, loadingIssuances, expanded, onToggle, onLoadIssuances,
 }) => {
+  const tz = useTimezone();
   const onHand = item.quantity - item.quantity_issued;
   const total = item.quantity;
 
@@ -149,7 +152,7 @@ const PoolCard: React.FC<PoolCardProps> = ({
                   <div className="min-w-0">
                     <span className="text-theme-text-primary">{iss.user_id.slice(0, 8)}...</span>
                     <span className="text-theme-text-muted ml-2">qty {iss.quantity_issued}</span>
-                    <span className="text-theme-text-muted ml-2">{new Date(iss.issued_at).toLocaleDateString()}</span>
+                    <span className="text-theme-text-muted ml-2">{formatDate(iss.issued_at, tz)}</span>
                   </div>
                   <button
                     type="button"

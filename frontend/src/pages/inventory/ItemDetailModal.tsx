@@ -37,6 +37,8 @@ import {
 } from '../../constants/enums';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../utils/errorHandling';
+import { formatDate, formatShortDateTime } from '../../utils/dateFormatting';
+import { useTimezone } from '../../hooks/useTimezone';
 
 type DetailTab = 'general' | 'history' | 'nfpa' | 'inspections' | 'exposures';
 
@@ -51,11 +53,6 @@ interface ItemDetailModalProps {
 const inputClass =
   'w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-emerald-500';
 
-function formatDate(dateStr?: string | null): string {
-  if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleDateString();
-}
-
 function daysUntil(dateStr?: string | null): number | null {
   if (!dateStr) return null;
   const diff = new Date(dateStr).getTime() - Date.now();
@@ -67,6 +64,7 @@ function daysUntil(dateStr?: string | null): number | null {
 // ============================================
 
 function GeneralTab({ item }: { item: InventoryItem }) {
+  const tz = useTimezone();
   const fields: Array<{ label: string; value: string | undefined | null }> = [
     { label: 'Name', value: item.name },
     { label: 'Description', value: item.description },
@@ -79,8 +77,8 @@ function GeneralTab({ item }: { item: InventoryItem }) {
     { label: 'Color', value: item.color },
     { label: 'Condition', value: item.condition },
     { label: 'Status', value: item.status },
-    { label: 'Purchase Date', value: formatDate(item.purchase_date) },
-    { label: 'Warranty Expiration', value: formatDate(item.warranty_expiration) },
+    { label: 'Purchase Date', value: formatDate(item.purchase_date, tz) },
+    { label: 'Warranty Expiration', value: formatDate(item.warranty_expiration, tz) },
     { label: 'Notes', value: item.notes },
   ];
 
@@ -89,7 +87,7 @@ function GeneralTab({ item }: { item: InventoryItem }) {
       {fields.map(
         (f) =>
           f.value &&
-          f.value !== '—' && (
+          f.value !== '—' && f.value !== 'N/A' && (
             <div key={f.label}>
               <dt className="text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                 {f.label}
@@ -113,6 +111,7 @@ function NFPAComplianceTab({
   item: InventoryItem;
   canManage: boolean;
 }) {
+  const tz = useTimezone();
   const [compliance, setCompliance] = useState<NFPACompliance | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -446,13 +445,13 @@ function NFPAComplianceTab({
           <div>
             <dt className="text-xs text-theme-text-muted">Manufacture Date</dt>
             <dd className="mt-1 text-sm text-theme-text-primary font-medium">
-              {formatDate(compliance?.manufacture_date)}
+              {formatDate(compliance?.manufacture_date, tz)}
             </dd>
           </div>
           <div>
             <dt className="text-xs text-theme-text-muted">First In-Service</dt>
             <dd className="mt-1 text-sm text-theme-text-primary font-medium">
-              {formatDate(compliance?.first_in_service_date)}
+              {formatDate(compliance?.first_in_service_date, tz)}
             </dd>
           </div>
           <div>
@@ -460,7 +459,7 @@ function NFPAComplianceTab({
               Expected Retirement
             </dt>
             <dd className="mt-1 text-sm text-theme-text-primary font-medium">
-              {formatDate(compliance?.expected_retirement_date)}
+              {formatDate(compliance?.expected_retirement_date, tz)}
               {retirementDays !== null && retirementDays > 0 && (
                 <span className="ml-2 text-xs text-theme-text-muted">
                   ({retirementDays}d)
@@ -507,7 +506,7 @@ function NFPAComplianceTab({
                 Cylinder Manufactured
               </dt>
               <dd className="mt-1 text-sm text-theme-text-primary">
-                {formatDate(compliance.cylinder_manufacture_date)}
+                {formatDate(compliance.cylinder_manufacture_date, tz)}
               </dd>
             </div>
             <div>
@@ -515,7 +514,7 @@ function NFPAComplianceTab({
                 Cylinder Expiration
               </dt>
               <dd className="mt-1 text-sm text-theme-text-primary">
-                {formatDate(compliance.cylinder_expiration_date)}
+                {formatDate(compliance.cylinder_expiration_date, tz)}
               </dd>
             </div>
             <div>
@@ -523,10 +522,10 @@ function NFPAComplianceTab({
                 Hydrostatic Test
               </dt>
               <dd className="mt-1 text-sm text-theme-text-primary">
-                {formatDate(compliance.hydrostatic_test_date)}
+                {formatDate(compliance.hydrostatic_test_date, tz)}
                 {compliance.hydrostatic_test_due && (
                   <span className="ml-2 text-xs text-theme-text-muted">
-                    (due {formatDate(compliance.hydrostatic_test_due)})
+                    (due {formatDate(compliance.hydrostatic_test_due, tz)})
                   </span>
                 )}
               </dd>
@@ -534,10 +533,10 @@ function NFPAComplianceTab({
             <div>
               <dt className="text-xs text-theme-text-muted">Flow Test</dt>
               <dd className="mt-1 text-sm text-theme-text-primary">
-                {formatDate(compliance.flow_test_date)}
+                {formatDate(compliance.flow_test_date, tz)}
                 {compliance.flow_test_due && (
                   <span className="ml-2 text-xs text-theme-text-muted">
-                    (due {formatDate(compliance.flow_test_due)})
+                    (due {formatDate(compliance.flow_test_due, tz)})
                   </span>
                 )}
               </dd>
@@ -591,6 +590,7 @@ function NFPAComplianceTab({
 // ============================================
 
 function InspectionsTab({ item }: { item: InventoryItem }) {
+  const tz = useTimezone();
   const [records, setRecords] = useState<MaintenanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -672,11 +672,11 @@ function InspectionsTab({ item }: { item: InventoryItem }) {
               {r.completed_date && (
                 <span>
                   <Calendar className="inline h-3 w-3 mr-1" />
-                  {formatDate(r.completed_date)}
+                  {formatDate(r.completed_date, tz)}
                 </span>
               )}
               {r.next_due_date && (
-                <span>Next due: {formatDate(r.next_due_date)}</span>
+                <span>Next due: {formatDate(r.next_due_date, tz)}</span>
               )}
             </div>
             {r.description && (
@@ -702,6 +702,7 @@ function ExposuresTab({
   item: InventoryItem;
   canManage: boolean;
 }) {
+  const tz = useTimezone();
   const [records, setRecords] = useState<NFPAExposureRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -904,7 +905,7 @@ function ExposuresTab({
               </div>
               <div className="text-xs text-theme-text-muted mt-1">
                 <Calendar className="inline h-3 w-3 mr-1" />
-                {formatDate(r.exposure_date)}
+                {formatDate(r.exposure_date, tz)}
               </div>
               {r.description && (
                 <p className="text-xs text-theme-text-muted mt-1">
@@ -944,6 +945,7 @@ const EVENT_LABEL: Record<string, string> = {
 };
 
 function HistoryTab({ item }: { item: InventoryItem }) {
+  const tz = useTimezone();
   const [events, setEvents] = useState<ItemHistoryEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -1002,7 +1004,7 @@ function HistoryTab({ item }: { item: InventoryItem }) {
                   {EVENT_LABEL[event.type] ?? event.type}
                 </span>
                 <time className="text-xs text-theme-text-muted">
-                  {new Date(event.date).toLocaleString()}
+                  {formatShortDateTime(event.date, tz)}
                 </time>
               </div>
               <p className="text-sm text-theme-text-primary mt-0.5">

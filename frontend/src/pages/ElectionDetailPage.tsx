@@ -20,7 +20,7 @@ import { useAuthStore } from '../stores/authStore';
 import { ElectionStatus, VoteType, BallotItemType } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatDateTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
+import { formatDate, formatDateTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 
 export const ElectionDetailPage: React.FC = () => {
   const { electionId } = useParams<{ electionId: string }>();
@@ -1513,12 +1513,7 @@ export const ElectionDetailPage: React.FC = () => {
                 )}
                 {election.meeting_date && (
                   <p className="mt-1 text-red-200 text-sm">
-                    Meeting Date: {new Date(election.meeting_date).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                      timeZone: tz,
-                    })}
+                    Meeting Date: {formatDate(election.meeting_date, tz)}
                   </p>
                 )}
               </div>

@@ -26,6 +26,7 @@ import type {
   BallotSubmissionResponse,
 } from '../types/election';
 import { getErrorMessage } from '../utils/errorHandling';
+import { formatDate } from '../utils/dateFormatting';
 import { VoteType } from '../constants/enums';
 import { useTimezone } from '../hooks/useTimezone';
 
@@ -254,12 +255,7 @@ export const BallotVotingPage: React.FC = () => {
           )}
           {election.meeting_date && (
             <p className="mt-1 text-red-200 text-sm">
-              Meeting Date: {new Date(election.meeting_date).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                timeZone: tz,
-              })}
+              Meeting Date: {formatDate(election.meeting_date, tz)}
             </p>
           )}
         </div>

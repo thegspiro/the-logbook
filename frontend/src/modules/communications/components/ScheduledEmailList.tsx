@@ -15,6 +15,8 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { formatShortDateTime } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
 import { useScheduledEmailsStore } from '../store/scheduledEmailsStore';
 
 const STATUS_CONFIG: Record<string, { icon: React.ElementType; color: string; label: string }> = {
@@ -25,6 +27,7 @@ const STATUS_CONFIG: Record<string, { icon: React.ElementType; color: string; la
 };
 
 const ScheduledEmailList: React.FC = () => {
+  const tz = useTimezone();
   const {
     scheduledEmails,
     isLoading,
@@ -44,14 +47,6 @@ const ScheduledEmailList: React.FC = () => {
     } catch {
       // Error handled by store
     }
-  };
-
-  const formatDate = (dateStr: string) => {
-    const d = new Date(dateStr);
-    return d.toLocaleString(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    });
   };
 
   if (isLoading) {
@@ -111,7 +106,7 @@ const ScheduledEmailList: React.FC = () => {
                 )}
                 <div className="mt-0.5 text-xs text-theme-text-secondary">
                   <CalendarClock className="mr-1 inline h-3 w-3" />
-                  {formatDate(email.scheduled_at)}
+                  {formatShortDateTime(email.scheduled_at, tz)}
                 </div>
                 {email.error_message && (
                   <div className="mt-1 text-xs text-red-500">
@@ -120,7 +115,7 @@ const ScheduledEmailList: React.FC = () => {
                 )}
                 {email.sent_at && (
                   <div className="mt-0.5 text-xs text-green-600">
-                    Sent: {formatDate(email.sent_at)}
+                    Sent: {formatShortDateTime(email.sent_at, tz)}
                   </div>
                 )}
               </div>

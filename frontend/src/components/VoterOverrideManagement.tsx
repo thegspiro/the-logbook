@@ -11,6 +11,8 @@ import toast from 'react-hot-toast';
 import { electionService } from '../services/api';
 import type { VoterOverride } from '../types/election';
 import { getErrorMessage } from '../utils/errorHandling';
+import { formatShortDateTime } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 
 interface VoterOverrideManagementProps {
   electionId: string;
@@ -21,6 +23,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
   electionId,
   canManage,
 }) => {
+  const tz = useTimezone();
   const [overrides, setOverrides] = useState<VoterOverride[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -97,19 +100,6 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
     }
   };
 
-  const formatDate = (dateStr: string): string => {
-    try {
-      return new Date(dateStr).toLocaleDateString(undefined, {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    } catch {
-      return dateStr;
-    }
-  };
 
   if (loading) {
     return (
@@ -236,7 +226,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
                   <p className="mt-1 text-xs text-theme-text-muted">
                     Overridden by {override.overridden_by_name || override.overridden_by}
                     {' on '}
-                    {formatDate(override.overridden_at)}
+                    {formatShortDateTime(override.overridden_at, tz)}
                   </p>
                 </div>
 
