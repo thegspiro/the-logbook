@@ -37,9 +37,12 @@ export interface Event {
   custom_fields?: Record<string, string | number | boolean | null>;
   attachments?: EventAttachment[];
   is_recurring?: boolean;
-  recurrence_pattern?: 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'custom';
+  recurrence_pattern?: RecurrencePattern;
   recurrence_end_date?: string;
   recurrence_custom_days?: number[];
+  recurrence_weekday?: number;
+  recurrence_week_ordinal?: number;
+  recurrence_month?: number;
   recurrence_parent_id?: string;
   template_id?: string;
   is_cancelled: boolean;
@@ -236,7 +239,15 @@ export interface CheckInMonitoringStats {
 }
 
 // Event Templates
-export type RecurrencePattern = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'custom';
+export type RecurrencePattern =
+  | 'daily'
+  | 'weekly'
+  | 'biweekly'
+  | 'monthly'
+  | 'monthly_weekday'
+  | 'annually'
+  | 'annually_weekday'
+  | 'custom';
 
 export interface EventTemplate {
   id: string;
@@ -303,6 +314,9 @@ export interface RecurringEventCreate {
   recurrence_pattern: RecurrencePattern;
   recurrence_end_date: string;
   recurrence_custom_days?: number[];
+  recurrence_weekday?: number;
+  recurrence_week_ordinal?: number;
+  recurrence_month?: number;
   requires_rsvp?: boolean;
   rsvp_deadline?: string;
   max_attendees?: number;

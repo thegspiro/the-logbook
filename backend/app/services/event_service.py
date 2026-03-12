@@ -1508,6 +1508,40 @@ class EventService:
     # Recurring Events
     # ============================================================
 
+    @staticmethod
+    def _nth_weekday_of_month(
+        year: int, month: int, weekday: int, ordinal: int,
+        reference: datetime,
+    ) -> Optional[datetime]:
+        """
+        Find the Nth weekday of a given month/year.
+
+        weekday: 0=Mon … 6=Sun
+        ordinal: 1-5 for 1st-5th, -1 for last
+        Returns a datetime with the same time as *reference*, or None if
+        the ordinal doesn't exist (e.g. 5th Monday in February).
+        """
+        if ordinal == -1:
+            # Last occurrence: start from month's last day and walk back
+            last_day = calendar.monthrange(year, month)[1]
+            d = last_day
+            while d >= 1:
+                candidate = reference.replace(year=year, month=month, day=d)
+                if candidate.weekday() == weekday:
+                    return candidate
+                d -= 1
+            return None
+
+        # Nth occurrence: walk from day 1
+        count = 0
+        for d in range(1, calendar.monthrange(year, month)[1] + 1):
+            candidate = reference.replace(year=year, month=month, day=d)
+            if candidate.weekday() == weekday:
+                count += 1
+                if count == ordinal:
+                    return candidate
+        return None
+
     def _generate_recurrence_dates(
         self,
         start_datetime: datetime,
@@ -1515,6 +1549,9 @@ class EventService:
         pattern: str,
         recurrence_end_date: datetime,
         custom_days: Optional[List[int]] = None,
+        weekday: Optional[int] = None,
+        week_ordinal: Optional[int] = None,
+        month: Optional[int] = None,
     ) -> List[Tuple[datetime, datetime]]:
         """
         Generate all occurrence dates for a recurring event.
@@ -1536,19 +1573,68 @@ class EventService:
                 current += timedelta(weeks=2)
             elif pattern == RecurrencePattern.MONTHLY.value:
                 # Move to same day next month
-                month = current.month + 1
-                year = current.year
-                if month > 12:
-                    month = 1
-                    year += 1
+                m = current.month + 1
+                y = current.year
+                if m > 12:
+                    m = 1
+                    y += 1
                 try:
-                    current = current.replace(year=year, month=month)
+                    current = current.replace(year=y, month=m)
                 except ValueError:
-                    # Handle months with fewer days (e.g., Jan 31 -> Feb 28)
-                    last_day = calendar.monthrange(year, month)[1]
+                    last_day = calendar.monthrange(y, m)[1]
                     current = current.replace(
-                        year=year, month=month, day=min(current.day, last_day)
+                        year=y, month=m, day=min(current.day, last_day)
                     )
+            elif (
+                pattern == RecurrencePattern.MONTHLY_WEEKDAY.value
+                and weekday is not None
+                and week_ordinal is not None
+            ):
+                # e.g., 2nd Monday of every month
+                m = current.month + 1
+                y = current.year
+                if m > 12:
+                    m = 1
+                    y += 1
+                candidate = self._nth_weekday_of_month(
+                    y, m, weekday, week_ordinal, current
+                )
+                if candidate is None:
+                    # Skip months where the ordinal doesn't exist
+                    # Try next month
+                    m += 1
+                    if m > 12:
+                        m = 1
+                        y += 1
+                    candidate = self._nth_weekday_of_month(
+                        y, m, weekday, week_ordinal, current
+                    )
+                if candidate is None:
+                    break
+                current = candidate
+            elif pattern == RecurrencePattern.ANNUALLY.value:
+                # Same date next year
+                try:
+                    current = current.replace(year=current.year + 1)
+                except ValueError:
+                    # Feb 29 in a non-leap year → Feb 28
+                    current = current.replace(
+                        year=current.year + 1, day=28
+                    )
+            elif (
+                pattern == RecurrencePattern.ANNUALLY_WEEKDAY.value
+                and weekday is not None
+                and week_ordinal is not None
+                and month is not None
+            ):
+                # e.g., 4th Monday of July every year
+                y = current.year + 1
+                candidate = self._nth_weekday_of_month(
+                    y, month, weekday, week_ordinal, current
+                )
+                if candidate is None:
+                    break
+                current = candidate
             elif pattern == RecurrencePattern.CUSTOM.value and custom_days:
                 # Find next matching weekday
                 found = False
@@ -1579,6 +1665,9 @@ class EventService:
         recurrence_pattern = event_data.pop("recurrence_pattern")
         recurrence_end_date = event_data.pop("recurrence_end_date")
         recurrence_custom_days = event_data.pop("recurrence_custom_days", None)
+        recurrence_weekday = event_data.pop("recurrence_weekday", None)
+        recurrence_week_ordinal = event_data.pop("recurrence_week_ordinal", None)
+        recurrence_month = event_data.pop("recurrence_month", None)
 
         # Generate occurrence dates
         occurrences = self._generate_recurrence_dates(
@@ -1587,6 +1676,9 @@ class EventService:
             pattern=recurrence_pattern,
             recurrence_end_date=recurrence_end_date,
             custom_days=recurrence_custom_days,
+            weekday=recurrence_weekday,
+            week_ordinal=recurrence_week_ordinal,
+            month=recurrence_month,
         )
 
         if len(occurrences) == 0:
@@ -1603,6 +1695,9 @@ class EventService:
             recurrence_pattern=RecurrencePattern(recurrence_pattern),
             recurrence_end_date=recurrence_end_date,
             recurrence_custom_days=recurrence_custom_days,
+            recurrence_weekday=recurrence_weekday,
+            recurrence_week_ordinal=recurrence_week_ordinal,
+            recurrence_month=recurrence_month,
             start_datetime=occurrences[0][0],
             end_datetime=occurrences[0][1],
             **{
