@@ -17,6 +17,7 @@ Before committing any changes, mentally verify these items (the most frequent so
 - [ ] **No unused imports (frontend or backend)** — TypeScript strict mode rejects them; Python flake8 F401 catches them. Remove all unused imports before committing
 - [ ] **No Python lint violations** — no F401 (unused imports), F811 (redefined unused), F821 (undefined names), E303 (excess blank lines), or W291/W293 (trailing whitespace). Run `flake8` on changed files before committing
 - [ ] **Seed migrations registered** — new seed data files added to `SEED_DATA_FILES`; org_id is nullable for system records
+- [ ] **JSON column deep copy** — code modifying nested keys in JSON columns uses `copy.deepcopy()` or `flag_modified()`, never `dict()` shallow copy
 
 ## Project Overview
 
@@ -451,6 +452,32 @@ def foo():
 When creating a record (facility, ballot item, candidate, etc.) and immediately displaying it in a detail view, always fetch the full record from the API after creation. Do not rely on the creation response or list-item data, which may lack nested relationships or computed fields needed by the detail view.
 
 **Rule:** After a successful create/update, re-fetch the full record via its detail endpoint before populating the UI. This also applies when selecting an item from a list view to show in a detail panel.
+
+### 12. SQLAlchemy JSON Columns: Never Mutate via Shared References
+
+Plain `Column(JSON)` does not track in-place mutations. If you read `org.settings`, shallow-copy it with `dict()`, modify a nested dict, and reassign `org.settings = new_dict`, SQLAlchemy may see old == new (because the shallow copy shares nested references that were mutated in both) and **skip the UPDATE entirely**. The change appears to work in-memory but is never written to the database.
+
+```python
+# WRONG — shallow copy shares nested dicts with SQLAlchemy's committed state
+current_settings = dict(org.settings or {})
+current_settings["events"]["visible"] = True  # also mutates org.settings["events"]!
+org.settings = current_settings  # SQLAlchemy sees no change → silent no-op
+
+# CORRECT (option A) — deep copy breaks shared references
+import copy
+current_settings = copy.deepcopy(org.settings or {})
+current_settings["events"]["visible"] = True
+org.settings = current_settings  # new value ≠ committed state → UPDATE issued
+
+# CORRECT (option B) — flag_modified forces the UPDATE
+from sqlalchemy.orm.attributes import flag_modified
+org.settings["events"]["visible"] = True
+flag_modified(org, "settings")  # tells SQLAlchemy the column changed
+```
+
+The `Organization.settings` column uses `MutableDict.as_mutable(JSON)` which auto-detects **top-level** key changes, but nested mutations still require `copy.deepcopy()` or `flag_modified()`. When modifying nested keys inside any JSON column, always use one of the two correct patterns above.
+
+**Rule:** Never use `dict(obj.json_column)` (shallow copy) when you intend to modify nested values and reassign. Use `copy.deepcopy()` to create a fully independent copy, or use `flag_modified()` after in-place mutation.
 
 ## Environment Variables
 
