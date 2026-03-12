@@ -71,6 +71,8 @@ export interface EventListItem {
   requires_rsvp: boolean;
   is_mandatory: boolean;
   is_cancelled: boolean;
+  is_recurring?: boolean;
+  recurrence_parent_id?: string;
   rsvp_count?: number;
   going_count?: number;
   user_rsvp_status?: RSVPStatus;

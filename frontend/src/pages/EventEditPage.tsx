@@ -6,7 +6,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Calendar, ArrowLeft } from 'lucide-react';
+import { Calendar, ArrowLeft, Info } from 'lucide-react';
 import { AxiosError } from 'axios';
 import { eventService } from '../services/api';
 import type { EventCreate, Event } from '../types/event';
@@ -135,6 +135,16 @@ export const EventEditPage: React.FC = () => {
         {error && (
           <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
             <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+          </div>
+        )}
+
+        {(event.is_recurring || event.recurrence_parent_id) && (
+          <div className="mb-6 flex items-start gap-3 rounded-lg border border-indigo-300 bg-indigo-50 p-4 dark:border-indigo-500/30 dark:bg-indigo-500/10">
+            <Info className="mt-0.5 h-5 w-5 shrink-0 text-indigo-600 dark:text-indigo-400" />
+            <div className="text-sm text-indigo-700 dark:text-indigo-300">
+              <p className="font-medium">This event is part of a recurring series.</p>
+              <p className="mt-1">Changes made here will only affect this individual occurrence, not the entire series.</p>
+            </div>
           </div>
         )}
 

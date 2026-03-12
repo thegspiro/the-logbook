@@ -18,6 +18,7 @@ import { getRSVPStatusLabel, getRSVPStatusColor } from '../utils/eventHelpers';
 import { formatDateTime, formatShortDateTime, formatTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum } from '../constants/enums';
+import { Repeat } from 'lucide-react';
 
 export const EventDetailPage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
@@ -36,6 +37,8 @@ export const EventDetailPage: React.FC = () => {
   const [rsvpNotes, setRsvpNotes] = useState('');
   const [cancelReason, setCancelReason] = useState('');
   const [sendCancelNotifications, setSendCancelNotifications] = useState(false);
+  const [showCancelSeriesModal, setShowCancelSeriesModal] = useState(false);
+  const [cancelSeriesFutureOnly, setCancelSeriesFutureOnly] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -182,6 +185,37 @@ export const EventDetailPage: React.FC = () => {
       await fetchEvent();
     } catch (err) {
       setSubmitError((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to cancel event');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCancelSeries = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!event) return;
+
+    const parentId = event.recurrence_parent_id || event.id;
+    try {
+      setSubmitting(true);
+      setSubmitError(null);
+
+      const result = await eventService.cancelEventSeries(
+        parentId,
+        {
+          cancellation_reason: cancelReason,
+          send_notifications: sendCancelNotifications,
+        },
+        cancelSeriesFutureOnly,
+      );
+
+      setShowCancelSeriesModal(false);
+      setCancelReason('');
+      setSendCancelNotifications(false);
+      setCancelSeriesFutureOnly(false);
+      toast.success(result.message);
+      await fetchEvent();
+    } catch (err) {
+      setSubmitError((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to cancel series');
     } finally {
       setSubmitting(false);
     }
@@ -399,6 +433,12 @@ export const EventDetailPage: React.FC = () => {
                   Mandatory
                 </span>
               )}
+              {(event.is_recurring || event.recurrence_parent_id) && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
+                  <Repeat className="h-3 w-3" />
+                  Recurring
+                </span>
+              )}
             </div>
           </div>
 
@@ -512,6 +552,14 @@ export const EventDetailPage: React.FC = () => {
                           >
                             Cancel Event
                           </button>
+                          {(event.is_recurring || event.recurrence_parent_id) && (
+                            <button
+                              onClick={() => { setShowActionsMenu(false); setShowCancelSeriesModal(true); }}
+                              className="w-full text-left px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-theme-surface-hover"
+                            >
+                              Cancel Entire Series
+                            </button>
+                          )}
                           <button
                             onClick={() => { setShowActionsMenu(false); setShowDeleteConfirm(true); }}
                             className="w-full text-left px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-theme-surface-hover"
@@ -1064,6 +1112,115 @@ export const EventDetailPage: React.FC = () => {
                       setSubmitError(null);
                       setCancelReason('');
                       setSendCancelNotifications(false);
+                    }}
+                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-xs px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                  >
+                    Go Back
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Series Modal */}
+      {showCancelSeriesModal && (
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cancel-series-modal-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') { setShowCancelSeriesModal(false); setSubmitError(null); setCancelReason(''); } }}
+        >
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+              <div className="absolute inset-0 bg-black/75"></div>
+            </div>
+
+            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+              <form onSubmit={(e) => { void handleCancelSeries(e); }}>
+                <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                  <h3 id="cancel-series-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">Cancel Recurring Series</h3>
+
+                  <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3 dark:bg-red-500/10 dark:border-red-500/30">
+                    <p className="text-sm text-red-800 dark:text-red-300">
+                      This will cancel multiple events in this recurring series. This action cannot be undone.
+                    </p>
+                  </div>
+
+                  {submitError && (
+                    <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert">
+                      <p className="text-sm text-red-300">{submitError}</p>
+                    </div>
+                  )}
+
+                  <div className="mb-4">
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={cancelSeriesFutureOnly}
+                        onChange={(e) => setCancelSeriesFutureOnly(e.target.checked)}
+                        className="form-checkbox border-theme-surface-border"
+                      />
+                      <span className="ml-2 text-sm text-theme-text-secondary">
+                        Only cancel future events (keep past events)
+                      </span>
+                    </label>
+                  </div>
+
+                  <div>
+                    <label htmlFor="cancel_series_reason" className="block text-sm font-medium text-theme-text-secondary">
+                      Reason for Cancellation <span aria-hidden="true">*</span>
+                    </label>
+                    <textarea
+                      id="cancel_series_reason"
+                      rows={4}
+                      required
+                      aria-required="true"
+                      minLength={10}
+                      maxLength={500}
+                      value={cancelReason}
+                      onChange={(e) => setCancelReason(e.target.value)}
+                      className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
+                      placeholder="Please provide a reason for cancelling this series..."
+                    />
+                    <p className="mt-1 text-xs text-theme-text-muted">
+                      {cancelReason.length}/500 characters (minimum 10)
+                    </p>
+                  </div>
+
+                  <div className="mt-4">
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={sendCancelNotifications}
+                        onChange={(e) => setSendCancelNotifications(e.target.checked)}
+                        className="form-checkbox border-theme-surface-border"
+                      />
+                      <span className="ml-2 text-sm text-theme-text-secondary">
+                        Send cancellation notifications to all RSVPs
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="bg-theme-surface-secondary px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                  <button
+                    type="submit"
+                    disabled={submitting || cancelReason.length < 10}
+                    className="btn-primary font-medium inline-flex justify-center rounded-md sm:ml-3 sm:text-sm sm:w-auto text-base w-full"
+                  >
+                    {submitting ? 'Cancelling...' : 'Cancel Series'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCancelSeriesModal(false);
+                      setSubmitError(null);
+                      setCancelReason('');
+                      setSendCancelNotifications(false);
+                      setCancelSeriesFutureOnly(false);
                     }}
                     className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-xs px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                   >

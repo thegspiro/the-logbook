@@ -60,12 +60,21 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
     if event.location_obj:
         location_name = event.location_obj.name
 
+    recurrence_pattern_val = None
+    if event.recurrence_pattern:
+        recurrence_pattern_val = (
+            event.recurrence_pattern.value
+            if hasattr(event.recurrence_pattern, "value")
+            else event.recurrence_pattern
+        )
+
     return EventResponse(
         id=event.id,
         organization_id=event.organization_id,
         title=event.title,
         description=event.description,
         event_type=event.event_type.value if event.event_type else "other",
+        custom_category=event.custom_category,
         location_id=event.location_id,
         location=event.location,
         location_name=location_name,
@@ -92,6 +101,15 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         require_checkout=event.require_checkout,
         custom_fields=event.custom_fields,
         attachments=event.attachments,
+        is_recurring=event.is_recurring or False,
+        recurrence_pattern=recurrence_pattern_val,
+        recurrence_end_date=event.recurrence_end_date,
+        recurrence_custom_days=event.recurrence_custom_days,
+        recurrence_weekday=event.recurrence_weekday,
+        recurrence_week_ordinal=event.recurrence_week_ordinal,
+        recurrence_month=event.recurrence_month,
+        recurrence_parent_id=event.recurrence_parent_id,
+        template_id=event.template_id,
         is_cancelled=event.is_cancelled,
         cancellation_reason=event.cancellation_reason,
         cancelled_at=event.cancelled_at,
@@ -191,6 +209,8 @@ async def list_events(
                 requires_rsvp=event.requires_rsvp,
                 is_mandatory=event.is_mandatory,
                 is_cancelled=event.is_cancelled,
+                is_recurring=event.is_recurring or False,
+                recurrence_parent_id=event.recurrence_parent_id,
                 rsvp_count=rsvp_count,
                 going_count=going_count,
                 user_rsvp_status=user_rsvp_status,
@@ -793,6 +813,71 @@ async def cancel_event(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
+
+
+@router.post("/{event_id}/cancel-series")
+async def cancel_event_series(
+    event_id: UUID,
+    cancel_data: EventCancel,
+    cancel_future_only: bool = False,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Cancel all events in a recurring series.
+
+    Cancels the parent event and all child occurrences.
+    If cancel_future_only is True, only cancels future occurrences.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+
+    try:
+        cancelled_count = await service.cancel_series(
+            parent_event_id=event_id,
+            organization_id=current_user.organization_id,
+            reason=cancel_data.cancellation_reason,
+            cancel_future_only=cancel_future_only,
+        )
+
+        if cancelled_count == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No events found in this series",
+            )
+
+        await log_audit_event(
+            db=db,
+            event_type="event.series_cancelled",
+            event_category="events",
+            severity="warning",
+            event_data={
+                "parent_event_id": str(event_id),
+                "cancelled_count": cancelled_count,
+                "reason": cancel_data.cancellation_reason,
+                "future_only": cancel_future_only,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+        return {
+            "message": f"Successfully cancelled {cancelled_count} event(s) in the series",
+            "cancelled_count": cancelled_count,
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

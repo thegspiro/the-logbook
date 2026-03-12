@@ -72,6 +72,17 @@ export const eventService = {
   },
 
   /**
+   * Cancel all events in a recurring series
+   */
+  async cancelEventSeries(parentEventId: string, cancelData: EventCancel, cancelFutureOnly = false): Promise<{ message: string; cancelled_count: number }> {
+    const response = await api.post<{ message: string; cancelled_count: number }>(
+      `/events/${parentEventId}/cancel-series?cancel_future_only=${cancelFutureOnly}`,
+      cancelData
+    );
+    return response.data;
+  },
+
+  /**
    * Create or update an RSVP
    */
   async createOrUpdateRSVP(eventId: string, rsvpData: RSVPCreate): Promise<RSVP> {

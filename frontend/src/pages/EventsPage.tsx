@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, Plus, Download, Search } from 'lucide-react';
+import { Calendar, Plus, Download, Search, Repeat } from 'lucide-react';
 import { eventService } from '../services/api';
 import type { EventListItem, EventType, EventCategoryConfig } from '../types/event';
 import { getEventTypeLabel, getEventTypeBadgeColor, getRSVPStatusLabel, getRSVPStatusColor } from '../utils/eventHelpers';
@@ -330,6 +330,12 @@ export const EventsPage: React.FC = () => {
                       {event.is_mandatory && (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400">
                           Mandatory
+                        </span>
+                      )}
+                      {(event.is_recurring || event.recurrence_parent_id) && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
+                          <Repeat className="h-3 w-3" />
+                          Recurring
                         </span>
                       )}
                       {event.user_rsvp_status && (

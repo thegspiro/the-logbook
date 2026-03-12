@@ -247,6 +247,7 @@ class EventResponse(EventBase):
     recurrence_week_ordinal: Optional[int] = None
     recurrence_month: Optional[int] = None
     recurrence_parent_id: Optional[UUID] = None
+    template_id: Optional[UUID] = None
 
     # Additional computed fields
     rsvp_count: Optional[int] = None
@@ -274,6 +275,8 @@ class EventListItem(BaseModel):
     requires_rsvp: bool
     is_mandatory: bool
     is_cancelled: bool
+    is_recurring: bool = False
+    recurrence_parent_id: Optional[UUID] = None
     rsvp_count: Optional[int] = None
     going_count: Optional[int] = None
     user_rsvp_status: Optional[str] = None
