@@ -5,6 +5,7 @@ Handles first-time system setup and configuration.
 This module guides users through initial setup and can be disabled once complete.
 """
 
+import copy
 from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional
 
@@ -118,8 +119,8 @@ class OnboardingService:
             # First, check if onboarding is explicitly marked as completed
             result = await self.db.execute(
                 select(OnboardingStatus).where(
-                    OnboardingStatus.is_completed == True
-                )  # noqa: E712
+                    OnboardingStatus.is_completed == True  # noqa: E712
+                )
             )
             completed = result.scalar_one_or_none()
 
@@ -129,8 +130,8 @@ class OnboardingService:
             # Check if there's an onboarding in progress (not completed)
             result = await self.db.execute(
                 select(OnboardingStatus).where(
-                    OnboardingStatus.is_completed == False
-                )  # noqa: E712
+                    OnboardingStatus.is_completed == False  # noqa: E712
+                )
             )
             in_progress = result.scalar_one_or_none()
 
@@ -230,8 +231,14 @@ class OnboardingService:
                 {
                     "field": "SECRET_KEY",
                     "severity": "critical",
-                    "message": "SECRET_KEY is not set or uses an insecure default. Generate a secure key in your .env file.",
-                    "fix": 'Run: python -c "import secrets; print(secrets.token_urlsafe(64))" and set SECRET_KEY in .env',
+                    "message": (
+                        "SECRET_KEY is not set or uses an insecure default. "
+                        "Generate a secure key in your .env file."
+                    ),
+                    "fix": (
+                        'Run: python -c "import secrets; print(secrets.token_urlsafe(64))"'
+                        " and set SECRET_KEY in .env"
+                    ),
                 }
             )
             passed = False
@@ -254,8 +261,14 @@ class OnboardingService:
                 {
                     "field": "ENCRYPTION_KEY",
                     "severity": "critical",
-                    "message": "ENCRYPTION_KEY is not set or uses an insecure default. Generate a secure key in your .env file.",
-                    "fix": 'Run: python -c "import secrets; print(secrets.token_hex(32))" and set ENCRYPTION_KEY in .env',
+                    "message": (
+                        "ENCRYPTION_KEY is not set or uses an insecure default. "
+                        "Generate a secure key in your .env file."
+                    ),
+                    "fix": (
+                        'Run: python -c "import secrets; print(secrets.token_hex(32))"'
+                        " and set ENCRYPTION_KEY in .env"
+                    ),
                 }
             )
             passed = False
@@ -314,7 +327,10 @@ class OnboardingService:
                 {
                     "field": "CONFIGURATION",
                     "severity": "critical",
-                    "message": "Security configuration check failed but no specific issues were identified. Please review logs for details.",
+                    "message": (
+                        "Security configuration check failed but no specific issues "
+                        "were identified. Please review logs for details."
+                    ),
                     "fix": "Check application logs for more information about the security validation failure.",
                 }
             )
@@ -995,12 +1011,9 @@ class OnboardingService:
         result = await self.db.execute(select(Organization).limit(1))
         org = result.scalar_one_or_none()
         if org:
-            settings_dict = dict(org.settings or {})
+            settings_dict = copy.deepcopy(org.settings or {})
             settings_dict["modules"] = modules_dict
             org.settings = settings_dict
-            from sqlalchemy.orm.attributes import flag_modified
-
-            flag_modified(org, "settings")
             await self.db.flush()
 
         return {module: module in final_modules for module in available_modules}
