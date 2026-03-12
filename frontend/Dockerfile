@@ -50,6 +50,10 @@ RUN npm run build
 # Production stage
 FROM nginx:alpine AS production
 
+# Limit worker processes — 'auto' detects host CPUs, not container limits,
+# which can spawn dozens of unnecessary workers in Docker.
+RUN sed -i 's/worker_processes\s*auto;/worker_processes 2;/' /etc/nginx/nginx.conf
+
 # Copy custom nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 

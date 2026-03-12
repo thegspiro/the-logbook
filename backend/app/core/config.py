@@ -188,6 +188,10 @@ class Settings(BaseSettings):
     # Defaults to False for local development; production/staging validation
     # will warn if not enabled.
     SECURITY_ENFORCE_HTTPS: bool = False  # Set to True in production
+    # SEC: Explicit override for the Secure flag on auth cookies.
+    # None = auto-detect (Secure=False only for localhost development).
+    # Set to False for LAN deployments served over plain HTTP.
+    COOKIE_SECURE: bool | None = None
     # SEC: When True, blocks startup in ANY environment if critical security
     # issues are detected (missing secrets, etc.).  Production and staging
     # ALWAYS block regardless of this flag.  Set to False for local dev only.
