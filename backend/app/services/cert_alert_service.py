@@ -34,7 +34,7 @@ from app.core.constants import (
 from app.models.notification import NotificationCategory, NotificationChannel
 from app.models.training import TrainingRecord, TrainingStatus
 from app.models.user import Organization, User, UserStatus
-from app.services.email_service import EmailService
+from app.services.email_service import EmailService, build_email_logo_html
 from app.services.notifications_service import NotificationsService
 
 # Alert tiers: (days_before, field_name, cc_officers)
@@ -192,14 +192,7 @@ class CertAlertService:
             }
 
         email_service = EmailService(org)
-
-        # Build org logo for email header
-        org_logo_url = getattr(org, "logo", None) or ""
-        logo_html = (
-            f'<div style="text-align:center;padding:16px 0;">'
-            f'<img src="{_html.escape(org_logo_url)}" alt="Logo" '
-            f'style="max-height:80px;max-width:200px;" /></div>'
-        ) if org_logo_url else ""
+        logo_html = build_email_logo_html(org)
 
         training_roles = config.get(
             "training_officer_roles", DEFAULT_TRAINING_OFFICER_ROLES

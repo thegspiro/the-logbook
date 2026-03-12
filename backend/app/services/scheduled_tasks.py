@@ -1249,7 +1249,7 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
     Send email alerts to admins when inventory items drop below reorder point.
     Daily at 07:00.
     """
-    from app.services.email_service import EmailService
+    from app.services.email_service import EmailService, build_email_logo_html
     from app.services.inventory_service import InventoryService
 
     orgs = await db.execute(select(Organization))
@@ -1281,12 +1281,7 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
                     f"{item.reorder_point}</td></tr>"
                 )
 
-            _org_logo = getattr(org, "logo", None) or ""
-            _logo_img = (
-                f'<div style="text-align:center;padding:16px 0;">'
-                f'<img src="{_html.escape(_org_logo)}" alt="Logo" '
-                f'style="max-height:80px;max-width:200px;" /></div>'
-            ) if _org_logo else ""
+            _logo_img = build_email_logo_html(org)
 
             html_body = f"""
             <div style="font-family:Arial,sans-serif;max-width:600px;">
@@ -1371,7 +1366,7 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
     Send email alerts for overdue checkouts. Daily at 07:30.
     Notifies both the member who has the overdue item and admins.
     """
-    from app.services.email_service import EmailService
+    from app.services.email_service import EmailService, build_email_logo_html
     from app.services.inventory_service import InventoryService
 
     orgs = await db.execute(select(Organization))
@@ -1397,13 +1392,7 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
                 by_user[uid].append(co)
 
             email_svc = EmailService(organization=org)
-
-            _org_logo = getattr(org, "logo", None) or ""
-            _logo_img = (
-                f'<div style="text-align:center;padding:16px 0;">'
-                f'<img src="{_html.escape(_org_logo)}" alt="Logo" '
-                f'style="max-height:80px;max-width:200px;" /></div>'
-            ) if _org_logo else ""
+            _logo_img = build_email_logo_html(org)
 
             for uid, user_checkouts in by_user.items():
                 user_obj = user_checkouts[0].user if user_checkouts[0].user else None
@@ -1466,7 +1455,7 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
     Weekly on Mondays at 08:00.
     Tiers: 180 days, 90 days, 30 days, past due.
     """
-    from app.services.email_service import EmailService
+    from app.services.email_service import EmailService, build_email_logo_html
     from app.services.inventory_service import InventoryService
 
     orgs = await db.execute(select(Organization))
@@ -1522,12 +1511,7 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
                 </table>
                 """
 
-            _org_logo = getattr(org, "logo", None) or ""
-            _logo_img = (
-                f'<div style="text-align:center;padding:16px 0;">'
-                f'<img src="{_html.escape(_org_logo)}" alt="Logo" '
-                f'style="max-height:80px;max-width:200px;" /></div>'
-            ) if _org_logo else ""
+            _logo_img = build_email_logo_html(org)
 
             html_body = f"""
             <div style="font-family:Arial,sans-serif;max-width:700px;">

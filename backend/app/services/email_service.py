@@ -21,6 +21,41 @@ from app.core.config import settings
 from app.models.user import Organization
 
 
+def build_email_logo_img(organization: Optional[Organization]) -> str:
+    """Build a bare <img> tag for the org logo, or empty string.
+
+    Use this when inserting into a template that already provides its own
+    wrapper element (e.g. ``<div class="logo">{{organization_logo_img}}</div>``).
+    """
+    if not organization:
+        return ""
+    logo_url = getattr(organization, "logo", None) or ""
+    if not logo_url:
+        return ""
+    org_name = getattr(organization, "name", "Organization")
+    safe_url = _html.escape(str(logo_url))
+    safe_name = _html.escape(str(org_name))
+    return (
+        f'<img src="{safe_url}" alt="{safe_name}" '
+        f'style="max-height:80px;max-width:200px;" />'
+    )
+
+
+def build_email_logo_html(organization: Optional[Organization]) -> str:
+    """Build an <img> tag (inside a centered div) for the org logo.
+
+    Returns an empty string when the organization has no logo configured.
+    Use this in inline HTML emails where no wrapper element exists.
+    """
+    img = build_email_logo_img(organization)
+    if not img:
+        return ""
+    return (
+        f'<div style="text-align:center;padding:16px 0;">'
+        f'{img}</div>'
+    )
+
+
 class EmailService:
     """Service for sending emails"""
 
@@ -40,16 +75,12 @@ class EmailService:
         return _html.escape(str(value)) if value else ""
 
     def _build_logo_img(self) -> str:
-        """Build an <img> tag for the organization logo, or empty string."""
-        org_logo = ""
-        if self.organization:
-            org_logo = getattr(self.organization, "logo", None) or ""
-        if org_logo:
-            return (
-                f'<img src="{self._esc(org_logo)}" alt="Logo" '
-                f'style="max-height:80px;max-width:200px;" />'
-            )
-        return ""
+        """Build an <img> tag for the organization logo, or empty string.
+
+        Returns the bare <img> tag (no wrapper div) for use in template
+        variable substitution where the template itself provides the wrapper.
+        """
+        return build_email_logo_img(self.organization)
 
     def _format_local_dt(self, dt: datetime, fmt: str = "%B %d, %Y at %I:%M %p") -> str:
         """Format a datetime in the organization's local timezone."""

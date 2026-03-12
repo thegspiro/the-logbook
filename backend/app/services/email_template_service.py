@@ -1910,9 +1910,10 @@ class EmailTemplateService:
         if logo_val:
             import html as _h
 
+            org_name = ctx.get("organization_name", "Organization")
             ctx.setdefault(
                 "organization_logo_img",
-                f'<img src="{_h.escape(str(logo_val))}" alt="Logo" class="logo" style="max-height:80px;max-width:200px;" />',
+                f'<img src="{_h.escape(str(logo_val))}" alt="{_h.escape(str(org_name))}" class="logo" style="max-height:80px;max-width:200px;" />',
             )
         else:
             ctx.setdefault("organization_logo_img", "")

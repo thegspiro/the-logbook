@@ -2176,7 +2176,10 @@ class ElectionService:
 
         Returns: Number of notifications sent
         """
-        from app.services.email_service import EmailService
+        from app.services.email_service import (
+            EmailService,
+            build_email_logo_html,
+        )
 
         # Get leadership users (Chief, President, Vice President, Secretary roles)
         leadership_roles = LEADERSHIP_ROLE_SLUGS
@@ -2233,13 +2236,7 @@ class ElectionService:
             .strftime("%B %d, %Y at %I:%M %p")
         )
 
-        # Build org logo for email header
-        org_logo_url = getattr(organization, "logo", None) or ""
-        logo_html = (
-            f'<div style="text-align:center;padding:16px 0;">'
-            f'<img src="{html.escape(org_logo_url)}" alt="Logo" '
-            f'style="max-height:80px;max-width:200px;" /></div>'
-        ) if org_logo_url else ""
+        logo_html = build_email_logo_html(organization)
 
         # Send notifications
         sent_count = 0
@@ -2365,7 +2362,10 @@ Best regards,
 
         Returns: Number of notifications sent
         """
-        from app.services.email_service import EmailService
+        from app.services.email_service import (
+            EmailService,
+            build_email_logo_html,
+        )
 
         leadership_roles = LEADERSHIP_ROLE_SLUGS
 
@@ -2417,13 +2417,7 @@ Best regards,
             .strftime("%B %d, %Y at %I:%M %p")
         )
 
-        # Build org logo for email header
-        org_logo_url = getattr(organization, "logo", None) or ""
-        logo_html = (
-            f'<div style="text-align:center;padding:16px 0;">'
-            f'<img src="{html.escape(org_logo_url)}" alt="Logo" '
-            f'style="max-height:80px;max-width:200px;" /></div>'
-        ) if org_logo_url else ""
+        logo_html = build_email_logo_html(organization)
 
         sent_count = 0
         for user in leadership_users:
