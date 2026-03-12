@@ -44,6 +44,7 @@ from sqlalchemy import (
     Text,
 )
 from sqlalchemy.dialects import mysql
+from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import relationship, synonym
 from sqlalchemy.sql import func
 
@@ -169,8 +170,9 @@ class Organization(Base):
     # Legacy field - keep for compatibility
     type = Column(String(50), default="fire_department")
 
-    # Settings JSON for extensibility
-    settings = Column(JSON, default=dict)
+    # Settings JSON for extensibility — MutableDict ensures SQLAlchemy detects
+    # in-place mutations to nested dicts, preventing silent commit no-ops.
+    settings = Column(MutableDict.as_mutable(JSON), default=dict)
     active = Column(Boolean, default=True, index=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
