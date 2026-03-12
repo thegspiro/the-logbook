@@ -45,6 +45,15 @@ export const ElectionDetailPage: React.FC = () => {
   const [isSendingEmails, setIsSendingEmails] = useState(false);
   const [sendEmailError, setSendEmailError] = useState<string | null>(null);
 
+  // Remind Non-Voters state
+  const [isLoadingNonVoters, setIsLoadingNonVoters] = useState(false);
+  const [showRemindModal, setShowRemindModal] = useState(false);
+  const [nonVoterCount, setNonVoterCount] = useState(0);
+  const [nonVoterIds, setNonVoterIds] = useState<string[]>([]);
+  const [remindMessage, setRemindMessage] = useState('');
+  const [isSendingReminders, setIsSendingReminders] = useState(false);
+  const [remindError, setRemindError] = useState<string | null>(null);
+
   // Delete Election state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteReason, setDeleteReason] = useState('');
@@ -213,8 +222,8 @@ export const ElectionDetailPage: React.FC = () => {
       setSendEmailError(null);
 
       const response = await electionService.sendBallotEmail(electionId, {
-        subject: emailSubject ?? undefined,
-        message: emailMessage ?? undefined,
+        subject: emailSubject.trim() || undefined,
+        message: emailMessage.trim() || undefined,
         include_ballot_link: true,
       });
 
@@ -232,6 +241,59 @@ export const ElectionDetailPage: React.FC = () => {
       setSendEmailError(getErrorMessage(err, 'Failed to send ballot emails'));
     } finally {
       setIsSendingEmails(false);
+    }
+  };
+
+  // --- Remind Non-Voters ---
+  const handleOpenRemindModal = async () => {
+    if (!electionId) return;
+
+    try {
+      setIsLoadingNonVoters(true);
+      const data = await electionService.getNonVoters(electionId);
+      setNonVoterCount(data.count);
+      setNonVoterIds(data.non_voters.map((v) => v.id));
+
+      if (data.count === 0) {
+        toast.success('All eligible voters have already voted!');
+        return;
+      }
+
+      setRemindMessage('');
+      setRemindError(null);
+      setShowRemindModal(true);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to load non-voters'));
+    } finally {
+      setIsLoadingNonVoters(false);
+    }
+  };
+
+  const handleSendReminders = async () => {
+    if (!electionId || nonVoterIds.length === 0) return;
+
+    try {
+      setIsSendingReminders(true);
+      setRemindError(null);
+
+      const response = await electionService.sendBallotEmail(electionId, {
+        recipient_user_ids: nonVoterIds,
+        message: remindMessage || 'This is a reminder to cast your vote. The voting window will be closing soon.',
+        include_ballot_link: true,
+      });
+
+      setShowRemindModal(false);
+      setRemindMessage('');
+
+      if (response.failed_count > 0) {
+        toast.success(`Reminders sent to ${response.recipients_count} non-voters (${response.failed_count} failed)`);
+      } else {
+        toast.success(`Reminders sent to ${response.recipients_count} non-voters`);
+      }
+    } catch (err: unknown) {
+      setRemindError(getErrorMessage(err, 'Failed to send reminders'));
+    } finally {
+      setIsSendingReminders(false);
     }
   };
 
@@ -535,6 +597,15 @@ export const ElectionDetailPage: React.FC = () => {
                   >
                     {election.email_sent ? 'Resend Ballot Emails' : 'Send Ballot Emails'}
                   </button>
+                  {election.email_sent && (
+                    <button
+                      onClick={() => { void handleOpenRemindModal(); }}
+                      disabled={isLoadingNonVoters}
+                      className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 disabled:opacity-50"
+                    >
+                      {isLoadingNonVoters ? 'Loading...' : 'Remind Non-Voters'}
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       setNewEndDate(election.end_date);
@@ -1108,6 +1179,78 @@ export const ElectionDetailPage: React.FC = () => {
                   className="btn-primary disabled:opacity-50"
                 >
                   {isSendingEmails ? 'Sending...' : 'Send Ballots'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remind Non-Voters Modal */}
+      {showRemindModal && election && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="remind-modal-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') { setShowRemindModal(false); setRemindError(null); } }}
+        >
+          <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full">
+            <div className="px-6 py-4 border-b border-theme-surface-border">
+              <h3 id="remind-modal-title" className="text-lg font-medium text-theme-text-primary">
+                Remind Non-Voters
+              </h3>
+            </div>
+
+            <div className="px-6 py-4">
+              <div className="mb-4 bg-amber-500/10 border border-amber-500/30 rounded-sm p-3">
+                <p className="text-sm text-amber-300">
+                  {nonVoterCount} eligible voter{nonVoterCount !== 1 ? 's have' : ' has'} not yet voted.
+                  This will resend ballot emails with new voting links to only those members.
+                </p>
+              </div>
+
+              {remindError && (
+                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert">
+                  <p className="text-sm text-red-300">{remindError}</p>
+                </div>
+              )}
+
+              <div>
+                <label htmlFor="remind-message" className="block text-sm font-medium text-theme-text-secondary">
+                  Reminder Message <span className="text-xs text-theme-text-muted">(optional)</span>
+                </label>
+                <textarea
+                  id="remind-message"
+                  value={remindMessage}
+                  onChange={(e) => setRemindMessage(e.target.value)}
+                  rows={3}
+                  placeholder="This is a reminder to cast your vote. The voting window will be closing soon."
+                  aria-label="Reminder message"
+                  className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+                />
+              </div>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowRemindModal(false);
+                    setRemindMessage('');
+                    setRemindError(null);
+                  }}
+                  disabled={isSendingReminders}
+                  className="px-4 py-2 border border-theme-surface-border rounded-md text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { void handleSendReminders(); }}
+                  disabled={isSendingReminders}
+                  className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {isSendingReminders ? 'Sending...' : `Send Reminders (${nonVoterCount})`}
                 </button>
               </div>
             </div>

@@ -1249,7 +1249,7 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
     Send email alerts to admins when inventory items drop below reorder point.
     Daily at 07:00.
     """
-    from app.services.email_service import EmailService
+    from app.services.email_service import EmailService, build_email_logo_html
     from app.services.inventory_service import InventoryService
 
     orgs = await db.execute(select(Organization))
@@ -1281,8 +1281,11 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
                     f"{item.reorder_point}</td></tr>"
                 )
 
+            _logo_img = build_email_logo_html(org)
+
             html_body = f"""
             <div style="font-family:Arial,sans-serif;max-width:600px;">
+                {_logo_img}
                 <h2 style="color:#dc2626;">Low Stock Alert</h2>
                 <p>The following inventory items are at or below their reorder point:</p>
                 <table style="width:100%;border-collapse:collapse;margin:16px 0;">
@@ -1363,7 +1366,7 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
     Send email alerts for overdue checkouts. Daily at 07:30.
     Notifies both the member who has the overdue item and admins.
     """
-    from app.services.email_service import EmailService
+    from app.services.email_service import EmailService, build_email_logo_html
     from app.services.inventory_service import InventoryService
 
     orgs = await db.execute(select(Organization))
@@ -1389,6 +1392,7 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
                 by_user[uid].append(co)
 
             email_svc = EmailService(organization=org)
+            _logo_img = build_email_logo_html(org)
 
             for uid, user_checkouts in by_user.items():
                 user_obj = user_checkouts[0].user if user_checkouts[0].user else None
@@ -1407,6 +1411,7 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
 
                 html_body = f"""
                 <div style="font-family:Arial,sans-serif;max-width:600px;">
+                    {_logo_img}
                     <h2 style="color:#dc2626;">Overdue Equipment</h2>
                     <p>Hi {_html.escape(user_obj.first_name or 'Member')},</p>
                     <p>The following items are overdue for return:</p>
@@ -1450,7 +1455,7 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
     Weekly on Mondays at 08:00.
     Tiers: 180 days, 90 days, 30 days, past due.
     """
-    from app.services.email_service import EmailService
+    from app.services.email_service import EmailService, build_email_logo_html
     from app.services.inventory_service import InventoryService
 
     orgs = await db.execute(select(Organization))
@@ -1506,8 +1511,11 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
                 </table>
                 """
 
+            _logo_img = build_email_logo_html(org)
+
             html_body = f"""
             <div style="font-family:Arial,sans-serif;max-width:700px;">
+                {_logo_img}
                 <h2>NFPA 1851 Retirement Alert</h2>
                 <p>{len(items_due)} PPE item(s) are approaching or past their retirement date:</p>
                 {_build_section("Past Due — Retire Immediately", past_due, "#dc2626")}

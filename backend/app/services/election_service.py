@@ -128,6 +128,47 @@ class ElectionService:
             return False
         return any(a.get("user_id") == str(user_id) for a in election.attendees)
 
+    @staticmethod
+    def _build_ballot_items_lists(
+        eligible_items: List[Dict],
+    ) -> Tuple[str, str]:
+        """Build HTML and plain-text lists of ballot items for the email.
+
+        Returns (html_string, text_string).
+        """
+        if not eligible_items:
+            return "", ""
+
+        html_parts = ["<ul>"]
+        text_parts = []
+        for item in eligible_items:
+            title = html.escape(item.get("title", "Untitled"))
+            item_type = (
+                item.get("type", "")
+                .replace("_", " ")
+                .title()
+            )
+            vote_type = (
+                item.get("vote_type", "")
+                .replace("_", " ")
+            )
+            label = f"<strong>{title}</strong>"
+            if item_type:
+                label += f" &mdash; {html.escape(item_type)}"
+            if vote_type:
+                label += f" ({html.escape(vote_type)})"
+            html_parts.append(f"<li>{label}</li>")
+
+            text_label = f"  - {item.get('title', 'Untitled')}"
+            if item_type:
+                text_label += f" — {item_type}"
+            if vote_type:
+                text_label += f" ({vote_type})"
+            text_parts.append(text_label)
+
+        html_parts.append("</ul>")
+        return "\n".join(html_parts), "\n".join(text_parts)
+
     async def _get_eligible_ballot_items_for_user(
         self,
         user: "User",
@@ -1718,6 +1759,75 @@ class ElectionService:
             voting_timeline=None,  # Could be implemented for charts
         )
 
+    async def get_non_voters(
+        self, election_id: UUID, organization_id: UUID
+    ) -> List[Dict]:
+        """Return list of eligible voters who have not yet cast a vote.
+
+        Returns a list of dicts with ``id``, ``full_name``, and ``email``
+        for each non-voter.
+        """
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
+        )
+        election = result.scalar_one_or_none()
+        if not election:
+            return []
+
+        # Get eligible voters
+        if election.eligible_voters:
+            users_result = await self.db.execute(
+                select(User)
+                .where(User.id.in_([str(v) for v in election.eligible_voters]))
+                .where(User.organization_id == str(organization_id))
+                .options(selectinload(User.roles))
+            )
+        else:
+            users_result = await self.db.execute(
+                select(User)
+                .where(User.organization_id == str(organization_id))
+                .where(User.is_active == True)  # noqa: E712
+                .options(selectinload(User.roles))
+            )
+        eligible_users = users_result.scalars().all()
+
+        # Get all voter hashes / voter IDs who have voted
+        votes_result = await self.db.execute(
+            select(Vote)
+            .where(Vote.election_id == str(election_id))
+            .where(Vote.deleted_at.is_(None))
+        )
+        votes = votes_result.scalars().all()
+
+        if election.anonymous_voting:
+            voted_hashes = {v.voter_hash for v in votes if v.voter_hash}
+            non_voters = []
+            for user in eligible_users:
+                user_hash = self._generate_voter_hash(
+                    user.id, election_id, election.voter_anonymity_salt or ""
+                )
+                if user_hash not in voted_hashes:
+                    non_voters.append({
+                        "id": user.id,
+                        "full_name": user.full_name,
+                        "email": user.email,
+                    })
+        else:
+            voted_ids = {v.voter_id for v in votes if v.voter_id}
+            non_voters = [
+                {
+                    "id": user.id,
+                    "full_name": user.full_name,
+                    "email": user.email,
+                }
+                for user in eligible_users
+                if str(user.id) not in voted_ids
+            ]
+
+        return non_voters
+
     async def _check_and_create_runoff(
         self, election: Election, organization_id: UUID
     ) -> Optional[Election]:
@@ -2066,7 +2176,10 @@ class ElectionService:
 
         Returns: Number of notifications sent
         """
-        from app.services.email_service import EmailService
+        from app.services.email_service import (
+            EmailService,
+            build_email_logo_html,
+        )
 
         # Get leadership users (Chief, President, Vice President, Secretary roles)
         leadership_roles = LEADERSHIP_ROLE_SLUGS
@@ -2123,6 +2236,8 @@ class ElectionService:
             .strftime("%B %d, %Y at %I:%M %p")
         )
 
+        logo_html = build_email_logo_html(organization)
+
         # Send notifications
         sent_count = 0
         for user in leadership_users:
@@ -2151,6 +2266,7 @@ class ElectionService:
 </head>
 <body>
     <div class="container">
+        {logo_html}
         <div class="header">
             <h1>⚠️ Election Rollback Alert</h1>
             <div class="alert-badge">REQUIRES ATTENTION</div>
@@ -2246,7 +2362,10 @@ Best regards,
 
         Returns: Number of notifications sent
         """
-        from app.services.email_service import EmailService
+        from app.services.email_service import (
+            EmailService,
+            build_email_logo_html,
+        )
 
         leadership_roles = LEADERSHIP_ROLE_SLUGS
 
@@ -2298,6 +2417,8 @@ Best regards,
             .strftime("%B %d, %Y at %I:%M %p")
         )
 
+        logo_html = build_email_logo_html(organization)
+
         sent_count = 0
         for user in leadership_users:
             safe_first_name = html.escape(user.first_name)
@@ -2322,6 +2443,7 @@ Best regards,
 </head>
 <body>
     <div class="container">
+        {logo_html}
         <div class="header">
             <h1>ELECTION DELETED</h1>
             <div class="critical-badge">CRITICAL - REQUIRES IMMEDIATE ATTENTION</div>
@@ -2872,7 +2994,7 @@ Best regards,
         row = result.one_or_none()
 
         if not row:
-            return 0, 0
+            return 0, 0, 0
 
         election, organization = row
 
@@ -2926,6 +3048,23 @@ Best regards,
                     if proxy_u:
                         proxy_cc_map[delegating_uid] = proxy_u.email
 
+        # Resolve admin contact info (election creator or org email)
+        admin_contact_name = ""
+        admin_contact_email = ""
+        if election.created_by:
+            creator_result = await self.db.execute(
+                select(User).where(User.id == election.created_by)
+            )
+            creator = creator_result.scalar_one_or_none()
+            if creator:
+                admin_contact_name = creator.full_name
+                admin_contact_email = creator.email
+        if not admin_contact_email:
+            admin_contact_name = organization.name
+            admin_contact_email = (
+                getattr(organization, "email", None) or ""
+            )
+
         # Send individual ballot emails with unique tokens
         success_count = 0
         failed_count = 0
@@ -2934,6 +3073,7 @@ Best regards,
         for recipient in recipients:
             # Empty ballot prevention: skip members who have zero eligible
             # ballot items so they don't receive a confusing empty ballot.
+            eligible_items = []
             if election.ballot_items:
                 eligible_items = await self._get_eligible_ballot_items_for_user(
                     user=recipient,
@@ -2947,6 +3087,11 @@ Best regards,
                         f"(no eligible ballot items) | election={election_id}"
                     )
                     continue
+
+            # Build ballot items lists for the email
+            items_html, items_text = self._build_ballot_items_lists(
+                eligible_items
+            )
 
             # Generate unique voting token for this voter
             voting_token = await self._generate_voting_token(
@@ -2978,6 +3123,10 @@ Best regards,
                 start_date=election.start_date,
                 end_date=election.end_date,
                 positions=election.positions,
+                ballot_items_html=items_html,
+                ballot_items_text=items_text,
+                admin_contact_name=admin_contact_name,
+                admin_contact_email=admin_contact_email,
                 db=self.db,
                 organization_id=str(organization_id),
             )

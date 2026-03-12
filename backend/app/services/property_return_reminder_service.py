@@ -347,6 +347,10 @@ class PropertyReturnReminderService:
                 DEFAULT_PROPERTY_RETURN_REMINDER_TEXT,
             )
 
+            from app.services.email_service import build_email_logo_img
+
+            context["organization_logo_img"] = build_email_logo_img(org)
+
             subject = DEFAULT_PROPERTY_RETURN_REMINDER_SUBJECT
             rendered_html = DEFAULT_PROPERTY_RETURN_REMINDER_HTML
             rendered_text = DEFAULT_PROPERTY_RETURN_REMINDER_TEXT
