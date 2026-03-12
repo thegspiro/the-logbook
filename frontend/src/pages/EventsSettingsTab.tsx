@@ -279,10 +279,16 @@ const EventsSettingsTab: React.FC = () => {
     const existing = settings.custom_event_categories || [];
     const updated = existing.filter((c) => c.value !== categoryValue);
 
+    // Also remove from visible list so deleted slugs don't linger
+    const updatedVisible = (settings.visible_custom_categories || []).filter(
+      (v) => v !== categoryValue
+    );
+
     try {
       setSaving(true);
       const result = await eventService.updateModuleSettings({
         custom_event_categories: updated,
+        visible_custom_categories: updatedVisible,
       });
       setSettings(result);
       toast.success('Category removed.');

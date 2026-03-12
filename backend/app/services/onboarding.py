@@ -5,6 +5,7 @@ Handles first-time system setup and configuration.
 This module guides users through initial setup and can be disabled once complete.
 """
 
+import copy
 from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional
 
@@ -995,12 +996,9 @@ class OnboardingService:
         result = await self.db.execute(select(Organization).limit(1))
         org = result.scalar_one_or_none()
         if org:
-            settings_dict = dict(org.settings or {})
+            settings_dict = copy.deepcopy(org.settings or {})
             settings_dict["modules"] = modules_dict
             org.settings = settings_dict
-            from sqlalchemy.orm.attributes import flag_modified
-
-            flag_modified(org, "settings")
             await self.db.flush()
 
         return {module: module in final_modules for module in available_modules}
