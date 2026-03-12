@@ -132,7 +132,7 @@ const CategorySection: React.FC<CategorySectionProps> = ({ category, fields, onT
                     onChange={(e) => { void onToggle(field.id, e.target.checked); }}
                     className="sr-only peer"
                   />
-                  <div className="w-11 h-6 bg-theme-surface-border peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:after:bg-slate-200 after:border-theme-surface-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  <div className="w-11 h-6 bg-theme-surface-border peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:after:bg-theme-surface after:border-theme-surface-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                 </label>
               </div>
             </div>
@@ -198,8 +198,8 @@ export const DataWhitelistTab: React.FC = () => {
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-md p-4">
-        <p className="text-red-800">Error loading data whitelist: {error}</p>
+      <div className="bg-red-50 border border-red-200 dark:bg-red-500/10 dark:border-red-500/30 rounded-md p-4">
+        <p className="text-red-800 dark:text-red-400">Error loading data whitelist: {error}</p>
       </div>
     );
   }
@@ -215,7 +215,7 @@ export const DataWhitelistTab: React.FC = () => {
       </div>
 
       {/* Security Warning */}
-      <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+      <div className="bg-yellow-500/10 border-l-4 border-yellow-400 p-4">
         <div className="flex">
           <div className="shrink-0">
             <svg className="h-5 w-5 text-yellow-700 dark:text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
@@ -339,7 +339,7 @@ export const DataWhitelistTab: React.FC = () => {
       )}
 
       {/* Help Text */}
-      <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+      <div className="bg-blue-500/10 border border-blue-500/30 rounded-md p-4">
         <div className="flex">
           <div className="shrink-0">
             <svg className="h-5 w-5 text-blue-700 dark:text-blue-400" fill="currentColor" viewBox="0 0 20 20">
@@ -347,8 +347,8 @@ export const DataWhitelistTab: React.FC = () => {
             </svg>
           </div>
           <div className="ml-3">
-            <h3 className="text-sm font-medium text-blue-800">How it works</h3>
-            <div className="mt-2 text-sm text-blue-700">
+            <h3 className="text-sm font-medium text-blue-700 dark:text-blue-300">How it works</h3>
+            <div className="mt-2 text-sm text-blue-700 dark:text-blue-300">
               <p>
                 Only fields that are enabled will be returned in public API responses. Use this to control
                 exactly what information is shared with external applications. Changes take effect immediately.

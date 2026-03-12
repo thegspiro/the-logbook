@@ -68,7 +68,7 @@ const CycleStrip: React.FC<{ config: Record<string, unknown> }> = ({
   return (
     <div className="flex gap-px mt-1.5">
       {entries.map((entry, i) => {
-        let bg = "bg-gray-300 dark:bg-gray-600";
+        let bg = "bg-theme-surface-hover";
         if (entry === "on") bg = "bg-violet-500";
         else if (entry === "day") bg = "bg-amber-400 dark:bg-amber-500";
         else if (entry === "night") bg = "bg-indigo-500 dark:bg-indigo-400";
@@ -831,11 +831,11 @@ export const PatternsTab: React.FC = () => {
                       className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
                         pattern.is_active
                           ? "bg-violet-500/10"
-                          : "bg-gray-500/10"
+                          : "bg-theme-surface-secondary"
                       }`}
                     >
                       <RefreshCw
-                        className={`w-5 h-5 ${pattern.is_active ? "text-violet-500" : "text-gray-400"}`}
+                        className={`w-5 h-5 ${pattern.is_active ? "text-violet-500" : "text-theme-text-muted"}`}
                       />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -848,7 +848,7 @@ export const PatternsTab: React.FC = () => {
                             pattern.pattern_type}
                         </span>
                         {!pattern.is_active && (
-                          <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-gray-500/10 text-gray-500">
+                          <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-theme-surface-secondary text-theme-text-muted">
                             Inactive
                           </span>
                         )}
@@ -949,7 +949,7 @@ export const PatternsTab: React.FC = () => {
                         <div className="flex gap-1 flex-wrap">
                           {cyclePattern.map((entry, i) => {
                             let cls =
-                              "bg-gray-200 dark:bg-gray-700 text-gray-500";
+                              "bg-theme-surface-hover text-theme-text-muted";
                             if (entry === "on")
                               cls =
                                 "bg-violet-500/20 text-violet-600 dark:text-violet-400";

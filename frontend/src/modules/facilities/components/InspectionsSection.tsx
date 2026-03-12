@@ -196,7 +196,7 @@ export default function InspectionsSection({ facilityId }: Props) {
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
                   insp.passed === true ? 'bg-emerald-500/10 text-emerald-500' :
                   insp.passed === false ? 'bg-red-500/10 text-red-500' :
-                  'bg-gray-500/10 text-gray-700 dark:text-gray-400'
+                  'bg-theme-surface-secondary text-theme-text-muted'
                 }`}>
                   {insp.passed === true ? <CheckCircle2 className="w-3.5 h-3.5" /> :
                    insp.passed === false ? <XCircle className="w-3.5 h-3.5" /> :

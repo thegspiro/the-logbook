@@ -243,6 +243,8 @@ class TrainingRequirementBase(BaseModel):
     rolling_period_months: Optional[int] = Field(None, ge=1, le=120)  # 1-10 years
     period_start_month: int = Field(1, ge=1, le=12)  # Month period starts (1=January)
     period_start_day: int = Field(1, ge=1, le=31)  # Day period starts
+    period_end_month: Optional[int] = Field(None, ge=1, le=12)  # Month period ends
+    period_end_day: Optional[int] = Field(None, ge=1, le=31)  # Day period ends
     # Category requirements - training in these categories satisfies this requirement
     category_ids: Optional[List[str]] = None
 
@@ -272,6 +274,8 @@ class TrainingRequirementUpdate(BaseModel):
     rolling_period_months: Optional[int] = Field(None, ge=1, le=120)
     period_start_month: Optional[int] = Field(None, ge=1, le=12)
     period_start_day: Optional[int] = Field(None, ge=1, le=31)
+    period_end_month: Optional[int] = Field(None, ge=1, le=12)
+    period_end_day: Optional[int] = Field(None, ge=1, le=31)
     category_ids: Optional[List[str]] = None
     active: Optional[bool] = None
 
@@ -348,10 +352,11 @@ class ComplianceSummary(BaseModel):
     requirements_total: int
     certs_expiring_soon: int  # Within 90 days
     certs_expired: int
-    compliance_status: str  # "green", "yellow", "red"
-    compliance_label: str  # "Compliant", "At Risk", "Non-Compliant"
+    compliance_status: str  # "green", "yellow", "red", "exempt"
+    compliance_label: str  # "Compliant", "At Risk", "Non-Compliant", "Exempt"
     hours_this_year: float
     active_certifications: int
+    is_exempt: bool = False
 
 
 # ============================================

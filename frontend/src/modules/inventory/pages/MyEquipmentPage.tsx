@@ -17,7 +17,7 @@ import { inventoryService } from '../../../services/api';
 import type {
   UserInventoryResponse, InventoryItem, EquipmentRequestItem, ReturnRequestItem,
 } from '../types';
-import { getConditionColor } from '../types';
+import { getConditionColor, REQUEST_STATUS_BADGES } from '../types';
 import { useAuthStore } from '../../../stores/authStore';
 import { useRanks } from '../../../hooks/useRanks';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -28,12 +28,7 @@ import { Modal } from '../../../components/Modal';
 import toast from 'react-hot-toast';
 
 /* ---------- Status badge colors ---------- */
-const STATUS_BADGE: Record<string, string> = {
-  pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/30',
-  approved: 'bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/30',
-  denied: 'bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/30',
-  completed: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/30',
-};
+const STATUS_BADGE = REQUEST_STATUS_BADGES;
 
 /* ---------- Collapsible section ---------- */
 const Section: React.FC<{
@@ -42,7 +37,7 @@ const Section: React.FC<{
 }> = ({ title, count, icon, defaultOpen = true, children }) => {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden">
+    <div className="card-secondary overflow-hidden">
       <button
         type="button"
         onClick={() => setOpen(!open)}
@@ -262,9 +257,9 @@ const MyEquipmentPage: React.FC = () => {
   };
 
   /* ---------- Shared styles ---------- */
-  const inputClass = 'w-full rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring';
-  const selectClass = inputClass;
-  const labelClass = 'block text-sm font-medium text-theme-text-secondary mb-1';
+  const inputClass = 'form-input';
+  const selectClass = 'form-input';
+  const labelClass = 'form-label';
 
   if (loading && !inventory) {
     return (
@@ -309,13 +304,13 @@ const MyEquipmentPage: React.FC = () => {
 
         {/* Action buttons */}
         <div className="flex flex-wrap gap-3">
-          <button type="button" onClick={() => setRequestModal(true)} className="btn-primary inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium">
+          <button type="button" onClick={() => setRequestModal(true)} className="btn-info btn-md inline-flex items-center gap-1.5">
             <Plus className="h-4 w-4" /> Request Equipment
           </button>
           <button
             type="button"
             onClick={() => setShowRequests(!showRequests)}
-            className="btn-info inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium"
+            className="btn-secondary btn-md inline-flex items-center gap-1.5"
           >
             <ClipboardList className="h-4 w-4" /> {showRequests ? 'Hide' : 'My'} Requests
           </button>
@@ -323,7 +318,7 @@ const MyEquipmentPage: React.FC = () => {
 
         {/* My Requests Panel */}
         {showRequests && (
-          <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-4 space-y-4">
+          <div className="card-secondary p-4 space-y-4">
             <h2 className="text-lg font-semibold text-theme-text-primary">My Requests</h2>
             {equipRequests.length === 0 && returnRequests.length === 0 && (
               <p className="text-sm text-theme-text-muted">No requests found.</p>
@@ -535,10 +530,10 @@ const MyEquipmentPage: React.FC = () => {
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => { setRequestModal(false); resetRequestForm(); }} className="px-4 py-2 text-sm rounded-md border border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary">
+              <button type="button" onClick={() => { setRequestModal(false); resetRequestForm(); }} className="btn-secondary btn-md">
                 Cancel
               </button>
-              <button type="button" onClick={() => void submitRequest()} disabled={!reqSelected || submitting} className="btn-primary px-4 py-2 text-sm rounded-md font-medium disabled:opacity-50">
+              <button type="button" onClick={() => void submitRequest()} disabled={!reqSelected || submitting} className="btn-info btn-md disabled:opacity-50">
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin inline mr-1" /> : null}Submit Request
               </button>
             </div>
@@ -559,10 +554,10 @@ const MyEquipmentPage: React.FC = () => {
               <textarea rows={3} value={ciNotes} onChange={(e) => setCiNotes(e.target.value)} className={inputClass} placeholder="Describe any damage..." />
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setCheckInModal({ open: false, checkoutId: '' })} className="px-4 py-2 text-sm rounded-md border border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary">
+              <button type="button" onClick={() => setCheckInModal({ open: false, checkoutId: '' })} className="btn-secondary btn-md">
                 Cancel
               </button>
-              <button type="button" onClick={() => void handleCheckIn()} disabled={submitting} className="btn-primary px-4 py-2 text-sm rounded-md font-medium disabled:opacity-50">
+              <button type="button" onClick={() => void handleCheckIn()} disabled={submitting} className="btn-info btn-md disabled:opacity-50">
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin inline mr-1" /> : null}Check In
               </button>
             </div>
@@ -577,10 +572,10 @@ const MyEquipmentPage: React.FC = () => {
               <input type="date" value={extendDate} onChange={(e) => setExtendDate(e.target.value)} className={inputClass} />
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setExtendModal({ open: false, checkoutId: '' })} className="px-4 py-2 text-sm rounded-md border border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary">
+              <button type="button" onClick={() => setExtendModal({ open: false, checkoutId: '' })} className="btn-secondary btn-md">
                 Cancel
               </button>
-              <button type="button" onClick={() => void handleExtend()} disabled={!extendDate || submitting} className="btn-primary px-4 py-2 text-sm rounded-md font-medium disabled:opacity-50">
+              <button type="button" onClick={() => void handleExtend()} disabled={!extendDate || submitting} className="btn-info btn-md disabled:opacity-50">
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin inline mr-1" /> : null}Extend
               </button>
             </div>
@@ -607,10 +602,10 @@ const MyEquipmentPage: React.FC = () => {
               <textarea rows={3} value={retNotes} onChange={(e) => setRetNotes(e.target.value)} className={inputClass} placeholder="Any notes for the quartermaster..." />
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setReturnModal({ open: false, returnType: 'assignment', itemId: '', refId: '', maxQty: 1 })} className="px-4 py-2 text-sm rounded-md border border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary">
+              <button type="button" onClick={() => setReturnModal({ open: false, returnType: 'assignment', itemId: '', refId: '', maxQty: 1 })} className="btn-secondary btn-md">
                 Cancel
               </button>
-              <button type="button" onClick={() => void handleReturnRequest()} disabled={submitting} className="btn-primary px-4 py-2 text-sm rounded-md font-medium disabled:opacity-50">
+              <button type="button" onClick={() => void handleReturnRequest()} disabled={submitting} className="btn-info btn-md disabled:opacity-50">
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin inline mr-1" /> : null}Submit
               </button>
             </div>
@@ -625,7 +620,7 @@ const MyEquipmentPage: React.FC = () => {
 const StatCard: React.FC<{
   icon: React.ReactNode; label: string; value: number; extra?: React.ReactNode;
 }> = ({ icon, label, value, extra }) => (
-  <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-3 flex items-center gap-3">
+  <div className="card-secondary p-3 flex items-center gap-3">
     {icon}
     <div>
       <p className="text-xl font-bold text-theme-text-primary">{value}</p>

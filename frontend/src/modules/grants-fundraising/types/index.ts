@@ -128,39 +128,39 @@ export type PledgeStatus =
 // =============================================================================
 
 export const APPLICATION_STATUS_COLORS: Record<string, string> = {
-  researching: 'bg-gray-100 text-gray-800',
-  preparing: 'bg-blue-100 text-blue-800',
-  internal_review: 'bg-yellow-100 text-yellow-800',
-  submitted: 'bg-indigo-100 text-indigo-800',
-  under_review: 'bg-purple-100 text-purple-800',
-  awarded: 'bg-green-100 text-green-800',
-  denied: 'bg-red-100 text-red-800',
-  active: 'bg-emerald-100 text-emerald-800',
-  reporting: 'bg-orange-100 text-orange-800',
-  closed: 'bg-gray-200 text-gray-600',
+  researching: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
+  preparing: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
+  internal_review: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
+  submitted: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-400',
+  under_review: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400',
+  awarded: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+  denied: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+  active: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400',
+  reporting: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
+  closed: 'bg-gray-200 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
 };
 
 export const CAMPAIGN_STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-800',
-  active: 'bg-green-100 text-green-800',
-  paused: 'bg-yellow-100 text-yellow-800',
-  completed: 'bg-blue-100 text-blue-800',
-  cancelled: 'bg-red-100 text-red-800',
+  draft: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
+  active: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+  paused: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
+  completed: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
+  cancelled: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
 };
 
 export const COMPLIANCE_STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  in_progress: 'bg-blue-100 text-blue-800',
-  completed: 'bg-green-100 text-green-800',
-  overdue: 'bg-red-100 text-red-800',
-  waived: 'bg-gray-100 text-gray-600',
+  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
+  in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
+  completed: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+  overdue: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+  waived: 'bg-gray-100 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
 };
 
 export const PRIORITY_COLORS: Record<string, string> = {
-  low: 'bg-gray-100 text-gray-700',
-  medium: 'bg-blue-100 text-blue-700',
-  high: 'bg-orange-100 text-orange-700',
-  critical: 'bg-red-100 text-red-700',
+  low: 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400',
+  medium: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
+  high: 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
+  critical: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
 };
 
 // =============================================================================

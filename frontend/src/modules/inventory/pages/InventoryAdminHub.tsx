@@ -16,13 +16,14 @@ import {
   ArrowDownToLine,
   Layers,
   RefreshCw,
-  AlertTriangle,
   ClipboardList,
   DollarSign,
   CornerDownLeft,
   Upload,
   MapPin,
-  Barcode,
+  FileX,
+  Truck,
+  AlertTriangle,
   BoxSelect,
   Ruler,
 } from 'lucide-react';
@@ -101,13 +102,13 @@ export const InventoryAdminHub: React.FC = () => {
               <Package className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-theme-text-primary">Inventory Administration</h1>
+              <h1 className="text-2xl font-bold text-theme-text-primary">Inventory Administration</h1>
               <p className="text-sm text-theme-text-muted">Manage equipment, assignments, and compliance</p>
             </div>
           </div>
           <button
             onClick={() => { void loadSummary(); }}
-            className="flex items-center gap-2 px-3 py-2 border border-theme-surface-border rounded-lg text-sm text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+            className="btn-secondary btn-md"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">Refresh</span>
@@ -264,13 +265,13 @@ export const InventoryAdminHub: React.FC = () => {
           />
           <NavCard
             to="/inventory/admin/write-offs"
-            icon={<Barcode className="w-5 h-5" />}
+            icon={<FileX className="w-5 h-5" />}
             title="Write-Offs"
             description="Process loss and damage write-off requests"
           />
           <NavCard
             to="/inventory/admin/reorder"
-            icon={<AlertTriangle className="w-5 h-5" />}
+            icon={<Truck className="w-5 h-5" />}
             title="Reorder Requests"
             description="Track and manage supply reorder requests"
             badge={lowStockAlerts.length > 0 ? lowStockAlerts.length : undefined}

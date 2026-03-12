@@ -45,6 +45,15 @@ export const ElectionDetailPage: React.FC = () => {
   const [isSendingEmails, setIsSendingEmails] = useState(false);
   const [sendEmailError, setSendEmailError] = useState<string | null>(null);
 
+  // Remind Non-Voters state
+  const [isLoadingNonVoters, setIsLoadingNonVoters] = useState(false);
+  const [showRemindModal, setShowRemindModal] = useState(false);
+  const [nonVoterCount, setNonVoterCount] = useState(0);
+  const [nonVoterIds, setNonVoterIds] = useState<string[]>([]);
+  const [remindMessage, setRemindMessage] = useState('');
+  const [isSendingReminders, setIsSendingReminders] = useState(false);
+  const [remindError, setRemindError] = useState<string | null>(null);
+
   // Delete Election state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteReason, setDeleteReason] = useState('');
@@ -213,8 +222,8 @@ export const ElectionDetailPage: React.FC = () => {
       setSendEmailError(null);
 
       const response = await electionService.sendBallotEmail(electionId, {
-        subject: emailSubject ?? undefined,
-        message: emailMessage ?? undefined,
+        subject: emailSubject.trim() || undefined,
+        message: emailMessage.trim() || undefined,
         include_ballot_link: true,
       });
 
@@ -232,6 +241,59 @@ export const ElectionDetailPage: React.FC = () => {
       setSendEmailError(getErrorMessage(err, 'Failed to send ballot emails'));
     } finally {
       setIsSendingEmails(false);
+    }
+  };
+
+  // --- Remind Non-Voters ---
+  const handleOpenRemindModal = async () => {
+    if (!electionId) return;
+
+    try {
+      setIsLoadingNonVoters(true);
+      const data = await electionService.getNonVoters(electionId);
+      setNonVoterCount(data.count);
+      setNonVoterIds(data.non_voters.map((v) => v.id));
+
+      if (data.count === 0) {
+        toast.success('All eligible voters have already voted!');
+        return;
+      }
+
+      setRemindMessage('');
+      setRemindError(null);
+      setShowRemindModal(true);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to load non-voters'));
+    } finally {
+      setIsLoadingNonVoters(false);
+    }
+  };
+
+  const handleSendReminders = async () => {
+    if (!electionId || nonVoterIds.length === 0) return;
+
+    try {
+      setIsSendingReminders(true);
+      setRemindError(null);
+
+      const response = await electionService.sendBallotEmail(electionId, {
+        recipient_user_ids: nonVoterIds,
+        message: remindMessage || 'This is a reminder to cast your vote. The voting window will be closing soon.',
+        include_ballot_link: true,
+      });
+
+      setShowRemindModal(false);
+      setRemindMessage('');
+
+      if (response.failed_count > 0) {
+        toast.success(`Reminders sent to ${response.recipients_count} non-voters (${response.failed_count} failed)`);
+      } else {
+        toast.success(`Reminders sent to ${response.recipients_count} non-voters`);
+      }
+    } catch (err: unknown) {
+      setRemindError(getErrorMessage(err, 'Failed to send reminders'));
+    } finally {
+      setIsSendingReminders(false);
     }
   };
 
@@ -344,15 +406,15 @@ export const ElectionDetailPage: React.FC = () => {
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
       case ElectionStatus.OPEN:
-        return 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400';
+        return 'bg-green-500/10 text-green-700 dark:text-green-400';
       case ElectionStatus.CLOSED:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400';
+        return 'bg-theme-surface-secondary text-theme-text-muted';
       case ElectionStatus.DRAFT:
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400';
+        return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400';
       case ElectionStatus.CANCELLED:
-        return 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400';
+        return 'bg-red-500/10 text-red-700 dark:text-red-400';
       default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400';
+        return 'bg-theme-surface-secondary text-theme-text-muted';
     }
   };
 
@@ -535,6 +597,15 @@ export const ElectionDetailPage: React.FC = () => {
                   >
                     {election.email_sent ? 'Resend Ballot Emails' : 'Send Ballot Emails'}
                   </button>
+                  {election.email_sent && (
+                    <button
+                      onClick={() => { void handleOpenRemindModal(); }}
+                      disabled={isLoadingNonVoters}
+                      className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 disabled:opacity-50"
+                    >
+                      {isLoadingNonVoters ? 'Loading...' : 'Remind Non-Voters'}
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       setNewEndDate(election.end_date);
@@ -587,7 +658,7 @@ export const ElectionDetailPage: React.FC = () => {
                   onClick={() => setShowDeleteModal(true)}
                   className={`px-4 py-2 rounded-md ${
                     isDraft
-                      ? 'bg-gray-600 text-white hover:bg-gray-700 dark:bg-gray-500 dark:hover:bg-gray-400'
+                      ? 'bg-theme-surface-hover text-theme-text-primary hover:bg-theme-surface-secondary'
                       : 'bg-red-800 text-white hover:bg-red-900'
                   }`}
                 >
@@ -983,9 +1054,9 @@ export const ElectionDetailPage: React.FC = () => {
                                 <td className="px-3 py-2 text-xs">{entry.event_type}</td>
                                 <td className="px-3 py-2">
                                   <span className={`text-xs px-2 py-0.5 rounded ${
-                                    entry.severity === 'critical' ? 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400' :
-                                    entry.severity === 'warning' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400' :
-                                    'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
+                                    entry.severity === 'critical' ? 'bg-red-500/10 text-red-700 dark:text-red-400' :
+                                    entry.severity === 'warning' ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400' :
+                                    'bg-theme-surface-secondary text-theme-text-muted'
                                   }`}>
                                     {entry.severity || 'info'}
                                   </span>
@@ -1115,6 +1186,78 @@ export const ElectionDetailPage: React.FC = () => {
         </div>
       )}
 
+      {/* Remind Non-Voters Modal */}
+      {showRemindModal && election && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="remind-modal-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') { setShowRemindModal(false); setRemindError(null); } }}
+        >
+          <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full">
+            <div className="px-6 py-4 border-b border-theme-surface-border">
+              <h3 id="remind-modal-title" className="text-lg font-medium text-theme-text-primary">
+                Remind Non-Voters
+              </h3>
+            </div>
+
+            <div className="px-6 py-4">
+              <div className="mb-4 bg-amber-500/10 border border-amber-500/30 rounded-sm p-3">
+                <p className="text-sm text-amber-300">
+                  {nonVoterCount} eligible voter{nonVoterCount !== 1 ? 's have' : ' has'} not yet voted.
+                  This will resend ballot emails with new voting links to only those members.
+                </p>
+              </div>
+
+              {remindError && (
+                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert">
+                  <p className="text-sm text-red-300">{remindError}</p>
+                </div>
+              )}
+
+              <div>
+                <label htmlFor="remind-message" className="block text-sm font-medium text-theme-text-secondary">
+                  Reminder Message <span className="text-xs text-theme-text-muted">(optional)</span>
+                </label>
+                <textarea
+                  id="remind-message"
+                  value={remindMessage}
+                  onChange={(e) => setRemindMessage(e.target.value)}
+                  rows={3}
+                  placeholder="This is a reminder to cast your vote. The voting window will be closing soon."
+                  aria-label="Reminder message"
+                  className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+                />
+              </div>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowRemindModal(false);
+                    setRemindMessage('');
+                    setRemindError(null);
+                  }}
+                  disabled={isSendingReminders}
+                  className="px-4 py-2 border border-theme-surface-border rounded-md text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { void handleSendReminders(); }}
+                  disabled={isSendingReminders}
+                  className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {isSendingReminders ? 'Sending...' : `Send Reminders (${nonVoterCount})`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete Election Modal */}
       {showDeleteModal && election && (
         <div
@@ -1225,7 +1368,7 @@ export const ElectionDetailPage: React.FC = () => {
                   disabled={isDeleting || (!isDraft && deleteReason.trim().length < 10)}
                   className={`px-4 py-2 text-white rounded-md disabled:opacity-50 ${
                     isDraft
-                      ? 'bg-gray-600 hover:bg-gray-700 dark:bg-gray-500 dark:hover:bg-gray-400'
+                      ? 'bg-theme-surface-hover hover:bg-theme-surface-secondary'
                       : 'bg-red-800 hover:bg-red-900'
                   }`}
                 >
@@ -1487,7 +1630,7 @@ export const ElectionDetailPage: React.FC = () => {
                         )}
 
                         <div className="flex items-center gap-3 p-3 rounded-lg border border-theme-surface-border">
-                          <input type="radio" disabled className="w-4 h-4 text-gray-400" />
+                          <input type="radio" disabled className="w-4 h-4 text-theme-text-muted" />
                           <span className="text-theme-text-muted">Abstain (Do not vote on this item)</span>
                         </div>
                       </div>
@@ -1581,7 +1724,7 @@ export const ElectionDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowPreview(false)}
-                className="px-6 py-2 bg-slate-700 text-white rounded-md hover:bg-slate-800"
+                className="px-6 py-2 bg-theme-surface-secondary text-theme-text-primary border border-theme-surface-border rounded-md hover:bg-theme-surface-hover"
               >
                 Close Preview
               </button>

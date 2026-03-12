@@ -117,7 +117,7 @@ const COMPLIANCE_TASK_TYPE_ICONS: Record<string, React.ReactNode> = {
   audit: <Shield className="h-5 w-5 text-red-500" />,
   equipment_inventory: <ClipboardCheck className="h-5 w-5 text-purple-500" />,
   nfirs_submission: <Send className="h-5 w-5 text-cyan-500" />,
-  closeout_report: <FileText className="h-5 w-5 text-gray-500" />,
+  closeout_report: <FileText className="h-5 w-5 text-theme-text-muted" />,
   other: <Info className="h-5 w-5 text-theme-text-secondary" />,
 };
 
@@ -184,10 +184,10 @@ const Modal: React.FC<ModalProps> = ({ open, onClose, title, children }) => {
 // =============================================================================
 
 const inputClass =
-  'w-full rounded-lg border border-theme-surface-border bg-theme-bg px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-secondary focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500';
+  'w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-secondary focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500';
 
 const selectClass =
-  'w-full rounded-lg border border-theme-surface-border bg-theme-bg px-3 py-2 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500';
+  'w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500';
 
 const labelClass = 'block text-sm font-medium text-theme-text-primary mb-1';
 
@@ -512,13 +512,13 @@ export const GrantDetailPage: React.FC = () => {
                   {application.grantProgramName}
                 </h1>
                 <span
-                  className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${APPLICATION_STATUS_COLORS[application.applicationStatus] ?? 'bg-gray-100 text-gray-800'}`}
+                  className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${APPLICATION_STATUS_COLORS[application.applicationStatus] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
                 >
                   {APPLICATION_STATUS_LABELS[application.applicationStatus] ??
                     application.applicationStatus}
                 </span>
                 <span
-                  className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${PRIORITY_COLORS[application.priority] ?? 'bg-gray-100 text-gray-700'}`}
+                  className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${PRIORITY_COLORS[application.priority] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
                 >
                   {PRIORITY_LABELS[application.priority] ?? application.priority}
                 </span>
@@ -831,7 +831,7 @@ export const GrantDetailPage: React.FC = () => {
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <div className="h-2 w-24 overflow-hidden rounded-full bg-gray-200">
+                                <div className="h-2 w-24 overflow-hidden rounded-full bg-theme-surface-hover">
                                   <div
                                     className={`h-full rounded-full transition-all ${isOver ? 'bg-red-500' : 'bg-green-500'}`}
                                     style={{ width: `${percent}%` }}
@@ -1027,7 +1027,7 @@ export const GrantDetailPage: React.FC = () => {
                             {task.title}
                           </h4>
                           <span
-                            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[task.priority] ?? 'bg-gray-100 text-gray-700'}`}
+                            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[task.priority] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
                           >
                             {PRIORITY_LABELS[task.priority] ?? task.priority}
                           </span>
@@ -1065,7 +1065,7 @@ export const GrantDetailPage: React.FC = () => {
                               e.target.value as ComplianceTaskStatus,
                             )
                           }
-                          className={`rounded-full border-0 px-2.5 py-0.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-red-500 ${COMPLIANCE_STATUS_COLORS[task.status] ?? 'bg-gray-100 text-gray-800'}`}
+                          className={`rounded-full border-0 px-2.5 py-0.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-red-500 ${COMPLIANCE_STATUS_COLORS[task.status] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
                         >
                           {Object.entries(COMPLIANCE_STATUS_LABELS).map(
                             ([value, label]) => (

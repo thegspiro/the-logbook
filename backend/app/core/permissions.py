@@ -195,6 +195,23 @@ SCHEDULING_REPORT = Permission(
     PermissionCategory.SCHEDULING,
 )
 
+# Equipment Checks (under scheduling category)
+EQUIPMENT_CHECK_VIEW = Permission(
+    "equipment_check.view",
+    "View equipment check templates and results",
+    PermissionCategory.SCHEDULING,
+)
+EQUIPMENT_CHECK_MANAGE = Permission(
+    "equipment_check.manage",
+    "Create and edit equipment check templates",
+    PermissionCategory.SCHEDULING,
+)
+EQUIPMENT_CHECK_SUBMIT = Permission(
+    "equipment_check.submit",
+    "Submit equipment checks on shifts",
+    PermissionCategory.SCHEDULING,
+)
+
 # Inventory
 INVENTORY_VIEW = Permission(
     "inventory.view", "View inventory", PermissionCategory.INVENTORY
@@ -451,6 +468,9 @@ ALL_PERMISSIONS: list[Permission] = [
     SCHEDULING_ASSIGN,
     SCHEDULING_SWAP,
     SCHEDULING_REPORT,
+    EQUIPMENT_CHECK_VIEW,
+    EQUIPMENT_CHECK_MANAGE,
+    EQUIPMENT_CHECK_SUBMIT,
     INVENTORY_VIEW,
     INVENTORY_MANAGE,
     MEETINGS_VIEW,
@@ -621,6 +641,8 @@ _LEADERSHIP_VIEW_PERMISSIONS = [
     TRAINING_VIEW_ALL.name,
     COMPLIANCE_VIEW.name,
     SCHEDULING_VIEW.name,
+    EQUIPMENT_CHECK_VIEW.name,
+    EQUIPMENT_CHECK_SUBMIT.name,
     INVENTORY_VIEW.name,
     MEETINGS_VIEW.name,
     ELECTIONS_VIEW.name,
@@ -669,6 +691,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             SCHEDULING_ASSIGN.name,
             SCHEDULING_SWAP.name,
             SCHEDULING_REPORT.name,
+            EQUIPMENT_CHECK_MANAGE.name,
             INVENTORY_MANAGE.name,
             MEETINGS_MANAGE.name,
             ELECTIONS_MANAGE.name,
@@ -718,6 +741,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             SCHEDULING_ASSIGN.name,
             SCHEDULING_SWAP.name,
             SCHEDULING_REPORT.name,
+            EQUIPMENT_CHECK_MANAGE.name,
             INVENTORY_MANAGE.name,
             MEETINGS_MANAGE.name,
             ELECTIONS_MANAGE.name,
@@ -765,6 +789,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             SCHEDULING_ASSIGN.name,
             SCHEDULING_SWAP.name,
             SCHEDULING_REPORT.name,
+            EQUIPMENT_CHECK_MANAGE.name,
             INVENTORY_MANAGE.name,
             MEETINGS_MANAGE.name,
             EVENTS_CREATE.name,
@@ -800,6 +825,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             SCHEDULING_ASSIGN.name,
             SCHEDULING_SWAP.name,
             SCHEDULING_REPORT.name,
+            EQUIPMENT_CHECK_MANAGE.name,
             EVENTS_CREATE.name,
             EVENTS_EDIT.name,
             APPARATUS_EDIT.name,
@@ -817,6 +843,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             SCHEDULING_ASSIGN.name,
             SCHEDULING_SWAP.name,
             SCHEDULING_REPORT.name,
+            EQUIPMENT_CHECK_MANAGE.name,
             EVENTS_CREATE.name,
             EVENTS_EDIT.name,
             APPARATUS_MAINTENANCE.name,
@@ -1001,6 +1028,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             SCHEDULING_ASSIGN.name,
             SCHEDULING_SWAP.name,
             SCHEDULING_REPORT.name,
+            EQUIPMENT_CHECK_MANAGE.name,
             INVENTORY_VIEW.name,
             INVENTORY_MANAGE.name,
             MEETINGS_VIEW.name,
@@ -1426,6 +1454,9 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             SCHEDULING_VIEW.name,
             SCHEDULING_MANAGE.name,
             SCHEDULING_ASSIGN.name,
+            EQUIPMENT_CHECK_VIEW.name,
+            EQUIPMENT_CHECK_MANAGE.name,
+            EQUIPMENT_CHECK_SUBMIT.name,
             EVENTS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
         ],

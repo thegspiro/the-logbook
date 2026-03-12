@@ -42,6 +42,7 @@ interface FormData {
   station: string;
   hire_date: string;
   membership_type: string;
+  compliance_exempt: boolean;
   email: string;
   phone: string;
   mobile: string;
@@ -53,7 +54,7 @@ interface FormData {
   emergency_contacts: EmergencyContact[];
 }
 
-function buildInitialForm(user: UserWithRoles & { personal_email?: string; membership_type?: string }): FormData {
+function buildInitialForm(user: UserWithRoles & { personal_email?: string; membership_type?: string; compliance_exempt?: boolean }): FormData {
   return {
     first_name: user.first_name || '',
     middle_name: user.middle_name || '',
@@ -65,6 +66,7 @@ function buildInitialForm(user: UserWithRoles & { personal_email?: string; membe
     station: user.station || '',
     hire_date: user.hire_date || '',
     membership_type: user.membership_type || '',
+    compliance_exempt: user.compliance_exempt || false,
     email: user.email || '',
     phone: user.phone || '',
     mobile: user.mobile || '',
@@ -94,7 +96,7 @@ export const MemberAdminEditPage: React.FC = () => {
   const navigate = useNavigate();
   const { rankOptions } = useRanks();
 
-  const [user, setUser] = useState<(UserWithRoles & { personal_email?: string; membership_type?: string }) | null>(null);
+  const [user, setUser] = useState<(UserWithRoles & { personal_email?: string; membership_type?: string; compliance_exempt?: boolean }) | null>(null);
   const [form, setForm] = useState<FormData | null>(null);
   const [initialForm, setInitialForm] = useState<FormData | null>(null);
   const [availableStations, setAvailableStations] = useState<Location[]>([]);
@@ -111,7 +113,7 @@ export const MemberAdminEditPage: React.FC = () => {
       setError(null);
       const userData = await userService.getUserWithRoles(userId);
       // The API may return personal_email and membership_type even though UserWithRoles doesn't declare them
-      const extendedUser = userData as UserWithRoles & { personal_email?: string; membership_type?: string };
+      const extendedUser = userData as UserWithRoles & { personal_email?: string; membership_type?: string; compliance_exempt?: boolean };
       setUser(extendedUser);
       const formData = buildInitialForm(extendedUser);
       setForm(formData);
@@ -209,7 +211,10 @@ export const MemberAdminEditPage: React.FC = () => {
       // Check if membership_type changed
       const membershipTypeChanged = form.membership_type !== initialForm.membership_type;
 
-      if (!hasProfileChanges && !membershipTypeChanged) {
+      // Check if compliance_exempt changed
+      const complianceExemptChanged = form.compliance_exempt !== initialForm.compliance_exempt;
+
+      if (!hasProfileChanges && !membershipTypeChanged && !complianceExemptChanged) {
         setSuccessMessage('No changes to save.');
         return;
       }
@@ -224,9 +229,14 @@ export const MemberAdminEditPage: React.FC = () => {
         await userService.changeMembershipType(userId, form.membership_type);
       }
 
+      // Save compliance exemption separately if changed
+      if (complianceExemptChanged) {
+        await userService.setComplianceExemption(userId, form.compliance_exempt);
+      }
+
       // Re-fetch user to get updated data
       const updatedUser = await userService.getUserWithRoles(userId);
-      const extendedUser = updatedUser as UserWithRoles & { personal_email?: string; membership_type?: string };
+      const extendedUser = updatedUser as UserWithRoles & { personal_email?: string; membership_type?: string; compliance_exempt?: boolean };
       setUser(extendedUser);
       const newFormData = buildInitialForm(extendedUser);
       setForm(newFormData);
@@ -474,6 +484,35 @@ export const MemberAdminEditPage: React.FC = () => {
                   ))}
                 </select>
               </div>
+            </div>
+
+            {/* Compliance Exemption */}
+            <div className="mt-4 p-4 rounded-lg border border-theme-surface-border bg-theme-surface-secondary">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.compliance_exempt}
+                  onChange={(e) => {
+                    if (!form) return;
+                    setSuccessMessage(null);
+                    setForm((prev) => prev ? { ...prev, compliance_exempt: e.target.checked } : prev);
+                  }}
+                  className="form-checkbox mt-0.5 border-theme-surface-border"
+                  disabled={saving}
+                />
+                <div>
+                  <span className="text-sm font-medium text-theme-text-primary">
+                    Exempt from Compliance
+                  </span>
+                  <p className="text-xs text-theme-text-muted mt-1">
+                    When enabled, this member will not be evaluated against training
+                    requirements, shift minimums, admin-hour targets, or certificate
+                    maintenance. They will not appear as non-compliant in reports or
+                    dashboards. Use for retired, honorary, or other members not
+                    required to maintain compliance.
+                  </p>
+                </div>
+              </label>
             </div>
           </div>
 

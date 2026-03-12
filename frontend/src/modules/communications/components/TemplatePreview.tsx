@@ -109,7 +109,7 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
           value={selectedMemberId}
           onChange={(e) => handleMemberChange(e.target.value)}
           disabled={isLoadingMembers}
-          className="flex-1 rounded-md border border-theme-surface-border bg-theme-surface px-2 py-1.5 text-xs text-theme-text-primary focus:border-blue-500 focus:outline-hidden"
+          className="flex-1 rounded-md border border-theme-surface-border bg-theme-surface px-2 py-1.5 text-xs text-theme-text-primary focus:border-theme-focus-ring focus:outline-hidden"
         >
           <option value="">Sample data (default)</option>
           {members.map((m) => {
@@ -137,7 +137,7 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
 
       {/* Email body preview */}
       <div
-        className={`bg-white rounded-lg border border-theme-surface-border overflow-hidden transition-all mx-auto ${
+        className={`bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden transition-all mx-auto ${
           viewport === 'mobile' ? 'max-w-[375px]' : 'w-full'
         }`}
       >
@@ -145,7 +145,7 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
           <div className="flex items-center justify-center h-[600px]">
             <div className="text-center">
               <Loader2 className="w-8 h-8 text-orange-500 animate-spin mx-auto mb-2" />
-              <p className="text-slate-500 text-sm">Loading preview...</p>
+              <p className="text-theme-text-muted text-sm">Loading preview...</p>
             </div>
           </div>
         ) : preview ? (
@@ -159,8 +159,8 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
         ) : (
           <div className="flex items-center justify-center h-[600px]">
             <div className="text-center">
-              <Eye className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-              <p className="text-slate-500 text-sm">
+              <Eye className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
+              <p className="text-theme-text-muted text-sm">
                 Click "Refresh" to generate a preview with sample data
               </p>
             </div>

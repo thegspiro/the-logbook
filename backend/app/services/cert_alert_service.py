@@ -34,7 +34,7 @@ from app.core.constants import (
 from app.models.notification import NotificationCategory, NotificationChannel
 from app.models.training import TrainingRecord, TrainingStatus
 from app.models.user import Organization, User, UserStatus
-from app.services.email_service import EmailService
+from app.services.email_service import EmailService, build_email_logo_html
 from app.services.notifications_service import NotificationsService
 
 # Alert tiers: (days_before, field_name, cc_officers)
@@ -192,6 +192,8 @@ class CertAlertService:
             }
 
         email_service = EmailService(org)
+        logo_html = build_email_logo_html(org)
+
         training_roles = config.get(
             "training_officer_roles", DEFAULT_TRAINING_OFFICER_ROLES
         )
@@ -299,6 +301,7 @@ class CertAlertService:
 
                         html_body = f"""
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    {logo_html}
     <div style="background-color: {'#dc2626' if days_until <= 7 else '#f59e0b'}; color: white; padding: 20px; text-align: center;">
         <h2>Certification Expiration {'Warning' if days_until <= 30 else 'Notice'}</h2>
     </div>
@@ -418,6 +421,7 @@ class CertAlertService:
 
                     html_body = f"""
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    {logo_html}
     <div style="background-color: #7f1d1d; color: white; padding: 20px; text-align: center;">
         <h2>Certification EXPIRED</h2>
     </div>

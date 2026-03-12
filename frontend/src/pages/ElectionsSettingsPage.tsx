@@ -35,7 +35,7 @@ const QUORUM_TYPE_OPTIONS = [
 ] as const;
 
 const inputClass =
-  'block w-full rounded-md border border-theme-surface-border bg-theme-surface-secondary px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:border-red-500 focus:outline-hidden focus:ring-1 focus:ring-red-500';
+  'block w-full rounded-md border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:border-red-500 focus:outline-hidden focus:ring-1 focus:ring-red-500';
 const selectClass = inputClass;
 const labelClass = 'block text-sm font-medium text-theme-text-secondary mb-1';
 
@@ -224,7 +224,7 @@ export const ElectionsSettingsPage: React.FC = () => {
                 id="default_anonymous"
                 checked={settings.default_anonymous_voting ?? true}
                 onChange={(e) => updateField('default_anonymous_voting', e.target.checked)}
-                className="h-4 w-4 text-red-600 rounded border-gray-300"
+                className="h-4 w-4 text-red-600 rounded border-theme-input-border"
               />
               <label htmlFor="default_anonymous" className="text-sm text-theme-text-secondary">
                 Anonymous voting by default
@@ -237,7 +237,7 @@ export const ElectionsSettingsPage: React.FC = () => {
                 id="default_write_ins"
                 checked={settings.default_allow_write_ins ?? false}
                 onChange={(e) => updateField('default_allow_write_ins', e.target.checked)}
-                className="h-4 w-4 text-red-600 rounded border-gray-300"
+                className="h-4 w-4 text-red-600 rounded border-theme-input-border"
               />
               <label htmlFor="default_write_ins" className="text-sm text-theme-text-secondary">
                 Allow write-in candidates by default
@@ -262,7 +262,7 @@ export const ElectionsSettingsPage: React.FC = () => {
                 id="proxy_voting_enabled"
                 checked={settings.proxy_voting_enabled ?? false}
                 onChange={(e) => updateField('proxy_voting_enabled', e.target.checked)}
-                className="h-4 w-4 text-red-600 rounded border-gray-300"
+                className="h-4 w-4 text-red-600 rounded border-theme-input-border"
               />
               <label htmlFor="proxy_voting_enabled" className="text-sm text-theme-text-secondary">
                 Allow proxy voting

@@ -592,7 +592,7 @@ const CriterionResultDisplay: React.FC<{
       );
     }
     return (
-      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">Not evaluated</span>
+      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-theme-surface-secondary text-theme-text-muted">Not evaluated</span>
     );
   };
 
@@ -693,7 +693,7 @@ const ReviewSection: React.FC<{
               <span className="text-red-600 font-medium">{failCount} failed</span>
             )}
             {nonStatementCriteria.length - passCount - failCount > 0 && (
-              <span className="text-gray-500 font-medium">
+              <span className="text-theme-text-muted font-medium">
                 {nonStatementCriteria.length - passCount - failCount} unevaluated
               </span>
             )}
@@ -773,7 +773,7 @@ const ReadOnlySectionView: React.FC<{
               <span className="text-red-600 font-medium">{failCount} failed</span>
             )}
             {nonStatementCriteria.length - passCount - failCount > 0 && (
-              <span className="text-gray-500 font-medium">
+              <span className="text-theme-text-muted font-medium">
                 {nonStatementCriteria.length - passCount - failCount} unevaluated
               </span>
             )}

@@ -161,7 +161,7 @@ async def check_and_auto_archive(
         org = org_result.scalar_one_or_none()
         org_name = org.name if org else "Department"
 
-        from app.services.email_service import EmailService
+        from app.services.email_service import EmailService, build_email_logo_html
 
         email_svc = EmailService(org)
 
@@ -186,12 +186,16 @@ async def check_and_auto_archive(
                     admin_emails.append(u.email)
 
         if admin_emails:
+            _logo = build_email_logo_html(org)
             subject = f"Member Archived: {member.full_name} — {org_name}"
             html_body = (
+                f'<div style="font-family:Arial,sans-serif;max-width:600px;">'
+                f"{_logo}"
                 f"<p><strong>{member.full_name}</strong> has been automatically archived.</p>"
                 f"<p>All department property has been returned. "
                 f"Previous status: {previous_status.replace('_', ' ').title()}.</p>"
                 f"<p>The member's profile remains accessible for legal requests or future reactivation.</p>"
+                f"</div>"
             )
             text_body = (
                 f"Member Archived: {member.full_name}\n\n"

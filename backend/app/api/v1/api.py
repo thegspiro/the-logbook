@@ -17,6 +17,7 @@ from app.api.v1.endpoints import (
     documents,
     elections,
     email_templates,
+    equipment_check,
     error_logs,
     event_requests,
     events,
@@ -35,6 +36,7 @@ from app.api.v1.endpoints import (
     member_leaves,
     member_status,
     membership_pipeline,
+    message_history,
     messages,
     minutes,
     notifications,
@@ -109,6 +111,9 @@ api_router.include_router(
 api_router.include_router(
     email_templates.router, prefix="/email-templates", tags=["email-templates"]
 )
+api_router.include_router(
+    message_history.router, prefix="/message-history", tags=["message-history"]
+)
 api_router.include_router(member_status.router, prefix="/users", tags=["member-status"])
 api_router.include_router(
     membership_pipeline.router,
@@ -119,6 +124,11 @@ api_router.include_router(documents.router, prefix="/documents", tags=["document
 api_router.include_router(meetings.router, prefix="/meetings", tags=["meetings"])
 api_router.include_router(minutes.router, prefix="/minutes-records", tags=["minutes"])
 api_router.include_router(scheduling.router, prefix="/scheduling", tags=["scheduling"])
+api_router.include_router(
+    equipment_check.router,
+    prefix="/equipment-checks",
+    tags=["equipment-checks"],
+)
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(
     notifications.router, prefix="/notifications", tags=["notifications"]
@@ -205,5 +215,6 @@ async def api_root():
             "prospective_members": "/api/v1/prospective-members",
             "public_portal": "/api/v1/public-portal",
             "admin_hours": "/api/v1/admin-hours",
+            "message_history": "/api/v1/message-history",
         },
     }

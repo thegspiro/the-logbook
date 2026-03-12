@@ -145,3 +145,43 @@ class ScheduledEmailResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+# --- Message History schemas ---
+
+
+class MessageHistoryResponse(BaseModel):
+    """Response schema for a sent message log entry"""
+
+    id: str
+    organization_id: Optional[str] = None
+    to_email: str
+    cc_emails: Optional[List[str]] = None
+    bcc_emails: Optional[List[str]] = None
+    subject: str
+    template_type: Optional[str] = None
+    status: str
+    error_message: Optional[str] = None
+    recipient_count: int = 1
+    sent_at: datetime
+    sent_by: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class MessageHistoryListResponse(BaseModel):
+    """Paginated response for message history"""
+
+    items: List[MessageHistoryResponse]
+    total: int
+    skip: int
+    limit: int
+
+
+class SendTestEmailRequest(BaseModel):
+    """Request schema for sending a test email"""
+
+    to_email: str = Field(..., description="Recipient email address")
+    template_id: Optional[str] = Field(
+        None, description="Optional template ID to use for the test"
+    )

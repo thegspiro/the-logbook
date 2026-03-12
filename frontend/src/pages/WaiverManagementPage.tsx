@@ -49,7 +49,7 @@ function getWaiverTypeLabel(type: string): string {
 
 function getStatusBadge(waiver: { start_date: string; end_date: string | null; active: boolean }) {
   if (!waiver.active) {
-    return { label: 'Inactive', color: 'bg-gray-500/20 text-gray-400' };
+    return { label: 'Inactive', color: 'bg-theme-surface-secondary text-theme-text-muted' };
   }
   const today = new Date().toISOString().split('T')[0] ?? '';
   if (waiver.start_date > today) {
@@ -471,7 +471,7 @@ export const WaiverManagementPage: React.FC = () => {
                   <select
                     value={formData.user_id}
                     onChange={(e) => setFormData({ ...formData, user_id: e.target.value })}
-                    className="w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                    className="w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                     required
                   >
                     <option value="">Select a member...</option>
@@ -489,7 +489,7 @@ export const WaiverManagementPage: React.FC = () => {
                   <select
                     value={formData.waiver_type}
                     onChange={(e) => setFormData({ ...formData, waiver_type: e.target.value })}
-                    className="w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                    className="w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                   >
                     {WAIVER_TYPES.map((t) => (
                       <option key={t.value} value={t.value}>{t.label}</option>
@@ -538,7 +538,7 @@ export const WaiverManagementPage: React.FC = () => {
                         type="date"
                         value={formData.start_date}
                         onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                        className="w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                        className="w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                         required
                       />
                     </div>
@@ -549,7 +549,7 @@ export const WaiverManagementPage: React.FC = () => {
                           type="date"
                           value={formData.end_date}
                           onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                          className="w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                          className="w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                           required
                         />
                       </div>
@@ -580,7 +580,7 @@ export const WaiverManagementPage: React.FC = () => {
                     value={formData.reason}
                     onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
                     rows={3}
-                    className="w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                    className="w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                     placeholder="Reason for the waiver..."
                   />
                 </div>

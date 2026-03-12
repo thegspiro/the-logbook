@@ -9,17 +9,15 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, FileX, RefreshCw, Check, XCircle, Loader2 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import type { WriteOffRequestItem } from '../types';
+import { REQUEST_STATUS_BADGES } from '../types';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { formatDate } from '../../../utils/dateFormatting';
 import { Modal } from '../../../components/Modal';
 import toast from 'react-hot-toast';
 
-const STATUS_BADGES: Record<string, string> = {
-  pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
-  approved: 'bg-green-500/10 text-green-700 dark:text-green-400',
-  denied: 'bg-red-500/10 text-red-700 dark:text-red-400',
-};
-
 const WriteOffsPage: React.FC = () => {
+  const tz = useTimezone();
   const [writeOffs, setWriteOffs] = useState<WriteOffRequestItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('pending');
@@ -62,9 +60,9 @@ const WriteOffsPage: React.FC = () => {
     }
   };
 
-  const formatDate = (dateStr?: string) => {
+  const fmtDate = (dateStr?: string) => {
     if (!dateStr) return '--';
-    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return formatDate(dateStr, tz);
   };
 
   return (
@@ -90,7 +88,7 @@ const WriteOffsPage: React.FC = () => {
           </div>
           <button
             onClick={() => { void loadWriteOffs(); }}
-            className="flex items-center gap-2 px-3 py-2 border border-theme-surface-border rounded-lg text-sm text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+            className="btn-secondary btn-md"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -130,12 +128,12 @@ const WriteOffsPage: React.FC = () => {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="text-sm font-semibold text-theme-text-primary">{wo.item_name}</h3>
-                      <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${STATUS_BADGES[wo.status] ?? 'bg-theme-surface-secondary text-theme-text-muted'}`}>
+                      <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${REQUEST_STATUS_BADGES[wo.status] ?? 'bg-theme-surface-secondary text-theme-text-muted'}`}>
                         {wo.status}
                       </span>
                     </div>
                     <p className="text-xs text-theme-text-muted">
-                      Reason: {wo.reason} &middot; Requested by {wo.requester_name ?? 'Unknown'} on {formatDate(wo.created_at)}
+                      Reason: {wo.reason} &middot; Requested by {wo.requester_name ?? 'Unknown'} on {fmtDate(wo.created_at)}
                     </p>
                     {wo.description && (
                       <p className="text-xs text-theme-text-secondary mt-1">{wo.description}</p>
@@ -208,7 +206,7 @@ const WriteOffsPage: React.FC = () => {
                 <button
                   onClick={() => { void handleReview('denied'); }}
                   disabled={submitting}
-                  className="flex items-center gap-1.5 px-4 py-2 border border-red-500/30 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                  className="btn-primary btn-md flex items-center gap-1.5 disabled:opacity-50"
                 >
                   <XCircle className="w-4 h-4" />
                   Deny
@@ -216,7 +214,7 @@ const WriteOffsPage: React.FC = () => {
                 <button
                   onClick={() => { void handleReview('approved'); }}
                   disabled={submitting}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                  className="btn-success btn-md flex items-center gap-1.5 disabled:opacity-50"
                 >
                   <Check className="w-4 h-4" />
                   Approve

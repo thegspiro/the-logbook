@@ -28,15 +28,15 @@ import type { SkillTemplateListItem, SkillTestListItem } from '../types/skillsTe
 
 const ResultBadge: React.FC<{ result: string }> = ({ result }) => {
   const styles: Record<string, string> = {
-    pass: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-    fail: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
-    incomplete: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300',
-    in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-    completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+    pass: 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400',
+    fail: 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400',
+    incomplete: 'bg-theme-surface-secondary text-theme-text-primary',
+    in_progress: 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
+    completed: 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400',
   };
 
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[result] ?? styles['incomplete']}`}>
+    <span role="status" className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[result] ?? styles['incomplete']}`}>
       {result.replace('_', ' ')}
     </span>
   );
@@ -61,12 +61,12 @@ const TemplateCard: React.FC<{
         <div className="flex items-center gap-3 mt-3 text-xs text-theme-text-muted">
           {template.category && (
             <span className="inline-flex items-center gap-1">
-              <FileText className="w-3 h-3" />
+              <FileText className="w-3 h-3" aria-hidden="true" />
               {template.category}
             </span>
           )}
           <span className="inline-flex items-center gap-1">
-            <Layers className="w-3 h-3" />
+            <Layers className="w-3 h-3" aria-hidden="true" />
             {template.section_count} section{template.section_count !== 1 ? 's' : ''}
           </span>
           <span>
@@ -209,7 +209,7 @@ export const SkillsTestingPage: React.FC = () => {
 
         {/* Search */}
         <div className="relative mb-6">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" aria-hidden="true" />
           <input
             type="text"
             placeholder={activeTab === 'available' ? 'Search available tests...' : 'Search your results...'}
@@ -223,8 +223,9 @@ export const SkillsTestingPage: React.FC = () => {
         {activeTab === 'available' && (
           <>
             {templatesLoading ? (
-              <div className="flex justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500" />
+              <div className="flex justify-center py-12" role="status">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500" aria-hidden="true" />
+                <span className="sr-only">Loading...</span>
               </div>
             ) : filteredTemplates.length === 0 ? (
               <div className="text-center py-12 bg-theme-surface rounded-lg border border-theme-surface-border">
@@ -254,8 +255,9 @@ export const SkillsTestingPage: React.FC = () => {
         {activeTab === 'history' && (
           <>
             {testsLoading ? (
-              <div className="flex justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500" />
+              <div className="flex justify-center py-12" role="status">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500" aria-hidden="true" />
+                <span className="sr-only">Loading...</span>
               </div>
             ) : filteredTests.length === 0 ? (
               <div className="text-center py-12 bg-theme-surface rounded-lg border border-theme-surface-border">

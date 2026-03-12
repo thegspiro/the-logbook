@@ -21,6 +21,41 @@ from app.core.config import settings
 from app.models.user import Organization
 
 
+def build_email_logo_img(organization: Optional[Organization]) -> str:
+    """Build a bare <img> tag for the org logo, or empty string.
+
+    Use this when inserting into a template that already provides its own
+    wrapper element (e.g. ``<div class="logo">{{organization_logo_img}}</div>``).
+    """
+    if not organization:
+        return ""
+    logo_url = getattr(organization, "logo", None) or ""
+    if not logo_url:
+        return ""
+    org_name = getattr(organization, "name", "Organization")
+    safe_url = _html.escape(str(logo_url))
+    safe_name = _html.escape(str(org_name))
+    return (
+        f'<img src="{safe_url}" alt="{safe_name}" '
+        f'style="max-height:80px;max-width:200px;" />'
+    )
+
+
+def build_email_logo_html(organization: Optional[Organization]) -> str:
+    """Build an <img> tag (inside a centered div) for the org logo.
+
+    Returns an empty string when the organization has no logo configured.
+    Use this in inline HTML emails where no wrapper element exists.
+    """
+    img = build_email_logo_img(organization)
+    if not img:
+        return ""
+    return (
+        f'<div style="text-align:center;padding:16px 0;">'
+        f'{img}</div>'
+    )
+
+
 class EmailService:
     """Service for sending emails"""
 
@@ -38,6 +73,14 @@ class EmailService:
     def _esc(value: str) -> str:
         """HTML-escape a string for safe insertion into email HTML bodies."""
         return _html.escape(str(value)) if value else ""
+
+    def _build_logo_img(self) -> str:
+        """Build an <img> tag for the organization logo, or empty string.
+
+        Returns the bare <img> tag (no wrapper div) for use in template
+        variable substitution where the template itself provides the wrapper.
+        """
+        return build_email_logo_img(self.organization)
 
     def _format_local_dt(self, dt: datetime, fmt: str = "%B %d, %Y at %I:%M %p") -> str:
         """Format a datetime in the organization's local timezone."""
@@ -212,6 +255,10 @@ class EmailService:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         positions: Optional[List[str]] = None,
+        ballot_items_html: str = "",
+        ballot_items_text: str = "",
+        admin_contact_name: str = "",
+        admin_contact_email: str = "",
         db: Any = None,
         organization_id: Optional[str] = None,
     ) -> bool:
@@ -229,6 +276,10 @@ class EmailService:
             start_date: When voting opens (UTC)
             end_date: When voting closes (UTC)
             positions: List of positions being voted on
+            ballot_items_html: HTML list of ballot items this voter is eligible for
+            ballot_items_text: Plain-text list of ballot items
+            admin_contact_name: Election administrator's display name
+            admin_contact_email: Election administrator's email address
             db: Optional async database session (for loading templates)
             organization_id: Optional org ID (for loading templates)
 
@@ -251,6 +302,10 @@ class EmailService:
             "voting_opens": self._format_local_dt(start_date) if start_date else "",
             "voting_closes": self._format_local_dt(end_date) if end_date else "",
             "positions": ", ".join(positions) if positions else "",
+            "ballot_items_html": ballot_items_html,
+            "ballot_items_text": ballot_items_text,
+            "admin_contact_name": admin_contact_name,
+            "admin_contact_email": admin_contact_email,
             "organization_name": org_name,
             "organization_logo": org_logo,
         }
@@ -289,16 +344,15 @@ class EmailService:
                 DEFAULT_CSS,
             )
 
-            # Build logo img tag for inline fallback
-            logo_img = ""
-            if org_logo:
-                logo_img = f'<img src="{self._esc(org_logo)}" alt="Logo" style="max-height:80px;max-width:200px;" />'
-            context["organization_logo_img"] = logo_img
+            context["organization_logo_img"] = self._build_logo_img()
+            _raw_html_vars = {"organization_logo_img", "ballot_items_html"}
 
             def _replace(text: str) -> str:
                 def replacer(match):
                     var = match.group(1).strip()
                     value = str(context.get(var, match.group(0)))
+                    if var in _raw_html_vars:
+                        return value
                     return _html.escape(value)
 
                 return re.sub(r"\{\{(\s*\w+\s*)\}\}", replacer, text)
@@ -392,6 +446,7 @@ class EmailService:
                 DEFAULT_TRAINING_APPROVAL_TEXT,
             )
 
+            context["organization_logo_img"] = self._build_logo_img()
             subject = DEFAULT_TRAINING_APPROVAL_SUBJECT
             rendered_html = DEFAULT_TRAINING_APPROVAL_HTML
             rendered_text = DEFAULT_TRAINING_APPROVAL_TEXT
@@ -501,10 +556,15 @@ class EmailService:
                 DEFAULT_WELCOME_TEXT,
             )
 
+            context["organization_logo_img"] = self._build_logo_img()
+            _raw_html_vars = {"organization_logo_img"}
+
             def _replace(text: str) -> str:
                 def replacer(match):
                     var = match.group(1).strip()
                     value = str(context.get(var, match.group(0)))
+                    if var in _raw_html_vars:
+                        return value
                     return _html.escape(value)
 
                 return re.sub(r"\{\{(\s*\w+\s*)\}\}", replacer, text)
@@ -598,10 +658,15 @@ class EmailService:
                 DEFAULT_PASSWORD_RESET_TEXT,
             )
 
+            context["organization_logo_img"] = self._build_logo_img()
+            _raw_html_vars = {"organization_logo_img"}
+
             def _replace(text: str) -> str:
                 def replacer(match):
                     var = match.group(1).strip()
                     value = str(context.get(var, match.group(0)))
+                    if var in _raw_html_vars:
+                        return value
                     return _html.escape(value)
 
                 return re.sub(r"\{\{(\s*\w+\s*)\}\}", replacer, text)
@@ -689,6 +754,7 @@ class EmailService:
                 DEFAULT_IT_PASSWORD_NOTIFICATION_TEXT,
             )
 
+            context["organization_logo_img"] = self._build_logo_img()
             subject = DEFAULT_IT_PASSWORD_NOTIFICATION_SUBJECT
             rendered_html = DEFAULT_IT_PASSWORD_NOTIFICATION_HTML
             rendered_text = DEFAULT_IT_PASSWORD_NOTIFICATION_TEXT
@@ -788,6 +854,7 @@ class EmailService:
                 DEFAULT_EVENT_REMINDER_TEXT,
             )
 
+            context["organization_logo_img"] = self._build_logo_img()
             subject = DEFAULT_EVENT_REMINDER_SUBJECT
             rendered_html = DEFAULT_EVENT_REMINDER_HTML
             rendered_text = DEFAULT_EVENT_REMINDER_TEXT
@@ -880,6 +947,7 @@ class EmailService:
                 DEFAULT_INACTIVITY_WARNING_TEXT,
             )
 
+            context["organization_logo_img"] = self._build_logo_img()
             subject = DEFAULT_INACTIVITY_WARNING_SUBJECT
             rendered_html = DEFAULT_INACTIVITY_WARNING_HTML
             rendered_text = DEFAULT_INACTIVITY_WARNING_TEXT
@@ -962,6 +1030,7 @@ class EmailService:
                 DEFAULT_DUPLICATE_APPLICATION_TEXT,
             )
 
+            context["organization_logo_img"] = self._build_logo_img()
             subject = DEFAULT_DUPLICATE_APPLICATION_SUBJECT
             rendered_html = DEFAULT_DUPLICATE_APPLICATION_HTML
             rendered_text = DEFAULT_DUPLICATE_APPLICATION_TEXT

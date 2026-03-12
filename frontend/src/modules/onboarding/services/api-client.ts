@@ -25,10 +25,11 @@ interface RateLimitError {
 
 interface HealthStatus {
   status: 'healthy' | 'degraded' | 'unhealthy';
-  version: string;
-  environment: string;
-  timestamp: string;
-  checks: {
+  ready?: boolean | undefined;
+  version?: string | undefined;
+  environment?: string | undefined;
+  timestamp?: string | undefined;
+  checks?: {
     database: string;
     redis: string;
     configuration?: string | undefined;
@@ -38,7 +39,7 @@ interface HealthStatus {
       critical_issues?: number | undefined;
       warnings?: number | undefined;
     } | undefined;
-  };
+  } | undefined;
   warnings?: string[] | undefined;
   schema_error?: string | undefined;
   startup?: {

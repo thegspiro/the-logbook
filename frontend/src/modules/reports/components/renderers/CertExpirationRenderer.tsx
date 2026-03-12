@@ -16,7 +16,7 @@ const STATUS_COLORS: Record<string, string> = {
   expired: 'bg-red-500/20 text-red-300',
   expiring_soon: 'bg-yellow-500/20 text-yellow-300',
   valid: 'bg-green-500/20 text-green-300',
-  no_expiry: 'bg-gray-500/20 text-gray-300',
+  no_expiry: 'bg-theme-surface-secondary text-theme-text-muted',
 };
 
 const STATUS_LABELS: Record<string, string> = {

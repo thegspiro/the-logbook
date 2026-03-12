@@ -29,6 +29,7 @@ import {
   ArrowLeft,
   BarChart3,
 } from 'lucide-react';
+import { EmptyState } from '../components/ux';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuthStore } from '../stores/authStore';
 import {
@@ -559,8 +560,8 @@ const FormsPage: React.FC = () => {
     switch (s) {
       case FormStatus.PUBLISHED: return 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30';
       case FormStatus.DRAFT: return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30';
-      case FormStatus.ARCHIVED: return 'bg-slate-500/10 text-theme-text-muted border-slate-500/30';
-      default: return 'bg-slate-500/10 text-theme-text-muted border-slate-500/30';
+      case FormStatus.ARCHIVED: return 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border';
+      default: return 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border';
     }
   };
 
@@ -570,8 +571,8 @@ const FormsPage: React.FC = () => {
         {/* Page Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-3">
-            <div className="bg-pink-600 rounded-lg p-2">
-              <FormInput className="w-6 h-6 text-theme-text-primary" aria-hidden="true" />
+            <div className="bg-red-600 rounded-lg p-2">
+              <FormInput className="w-6 h-6 text-white" aria-hidden="true" />
             </div>
             <div>
               <h1 className="text-theme-text-primary text-2xl font-bold">Custom Forms</h1>
@@ -591,7 +592,7 @@ const FormsPage: React.FC = () => {
             {canManage && (
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="flex items-center space-x-2 px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg transition-colors"
+                className="btn-primary inline-flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" aria-hidden="true" />
                 <span>Create Form</span>
@@ -621,7 +622,7 @@ const FormsPage: React.FC = () => {
             </div>
             <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Submissions This Month</p>
-              <p className="text-pink-700 dark:text-pink-400 text-2xl font-bold mt-1">{summary.submissions_this_month}</p>
+              <p className="text-red-700 dark:text-red-400 text-2xl font-bold mt-1">{summary.submissions_this_month}</p>
             </div>
           </div>
         )}
@@ -646,7 +647,7 @@ const FormsPage: React.FC = () => {
             role="tab"
             aria-selected={activeTab === 'forms'}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'forms' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+              activeTab === 'forms' ? 'bg-red-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
             }`}
           >
             My Forms
@@ -656,7 +657,7 @@ const FormsPage: React.FC = () => {
             role="tab"
             aria-selected={activeTab === 'templates'}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'templates' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+              activeTab === 'templates' ? 'bg-red-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
             }`}
           >
             Starter Templates
@@ -666,7 +667,7 @@ const FormsPage: React.FC = () => {
             role="tab"
             aria-selected={activeTab === 'submissions'}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'submissions' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+              activeTab === 'submissions' ? 'bg-red-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
             }`}
           >
             Submissions
@@ -685,7 +686,7 @@ const FormsPage: React.FC = () => {
                 placeholder="Search forms..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="form-input focus:ring-pink-500 pl-10 placeholder-theme-text-muted pr-4"
+                className="form-input pl-10 placeholder-theme-text-muted pr-4"
               />
             </div>
             <div className="flex items-center space-x-2">
@@ -695,7 +696,7 @@ const FormsPage: React.FC = () => {
                 id="forms-category-filter"
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value as FormCategory)}
-                className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-pink-500"
+                className="form-input"
               >
                 <option value="all">All Categories</option>
                 <option value="Safety">Safety</option>
@@ -716,43 +717,20 @@ const FormsPage: React.FC = () => {
                 <p className="text-theme-text-secondary" role="status" aria-live="polite">Loading forms...</p>
               </div>
             ) : forms.length === 0 ? (
-              <div className="card p-12 text-center">
-                <FormInput className="w-16 h-16 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
-                <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Custom Forms Yet</h3>
-                <p className="text-theme-text-secondary mb-2">
-                  Build custom forms for incident reports, equipment inspections, public signup pages, and more.
-                </p>
-                <p className="text-theme-text-muted text-sm mb-6">
-                  Start from a template for a quick setup, or create a blank form from scratch.
-                </p>
-                {canManage && (
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="flex items-center justify-center space-x-3">
-                      <button
-                        onClick={() => setActiveTab('templates')}
-                        className="px-6 py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-lg transition-colors inline-flex items-center space-x-2"
-                      >
-                        <Copy className="w-5 h-5" aria-hidden="true" />
-                        <span>Browse Templates</span>
-                      </button>
-                      <button
-                        onClick={() => setShowCreateModal(true)}
-                        className="px-6 py-3 bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-secondary rounded-lg transition-colors inline-flex items-center space-x-2"
-                      >
-                        <Plus className="w-5 h-5" aria-hidden="true" />
-                        <span>Blank Form</span>
-                      </button>
-                    </div>
-                    <p className="text-theme-text-muted text-xs mt-2">
-                      Tip: The &quot;Membership Interest Form&quot; template is great for collecting prospective member signups from a public link.
-                    </p>
-                  </div>
-                )}
-              </div>
+              <EmptyState
+                icon={FormInput}
+                title="No Custom Forms Yet"
+                description="Build custom forms for incident reports, equipment inspections, public signup pages, and more. Start from a template for a quick setup, or create a blank form from scratch."
+                actions={canManage ? [
+                  { label: 'Browse Templates', onClick: () => setActiveTab('templates'), variant: 'primary', icon: Copy },
+                  { label: 'Blank Form', onClick: () => setShowCreateModal(true), variant: 'secondary', icon: Plus },
+                ] : undefined}
+                className="card"
+              />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {forms.map((form) => (
-                  <div key={form.id} className="stat-card hover:border-pink-500/30 transition-all">
+                  <div key={form.id} className="card-hover p-5">
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <h3 className="text-theme-text-primary font-semibold">{form.name}</h3>
@@ -760,7 +738,7 @@ const FormsPage: React.FC = () => {
                           <span className={`px-2 py-0.5 text-xs rounded-sm border ${statusColor(form.status)}`}>
                             {form.status}
                           </span>
-                          <span className="px-2 py-0.5 text-xs bg-pink-500/10 text-pink-700 dark:text-pink-400 rounded-sm border border-pink-500/30">
+                          <span className="px-2 py-0.5 text-xs bg-red-500/10 text-red-700 dark:text-red-400 rounded-sm border border-red-500/30">
                             {form.category}
                           </span>
                           {form.is_public && (
@@ -830,7 +808,7 @@ const FormsPage: React.FC = () => {
                       {canManage && (
                         <button
                           onClick={() => { void handleEditForm(form.id); }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-pink-700 dark:text-pink-400 bg-pink-500/10 hover:bg-pink-500/20 rounded-lg transition-colors"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-400 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors"
                         >
                           <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
                           Edit Fields
@@ -900,7 +878,7 @@ const FormsPage: React.FC = () => {
         {activeTab === 'templates' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredTemplates.map((template) => (
-              <div key={template.id} className="stat-card hover:border-pink-500/30 transition-all">
+              <div key={template.id} className="card-hover p-5">
                 <div className="flex items-start space-x-4">
                   <div className={`p-3 rounded-lg bg-theme-surface-secondary ${template.color}`}>
                     {template.icon}
@@ -914,7 +892,7 @@ const FormsPage: React.FC = () => {
                             Public
                           </span>
                         )}
-                        <span className="px-2 py-0.5 text-xs bg-pink-500/10 text-pink-700 dark:text-pink-400 rounded-sm border border-pink-500/30">
+                        <span className="px-2 py-0.5 text-xs bg-red-500/10 text-red-700 dark:text-red-400 rounded-sm border border-red-500/30">
                           {template.category}
                         </span>
                       </div>
@@ -933,7 +911,7 @@ const FormsPage: React.FC = () => {
                           <button
                             onClick={() => { void handleUseTemplate(template); }}
                             disabled={creating}
-                            className="px-3 py-1 text-xs bg-pink-600/20 text-pink-700 dark:text-pink-400 hover:bg-pink-600/30 rounded-sm transition-colors flex items-center space-x-1 disabled:opacity-50"
+                            className="px-3 py-1 text-xs bg-red-600/20 text-red-700 dark:text-red-400 hover:bg-red-600/30 rounded-sm transition-colors flex items-center space-x-1 disabled:opacity-50"
                           >
                             <Copy className="w-3 h-3" aria-hidden="true" />
                             <span>{creating ? 'Creating...' : 'Use Template'}</span>
@@ -960,7 +938,7 @@ const FormsPage: React.FC = () => {
                 id="submission-form-select"
                 value={selectedFormId ?? ''}
                 onChange={(e) => { setSelectedFormId(e.target.value || null); setSubmissionsView('list'); }}
-                className="card-secondary focus:border-pink-500 focus:ring-2 focus:ring-pink-500 px-3 py-2 text-sm text-theme-text-primary flex-1 max-w-md"
+                className="form-input flex-1 max-w-md"
               >
                 <option value="">Select a form...</option>
                 {forms
@@ -977,7 +955,7 @@ const FormsPage: React.FC = () => {
                   <button
                     onClick={() => setSubmissionsView('list')}
                     className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                      submissionsView === 'list' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+                      submissionsView === 'list' ? 'bg-red-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
                     }`}
                   >
                     Responses
@@ -985,7 +963,7 @@ const FormsPage: React.FC = () => {
                   <button
                     onClick={() => setSubmissionsView('results')}
                     className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1 ${
-                      submissionsView === 'results' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+                      submissionsView === 'results' ? 'bg-red-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
                     }`}
                   >
                     <BarChart3 className="w-3 h-3" />
@@ -1044,7 +1022,7 @@ const FormsPage: React.FC = () => {
                   <span className={`px-2 py-0.5 text-xs rounded-sm border ${statusColor(editingForm.status)}`}>
                     {editingForm.status}
                   </span>
-                  <span className="px-2 py-0.5 text-xs bg-pink-500/10 text-pink-700 dark:text-pink-400 rounded-sm border border-pink-500/30">
+                  <span className="px-2 py-0.5 text-xs bg-red-500/10 text-red-700 dark:text-red-400 rounded-sm border border-red-500/30">
                     {editingForm.category}
                   </span>
                 </div>
@@ -1057,7 +1035,7 @@ const FormsPage: React.FC = () => {
                   role="tab"
                   aria-selected={detailTab === 'builder'}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    detailTab === 'builder' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+                    detailTab === 'builder' ? 'bg-red-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
                   }`}
                 >
                   Form Builder
@@ -1067,7 +1045,7 @@ const FormsPage: React.FC = () => {
                   role="tab"
                   aria-selected={detailTab === 'preview'}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    detailTab === 'preview' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+                    detailTab === 'preview' ? 'bg-red-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
                   }`}
                 >
                   Preview & Submit
@@ -1077,7 +1055,7 @@ const FormsPage: React.FC = () => {
                   role="tab"
                   aria-selected={detailTab === 'submissions'}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    detailTab === 'submissions' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+                    detailTab === 'submissions' ? 'bg-red-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
                   }`}
                 >
                   Submissions
@@ -1087,7 +1065,7 @@ const FormsPage: React.FC = () => {
                   role="tab"
                   aria-selected={detailTab === 'results'}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    detailTab === 'results' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+                    detailTab === 'results' ? 'bg-red-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
                   }`}
                 >
                   Results
@@ -1158,7 +1136,7 @@ const FormsPage: React.FC = () => {
                         id="form-name"
                         type="text" required aria-required="true" value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        className="form-input focus:ring-pink-500"
+                        className="form-input"
                         placeholder="e.g., Monthly Safety Report"
                       />
                     </div>
@@ -1168,7 +1146,7 @@ const FormsPage: React.FC = () => {
                         id="form-category"
                         value={formData.category}
                         onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                        className="form-input focus:ring-pink-500"
+                        className="form-input"
                       >
                         <option value="Safety">Safety</option>
                         <option value="Operations">Operations</option>
@@ -1182,7 +1160,7 @@ const FormsPage: React.FC = () => {
                         id="form-description"
                         rows={3} value={formData.description}
                         onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        className="form-input focus:ring-pink-500"
+                        className="form-input"
                         placeholder="Describe the purpose of this form..."
                       />
                     </div>
@@ -1206,14 +1184,14 @@ const FormsPage: React.FC = () => {
                 <div className="bg-theme-input-bg px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
                   <button
                     onClick={() => setShowCreateModal(false)}
-                    className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-input-bg transition-colors"
+                    className="btn-secondary"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={() => { void handleCreateForm(); }}
                     disabled={!formData.name.trim() || creating}
-                    className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {creating ? 'Creating...' : 'Create Form'}
                   </button>
@@ -1307,7 +1285,7 @@ const FormsPage: React.FC = () => {
                                 <QrCode className="w-4 h-4" aria-hidden="true" />
                                 <span>QR Code</span>
                               </label>
-                              <div className="flex flex-col items-center p-4 bg-white dark:bg-slate-900 rounded-lg border border-theme-surface-border">
+                              <div className="flex flex-col items-center p-4 bg-theme-surface rounded-lg border border-theme-surface-border">
                                 <QRCodeSVG
                                   id={`qr-${form.public_slug}`}
                                   value={getPublicUrl(form.public_slug)}
@@ -1568,7 +1546,7 @@ const FormsPage: React.FC = () => {
                                   id={`mapping-${tf.key}`}
                                   value={fieldMappings[tf.key] ?? ''}
                                   onChange={(e) => setFieldMappings((prev) => ({ ...prev, [tf.key]: e.target.value }))}
-                                  className="card-secondary focus:border-pink-500 focus:ring-2 focus:ring-pink-500 px-2 py-1.5 text-xs text-theme-text-primary flex-1"
+                                  className="form-input-sm flex-1"
                                 >
                                   <option value="">{tf.required ? 'Select a field...' : '(none)'}</option>
                                   {selectedFormDetail.fields

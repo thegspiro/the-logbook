@@ -14,6 +14,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Settings,
   Eye,
@@ -106,6 +107,7 @@ const SECTIONS: { key: SectionKey; label: string; icon: React.ElementType; descr
 // ─── Main Component ─────────────────────────────────────────────────────────────
 
 const EventsSettingsTab: React.FC = () => {
+  const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState<SectionKey>('visibility');
   const [settings, setSettings] = useState<EventModuleSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -552,11 +554,12 @@ const EventsSettingsTab: React.FC = () => {
     try {
       setGeneratingForm(true);
       const result = await eventRequestService.generateForm();
-      toast.success('Event request form created! You can find it in the Forms module.');
+      toast.success('Event request form created! Redirecting to Forms...');
       toast(
         `Public URL: ${window.location.origin}${result.public_url}`,
         { duration: 8000, icon: '🔗' }
       );
+      navigate('/forms');
     } catch {
       toast.error('Failed to generate form. It may already exist.');
     } finally {
@@ -957,7 +960,7 @@ const EventsSettingsTab: React.FC = () => {
                 className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:cursor-not-allowed ${
                   settings.request_pipeline.public_progress_visible
                     ? 'bg-green-500'
-                    : 'bg-gray-300 dark:bg-gray-600'
+                    : 'bg-theme-surface-hover'
                 }`}
                 role="switch"
                 aria-checked={settings.request_pipeline.public_progress_visible}
@@ -1131,7 +1134,7 @@ const EventsSettingsTab: React.FC = () => {
                         onClick={() => void toggleEmailTrigger(key)}
                         disabled={saving}
                         className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:cursor-not-allowed ${
-                          config.enabled ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
+                          config.enabled ? 'bg-green-500' : 'bg-theme-surface-hover'
                         }`}
                         role="switch"
                         aria-checked={config.enabled}
@@ -1271,29 +1274,42 @@ const EventsSettingsTab: React.FC = () => {
               </p>
             </div>
 
-            <div>
-              <button
-                type="button"
-                onClick={() => void handleGenerateForm()}
-                disabled={generatingForm}
-                className="btn-primary flex font-medium gap-2 items-center text-sm"
-              >
-                {generatingForm ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <FileText className="w-4 h-4" />
-                    Generate Event Request Form
-                  </>
-                )}
-              </button>
-              <p className="text-xs text-theme-text-muted mt-2">
-                The form will be created in Draft status. Publish it from the Forms module when ready.
-                You can customize fields and styling before publishing.
-              </p>
+            <div className="space-y-4">
+              <div>
+                <button
+                  type="button"
+                  onClick={() => void handleGenerateForm()}
+                  disabled={generatingForm}
+                  className="btn-primary flex font-medium gap-2 items-center text-sm"
+                >
+                  {generatingForm ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="w-4 h-4" />
+                      Generate Event Request Form
+                    </>
+                  )}
+                </button>
+                <p className="text-xs text-theme-text-muted mt-2">
+                  The form will be created in Draft status and you will be redirected to the Forms page
+                  where you can customize fields and styling before publishing.
+                </p>
+              </div>
+
+              <div className="border-t border-theme-surface-border pt-4">
+                <button
+                  type="button"
+                  onClick={() => navigate('/forms')}
+                  className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  View all public forms
+                </button>
+              </div>
             </div>
           </div>
         );

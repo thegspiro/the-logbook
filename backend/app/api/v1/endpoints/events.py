@@ -419,6 +419,7 @@ async def update_event_settings(
     await log_audit_event(
         db=db,
         event_type="events.settings_updated",
+        event_category="events",
         severity="info",
         event_data={"updated_keys": list(updates_dict.keys())},
         user_id=str(current_user.id),
@@ -775,6 +776,7 @@ async def cancel_event(
         await log_audit_event(
             db=db,
             event_type="event.cancelled",
+            event_category="events",
             severity="warning",
             event_data={
                 "event_id": str(event_id),

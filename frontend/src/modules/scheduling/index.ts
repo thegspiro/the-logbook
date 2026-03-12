@@ -58,6 +58,22 @@ export type {
   ShiftSignupResponse,
 } from "./types";
 
+// Equipment Check Types
+export type {
+  EquipmentCheckTemplate,
+  EquipmentCheckTemplateCreate,
+  EquipmentCheckTemplateUpdate,
+  CheckTemplateCompartment,
+  CheckTemplateCompartmentCreate,
+  CheckTemplateItem,
+  CheckTemplateItemCreate,
+  CheckItemResultSubmit,
+  ShiftEquipmentCheckCreate,
+  ShiftEquipmentCheckRecord,
+  ShiftCheckSummary,
+  CheckItemHistory,
+} from "./types/equipmentCheck";
+
 // Components
 export { ShiftSettingsPanel } from "./components/ShiftSettingsPanel";
 export { SchedulingNotificationsPanel } from "./components/SchedulingNotificationsPanel";

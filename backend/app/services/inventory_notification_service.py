@@ -24,7 +24,7 @@ from app.models.inventory import (
     InventoryNotificationQueue,
 )
 from app.models.user import Organization, User
-from app.services.email_service import EmailService
+from app.services.email_service import EmailService, build_email_logo_img
 from app.services.email_template_service import (
     DEFAULT_CSS,
     DEFAULT_INVENTORY_CHANGE_HTML,
@@ -367,8 +367,10 @@ class InventoryNotificationService:
         if not subject:
             import html as _html_mod
 
+            context["organization_logo_img"] = build_email_logo_img(org)
+
             # Variables that are already rendered HTML and must NOT be escaped
-            _html_vars = {"items_issued_html", "items_returned_html"}
+            _html_vars = {"items_issued_html", "items_returned_html", "organization_logo_img"}
 
             def _replace(text: str) -> str:
                 def replacer(match):

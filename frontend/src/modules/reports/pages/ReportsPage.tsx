@@ -467,14 +467,14 @@ export const ReportsPage: React.FC = () => {
                 type="date"
                 value={startDate}
                 onChange={(e) => setCustomDates(e.target.value, endDate)}
-                className="form-input bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring rounded-sm border px-3 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring rounded-sm border px-3 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
               />
               <span className="text-theme-text-muted text-sm">to</span>
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => setCustomDates(startDate, e.target.value)}
-                className="form-input bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring rounded-sm border px-3 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
+                className="form-input bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring rounded-sm border px-3 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
               />
             </div>
           </div>
@@ -557,7 +557,7 @@ export const ReportsPage: React.FC = () => {
         {/* Empty State */}
         {filteredReports.length === 0 && (
           <div className="py-12 text-center">
-            <FileText className="mx-auto mb-4 h-16 w-16 text-slate-600" aria-hidden="true" />
+            <FileText className="mx-auto mb-4 h-16 w-16 text-theme-text-muted" aria-hidden="true" />
             <h3 className="text-theme-text-primary mb-2 text-xl font-semibold">No reports found</h3>
             <p className="text-theme-text-muted">Try selecting a different category</p>
           </div>

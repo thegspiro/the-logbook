@@ -168,8 +168,8 @@ const AdminHoursClockInPage: React.FC = () => {
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-                <p className="text-red-800">{error}</p>
+              <div className="bg-red-50 border border-red-200 dark:bg-red-500/10 dark:border-red-500/30 rounded-lg p-4 mb-6">
+                <p className="text-red-800 dark:text-red-400">{error}</p>
               </div>
             )}
 
@@ -177,7 +177,7 @@ const AdminHoursClockInPage: React.FC = () => {
               <button
                 onClick={() => { void handleClockOut(); }}
                 disabled={processing}
-                className="btn-primary disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold px-8 py-4 text-lg transition w-full"
+                className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed font-semibold px-8 py-4 text-lg transition w-full"
               >
                 {processing ? 'Clocking Out...' : 'Clock Out'}
               </button>
@@ -325,15 +325,15 @@ const AdminHoursClockInPage: React.FC = () => {
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-            <p className="text-red-800">{error}</p>
+          <div className="bg-red-50 border border-red-200 dark:bg-red-500/10 dark:border-red-500/30 rounded-lg p-4 mb-6">
+            <p className="text-red-800 dark:text-red-400">{error}</p>
           </div>
         )}
 
         <button
           onClick={() => { void handleClockIn(); }}
           disabled={processing}
-          className="btn-success disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold px-8 py-4 text-lg transition w-full"
+          className="btn-success disabled:opacity-50 disabled:cursor-not-allowed font-semibold px-8 py-4 text-lg transition w-full"
         >
           {processing ? 'Clocking In...' : 'Clock In'}
         </button>

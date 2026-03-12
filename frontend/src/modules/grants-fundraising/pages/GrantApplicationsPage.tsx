@@ -143,7 +143,7 @@ const PipelineCard: React.FC<PipelineCardProps> = ({ application, timezone }) =>
 
       <div className="mt-2 flex items-center gap-2">
         <span
-          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[application.priority] ?? 'bg-gray-100 text-gray-700'}`}
+          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[application.priority] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
         >
           {PRIORITY_LABELS[application.priority] ?? application.priority}
         </span>
@@ -174,7 +174,7 @@ const PipelineColumn: React.FC<PipelineColumnProps> = ({
   timezone,
 }) => {
   const colorClasses =
-    APPLICATION_STATUS_COLORS[status] ?? 'bg-gray-100 text-gray-800';
+    APPLICATION_STATUS_COLORS[status] ?? 'bg-theme-surface-secondary text-theme-text-secondary';
 
   return (
     <div className="flex h-full w-72 flex-shrink-0 flex-col rounded-lg border border-theme-surface-border bg-theme-bg">
@@ -450,14 +450,14 @@ export const GrantApplicationsPage: React.FC = () => {
               placeholder="Search programs, agencies, assignees..."
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              className="w-full rounded-lg border border-theme-surface-border bg-theme-surface py-2 pl-10 pr-4 text-sm text-theme-text-primary placeholder:text-theme-text-secondary focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+              className="w-full rounded-lg border border-theme-input-border bg-theme-input-bg py-2 pl-10 pr-4 text-sm text-theme-text-primary placeholder:text-theme-text-secondary focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
             />
           </div>
 
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none"
+            className="rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none"
           >
             <option value="">All Statuses</option>
             {PIPELINE_COLUMNS.map((s) => (
@@ -470,7 +470,7 @@ export const GrantApplicationsPage: React.FC = () => {
           <select
             value={priorityFilter}
             onChange={(e) => setPriorityFilter(e.target.value)}
-            className="rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none"
+            className="rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none"
           >
             <option value="">All Priorities</option>
             {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
@@ -632,7 +632,7 @@ export const GrantApplicationsPage: React.FC = () => {
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <span
-                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${APPLICATION_STATUS_COLORS[app.applicationStatus] ?? 'bg-gray-100 text-gray-800'}`}
+                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${APPLICATION_STATUS_COLORS[app.applicationStatus] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
                         >
                           {APPLICATION_STATUS_LABELS[app.applicationStatus] ??
                             app.applicationStatus}
@@ -651,7 +651,7 @@ export const GrantApplicationsPage: React.FC = () => {
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <span
-                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[app.priority] ?? 'bg-gray-100 text-gray-700'}`}
+                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[app.priority] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
                         >
                           {PRIORITY_LABELS[app.priority] ?? app.priority}
                         </span>

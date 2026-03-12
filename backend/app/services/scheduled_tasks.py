@@ -423,7 +423,7 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
     from app.models.event import Event, RSVPStatus
     from app.models.notification import NotificationChannel, NotificationLog
     from app.models.user import User
-    from app.services.email_service import EmailService
+    from app.services.email_service import EmailService, build_email_logo_html
 
     now = datetime.now(dt_timezone.utc)
     orgs = await db.execute(select(Organization))
@@ -669,7 +669,7 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
     from app.models.event import Event
     from app.models.notification import NotificationChannel, NotificationLog
     from app.models.user import User
-    from app.services.email_service import EmailService
+    from app.services.email_service import EmailService, build_email_logo_html
 
     now = datetime.now(dt_timezone.utc)
     # Look back 2 hours for recently ended events
@@ -759,17 +759,21 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                         full_event_url = f"{settings.FRONTEND_URL}/events/{event.id}"
                         e_first = _html.escape(creator.first_name or "")
                         e_title = _html.escape(event.title or "")
+                        _logo = build_email_logo_html(org)
                         email_service = EmailService(organization=org)
                         sent_count, _ = await email_service.send_email(
                             to_emails=[creator.email],
                             subject=subject,
                             html_body=(
+                                f'<div style="font-family:Arial,sans-serif;max-width:600px;">'
+                                f"{_logo}"
                                 f"<p>Hi {e_first},</p>"
                                 f'<p>Your event "<strong>{e_title}</strong>" has ended. '
                                 f"{checked_in_count} of {rsvp_count} attendees checked in.</p>"
                                 f"<p>Please review and confirm the attendance records and "
                                 f"event timing before finalizing.</p>"
                                 f'<p><a href="{_html.escape(full_event_url)}">Review Event</a></p>'
+                                f"</div>"
                             ),
                             text_body=(
                                 f"Hi {creator.first_name},\n\n"
@@ -938,17 +942,21 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                         full_url = f"{settings.FRONTEND_URL}/scheduling"
                         e_first = _html.escape(officer.first_name or "")
                         e_shift_date = _html.escape(shift_date_str)
+                        _logo = build_email_logo_html(org)
                         email_service = EmailService(organization=org)
                         sent_count, _ = await email_service.send_email(
                             to_emails=[officer.email],
                             subject=subject,
                             html_body=(
+                                f'<div style="font-family:Arial,sans-serif;max-width:600px;">'
+                                f"{_logo}"
                                 f"<p>Hi {e_first},</p>"
                                 f"<p>Your shift on <strong>{e_shift_date}</strong> has ended. "
                                 f"{att_count} member{'s' if att_count != 1 else ''} recorded.</p>"
                                 f"<p>Please review and confirm the attendance records and "
                                 f"shift timing before finalizing.</p>"
                                 f'<p><a href="{_html.escape(full_url)}">Review Shift</a></p>'
+                                f"</div>"
                             ),
                             text_body=(
                                 f"Hi {officer.first_name},\n\n"
@@ -1249,7 +1257,7 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
     Send email alerts to admins when inventory items drop below reorder point.
     Daily at 07:00.
     """
-    from app.services.email_service import EmailService
+    from app.services.email_service import EmailService, build_email_logo_html
     from app.services.inventory_service import InventoryService
 
     orgs = await db.execute(select(Organization))
@@ -1281,8 +1289,11 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
                     f"{item.reorder_point}</td></tr>"
                 )
 
+            _logo_img = build_email_logo_html(org)
+
             html_body = f"""
             <div style="font-family:Arial,sans-serif;max-width:600px;">
+                {_logo_img}
                 <h2 style="color:#dc2626;">Low Stock Alert</h2>
                 <p>The following inventory items are at or below their reorder point:</p>
                 <table style="width:100%;border-collapse:collapse;margin:16px 0;">
@@ -1363,7 +1374,7 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
     Send email alerts for overdue checkouts. Daily at 07:30.
     Notifies both the member who has the overdue item and admins.
     """
-    from app.services.email_service import EmailService
+    from app.services.email_service import EmailService, build_email_logo_html
     from app.services.inventory_service import InventoryService
 
     orgs = await db.execute(select(Organization))
@@ -1389,6 +1400,7 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
                 by_user[uid].append(co)
 
             email_svc = EmailService(organization=org)
+            _logo_img = build_email_logo_html(org)
 
             for uid, user_checkouts in by_user.items():
                 user_obj = user_checkouts[0].user if user_checkouts[0].user else None
@@ -1407,6 +1419,7 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
 
                 html_body = f"""
                 <div style="font-family:Arial,sans-serif;max-width:600px;">
+                    {_logo_img}
                     <h2 style="color:#dc2626;">Overdue Equipment</h2>
                     <p>Hi {_html.escape(user_obj.first_name or 'Member')},</p>
                     <p>The following items are overdue for return:</p>
@@ -1450,7 +1463,7 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
     Weekly on Mondays at 08:00.
     Tiers: 180 days, 90 days, 30 days, past due.
     """
-    from app.services.email_service import EmailService
+    from app.services.email_service import EmailService, build_email_logo_html
     from app.services.inventory_service import InventoryService
 
     orgs = await db.execute(select(Organization))
@@ -1506,8 +1519,11 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
                 </table>
                 """
 
+            _logo_img = build_email_logo_html(org)
+
             html_body = f"""
             <div style="font-family:Arial,sans-serif;max-width:700px;">
+                {_logo_img}
                 <h2>NFPA 1851 Retirement Alert</h2>
                 <p>{len(items_due)} PPE item(s) are approaching or past their retirement date:</p>
                 {_build_section("Past Due — Retire Immediately", past_due, "#dc2626")}

@@ -119,7 +119,7 @@ const PoolCard: React.FC<PoolCardProps> = ({
       <div className="flex items-center gap-2 pt-1">
         <button
           type="button"
-          className="btn-primary text-sm px-3 py-1.5 rounded-lg flex items-center gap-1 disabled:opacity-50"
+          className="btn-info btn-sm flex items-center gap-1 disabled:opacity-50"
           disabled={onHand <= 0}
           onClick={() => onIssue(item)}
         >
@@ -127,7 +127,7 @@ const PoolCard: React.FC<PoolCardProps> = ({
         </button>
         <button
           type="button"
-          className="text-sm px-3 py-1.5 rounded-lg border border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface flex items-center gap-1"
+          className="btn-secondary btn-sm flex items-center gap-1"
           onClick={handleToggle}
         >
           {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -153,7 +153,7 @@ const PoolCard: React.FC<PoolCardProps> = ({
                   </div>
                   <button
                     type="button"
-                    className="btn-info text-xs px-2 py-1 rounded shrink-0"
+                    className="btn-info btn-sm shrink-0"
                     onClick={() => onReturn(iss)}
                   >
                     Return
@@ -409,10 +409,10 @@ const PoolItemsPage: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button type="button" className="btn-info px-3 py-2 rounded-lg flex items-center gap-1 text-sm" onClick={() => void loadData()}>
+          <button type="button" className="btn-secondary btn-md flex items-center gap-1" onClick={() => void loadData()}>
             <RefreshCw size={15} /> Refresh
           </button>
-          <button type="button" className="btn-primary px-3 py-2 rounded-lg flex items-center gap-1 text-sm" onClick={openBulkModal}>
+          <button type="button" className="btn-info btn-md flex items-center gap-1" onClick={openBulkModal}>
             <Users size={15} /> Bulk Issue
           </button>
         </div>
@@ -591,12 +591,12 @@ const PoolItemsPage: React.FC = () => {
 
           {/* Submit */}
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" className="px-4 py-2 rounded-lg border border-theme-surface-border text-theme-text-secondary text-sm" onClick={() => setIssueModalOpen(false)}>
+            <button type="button" className="btn-secondary btn-md" onClick={() => setIssueModalOpen(false)}>
               Cancel
             </button>
             <button
               type="button"
-              className="btn-primary px-4 py-2 rounded-lg text-sm flex items-center gap-1 disabled:opacity-50"
+              className="btn-info btn-md flex items-center gap-1 disabled:opacity-50"
               disabled={!issueUserId || issueQty < 1 || issueSubmitting}
               onClick={() => void handleIssue()}
             >
@@ -636,12 +636,12 @@ const PoolItemsPage: React.FC = () => {
             <input type="text" className="form-input w-full" value={returnNotes} onChange={e => setReturnNotes(e.target.value)} />
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" className="px-4 py-2 rounded-lg border border-theme-surface-border text-theme-text-secondary text-sm" onClick={() => setReturnModalOpen(false)}>
+            <button type="button" className="btn-secondary btn-md" onClick={() => setReturnModalOpen(false)}>
               Cancel
             </button>
             <button
               type="button"
-              className="btn-primary px-4 py-2 rounded-lg text-sm flex items-center gap-1 disabled:opacity-50"
+              className="btn-info btn-md flex items-center gap-1 disabled:opacity-50"
               disabled={returnSubmitting}
               onClick={() => void handleReturn()}
             >
@@ -708,12 +708,12 @@ const PoolItemsPage: React.FC = () => {
 
           {/* Submit */}
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" className="px-4 py-2 rounded-lg border border-theme-surface-border text-theme-text-secondary text-sm" onClick={() => setBulkModalOpen(false)}>
+            <button type="button" className="btn-secondary btn-md" onClick={() => setBulkModalOpen(false)}>
               Cancel
             </button>
             <button
               type="button"
-              className="btn-primary px-4 py-2 rounded-lg text-sm flex items-center gap-1 disabled:opacity-50"
+              className="btn-info btn-md flex items-center gap-1 disabled:opacity-50"
               disabled={!bulkItemId || bulkRows.every(r => !r.userId) || bulkSubmitting}
               onClick={() => void handleBulkIssue()}
             >

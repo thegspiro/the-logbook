@@ -153,8 +153,8 @@ const EventSelfCheckInPage: React.FC = () => {
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-                <p className="text-red-800">{error}</p>
+              <div className="bg-red-50 border border-red-200 dark:bg-red-500/10 dark:border-red-500/30 rounded-lg p-4 mb-6">
+                <p className="text-red-800 dark:text-red-400">{error}</p>
               </div>
             )}
 
@@ -162,7 +162,7 @@ const EventSelfCheckInPage: React.FC = () => {
               <button
                 onClick={() => { void handleCheckOut(); }}
                 disabled={checkingIn}
-                className="btn-primary disabled:bg-gray-400 disabled:cursor-not-allowed disabled:text-gray-200 font-semibold px-8 py-4 text-lg transition w-full"
+                className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed font-semibold px-8 py-4 text-lg transition w-full"
               >
                 {checkingIn ? 'Checking Out...' : 'Check Out of This Event'}
               </button>
@@ -333,12 +333,12 @@ const EventSelfCheckInPage: React.FC = () => {
         {qrData?.is_valid ? (
           <div>
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+              <div className="bg-red-50 border border-red-200 dark:bg-red-500/10 dark:border-red-500/30 rounded-lg p-4 mb-6">
                 <div className="flex items-start">
-                  <svg className="w-5 h-5 text-red-600 mt-0.5 mr-2 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <svg className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 mr-2 shrink-0" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                   </svg>
-                  <p className="text-red-800">{error}</p>
+                  <p className="text-red-800 dark:text-red-400">{error}</p>
                 </div>
               </div>
             )}
@@ -346,7 +346,7 @@ const EventSelfCheckInPage: React.FC = () => {
             <button
               onClick={() => { void handleCheckIn(); }}
               disabled={checkingIn}
-              className="btn-success disabled:bg-gray-400 disabled:cursor-not-allowed disabled:text-gray-200 font-semibold px-8 py-4 text-lg transition w-full"
+              className="btn-success disabled:opacity-50 disabled:cursor-not-allowed font-semibold px-8 py-4 text-lg transition w-full"
             >
               {checkingIn ? 'Checking In...' : 'Check In to This Event'}
             </button>

@@ -191,7 +191,7 @@ const MinutesPage: React.FC = () => {
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center space-x-3">
           <div className="bg-cyan-600 rounded-lg p-2">
-            <ClipboardList className="w-6 h-6 text-theme-text-primary" aria-hidden="true" />
+            <ClipboardList className="w-6 h-6 text-white" aria-hidden="true" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-theme-text-primary">Meeting Minutes</h1>
@@ -306,7 +306,7 @@ const MinutesPage: React.FC = () => {
                           meeting.status === 'approved'
                             ? 'bg-green-500/10 text-green-700 border border-green-500/30'
                             : meeting.status === 'draft'
-                            ? 'bg-slate-500/10 text-theme-text-muted border border-slate-500/30'
+                            ? 'bg-theme-surface-secondary text-theme-text-muted border border-theme-surface-border'
                             : 'bg-yellow-500/10 text-yellow-700 border border-yellow-500/30'
                         }`}>
                           {meeting.status.charAt(0).toUpperCase() + meeting.status.slice(1)}

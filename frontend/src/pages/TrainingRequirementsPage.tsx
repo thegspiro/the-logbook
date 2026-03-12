@@ -127,6 +127,8 @@ const TrainingRequirementsPage: React.FC = () => {
         rolling_period_months: requirement.rolling_period_months,
         period_start_month: requirement.period_start_month,
         period_start_day: requirement.period_start_day,
+        period_end_month: requirement.period_end_month,
+        period_end_day: requirement.period_end_day,
         category_ids: requirement.category_ids,
       };
 
@@ -571,6 +573,12 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                     value={`Month ${requirement.period_start_month || 1}, Day ${requirement.period_start_day || 1}`}
                   />
                 )}
+                {requirement.due_date_type === 'calendar_period' && requirement.period_end_month && (
+                  <DetailRow
+                    label="Period End"
+                    value={`Month ${requirement.period_end_month}, Day ${requirement.period_end_day || 'last'}`}
+                  />
+                )}
               </DetailSection>
 
               <DetailSection title="Assignment">
@@ -646,6 +654,8 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
     rolling_period_months: requirement?.rolling_period_months || 12,
     period_start_month: requirement?.period_start_month || 1,
     period_start_day: requirement?.period_start_day || 1,
+    period_end_month: requirement?.period_end_month || undefined as number | undefined,
+    period_end_day: requirement?.period_end_day || undefined as number | undefined,
     category_ids: requirement?.category_ids || [] as string[],
   });
 
@@ -676,6 +686,8 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
         rolling_period_months: formData.due_date_type === 'rolling' ? formData.rolling_period_months : undefined,
         period_start_month: formData.due_date_type === 'calendar_period' ? formData.period_start_month : undefined,
         period_start_day: formData.due_date_type === 'calendar_period' ? formData.period_start_day : undefined,
+        period_end_month: formData.due_date_type === 'calendar_period' ? formData.period_end_month : undefined,
+        period_end_day: formData.due_date_type === 'calendar_period' ? formData.period_end_day : undefined,
         category_ids: formData.category_ids.length > 0 ? formData.category_ids : undefined,
       };
 
@@ -879,33 +891,70 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
 
             {/* Calendar period options */}
             {formData.due_date_type === 'calendar_period' && (
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="req-period-start-month" className="block text-sm font-medium text-theme-text-secondary mb-2">Period Start Month</label>
-                  <select
-                    id="req-period-start-month"
-                    value={formData.period_start_month}
-                    onChange={(e) => setFormData({ ...formData, period_start_month: Number(e.target.value) })}
-                    className="form-input"
-                  >
-                    {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((month, idx) => (
-                      <option key={idx} value={idx + 1}>{month}</option>
-                    ))}
-                  </select>
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="req-period-start-month" className="block text-sm font-medium text-theme-text-secondary mb-2">Period Start Month</label>
+                    <select
+                      id="req-period-start-month"
+                      value={formData.period_start_month}
+                      onChange={(e) => setFormData({ ...formData, period_start_month: Number(e.target.value) })}
+                      className="form-input"
+                    >
+                      {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((month, idx) => (
+                        <option key={idx} value={idx + 1}>{month}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="req-period-start-day" className="block text-sm font-medium text-theme-text-secondary mb-2">Period Start Day</label>
+                    <input
+                      id="req-period-start-day"
+                      type="number"
+                      value={formData.period_start_day}
+                      onChange={(e) => setFormData({ ...formData, period_start_day: Number(e.target.value) })}
+                      className="form-input"
+                      min="1"
+                      max="31"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label htmlFor="req-period-start-day" className="block text-sm font-medium text-theme-text-secondary mb-2">Period Start Day</label>
-                  <input
-                    id="req-period-start-day"
-                    type="number"
-                    value={formData.period_start_day}
-                    onChange={(e) => setFormData({ ...formData, period_start_day: Number(e.target.value) })}
-                    className="form-input"
-                    min="1"
-                    max="31"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="req-period-end-month" className="block text-sm font-medium text-theme-text-secondary mb-2">Period End Month (Optional)</label>
+                    <select
+                      id="req-period-end-month"
+                      value={formData.period_end_month || ''}
+                      onChange={(e) => setFormData({ ...formData, period_end_month: e.target.value ? Number(e.target.value) : undefined })}
+                      className="form-input"
+                    >
+                      <option value="">Default (end of year)</option>
+                      {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((month, idx) => (
+                        <option key={idx} value={idx + 1}>{month}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="req-period-end-day" className="block text-sm font-medium text-theme-text-secondary mb-2">Period End Day</label>
+                    <input
+                      id="req-period-end-day"
+                      type="number"
+                      value={formData.period_end_day || ''}
+                      onChange={(e) => setFormData({ ...formData, period_end_day: e.target.value ? Number(e.target.value) : undefined })}
+                      className="form-input"
+                      min="1"
+                      max="31"
+                      disabled={!formData.period_end_month}
+                      placeholder={formData.period_end_month ? 'Last day of month' : ''}
+                    />
+                  </div>
                 </div>
-              </div>
+                {formData.period_end_month && formData.period_start_month > formData.period_end_month && (
+                  <p className="text-theme-text-muted text-sm">
+                    Cross-year window: completions accepted from month {formData.period_start_month} of the previous year through month {formData.period_end_month}, day {formData.period_end_day || 'last'} of the current year.
+                  </p>
+                )}
+              </>
             )}
 
             {/* Fixed date option */}

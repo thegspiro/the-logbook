@@ -8,7 +8,7 @@ from datetime import date, datetime
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class EmergencyContact(BaseModel):
@@ -140,6 +140,7 @@ class UserResponse(UserBase):
     personal_email: Optional[str] = None
     status: str
     membership_type: Optional[str] = None
+    compliance_exempt: bool = False
     email_verified: bool
     mfa_enabled: bool
     last_login_at: Optional[datetime] = None
@@ -167,6 +168,12 @@ class UserResponse(UserBase):
     # Computed field
     full_name: Optional[str] = None
 
+    @field_validator("emergency_contacts", mode="before")
+    @classmethod
+    def coerce_null_emergency_contacts(cls, v: object) -> object:
+        """Coerce NULL (from DB) to empty list so Pydantic doesn't reject it."""
+        return v if v is not None else []
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -187,6 +194,7 @@ class UserListResponse(BaseModel):
     photo_url: Optional[str] = None
     status: str
     membership_type: Optional[str] = None
+    compliance_exempt: bool = False
     hire_date: Optional[date] = None
 
     # Department info
@@ -206,6 +214,12 @@ class RoleResponse(BaseModel):
     permissions: List[str] = []
     is_system: bool
     priority: int
+
+    @field_validator("permissions", mode="before")
+    @classmethod
+    def coerce_null_permissions(cls, v: object) -> object:
+        """Coerce NULL (from DB) to empty list so Pydantic doesn't reject it."""
+        return v if v is not None else []
 
     model_config = ConfigDict(from_attributes=True)
 

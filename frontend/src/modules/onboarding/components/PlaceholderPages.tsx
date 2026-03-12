@@ -33,7 +33,7 @@ export const FileStorageConfigPlaceholder: React.FC = () => {
           {'Detailed configuration can be done later in Settings \u2192 File Storage.'}
         </p>
         <div className="flex items-center justify-center gap-2 text-theme-text-muted">
-          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent"></span>
+          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-theme-surface-border border-t-transparent"></span>
           <span>Continuing to authentication...</span>
         </div>
       </div>
@@ -67,7 +67,7 @@ export const SecurityCheckPlaceholder: React.FC = () => {
           {'Security settings will be configured automatically based on your authentication choice. You can customize security options later in Settings \u2192 Security.'}
         </p>
         <div className="flex items-center justify-center gap-2 text-theme-text-muted">
-          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent"></span>
+          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-theme-surface-border border-t-transparent"></span>
           <span>Redirecting to module selection...</span>
         </div>
       </div>

@@ -274,6 +274,16 @@ const OnboardingCheck: React.FC = () => {
 
     const health = healthResponse.data;
 
+    // When the backend is already fully started, the /health endpoint returns
+    // a minimal response: {status, ready} without checks/version/startup.
+    // Treat this as all services ready — skip individual service checks.
+    if (health.ready && !health.checks) {
+      updateServiceStatus('Backend API', ConnectionStatus.CONNECTED);
+      updateServiceStatus('Database', ConnectionStatus.CONNECTED);
+      updateServiceStatus('Cache (Redis)', ConnectionStatus.CONNECTED);
+      return true;
+    }
+
     // Check for schema errors
     if (health.schema_error) {
       setSchemaError(health.schema_error);
@@ -304,27 +314,33 @@ const OnboardingCheck: React.FC = () => {
     // Update Backend API status
     updateServiceStatus('Backend API', ConnectionStatus.CONNECTED, `v${health.version}`);
 
+    // Narrow checks — the early return above handles the case where checks is absent
+    const checks = health.checks;
+    if (!checks) {
+      return false;
+    }
+
     // Update Database status
-    if (health.checks.database === ConnectionStatus.CONNECTED) {
+    if (checks.database === ConnectionStatus.CONNECTED) {
       updateServiceStatus('Database', ConnectionStatus.CONNECTED);
-    } else if (health.checks.database === ConnectionStatus.DISCONNECTED) {
+    } else if (checks.database === ConnectionStatus.DISCONNECTED) {
       updateServiceStatus('Database', ConnectionStatus.DISCONNECTED, 'Starting up...');
       return false;
     } else {
-      updateServiceStatus('Database', ConnectionStatus.ERROR, health.checks.database);
+      updateServiceStatus('Database', ConnectionStatus.ERROR, checks.database);
       return false;
     }
 
     // Update Redis status (non-critical)
-    if (health.checks.redis === ConnectionStatus.CONNECTED) {
+    if (checks.redis === ConnectionStatus.CONNECTED) {
       updateServiceStatus('Cache (Redis)', ConnectionStatus.CONNECTED);
-    } else if (health.checks.redis === ConnectionStatus.DISCONNECTED) {
+    } else if (checks.redis === ConnectionStatus.DISCONNECTED) {
       updateServiceStatus('Cache (Redis)', ConnectionStatus.DISCONNECTED, 'Optional - skipped');
     } else {
       updateServiceStatus('Cache (Redis)', ConnectionStatus.ERROR, 'Optional - failed');
     }
 
-    return health.status !== HealthStatus.UNHEALTHY && health.checks.database === ConnectionStatus.CONNECTED;
+    return health.status !== HealthStatus.UNHEALTHY && checks.database === ConnectionStatus.CONNECTED;
   }, [updateServiceStatus]);
 
   const checkOnboardingStatus = useCallback(async () => {

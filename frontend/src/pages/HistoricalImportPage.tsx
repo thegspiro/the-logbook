@@ -392,7 +392,7 @@ const MapCoursesStep: React.FC<MapCoursesStepProps> = ({
                     className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
                       mapping.action === action
                         ? action === 'skip'
-                          ? 'bg-gray-500/20 border-gray-500 text-gray-300'
+                          ? 'bg-theme-surface-hover border-theme-surface-border text-theme-text-muted'
                           : 'bg-red-600/20 border-red-500 text-red-400'
                         : 'border-theme-surface-border text-theme-text-muted hover:border-theme-text-muted'
                     }`}
@@ -633,7 +633,7 @@ const PreviewStep: React.FC<PreviewStepProps> = ({
                     {row.course_matched && (
                       <CheckCircle2 className="inline w-3.5 h-3.5 text-green-500 ml-1" />
                     )}
-                    {isSkipped && <span className="text-xs text-gray-400 ml-1">(skipped)</span>}
+                    {isSkipped && <span className="text-xs text-theme-text-muted ml-1">(skipped)</span>}
                   </td>
                   <td className="px-4 py-2 text-theme-text-muted">{row.completion_date || '-'}</td>
                   <td className="px-4 py-2 text-theme-text-muted">{row.hours_completed ?? '-'}</td>

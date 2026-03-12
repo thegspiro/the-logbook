@@ -15,7 +15,7 @@ interface IPExceptionRequestFormProps {
 }
 
 const inputClass =
-  'w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500/40';
+  'w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-theme-focus-ring';
 const labelClass = 'block text-sm font-medium text-theme-text-secondary mb-1';
 
 export const IPExceptionRequestForm: React.FC<IPExceptionRequestFormProps> = ({
@@ -30,12 +30,13 @@ export const IPExceptionRequestForm: React.FC<IPExceptionRequestFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const trimmedDescription = description.trim();
     await onSubmit({
       ipAddress: ipAddress.trim(),
       reason: reason.trim(),
       useCase: useCase.trim(),
       requestedDurationDays: durationDays,
-      description: description.trim() || undefined,
+      ...(trimmedDescription ? { description: trimmedDescription } : {}),
     });
     setIpAddress('');
     setReason('');

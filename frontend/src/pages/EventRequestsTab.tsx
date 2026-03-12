@@ -77,7 +77,7 @@ const STATUS_CONFIG: Record<
   },
   cancelled: {
     label: 'Cancelled',
-    color: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300',
+    color: 'bg-theme-surface-secondary text-theme-text-muted',
     icon: XCircle,
   },
   completed: {
@@ -923,7 +923,7 @@ const EventRequestsTab: React.FC = () => {
                                 <button
                                   onClick={() => void handleStatusChange(expandedDetail.id, 'cancelled')}
                                   disabled={actionLoading}
-                                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 dark:text-gray-300 dark:bg-gray-500/20 dark:hover:bg-gray-500/30 rounded-lg disabled:opacity-50 transition-colors"
+                                  className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface-secondary hover:bg-theme-surface-hover rounded-lg disabled:opacity-50 transition-colors"
                                 >
                                   Cancel Request
                                 </button>
@@ -1076,7 +1076,7 @@ const EventRequestsTab: React.FC = () => {
                                       ) : (
                                         <p className="text-theme-text-primary">
                                           {entry.new_status && (
-                                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-sm text-xs font-medium mr-1 ${STATUS_CONFIG[entry.new_status as EventRequestStatus]?.color || 'bg-gray-100 text-gray-800'}`}>
+                                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-sm text-xs font-medium mr-1 ${STATUS_CONFIG[entry.new_status as EventRequestStatus]?.color || 'bg-theme-surface-secondary text-theme-text-muted'}`}>
                                               {STATUS_CONFIG[entry.new_status as EventRequestStatus]?.label || entry.new_status}
                                             </span>
                                           )}

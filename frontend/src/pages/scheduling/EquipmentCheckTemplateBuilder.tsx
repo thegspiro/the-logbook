@@ -1,0 +1,1019 @@
+/**
+ * Equipment Check Template Builder
+ *
+ * Admin page for creating and editing equipment check templates with
+ * compartments and items. Supports nested compartments, multiple check
+ * types, expiration tracking, and drag-handle placeholders for reordering.
+ */
+
+import React, { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import {
+  Plus,
+  Trash2,
+  GripVertical,
+  ChevronDown,
+  ChevronUp,
+  Save,
+  ArrowLeft,
+  Image,
+  Clock,
+  AlertTriangle,
+  Loader2,
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+import { getErrorMessage } from '@/utils/errorHandling';
+import { schedulingService } from '@/modules/scheduling';
+import type {
+  EquipmentCheckTemplate,
+  EquipmentCheckTemplateCreate,
+  CheckTemplateCompartmentCreate,
+  CheckTemplateItemCreate,
+} from '@/modules/scheduling/types/equipmentCheck';
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const POSITIONS = [
+  'officer',
+  'driver',
+  'firefighter',
+  'ems',
+  'captain',
+  'lieutenant',
+  'probationary',
+  'volunteer',
+] as const;
+
+const APPARATUS_TYPES = [
+  'engine',
+  'ladder',
+  'ambulance',
+  'rescue',
+  'tanker',
+  'brush',
+  'tower',
+  'hazmat',
+  'boat',
+  'chief',
+  'utility',
+] as const;
+
+const CHECK_TYPES = [
+  { value: 'pass_fail', label: 'Pass / Fail' },
+  { value: 'quantity', label: 'Quantity' },
+  { value: 'reading', label: 'Reading' },
+] as const;
+
+const inputClass =
+  'w-full rounded-md border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
+
+const selectClass =
+  'w-full rounded-md border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
+
+const labelClass = 'block text-sm font-medium text-theme-text-secondary mb-1';
+
+const checkboxClass =
+  'h-4 w-4 rounded border-theme-surface-border text-blue-600 focus:ring-blue-500';
+
+// ============================================================================
+// Item Form State
+// ============================================================================
+
+interface ItemFormState {
+  id?: string;
+  name: string;
+  description: string;
+  checkType: 'pass_fail' | 'quantity' | 'reading';
+  isRequired: boolean;
+  requiredQuantity: string;
+  hasExpiration: boolean;
+  expirationDate: string;
+  expirationWarningDays: string;
+  imageUrl: string;
+}
+
+function emptyItem(): ItemFormState {
+  return {
+    name: '',
+    description: '',
+    checkType: 'pass_fail',
+    isRequired: true,
+    requiredQuantity: '',
+    hasExpiration: false,
+    expirationDate: '',
+    expirationWarningDays: '30',
+    imageUrl: '',
+  };
+}
+
+// ============================================================================
+// Compartment Form State
+// ============================================================================
+
+interface CompartmentFormState {
+  id?: string;
+  name: string;
+  description: string;
+  imageUrl: string;
+  parentCompartmentId: string;
+  items: ItemFormState[];
+}
+
+function emptyCompartment(): CompartmentFormState {
+  return {
+    name: '',
+    description: '',
+    imageUrl: '',
+    parentCompartmentId: '',
+    items: [],
+  };
+}
+
+// ============================================================================
+// Template Form State
+// ============================================================================
+
+interface TemplateFormState {
+  name: string;
+  description: string;
+  checkTiming: 'start_of_shift' | 'end_of_shift';
+  assignedPositions: string[];
+  apparatusType: string;
+  apparatusId: string;
+  isActive: boolean;
+}
+
+function defaultTemplateForm(): TemplateFormState {
+  return {
+    name: '',
+    description: '',
+    checkTiming: 'start_of_shift',
+    assignedPositions: [],
+    apparatusType: '',
+    apparatusId: '',
+    isActive: true,
+  };
+}
+
+// ============================================================================
+// Component
+// ============================================================================
+
+const EquipmentCheckTemplateBuilder: React.FC = () => {
+  const { templateId } = useParams<{ templateId: string }>();
+  const navigate = useNavigate();
+  const isEditing = Boolean(templateId);
+
+  // State
+  const [form, setForm] = useState<TemplateFormState>(defaultTemplateForm);
+  const [compartments, setCompartments] = useState<CompartmentFormState[]>([]);
+  const [expandedCompartments, setExpandedCompartments] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // ---------------------------------------------------------------------------
+  // Load existing template
+  // ---------------------------------------------------------------------------
+
+  const loadTemplate = useCallback(async (id: string) => {
+    setLoading(true);
+    try {
+      const data: EquipmentCheckTemplate = await schedulingService.getEquipmentCheckTemplate(id);
+      setForm({
+        name: data.name,
+        description: data.description ?? '',
+        checkTiming: data.checkTiming,
+        assignedPositions: data.assignedPositions ?? [],
+        apparatusType: data.apparatusType ?? '',
+        apparatusId: data.apparatusId ?? '',
+        isActive: data.isActive,
+      });
+
+      const expanded = new Set<string>();
+      const mapped: CompartmentFormState[] = (data.compartments ?? []).map((c) => {
+        if (c.id) expanded.add(c.id);
+        return {
+          id: c.id,
+          name: c.name,
+          description: c.description ?? '',
+          imageUrl: c.imageUrl ?? '',
+          parentCompartmentId: c.parentCompartmentId ?? '',
+          items: (c.items ?? []).map((item) => ({
+            id: item.id,
+            name: item.name,
+            description: item.description ?? '',
+            checkType: item.checkType,
+            isRequired: item.isRequired,
+            requiredQuantity: item.requiredQuantity != null ? String(item.requiredQuantity) : '',
+            hasExpiration: item.hasExpiration,
+            expirationDate: item.expirationDate ?? '',
+            expirationWarningDays: String(item.expirationWarningDays ?? 30),
+            imageUrl: item.imageUrl ?? '',
+          })),
+        };
+      });
+      setCompartments(mapped);
+      setExpandedCompartments(expanded);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to load template'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (templateId) {
+      void loadTemplate(templateId);
+    }
+  }, [templateId, loadTemplate]);
+
+  // ---------------------------------------------------------------------------
+  // Template metadata helpers
+  // ---------------------------------------------------------------------------
+
+  const updateForm = (patch: Partial<TemplateFormState>) => {
+    setForm((prev) => ({ ...prev, ...patch }));
+  };
+
+  const togglePosition = (pos: string) => {
+    setForm((prev) => {
+      const current = prev.assignedPositions;
+      const next = current.includes(pos)
+        ? current.filter((p) => p !== pos)
+        : [...current, pos];
+      return { ...prev, assignedPositions: next };
+    });
+  };
+
+  // ---------------------------------------------------------------------------
+  // Compartment helpers
+  // ---------------------------------------------------------------------------
+
+  const toggleCompartmentExpanded = (key: string) => {
+    setExpandedCompartments((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const addCompartment = async () => {
+    if (!templateId) {
+      // For new templates not yet saved, add locally
+      const key = `new-${Date.now()}`;
+      const comp = emptyCompartment();
+      setCompartments((prev) => [...prev, comp]);
+      setExpandedCompartments((prev) => new Set(prev).add(key));
+      return;
+    }
+
+    try {
+      const payload: CheckTemplateCompartmentCreate = {
+        name: 'New Compartment',
+        sort_order: compartments.length,
+      };
+      const created = await schedulingService.addCompartment(templateId, payload);
+      const comp: CompartmentFormState = {
+        id: created.id,
+        name: created.name,
+        description: created.description ?? '',
+        imageUrl: created.imageUrl ?? '',
+        parentCompartmentId: created.parentCompartmentId ?? '',
+        items: [],
+      };
+      setCompartments((prev) => [...prev, comp]);
+      setExpandedCompartments((prev) => new Set(prev).add(created.id));
+      toast.success('Compartment added');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to add compartment'));
+    }
+  };
+
+  const updateCompartmentField = (
+    idx: number,
+    patch: Partial<CompartmentFormState>,
+  ) => {
+    setCompartments((prev) => {
+      const next = [...prev];
+      const existing = next[idx];
+      if (!existing) return prev;
+      next[idx] = { ...existing, ...patch };
+      return next;
+    });
+  };
+
+  const deleteCompartment = async (idx: number) => {
+    const comp = compartments[idx];
+    if (!comp) return;
+
+    if (comp.id) {
+      try {
+        await schedulingService.deleteCompartment(comp.id);
+        toast.success('Compartment deleted');
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to delete compartment'));
+        return;
+      }
+    }
+    setCompartments((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  // ---------------------------------------------------------------------------
+  // Item helpers
+  // ---------------------------------------------------------------------------
+
+  const addItem = async (compartmentIdx: number) => {
+    const comp = compartments[compartmentIdx];
+    if (!comp) return;
+
+    if (comp.id) {
+      try {
+        const payload: CheckTemplateItemCreate = {
+          name: 'New Item',
+          sort_order: comp.items.length,
+        };
+        const created = await schedulingService.addCheckItem(comp.id, payload);
+        const item: ItemFormState = {
+          id: created.id,
+          name: created.name,
+          description: created.description ?? '',
+          checkType: created.checkType,
+          isRequired: created.isRequired,
+          requiredQuantity: created.requiredQuantity != null ? String(created.requiredQuantity) : '',
+          hasExpiration: created.hasExpiration,
+          expirationDate: created.expirationDate ?? '',
+          expirationWarningDays: String(created.expirationWarningDays ?? 30),
+          imageUrl: created.imageUrl ?? '',
+        };
+        updateCompartmentField(compartmentIdx, { items: [...comp.items, item] });
+        toast.success('Item added');
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to add item'));
+      }
+    } else {
+      // Unsaved compartment — add locally
+      updateCompartmentField(compartmentIdx, {
+        items: [...comp.items, emptyItem()],
+      });
+    }
+  };
+
+  const updateItemField = (
+    compartmentIdx: number,
+    itemIdx: number,
+    patch: Partial<ItemFormState>,
+  ) => {
+    setCompartments((prev) => {
+      const next = [...prev];
+      const comp = next[compartmentIdx];
+      if (!comp) return prev;
+      const items = [...comp.items];
+      const existing = items[itemIdx];
+      if (!existing) return prev;
+      items[itemIdx] = { ...existing, ...patch };
+      next[compartmentIdx] = { ...comp, items };
+      return next;
+    });
+  };
+
+  const deleteItem = async (compartmentIdx: number, itemIdx: number) => {
+    const comp = compartments[compartmentIdx];
+    if (!comp) return;
+    const item = comp.items[itemIdx];
+    if (!item) return;
+
+    if (item.id) {
+      try {
+        await schedulingService.deleteCheckItem(item.id);
+        toast.success('Item deleted');
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to delete item'));
+        return;
+      }
+    }
+
+    const updatedItems = comp.items.filter((_, i) => i !== itemIdx);
+    updateCompartmentField(compartmentIdx, { items: updatedItems });
+  };
+
+  // ---------------------------------------------------------------------------
+  // Save
+  // ---------------------------------------------------------------------------
+
+  const handleSave = async () => {
+    if (!form.name.trim()) {
+      toast.error('Template name is required');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const compartmentPayloads: CheckTemplateCompartmentCreate[] = compartments
+        .filter((c) => !c.id) // Only include unsaved compartments in create payload
+        .map((c, idx) => ({
+          name: c.name || 'Untitled Compartment',
+          description: c.description.trim() || undefined,
+          sort_order: idx,
+          image_url: c.imageUrl.trim() || undefined,
+          parent_compartment_id: c.parentCompartmentId || undefined,
+          items: c.items.map((item, itemIdx) => ({
+            name: item.name || 'Untitled Item',
+            description: item.description.trim() || undefined,
+            sort_order: itemIdx,
+            check_type: item.checkType,
+            is_required: item.isRequired,
+            required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
+            image_url: item.imageUrl.trim() || undefined,
+            has_expiration: item.hasExpiration,
+            expiration_date: item.expirationDate.trim() || undefined,
+            expiration_warning_days: item.expirationWarningDays
+              ? Number(item.expirationWarningDays)
+              : undefined,
+          })),
+        }));
+
+      if (isEditing && templateId) {
+        await schedulingService.updateEquipmentCheckTemplate(templateId, {
+          name: form.name.trim(),
+          description: form.description.trim() || undefined,
+          check_timing: form.checkTiming,
+          assigned_positions: form.assignedPositions.length > 0 ? form.assignedPositions : undefined,
+          apparatus_type: form.apparatusType || undefined,
+          apparatus_id: form.apparatusId || undefined,
+          is_active: form.isActive,
+        });
+
+        // Save any new compartments that haven't been persisted yet
+        for (const payload of compartmentPayloads) {
+          await schedulingService.addCompartment(templateId, payload);
+        }
+
+        // Update existing compartments
+        for (const comp of compartments) {
+          if (comp.id) {
+            await schedulingService.updateCompartment(comp.id, {
+              name: comp.name || undefined,
+              description: comp.description.trim() || undefined,
+              image_url: comp.imageUrl.trim() || undefined,
+              parent_compartment_id: comp.parentCompartmentId || undefined,
+            });
+
+            // Update existing items
+            for (const item of comp.items) {
+              if (item.id) {
+                await schedulingService.updateCheckItem(item.id, {
+                  name: item.name || undefined,
+                  description: item.description.trim() || undefined,
+                  check_type: item.checkType,
+                  is_required: item.isRequired,
+                  required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
+                  image_url: item.imageUrl.trim() || undefined,
+                  has_expiration: item.hasExpiration,
+                  expiration_date: item.expirationDate.trim() || undefined,
+                  expiration_warning_days: item.expirationWarningDays
+                    ? Number(item.expirationWarningDays)
+                    : undefined,
+                });
+              }
+            }
+          }
+        }
+
+        toast.success('Template updated');
+      } else {
+        const createPayload: EquipmentCheckTemplateCreate = {
+          name: form.name.trim(),
+          description: form.description.trim() || undefined,
+          check_timing: form.checkTiming,
+          assigned_positions: form.assignedPositions.length > 0 ? form.assignedPositions : undefined,
+          apparatus_type: form.apparatusType || undefined,
+          apparatus_id: form.apparatusId || undefined,
+          is_active: form.isActive,
+          compartments: compartments.map((c, idx) => ({
+            name: c.name || 'Untitled Compartment',
+            description: c.description.trim() || undefined,
+            sort_order: idx,
+            image_url: c.imageUrl.trim() || undefined,
+            parent_compartment_id: c.parentCompartmentId || undefined,
+            items: c.items.map((item, itemIdx) => ({
+              name: item.name || 'Untitled Item',
+              description: item.description.trim() || undefined,
+              sort_order: itemIdx,
+              check_type: item.checkType,
+              is_required: item.isRequired,
+              required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
+              image_url: item.imageUrl.trim() || undefined,
+              has_expiration: item.hasExpiration,
+              expiration_date: item.expirationDate.trim() || undefined,
+              expiration_warning_days: item.expirationWarningDays
+                ? Number(item.expirationWarningDays)
+                : undefined,
+            })),
+          })),
+        };
+        await schedulingService.createEquipmentCheckTemplate(createPayload);
+        toast.success('Template created');
+      }
+
+      navigate(-1);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save template'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Render: Loading
+  // ---------------------------------------------------------------------------
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="h-8 w-8 animate-spin text-theme-text-muted" />
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Render: Item Row
+  // ---------------------------------------------------------------------------
+
+  const renderItem = (
+    compIdx: number,
+    itemIdx: number,
+    item: ItemFormState,
+  ) => (
+    <div
+      key={item.id ?? `item-${compIdx}-${itemIdx}`}
+      className="rounded-md border border-theme-surface-border bg-theme-surface p-3 space-y-3"
+    >
+      <div className="flex items-start gap-3">
+        {/* Name + Description */}
+        <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className={labelClass}>Name</label>
+            <input
+              type="text"
+              className={inputClass}
+              placeholder="Item name"
+              value={item.name}
+              onChange={(e) => updateItemField(compIdx, itemIdx, { name: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Description</label>
+            <input
+              type="text"
+              className={inputClass}
+              placeholder="Optional description"
+              value={item.description}
+              onChange={(e) => updateItemField(compIdx, itemIdx, { description: e.target.value })}
+            />
+          </div>
+        </div>
+
+        {/* Delete */}
+        <button
+          type="button"
+          onClick={() => void deleteItem(compIdx, itemIdx)}
+          className="mt-6 p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+          title="Delete item"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {/* Check Type */}
+        <div>
+          <label className={labelClass}>Check Type</label>
+          <select
+            className={selectClass}
+            value={item.checkType}
+            onChange={(e) =>
+              updateItemField(compIdx, itemIdx, {
+                checkType: e.target.value as ItemFormState['checkType'],
+              })
+            }
+          >
+            {CHECK_TYPES.map((ct) => (
+              <option key={ct.value} value={ct.value}>
+                {ct.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Required */}
+        <div className="flex items-end pb-2">
+          <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
+            <input
+              type="checkbox"
+              className={checkboxClass}
+              checked={item.isRequired}
+              onChange={(e) => updateItemField(compIdx, itemIdx, { isRequired: e.target.checked })}
+            />
+            Required
+          </label>
+        </div>
+
+        {/* Required Quantity (conditional) */}
+        {item.checkType === 'quantity' && (
+          <div>
+            <label className={labelClass}>Required Qty</label>
+            <input
+              type="number"
+              className={inputClass}
+              min="0"
+              placeholder="0"
+              value={item.requiredQuantity}
+              onChange={(e) => updateItemField(compIdx, itemIdx, { requiredQuantity: e.target.value })}
+            />
+          </div>
+        )}
+
+        {/* Image URL */}
+        <div>
+          <label className={labelClass}>
+            <Image className="inline h-3.5 w-3.5 mr-1" />
+            Image URL
+          </label>
+          <input
+            type="text"
+            className={inputClass}
+            placeholder="https://..."
+            value={item.imageUrl}
+            onChange={(e) => updateItemField(compIdx, itemIdx, { imageUrl: e.target.value })}
+          />
+        </div>
+      </div>
+
+      {/* Expiration row */}
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
+          <input
+            type="checkbox"
+            className={checkboxClass}
+            checked={item.hasExpiration}
+            onChange={(e) => updateItemField(compIdx, itemIdx, { hasExpiration: e.target.checked })}
+          />
+          <AlertTriangle className="h-3.5 w-3.5" />
+          Has Expiration
+        </label>
+
+        {item.hasExpiration && (
+          <>
+            <div>
+              <label className={labelClass}>Expiration Date</label>
+              <input
+                type="date"
+                className={inputClass}
+                value={item.expirationDate}
+                onChange={(e) => updateItemField(compIdx, itemIdx, { expirationDate: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Warning Days</label>
+              <input
+                type="number"
+                className={inputClass}
+                min="0"
+                placeholder="30"
+                value={item.expirationWarningDays}
+                onChange={(e) =>
+                  updateItemField(compIdx, itemIdx, { expirationWarningDays: e.target.value })
+                }
+              />
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  // ---------------------------------------------------------------------------
+  // Render: Compartment Card
+  // ---------------------------------------------------------------------------
+
+  const renderCompartment = (comp: CompartmentFormState, idx: number) => {
+    const key = comp.id ?? `comp-${idx}`;
+    const isExpanded = expandedCompartments.has(key);
+
+    return (
+      <div
+        key={key}
+        className="rounded-lg border border-theme-surface-border bg-theme-surface overflow-hidden"
+      >
+        {/* Compartment header */}
+        <div className="flex items-center gap-2 px-4 py-3 bg-theme-surface">
+          <GripVertical className="h-5 w-5 text-theme-text-muted cursor-grab flex-shrink-0" />
+
+          <button
+            type="button"
+            onClick={() => toggleCompartmentExpanded(key)}
+            className="flex items-center gap-2 flex-1 text-left"
+          >
+            {isExpanded ? (
+              <ChevronUp className="h-4 w-4 text-theme-text-muted" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-theme-text-muted" />
+            )}
+            <span className="font-medium text-theme-text-primary">
+              {comp.name || 'Untitled Compartment'}
+            </span>
+            <span className="text-xs text-theme-text-muted">
+              ({comp.items.length} item{comp.items.length !== 1 ? 's' : ''})
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void deleteCompartment(idx)}
+            className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+            title="Delete compartment"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Compartment body */}
+        {isExpanded && (
+          <div className="border-t border-theme-surface-border px-4 py-4 space-y-4">
+            {/* Compartment fields */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass}>Compartment Name</label>
+                <input
+                  type="text"
+                  className={inputClass}
+                  placeholder="e.g. Driver Side, Cab, Hose Bed"
+                  value={comp.name}
+                  onChange={(e) => updateCompartmentField(idx, { name: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Description</label>
+                <input
+                  type="text"
+                  className={inputClass}
+                  placeholder="Optional description"
+                  value={comp.description}
+                  onChange={(e) => updateCompartmentField(idx, { description: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass}>
+                  <Image className="inline h-3.5 w-3.5 mr-1" />
+                  Image URL
+                </label>
+                <input
+                  type="text"
+                  className={inputClass}
+                  placeholder="https://..."
+                  value={comp.imageUrl}
+                  onChange={(e) => updateCompartmentField(idx, { imageUrl: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Parent Compartment</label>
+                <select
+                  className={selectClass}
+                  value={comp.parentCompartmentId}
+                  onChange={(e) =>
+                    updateCompartmentField(idx, { parentCompartmentId: e.target.value })
+                  }
+                >
+                  <option value="">None (top-level)</option>
+                  {compartments
+                    .filter((_, cIdx) => cIdx !== idx)
+                    .map((other, oIdx) => {
+                      const otherId = other.id ?? `comp-${oIdx >= idx ? oIdx + 1 : oIdx}`;
+                      return (
+                        <option key={otherId} value={other.id ?? ''}>
+                          {other.name || 'Untitled Compartment'}
+                        </option>
+                      );
+                    })}
+                </select>
+              </div>
+            </div>
+
+            {/* Items */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-theme-text-primary">Check Items</h4>
+                <button
+                  type="button"
+                  onClick={() => void addItem(idx)}
+                  className="flex items-center gap-1 rounded-md border border-theme-surface-border px-3 py-1.5 text-xs font-medium text-theme-text-secondary hover:border-blue-500 hover:text-blue-600 transition-colors"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Item
+                </button>
+              </div>
+
+              {comp.items.length === 0 && (
+                <p className="text-sm text-theme-text-muted italic py-2">
+                  No items yet. Click &ldquo;Add Item&rdquo; to start building this compartment&apos;s checklist.
+                </p>
+              )}
+
+              {comp.items.map((item, itemIdx) => renderItem(idx, itemIdx, item))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ---------------------------------------------------------------------------
+  // Render: Main
+  // ---------------------------------------------------------------------------
+
+  return (
+    <div className="mx-auto max-w-4xl space-y-6 pb-12">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="p-2 rounded-md text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface transition-colors"
+            title="Go back"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+          <h1 className="text-2xl font-bold text-theme-text-primary">
+            {isEditing ? `Edit: ${form.name || 'Template'}` : 'New Equipment Check Template'}
+          </h1>
+        </div>
+        <button
+          type="button"
+          onClick={() => void handleSave()}
+          disabled={saving}
+          className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+        >
+          {saving ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Save className="h-4 w-4" />
+          )}
+          {saving ? 'Saving...' : 'Save Template'}
+        </button>
+      </div>
+
+      {/* Template Metadata Card */}
+      <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6 space-y-5">
+        <h2 className="text-lg font-semibold text-theme-text-primary">Template Details</h2>
+
+        {/* Name */}
+        <div>
+          <label className={labelClass}>
+            Name <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            className={inputClass}
+            placeholder="e.g. Engine Daily Check"
+            value={form.name}
+            onChange={(e) => updateForm({ name: e.target.value })}
+          />
+        </div>
+
+        {/* Description */}
+        <div>
+          <label className={labelClass}>Description</label>
+          <textarea
+            className={inputClass}
+            rows={3}
+            placeholder="Describe what this template covers..."
+            value={form.description}
+            onChange={(e) => updateForm({ description: e.target.value })}
+          />
+        </div>
+
+        {/* Check Timing */}
+        <div>
+          <label className={labelClass}>
+            <Clock className="inline h-3.5 w-3.5 mr-1" />
+            Check Timing
+          </label>
+          <select
+            className={selectClass}
+            value={form.checkTiming}
+            onChange={(e) =>
+              updateForm({ checkTiming: e.target.value as TemplateFormState['checkTiming'] })
+            }
+          >
+            <option value="start_of_shift">Start of Shift</option>
+            <option value="end_of_shift">End of Shift</option>
+          </select>
+        </div>
+
+        {/* Assigned Positions */}
+        <div>
+          <label className={labelClass}>Assigned Positions</label>
+          <div className="flex flex-wrap gap-3 mt-1">
+            {POSITIONS.map((pos) => (
+              <label
+                key={pos}
+                className="flex items-center gap-2 text-sm text-theme-text-secondary capitalize"
+              >
+                <input
+                  type="checkbox"
+                  className={checkboxClass}
+                  checked={form.assignedPositions.includes(pos)}
+                  onChange={() => togglePosition(pos)}
+                />
+                {pos}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Apparatus Type */}
+        <div>
+          <label className={labelClass}>Apparatus Type</label>
+          <select
+            className={selectClass}
+            value={form.apparatusType}
+            onChange={(e) => updateForm({ apparatusType: e.target.value })}
+          >
+            <option value="">-- Select Type --</option>
+            {APPARATUS_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {t.charAt(0).toUpperCase() + t.slice(1)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Apparatus ID (specific apparatus) */}
+        <div>
+          <label className={labelClass}>Specific Apparatus ID</label>
+          <input
+            type="text"
+            className={inputClass}
+            placeholder="Leave blank to apply to all of the selected type"
+            value={form.apparatusId}
+            onChange={(e) => updateForm({ apparatusId: e.target.value })}
+          />
+        </div>
+
+        {/* Active toggle */}
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
+            <input
+              type="checkbox"
+              className={checkboxClass}
+              checked={form.isActive}
+              onChange={(e) => updateForm({ isActive: e.target.checked })}
+            />
+            Active
+          </label>
+          <span className="text-xs text-theme-text-muted">
+            Inactive templates will not appear in shift checklists
+          </span>
+        </div>
+      </div>
+
+      {/* Compartments Section */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-theme-text-primary">Compartments</h2>
+          <button
+            type="button"
+            onClick={() => void addCompartment()}
+            className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Add Compartment
+          </button>
+        </div>
+
+        {compartments.length === 0 && (
+          <div className="rounded-lg border border-dashed border-theme-surface-border bg-theme-surface p-8 text-center">
+            <p className="text-sm text-theme-text-muted">
+              No compartments yet. Add compartments to organize equipment check items by location on
+              the apparatus.
+            </p>
+          </div>
+        )}
+
+        {compartments.map((comp, idx) => renderCompartment(comp, idx))}
+      </div>
+    </div>
+  );
+};
+
+export default EquipmentCheckTemplateBuilder;

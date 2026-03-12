@@ -28,9 +28,12 @@ from app.models.apparatus import (
     ApparatusStatus,
     ApparatusStatusHistory,
     ApparatusType,
+    CheckTemplateCompartment,
+    CheckTemplateItem,
     CustomFieldType,
     DefaultApparatusStatus,
     DefaultApparatusType,
+    EquipmentCheckTemplate,
     FuelType,
     MaintenanceCategory,
     MaintenanceIntervalUnit,
@@ -212,6 +215,8 @@ from app.models.training import (
     Shift,
     ShiftAttendance,
     ShiftCall,
+    ShiftEquipmentCheck,
+    ShiftEquipmentCheckItem,
     SkillCheckoff,
     SkillEvaluation,
     TrainingApproval,
@@ -382,6 +387,10 @@ __all__ = [
     "ApparatusStatusHistory",
     "ApparatusNFPACompliance",
     "ApparatusReportConfig",
+    # Equipment check template models
+    "EquipmentCheckTemplate",
+    "CheckTemplateCompartment",
+    "CheckTemplateItem",
     # Apparatus enums
     "ApparatusCategory",
     "DefaultApparatusType",
@@ -441,6 +450,9 @@ __all__ = [
     "Shift",
     "ShiftAttendance",
     "ShiftCall",
+    # Shift equipment check models
+    "ShiftEquipmentCheck",
+    "ShiftEquipmentCheckItem",
     # Security alert models
     "SecurityAlertRecord",
     "AlertType",

@@ -79,7 +79,7 @@ const KpiCard: React.FC<{
   <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-4">
     <div className="flex items-center gap-3">
       <div
-        className={`rounded-lg p-2 ${color ?? 'bg-gray-100 dark:bg-gray-800'}`}
+        className={`rounded-lg p-2 ${color ?? 'bg-theme-surface-secondary'}`}
       >
         {icon}
       </div>
@@ -103,7 +103,7 @@ const HorizontalBarChart: React.FC<{
     <div className="space-y-2">
       {items.map((item, idx) => {
         const pct = Math.round((item.value / maxValue) * 100);
-        const color = BAR_COLORS[idx % BAR_COLORS.length] ?? 'bg-gray-400';
+        const color = BAR_COLORS[idx % BAR_COLORS.length] ?? 'bg-theme-text-muted';
 
         return (
           <div key={item.label}>
@@ -115,7 +115,7 @@ const HorizontalBarChart: React.FC<{
                 {fmt(item.value)}
               </span>
             </div>
-            <div className="h-4 w-full overflow-hidden rounded bg-gray-200 dark:bg-gray-700">
+            <div className="h-4 w-full overflow-hidden rounded bg-theme-surface-hover">
               <div
                 className={`h-full rounded transition-all ${color}`}
                 style={{ width: `${pct}%` }}
@@ -250,14 +250,14 @@ const GrantsReportsPage: React.FC = () => {
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-1.5 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none"
+            className="rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-1.5 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none"
           />
           <span className="text-sm text-theme-text-secondary">to</span>
           <input
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-1.5 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none"
+            className="rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-1.5 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none"
           />
         </div>
       </div>
@@ -272,7 +272,7 @@ const GrantsReportsPage: React.FC = () => {
             className={`flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               activeTab === tab.id
                 ? 'bg-red-600 text-white'
-                : 'text-theme-text-secondary hover:bg-gray-100 hover:text-theme-text-primary dark:hover:bg-gray-800'
+                : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
             }`}
           >
             {tab.icon}
@@ -351,7 +351,7 @@ const GrantsReportsPage: React.FC = () => {
                 </h3>
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                    <span className="inline-flex rounded-full bg-theme-surface-secondary px-2 py-0.5 text-xs font-medium text-theme-text-secondary">
                       Total
                     </span>
                     <span className="font-bold text-theme-text-primary">

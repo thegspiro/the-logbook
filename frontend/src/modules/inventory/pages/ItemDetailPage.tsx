@@ -18,11 +18,13 @@ import { locationsService } from '../../../services/facilitiesServices';
 import type {
   InventoryItem, InventoryCategory, ItemHistoryEvent,
   MaintenanceRecord, NFPACompliance, NFPAExposureRecord,
+  StorageAreaResponse, Location,
 } from '../types';
 import { getStatusStyle, getConditionColor } from '../types';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
+import { ItemFormModal } from '../components/ItemFormModal';
 import { useTimezone } from '../../../hooks/useTimezone';
 import toast from 'react-hot-toast';
 
@@ -81,7 +83,7 @@ const Field: React.FC<FieldProps> = ({ label, value }) => (
 
 interface CardProps { title: string; icon?: React.ReactNode; children: React.ReactNode }
 const Card: React.FC<CardProps> = ({ title, icon, children }) => (
-  <div className="bg-theme-surface border border-theme-surface-border rounded-lg p-4">
+  <div className="card-secondary p-4">
     <h3 className="text-sm font-semibold text-theme-text-primary flex items-center gap-2 mb-3">
       {icon}{title}
     </h3>
@@ -114,6 +116,12 @@ const ItemDetailPage: React.FC = () => {
   // Location name resolution
   const [locationName, setLocationName] = useState<string | null>(null);
 
+  // Edit modal data
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [categories, setCategories] = useState<InventoryCategory[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [storageAreas, setStorageAreas] = useState<StorageAreaResponse[]>([]);
+
   // Assign modal
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assignUserId, setAssignUserId] = useState('');
@@ -129,22 +137,22 @@ const ItemDetailPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [fetched, cats] = await Promise.all([
+      const [fetched, cats, locs, areas] = await Promise.all([
         inventoryService.getItem(id),
         inventoryService.getCategories(),
+        locationsService.getLocations(),
+        inventoryService.getStorageAreas({ flat: true }),
       ]);
       setItem(fetched);
+      setCategories(cats);
+      setLocations(locs);
+      setStorageAreas(areas);
       const cat = cats.find(c => c.id === fetched.category_id) ?? null;
       setCategory(cat);
       // Resolve location name
       if (fetched.location_id) {
-        try {
-          const locations = await locationsService.getLocations();
-          const loc = locations.find((l) => l.id === fetched.location_id);
-          setLocationName(loc?.name ?? null);
-        } catch {
-          setLocationName(null);
-        }
+        const loc = locs.find((l: { id: string }) => l.id === fetched.location_id);
+        setLocationName(loc?.name ?? null);
       }
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to load item'));
@@ -258,7 +266,7 @@ const ItemDetailPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <span className="text-theme-text-muted">{typeIcon(itemType)}</span>
-          <h1 className="text-xl font-bold text-theme-text-primary">{item.name}</h1>
+          <h1 className="text-2xl font-bold text-theme-text-primary">{item.name}</h1>
           <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${getStatusStyle(item.status)}`}>
             {item.status.replace('_', ' ')}
           </span>
@@ -272,22 +280,22 @@ const ItemDetailPage: React.FC = () => {
         <div className="flex items-center gap-2">
           <Link
             to="/inventory/items"
-            className="btn-info text-sm inline-flex items-center gap-1"
+            className="btn-secondary btn-sm inline-flex items-center gap-1"
           >
             <ArrowLeft className="w-4 h-4" /> Back
           </Link>
           <Link
             to={`/inventory/print-labels?ids=${id ?? ''}`}
-            className="btn-info text-sm inline-flex items-center gap-1"
+            className="btn-secondary btn-sm inline-flex items-center gap-1"
           >
             <Printer className="w-4 h-4" /> Print Barcode
           </Link>
-          <Link
-            to={`/inventory/items/${id ?? ''}/edit`}
-            className="btn-primary text-sm inline-flex items-center gap-1"
+          <button
+            onClick={() => setShowEditModal(true)}
+            className="btn-info btn-sm inline-flex items-center gap-1"
           >
             <Pencil className="w-4 h-4" /> Edit
-          </Link>
+          </button>
         </div>
       </div>
 
@@ -386,7 +394,7 @@ const ItemDetailPage: React.FC = () => {
                 <div className="col-span-full mt-1">
                   <button
                     onClick={() => void handleUnassign()}
-                    className="btn-info text-xs"
+                    className="btn-secondary btn-sm"
                   >
                     Unassign
                   </button>
@@ -397,7 +405,7 @@ const ItemDetailPage: React.FC = () => {
                 <p className="text-sm text-theme-text-muted mb-2">Not currently assigned</p>
                 <button
                   onClick={() => setShowAssignModal(true)}
-                  className="btn-primary text-xs"
+                  className="btn-info btn-sm"
                 >
                   Assign Item
                 </button>
@@ -460,11 +468,11 @@ const ItemDetailPage: React.FC = () => {
               />
             </div>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setShowAssignModal(false)} className="btn-info text-sm">Cancel</button>
+              <button onClick={() => setShowAssignModal(false)} className="btn-secondary btn-md">Cancel</button>
               <button
                 onClick={() => void handleAssign()}
                 disabled={assigning || !assignUserId.trim()}
-                className="btn-primary text-sm inline-flex items-center gap-1"
+                className="btn-info btn-md inline-flex items-center gap-1"
               >
                 {assigning && <Loader2 className="w-4 h-4 animate-spin" />}
                 Assign
@@ -473,6 +481,17 @@ const ItemDetailPage: React.FC = () => {
           </div>
         </Modal>
       )}
+
+      {/* Edit Item Modal */}
+      <ItemFormModal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        onSaved={() => void loadItem()}
+        categories={categories}
+        locations={locations}
+        storageAreas={storageAreas}
+        editItem={item}
+      />
     </div>
   );
 };
@@ -556,7 +575,7 @@ const InspectionsTab: React.FC<InspectionsTabProps> = ({ records, tz, itemId }) 
   <div>
     <div className="flex items-center justify-between mb-3">
       <h3 className="text-sm font-semibold text-theme-text-primary">Maintenance Records</h3>
-      <Link to={`/inventory/maintenance?item=${itemId}`} className="btn-primary text-xs">
+      <Link to={`/inventory/maintenance?item=${itemId}`} className="btn-info btn-sm">
         + Add Record
       </Link>
     </div>
@@ -565,7 +584,7 @@ const InspectionsTab: React.FC<InspectionsTabProps> = ({ records, tz, itemId }) 
     ) : (
       <div className="space-y-2">
         {records.map(rec => (
-          <div key={rec.id} className="bg-theme-surface border border-theme-surface-border rounded-lg p-3 flex items-start justify-between gap-3">
+          <div key={rec.id} className="card-secondary p-3 flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-sm font-medium text-theme-text-primary">
                 {rec.maintenance_type.replace('_', ' ')}{' '}
@@ -600,7 +619,7 @@ const ExposuresTab: React.FC<ExposuresTabProps> = ({ records, tz }) => (
     ) : (
       <div className="space-y-2">
         {records.map(rec => (
-          <div key={rec.id} className="bg-theme-surface border border-theme-surface-border rounded-lg p-3">
+          <div key={rec.id} className="card-secondary p-3">
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-medium text-theme-text-primary">
                 {rec.exposure_type.replace('_', ' ')}

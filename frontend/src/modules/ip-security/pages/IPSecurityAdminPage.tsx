@@ -25,7 +25,7 @@ const tabClass = (active: boolean) =>
   }`;
 
 const inputClass =
-  'w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500/40';
+  'w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500/40';
 const labelClass = 'block text-sm font-medium text-theme-text-secondary mb-1';
 
 type Tab = 'pending' | 'all' | 'blocked-attempts' | 'blocked-countries';
@@ -87,9 +87,10 @@ const IPSecurityAdminPage: React.FC = () => {
 
   const handleApprove = async () => {
     try {
+      const trimmedNotes = approvalNotes.trim();
       await approveException(approveModal.id, {
-        approvedDurationDays: approvedDays || undefined,
-        approvalNotes: approvalNotes.trim() || undefined,
+        ...(approvedDays ? { approvedDurationDays: approvedDays } : {}),
+        ...(trimmedNotes ? { approvalNotes: trimmedNotes } : {}),
       });
       toast.success('Exception approved');
       setApproveModal({ open: false, id: '' });
@@ -127,11 +128,12 @@ const IPSecurityAdminPage: React.FC = () => {
   const handleAddCountry = async () => {
     if (!newCountry.countryCode.trim() || !newCountry.reason.trim()) return;
     try {
+      const trimmedCountryName = newCountry.countryName?.trim();
       await addBlockedCountry({
-        ...newCountry,
         countryCode: newCountry.countryCode.trim().toUpperCase(),
         reason: newCountry.reason.trim(),
-        countryName: newCountry.countryName?.trim() || undefined,
+        riskLevel: newCountry.riskLevel,
+        ...(trimmedCountryName ? { countryName: trimmedCountryName } : {}),
       });
       toast.success('Country added to block list');
       setCountryModal(false);

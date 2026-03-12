@@ -278,7 +278,7 @@ const ModuleCard: React.FC<ModuleCardProps> = ({ module }) => {
         <span className={`px-2 py-0.5 rounded text-xs font-medium ${
           module.enabled
             ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
-            : 'bg-gray-100 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400'
+            : 'bg-theme-surface-secondary text-theme-text-muted'
         }`}>
           {module.enabled ? 'Enabled' : 'Disabled'}
         </span>

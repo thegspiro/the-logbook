@@ -114,7 +114,7 @@ const LocationKioskPage: React.FC = () => {
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-linear-to-br from-theme-nav-bg via-theme-surface to-theme-nav-bg flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-red-500 mb-6" />
           <p className="text-xl text-white">Loading display...</p>
@@ -126,11 +126,11 @@ const LocationKioskPage: React.FC = () => {
   // Error state (permanent — bad code)
   if (error && !data) {
     return (
-      <div className="min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-8">
+      <div className="min-h-screen bg-linear-to-br from-theme-nav-bg via-theme-surface to-theme-nav-bg flex items-center justify-center p-8">
         <div className="text-center max-w-md">
-          <MapPin className="w-16 h-16 text-slate-500 mx-auto mb-6" />
+          <MapPin className="w-16 h-16 text-theme-text-muted mx-auto mb-6" />
           <h1 className="text-2xl font-bold text-white mb-4">Display Unavailable</h1>
-          <p className="text-slate-200">{error}</p>
+          <p className="text-theme-text-secondary">{error}</p>
         </div>
       </div>
     );
@@ -143,7 +143,7 @@ const LocationKioskPage: React.FC = () => {
   const currentEvent = hasEvents ? events[currentEventIndex % events.length] : null;
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
+    <div className="min-h-screen bg-linear-to-br from-theme-nav-bg via-theme-surface to-theme-nav-bg flex flex-col">
       {/* Header bar */}
       <div className="flex items-center justify-between px-8 py-4 bg-black/30">
         <div className="flex items-center gap-3">
@@ -156,7 +156,7 @@ const LocationKioskPage: React.FC = () => {
           ) : (
             <WifiOff className="w-5 h-5 text-red-400 animate-pulse" />
           )}
-          <span className="text-lg text-slate-100 font-mono">
+          <span className="text-lg text-theme-text-primary font-mono">
             {currentTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: tz })}
           </span>
         </div>
@@ -176,7 +176,7 @@ const LocationKioskPage: React.FC = () => {
                       className={`w-3 h-3 rounded-full transition-all ${
                         idx === currentEventIndex % events.length
                           ? 'bg-red-500 scale-110'
-                          : 'bg-slate-600'
+                          : 'bg-theme-surface-hover'
                       }`}
                     />
                   ))}
@@ -188,11 +188,11 @@ const LocationKioskPage: React.FC = () => {
               </div>
               <h2 className="text-4xl font-bold text-white mb-3">{currentEvent.event_name}</h2>
               {currentEvent.event_type && (
-                <p className="text-lg text-slate-200 capitalize mb-2">
+                <p className="text-lg text-theme-text-secondary capitalize mb-2">
                   {currentEvent.event_type.replace('_', ' ')}
                 </p>
               )}
-              <p className="text-xl text-slate-100">
+              <p className="text-xl text-theme-text-primary">
                 {formatDate(currentEvent.start_datetime)} &middot;{' '}
                 {formatTime(currentEvent.start_datetime)} &ndash; {formatTime(currentEvent.end_datetime)}
               </p>
@@ -211,21 +211,21 @@ const LocationKioskPage: React.FC = () => {
             </div>
 
             {/* Instructions */}
-            <p className="text-xl text-slate-100 font-medium">
+            <p className="text-xl text-theme-text-primary font-medium">
               Scan with your phone to check in
             </p>
-            <p className="text-sm text-slate-400 mt-2">
+            <p className="text-sm text-theme-text-muted mt-2">
               You will be prompted to log in if needed
             </p>
           </div>
         ) : (
           /* Idle state — no active events */
           <div className="text-center max-w-lg">
-            <div className="w-24 h-24 mx-auto mb-8 rounded-full bg-slate-800 flex items-center justify-center">
-              <MapPin className="w-12 h-12 text-slate-600" />
+            <div className="w-24 h-24 mx-auto mb-8 rounded-full bg-theme-surface flex items-center justify-center">
+              <MapPin className="w-12 h-12 text-theme-text-muted" />
             </div>
-            <h2 className="text-3xl font-bold text-slate-200 mb-4">No Active Events</h2>
-            <p className="text-lg text-slate-300">
+            <h2 className="text-3xl font-bold text-theme-text-primary mb-4">No Active Events</h2>
+            <p className="text-lg text-theme-text-secondary">
               QR codes will appear here automatically when an event is scheduled in this room.
             </p>
           </div>
@@ -234,7 +234,7 @@ const LocationKioskPage: React.FC = () => {
 
       {/* Footer */}
       <div className="px-8 py-3 bg-black/20 text-center">
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-theme-text-muted">
           Display refreshes automatically &middot; {data.location_name}
         </p>
       </div>

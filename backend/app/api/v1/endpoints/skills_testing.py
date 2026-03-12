@@ -1137,8 +1137,12 @@ async def email_test_results(
                 f"{criteria_html}</table>"
             )
 
+    from app.services.email_service import EmailService, build_email_logo_html
+
+    _logo = build_email_logo_html(org)
     html_body = f"""
     <div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
+      {_logo}
       <h2 style="color:#333;">Skills Test Results — {test_type}</h2>
       <table style="width:100%;margin-bottom:16px;">
         <tr><td style="padding:4px 0;color:#666;">Template:</td>
@@ -1161,8 +1165,6 @@ async def email_test_results(
       </p>
     </div>
     """
-
-    from app.services.email_service import EmailService
 
     email_service = EmailService(organization=org)
     subject = f"Skills Test Results: {template_name} ({test_type})"

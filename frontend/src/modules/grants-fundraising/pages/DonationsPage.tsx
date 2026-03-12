@@ -34,11 +34,11 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
 };
 
 const PAYMENT_STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  completed: 'bg-green-100 text-green-800',
-  failed: 'bg-red-100 text-red-800',
-  refunded: 'bg-gray-100 text-gray-600',
-  cancelled: 'bg-red-100 text-red-700',
+  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
+  completed: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+  failed: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+  refunded: 'bg-theme-surface-secondary text-theme-text-secondary',
+  cancelled: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
 };
 
 const DonationsPage: React.FC = () => {
@@ -130,7 +130,7 @@ const DonationsPage: React.FC = () => {
           <select
             value={methodFilter}
             onChange={(e) => setMethodFilter(e.target.value)}
-            className="rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none"
+            className="rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none"
           >
             <option value="">All Methods</option>
             {Object.entries(PAYMENT_METHOD_LABELS).map(([key, label]) => (
@@ -218,7 +218,7 @@ const DonationsPage: React.FC = () => {
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
                       <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_STATUS_COLORS[donation.paymentStatus] ?? 'bg-gray-100 text-gray-800'}`}
+                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_STATUS_COLORS[donation.paymentStatus] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
                       >
                         {donation.paymentStatus}
                       </span>

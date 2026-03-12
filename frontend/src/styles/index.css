@@ -703,7 +703,7 @@
   --nav-border: rgba(255, 255, 255, 0.1); /* white/10 */
 
   /* Inputs */
-  --input-bg: rgba(15, 23, 42, 0.5); /* slate-900/50 */
+  --input-bg: #1e293b; /* slate-800 */
   --input-border: #475569; /* slate-600 */
 
   /* Scrollbar */

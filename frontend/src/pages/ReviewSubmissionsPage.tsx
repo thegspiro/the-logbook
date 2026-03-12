@@ -39,7 +39,7 @@ import type {
 // ==================== Helpers ====================
 
 const STATUS_CONFIG: Record<SubmissionStatus, { label: string; color: string; icon: React.ElementType }> = {
-  draft: { label: 'Draft', color: 'bg-gray-500/10 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400', icon: FileText },
+  draft: { label: 'Draft', color: 'bg-theme-surface-secondary text-theme-text-secondary', icon: FileText },
   pending_review: { label: 'Pending Review', color: 'bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400', icon: Clock },
   approved: { label: 'Approved', color: 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400', icon: CheckCircle2 },
   rejected: { label: 'Rejected', color: 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400', icon: XCircle },
@@ -236,15 +236,15 @@ const EditRecordPanel: React.FC<{
       }
       if (fields.completion_date !== submission.completion_date) updates.completion_date = fields.completion_date;
       if (fields.certification_number !== (submission.certification_number || ''))
-        updates.certification_number = fields.certification_number ?? undefined;
+        updates.certification_number = fields.certification_number || undefined;
       if (fields.issuing_agency !== (submission.issuing_agency || ''))
-        updates.issuing_agency = fields.issuing_agency ?? undefined;
+        updates.issuing_agency = fields.issuing_agency || undefined;
       if (fields.expiration_date !== (submission.expiration_date || ''))
-        updates.expiration_date = fields.expiration_date ?? undefined;
+        updates.expiration_date = fields.expiration_date || undefined;
       if (fields.instructor !== (submission.instructor || ''))
-        updates.instructor = fields.instructor ?? undefined;
+        updates.instructor = fields.instructor || undefined;
       if (fields.location !== (submission.location || ''))
-        updates.location = fields.location ?? undefined;
+        updates.location = fields.location || undefined;
 
       if (Object.keys(updates).length === 0) {
         setEditing(false);
@@ -915,7 +915,7 @@ const ReviewSubmissionsPage: React.FC = () => {
               </>
             ) : (
               <>
-                <FileText className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                <FileText className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
                 <p className="text-theme-text-muted">No submissions found</p>
                 {statusFilter && (
                   <button

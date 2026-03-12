@@ -189,8 +189,8 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
   };
 
   const inputClass = isDark
-    ? `w-full px-3 py-2 bg-theme-surface-secondary border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-pink-500 focus:border-pink-500 ${
-        error ? 'border-red-500/50' : 'border-theme-surface-border'
+    ? `w-full px-3 py-2 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring ${
+        error ? 'border-red-500/50' : 'border-theme-input-border'
       } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`
     : `w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring ${
         error ? 'border-red-300 dark:border-red-500/50' : 'border-theme-input-border'
@@ -390,7 +390,7 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
                         : selected.filter((v) => v !== opt.value);
                       onChange(field.id, updated.join(','));
                     }}
-                    className="w-4 h-4 text-pink-600 rounded-sm"
+                    className="w-4 h-4 text-red-600 rounded-sm"
                   />
                   <span className={radioTextClass}>{opt.label}</span>
                 </label>
@@ -418,7 +418,7 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
                         : checkedValues.filter((v) => v !== opt.value);
                       onChange(field.id, updated.join(','));
                     }}
-                    className="w-4 h-4 text-pink-600 rounded-sm"
+                    className="w-4 h-4 text-red-600 rounded-sm"
                   />
                   <span className={radioTextClass}>{opt.label}</span>
                 </label>
@@ -440,7 +440,7 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
                   checked={value === opt.value}
                   disabled={disabled}
                   onChange={(e) => onChange(field.id, e.target.value)}
-                  className="w-4 h-4 text-pink-600"
+                  className="w-4 h-4 text-red-600"
                 />
                 <span className={radioTextClass}>{opt.label}</span>
               </label>
@@ -463,7 +463,7 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
                 {...ariaProps}
               />
               {searchingMembers && (
-                <div className={`absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-t-transparent rounded-full animate-spin ${isDark ? 'border-pink-500' : 'border-blue-500 dark:border-blue-400'}`} />
+                <div className={`absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-t-transparent rounded-full animate-spin ${isDark ? 'border-red-500' : 'border-blue-500 dark:border-blue-400'}`} />
               )}
             </div>
             {memberResults.length > 0 && (
@@ -523,7 +523,7 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
           return (
             <div className={`${inputClass} flex items-center justify-between py-3`}>
               <div className="flex items-center gap-2 min-w-0">
-                <FileText className={`w-4 h-4 shrink-0 ${isDark ? 'text-pink-700 dark:text-pink-400' : 'text-blue-700 dark:text-blue-400'}`} />
+                <FileText className={`w-4 h-4 shrink-0 ${isDark ? 'text-red-700 dark:text-red-400' : 'text-blue-700 dark:text-blue-400'}`} />
                 <span className="text-sm truncate">{fileInfo.name}</span>
                 <span className="text-xs shrink-0 text-theme-text-muted">
                   ({formatFileSize(fileInfo.size)})

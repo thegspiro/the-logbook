@@ -650,7 +650,6 @@ def _fast_path_init(engine, alembic_cfg, base_dir, head_revision=None):
     This reduces first-boot database setup from ~20 minutes to seconds.
     """
     from sqlalchemy import text
-    from sqlalchemy.exc import DatabaseError, OperationalError
 
     from alembic import command
     from alembic.script import ScriptDirectory
@@ -667,78 +666,77 @@ def _fast_path_init(engine, alembic_cfg, base_dir, head_revision=None):
     _import_all_models()
     from app.core.database import Base
 
-    # 2-5. Drop, create, and seed all in a SINGLE connection with FK checks off.
-    #    This eliminates connection pool overhead and FK validation overhead
-    #    across all DDL operations (~100+ CREATE TABLEs, ~40 indexes).
+    # 2-5. Drop, create, and seed using SEPARATE connections per phase.
+    #    MySQL auto-commits DDL (CREATE/DROP TABLE), which silently commits
+    #    any transaction started by engine.begin().  After 184 implicit commits
+    #    over a long init, SQLAlchemy's transaction tracker loses sync with
+    #    MySQL's actual state, producing "Can't reconnect until invalid
+    #    transaction is rolled back" errors.  Using separate connections for
+    #    each phase avoids this: each gets a fresh DBAPI connection (NullPool)
+    #    and the implicit DDL commits don't corrupt transaction bookkeeping.
     versions_dir = os.path.join(base_dir, "alembic", "versions")
-    with engine.begin() as conn:
-        try:
-            conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
 
-            # 2. Drop ALL existing tables so create_all() starts from a clean slate.
-            #    Uses a single batched DROP TABLE statement instead of per-table drops.
-            #    We keep alembic_version since command.stamp() manages it.
-            logger.info("Dropping all existing tables for clean recreation...")
-            result = conn.execute(text("SHOW TABLES"))
-            tables_to_drop = [row[0] for row in result if row[0] != "alembic_version"]
-            if tables_to_drop:
-                import re
+    # 2. Drop ALL existing tables so create_all() starts from a clean slate.
+    #    We keep alembic_version since command.stamp() manages it.
+    logger.info("Dropping all existing tables for clean recreation...")
+    with engine.connect() as conn:
+        conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+        result = conn.execute(text("SHOW TABLES"))
+        tables_to_drop = [row[0] for row in result if row[0] != "alembic_version"]
+        if tables_to_drop:
+            import re
 
-                _TABLE_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
-                for tname in tables_to_drop:
-                    # SEC: Validate table name against strict allowlist pattern
-                    # to prevent SQL injection via crafted table names.
-                    if not _TABLE_NAME_RE.match(tname):
-                        logger.warning(
-                            "Skipping table with suspicious name: %r", tname
-                        )
-                        continue
-                    conn.execute(text(f"DROP TABLE IF EXISTS `{tname}`"))
-            logger.info(f"Dropped {len(tables_to_drop)} existing tables")
-
-            # 3. Create ALL tables from current model definitions.
-            #    checkfirst=True is used because multiple uvicorn workers may
-            #    run this concurrently, and another worker may have already
-            #    created some tables. FK_CHECKS=0 (set above) skips FK
-            #    validation during CREATE TABLE.
-            #    Iterates sorted_tables individually for progress logging so
-            #    slow environments don't look hung during long create runs.
-            sorted_tables = Base.metadata.sorted_tables
-            total_tables = len(sorted_tables)
-            logger.info(f"Creating {total_tables} tables from model definitions...")
-            for i, table in enumerate(sorted_tables, 1):
-                table.create(conn, checkfirst=True)
-                if i % 25 == 0 or i == total_tables:
-                    logger.info(f"  Tables created: {i}/{total_tables}")
-            logger.info(f"All {total_tables} model-based tables created")
-
-            # 4. Create tables that only exist in migration files (no SQLAlchemy models).
-            #    Reuses the same connection to avoid pool overhead.
-            for migration_file in MIGRATION_ONLY_FILES:
-                migration_path = os.path.join(versions_dir, migration_file)
-                if os.path.exists(migration_path):
-                    logger.info(
-                        f"Creating migration-only tables from {migration_file}..."
+            _TABLE_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+            for tname in tables_to_drop:
+                # SEC: Validate table name against strict allowlist pattern
+                # to prevent SQL injection via crafted table names.
+                if not _TABLE_NAME_RE.match(tname):
+                    logger.warning(
+                        "Skipping table with suspicious name: %r", tname
                     )
-                    _run_migration_file(conn, migration_path)
+                    continue
+                conn.execute(text(f"DROP TABLE IF EXISTS `{tname}`"))
+        conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+        conn.commit()
+    logger.info(f"Dropped {len(tables_to_drop)} existing tables")
 
-            # 5. Insert seed data (apparatus types, statuses, maintenance types, facilities).
-            for seed_file in SEED_DATA_FILES:
-                seed_path = os.path.join(versions_dir, seed_file)
-                if os.path.exists(seed_path):
-                    logger.info(f"Inserting seed data from {seed_file}...")
-                    _run_migration_file(conn, seed_path)
-                    logger.info(f"Seed data from {seed_file} inserted")
-        finally:
-            # Re-enable FK checks even on failure. With NullPool the connection
-            # dies anyway, but this is defense-in-depth for pooled engines.
-            try:
-                conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
-            except (OperationalError, DatabaseError):
-                logger.debug(
-                    "Could not re-enable FOREIGN_KEY_CHECKS during fast-path init",
-                    exc_info=True,
-                )
+    # 3. Create ALL tables from current model definitions.
+    #    checkfirst=True is used because multiple uvicorn workers may
+    #    run this concurrently, and another worker may have already
+    #    created some tables. FK_CHECKS=0 skips FK validation during
+    #    CREATE TABLE.  Iterates sorted_tables individually for progress
+    #    logging so slow environments don't look hung during long runs.
+    sorted_tables = Base.metadata.sorted_tables
+    total_tables = len(sorted_tables)
+    logger.info(f"Creating {total_tables} tables from model definitions...")
+    with engine.connect() as conn:
+        conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+        for i, table in enumerate(sorted_tables, 1):
+            table.create(conn, checkfirst=True)
+            if i % 25 == 0 or i == total_tables:
+                logger.info(f"  Tables created: {i}/{total_tables}")
+        conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+        conn.commit()
+    logger.info(f"All {total_tables} model-based tables created")
+
+    # 4. Create tables that only exist in migration files (no SQLAlchemy models).
+    #    Each file gets its own connection via _run_migration_file(engine).
+    for migration_file in MIGRATION_ONLY_FILES:
+        migration_path = os.path.join(versions_dir, migration_file)
+        if os.path.exists(migration_path):
+            logger.info(
+                f"Creating migration-only tables from {migration_file}..."
+            )
+            _run_migration_file(engine, migration_path)
+
+    # 5. Insert seed data (apparatus types, statuses, maintenance types, facilities).
+    #    Each file gets its own connection via _run_migration_file(engine).
+    for seed_file in SEED_DATA_FILES:
+        seed_path = os.path.join(versions_dir, seed_file)
+        if os.path.exists(seed_path):
+            logger.info(f"Inserting seed data from {seed_file}...")
+            _run_migration_file(engine, seed_path)
+            logger.info(f"Seed data from {seed_file} inserted")
 
     # 6. Stamp alembic to head so future startups skip all migrations
     try:
@@ -1054,7 +1052,7 @@ def run_migrations():
             max_attempts = 2
             for attempt in range(1, max_attempts + 1):
                 try:
-                    with timeout_context(1200, "Fast-path database initialization"):
+                    with timeout_context(3600, "Fast-path database initialization"):
                         _fast_path_init(engine, alembic_cfg, base_dir, head_revision)
                     break  # Success
                 except Exception as init_error:

@@ -823,7 +823,7 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     at_risk: { bg: 'bg-yellow-500/10', text: 'text-yellow-500', label: 'At Risk' },
     non_compliant: { bg: 'bg-red-500/10', text: 'text-red-500', label: 'Non-Compliant' },
   };
-  const c = config[status] ?? { bg: 'bg-gray-500/10', text: 'text-gray-500', label: status };
+  const c = config[status] ?? { bg: 'bg-theme-surface-secondary', text: 'text-theme-text-muted', label: status };
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${c.bg} ${c.text}`}>
       {c.label}

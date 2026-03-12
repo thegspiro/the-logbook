@@ -509,7 +509,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
             {/* Withdrawn Notice */}
             {applicant.status === ApplicantStatus.WITHDRAWN && (
-              <div className="mx-4 mt-4 p-3 bg-slate-500/5 border border-slate-500/20 rounded-lg">
+              <div className="mx-4 mt-4 p-3 bg-theme-surface-secondary border border-theme-surface-border rounded-lg">
                 <div className="flex items-center gap-2 mb-1">
                   <Archive className="w-4 h-4 text-theme-text-muted" />
                   <span className="text-sm font-medium text-theme-text-secondary">Application Withdrawn</span>
@@ -791,7 +791,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         <span className="text-xs text-theme-text-muted">Status</span>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                           currentElectionPackage.status === ElectionStatus.DRAFT
-                            ? 'bg-slate-500/20 text-theme-text-muted'
+                            ? 'bg-theme-surface-secondary text-theme-text-muted'
                             : currentElectionPackage.status === 'ready'
                               ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300'
                               : currentElectionPackage.status === 'added_to_ballot'
@@ -1021,7 +1021,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                               ) : isCurrent ? (
                                 <div className="w-5 h-5 rounded-full border-2 border-red-500 bg-red-500/20 shrink-0" />
                               ) : (
-                                <Circle className="w-5 h-5 text-slate-400 dark:text-slate-600 shrink-0" />
+                                <Circle className="w-5 h-5 text-theme-text-muted shrink-0" />
                               )}
                               {idx < applicant.stage_history.length - 1 && (
                                 <div className="w-px h-full min-h-[24px] bg-theme-surface-border my-1" />
@@ -1200,7 +1200,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
                 {/* Withdraw confirmation */}
                 {showWithdrawConfirm && (
-                  <div className="bg-slate-500/10 border border-slate-500/20 rounded-lg p-3">
+                  <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-3">
                     <p className="text-sm text-theme-text-secondary mb-2">
                       Withdraw this application? The applicant will be archived and removed from the active pipeline.
                     </p>
@@ -1214,7 +1214,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       <button
                         onClick={() => { void handleWithdraw(); }}
                         disabled={isWithdrawing}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-slate-600 hover:bg-slate-500 text-white rounded-lg transition-colors disabled:opacity-50"
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary border border-theme-surface-border rounded-lg transition-colors disabled:opacity-50"
                       >
                         {isWithdrawing && <Loader2 className="w-3 h-3 animate-spin" />}
                         Confirm Withdraw
@@ -1361,7 +1361,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   </div>
                 )}
                 {showWithdrawConfirm && (
-                  <div className="bg-slate-500/10 border border-slate-500/20 rounded-lg p-3">
+                  <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-3">
                     <p className="text-sm text-theme-text-secondary mb-2">
                       Withdraw this application? The applicant will be archived and removed from the active pipeline.
                     </p>
@@ -1375,7 +1375,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       <button
                         onClick={() => { void handleWithdraw(); }}
                         disabled={isWithdrawing}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-slate-600 hover:bg-slate-500 text-white rounded-lg transition-colors disabled:opacity-50"
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary border border-theme-surface-border rounded-lg transition-colors disabled:opacity-50"
                       >
                         {isWithdrawing && <Loader2 className="w-3 h-3 animate-spin" />}
                         Confirm Withdraw

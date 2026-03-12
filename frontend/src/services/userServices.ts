@@ -214,6 +214,17 @@ export const userService = {
   },
 
   /**
+   * Set compliance exemption status for a member
+   */
+  async setComplianceExemption(userId: string, exempt: boolean, reason?: string): Promise<Record<string, unknown>> {
+    const response = await api.patch<Record<string, unknown>>(`/users/${userId}/compliance-exempt`, {
+      exempt,
+      reason: reason || undefined,
+    });
+    return response.data;
+  },
+
+  /**
    * Get audit history for a member
    */
   async getMemberAuditHistory(userId: string, page: number = 1, eventType?: string): Promise<import('../types/user').MemberAuditLogEntry[]> {

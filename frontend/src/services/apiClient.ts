@@ -230,8 +230,14 @@ api.interceptors.response.use(
       // All retries exhausted — let it fall through as a normal error
     }
 
+    // Skip refresh for auth endpoints — they return 401 for invalid
+    // credentials, not expired tokens.  Attempting a refresh here would
+    // trigger the backend's token replay detection and revoke all sessions.
+    const requestUrl = originalRequest.url || '';
+    const isAuthEndpoint = ['/auth/login', '/auth/register', '/auth/forgot-password', '/auth/reset-password', '/auth/refresh', '/auth/validate-reset-token'].some(ep => requestUrl.includes(ep));
+
     // If 401 and we haven't retried yet, try to recover
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       originalRequest._retry = true;
 
       // --- Post-login grace period ---

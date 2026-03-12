@@ -550,29 +550,32 @@ const InventoryBarcodePrintPage: React.FC = () => {
             </div>
           )}
 
-          {/* Label preview */}
-          <div className="card-secondary p-4">
-            <h3 className="text-sm font-medium text-theme-text-muted mb-3 print:hidden">Preview</h3>
-            <div
-              className="barcode-labels-container"
-              style={{
-                display: isThermal ? 'flex' : 'grid',
-                flexDirection: isThermal ? 'column' : undefined,
-                gridTemplateColumns: isThermal ? undefined : `repeat(${preset.columns}, ${preset.width})`,
-                gap: isThermal ? '8px' : '0',
-                alignItems: isThermal ? 'center' : undefined,
-                justifyContent: isThermal ? undefined : 'center',
-              }}
-            >
-              {labelItems.map((item, index) => (
-                <BarcodeLabel
-                  key={`${item.id}-${index}`}
-                  item={item}
-                  preset={preset}
-                  onRendered={handleLabelRendered}
-                />
-              ))}
-            </div>
+        </div>
+      </div>
+
+      {/* Label preview — outside print-controls so it remains visible during print */}
+      <div className="max-w-4xl mx-auto px-4 pb-6 print:max-w-none print:p-0">
+        <div className="card-secondary p-4 print:bg-white print:p-0 print:border-0 print:shadow-none">
+          <h3 className="text-sm font-medium text-theme-text-muted mb-3 print:hidden">Preview</h3>
+          <div
+            className="barcode-labels-container"
+            style={{
+              display: isThermal ? 'flex' : 'grid',
+              flexDirection: isThermal ? 'column' : undefined,
+              gridTemplateColumns: isThermal ? undefined : `repeat(${preset.columns}, ${preset.width})`,
+              gap: isThermal ? '8px' : '0',
+              alignItems: isThermal ? 'center' : undefined,
+              justifyContent: isThermal ? undefined : 'center',
+            }}
+          >
+            {labelItems.map((item, index) => (
+              <BarcodeLabel
+                key={`${item.id}-${index}`}
+                item={item}
+                preset={preset}
+                onRendered={handleLabelRendered}
+              />
+            ))}
           </div>
         </div>
       </div>

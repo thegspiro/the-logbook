@@ -519,7 +519,7 @@ const FormBuilder = ({
   if (loading) {
     return (
       <div className="bg-theme-surface-secondary rounded-lg p-8 text-center">
-        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-pink-700 dark:text-pink-400" />
+        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-theme-text-muted" />
         <p className="text-sm text-theme-text-muted">Loading form builder...</p>
       </div>
     );
@@ -534,7 +534,7 @@ const FormBuilder = ({
             {fields.length} {fields.length === 1 ? 'field' : 'fields'}
           </span>
           {saving && (
-            <span className="flex items-center gap-1 text-xs text-pink-700 dark:text-pink-400">
+            <span className="flex items-center gap-1 text-xs text-theme-text-muted">
               <RefreshCw className="w-3 h-3 animate-spin" />
               Saving...
             </span>
@@ -554,7 +554,7 @@ const FormBuilder = ({
           <button
             type="button"
             onClick={handleAddField}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg transition-colors"
+            className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs"
           >
             <Plus className="w-3.5 h-3.5" />
             Add Field
@@ -594,7 +594,7 @@ const FormBuilder = ({
           <button
             type="button"
             onClick={handleAddField}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 rounded-lg transition-colors"
+            className="btn-primary inline-flex items-center gap-1.5"
           >
             <Plus className="w-4 h-4" />
             Add Your First Field

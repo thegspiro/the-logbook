@@ -22,7 +22,7 @@ type StatusFilter = 'all' | 'active' | 'future' | 'expired' | 'inactive';
 
 function getStatusBadge(waiver: { start_date: string; end_date: string | null; active: boolean }) {
   if (!waiver.active) {
-    return { label: 'Deactivated', color: 'bg-gray-500/20 text-gray-400' };
+    return { label: 'Deactivated', color: 'bg-theme-surface-secondary text-theme-text-muted' };
   }
   const today = new Date().toISOString().split('T')[0] ?? '';
   if (waiver.start_date > today) {
