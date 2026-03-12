@@ -445,7 +445,7 @@ describe('EventSelfCheckInPage', () => {
     it('should handle missing location in event data', async () => {
       const dataWithoutLocation = {
         ...mockQRCheckInData,
-        location: null,
+        location: undefined,
       };
 
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(dataWithoutLocation);
@@ -461,7 +461,7 @@ describe('EventSelfCheckInPage', () => {
     it('should handle missing event type in event data', async () => {
       const dataWithoutType = {
         ...mockQRCheckInData,
-        event_type: null,
+        event_type: undefined,
       };
 
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(dataWithoutType);
@@ -477,7 +477,7 @@ describe('EventSelfCheckInPage', () => {
     it('should handle missing checked_in_at in RSVP response', async () => {
       const rsvpWithoutTimestamp = {
         ...mockRSVP,
-        checked_in_at: null,
+        checked_in_at: undefined,
       };
 
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(mockQRCheckInData);

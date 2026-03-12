@@ -371,7 +371,7 @@ describe('EventQRCodePage', () => {
     it('should handle missing location in event data', async () => {
       const dataWithoutLocation = {
         ...mockQRCheckInData,
-        location: null,
+        location: undefined,
       };
 
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(dataWithoutLocation);
@@ -387,7 +387,7 @@ describe('EventQRCodePage', () => {
     it('should handle missing event type in event data', async () => {
       const dataWithoutType = {
         ...mockQRCheckInData,
-        event_type: null,
+        event_type: undefined,
       };
 
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(dataWithoutType);

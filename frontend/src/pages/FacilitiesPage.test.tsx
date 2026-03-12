@@ -194,6 +194,7 @@ describe('FacilitiesDashboard', () => {
     // Find the submit button in the modal (the last "Add Facility" button)
     const submitButtons = screen.getAllByText('Add Facility');
     const modalSubmit = submitButtons[submitButtons.length - 1] ?? submitButtons[0];
+    if (!modalSubmit) throw new Error('Expected submit button to exist');
     await user.click(modalSubmit);
 
     await waitFor(() => {

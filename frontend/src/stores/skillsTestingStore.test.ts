@@ -90,9 +90,6 @@ const mockTest = {
   result: 'incomplete' as const,
   is_practice: false,
   section_results: [],
-  overall_score: undefined,
-  elapsed_seconds: 0,
-  notes: '',
   started_at: '2026-01-01T00:00:00Z',
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
@@ -279,6 +276,7 @@ describe('skillsTestingStore', () => {
           examiner_name: 'Captain Jones',
           status: 'in_progress',
           result: 'incomplete',
+          is_practice: false,
           created_at: '2026-01-01T00:00:00Z',
         },
       ]);
@@ -322,7 +320,7 @@ describe('skillsTestingStore', () => {
 
     it('should delete a test and remove it from the list', async () => {
       useSkillsTestingStore.setState({
-        tests: [{ id: 'test-1', template_name: 'T', candidate_name: 'C', examiner_name: 'E', status: 'completed', result: 'pass', created_at: '' }],
+        tests: [{ id: 'test-1', template_name: 'T', candidate_name: 'C', examiner_name: 'E', status: 'completed', result: 'pass', is_practice: false, created_at: '' }],
         currentTest: mockTest,
       });
       vi.mocked(skillsTestingService.deleteTest).mockResolvedValue(undefined);
@@ -335,7 +333,7 @@ describe('skillsTestingStore', () => {
 
     it('should discard a practice test', async () => {
       useSkillsTestingStore.setState({
-        tests: [{ id: 'test-1', template_name: 'T', candidate_name: 'C', examiner_name: 'E', status: 'in_progress', result: 'incomplete', created_at: '' }],
+        tests: [{ id: 'test-1', template_name: 'T', candidate_name: 'C', examiner_name: 'E', status: 'in_progress', result: 'incomplete', is_practice: false, created_at: '' }],
         currentTest: mockTest,
       });
       vi.mocked(skillsTestingService.discardPracticeTest).mockResolvedValue(undefined);
