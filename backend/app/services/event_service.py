@@ -1085,15 +1085,15 @@ class EventService:
             "event_name": event.title,
             "event_type": event.event_type.value if event.event_type else None,
             "event_description": event.description,
-            "start_datetime": event.start_datetime.isoformat() + "Z",
-            "end_datetime": event.end_datetime.isoformat() + "Z",
+            "start_datetime": event.start_datetime.replace(tzinfo=None).isoformat() + "Z",
+            "end_datetime": event.end_datetime.replace(tzinfo=None).isoformat() + "Z",
             "actual_end_time": (
-                (event.actual_end_time.isoformat() + "Z")
+                (event.actual_end_time.replace(tzinfo=None).isoformat() + "Z")
                 if event.actual_end_time
                 else None
             ),
-            "check_in_start": check_in_start.isoformat() + "Z",
-            "check_in_end": check_in_end.isoformat() + "Z",
+            "check_in_start": check_in_start.replace(tzinfo=None).isoformat() + "Z",
+            "check_in_end": check_in_end.replace(tzinfo=None).isoformat() + "Z",
             "is_valid": is_valid,
             "location": event.location,
             "location_id": str(event.location_id) if event.location_id else None,
