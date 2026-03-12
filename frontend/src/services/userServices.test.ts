@@ -746,7 +746,7 @@ describe('roleService', () => {
       const newRole = { id: 'r-new', name: 'Editor', slug: 'editor', permissions: ['events.view'] };
       mockPost.mockResolvedValue({ data: newRole });
 
-      const roleData = { name: 'Editor', slug: 'editor', permissions: ['events.view'] };
+      const roleData = { name: 'Editor', permissions: ['events.view'] };
       const result = await roleService.createRole(roleData);
 
       expect(mockPost).toHaveBeenCalledWith('/roles', roleData);

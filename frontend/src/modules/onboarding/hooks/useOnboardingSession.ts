@@ -11,7 +11,6 @@ import { getErrorMessage, toAppError } from '@/utils/errorHandling';
 
 interface OrganizationData {
   name: string;
-  slug?: string | undefined;
   description?: string | undefined;
   organization_type: 'fire_department' | 'ems_only' | 'fire_ems_combined';
   timezone: string;

@@ -15,12 +15,15 @@ class RoleBase(BaseModel):
     """Base role schema"""
 
     name: str = Field(..., min_length=1, max_length=100)
-    slug: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
 
 
 class RoleCreate(RoleBase):
-    """Schema for creating a new role"""
+    """Schema for creating a new role.
+
+    The slug is auto-generated from the name on the backend and should
+    not be provided by the client.
+    """
 
     permissions: List[str] = Field(default_factory=list)
     priority: int = Field(default=0, ge=0, le=100)
@@ -93,13 +96,13 @@ class UserRoleResponse(BaseModel):
 
 
 class RoleCloneRequest(BaseModel):
-    """Schema for cloning a role"""
+    """Schema for cloning a role.
+
+    The slug is auto-generated from the name on the backend.
+    """
 
     name: str = Field(
         ..., min_length=1, max_length=100, description="Name for the new role"
-    )
-    slug: str = Field(
-        ..., min_length=1, max_length=100, description="Slug for the new role"
     )
     description: Optional[str] = Field(
         None, description="Optional description for the new role"
