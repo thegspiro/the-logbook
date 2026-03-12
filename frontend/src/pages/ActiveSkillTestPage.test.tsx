@@ -97,8 +97,7 @@ describe('ActiveSkillTestPage', () => {
       renderWithRouter(<ActiveSkillTestPage />);
 
       // Should show the loading spinner (test is null so it shows loading)
-      const spinner = document.querySelector('.animate-spin');
-      expect(spinner).toBeInTheDocument();
+      expect(screen.getByRole('status')).toBeInTheDocument();
     });
   });
 
@@ -188,7 +187,7 @@ describe('ActiveSkillTestPage', () => {
 
       unmount();
 
-      expect(mockClearCurrentTest).toHaveBeenCalled();
+      expect(mockClearCurrentTest).toHaveBeenCalledWith();
     });
   });
 });

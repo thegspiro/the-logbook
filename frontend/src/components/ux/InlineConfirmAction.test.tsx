@@ -66,7 +66,7 @@ describe('InlineConfirmAction', () => {
     // Yes button should be disabled with a spinner
     const yesButton = screen.getByLabelText('Confirm: Remove?');
     expect(yesButton).toBeDisabled();
-    expect(yesButton.querySelector('.animate-spin')).toBeTruthy();
+    expect(screen.getByTestId('confirm-spinner')).toBeInTheDocument();
   });
 
   it('should handle async onConfirm', async () => {

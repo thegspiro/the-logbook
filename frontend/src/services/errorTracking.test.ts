@@ -296,7 +296,7 @@ describe('ErrorTrackingService', () => {
 
       const result = await errorTracker.getErrorStats();
 
-      expect(mockGetStats).toHaveBeenCalled();
+      expect(mockGetStats).toHaveBeenCalledWith();
       expect(result.total).toBe(15);
       expect(result.byType).toEqual({ NETWORK_ERROR: 10, EVENT_NOT_FOUND: 5 });
       expect(result.recentErrors).toHaveLength(1);
@@ -320,7 +320,7 @@ describe('ErrorTrackingService', () => {
 
       await errorTracker.clearErrors();
 
-      expect(mockClearErrors).toHaveBeenCalled();
+      expect(mockClearErrors).toHaveBeenCalledWith();
     });
 
     it('should silently fail when backend call fails', async () => {

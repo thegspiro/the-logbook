@@ -62,11 +62,11 @@ describe('SchedulingPage', () => {
       renderWithRouter(<SchedulingPage />);
 
       await waitFor(() => {
-        expectTabVisible('Schedule');
-        expectTabVisible('My Shifts');
-        expectTabVisible('Open Shifts');
-        expectTabVisible('Requests');
-        expectTabVisible('Shift Reports');
+        expect(screen.getAllByText('Schedule').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('My Shifts').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('Open Shifts').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('Requests').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('Shift Reports').length).toBeGreaterThanOrEqual(1);
       });
     });
 
@@ -78,10 +78,10 @@ describe('SchedulingPage', () => {
       renderWithRouter(<SchedulingPage />);
 
       await waitFor(() => {
-        expectTabVisible('Templates');
-        expectTabVisible('Patterns');
-        expectTabVisible('Reports');
-        expectTabVisible('Settings');
+        expect(screen.getAllByText('Templates').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('Patterns').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('Reports').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('Settings').length).toBeGreaterThanOrEqual(1);
       });
     });
 
@@ -137,11 +137,8 @@ describe('SchedulingPage', () => {
       });
 
       const myShiftsButtons = screen.getAllByText('My Shifts');
-      // Click the first visible button (getAllByText always returns at least one)
-      const firstButton = myShiftsButtons[0];
-      if (firstButton) {
-        await user.click(firstButton);
-      }
+      expect(myShiftsButtons.length).toBeGreaterThanOrEqual(1);
+      await user.click(myShiftsButtons[0] as HTMLElement);
 
       // The tab should remain visible
       await waitFor(() => {
@@ -155,7 +152,7 @@ describe('SchedulingPage', () => {
       renderWithRouter(<SchedulingPage />);
       // The component starts with loading=true, which shows a spinner
       // Since we mock the API to resolve, it should eventually load
-      expectTabVisible('Schedule');
+      expect(screen.getAllByText('Schedule').length).toBeGreaterThanOrEqual(1);
     });
   });
 });

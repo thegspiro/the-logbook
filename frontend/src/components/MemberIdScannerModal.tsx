@@ -242,6 +242,7 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
         <div className="bg-black">
           <div
             id="member-scanner-viewport"
+            data-testid="member-scanner-viewport"
             className="w-full aspect-square"
           />
         </div>

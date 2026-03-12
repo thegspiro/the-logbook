@@ -115,10 +115,9 @@ describe('SkillTemplateBuilderPage', () => {
 
       // Click save without entering a name
       const saveButtons = screen.getAllByRole('button', { name: /save|create template/i });
-      const mainSaveButton = saveButtons[saveButtons.length - 1];
-      if (mainSaveButton) {
-        await user.click(mainSaveButton);
-      }
+      expect(saveButtons.length).toBeGreaterThanOrEqual(1);
+      const mainSaveButton = saveButtons[saveButtons.length - 1] as HTMLElement;
+      await user.click(mainSaveButton);
 
       expect(screen.getByText(/template name is required/i)).toBeInTheDocument();
     });
@@ -132,10 +131,9 @@ describe('SkillTemplateBuilderPage', () => {
       await user.type(nameInput, 'Test Template');
 
       const saveButtons = screen.getAllByRole('button', { name: /save|create template/i });
-      const mainSaveButton = saveButtons[saveButtons.length - 1];
-      if (mainSaveButton) {
-        await user.click(mainSaveButton);
-      }
+      expect(saveButtons.length).toBeGreaterThanOrEqual(1);
+      const mainSaveButton = saveButtons[saveButtons.length - 1] as HTMLElement;
+      await user.click(mainSaveButton);
 
       expect(screen.getByText(/section 1: name is required/i)).toBeInTheDocument();
     });
@@ -164,10 +162,9 @@ describe('SkillTemplateBuilderPage', () => {
 
       // Save
       const saveButtons = screen.getAllByRole('button', { name: /save|create template/i });
-      const mainSaveButton = saveButtons[saveButtons.length - 1];
-      if (mainSaveButton) {
-        await user.click(mainSaveButton);
-      }
+      expect(saveButtons.length).toBeGreaterThanOrEqual(1);
+      const mainSaveButton = saveButtons[saveButtons.length - 1] as HTMLElement;
+      await user.click(mainSaveButton);
 
       expect(mockCreateTemplate).toHaveBeenCalledWith(
         expect.objectContaining({

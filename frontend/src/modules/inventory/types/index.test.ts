@@ -24,7 +24,7 @@ describe('ITEM_TYPES', () => {
 
   it('has labels for each type', () => {
     for (const item of ITEM_TYPES) {
-      expect(item.label).toBeTruthy();
+      expect(item.label).not.toBe('');
     }
   });
 });

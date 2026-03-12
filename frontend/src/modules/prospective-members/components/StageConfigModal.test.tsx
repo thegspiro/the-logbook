@@ -478,7 +478,7 @@ describe('StageConfigModal', () => {
     await user.click(screen.getByText('Meeting'));
 
     await waitFor(() => {
-      expect(mockGetEvents).toHaveBeenCalled();
+      expect(mockGetEvents).toHaveBeenCalledWith();
     });
 
     await user.selectOptions(screen.getByLabelText(/link to upcoming event/i), 'business_meeting');
@@ -509,7 +509,7 @@ describe('StageConfigModal', () => {
     await user.click(screen.getByText('Automated Email'));
 
     await waitFor(() => {
-      expect(mockGetEvents).toHaveBeenCalled();
+      expect(mockGetEvents).toHaveBeenCalledWith();
     });
 
     const meetingCheckbox = screen.getByRole('checkbox', { name: 'Next Meeting Details' });
@@ -530,7 +530,7 @@ describe('StageConfigModal', () => {
     await user.click(screen.getByText('Meeting'));
 
     await waitFor(() => {
-      expect(mockGetEvents).toHaveBeenCalled();
+      expect(mockGetEvents).toHaveBeenCalledWith();
     });
 
     // Select an event type with no upcoming events

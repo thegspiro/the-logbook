@@ -17,8 +17,8 @@ describe('ReturnRequestsPage', () => {
 
   it('renders back link to admin', () => {
     renderWithRouter(<ReturnRequestsPage />);
-    const backLink = screen.getByText('Back to Admin');
-    expect(backLink.closest('a')).toHaveAttribute('href', '/inventory/admin');
+    const backLink = screen.getByRole('link', { name: /Back to Admin/ });
+    expect(backLink).toHaveAttribute('href', '/inventory/admin');
   });
 
   it('renders the ReturnRequestsPanel component', async () => {

@@ -41,6 +41,7 @@ export const PullToRefreshIndicator: React.FC<PullToRefreshIndicatorProps> = ({
             className="w-5 h-5 text-theme-text-secondary transition-transform"
             style={{ transform: `rotate(${rotation}deg)`, opacity: progress }}
             aria-hidden="true"
+            data-testid="pull-arrow"
           />
         )}
       </div>

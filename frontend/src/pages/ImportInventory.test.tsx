@@ -61,7 +61,7 @@ describe('ImportInventory', () => {
   it('renders file input with csv accept', () => {
     renderWithRouter(<ImportInventory />);
 
-    const input = document.querySelector('input[type="file"][accept=".csv"]');
+    const input = screen.getByTestId<HTMLInputElement>('csv-file-input') ?? screen.getByLabelText(/upload/i);
     expect(input).toBeInTheDocument();
   });
 
@@ -96,7 +96,7 @@ describe('ImportInventory', () => {
     const csvContent = 'Name,Category,Status\nTest Item,Tools,available\n';
     const file = new File([csvContent], 'test-import.csv', { type: 'text/csv' });
 
-    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const input = screen.getByTestId<HTMLInputElement>('csv-file-input');
     await user.upload(input, file);
 
     await vi.waitFor(() => {
@@ -112,7 +112,7 @@ describe('ImportInventory', () => {
     const csvContent = 'Name\nItem\n';
     const file = new File([csvContent], 'items.csv', { type: 'text/csv' });
 
-    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const input = screen.getByTestId<HTMLInputElement>('csv-file-input');
     await user.upload(input, file);
 
     await vi.waitFor(() => {

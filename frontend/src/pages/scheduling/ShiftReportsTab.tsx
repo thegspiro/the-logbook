@@ -235,7 +235,7 @@ export const ShiftReportsTab: React.FC = () => {
       await shiftCompletionService.createReport(payload);
       toast.success('Shift report submitted');
       setForm({
-        shift_date: new Date().toISOString().split('T')[0] ?? '',
+        shift_date: new Date().toISOString().split('T')[0] || '',
         hours_on_shift: 0,
         calls_responded: 0,
         call_types: [],

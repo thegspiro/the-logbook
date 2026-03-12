@@ -538,7 +538,7 @@ const IntegrationsPage: React.FC = () => {
           {filteredIntegrations.map((integration) => {
             const ui = getUI(integration.integration_type);
             return (
-              <div key={integration.id} className="stat-card hover:border-indigo-500/30 transition-all">
+              <div key={integration.id} data-testid={`integration-card-${integration.integration_type}`} className="stat-card hover:border-indigo-500/30 transition-all">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center space-x-3">
                     <div className={`p-2 rounded-lg ${ui.bgColor} ${ui.color}`}>

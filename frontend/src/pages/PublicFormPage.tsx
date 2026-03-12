@@ -72,7 +72,7 @@ const PublicFormPage = () => {
       const result = await publicFormsService.submitForm(
         slug ?? '',
         formData,
-        honeypotRef.current?.value ?? undefined
+        honeypotRef.current?.value || undefined
       );
       setSubmitted(true);
       setSubmitMessage(result.message);

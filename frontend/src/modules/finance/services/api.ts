@@ -212,7 +212,7 @@ export const approvalChainService = {
     chainId: string,
     data: Partial<ApprovalChain['steps'][number]>,
   ): Promise<ApprovalChain['steps'][number]> {
-    const response = await api.post(
+    const response = await api.post<ApprovalChain['steps'][number]>(
       `/finance/approval-chains/${chainId}/steps`,
       data,
     );
@@ -224,7 +224,7 @@ export const approvalChainService = {
     stepId: string,
     data: Partial<ApprovalChain['steps'][number]>,
   ): Promise<ApprovalChain['steps'][number]> {
-    const response = await api.put(
+    const response = await api.put<ApprovalChain['steps'][number]>(
       `/finance/approval-chains/${chainId}/steps/${stepId}`,
       data,
     );

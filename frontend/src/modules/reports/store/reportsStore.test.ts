@@ -36,8 +36,8 @@ describe('getPresetDates', () => {
 
   it('returns last 90 days', () => {
     const { start, end } = getPresetDates('last-90');
-    expect(start).toBeTruthy();
-    expect(end).toBeTruthy();
+    expect(start).not.toBe('');
+    expect(end).not.toBe('');
     const startDate = new Date(start);
     const endDate = new Date(end);
     const diffDays = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -47,20 +47,20 @@ describe('getPresetDates', () => {
 
   it('returns last 30 days', () => {
     const { start, end } = getPresetDates('last-30');
-    expect(start).toBeTruthy();
-    expect(end).toBeTruthy();
+    expect(start).not.toBe('');
+    expect(end).not.toBe('');
   });
 
   it('returns this quarter dates', () => {
     const { start, end } = getPresetDates('this-quarter');
-    expect(start).toBeTruthy();
-    expect(end).toBeTruthy();
+    expect(start).not.toBe('');
+    expect(end).not.toBe('');
   });
 
   it('returns last quarter dates', () => {
     const { start, end } = getPresetDates('last-quarter');
-    expect(start).toBeTruthy();
-    expect(end).toBeTruthy();
+    expect(start).not.toBe('');
+    expect(end).not.toBe('');
   });
 
   it('returns empty for custom preset', () => {

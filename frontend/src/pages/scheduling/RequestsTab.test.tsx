@@ -64,16 +64,17 @@ describe('RequestsTab', () => {
     });
   });
 
-  it('should render loading state', () => {
+  it('should render the view toggles before data loads', () => {
     renderWithRouter(<RequestsTab />);
-    expect(document.querySelector('.animate-spin')).toBeInTheDocument();
+    expect(screen.getByText(/Swap Requests/)).toBeInTheDocument();
+    expect(screen.getByText(/Time Off/)).toBeInTheDocument();
   });
 
-  it('should render empty state for swap requests', async () => {
+  it('should render empty state for swap requests after loading', async () => {
     renderWithRouter(<RequestsTab />);
 
     await waitFor(() => {
-      expect(document.querySelector('.animate-spin')).not.toBeInTheDocument();
+      expect(screen.getByText('No swap requests')).toBeInTheDocument();
     });
   });
 
@@ -93,7 +94,7 @@ describe('RequestsTab', () => {
     renderWithRouter(<RequestsTab />);
 
     await waitFor(() => {
-      expect(document.querySelector('.animate-spin')).not.toBeInTheDocument();
+      expect(screen.getByText(/pending/i)).toBeInTheDocument();
     });
   });
 
@@ -113,7 +114,7 @@ describe('RequestsTab', () => {
     });
   });
 
-  it('should show approve/deny buttons for admin users', async () => {
+  it('should show swap requests for admin users after loading', async () => {
     mockCheckPermission.mockReturnValue(true);
     mockGetSwapRequests.mockResolvedValue([
       {
@@ -129,7 +130,7 @@ describe('RequestsTab', () => {
     renderWithRouter(<RequestsTab />);
 
     await waitFor(() => {
-      expect(document.querySelector('.animate-spin')).not.toBeInTheDocument();
+      expect(screen.getByText(/pending/i)).toBeInTheDocument();
     });
   });
 
@@ -137,7 +138,7 @@ describe('RequestsTab', () => {
     renderWithRouter(<RequestsTab />);
 
     await waitFor(() => {
-      expect(document.querySelector('.animate-spin')).not.toBeInTheDocument();
+      expect(screen.getByRole('combobox')).toBeInTheDocument();
     });
   });
 });

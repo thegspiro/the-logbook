@@ -75,7 +75,7 @@ export const InlineConfirmAction: React.FC<InlineConfirmActionProps> = ({
         className={`px-2 py-1 text-xs ${btnBg} text-white rounded-md disabled:opacity-50`}
         aria-label={`Confirm: ${confirmLabel}`}
       >
-        {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : "Yes"}
+        {loading ? <Loader2 className="w-3 h-3 animate-spin" data-testid="confirm-spinner" /> : "Yes"}
       </button>
       <button
         onClick={() => {

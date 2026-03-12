@@ -116,9 +116,9 @@ describe('InventoryAdminHub', () => {
     await waitFor(() => {
       expect(screen.getByText('Total Items')).toBeInTheDocument();
     });
-    const itemsLink = screen.getByText('Items').closest('a');
+    const itemsLink = screen.getByRole('link', { name: /Items/ });
     expect(itemsLink).toHaveAttribute('href', '/inventory/admin/items');
-    const poolLink = screen.getByText('Pool Items').closest('a');
+    const poolLink = screen.getByRole('link', { name: /Pool Items/ });
     expect(poolLink).toHaveAttribute('href', '/inventory/admin/pool');
   });
 
@@ -128,7 +128,7 @@ describe('InventoryAdminHub', () => {
     await waitFor(() => {
       expect(mockGetSummary).toHaveBeenCalledTimes(1);
     });
-    const refreshButton = screen.getByText('Refresh').closest('button') ?? screen.getByText('Refresh');
+    const refreshButton = screen.getByRole('button', { name: /Refresh/ });
     await user.click(refreshButton);
     await waitFor(() => {
       expect(mockGetSummary).toHaveBeenCalledTimes(2);

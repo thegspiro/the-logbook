@@ -1,4 +1,4 @@
-import type { AxeResults } from 'axe-core';
+import type { AxeResults as _AxeResults } from 'axe-core';
 
 declare module '@vitest/expect' {
   interface Matchers<T = unknown> {

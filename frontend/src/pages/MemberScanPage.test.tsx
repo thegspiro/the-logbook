@@ -78,8 +78,7 @@ describe("MemberScanPage", () => {
   it("should show the scanner viewport container", () => {
     renderWithRouter(<MemberScanPage />);
 
-    const viewport = document.getElementById("scanner-viewport");
-    expect(viewport).toBeInTheDocument();
+    expect(screen.getByTestId("scanner-viewport")).toBeInTheDocument();
   });
 
   it("should show stop button after starting scanner", async () => {

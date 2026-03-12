@@ -189,7 +189,7 @@ describe('lazyWithRetry', () => {
 
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      expect(window.location.reload).toHaveBeenCalled();
+      expect(window.location.reload).toHaveBeenCalledWith();
     }
   });
 

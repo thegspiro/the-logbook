@@ -127,24 +127,26 @@ describe('MyTrainingPage', () => {
   it('displays training stats when data loads', async () => {
     renderWithRouter(<MyTrainingPage />);
     await waitFor(() => {
-      expect(mockGetMyTraining).toHaveBeenCalled();
+      expect(mockGetMyTraining).toHaveBeenCalledWith();
     });
   });
 
   it('shows loading state initially', () => {
     mockGetMyTraining.mockReturnValue(new Promise(() => {})); // Never resolves
     renderWithRouter(<MyTrainingPage />);
-    // The page should render without crashing during loading
-    expect(document.body.querySelector('#root, [data-testid]') ?? document.body).toBeInTheDocument();
+    // The page should show loading skeleton
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
   it('handles API error gracefully', async () => {
     mockGetMyTraining.mockRejectedValue(new Error('Network error'));
     renderWithRouter(<MyTrainingPage />);
     await waitFor(() => {
-      expect(mockGetMyTraining).toHaveBeenCalled();
+      expect(mockGetMyTraining).toHaveBeenCalledWith();
     });
-    // Should not crash — page still in DOM
-    expect(document.body).toBeInTheDocument();
+    // Should not crash — error message visible
+    await waitFor(() => {
+      expect(screen.getByText(/Network error/)).toBeInTheDocument();
+    });
   });
 });
