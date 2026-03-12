@@ -192,6 +192,15 @@ class CertAlertService:
             }
 
         email_service = EmailService(org)
+
+        # Build org logo for email header
+        org_logo_url = getattr(org, "logo", None) or ""
+        logo_html = (
+            f'<div style="text-align:center;padding:16px 0;">'
+            f'<img src="{_html.escape(org_logo_url)}" alt="Logo" '
+            f'style="max-height:80px;max-width:200px;" /></div>'
+        ) if org_logo_url else ""
+
         training_roles = config.get(
             "training_officer_roles", DEFAULT_TRAINING_OFFICER_ROLES
         )
@@ -299,6 +308,7 @@ class CertAlertService:
 
                         html_body = f"""
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    {logo_html}
     <div style="background-color: {'#dc2626' if days_until <= 7 else '#f59e0b'}; color: white; padding: 20px; text-align: center;">
         <h2>Certification Expiration {'Warning' if days_until <= 30 else 'Notice'}</h2>
     </div>
@@ -418,6 +428,7 @@ class CertAlertService:
 
                     html_body = f"""
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    {logo_html}
     <div style="background-color: #7f1d1d; color: white; padding: 20px; text-align: center;">
         <h2>Certification EXPIRED</h2>
     </div>

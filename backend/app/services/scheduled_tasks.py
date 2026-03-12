@@ -1281,8 +1281,16 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
                     f"{item.reorder_point}</td></tr>"
                 )
 
+            _org_logo = getattr(org, "logo", None) or ""
+            _logo_img = (
+                f'<div style="text-align:center;padding:16px 0;">'
+                f'<img src="{_html.escape(_org_logo)}" alt="Logo" '
+                f'style="max-height:80px;max-width:200px;" /></div>'
+            ) if _org_logo else ""
+
             html_body = f"""
             <div style="font-family:Arial,sans-serif;max-width:600px;">
+                {_logo_img}
                 <h2 style="color:#dc2626;">Low Stock Alert</h2>
                 <p>The following inventory items are at or below their reorder point:</p>
                 <table style="width:100%;border-collapse:collapse;margin:16px 0;">
@@ -1390,6 +1398,13 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
 
             email_svc = EmailService(organization=org)
 
+            _org_logo = getattr(org, "logo", None) or ""
+            _logo_img = (
+                f'<div style="text-align:center;padding:16px 0;">'
+                f'<img src="{_html.escape(_org_logo)}" alt="Logo" '
+                f'style="max-height:80px;max-width:200px;" /></div>'
+            ) if _org_logo else ""
+
             for uid, user_checkouts in by_user.items():
                 user_obj = user_checkouts[0].user if user_checkouts[0].user else None
                 if not user_obj or not user_obj.email:
@@ -1407,6 +1422,7 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
 
                 html_body = f"""
                 <div style="font-family:Arial,sans-serif;max-width:600px;">
+                    {_logo_img}
                     <h2 style="color:#dc2626;">Overdue Equipment</h2>
                     <p>Hi {_html.escape(user_obj.first_name or 'Member')},</p>
                     <p>The following items are overdue for return:</p>
@@ -1506,8 +1522,16 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
                 </table>
                 """
 
+            _org_logo = getattr(org, "logo", None) or ""
+            _logo_img = (
+                f'<div style="text-align:center;padding:16px 0;">'
+                f'<img src="{_html.escape(_org_logo)}" alt="Logo" '
+                f'style="max-height:80px;max-width:200px;" /></div>'
+            ) if _org_logo else ""
+
             html_body = f"""
             <div style="font-family:Arial,sans-serif;max-width:700px;">
+                {_logo_img}
                 <h2>NFPA 1851 Retirement Alert</h2>
                 <p>{len(items_due)} PPE item(s) are approaching or past their retirement date:</p>
                 {_build_section("Past Due — Retire Immediately", past_due, "#dc2626")}

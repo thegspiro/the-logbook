@@ -2233,6 +2233,14 @@ class ElectionService:
             .strftime("%B %d, %Y at %I:%M %p")
         )
 
+        # Build org logo for email header
+        org_logo_url = getattr(organization, "logo", None) or ""
+        logo_html = (
+            f'<div style="text-align:center;padding:16px 0;">'
+            f'<img src="{html.escape(org_logo_url)}" alt="Logo" '
+            f'style="max-height:80px;max-width:200px;" /></div>'
+        ) if org_logo_url else ""
+
         # Send notifications
         sent_count = 0
         for user in leadership_users:
@@ -2261,6 +2269,7 @@ class ElectionService:
 </head>
 <body>
     <div class="container">
+        {logo_html}
         <div class="header">
             <h1>⚠️ Election Rollback Alert</h1>
             <div class="alert-badge">REQUIRES ATTENTION</div>
@@ -2408,6 +2417,14 @@ Best regards,
             .strftime("%B %d, %Y at %I:%M %p")
         )
 
+        # Build org logo for email header
+        org_logo_url = getattr(organization, "logo", None) or ""
+        logo_html = (
+            f'<div style="text-align:center;padding:16px 0;">'
+            f'<img src="{html.escape(org_logo_url)}" alt="Logo" '
+            f'style="max-height:80px;max-width:200px;" /></div>'
+        ) if org_logo_url else ""
+
         sent_count = 0
         for user in leadership_users:
             safe_first_name = html.escape(user.first_name)
@@ -2432,6 +2449,7 @@ Best regards,
 </head>
 <body>
     <div class="container">
+        {logo_html}
         <div class="header">
             <h1>ELECTION DELETED</h1>
             <div class="critical-badge">CRITICAL - REQUIRES IMMEDIATE ATTENTION</div>
@@ -2982,7 +3000,7 @@ Best regards,
         row = result.one_or_none()
 
         if not row:
-            return 0, 0
+            return 0, 0, 0
 
         election, organization = row
 
