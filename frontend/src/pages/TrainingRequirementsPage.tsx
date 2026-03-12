@@ -643,7 +643,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
     description: requirement?.description || '',
     requirement_type: (requirement?.requirement_type || 'hours'),
     training_type: requirement?.training_type || '',
-    required_hours: requirement?.required_hours ?? undefined,
+    required_hours: requirement?.required_hours || undefined,
     frequency: requirement?.frequency || 'annual' as RequirementFrequency,
     year: requirement?.year || new Date().getFullYear() as number | undefined,
     applies_to_all: requirement?.applies_to_all ?? true,

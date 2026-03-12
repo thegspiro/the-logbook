@@ -423,7 +423,7 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
     from app.models.event import Event, RSVPStatus
     from app.models.notification import NotificationChannel, NotificationLog
     from app.models.user import User
-    from app.services.email_service import EmailService, build_email_logo_html
+    from app.services.email_service import EmailService
 
     now = datetime.now(dt_timezone.utc)
     orgs = await db.execute(select(Organization))
@@ -845,7 +845,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
     from app.models.notification import NotificationChannel, NotificationLog
     from app.models.training import Shift, ShiftAttendance
     from app.models.user import User
-    from app.services.email_service import EmailService
+    from app.services.email_service import EmailService, build_email_logo_html
 
     now = datetime.now(dt_timezone.utc)
     lookback = now - timedelta(hours=2)

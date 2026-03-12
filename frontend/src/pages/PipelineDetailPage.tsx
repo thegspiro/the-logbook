@@ -125,7 +125,7 @@ const EnrollModal: React.FC<{
 
       await trainingProgramService.bulkEnrollMembers(programId, {
         user_ids: ids,
-        target_completion_date: targetDate ?? undefined,
+        target_completion_date: targetDate || undefined,
       });
       toast.success(`Enrolled ${ids.length} member(s) in ${programName}`);
       onSuccess();

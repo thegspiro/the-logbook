@@ -87,7 +87,7 @@ const ReviewPanel: React.FC<{
         action,
         ...(notes ? { reviewer_notes: notes } : {}),
         override_hours: overrideHours,
-        override_credit_hours: overrideHours ?? overrideCreditHours,
+        override_credit_hours: overrideHours || overrideCreditHours,
         override_training_type: overrideType,
       });
     } finally {
