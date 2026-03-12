@@ -173,18 +173,18 @@ export interface SkillTest {
   is_practice: boolean;
   section_results: SectionResult[];
   /** Overall score as a percentage (0-100) */
-  overall_score?: number;
+  overall_score?: number | undefined;
   /** Total elapsed time in seconds */
-  elapsed_seconds?: number;
-  notes?: string;
-  started_at?: string;
-  completed_at?: string;
+  elapsed_seconds?: number | undefined;
+  notes?: string | undefined;
+  started_at?: string | undefined;
+  completed_at?: string | undefined;
   created_at: string;
   updated_at: string;
   /** Template sections for active test rendering (from API response) */
-  template_sections?: SkillTemplateSection[];
+  template_sections?: SkillTemplateSection[] | undefined;
   /** Template global time limit in seconds */
-  template_time_limit_seconds?: number;
+  template_time_limit_seconds?: number | undefined;
 }
 
 export interface SkillTestCreate {

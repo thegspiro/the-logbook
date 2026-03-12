@@ -41,7 +41,7 @@ export function useAutoSave<T>({
   const savedDataRef = useRef<string>(JSON.stringify(data));
   const dataRef = useRef<T>(data);
   const onSaveRef = useRef(onSave);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Keep refs in sync without resetting the interval
   useEffect(() => {

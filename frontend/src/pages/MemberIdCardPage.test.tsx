@@ -117,6 +117,14 @@ const mockOrg = {
     state: "IL",
     zip: "62701",
   },
+  physical_address_same: true,
+  physical_address: {
+    line1: "100 Main St",
+    line2: "",
+    city: "Springfield",
+    state: "IL",
+    zip: "62701",
+  },
 };
 
 describe("MemberIdCardPage", () => {

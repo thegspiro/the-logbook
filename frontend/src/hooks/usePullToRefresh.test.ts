@@ -17,10 +17,10 @@ function simulatePull(startY: number, endY: number) {
 }
 
 describe('usePullToRefresh', () => {
-  let onRefresh: ReturnType<typeof vi.fn>;
+  let onRefresh: ReturnType<typeof vi.fn<() => Promise<void>>>;
 
   beforeEach(() => {
-    onRefresh = vi.fn().mockResolvedValue(undefined);
+    onRefresh = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
     Object.defineProperty(window, 'scrollY', { value: 0, writable: true });
   });
 

@@ -457,7 +457,9 @@ describe('EventDetailPage', () => {
       // Open the More dropdown, then click Cancel Event
       await user.click(screen.getByRole('button', { name: /more/i }));
       const cancelButtons = screen.getAllByRole('button', { name: /cancel event/i });
-      await user.click(cancelButtons[0]);
+      const firstCancelButton = cancelButtons[0];
+      if (!firstCancelButton) throw new Error('Expected cancel button to exist');
+      await user.click(firstCancelButton);
 
       // Modal should be open
       await waitFor(() => {
@@ -498,7 +500,9 @@ describe('EventDetailPage', () => {
       // Open More dropdown, then cancel modal
       await user.click(screen.getByRole('button', { name: /more/i }));
       const cancelButtons = screen.getAllByRole('button', { name: /cancel event/i });
-      await user.click(cancelButtons[0]);
+      const firstCancelBtn = cancelButtons[0];
+      if (!firstCancelBtn) throw new Error('Expected cancel button to exist');
+      await user.click(firstCancelBtn);
 
       // Check the notifications checkbox
       const notifyCheckbox = screen.getByLabelText(/send cancellation notifications/i);
@@ -780,7 +784,9 @@ describe('EventDetailPage', () => {
       // Open More dropdown, then cancel modal
       await user.click(screen.getByRole('button', { name: /more/i }));
       const cancelButtons = screen.getAllByRole('button', { name: /cancel event/i });
-      await user.click(cancelButtons[0]);
+      const firstCancelButton = cancelButtons[0];
+      if (!firstCancelButton) throw new Error('Expected cancel button to exist');
+      await user.click(firstCancelButton);
 
       await waitFor(() => {
         const dialog = screen.getByRole('dialog');
