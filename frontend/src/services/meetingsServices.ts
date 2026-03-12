@@ -89,71 +89,9 @@ export const meetingsService = {
   },
 };
 
-// Minutes Detail Service — uses the /minutes-records API
-// Used by MinutesDetailPage for full minutes CRUD, motions, action items, and workflow
-
-export const minutesService = {
-  async getMinutes(minutesId: string): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.get<import('../types/minutes').MeetingMinutes>(`/minutes-records/${minutesId}`);
-    return response.data;
-  },
-
-  async updateMinutes(minutesId: string, data: Record<string, unknown>): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.put<import('../types/minutes').MeetingMinutes>(`/minutes-records/${minutesId}`, data);
-    return response.data;
-  },
-
-  async deleteMinutes(minutesId: string): Promise<void> {
-    await api.delete(`/minutes-records/${minutesId}`);
-  },
-
-  async publishMinutes(minutesId: string): Promise<void> {
-    await api.post(`/minutes-records/${minutesId}/publish`);
-  },
-
-  async submitForApproval(minutesId: string): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/minutes-records/${minutesId}/submit`);
-    return response.data;
-  },
-
-  async approve(minutesId: string): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/minutes-records/${minutesId}/approve`);
-    return response.data;
-  },
-
-  async reject(minutesId: string, reason: string): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/minutes-records/${minutesId}/reject`, { reason });
-    return response.data;
-  },
-
-  async addMotion(minutesId: string, data: import('../types/minutes').MotionCreate): Promise<import('../types/minutes').Motion> {
-    const response = await api.post<import('../types/minutes').Motion>(`/minutes-records/${minutesId}/motions`, data);
-    return response.data;
-  },
-
-  async deleteMotion(minutesId: string, motionId: string): Promise<void> {
-    await api.delete(`/minutes-records/${minutesId}/motions/${motionId}`);
-  },
-
-  async addActionItem(minutesId: string, data: import('../types/minutes').ActionItemCreate): Promise<import('../types/minutes').ActionItem> {
-    const response = await api.post<import('../types/minutes').ActionItem>(`/minutes-records/${minutesId}/action-items`, data);
-    return response.data;
-  },
-
-  async updateActionItem(minutesId: string, itemId: string, data: Record<string, unknown>): Promise<import('../types/minutes').ActionItem> {
-    const response = await api.put<import('../types/minutes').ActionItem>(`/minutes-records/${minutesId}/action-items/${itemId}`, data);
-    return response.data;
-  },
-
-  async deleteActionItem(minutesId: string, itemId: string): Promise<void> {
-    await api.delete(`/minutes-records/${minutesId}/action-items/${itemId}`);
-  },
-
-  async createFromMeeting(meetingId: string): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/minutes-records/from-meeting/${meetingId}`);
-    return response.data;
-  },
-};
+// Minutes service re-exported from the minutes module for backward compatibility.
+// New code should import from '@/modules/minutes/services/api'.
+export { minutesService } from '../modules/minutes/services/api';
 
 
 // Scheduling service moved to modules/scheduling/services/api.ts
