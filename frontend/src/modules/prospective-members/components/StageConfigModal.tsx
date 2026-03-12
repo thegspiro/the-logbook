@@ -257,6 +257,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   const [formValidationLoading, setFormValidationLoading] = useState(false);
   const [upcomingEvents, setUpcomingEvents] = useState<EventListItem[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
 
   // Fetch published forms when the modal opens
   useEffect(() => {
@@ -293,17 +294,27 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
     const fetchEvents = async () => {
       setEventsLoading(true);
       try {
-        const events = await eventService.getEvents({
-          end_after: new Date().toISOString(),
-          include_cancelled: false,
-          limit: 100,
-        });
+        const [events, typesWithCategories] = await Promise.all([
+          eventService.getEvents({
+            end_after: new Date().toISOString(),
+            include_cancelled: false,
+            limit: 100,
+          }),
+          eventService.getVisibleEventTypesWithCategories(),
+        ]);
         if (!cancelled) {
           // Sort by start_datetime ascending (soonest first)
           const sorted = [...events].sort(
             (a, b) => new Date(a.start_datetime).getTime() - new Date(b.start_datetime).getTime()
           );
           setUpcomingEvents(sorted);
+          // Merge org-defined categories + categories found on actual events
+          const orgCategories = typesWithCategories.custom_event_categories?.map((c) => c.label) ?? [];
+          const eventCategories = sorted
+            .map((e) => e.custom_category)
+            .filter((c): c is string => !!c);
+          const allCategories = [...new Set([...orgCategories, ...eventCategories])].sort();
+          setCustomCategories(allCategories);
         }
       } catch {
         // Non-critical — events dropdown will simply be empty
@@ -363,13 +374,17 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
     setErrors({});
   }, [editingStage, isOpen]);
 
-  /** Get next upcoming event for a given event type */
-  const getNextEventForType = (eventType: string): EventListItem | undefined => {
-    return upcomingEvents.find((e) => e.event_type === eventType);
+  /** Get next upcoming event for a given event type and optional category */
+  const getNextEventForType = (eventType: string, category?: string): EventListItem | undefined => {
+    return upcomingEvents.find((e) => {
+      if (e.event_type !== eventType) return false;
+      if (category && e.custom_category !== category) return false;
+      return true;
+    });
   };
 
   /** Render a preview card for the next upcoming event of a given type */
-  const renderEventPreview = (eventType: string | undefined) => {
+  const renderEventPreview = (eventType: string | undefined, category?: string) => {
     if (!eventType) return null;
     if (eventsLoading) {
       return (
@@ -379,17 +394,20 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
         </div>
       );
     }
-    const nextEvent = getNextEventForType(eventType);
+    const nextEvent = getNextEventForType(eventType, category);
+    const label = category
+      ? `${getEventTypeLabel(eventType).toLowerCase()} (${category})`
+      : getEventTypeLabel(eventType).toLowerCase();
     if (!nextEvent) {
       return (
         <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-          No upcoming {getEventTypeLabel(eventType).toLowerCase()} events found.
+          No upcoming {label} events found.
         </p>
       );
     }
     return (
       <div className="border-theme-surface-border bg-theme-surface-hover mt-2 rounded-md border p-3">
-        <p className="text-theme-text-muted mb-1 text-xs font-medium">Next upcoming event:</p>
+        <p className="text-theme-text-muted mb-1 text-xs font-medium">Next upcoming event (auto-linked when stage activates):</p>
         <p className="text-theme-text-primary text-sm font-medium">{nextEvent.title}</p>
         <p className="text-theme-text-muted mt-0.5 text-xs">
           {formatDateTime(nextEvent.start_datetime)}
@@ -399,6 +417,11 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
               ? ` — ${nextEvent.location}`
               : ''}
         </p>
+        {nextEvent.custom_category && (
+          <span className="mt-1 inline-block rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+            {nextEvent.custom_category}
+          </span>
+        )}
       </div>
     );
   };
@@ -863,17 +886,18 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                 </div>
                 <div>
                   <label htmlFor="stage-meeting-event-type" className="text-theme-text-muted mb-2 block text-sm">
-                    Link to Upcoming Event (optional)
+                    Auto-Link Event Type
                   </label>
                   <select
                     id="stage-meeting-event-type"
                     value={meetingConfig.linked_event_type ?? ''}
                     onChange={(e) => {
                       const eventType = e.target.value || undefined;
-                      const nextEvent = eventType ? getNextEventForType(eventType) : undefined;
+                      const nextEvent = eventType ? getNextEventForType(eventType, meetingConfig.linked_event_category) : undefined;
                       setConfig({
                         ...meetingConfig,
                         linked_event_type: eventType,
+                        linked_event_category: eventType ? meetingConfig.linked_event_category : undefined,
                         linked_event_id: nextEvent?.id,
                       });
                     }}
@@ -887,10 +911,45 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     ))}
                   </select>
                   <p className="text-theme-text-muted mt-1 text-xs">
-                    Automatically pull details from the next upcoming event of this type.
+                    When this stage activates, the next upcoming event of this type will be auto-linked.
                   </p>
-                  {renderEventPreview(meetingConfig.linked_event_type)}
                 </div>
+                {meetingConfig.linked_event_type && customCategories.length > 0 && (
+                  <div>
+                    <label htmlFor="stage-meeting-event-category" className="text-theme-text-muted mb-2 block text-sm">
+                      Event Category (optional)
+                    </label>
+                    <select
+                      id="stage-meeting-event-category"
+                      value={meetingConfig.linked_event_category ?? ''}
+                      onChange={(e) => {
+                        const category = e.target.value || undefined;
+                        const nextEvent = getNextEventForType(meetingConfig.linked_event_type ?? '', category);
+                        setConfig({
+                          ...meetingConfig,
+                          linked_event_category: category,
+                          linked_event_id: nextEvent?.id,
+                        });
+                      }}
+                      className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
+                    >
+                      <option value="">Any category</option>
+                      {customCategories.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-theme-text-muted mt-1 text-xs">
+                      Narrow auto-linking to events with this specific category (e.g., &quot;Information Session&quot;).
+                    </p>
+                  </div>
+                )}
+                {meetingConfig.linked_event_type && (
+                  <div>
+                    {renderEventPreview(meetingConfig.linked_event_type, meetingConfig.linked_event_category)}
+                  </div>
+                )}
                 <div>
                   <label htmlFor="stage-meeting-description" className="text-theme-text-muted mb-2 block text-sm">
                     Meeting Details (optional)

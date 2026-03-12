@@ -144,6 +144,7 @@ export interface MeetingStageConfig {
   meeting_description?: string | undefined;
   required_attendees?: string[] | undefined;
   linked_event_type?: string | undefined;
+  linked_event_category?: string | undefined;
   linked_event_id?: string | undefined;
 }
 
