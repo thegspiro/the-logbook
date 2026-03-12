@@ -135,6 +135,16 @@ const STAGE_PRESETS: StagePreset[] = [
     }),
   },
   {
+    label: 'President Interview',
+    name: 'Meeting with President',
+    description: 'Schedule a one-on-one meeting with the department president.',
+    stageType: 'meeting',
+    config: () => ({
+      meeting_type: 'president_meeting' as MeetingType,
+      meeting_description: 'Interview with the department president to discuss membership and responsibilities.',
+    }),
+  },
+  {
     label: 'Membership Vote',
     name: 'Membership Election',
     description: 'Hold a membership vote for the applicant.',
@@ -177,6 +187,11 @@ const MEETING_TYPE_OPTIONS: { value: MeetingType; label: string; description: st
     value: 'chief_meeting',
     label: 'Meeting with Chief',
     description: 'One-on-one or small group meeting with the chief.',
+  },
+  {
+    value: 'president_meeting',
+    label: 'Meeting with President',
+    description: 'One-on-one meeting with the department president.',
   },
   { value: 'informational', label: 'Informational Meeting', description: 'General info session about the department.' },
   { value: 'business_meeting', label: 'Business Meeting', description: 'Attend a regular business meeting.' },

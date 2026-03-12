@@ -137,7 +137,7 @@ export interface ManualApprovalConfig {
   require_notes: boolean;
 }
 
-export type MeetingType = 'chief_meeting' | 'informational' | 'business_meeting' | 'other';
+export type MeetingType = 'chief_meeting' | 'president_meeting' | 'informational' | 'business_meeting' | 'other';
 
 export interface MeetingStageConfig {
   meeting_type: MeetingType;
