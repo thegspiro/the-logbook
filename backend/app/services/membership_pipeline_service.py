@@ -24,12 +24,14 @@ from app.models.membership_pipeline import (
     ProspectActivityLog,
     ProspectDocument,
     ProspectElectionPackage,
+    ProspectEventLink,
     ProspectInterview,
     ProspectiveMember,
     ProspectStatus,
     ProspectStepProgress,
     StepProgressStatus,
 )
+from app.models.event import Event
 from app.models.user import Organization, User, UserStatus, generate_uuid
 from app.utils.prospect_fields import (
     FIELD_TYPE_MAP as _SHARED_FIELD_TYPE_MAP,
@@ -2742,6 +2744,201 @@ class MembershipPipelineService:
             action="interview_deleted",
             details={"interview_id": interview_id},
             performed_by=deleted_by,
+        )
+
+        await self.db.commit()
+        return True
+
+    # =========================================================================
+    # Event Links
+    # =========================================================================
+
+    async def list_event_links(
+        self,
+        prospect_id: str,
+        organization_id: str,
+    ) -> List[Dict[str, Any]]:
+        """List all event links for a prospect, enriched with event details."""
+        # Verify prospect belongs to org
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            raise ValueError("Prospect not found")
+
+        query = (
+            select(ProspectEventLink)
+            .where(ProspectEventLink.prospect_id == prospect_id)
+            .order_by(ProspectEventLink.created_at.desc())
+        )
+        result = await self.db.execute(query)
+        links = list(result.scalars().all())
+
+        enriched: List[Dict[str, Any]] = []
+        for link in links:
+            event_result = await self.db.execute(
+                select(Event).where(Event.id == link.event_id)
+            )
+            event = event_result.scalar_one_or_none()
+
+            linker_name = None
+            if link.linked_by:
+                linker_result = await self.db.execute(
+                    select(User).where(User.id == link.linked_by)
+                )
+                linker = linker_result.scalar_one_or_none()
+                if linker:
+                    linker_name = (
+                        f"{linker.first_name} {linker.last_name}".strip()
+                    )
+
+            enriched.append(
+                {
+                    "id": link.id,
+                    "prospect_id": link.prospect_id,
+                    "event_id": link.event_id,
+                    "event_title": event.title if event else None,
+                    "event_type": (
+                        event.event_type.value
+                        if event and event.event_type
+                        else None
+                    ),
+                    "custom_category": (
+                        event.custom_category if event else None
+                    ),
+                    "event_start": event.start_datetime if event else None,
+                    "event_end": event.end_datetime if event else None,
+                    "event_location": event.location if event else None,
+                    "is_cancelled": event.is_cancelled if event else False,
+                    "notes": link.notes,
+                    "linked_by": link.linked_by,
+                    "linked_by_name": linker_name,
+                    "created_at": link.created_at,
+                }
+            )
+        return enriched
+
+    async def link_event(
+        self,
+        prospect_id: str,
+        event_id: str,
+        organization_id: str,
+        linked_by: str,
+        notes: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Link an event to a prospect."""
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            raise ValueError("Prospect not found")
+
+        # Verify event exists and belongs to same org
+        event_result = await self.db.execute(
+            select(Event).where(
+                and_(
+                    Event.id == event_id,
+                    Event.organization_id == organization_id,
+                )
+            )
+        )
+        event = event_result.scalar_one_or_none()
+        if not event:
+            raise ValueError("Event not found")
+
+        # Check for duplicate link
+        existing = await self.db.execute(
+            select(ProspectEventLink).where(
+                and_(
+                    ProspectEventLink.prospect_id == prospect_id,
+                    ProspectEventLink.event_id == event_id,
+                )
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise ValueError("Event is already linked to this prospect")
+
+        link = ProspectEventLink(
+            id=generate_uuid(),
+            prospect_id=prospect_id,
+            event_id=event_id,
+            notes=notes,
+            linked_by=linked_by,
+        )
+        self.db.add(link)
+
+        await self._log_activity(
+            prospect_id=prospect_id,
+            action="event_linked",
+            details={
+                "event_id": event_id,
+                "event_title": event.title,
+            },
+            performed_by=linked_by,
+        )
+
+        await self.db.commit()
+
+        # Return enriched response
+        linker_result = await self.db.execute(
+            select(User).where(User.id == linked_by)
+        )
+        linker = linker_result.scalar_one_or_none()
+        linker_name = (
+            f"{linker.first_name} {linker.last_name}".strip()
+            if linker
+            else None
+        )
+
+        return {
+            "id": link.id,
+            "prospect_id": link.prospect_id,
+            "event_id": link.event_id,
+            "event_title": event.title,
+            "event_type": (
+                event.event_type.value if event.event_type else None
+            ),
+            "custom_category": event.custom_category,
+            "event_start": event.start_datetime,
+            "event_end": event.end_datetime,
+            "event_location": event.location,
+            "is_cancelled": event.is_cancelled,
+            "notes": link.notes,
+            "linked_by": link.linked_by,
+            "linked_by_name": linker_name,
+            "created_at": link.created_at,
+        }
+
+    async def unlink_event(
+        self,
+        prospect_id: str,
+        link_id: str,
+        organization_id: str,
+        unlinked_by: str,
+    ) -> bool:
+        """Remove an event link from a prospect."""
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            return False
+
+        result = await self.db.execute(
+            select(ProspectEventLink).where(
+                and_(
+                    ProspectEventLink.id == link_id,
+                    ProspectEventLink.prospect_id == prospect_id,
+                )
+            )
+        )
+        link = result.scalar_one_or_none()
+        if not link:
+            return False
+
+        event_id = link.event_id
+        await self.db.execute(
+            delete(ProspectEventLink).where(ProspectEventLink.id == link_id)
+        )
+
+        await self._log_activity(
+            prospect_id=prospect_id,
+            action="event_unlinked",
+            details={"event_id": event_id, "link_id": link_id},
+            performed_by=unlinked_by,
         )
 
         await self.db.commit()

@@ -54,6 +54,7 @@ import type {
   Interview,
   InterviewCreate,
   InterviewUpdate,
+  ProspectEventLink,
   TargetMembershipType,
 } from '../types';
 import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS, StepProgressStatus } from '../types';
@@ -992,6 +993,31 @@ export const interviewService = {
 
   async deleteInterview(interviewId: string): Promise<void> {
     await api.delete(`/prospective-members/interviews/${interviewId}`);
+  },
+};
+
+// =============================================================================
+// Event Link Service
+// =============================================================================
+
+export const eventLinkService = {
+  async getLinkedEvents(applicantId: string): Promise<ProspectEventLink[]> {
+    const response = await api.get<ProspectEventLink[]>(
+      `/prospective-members/prospects/${applicantId}/events`
+    );
+    return response.data;
+  },
+
+  async linkEvent(applicantId: string, eventId: string): Promise<ProspectEventLink> {
+    const response = await api.post<ProspectEventLink>(
+      `/prospective-members/prospects/${applicantId}/events`,
+      { event_id: eventId }
+    );
+    return response.data;
+  },
+
+  async unlinkEvent(applicantId: string, linkId: string): Promise<void> {
+    await api.delete(`/prospective-members/prospects/${applicantId}/events/${linkId}`);
   },
 };
 

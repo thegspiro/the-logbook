@@ -593,3 +593,49 @@ class ProspectInterview(Base):
 
     def __repr__(self):
         return f"<ProspectInterview(prospect={self.prospect_id}, interviewer={self.interviewer_id})>"
+
+
+class ProspectEventLink(Base):
+    """
+    Links a prospective member to an upcoming event.
+
+    Allows coordinators to associate relevant events (e.g., meetings,
+    trainings, social gatherings) with a prospect so they can be
+    invited or tracked against those events.
+    """
+
+    __tablename__ = "prospect_event_links"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    prospect_id = Column(
+        String(36),
+        ForeignKey("prospective_members.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    event_id = Column(
+        String(36),
+        ForeignKey("events.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    notes = Column(Text)
+    linked_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    prospect = relationship("ProspectiveMember", backref="event_links")
+    event = relationship("Event", foreign_keys=[event_id])
+    linker = relationship("User", foreign_keys=[linked_by])
+
+    __table_args__ = (
+        Index(
+            "idx_prospect_event_link_unique",
+            "prospect_id",
+            "event_id",
+            unique=True,
+        ),
+    )
