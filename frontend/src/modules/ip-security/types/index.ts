@@ -45,12 +45,12 @@ export interface IPExceptionRequestCreate {
   reason: string;
   requestedDurationDays: number;
   useCase: string;
-  description?: string;
+  description?: string | undefined;
 }
 
 export interface IPExceptionApprove {
-  approvedDurationDays?: number;
-  approvalNotes?: string;
+  approvedDurationDays?: number | undefined;
+  approvalNotes?: string | undefined;
 }
 
 export interface IPExceptionReject {
@@ -96,7 +96,7 @@ export interface CountryBlockRule {
 
 export interface CountryBlockRuleCreate {
   countryCode: string;
-  countryName?: string;
+  countryName?: string | undefined;
   reason: string;
   riskLevel: string;
 }
