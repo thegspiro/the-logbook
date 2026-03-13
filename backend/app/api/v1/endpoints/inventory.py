@@ -2194,7 +2194,7 @@ async def generate_barcode_labels(
 
     service = InventoryService(db)
     try:
-        pdf_buf = await service.generate_barcode_labels(
+        pdf_buf, auto_populated = await service.generate_barcode_labels(
             item_ids=request.item_ids,
             organization_id=current_user.organization_id,
             label_format=request.label_format,
@@ -2213,10 +2213,13 @@ async def generate_barcode_labels(
         )
 
     filename = f"inventory-labels-{request.label_format}.pdf"
+    headers = {"Content-Disposition": f"attachment; filename={filename}"}
+    if auto_populated > 0:
+        headers["X-Barcodes-Auto-Populated"] = str(auto_populated)
     return StreamingResponse(
         pdf_buf,
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+        headers=headers,
     )
 
 

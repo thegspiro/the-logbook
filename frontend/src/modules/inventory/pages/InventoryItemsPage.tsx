@@ -418,7 +418,7 @@ const InventoryItemsPage: React.FC = () => {
               <MobileItemCard key={item.id} name={item.name} status={item.status}
                 statusStyle={getStatusStyle(item.status)} condition={item.condition}
                 conditionColor={getConditionColor(item.condition)} category={c?.name}
-                serialNumber={item.serial_number} assetTag={item.asset_tag}
+                serialNumber={item.serial_number} barcode={item.barcode} assetTag={item.asset_tag}
                 size={item.size} color={item.color} location={loc || undefined}
                 manufacturer={[item.manufacturer, item.model_number].filter(Boolean).join(' ') || undefined}
                 quantity={item.tracking_type === 'pool' ? item.quantity : undefined}

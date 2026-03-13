@@ -2388,7 +2388,7 @@ class InventoryService:
         label_format: str = "letter",
         custom_width: Optional[float] = None,
         custom_height: Optional[float] = None,
-    ) -> BytesIO:
+    ) -> Tuple[BytesIO, int]:
         """
         Generate a PDF containing barcode labels for the given items.
 
@@ -2397,10 +2397,13 @@ class InventoryService:
         - "dymo_30252": Dymo 30252 address labels (1.125 x 3.5 in)
         - "dymo_30256": Dymo 30256 shipping labels (2.3125 x 4 in)
         - "dymo_30334": Dymo 30334 multi-purpose labels (2.25 x 1.25 in)
+        - "dymo_30336": Dymo 30336 small multipurpose labels (2.125 x 1 in)
         - "rollo_4x6": Rollo 4x6 shipping labels
         - "custom": Custom dimensions via custom_width/custom_height (in inches)
 
         Thermal formats produce one label per page, sized exactly to the label.
+
+        Returns a tuple of (pdf_buffer, auto_populated_count).
         """
 
         items = []
@@ -2427,13 +2430,13 @@ class InventoryService:
         # using the same fallback logic the label renderer uses.  This ensures
         # the barcode printed on the label is stored on the item and visible
         # when the user opens the edit form.
-        dirty = False
+        auto_populated = 0
         for item in items:
             if not item.barcode:
                 effective = item.asset_tag or item.serial_number or item.id[:12]
                 item.barcode = effective
-                dirty = True
-        if dirty:
+                auto_populated += 1
+        if auto_populated > 0:
             await self.db.commit()
 
         if label_format == "custom":
@@ -2441,7 +2444,10 @@ class InventoryService:
                 raise ValueError(
                     "custom_width and custom_height are required for custom label format"
                 )
-            return self._generate_thermal_labels(items, custom_width, custom_height)
+            pdf_buf = self._generate_thermal_labels(
+                items, custom_width, custom_height
+            )
+            return pdf_buf, auto_populated
 
         fmt = self.LABEL_FORMATS.get(label_format)
         if not fmt:
@@ -2450,9 +2456,12 @@ class InventoryService:
             )
 
         if fmt["type"] == "sheet":
-            return self._generate_sheet_labels(items)
+            pdf_buf = self._generate_sheet_labels(items)
         else:
-            return self._generate_thermal_labels(items, fmt["width"], fmt["height"])
+            pdf_buf = self._generate_thermal_labels(
+                items, fmt["width"], fmt["height"]
+            )
+        return pdf_buf, auto_populated
 
     @staticmethod
     def _generate_sheet_labels(items: list) -> BytesIO:

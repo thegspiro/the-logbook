@@ -303,12 +303,15 @@ const InventoryBarcodePrintPage: React.FC = () => {
       const backendFormat = PRESET_TO_BACKEND[preset.id] || 'letter';
       const customW = backendFormat === 'custom' ? parseFloat(preset.width) : undefined;
       const customH = backendFormat === 'custom' ? parseFloat(preset.height) : undefined;
-      const blob = await inventoryService.generateBarcodeLabels(
+      const { blob, autoPopulated } = await inventoryService.generateBarcodeLabels(
         items.map(i => i.id),
         backendFormat,
         customW,
         customH,
       );
+      if (autoPopulated > 0) {
+        toast.success(`${autoPopulated} item${autoPopulated !== 1 ? 's' : ''} had barcode values auto-generated`);
+      }
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

@@ -290,7 +290,7 @@ export const inventoryService = {
     labelFormat: string = 'letter',
     customWidth?: number,
     customHeight?: number,
-  ): Promise<Blob> {
+  ): Promise<{ blob: Blob; autoPopulated: number }> {
     const response = await api.post<Blob>('/inventory/labels/generate', {
       item_ids: itemIds,
       label_format: labelFormat,
@@ -299,7 +299,11 @@ export const inventoryService = {
     }, {
       responseType: 'blob',
     });
-    return response.data;
+    const autoPopulated = parseInt(
+      (response.headers?.['x-barcodes-auto-populated'] as string) ?? '0',
+      10,
+    );
+    return { blob: response.data, autoPopulated: isNaN(autoPopulated) ? 0 : autoPopulated };
   },
 
   async updateCategory(categoryId: string, data: Partial<InventoryCategoryCreate>): Promise<InventoryCategory> {

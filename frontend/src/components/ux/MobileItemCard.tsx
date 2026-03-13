@@ -30,6 +30,8 @@ interface MobileItemCardProps {
   category?: string | undefined;
   /** Serial number */
   serialNumber?: string | undefined;
+  /** Barcode value */
+  barcode?: string | undefined;
   /** Asset tag */
   assetTag?: string | undefined;
   /** Size label */
@@ -76,6 +78,7 @@ export const MobileItemCard: React.FC<MobileItemCardProps> = ({
   conditionColor,
   category,
   serialNumber,
+  barcode,
   assetTag,
   size,
   color,
@@ -169,6 +172,7 @@ export const MobileItemCard: React.FC<MobileItemCardProps> = ({
           {/* Detail row */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-theme-text-muted min-w-0">
+              {barcode && <span className="font-mono truncate">BC: {barcode}</span>}
               {serialNumber && <span className="font-mono truncate">SN: {serialNumber}</span>}
               {assetTag && <span className="font-mono truncate">Tag: {assetTag}</span>}
               {location && <span className="truncate">{location}</span>}
