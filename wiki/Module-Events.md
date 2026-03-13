@@ -8,7 +8,7 @@ The Events module manages department events with QR code check-in, recurring eve
 
 - **Event Creation** — Create one-time or recurring events with location, time, and attendance tracking
 - **QR Code Check-In** — Generate unique QR codes for event check-in; members scan to register attendance
-- **Recurring Events** — Daily, weekly, monthly, and yearly recurrence patterns with end dates
+- **Recurring Events** — Daily, weekly, monthly, monthly-by-weekday (e.g., "2nd Tuesday"), and annual recurrence patterns with end dates and series management
 - **Event Templates** — Save and reuse event configurations
 - **RSVP Management** — Going/Maybe/Not Going with RSVP overrides for admins
 - **Booking Prevention** — Prevents double-booking of locations at the same time
@@ -114,6 +114,42 @@ POST   /api/v1/event-requests/email-templates              # Create template
 PATCH  /api/v1/event-requests/email-templates/{id}         # Update template
 DELETE /api/v1/event-requests/email-templates/{id}         # Delete template
 ```
+
+---
+
+## Recent Changes (2026-03-12)
+
+- **Monthly-by-weekday recurrence**: Events can recur on patterns like "2nd Tuesday of every month" or "last Friday of every month". New `recurrence_week` and `recurrence_day_of_week` database columns
+- **Annual recurrence**: Yearly recurrence on a specific date, combinable with monthly-by-weekday for patterns like "first Monday in October every year"
+- **Recurring event UI**: Recurrence pattern selector in EventForm with radio buttons for daily/weekly/monthly/monthly-by-weekday/annual. Weekday picker auto-populates from event date
+- **Series management**: Event detail page shows recurring event badges, "View All in Series" link, and series management actions (edit all future, delete series). Events list shows recurrence indicator badges
+- **Duplicate event prevention**: Recurring event creation checks for existing events at the same time/location
+- **QR check-in timezone fix**: QR check-in data now includes `organizationTimezone` for correct local time display. Fixed ISO datetime string construction that caused "N/A" in check-in window
+- **Timezone standardization**: All date/time displays use `dateFormatting.ts` utilities with IANA timezone support instead of raw `toLocaleString()`
+- **Events settings refactored**: `EventsSettingsTab` extracted into 6 section components (`CategoriesSection`, `EmailSection`, `FormSection`, `OutreachSection`, `PipelineSection`, `VisibilitySection`) with shared types
+- **Form generation redirect**: After generating an event request form, user is redirected to the Forms page with the new form pre-selected
+- **Custom categories schema fix**: `custom_event_categories` accepts objects (`{id, label, color}`) instead of plain strings
+- **Settings persistence fix**: Uses `copy.deepcopy()` for JSON column mutations to prevent silent write failures
+- **`??` to `||` form value fix**: All optional form fields now use `||` to coerce empty strings to `undefined`
+- **Ballot email notifications**: Election detail page supports sending ballot notification emails to eligible voters with org logo header
+
+### API Endpoints — Recurring Events
+
+```
+POST   /api/v1/events/{id}/series               # Get all events in a recurring series
+PUT    /api/v1/events/{id}/series/future         # Update all future events in series
+DELETE /api/v1/events/{id}/series                # Delete entire series
+```
+
+### Edge Cases — Recurring Events
+
+| Scenario | Behavior |
+|----------|----------|
+| Monthly-by-weekday with "5th week" | Falls back to last occurrence when month has fewer than 5 weeks |
+| Annual events on Feb 29 | Shifts to Feb 28 in non-leap years |
+| Delete single occurrence | Does not affect other occurrences in the series |
+| "Edit all future" | Only modifies events after the current date; past occurrences are unchanged |
+| Duplicate detection | Checks time + location overlap before creating each occurrence |
 
 ---
 

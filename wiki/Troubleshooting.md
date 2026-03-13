@@ -81,6 +81,14 @@ This guide covers common issues and their solutions for The Logbook deployment.
 75. [Facilities Room-Location Integration](#facilities-room-location-integration-2026-03-06)
 76. [Onboarding Empty String 422s](#onboarding-empty-string-422s-2026-03-06)
 77. [Pydantic 422 Error Display](#pydantic-422-error-display-2026-03-06)
+78. [QR Check-In Timezone Display](#qr-check-in-timezone-display-2026-03-12)
+79. [Recurring Event Edge Cases](#recurring-event-edge-cases-2026-03-12)
+80. [Events Settings Persistence](#events-settings-persistence-2026-03-12)
+81. [Custom Categories Schema Mismatch](#custom-categories-schema-mismatch-2026-03-12)
+82. [Form Value Empty String 422s](#form-value-empty-string-422s-2026-03-12)
+83. [Minutes Module Table Name Mismatch](#minutes-module-table-name-mismatch-2026-03-12)
+84. [Auth Cookies on LAN HTTP](#auth-cookies-on-lan-http-2026-03-12)
+85. [TypeScript Build Errors After Update](#typescript-build-errors-after-update-2026-03-12)
 
 ---
 
@@ -2422,3 +2430,85 @@ docker volume rm logbook_mysql_data logbook_redis_data 2>/dev/null
 ### Problem: Error messages show "[object Object]" or empty red alert
 
 **Status (Fixed):** `toAppError()` now detects array `detail` and formats as "field: reason". `ErrorAlert` returns null for empty messages.
+
+---
+
+## QR Check-In Timezone Display (2026-03-12)
+
+### Problem: QR check-in window shows "N/A" for start/end times
+
+**Status (Fixed):** Backend was returning bare date and time strings separately instead of combined ISO 8601 datetime strings. Fixed to construct `{date}T{time}` format. Also added `organizationTimezone` to QR data for correct local time display.
+
+**Edge Case:** Organizations without a configured timezone default to UTC. Self check-in page falls back to browser's local timezone if org timezone is missing.
+
+---
+
+## Recurring Event Edge Cases (2026-03-12)
+
+### Problem: Monthly-by-weekday events create wrong dates
+
+**Status (Expected Behavior):** Monthly-by-weekday with "5th week" falls back to the last occurrence when the month has fewer than 5 weeks. Annual events on Feb 29 shift to Feb 28 in non-leap years. These are intentional behaviors.
+
+### Problem: Deleting one recurring event deletes the whole series
+
+**Status (Not a Bug):** Deleting a single occurrence does NOT affect other occurrences. Use "Delete Series" from the series management menu to delete all events. "Edit All Future" only modifies events after the current date.
+
+---
+
+## Events Settings Persistence (2026-03-12)
+
+### Problem: Event settings changes don't persist after save
+
+**Status (Fixed):** SQLAlchemy JSON column mutation detection failed because `dict()` shallow copy shares nested dict references with the committed state. Changed to `copy.deepcopy()` so SQLAlchemy detects the change and issues an UPDATE.
+
+**Edge Case:** This affects any JSON column with nested values. Top-level key changes are detected by `MutableDict.as_mutable(JSON)`, but nested mutations require `deepcopy()` or `flag_modified()`.
+
+---
+
+## Custom Categories Schema Mismatch (2026-03-12)
+
+### Problem: Saving custom event categories returns 422
+
+**Status (Fixed):** Backend schema expected plain strings but frontend sends objects with `{id, label, color}`. Updated Pydantic schema to accept the object format.
+
+**Edge Case:** Existing categories stored as plain strings are auto-migrated to object format on next save.
+
+---
+
+## Form Value Empty String 422s (2026-03-12)
+
+### Problem: Multiple forms across modules return 422 errors on optional fields
+
+**Status (Fixed):** React form fields initialize as `""`. Using `??` (nullish coalescing) to convert empty strings fails because `"" ?? undefined === ""`. Changed to `||` (logical OR) across 14+ files in events, scheduling, inventory, onboarding, prospective members, training, and member profile modules.
+
+**Edge Case:** This is the most common bug pattern in the project. Any new form code must use `||` (not `??`) when converting optional form values for API submission. See CLAUDE.md Pitfall #1.
+
+---
+
+## Minutes Module Table Name Mismatch (2026-03-12)
+
+### Problem: Backend startup fails with "Table 'meeting_action_items' doesn't exist"
+
+**Status (Fixed):** Alembic migration `20260312_0200` renames the table to match the SQLAlchemy model's expected table name. Run `alembic upgrade head`.
+
+**Edge Case:** Existing deployments with partially applied migrations should run the full migration chain. The migration handles both table rename and index recreation.
+
+---
+
+## Auth Cookies on LAN HTTP (2026-03-12)
+
+### Problem: Auth cookies not being set on LAN HTTP deployments
+
+**Status (Fixed):** `Secure` flag was hardcoded to `True`, but cookies with `Secure=True` are only sent over HTTPS. Now auto-detects from `ALLOWED_ORIGINS` scheme — HTTP origins set `Secure=False`.
+
+**Edge Case:** Mixed-scheme `ALLOWED_ORIGINS` (both HTTP and HTTPS) defaults to `Secure=False` with a warning. Deployments behind TLS-terminating reverse proxies should set `ALLOWED_ORIGINS` to the HTTPS URL. Added `NGINX_WORKER_PROCESSES` env var to prevent excessive worker spawning on high-core servers.
+
+---
+
+## TypeScript Build Errors After Update (2026-03-12)
+
+### Problem: Frontend build fails with 94+ TypeScript errors after pulling latest
+
+**Status (Fixed):** Batch fix resolved wrong import paths in admin-hours module, duplicate properties, unused variables, and `noUncheckedIndexedAccess` violations across 18 files. ESLint cleaned to 0 errors/0 warnings across 59 files.
+
+**Edge Case:** If you have local modifications in any of the affected files, you may need to resolve merge conflicts. Run `npx tsc --noEmit` to verify your build after merging.

@@ -97,7 +97,15 @@ frontend/src/modules/prospective-members/
 | `manual_approval` | CheckCircle | Coordinator manually approves | Internal action |
 | `automated_email` | Mail | Sends configurable email to applicant | Email template selection, variable interpolation, send delay |
 | `form_dropdown` | ListChecks | Links a form from Forms module for data collection | Links to Forms module via dropdown selector |
-| `meeting` | Calendar | Schedule interview or orientation meeting | Links to Events module |
+| `meeting` | Calendar | Schedule interview or orientation meeting | Links to Events module; auto-links upcoming events |
+
+### Quick Presets (StageConfigModal)
+
+The StageConfigModal includes quick presets for common stage configurations:
+
+| Preset | Type | Description |
+|--------|------|-------------|
+| President Interview | `meeting` | Pre-configured meeting stage for scheduling a president/chief interview with the applicant |
 
 ### Pipeline Builder
 
@@ -119,6 +127,42 @@ Each stage can be configured with:
 - **Form selection** (form_dropdown only): Choose a form from the Forms module for applicant data collection
 - **Event linking** (meeting and others): Link a stage to a specific event for scheduling
 - **Status page visibility**: Toggle whether the stage appears on the public application status page
+
+---
+
+## Event Linking (2026-03-12)
+
+Coordinators can link upcoming department events to individual applicants in the pipeline, enabling tracking of interviews, orientations, and meetings.
+
+### How It Works
+
+1. **Manual linking**: From the ApplicantDetailDrawer, coordinators can search and link any upcoming event to an applicant
+2. **Auto-linking**: When a pipeline stage of type `meeting` activates for an applicant, the system automatically links the next upcoming event that matches the stage configuration
+3. **Linked event display**: The ApplicantDetailDrawer shows all linked events with date, time, type, and status
+
+### Database Model
+
+| Table | Description |
+|-------|-------------|
+| `prospect_event_links` | Links applicants to events with `prospect_id` (FK), `event_id` (FK), `stage_id` (FK, nullable), `linked_by` (FK users), `created_at` |
+
+### API Endpoints
+
+```
+GET    /api/v1/membership-pipeline/prospects/{id}/events       # List linked events
+POST   /api/v1/membership-pipeline/prospects/{id}/events       # Link an event
+DELETE /api/v1/membership-pipeline/prospects/{id}/events/{eid}  # Unlink an event
+```
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| No matching events when meeting stage activates | No link created; coordinator prompted to schedule manually |
+| Linked event is cancelled | Shows "Cancelled" badge on applicant's event list |
+| Multiple applicants linked to same event | Supported (e.g., group orientation) |
+| Event link deleted | Only removes the link; event itself is unchanged |
+| Applicant converted to member | Event links are preserved for audit trail |
 
 ---
 

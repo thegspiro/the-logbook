@@ -38,6 +38,9 @@
 - [Apparatus](Module-Apparatus)
 - [Inventory](Module-Inventory)
 - [Grants & Fundraising](Module-Grants-Fundraising)
+- [Finance](../docs/FINANCE_MODULE.md)
+- [Meeting Minutes](../docs/MEETING_MINUTES_MODULE.md)
+- [Prospective Members](../docs/PROSPECTIVE_MEMBERS_MODULE.md)
 - [Compliance](Module-Compliance)
 
 ### 🔐 Security

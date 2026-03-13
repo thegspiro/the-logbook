@@ -698,4 +698,66 @@ All `Record<string, unknown>` types in `facilitiesService` replaced with proper 
 
 ---
 
+## TypeScript Build Errors — 94 Error Batch Fix (2026-03-12)
+
+### Problem: Frontend build fails with 94+ TypeScript errors
+
+**Status (Fixed):** Batch fix resolved wrong import paths in admin-hours module (`ActiveSessionsTab`, `AllEntriesTab`, `PendingReviewTab`), duplicate CSS class properties, unused variables, and `noUncheckedIndexedAccess` violations across 18 files.
+
+### Problem: ESLint reports many errors and warnings
+
+**Status (Fixed):** All ESLint errors and warnings resolved across 59 files — 0 errors, 0 warnings. Fixes include proper typing on test mocks, correct `@testing-library` assertions, and removed unused variables.
+
+---
+
+## Form Value `??` to `||` Migration (2026-03-12)
+
+### Problem: Optional form fields cause 422 errors across multiple modules
+
+**Status (Fixed):** React form fields initialize as `""`. Using `??` passes empty strings through to the API. Changed to `||` in 14+ files across events, scheduling, inventory, onboarding, prospective members, training, and member profile modules.
+
+**Rule:** Always use `||` (not `??`) to coerce optional form values. See CLAUDE.md Pitfall #1.
+
+---
+
+## QR Check-In Timezone Display (2026-03-12)
+
+### Problem: QR check-in window shows "N/A"
+
+**Status (Fixed):** Backend returned bare date/time strings instead of ISO 8601. Fixed to construct `{date}T{time}` format. Added `organizationTimezone` for correct local time display.
+
+**Edge Case:** Falls back to browser timezone if org timezone is missing.
+
+---
+
+## Timezone Standardization (2026-03-12)
+
+### Improvement: 34 files updated with timezone-aware formatting
+
+All `new Date().toLocaleString()` / `toLocaleDateString()` calls replaced with `formatDate()` / `formatDateTime()` / `formatTime()` utilities that accept an IANA timezone parameter. Affected modules: admin-hours, grants-fundraising, inventory, onboarding, scheduling, compliance, events, member profile, platform analytics, skills testing, elections.
+
+**Edge Case:** Users may notice time "shifts" after update since pages now show org-local times instead of UTC.
+
+---
+
+## Events Settings Refactor (2026-03-12)
+
+### Improvement: EventsSettingsTab extracted into 6 section components
+
+Monolithic `EventsSettingsTab` (~1160 lines) refactored into `CategoriesSection`, `EmailSection`, `FormSection`, `OutreachSection`, `PipelineSection`, and `VisibilitySection` with shared types and deduplicated save logic.
+
+### Problem: Form generation stays on settings page
+
+**Status (Fixed):** After generating an event request form, user is now redirected to the Forms page with the new form pre-selected.
+
+---
+
+## RecurringEventCreate Type Error (2026-03-12)
+
+### Problem: TypeScript error on RecurringEventCreate with exactOptionalPropertyTypes
+
+**Status (Fixed):** Optional fields needed explicit `| undefined` union types to satisfy `exactOptionalPropertyTypes`. Updated all 21 optional fields in the type definition.
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Backend Issues](Troubleshooting-Backend)
