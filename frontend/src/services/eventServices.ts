@@ -359,6 +359,24 @@ export const eventService = {
   },
 
   /**
+   * Send a notification about an event (announcement, reminder, follow-up, etc.)
+   */
+  async sendEventNotification(
+    eventId: string,
+    data: {
+      notification_type: 'announcement' | 'reminder' | 'follow_up' | 'missed_event' | 'check_in_confirmation';
+      message?: string | undefined;
+      target?: 'all' | 'going' | 'not_responded' | 'checked_in' | 'not_checked_in' | undefined;
+    },
+  ): Promise<{ message: string; recipients_count: number }> {
+    const response = await api.post<{ message: string; recipients_count: number }>(
+      `/events/${eventId}/notify`,
+      data,
+    );
+    return response.data;
+  },
+
+  /**
    * Get RSVP change history for an event (admin only)
    */
   async getRSVPHistory(eventId: string, limit?: number): Promise<import('../types/event').RSVPHistory[]> {
@@ -376,6 +394,14 @@ export const eventService = {
     const response = await api.post<CSVImportResponse>('/events/import-csv', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
+    return response.data;
+  },
+
+  /**
+   * Get analytics summary for attendance trends dashboard (#44, #46, #47)
+   */
+  async getAnalyticsSummary(params?: Record<string, string>): Promise<Record<string, unknown>> {
+    const response = await api.get<Record<string, unknown>>('/events/analytics/summary', { params });
     return response.data;
   },
 };

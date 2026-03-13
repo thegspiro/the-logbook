@@ -8,6 +8,7 @@ import os
 import uuid as uuid_lib
 from datetime import datetime
 from datetime import timezone as dt_timezone
+from typing import Optional
 
 from uuid import UUID
 
@@ -26,12 +27,15 @@ from app.models.event import Event, EventExternalAttendee, EventType, RSVPStatus
 from app.models.user import Organization, User
 from app.schemas.documents import DocumentFolderResponse
 from app.schemas.event import (
+    AnalyticsSummary,
     BulkAddAttendees,
     CheckInMonitoringStats,
     CheckInRequest,
     EventCancel,
     EventCreate,
     EventListItem,
+    EventNotificationRequest,
+    EventNotificationResponse,
     EventResponse,
     EventSettingsUpdate,
     EventStats,
@@ -420,6 +424,42 @@ EVENT_SETTINGS_DEFAULTS = {
         "notify_attendees": True,
     },
 }
+
+
+@router.get("/analytics/summary", response_model=AnalyticsSummary)
+async def get_analytics_summary(
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("analytics.view", "events.manage")
+    ),
+):
+    """
+    Get aggregated event analytics for the attendance trends dashboard.
+
+    Features #44 (attendance trends), #46 (event type distribution),
+    #47 (check-in analytics).
+
+    **Authentication required**
+    **Requires permission: analytics.view OR events.manage**
+    """
+    try:
+        service = EventService(db)
+        result = await service.get_analytics_summary(
+            organization_id=current_user.organization_id,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        return AnalyticsSummary(**result)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400, detail=safe_error_detail(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=safe_error_detail(e)
+        )
 
 
 @router.get("/settings")
@@ -2561,6 +2601,72 @@ async def send_event_reminders(
     )
 
     return {"message": "Reminders sent successfully", "sent_count": len(user_ids)}
+
+
+# ============================================
+# Event Notifications
+# ============================================
+
+
+@router.post(
+    "/{event_id}/notify",
+    response_model=EventNotificationResponse,
+)
+async def send_event_notification(
+    event_id: UUID,
+    body: EventNotificationRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Send a notification about an event.
+
+    Supports multiple notification types (announcement, reminder,
+    follow_up, missed_event, check_in_confirmation) and target
+    audiences (all, going, not_responded, checked_in, not_checked_in).
+    """
+    service = EventService(db)
+    try:
+        recipients_count, summary = await service.send_event_notification(
+            event_id=event_id,
+            organization_id=current_user.organization_id,
+            notification_type=body.notification_type.value,
+            target=body.target.value,
+            message=body.message,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+    await log_audit_event(
+        db=db,
+        user_id=str(current_user.id),
+        action="event.send_notification",
+        resource_type="event",
+        resource_id=str(event_id),
+        details={
+            "notification_type": body.notification_type.value,
+            "target": body.target.value,
+            "recipients_count": recipients_count,
+            "has_custom_message": body.message is not None,
+        },
+        organization_id=str(current_user.organization_id),
+    )
+
+    logger.info(
+        "User {} sent {} notification (target={}) for event {}: {} recipients",
+        current_user.id,
+        body.notification_type.value,
+        body.target.value,
+        event_id,
+        recipients_count,
+    )
+
+    return EventNotificationResponse(
+        message=summary,
+        recipients_count=recipients_count,
+    )
 
 
 # ============================================

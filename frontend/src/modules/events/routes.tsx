@@ -36,6 +36,11 @@ const EventCheckInMonitoringPage = lazyWithRetry(
 const AnalyticsDashboardPage = lazyWithRetry(
   () => import('../../pages/AnalyticsDashboardPage'),
 );
+const EventAnalyticsPage = lazyWithRetry(() =>
+  import('../../pages/EventAnalyticsPage').then((m) => ({
+    default: m.EventAnalyticsPage,
+  })),
+);
 const EventTemplatesPage = lazyWithRetry(() =>
   import('../../pages/EventTemplatesPage').then((m) => ({
     default: m.EventTemplatesPage,
@@ -86,6 +91,18 @@ export const getEventsRoutes = () => {
           <ProtectedRoute requiredPermission="events.manage">
             <Suspense fallback={null}>
               <EventTemplatesPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Events Module - Attendance Trends Dashboard (#44, #46, #47) */}
+      <Route
+        path="/events/analytics"
+        element={
+          <ProtectedRoute requiredPermission="analytics.view">
+            <Suspense fallback={null}>
+              <EventAnalyticsPage />
             </Suspense>
           </ProtectedRoute>
         }

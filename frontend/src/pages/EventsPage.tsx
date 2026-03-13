@@ -8,7 +8,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Calendar, List, Plus, Download, Upload, Search, Repeat, SlidersHorizontal, User, Check, X, Users, CheckSquare, Square, XCircle, Copy, FileText, Bookmark, BookmarkPlus, Trash2, AlertCircle } from 'lucide-react';
+import { Calendar, List, Plus, Download, Upload, Search, Repeat, SlidersHorizontal, User, Check, X, Users, CheckSquare, Square, XCircle, Copy, FileText, Bookmark, BookmarkPlus, Trash2, AlertCircle, BarChart3 } from 'lucide-react';
 import { eventService } from '../services/api';
 import { eventService as eventServiceDirect } from '../services/eventServices';
 import type { CSVImportRowError } from '../services/eventServices';
@@ -519,6 +519,14 @@ export const EventsPage: React.FC = () => {
             >
               <FileText className="h-4 w-4" aria-hidden="true" />
               <span className="hidden sm:inline">Templates</span>
+            </Link>
+            <Link
+              to="/events/analytics"
+              className="btn-secondary inline-flex items-center gap-2"
+              title="Attendance Trends"
+            >
+              <BarChart3 className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Analytics</span>
             </Link>
             <Link
               to="/events/admin"

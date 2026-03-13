@@ -2325,3 +2325,326 @@ class EventService:
         )
 
         return non_respondents, None
+
+    # ------------------------------------------------------------------
+    # Analytics (#44, #46, #47)
+    # ------------------------------------------------------------------
+
+    async def get_analytics_summary(
+        self,
+        organization_id: UUID,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+    ) -> Dict[str, Any]:
+        """Return aggregated analytics for the attendance trends dashboard.
+
+        Includes total events, average attendance rate, event type
+        distribution, monthly trend counts, average check-in lead time,
+        and top events by attendance.
+        """
+        from sqlalchemy import extract
+
+        # Base filter: org, not cancelled, not draft
+        base_filter = [
+            Event.organization_id == str(organization_id),
+            Event.is_cancelled.is_(False),
+            Event.is_draft.is_(False),
+        ]
+        if start_date:
+            base_filter.append(Event.start_datetime >= start_date)
+        if end_date:
+            base_filter.append(Event.start_datetime <= end_date)
+
+        # 1) Total events
+        total_q = select(func.count(Event.id)).where(*base_filter)
+        total_events = (await self.db.execute(total_q)).scalar() or 0
+
+        # 2) RSVP / check-in aggregates
+        rsvp_filter = [
+            EventRSVP.organization_id == str(organization_id),
+            Event.is_cancelled.is_(False),
+            Event.is_draft.is_(False),
+        ]
+        if start_date:
+            rsvp_filter.append(Event.start_datetime >= start_date)
+        if end_date:
+            rsvp_filter.append(Event.start_datetime <= end_date)
+
+        agg_q = (
+            select(
+                func.count(EventRSVP.id).label("total_rsvps"),
+                func.sum(
+                    case((EventRSVP.status == RSVPStatus.GOING, 1), else_=0)
+                ).label("going_count"),
+                func.sum(
+                    case((EventRSVP.checked_in.is_(True), 1), else_=0)
+                ).label("checked_in_count"),
+            )
+            .join(Event, Event.id == EventRSVP.event_id)
+            .where(*rsvp_filter)
+        )
+        row = (await self.db.execute(agg_q)).one()
+        total_rsvps = row.total_rsvps or 0
+        going_count = row.going_count or 0
+        checked_in_count = row.checked_in_count or 0
+
+        avg_attendance_rate = (
+            checked_in_count / going_count if going_count > 0 else 0.0
+        )
+        check_in_rate = (
+            checked_in_count / total_rsvps if total_rsvps > 0 else 0.0
+        )
+
+        # 3) Average check-in time before event start (minutes)
+        #    Uses raw SQL text for MySQL TIMESTAMPDIFF.
+        from sqlalchemy import literal_column
+
+        avg_seconds_expr = func.avg(
+            func.timestampdiff(
+                literal_column("SECOND"),
+                EventRSVP.checked_in_at,
+                Event.start_datetime,
+            )
+        ).label("avg_seconds_before")
+        checkin_time_q = (
+            select(avg_seconds_expr)
+            .join(Event, Event.id == EventRSVP.event_id)
+            .where(
+                *rsvp_filter,
+                EventRSVP.checked_in.is_(True),
+                EventRSVP.checked_in_at.isnot(None),
+            )
+        )
+        avg_seconds = (await self.db.execute(checkin_time_q)).scalar()
+        avg_checkin_minutes_before: Optional[float] = None
+        if avg_seconds is not None:
+            avg_checkin_minutes_before = round(float(avg_seconds) / 60.0, 1)
+
+        # 4) Event type distribution
+        type_q = (
+            select(
+                Event.event_type,
+                func.count(Event.id).label("cnt"),
+            )
+            .where(*base_filter)
+            .group_by(Event.event_type)
+            .order_by(func.count(Event.id).desc())
+        )
+        type_rows = (await self.db.execute(type_q)).all()
+        event_type_distribution = [
+            {
+                "event_type": (
+                    r.event_type.value
+                    if hasattr(r.event_type, "value")
+                    else str(r.event_type)
+                ),
+                "count": r.cnt,
+            }
+            for r in type_rows
+        ]
+
+        # 5) Monthly event counts
+        month_q = (
+            select(
+                extract("year", Event.start_datetime).label("yr"),
+                extract("month", Event.start_datetime).label("mo"),
+                func.count(Event.id).label("cnt"),
+            )
+            .where(*base_filter)
+            .group_by("yr", "mo")
+            .order_by("yr", "mo")
+        )
+        month_rows = (await self.db.execute(month_q)).all()
+        monthly_event_counts = [
+            {
+                "month": f"{int(r.yr)}-{int(r.mo):02d}",
+                "count": r.cnt,
+            }
+            for r in month_rows
+        ]
+
+        # 6) Top events by attendance (top 10)
+        top_q = (
+            select(
+                Event.id.label("event_id"),
+                Event.title,
+                Event.event_type,
+                Event.start_datetime,
+                func.sum(
+                    case((EventRSVP.status == RSVPStatus.GOING, 1), else_=0)
+                ).label("going_count"),
+                func.sum(
+                    case((EventRSVP.checked_in.is_(True), 1), else_=0)
+                ).label("checked_in_count"),
+            )
+            .join(EventRSVP, EventRSVP.event_id == Event.id)
+            .where(*base_filter)
+            .group_by(Event.id, Event.title, Event.event_type, Event.start_datetime)
+            .having(
+                func.sum(
+                    case((EventRSVP.status == RSVPStatus.GOING, 1), else_=0)
+                ) > 0
+            )
+            .order_by(
+                func.sum(
+                    case((EventRSVP.checked_in.is_(True), 1), else_=0)
+                ).desc()
+            )
+            .limit(10)
+        )
+        top_rows = (await self.db.execute(top_q)).all()
+        top_events = []
+        for r in top_rows:
+            g = r.going_count or 0
+            c = r.checked_in_count or 0
+            top_events.append(
+                {
+                    "event_id": r.event_id,
+                    "title": r.title,
+                    "event_type": (
+                        r.event_type.value
+                        if hasattr(r.event_type, "value")
+                        else str(r.event_type)
+                    ),
+                    "start_datetime": r.start_datetime,
+                    "going_count": g,
+                    "checked_in_count": c,
+                    "attendance_rate": round(c / g, 4) if g > 0 else 0.0,
+                }
+            )
+
+        return {
+            "total_events": total_events,
+            "total_rsvps": total_rsvps,
+            "total_checked_in": checked_in_count,
+            "avg_attendance_rate": round(avg_attendance_rate, 4),
+            "check_in_rate": round(check_in_rate, 4),
+            "avg_checkin_minutes_before": avg_checkin_minutes_before,
+            "event_type_distribution": event_type_distribution,
+            "monthly_event_counts": monthly_event_counts,
+            "top_events": top_events,
+        }
+
+    async def send_event_notification(
+        self,
+        event_id: UUID,
+        organization_id: UUID,
+        notification_type: str,
+        target: str = "all",
+        message: Optional[str] = None,
+    ) -> Tuple[int, str]:
+        """
+        Build a recipient list for an event notification and log it.
+
+        Args:
+            event_id: The event to notify about.
+            organization_id: The organization scope.
+            notification_type: One of announcement, reminder, follow_up,
+                               missed_event, check_in_confirmation.
+            target: Target audience — all, going, not_responded,
+                    checked_in, not_checked_in.
+            message: Optional custom message body.
+
+        Returns:
+            Tuple of (recipients_count, human-readable summary message).
+
+        Raises:
+            ValueError: If the event is not found or is cancelled.
+        """
+        from loguru import logger as _logger
+
+        # Verify the event exists and belongs to the organization
+        result = await self.db.execute(
+            select(Event)
+            .where(
+                Event.id == str(event_id),
+                Event.organization_id == str(organization_id),
+            )
+        )
+        event = result.scalar_one_or_none()
+        if not event:
+            raise ValueError("Event not found")
+
+        if event.is_cancelled:
+            raise ValueError("Cannot send notifications for a cancelled event")
+
+        # Fetch all active members
+        members_result = await self.db.execute(
+            select(User.id)
+            .where(
+                User.organization_id == str(organization_id),
+                User.is_active == True,  # noqa: E712
+            )
+        )
+        all_member_ids = {str(row[0]) for row in members_result.all()}
+
+        # Fetch RSVPs for filtering
+        rsvp_result = await self.db.execute(
+            select(EventRSVP)
+            .where(EventRSVP.event_id == str(event_id))
+        )
+        rsvps = rsvp_result.scalars().all()
+
+        rsvp_by_user: Dict[str, Any] = {}
+        for rsvp in rsvps:
+            rsvp_by_user[str(rsvp.user_id)] = rsvp
+
+        # Build recipient list based on target
+        recipient_ids: List[str] = []
+
+        if target == "all":
+            recipient_ids = list(all_member_ids)
+        elif target == "going":
+            recipient_ids = [
+                uid for uid, r in rsvp_by_user.items()
+                if r.status == RSVPStatus.GOING and uid in all_member_ids
+            ]
+        elif target == "not_responded":
+            responded_ids = set(rsvp_by_user.keys())
+            recipient_ids = [
+                uid for uid in all_member_ids
+                if uid not in responded_ids
+            ]
+        elif target == "checked_in":
+            recipient_ids = [
+                uid for uid, r in rsvp_by_user.items()
+                if r.checked_in and uid in all_member_ids
+            ]
+        elif target == "not_checked_in":
+            checked_in_ids = {
+                uid for uid, r in rsvp_by_user.items()
+                if r.checked_in
+            }
+            # Members who RSVP'd going but did not check in
+            recipient_ids = [
+                uid for uid, r in rsvp_by_user.items()
+                if r.status == RSVPStatus.GOING
+                and uid not in checked_in_ids
+                and uid in all_member_ids
+            ]
+
+        _logger.info(
+            "Event notification: type={}, target={}, event={}, "
+            "recipients={}, custom_message={}",
+            notification_type,
+            target,
+            event_id,
+            len(recipient_ids),
+            bool(message),
+        )
+
+        type_labels = {
+            "announcement": "Announcement",
+            "reminder": "Reminder",
+            "follow_up": "Follow-up",
+            "missed_event": "Missed event notice",
+            "check_in_confirmation": "Check-in confirmation",
+        }
+        label = type_labels.get(notification_type, notification_type)
+
+        summary = (
+            f"{label} notification queued for "
+            f"{len(recipient_ids)} recipient(s)"
+        )
+
+        return len(recipient_ids), summary
