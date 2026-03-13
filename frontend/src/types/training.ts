@@ -1947,3 +1947,124 @@ export interface AnnualComplianceReport {
     categories: ISOCategory[];
   };
 }
+
+// =============================================================================
+// Compliance Requirements Configuration
+// =============================================================================
+
+export interface ComplianceProfile {
+  id: string;
+  configId: string;
+  name: string;
+  description?: string;
+  membershipTypes?: string[];
+  roleIds?: string[];
+  compliantThresholdOverride?: number;
+  atRiskThresholdOverride?: number;
+  requiredRequirementIds?: string[];
+  optionalRequirementIds?: string[];
+  isActive: boolean;
+  priority: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ComplianceProfileCreate {
+  name: string;
+  description?: string | undefined;
+  membership_types?: string[] | undefined;
+  role_ids?: string[] | undefined;
+  compliant_threshold_override?: number | undefined;
+  at_risk_threshold_override?: number | undefined;
+  required_requirement_ids?: string[] | undefined;
+  optional_requirement_ids?: string[] | undefined;
+  is_active?: boolean | undefined;
+  priority?: number | undefined;
+}
+
+export interface ComplianceProfileUpdate {
+  name?: string | undefined;
+  description?: string | undefined;
+  membership_types?: string[] | undefined;
+  role_ids?: string[] | undefined;
+  compliant_threshold_override?: number | undefined;
+  at_risk_threshold_override?: number | undefined;
+  required_requirement_ids?: string[] | undefined;
+  optional_requirement_ids?: string[] | undefined;
+  is_active?: boolean | undefined;
+  priority?: number | undefined;
+}
+
+export interface ComplianceConfigData {
+  id: string;
+  organizationId: string;
+  thresholdType: string;
+  compliantThreshold: number;
+  atRiskThreshold: number;
+  gracePeriodDays: number;
+  autoReportFrequency: string;
+  reportEmailRecipients?: string[];
+  reportDayOfMonth?: number;
+  notifyNonCompliantMembers: boolean;
+  notifyDaysBeforeDeadline?: number[];
+  profiles: ComplianceProfile[];
+  createdAt: string;
+  updatedAt: string;
+  updatedBy?: string;
+}
+
+export interface ComplianceConfigUpdate {
+  threshold_type?: string | undefined;
+  compliant_threshold?: number | undefined;
+  at_risk_threshold?: number | undefined;
+  grace_period_days?: number | undefined;
+  auto_report_frequency?: string | undefined;
+  report_email_recipients?: string[] | undefined;
+  report_day_of_month?: number | undefined;
+  notify_non_compliant_members?: boolean | undefined;
+  notify_days_before_deadline?: number[] | undefined;
+}
+
+export interface AvailableRequirement {
+  id: string;
+  name: string;
+  requirement_type: string;
+  source: string | null;
+  frequency: string | null;
+}
+
+export interface ComplianceReportGenerate {
+  report_type: string;
+  year: number;
+  month?: number | undefined;
+  send_email?: boolean | undefined;
+  additional_recipients?: string[] | undefined;
+}
+
+export interface ComplianceReportSummary {
+  id: string;
+  organizationId: string;
+  reportType: string;
+  periodLabel: string;
+  periodYear: number;
+  periodMonth?: number;
+  status: string;
+  summary?: {
+    overall_compliance_pct: number;
+    fully_compliant_members: number;
+    total_members: number;
+    at_risk_members: number;
+    non_compliant_members: number;
+    total_training_hours: number;
+  };
+  emailedTo?: string[];
+  emailedAt?: string;
+  generatedBy?: string;
+  generatedAt: string;
+  generationDurationMs?: number;
+  errorMessage?: string;
+}
+
+export interface ComplianceReportDetail extends ComplianceReportSummary {
+  reportData?: Record<string, unknown>;
+}

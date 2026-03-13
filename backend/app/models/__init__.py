@@ -287,6 +287,14 @@ from app.models.grant import (
     RecurringFrequency,
     ReportingFrequency,
 )
+from app.models.compliance_config import (
+    ComplianceConfig,
+    ComplianceProfile,
+    ComplianceReport,
+    ComplianceThresholdType,
+    ReportFrequency,
+    ReportStatus,
+)
 from app.models.user import (
     LeaveType,
     MemberLeaveOfAbsence,
@@ -601,4 +609,11 @@ __all__ = [
     "FacilityCategory",
     "DefaultFacilityType",
     "DefaultFacilityStatus",
+    # Compliance config models
+    "ComplianceConfig",
+    "ComplianceProfile",
+    "ComplianceReport",
+    "ComplianceThresholdType",
+    "ReportFrequency",
+    "ReportStatus",
 ]

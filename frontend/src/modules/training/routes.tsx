@@ -36,6 +36,11 @@ const TrainingAdminPage = lazyWithRetry(() =>
   })),
 );
 
+// Compliance Requirements Configuration
+const ComplianceRequirementsConfigPage = lazyWithRetry(
+  () => import('../../pages/ComplianceRequirementsConfigPage'),
+);
+
 // Skills Testing Module
 const SkillsTestingPage = lazyWithRetry(() =>
   import('../../pages/SkillsTestingPage').then((m) => ({
@@ -72,6 +77,16 @@ export const getTrainingRoutes = () => {
         element={
           <ProtectedRoute requiredPermission="training.manage">
             <TrainingAdminPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Compliance Requirements Configuration */}
+      <Route
+        path="/training/compliance-config"
+        element={
+          <ProtectedRoute requiredPermission="settings.manage">
+            <ComplianceRequirementsConfigPage />
           </ProtectedRoute>
         }
       />
