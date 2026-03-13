@@ -6,8 +6,9 @@
  */
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { Link } from 'react-router-dom';
-import { Calendar, Plus, Download, Search, Repeat, SlidersHorizontal, User, Check, X, Users } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { Calendar, Plus, Download, Search, Repeat, SlidersHorizontal, User, Check, X, Users, CheckSquare, Square, XCircle, Copy } from 'lucide-react';
 import { eventService } from '../services/api';
 import type { EventListItem, EventType, EventCategoryConfig, RSVPCreate } from '../types/event';
 import { getEventTypeLabel, getEventTypeBadgeColor, getRSVPStatusLabel, getRSVPStatusColor } from '../utils/eventHelpers';
@@ -44,7 +45,11 @@ export const EventsPage: React.FC = () => {
   const [sortBy, setSortBy] = useState<'date' | 'title' | 'rsvp_count'>('date');
   const [rsvpLoading, setRsvpLoading] = useState<Record<string, boolean>>({});
   const [rsvpChanging, setRsvpChanging] = useState<Record<string, boolean>>({});
+  const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set());
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
 
+  const navigate = useNavigate();
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('events.manage');
   const tz = useTimezone();
@@ -214,6 +219,92 @@ export const EventsPage: React.FC = () => {
     a.click();
     URL.revokeObjectURL(url);
   }, [sortedEvents, tz]);
+
+  const handleDuplicate = useCallback(async (eventId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const newEvent = await eventService.duplicateEvent(eventId);
+      toast.success('Event duplicated successfully');
+      navigate(`/events/${newEvent.id}`);
+    } catch {
+      toast.error('Failed to duplicate event');
+    }
+  }, [navigate]);
+
+  const toggleEventSelection = useCallback((eventId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedEvents((prev) => {
+      const next = new Set(prev);
+      if (next.has(eventId)) {
+        next.delete(eventId);
+      } else {
+        next.add(eventId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleExportSelectedCSV = useCallback(() => {
+    const selected = sortedEvents.filter((e) => selectedEvents.has(e.id));
+    if (selected.length === 0) return;
+    const headers = ['Title', 'Type', 'Date', 'Location', 'Mandatory', 'Cancelled'];
+    const rows = selected.map(e => [
+      e.title,
+      getEventTypeLabel(e.event_type),
+      formatShortDateTime(e.start_datetime, tz),
+      e.location || '',
+      e.is_mandatory ? 'Yes' : 'No',
+      e.is_cancelled ? 'Yes' : 'No',
+    ]);
+    const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `events-selected-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [sortedEvents, selectedEvents, tz]);
+
+  const handleCancelSelected = useCallback(async () => {
+    const selected = sortedEvents.filter((e) => selectedEvents.has(e.id) && !e.is_cancelled);
+    if (selected.length === 0) {
+      toast.error('No cancellable events selected');
+      setShowCancelConfirm(false);
+      return;
+    }
+
+    try {
+      setBulkActionLoading(true);
+      let cancelled = 0;
+      for (const evt of selected) {
+        try {
+          await eventService.cancelEvent(evt.id, {
+            cancellation_reason: 'Bulk cancelled by administrator',
+            send_notifications: false,
+          });
+          cancelled++;
+        } catch {
+          // Continue with remaining events
+        }
+      }
+      toast.success(`Cancelled ${cancelled} event${cancelled !== 1 ? 's' : ''}`);
+      setSelectedEvents(new Set());
+      setShowCancelConfirm(false);
+      void fetchEvents();
+    } catch {
+      toast.error('Failed to cancel events');
+    } finally {
+      setBulkActionLoading(false);
+    }
+  }, [sortedEvents, selectedEvents, fetchEvents]);
+
+  // Clear selection when filters change
+  useEffect(() => {
+    setSelectedEvents(new Set());
+  }, [typeFilter, searchQuery, showPastEvents, showMyEventsOnly, sortBy]);
 
   if (loading) {
     return (
@@ -399,12 +490,31 @@ export const EventsPage: React.FC = () => {
         <>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {paginatedEvents.map((event) => (
+            <div key={event.id} className="relative">
+              {canManage && (
+                <button
+                  onClick={(e) => toggleEventSelection(event.id, e)}
+                  className={`absolute top-3 left-3 z-10 p-0.5 rounded transition-colors ${
+                    selectedEvents.has(event.id)
+                      ? 'text-red-600 dark:text-red-400'
+                      : 'text-theme-text-muted hover:text-theme-text-primary'
+                  }`}
+                  aria-label={selectedEvents.has(event.id) ? `Deselect ${event.title}` : `Select ${event.title}`}
+                >
+                  {selectedEvents.has(event.id) ? (
+                    <CheckSquare className="h-5 w-5" />
+                  ) : (
+                    <Square className="h-5 w-5" />
+                  )}
+                </button>
+              )}
             <Link
-              key={event.id}
               to={`/events/${event.id}`}
-              className="card block hover:border-red-300 hover:shadow-md transition-all"
+              className={`card block hover:border-red-300 hover:shadow-md transition-all ${
+                selectedEvents.has(event.id) ? 'ring-2 ring-red-500/50 border-red-300' : ''
+              }`}
             >
-              <div className="p-5">
+              <div className={`p-5 ${canManage ? 'pl-10' : ''}`}>
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -442,11 +552,23 @@ export const EventsPage: React.FC = () => {
                       )}
                     </div>
                   </div>
-                  {event.is_cancelled && (
-                    <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300">
-                      Cancelled
-                    </span>
-                  )}
+                  <div className="flex items-center gap-1 shrink-0 ml-2">
+                    {canManage && (
+                      <button
+                        onClick={(e) => { void handleDuplicate(event.id, e); }}
+                        className="p-1 rounded text-theme-text-muted hover:text-blue-600 dark:hover:text-blue-400 hover:bg-theme-surface-hover transition-colors"
+                        title="Duplicate event"
+                        aria-label={`Duplicate ${event.title}`}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </button>
+                    )}
+                    {event.is_cancelled && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300">
+                        Cancelled
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="mt-4 space-y-2">
@@ -535,6 +657,7 @@ export const EventsPage: React.FC = () => {
                 </div>
               </div>
             </Link>
+            </div>
           ))}
         </div>
 
@@ -551,6 +674,71 @@ export const EventsPage: React.FC = () => {
         </>
       )}
     </div>
+
+      {/* Floating Bulk Action Bar */}
+      {selectedEvents.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-6 py-3 bg-theme-surface border border-theme-surface-border rounded-xl shadow-lg">
+          <span className="text-sm font-medium text-theme-text-primary">
+            {selectedEvents.size} selected
+          </span>
+          <div className="h-5 w-px bg-theme-surface-border" />
+          <button
+            onClick={handleExportSelectedCSV}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md bg-theme-surface-hover text-theme-text-primary hover:bg-theme-surface-hover/80 transition-colors"
+          >
+            <Download className="h-4 w-4" aria-hidden="true" />
+            Export CSV
+          </button>
+          {canManage && (
+            <button
+              onClick={() => setShowCancelConfirm(true)}
+              disabled={bulkActionLoading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30 transition-colors disabled:opacity-50"
+            >
+              <XCircle className="h-4 w-4" aria-hidden="true" />
+              Cancel Selected
+            </button>
+          )}
+          <button
+            onClick={() => setSelectedEvents(new Set())}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+            Clear
+          </button>
+        </div>
+      )}
+
+      {/* Cancel Confirmation Modal */}
+      {showCancelConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true">
+          <div className="fixed inset-0 bg-black/50" onClick={() => setShowCancelConfirm(false)} />
+          <div className="relative bg-theme-surface-modal rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-medium text-theme-text-primary mb-2">
+              Cancel {selectedEvents.size} Event{selectedEvents.size !== 1 ? 's' : ''}?
+            </h3>
+            <p className="text-sm text-theme-text-secondary mb-4">
+              This will cancel all selected events. This action cannot be easily undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowCancelConfirm(false)}
+                disabled={bulkActionLoading}
+                className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover"
+              >
+                Go Back
+              </button>
+              <button
+                onClick={() => { void handleCancelSelected(); }}
+                disabled={bulkActionLoading}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50"
+              >
+                {bulkActionLoading ? 'Cancelling...' : 'Confirm Cancel'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

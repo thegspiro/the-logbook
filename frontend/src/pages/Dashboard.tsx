@@ -38,6 +38,7 @@ import {
   messagesService,
   organizationService,
   inventoryService,
+  eventService,
 } from "../services/api";
 import type {
   AdminSummary,
@@ -48,11 +49,12 @@ import type {
 import { schedulingService } from "../modules/scheduling/services/api";
 import { adminHoursEntryService } from "../modules/admin-hours/services/api";
 import { getErrorMessage } from "../utils/errorHandling";
-import { getProgressBarColor } from "../utils/eventHelpers";
+import { getProgressBarColor, getEventTypeLabel, getRSVPStatusLabel, getRSVPStatusColor } from "../utils/eventHelpers";
 import { useTimezone } from "../hooks/useTimezone";
 import {
   formatDate,
   formatTime,
+  formatShortDateTime,
   getTodayLocalDate,
   toLocalDateString,
 } from "../utils/dateFormatting";
@@ -64,6 +66,7 @@ import type {
 } from "../types/training";
 import type { NotificationLogRecord } from "../services/api";
 import type { ShiftRecord } from "../modules/scheduling/services/api";
+import type { EventListItem } from "../types/event";
 import { dashboardService } from "../services/api";
 
 /**
@@ -127,6 +130,10 @@ const Dashboard: React.FC = () => {
   const [lowStockAlerts, setLowStockAlerts] = useState<LowStockAlert[]>([]);
   const [loadingInventory, setLoadingInventory] = useState(true);
 
+  // Upcoming events
+  const [upcomingEvents, setUpcomingEvents] = useState<EventListItem[]>([]);
+  const [loadingUpcomingEvents, setLoadingUpcomingEvents] = useState(true);
+
   // Setup checklist (admin-only)
   const [setupProgress, setSetupProgress] = useState<{
     completed: number;
@@ -162,6 +169,7 @@ const Dashboard: React.FC = () => {
     void loadHours();
     void loadTrainingProgress();
     void loadInventorySummary();
+    void loadUpcomingEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
 
@@ -200,6 +208,24 @@ const Dashboard: React.FC = () => {
       // Inventory is non-critical on dashboard
     } finally {
       setLoadingInventory(false);
+    }
+  };
+
+  const loadUpcomingEvents = async () => {
+    try {
+      const data = await eventService.getEvents({
+        end_after: new Date().toISOString(),
+        limit: 5,
+      });
+      // Sort by start date ascending and take first 5
+      const sorted = data
+        .sort((a, b) => new Date(a.start_datetime).getTime() - new Date(b.start_datetime).getTime())
+        .slice(0, 5);
+      setUpcomingEvents(sorted);
+    } catch {
+      // Upcoming events are non-critical
+    } finally {
+      setLoadingUpcomingEvents(false);
     }
   };
 
@@ -401,6 +427,7 @@ const Dashboard: React.FC = () => {
       loadHours(),
       loadTrainingProgress(),
       loadInventorySummary(),
+      loadUpcomingEvents(),
       ...(isAdmin ? [loadAdminSummary(), loadSetupProgress()] : []),
     ]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1057,6 +1084,72 @@ const Dashboard: React.FC = () => {
                     </button>
                   </div>
                 </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Upcoming Events */}
+        <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
+              <Calendar className="w-5 h-5 text-purple-400" />
+              <span>Upcoming Events</span>
+            </h3>
+            <button
+              onClick={() => navigate("/events")}
+              className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1"
+            >
+              <span>View All</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {loadingUpcomingEvents ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="h-14 bg-theme-surface-hover animate-pulse rounded-lg"
+                ></div>
+              ))}
+            </div>
+          ) : upcomingEvents.length === 0 ? (
+            <div className="text-center py-8 text-theme-text-muted text-sm">
+              No upcoming events
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {upcomingEvents.map((evt) => (
+                <button
+                  key={evt.id}
+                  onClick={() => navigate(`/events/${evt.id}`)}
+                  className="w-full flex items-center justify-between p-3 bg-theme-surface-secondary rounded-lg hover:bg-theme-surface-hover transition-colors text-left"
+                >
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center shrink-0">
+                      <Calendar className="w-5 h-5 text-purple-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-theme-text-primary truncate">
+                        {evt.title}
+                      </p>
+                      <p className="text-xs text-theme-text-muted">
+                        {formatShortDateTime(evt.start_datetime, tz)}
+                        {" \u2022 "}
+                        {getEventTypeLabel(evt.event_type)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                    {evt.user_rsvp_status && (
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getRSVPStatusColor(evt.user_rsvp_status)}`}>
+                        {getRSVPStatusLabel(evt.user_rsvp_status)}
+                      </span>
+                    )}
+                    <ChevronRight className="w-4 h-4 text-theme-text-muted" />
+                  </div>
+                </button>
               ))}
             </div>
           )}

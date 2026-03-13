@@ -358,6 +358,15 @@ class ManagerAddAttendee(BaseModel):
     notes: Optional[str] = Field(None, max_length=500)
 
 
+class BulkAddAttendees(BaseModel):
+    """Schema for bulk-adding multiple attendees to an event"""
+
+    user_ids: List[UUID]
+    status: str = Field(
+        default="going", description="RSVP status: going, not_going, maybe"
+    )
+
+
 class RSVPOverride(BaseModel):
     """Schema for manager overriding attendance details"""
 

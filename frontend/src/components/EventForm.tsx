@@ -34,6 +34,17 @@ export interface ConflictEvent {
   end_datetime: string;
 }
 
+export interface InitialRecurrence {
+  is_recurring: boolean;
+  recurrence_pattern?: RecurrencePattern | undefined;
+  recurrence_end_date?: string | undefined;
+  recurrence_custom_days?: number[] | undefined;
+  recurrence_weekday?: number | undefined;
+  recurrence_week_ordinal?: number | undefined;
+  recurrence_month?: number | undefined;
+  recurrence_exceptions?: string[] | undefined;
+}
+
 interface EventFormProps {
   initialData?: Partial<EventCreate> | undefined;
   onSubmit: (data: EventCreate) => Promise<void>;
@@ -42,6 +53,8 @@ interface EventFormProps {
   submitLabel?: string;
   isSubmitting?: boolean;
   showRecurrence?: boolean;
+  /** Pre-populate recurrence state when editing a recurring event */
+  initialRecurrence?: InitialRecurrence | undefined;
   /** Events the user has RSVP'd to, used for conflict detection */
   userEvents?: ConflictEvent[] | undefined;
   /** When editing, the ID of the current event (excluded from conflict checks) */
@@ -130,6 +143,7 @@ export const EventForm: React.FC<EventFormProps> = ({
   submitLabel = 'Create Event',
   isSubmitting = false,
   showRecurrence = false,
+  initialRecurrence,
   userEvents,
   editingEventId,
 }) => {
@@ -164,14 +178,14 @@ export const EventForm: React.FC<EventFormProps> = ({
   const [visibleTypes, setVisibleTypes] = useState<EventType[]>(EVENT_TYPES);
   const [customCategories, setCustomCategories] = useState<EventCategoryConfig[]>([]);
   const [visibleCustomCategories, setVisibleCustomCategories] = useState<string[]>([]);
-  const [isRecurring, setIsRecurring] = useState(false);
-  const [recurrencePattern, setRecurrencePattern] = useState<RecurrencePattern>('weekly');
-  const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
-  const [recurrenceCustomDays, setRecurrenceCustomDays] = useState<number[]>([]);
-  const [recurrenceWeekday, setRecurrenceWeekday] = useState(0);
-  const [recurrenceWeekOrdinal, setRecurrenceWeekOrdinal] = useState(1);
-  const [recurrenceMonth, setRecurrenceMonth] = useState(1);
-  const [recurrenceExceptions, setRecurrenceExceptions] = useState<string[]>([]);
+  const [isRecurring, setIsRecurring] = useState(initialRecurrence?.is_recurring || false);
+  const [recurrencePattern, setRecurrencePattern] = useState<RecurrencePattern>(initialRecurrence?.recurrence_pattern || 'weekly');
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState(initialRecurrence?.recurrence_end_date || '');
+  const [recurrenceCustomDays, setRecurrenceCustomDays] = useState<number[]>(initialRecurrence?.recurrence_custom_days || []);
+  const [recurrenceWeekday, setRecurrenceWeekday] = useState(initialRecurrence?.recurrence_weekday ?? 0);
+  const [recurrenceWeekOrdinal, setRecurrenceWeekOrdinal] = useState(initialRecurrence?.recurrence_week_ordinal ?? 1);
+  const [recurrenceMonth, setRecurrenceMonth] = useState(initialRecurrence?.recurrence_month ?? 1);
+  const [recurrenceExceptions, setRecurrenceExceptions] = useState<string[]>(initialRecurrence?.recurrence_exceptions || []);
   const [newExceptionDate, setNewExceptionDate] = useState('');
 
   // Conflict detection: check if the selected time range overlaps with user's existing events

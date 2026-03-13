@@ -176,8 +176,8 @@ export interface RSVP {
 
 export interface RSVPCreate {
   status: RSVPStatus;
-  guest_count?: number;
-  notes?: string;
+  guest_count?: number | undefined;
+  notes?: string | undefined;
 }
 
 export interface CheckInRequest {

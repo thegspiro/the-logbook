@@ -26,6 +26,7 @@ from app.models.event import Event, EventExternalAttendee, EventType, RSVPStatus
 from app.models.user import Organization, User
 from app.schemas.documents import DocumentFolderResponse
 from app.schemas.event import (
+    BulkAddAttendees,
     CheckInMonitoringStats,
     CheckInRequest,
     EventCancel,
@@ -1256,6 +1257,61 @@ async def manager_add_attendee(
         user_name=f"{user.first_name} {user.last_name}" if user else None,
         user_email=user.email if user else None,
     )
+
+
+@router.post("/{event_id}/bulk-add-attendees")
+async def bulk_add_attendees(
+    event_id: UUID,
+    data: BulkAddAttendees,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Bulk-add multiple attendees to an event (manager action)
+
+    Adds RSVPs for each user_id with the given status.
+    Skips users who already have an RSVP. Returns the count of created RSVPs.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+    created_count = 0
+    errors = []
+
+    for user_id in data.user_ids:
+        rsvp, error = await service.manager_add_attendee(
+            event_id=event_id,
+            user_id=user_id,
+            organization_id=current_user.organization_id,
+            manager_id=current_user.id,
+            status=data.status,
+            checked_in=False,
+            notes=None,
+        )
+        if error:
+            errors.append({"user_id": str(user_id), "error": error})
+        else:
+            created_count += 1
+
+    await log_audit_event(
+        db=db,
+        event_type="event_bulk_attendees_added",
+        event_category="events",
+        severity="info",
+        event_data={
+            "event_id": str(event_id),
+            "user_count": len(data.user_ids),
+            "created_count": created_count,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return {
+        "created_count": created_count,
+        "errors": errors,
+    }
 
 
 @router.patch("/{event_id}/rsvps/{user_id}/override", response_model=RSVPResponse)

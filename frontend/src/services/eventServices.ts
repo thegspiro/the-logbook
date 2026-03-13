@@ -193,6 +193,17 @@ export const eventService = {
   },
 
   /**
+   * Bulk-add multiple attendees to an event (manager action)
+   */
+  async bulkAddAttendees(eventId: string, userIds: string[], status?: string): Promise<{ created_count: number; errors: Array<{ user_id: string; error: string }> }> {
+    const response = await api.post<{ created_count: number; errors: Array<{ user_id: string; error: string }> }>(
+      `/events/${eventId}/bulk-add-attendees`,
+      { user_ids: userIds, status: status || 'going' }
+    );
+    return response.data;
+  },
+
+  /**
    * Override attendance details for an RSVP (manager action)
    */
   async overrideAttendance(eventId: string, userId: string, data: import('../types/event').RSVPOverride): Promise<import('../types/event').RSVP> {

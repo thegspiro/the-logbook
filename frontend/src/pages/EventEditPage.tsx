@@ -12,7 +12,7 @@ import toast from 'react-hot-toast';
 import { eventService } from '../services/api';
 import type { EventCreate, Event } from '../types/event';
 import { EventForm } from '../components/EventForm';
-import type { ConflictEvent } from '../components/EventForm';
+import type { ConflictEvent, InitialRecurrence } from '../components/EventForm';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 
 export const EventEditPage: React.FC = () => {
@@ -133,6 +133,21 @@ export const EventEditPage: React.FC = () => {
     attachments: event.attachments ?? undefined,
   };
 
+  // Build initial recurrence state when editing a recurring event
+  const initialRecurrence: InitialRecurrence | undefined =
+    (event.is_recurring || event.recurrence_parent_id)
+      ? {
+          is_recurring: true,
+          recurrence_pattern: event.recurrence_pattern,
+          recurrence_end_date: event.recurrence_end_date,
+          recurrence_custom_days: event.recurrence_custom_days,
+          recurrence_weekday: event.recurrence_weekday,
+          recurrence_week_ordinal: event.recurrence_week_ordinal,
+          recurrence_month: event.recurrence_month,
+          recurrence_exceptions: event.recurrence_exceptions,
+        }
+      : undefined;
+
   return (
     <div className="min-h-screen">
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -204,6 +219,7 @@ export const EventEditPage: React.FC = () => {
             onCancel={handleCancel}
             submitLabel="Save Changes"
             isSubmitting={isSubmitting}
+            initialRecurrence={initialRecurrence}
             userEvents={userEvents}
             editingEventId={eventId}
           />
