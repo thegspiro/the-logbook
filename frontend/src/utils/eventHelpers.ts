@@ -47,6 +47,7 @@ export const getRSVPStatusLabel = (status: RSVPStatus): string => {
     going: 'Going',
     not_going: 'Not Going',
     maybe: 'Maybe',
+    waitlisted: 'Waitlisted',
   };
   return labels[status];
 };
@@ -59,6 +60,7 @@ export const getRSVPStatusColor = (status: RSVPStatus): string => {
     going: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
     not_going: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
     maybe: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
+    waitlisted: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-300',
   };
   return colors[status];
 };
@@ -99,3 +101,70 @@ export const getProgressBarColor = (percentage: number): string => {
   if (percentage >= 25) return 'bg-yellow-500';
   return 'bg-red-500';
 };
+
+/**
+ * Generate an ICS (iCalendar) file content string for an event.
+ */
+export function generateICSContent(event: {
+  title: string;
+  description?: string | null;
+  location?: string | null;
+  start_datetime: string;
+  end_datetime: string;
+  id: string;
+}): string {
+  const formatICSDate = (dateStr: string): string => {
+    const d = new Date(dateStr);
+    return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  };
+
+  const escapeICS = (str: string): string => {
+    return str.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+  };
+
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//The Logbook//Events//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    `DTSTART:${formatICSDate(event.start_datetime)}`,
+    `DTEND:${formatICSDate(event.end_datetime)}`,
+    `SUMMARY:${escapeICS(event.title)}`,
+    `UID:${event.id}@thelogbook`,
+  ];
+
+  if (event.description) {
+    lines.push(`DESCRIPTION:${escapeICS(event.description)}`);
+  }
+  if (event.location) {
+    lines.push(`LOCATION:${escapeICS(event.location)}`);
+  }
+
+  lines.push('END:VEVENT', 'END:VCALENDAR');
+  return lines.join('\r\n');
+}
+
+/**
+ * Trigger a download of an ICS file for the given event.
+ */
+export function downloadICSFile(event: {
+  title: string;
+  description?: string | null;
+  location?: string | null;
+  start_datetime: string;
+  end_datetime: string;
+  id: string;
+}): void {
+  const content = generateICSContent(event);
+  const blob = new Blob([content], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${event.title.replace(/[^a-zA-Z0-9]/g, '_')}.ics`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}

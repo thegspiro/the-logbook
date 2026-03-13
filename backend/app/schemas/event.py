@@ -155,6 +155,7 @@ class EventBase(BaseModel):
     )
     custom_fields: Optional[Dict[str, Any]] = None
     attachments: Optional[List[Dict[str, str]]] = None
+    is_draft: bool = False
 
 
 class EventCreate(EventBase):
@@ -205,6 +206,7 @@ class EventUpdate(BaseModel):
     )
     custom_fields: Optional[Dict[str, Any]] = None
     attachments: Optional[List[Dict[str, str]]] = None
+    is_draft: Optional[bool] = None
 
     @model_validator(mode="after")
     def validate_dates(self) -> "EventUpdate":
@@ -230,6 +232,7 @@ class EventResponse(EventBase):
     organization_id: UUID
     actual_start_time: Optional[datetime] = None
     actual_end_time: Optional[datetime] = None
+    is_draft: bool = False
     is_cancelled: bool = False
     cancellation_reason: Optional[str] = None
     cancelled_at: Optional[datetime] = None
@@ -246,6 +249,7 @@ class EventResponse(EventBase):
     recurrence_weekday: Optional[int] = None
     recurrence_week_ordinal: Optional[int] = None
     recurrence_month: Optional[int] = None
+    recurrence_exceptions: Optional[List[str]] = None
     recurrence_parent_id: Optional[UUID] = None
     template_id: Optional[UUID] = None
 
@@ -274,6 +278,7 @@ class EventListItem(BaseModel):
     location_name: Optional[str] = None  # Resolved location name if location_id is set
     requires_rsvp: bool
     is_mandatory: bool
+    is_draft: bool = False
     is_cancelled: bool
     is_recurring: bool = False
     recurrence_parent_id: Optional[UUID] = None
@@ -351,6 +356,15 @@ class ManagerAddAttendee(BaseModel):
         default=False, description="Mark as checked in immediately"
     )
     notes: Optional[str] = Field(None, max_length=500)
+
+
+class BulkAddAttendees(BaseModel):
+    """Schema for bulk-adding multiple attendees to an event"""
+
+    user_ids: List[UUID]
+    status: str = Field(
+        default="going", description="RSVP status: going, not_going, maybe"
+    )
 
 
 class RSVPOverride(BaseModel):
@@ -586,6 +600,8 @@ class RecurringEventCreate(BaseModel):
         le=12,
         description="For annually_weekday: target month (1=Jan, 12=Dec)",
     )
+
+    recurrence_exceptions: Optional[List[str]] = None
 
     # Event settings (same as EventCreate)
     requires_rsvp: bool = False

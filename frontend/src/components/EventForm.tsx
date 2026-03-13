@@ -6,7 +6,7 @@
  * check-in window configuration, and reminder settings.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   FileText,
   Clock,
@@ -16,6 +16,7 @@ import {
   QrCode,
   Bell,
   Repeat,
+  AlertTriangle,
 } from 'lucide-react';
 import type { EventCreate, RecurringEventCreate, RecurrencePattern, EventType, EventCategoryConfig, RSVPStatus } from '../types/event';
 import { eventService, locationsService } from '../services/api';
@@ -26,14 +27,38 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 
+export interface ConflictEvent {
+  id: string;
+  title: string;
+  start_datetime: string;
+  end_datetime: string;
+}
+
+export interface InitialRecurrence {
+  is_recurring: boolean;
+  recurrence_pattern?: RecurrencePattern | undefined;
+  recurrence_end_date?: string | undefined;
+  recurrence_custom_days?: number[] | undefined;
+  recurrence_weekday?: number | undefined;
+  recurrence_week_ordinal?: number | undefined;
+  recurrence_month?: number | undefined;
+  recurrence_exceptions?: string[] | undefined;
+}
+
 interface EventFormProps {
-  initialData?: Partial<EventCreate>;
+  initialData?: Partial<EventCreate> | undefined;
   onSubmit: (data: EventCreate) => Promise<void>;
   onSubmitRecurring?: (data: RecurringEventCreate) => Promise<void>;
   onCancel: () => void;
   submitLabel?: string;
   isSubmitting?: boolean;
   showRecurrence?: boolean;
+  /** Pre-populate recurrence state when editing a recurring event */
+  initialRecurrence?: InitialRecurrence | undefined;
+  /** Events the user has RSVP'd to, used for conflict detection */
+  userEvents?: ConflictEvent[] | undefined;
+  /** When editing, the ID of the current event (excluded from conflict checks) */
+  editingEventId?: string | undefined;
 }
 
 const EVENT_TYPES: EventType[] = [
@@ -68,6 +93,7 @@ const DEFAULT_FORM_DATA: EventCreate = {
   check_in_minutes_before: 15,
   check_in_minutes_after: 15,
   require_checkout: false,
+  is_draft: false,
 };
 
 /* Shared Tailwind classes for consistency */
@@ -117,6 +143,9 @@ export const EventForm: React.FC<EventFormProps> = ({
   submitLabel = 'Create Event',
   isSubmitting = false,
   showRecurrence = false,
+  initialRecurrence,
+  userEvents,
+  editingEventId,
 }) => {
   const tz = useTimezone();
 
@@ -149,13 +178,29 @@ export const EventForm: React.FC<EventFormProps> = ({
   const [visibleTypes, setVisibleTypes] = useState<EventType[]>(EVENT_TYPES);
   const [customCategories, setCustomCategories] = useState<EventCategoryConfig[]>([]);
   const [visibleCustomCategories, setVisibleCustomCategories] = useState<string[]>([]);
-  const [isRecurring, setIsRecurring] = useState(false);
-  const [recurrencePattern, setRecurrencePattern] = useState<RecurrencePattern>('weekly');
-  const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
-  const [recurrenceCustomDays, setRecurrenceCustomDays] = useState<number[]>([]);
-  const [recurrenceWeekday, setRecurrenceWeekday] = useState(0);
-  const [recurrenceWeekOrdinal, setRecurrenceWeekOrdinal] = useState(1);
-  const [recurrenceMonth, setRecurrenceMonth] = useState(1);
+  const [isRecurring, setIsRecurring] = useState(initialRecurrence?.is_recurring || false);
+  const [recurrencePattern, setRecurrencePattern] = useState<RecurrencePattern>(initialRecurrence?.recurrence_pattern || 'weekly');
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState(initialRecurrence?.recurrence_end_date || '');
+  const [recurrenceCustomDays, setRecurrenceCustomDays] = useState<number[]>(initialRecurrence?.recurrence_custom_days || []);
+  const [recurrenceWeekday, setRecurrenceWeekday] = useState(initialRecurrence?.recurrence_weekday ?? 0);
+  const [recurrenceWeekOrdinal, setRecurrenceWeekOrdinal] = useState(initialRecurrence?.recurrence_week_ordinal ?? 1);
+  const [recurrenceMonth, setRecurrenceMonth] = useState(initialRecurrence?.recurrence_month ?? 1);
+  const [recurrenceExceptions, setRecurrenceExceptions] = useState<string[]>(initialRecurrence?.recurrence_exceptions || []);
+  const [newExceptionDate, setNewExceptionDate] = useState('');
+
+  // Conflict detection: check if the selected time range overlaps with user's existing events
+  const conflicts = useMemo(() => {
+    if (!userEvents || !formData.start_datetime || !formData.end_datetime) return [];
+    const startA = new Date(formData.start_datetime).getTime();
+    const endA = new Date(formData.end_datetime).getTime();
+    if (isNaN(startA) || isNaN(endA) || endA <= startA) return [];
+    return userEvents.filter((evt) => {
+      if (editingEventId && evt.id === editingEventId) return false;
+      const startB = new Date(evt.start_datetime).getTime();
+      const endB = new Date(evt.end_datetime).getTime();
+      return startA < endB && endA > startB;
+    });
+  }, [userEvents, formData.start_datetime, formData.end_datetime, editingEventId]);
 
   useEffect(() => {
     void loadLocations();
@@ -318,6 +363,7 @@ export const EventForm: React.FC<EventFormProps> = ({
           recurrence_weekday: needsWeekday ? recurrenceWeekday : undefined,
           recurrence_week_ordinal: needsWeekday ? recurrenceWeekOrdinal : undefined,
           recurrence_month: recurrencePattern === 'annually_weekday' ? recurrenceMonth : undefined,
+          recurrence_exceptions: recurrenceExceptions.length > 0 ? recurrenceExceptions : undefined,
         };
         await onSubmitRecurring(recurringData);
       } else {
@@ -484,6 +530,30 @@ export const EventForm: React.FC<EventFormProps> = ({
           </div>
         </div>
 
+        {/* Conflict Warning */}
+        {conflicts.length > 0 && (
+          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4" role="status">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">
+                  Schedule Conflict Detected
+                </p>
+                <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                  This time overlaps with {conflicts.length === 1 ? 'an event' : 'events'} you have RSVP&apos;d to:
+                </p>
+                <ul className="mt-2 space-y-1">
+                  {conflicts.map((evt) => (
+                    <li key={evt.id} className="text-sm text-yellow-700 dark:text-yellow-300">
+                      &bull; {evt.title} ({formatForDateTimeInput(evt.start_datetime, tz)} &ndash; {formatForDateTimeInput(evt.end_datetime, tz)})
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Quick Duration */}
         <div>
           <span className={labelClass}>Quick Duration</span>
@@ -628,6 +698,48 @@ export const EventForm: React.FC<EventFormProps> = ({
                     </select>
                   </div>
                 )}
+
+                {/* Exception Dates */}
+                <div>
+                  <label className={labelClass}>Exception Dates (dates to skip)</label>
+                  <div className="flex items-center gap-2 mb-2">
+                    <input
+                      type="date"
+                      value={newExceptionDate}
+                      onChange={(e) => setNewExceptionDate(e.target.value)}
+                      className={inputClass}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (newExceptionDate && !recurrenceExceptions.includes(newExceptionDate)) {
+                          setRecurrenceExceptions((prev) => [...prev, newExceptionDate]);
+                          setNewExceptionDate('');
+                        }
+                      }}
+                      disabled={!newExceptionDate}
+                      className="px-4 py-2 text-sm font-medium rounded-lg bg-red-700 text-white hover:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  {recurrenceExceptions.length > 0 && (
+                    <ul className="space-y-1">
+                      {recurrenceExceptions.map((date) => (
+                        <li key={date} className="flex items-center justify-between bg-theme-surface-secondary rounded px-3 py-1.5 text-sm">
+                          <span className="text-theme-text-primary">{date}</span>
+                          <button
+                            type="button"
+                            onClick={() => setRecurrenceExceptions((prev) => prev.filter((d) => d !== date))}
+                            className="text-red-500 hover:text-red-700 text-xs font-medium"
+                          >
+                            Remove
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
 
                 <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
                   <p className="text-sm text-blue-700 dark:text-blue-300">
@@ -1030,21 +1142,32 @@ export const EventForm: React.FC<EventFormProps> = ({
       </section>
 
       {/* === Actions === */}
-      <div className="flex justify-end gap-3 pt-6 border-t border-theme-surface-border">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-6 py-3 border border-theme-surface-border rounded-lg text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring transition-colors"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="btn-primary border border-transparent disabled:cursor-not-allowed font-medium px-8 py-3 text-sm"
-        >
-          {isSubmitting ? 'Saving...' : submitLabel}
-        </button>
+      <div className="flex items-center justify-between gap-3 pt-6 border-t border-theme-surface-border">
+        <label className="inline-flex items-center gap-2 text-sm text-theme-text-secondary cursor-pointer">
+          <input
+            type="checkbox"
+            checked={formData.is_draft || false}
+            onChange={(e) => setFormData({ ...formData, is_draft: e.target.checked })}
+            className="rounded border-theme-input-border text-red-600 focus:ring-red-500"
+          />
+          Save as Draft
+        </label>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-6 py-3 border border-theme-surface-border rounded-lg text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="btn-primary border border-transparent disabled:cursor-not-allowed font-medium px-8 py-3 text-sm"
+          >
+            {isSubmitting ? 'Saving...' : submitLabel}
+          </button>
+        </div>
       </div>
     </form>
   );

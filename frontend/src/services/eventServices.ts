@@ -17,6 +17,7 @@ export const eventService = {
     end_after?: string;
     end_before?: string;
     include_cancelled?: boolean;
+    include_drafts?: boolean;
     skip?: number;
     limit?: number;
   }): Promise<EventListItem[]> {
@@ -29,6 +30,14 @@ export const eventService = {
    */
   async createEvent(eventData: EventCreate): Promise<Event> {
     const response = await api.post<Event>('/events', eventData);
+    return response.data;
+  },
+
+  /**
+   * Publish a draft event
+   */
+  async publishEvent(eventId: string): Promise<Event> {
+    const response = await api.post<Event>(`/events/${eventId}/publish`);
     return response.data;
   },
 
@@ -60,6 +69,14 @@ export const eventService = {
    */
   async duplicateEvent(eventId: string): Promise<Event> {
     const response = await api.post<Event>(`/events/${eventId}/duplicate`);
+    return response.data;
+  },
+
+  /**
+   * Update this event and all future events in the recurring series
+   */
+  async updateFutureEvents(eventId: string, data: EventUpdate): Promise<{ updated_count: number }> {
+    const response = await api.patch<{ updated_count: number }>(`/events/${eventId}/update-future`, data);
     return response.data;
   },
 
@@ -176,6 +193,17 @@ export const eventService = {
   },
 
   /**
+   * Bulk-add multiple attendees to an event (manager action)
+   */
+  async bulkAddAttendees(eventId: string, userIds: string[], status?: string): Promise<{ created_count: number; errors: Array<{ user_id: string; error: string }> }> {
+    const response = await api.post<{ created_count: number; errors: Array<{ user_id: string; error: string }> }>(
+      `/events/${eventId}/bulk-add-attendees`,
+      { user_ids: userIds, status: status || 'going' }
+    );
+    return response.data;
+  },
+
+  /**
    * Override attendance details for an RSVP (manager action)
    */
   async overrideAttendance(eventId: string, userId: string, data: import('../types/event').RSVPOverride): Promise<import('../types/event').RSVP> {
@@ -188,6 +216,30 @@ export const eventService = {
    */
   async removeAttendee(eventId: string, userId: string): Promise<void> {
     await api.delete(`/events/${eventId}/rsvps/${userId}`);
+  },
+
+  // Event Attachments
+  async getAttachments(eventId: string): Promise<import('../types/event').EventAttachment[]> {
+    const response = await api.get<import('../types/event').EventAttachment[]>(`/events/${eventId}/attachments`);
+    return response.data;
+  },
+
+  async uploadAttachment(eventId: string, file: File, description?: string): Promise<import('../types/event').EventAttachmentUploadResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (description) formData.append('description', description);
+    const response = await api.post<import('../types/event').EventAttachmentUploadResponse>(`/events/${eventId}/attachments`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  async deleteAttachment(eventId: string, attachmentId: string): Promise<void> {
+    await api.delete(`/events/${eventId}/attachments/${attachmentId}`);
+  },
+
+  getAttachmentDownloadUrl(eventId: string, attachmentId: string): string {
+    return `/api/v1/events/${eventId}/attachments/${attachmentId}/download`;
   },
 
   // Event Templates
@@ -214,6 +266,14 @@ export const eventService = {
 
   async deleteTemplate(templateId: string): Promise<void> {
     await api.delete(`/events/templates/${templateId}`);
+  },
+
+  /**
+   * RSVP to all future events in a recurring series
+   */
+  async rsvpToSeries(parentEventId: string, rsvpData: RSVPCreate): Promise<{ message: string; rsvp_count: number }> {
+    const response = await api.post<{ message: string; rsvp_count: number }>(`/events/${parentEventId}/rsvp-series`, rsvpData);
+    return response.data;
   },
 
   // Recurring Events

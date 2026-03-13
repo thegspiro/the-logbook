@@ -206,8 +206,8 @@ describe('EventsPage', () => {
       renderWithRouter(<EventsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('15 attending')).toBeInTheDocument();
-        expect(screen.getByText('30 attending')).toBeInTheDocument();
+        expect(screen.getByText('15 going')).toBeInTheDocument();
+        expect(screen.getByText('30 going')).toBeInTheDocument();
       });
     });
 

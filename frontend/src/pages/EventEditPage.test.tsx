@@ -20,6 +20,7 @@ vi.mock('../services/api', () => ({
   eventService: {
     getEvent: vi.fn(),
     updateEvent: vi.fn(),
+    getEvents: vi.fn().mockResolvedValue([]),
     getVisibleEventTypes: vi.fn().mockResolvedValue([]),
     getVisibleEventTypesWithCategories: vi.fn().mockResolvedValue({
       visible_event_types: [],
