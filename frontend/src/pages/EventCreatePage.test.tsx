@@ -19,6 +19,8 @@ function makeApiError(message: string, status = 400) {
 vi.mock('../services/api', () => ({
   eventService: {
     createEvent: vi.fn(),
+    getEvents: vi.fn().mockResolvedValue([]),
+    getTemplates: vi.fn().mockResolvedValue([]),
     getVisibleEventTypes: vi.fn().mockResolvedValue([]),
     getVisibleEventTypesWithCategories: vi.fn().mockResolvedValue({
       visible_event_types: [],

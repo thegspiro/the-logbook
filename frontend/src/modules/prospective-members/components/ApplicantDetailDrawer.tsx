@@ -42,6 +42,9 @@ import {
   Trash2,
   CalendarPlus,
   Search,
+  UserCheck,
+  Users,
+  Stethoscope,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type {
@@ -120,6 +123,11 @@ const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
   meeting: CalendarCheck,
   status_page_toggle: Globe,
   automated_email: Mail,
+  reference_check: UserCheck,
+  checklist: ClipboardList,
+  interview_requirement: MessageSquare,
+  multi_approval: Users,
+  medical_screening: Stethoscope,
 };
 
 export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
@@ -1153,6 +1161,182 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* Checklist Stage Section */}
+              {applicant.current_stage_type === StageTypeEnum.CHECKLIST && applicant.status === ApplicantStatus.ACTIVE && (() => {
+                const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
+                const actionResult = currentEntry?.action_result ?? {};
+                const completedItems = (actionResult.completed_items as string[] | undefined) ?? [];
+                const totalItems = (actionResult.total_items as number | undefined) ?? 0;
+                return (
+                  <div className="p-4 border-b border-theme-surface-border">
+                    <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
+                      Checklist Progress
+                    </h3>
+                    {totalItems > 0 ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs text-theme-text-secondary">
+                          <span>{completedItems.length} of {totalItems} items completed</span>
+                          <span className={completedItems.length === totalItems ? 'text-emerald-500' : 'text-amber-500'}>
+                            {Math.round((completedItems.length / totalItems) * 100)}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-theme-surface-hover rounded-full h-1.5">
+                          <div
+                            className={`h-1.5 rounded-full transition-all ${completedItems.length === totalItems ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                            style={{ width: `${(completedItems.length / totalItems) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-theme-text-muted">No checklist data recorded yet.</p>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Multi-Approval Stage Section */}
+              {applicant.current_stage_type === StageTypeEnum.MULTI_APPROVAL && applicant.status === ApplicantStatus.ACTIVE && (() => {
+                const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
+                const actionResult = currentEntry?.action_result ?? {};
+                const approvals = (actionResult.approvals as Array<{ role: string; approved_by?: string; approved_at?: string }> | undefined) ?? [];
+                const requiredApprovers = (actionResult.required_approvers as string[] | undefined) ?? [];
+                return (
+                  <div className="p-4 border-b border-theme-surface-border">
+                    <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
+                      Approval Status
+                    </h3>
+                    {requiredApprovers.length > 0 ? (
+                      <div className="space-y-2">
+                        {requiredApprovers.map((role) => {
+                          const approval = approvals.find((a) => a.role === role);
+                          return (
+                            <div key={role} className="flex items-center justify-between text-xs">
+                              <span className="text-theme-text-secondary capitalize">{role.replace(/_/g, ' ')}</span>
+                              {approval ? (
+                                <span className="flex items-center gap-1 text-emerald-500">
+                                  <CheckCircle className="w-3 h-3" />
+                                  Approved
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1 text-theme-text-muted">
+                                  <Clock className="w-3 h-3" />
+                                  Pending
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-theme-text-muted">No approval data recorded yet.</p>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Reference Check Stage Section */}
+              {applicant.current_stage_type === StageTypeEnum.REFERENCE_CHECK && applicant.status === ApplicantStatus.ACTIVE && (() => {
+                const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
+                const actionResult = currentEntry?.action_result ?? {};
+                const references = (actionResult.references as Array<{ name?: string; status?: string; submitted_at?: string }> | undefined) ?? [];
+                const requiredCount = (actionResult.required_count as number | undefined) ?? 0;
+                return (
+                  <div className="p-4 border-b border-theme-surface-border">
+                    <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
+                      Reference Checks
+                    </h3>
+                    <div className="space-y-2">
+                      <p className="text-xs text-theme-text-secondary">
+                        {references.length} of {requiredCount || '?'} references received
+                      </p>
+                      {references.map((ref, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-xs bg-theme-surface rounded-lg p-2 border border-theme-surface-border">
+                          <span className="text-theme-text-primary">{ref.name ?? `Reference ${idx + 1}`}</span>
+                          <span className={ref.status === 'completed' ? 'text-emerald-500' : 'text-amber-500'}>
+                            {ref.status ?? 'pending'}
+                          </span>
+                        </div>
+                      ))}
+                      {references.length === 0 && (
+                        <p className="text-xs text-theme-text-muted">No references submitted yet.</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Interview Requirement Stage Section */}
+              {applicant.current_stage_type === StageTypeEnum.INTERVIEW_REQUIREMENT && applicant.status === ApplicantStatus.ACTIVE && (() => {
+                const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
+                const actionResult = currentEntry?.action_result ?? {};
+                const interviewCount = (actionResult.interview_count as number | undefined) ?? 0;
+                const requiredCount = (actionResult.required_count as number | undefined) ?? 1;
+                return (
+                  <div className="p-4 border-b border-theme-surface-border">
+                    <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
+                      Interview Requirement
+                    </h3>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-theme-text-secondary">
+                        {interviewCount} of {requiredCount} interview{requiredCount !== 1 ? 's' : ''} completed
+                      </span>
+                      {interviewCount >= requiredCount ? (
+                        <span className="flex items-center gap-1 text-emerald-500">
+                          <CheckCircle className="w-3 h-3" />
+                          Requirement met
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-amber-500">
+                          <Clock className="w-3 h-3" />
+                          In progress
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Medical Screening Stage Section */}
+              {applicant.current_stage_type === StageTypeEnum.MEDICAL_SCREENING && applicant.status === ApplicantStatus.ACTIVE && (() => {
+                const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
+                const actionResult = currentEntry?.action_result ?? {};
+                const screenings = (actionResult.screenings as Array<{ type: string; status: string; date?: string }> | undefined) ?? [];
+                const requiredScreenings = (actionResult.required_screenings as string[] | undefined) ?? [];
+                return (
+                  <div className="p-4 border-b border-theme-surface-border">
+                    <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
+                      Medical Screenings
+                    </h3>
+                    {requiredScreenings.length > 0 || screenings.length > 0 ? (
+                      <div className="space-y-2">
+                        {(requiredScreenings.length > 0 ? requiredScreenings : screenings.map((s) => s.type)).map((type) => {
+                          const screening = screenings.find((s) => s.type === type);
+                          const isPassed = screening?.status === 'passed' || screening?.status === 'completed';
+                          return (
+                            <div key={type} className="flex items-center justify-between text-xs bg-theme-surface rounded-lg p-2 border border-theme-surface-border">
+                              <span className="text-theme-text-primary capitalize">{type.replace(/_/g, ' ')}</span>
+                              {screening ? (
+                                <span className={`flex items-center gap-1 ${isPassed ? 'text-emerald-500' : 'text-amber-500'}`}>
+                                  {isPassed ? <CheckCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                                  {screening.status.replace(/_/g, ' ')}
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1 text-theme-text-muted">
+                                  <Clock className="w-3 h-3" />
+                                  Not started
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-theme-text-muted">No screening data recorded yet.</p>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Visual Stage Progress */}
               {applicant.total_stages > 0 && (

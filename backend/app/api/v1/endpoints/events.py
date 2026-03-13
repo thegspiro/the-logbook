@@ -27,6 +27,7 @@ from app.models.event import Event, EventExternalAttendee, EventType, RSVPStatus
 from app.models.user import Organization, User
 from app.schemas.documents import DocumentFolderResponse
 from app.schemas.event import (
+    BulkAddAttendees,
     CheckInMonitoringStats,
     CheckInRequest,
     EventCancel,
@@ -110,6 +111,7 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         recurrence_month=event.recurrence_month,
         recurrence_parent_id=event.recurrence_parent_id,
         template_id=event.template_id,
+        is_draft=event.is_draft or False,
         is_cancelled=event.is_cancelled,
         cancellation_reason=event.cancellation_reason,
         cancelled_at=event.cancelled_at,
@@ -136,6 +138,7 @@ async def list_events(
     end_after: datetime | None = None,
     end_before: datetime | None = None,
     include_cancelled: bool = False,
+    include_drafts: bool = False,
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
@@ -169,6 +172,7 @@ async def list_events(
         end_after=end_after,
         end_before=end_before,
         include_cancelled=include_cancelled,
+        include_drafts=include_drafts,
         skip=skip,
         limit=limit,
     )
@@ -208,6 +212,7 @@ async def list_events(
                 location_name=location_name,
                 requires_rsvp=event.requires_rsvp,
                 is_mandatory=event.is_mandatory,
+                is_draft=event.is_draft or False,
                 is_cancelled=event.is_cancelled,
                 is_recurring=event.is_recurring or False,
                 recurrence_parent_id=event.recurrence_parent_id,
@@ -250,6 +255,51 @@ async def create_event(
                 "event_id": str(event.id),
                 "title": event.title,
                 "event_type": event.event_type.value,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+        return _build_event_response(event)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+
+
+@router.post("/{event_id}/publish", response_model=EventResponse)
+async def publish_event(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Publish a draft event (sets is_draft to False)
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+
+    try:
+        event = await service.publish_event(
+            event_id=event_id,
+            organization_id=current_user.organization_id,
+        )
+
+        if not event:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+            )
+
+        await log_audit_event(
+            db=db,
+            event_type="event_published",
+            event_category="events",
+            severity="info",
+            event_data={
+                "event_id": str(event.id),
+                "title": event.title,
             },
             user_id=str(current_user.id),
             username=current_user.username,
@@ -686,6 +736,67 @@ async def update_event(
         )
 
 
+@router.patch("/{event_id}/update-future")
+async def update_future_events(
+    event_id: UUID,
+    event_data: EventUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Update this event and all future events in the same recurring series.
+
+    Applies the same update to this event and all subsequent occurrences.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+
+    try:
+        updated_count = await service.update_future_events(
+            event_id=event_id,
+            organization_id=current_user.organization_id,
+            event_data=event_data,
+            updated_by=current_user.id,
+        )
+
+        if updated_count == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No events found to update",
+            )
+
+        await log_audit_event(
+            db=db,
+            event_type="event.future_series_updated",
+            event_category="events",
+            severity="info",
+            event_data={
+                "event_id": str(event_id),
+                "updated_count": updated_count,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+        return {
+            "message": f"Successfully updated {updated_count} event(s)",
+            "updated_count": updated_count,
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
+
+
 @router.post(
     "/{event_id}/duplicate",
     response_model=EventResponse,
@@ -929,6 +1040,53 @@ async def create_or_update_rsvp(
     )
 
 
+@router.post("/{event_id}/rsvp-series")
+async def rsvp_to_series(
+    event_id: UUID,
+    rsvp_data: RSVPCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    RSVP to all future events in a recurring series
+
+    **Authentication required**
+    """
+    service = EventService(db)
+
+    # Resolve the parent event id — if this is a child, use its parent
+    event_result = await db.execute(
+        select(Event).where(Event.id == str(event_id))
+    )
+    event = event_result.scalar_one_or_none()
+    if not event:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+        )
+
+    parent_id = event.recurrence_parent_id or event.id
+
+    try:
+        rsvp_count = await service.rsvp_to_series(
+            parent_event_id=parent_id,
+            user_id=current_user.id,
+            organization_id=current_user.organization_id,
+            rsvp_data=rsvp_data,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
+
+    return {"message": f"RSVP applied to {rsvp_count} events in the series", "rsvp_count": rsvp_count}
+
+
 @router.get("/{event_id}/rsvps", response_model=list[RSVPResponse])
 async def list_event_rsvps(
     event_id: UUID,
@@ -1104,6 +1262,61 @@ async def manager_add_attendee(
     )
 
 
+@router.post("/{event_id}/bulk-add-attendees")
+async def bulk_add_attendees(
+    event_id: UUID,
+    data: BulkAddAttendees,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Bulk-add multiple attendees to an event (manager action)
+
+    Adds RSVPs for each user_id with the given status.
+    Skips users who already have an RSVP. Returns the count of created RSVPs.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+    created_count = 0
+    errors = []
+
+    for user_id in data.user_ids:
+        rsvp, error = await service.manager_add_attendee(
+            event_id=event_id,
+            user_id=user_id,
+            organization_id=current_user.organization_id,
+            manager_id=current_user.id,
+            status=data.status,
+            checked_in=False,
+            notes=None,
+        )
+        if error:
+            errors.append({"user_id": str(user_id), "error": error})
+        else:
+            created_count += 1
+
+    await log_audit_event(
+        db=db,
+        event_type="event_bulk_attendees_added",
+        event_category="events",
+        severity="info",
+        event_data={
+            "event_id": str(event_id),
+            "user_count": len(data.user_ids),
+            "created_count": created_count,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return {
+        "created_count": created_count,
+        "errors": errors,
+    }
+
+
 @router.patch("/{event_id}/rsvps/{user_id}/override", response_model=RSVPResponse)
 async def override_rsvp_attendance(
     event_id: UUID,
@@ -1210,6 +1423,67 @@ async def remove_attendee(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+    )
+
+
+@router.post("/{event_id}/promote-waitlist", response_model=RSVPResponse)
+async def promote_from_waitlist(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Promote the next waitlisted user to 'going' status (manager action)
+
+    Finds the earliest waitlisted RSVP (by responded_at) and promotes it.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+    rsvp = await service.promote_from_waitlist(
+        event_id=event_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not rsvp:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No waitlisted users found for this event",
+        )
+
+    # Get user info for response
+    user_result = await db.execute(
+        select(User).where(User.id == rsvp.user_id)
+    )
+    user = user_result.scalar_one_or_none()
+
+    await log_audit_event(
+        db=db,
+        event_type="event_waitlist_promoted",
+        event_category="events",
+        severity="info",
+        event_data={
+            "event_id": str(event_id),
+            "promoted_user_id": str(rsvp.user_id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return RSVPResponse(
+        id=rsvp.id,
+        event_id=rsvp.event_id,
+        user_id=rsvp.user_id,
+        status=rsvp.status.value,
+        guest_count=rsvp.guest_count,
+        notes=rsvp.notes,
+        responded_at=rsvp.responded_at,
+        updated_at=rsvp.updated_at,
+        checked_in=rsvp.checked_in,
+        checked_in_at=rsvp.checked_in_at,
+        user_name=f"{user.first_name} {user.last_name}" if user else None,
+        user_email=user.email if user else None,
     )
 
 

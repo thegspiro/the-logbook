@@ -39,6 +39,7 @@ export const RSVPStatus = {
   GOING: 'going',
   NOT_GOING: 'not_going',
   MAYBE: 'maybe',
+  WAITLISTED: 'waitlisted',
 } as const;
 export type RSVPStatus = (typeof RSVPStatus)[keyof typeof RSVPStatus];
 
@@ -160,6 +161,11 @@ export const StageType = {
   MEETING: 'meeting',
   STATUS_PAGE_TOGGLE: 'status_page_toggle',
   AUTOMATED_EMAIL: 'automated_email',
+  REFERENCE_CHECK: 'reference_check',
+  CHECKLIST: 'checklist',
+  INTERVIEW_REQUIREMENT: 'interview_requirement',
+  MULTI_APPROVAL: 'multi_approval',
+  MEDICAL_SCREENING: 'medical_screening',
 } as const;
 export type StageType = (typeof StageType)[keyof typeof StageType];
 

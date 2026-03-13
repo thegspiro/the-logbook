@@ -20,6 +20,11 @@ import {
   Loader2,
   AlertCircle,
   Mail,
+  UserCheck,
+  ClipboardList,
+  MessageSquare,
+  Users,
+  Stethoscope,
 } from 'lucide-react';
 import { StageType as StageTypeConst } from '../../../constants/enums';
 import type {
@@ -35,6 +40,12 @@ import type {
   MeetingType,
   StatusPageToggleConfig,
   AutomatedEmailStageConfig,
+  ReferenceCheckConfig,
+  ChecklistConfig,
+  ChecklistItemConfig,
+  InterviewRequirementConfig,
+  MultiApprovalConfig,
+  MedicalScreeningStageConfig,
   StageConfig,
 } from '../types';
 import { DEFAULT_ELECTION_PACKAGE_FIELDS } from '../types';
@@ -97,6 +108,36 @@ const STAGE_TYPE_OPTIONS: { value: StageType; label: string; icon: React.Element
     label: 'Automated Email',
     icon: Mail,
     description: 'Send an automated email to the prospect at this stage.',
+  },
+  {
+    value: 'reference_check',
+    label: 'Reference Check',
+    icon: UserCheck,
+    description: 'Collect and verify personal or professional references.',
+  },
+  {
+    value: 'checklist',
+    label: 'Checklist',
+    icon: ClipboardList,
+    description: 'Multi-item checklist (orientation, gear issue, etc.).',
+  },
+  {
+    value: 'interview_requirement',
+    label: 'Interview Requirement',
+    icon: MessageSquare,
+    description: 'Require a set number of interviews before advancing.',
+  },
+  {
+    value: 'multi_approval',
+    label: 'Multi-Signer Approval',
+    icon: Users,
+    description: 'Require multiple designated roles to all sign off.',
+  },
+  {
+    value: 'medical_screening',
+    label: 'Medical Screening',
+    icon: Stethoscope,
+    description: 'Require physical exam or medical clearance before advancing.',
   },
 ];
 
@@ -180,6 +221,65 @@ const STAGE_PRESETS: StagePreset[] = [
     stageType: 'manual_approval',
     config: () => ({ approver_roles: ['membership_coordinator'], require_notes: true }),
   },
+  {
+    label: 'Reference Check',
+    name: 'Reference Check',
+    description: 'Collect and verify three personal/professional references.',
+    stageType: 'reference_check',
+    config: () => ({
+      required_count: 3,
+      reference_types: ['Professional', 'Personal'],
+      collect_method: 'manual' as const,
+      require_all_before_advance: true,
+    }),
+  },
+  {
+    label: 'New Member Orientation',
+    name: 'New Member Orientation',
+    description: 'Complete all orientation checklist items.',
+    stageType: 'checklist',
+    config: () => ({
+      items: [
+        { label: 'Station tour completed' },
+        { label: 'PPE fitted and issued' },
+        { label: 'Radio and pager issued' },
+        { label: 'Keys and access cards issued' },
+        { label: 'Policy manual reviewed and signed' },
+      ] as ChecklistItemConfig[],
+      require_all: true,
+    }),
+  },
+  {
+    label: 'Interview Panel',
+    name: 'Interview Panel',
+    description: 'Require two interviews with positive recommendations.',
+    stageType: 'interview_requirement',
+    config: () => ({
+      required_count: 2,
+      required_recommendation: 'recommend' as const,
+    }),
+  },
+  {
+    label: 'Officer Sign-Off',
+    name: 'Officer Sign-Off',
+    description: 'Require Chief and President to both approve.',
+    stageType: 'multi_approval',
+    config: () => ({
+      required_approvers: ['chief', 'president'],
+      require_notes: true,
+      approval_order: 'any' as const,
+    }),
+  },
+  {
+    label: 'Physical Exam',
+    name: 'Physical / Medical Exam',
+    description: 'Require a physical exam and medical clearance.',
+    stageType: 'medical_screening',
+    config: () => ({
+      required_screenings: ['physical_exam', 'medical_clearance'],
+      require_all_passed: true,
+    }),
+  },
 ];
 
 const MEETING_TYPE_OPTIONS: { value: MeetingType; label: string; description: string }[] = [
@@ -230,6 +330,28 @@ const DEFAULT_CONFIGS: Record<StageType, () => StageConfig> = {
     next_meeting_details: '',
     include_status_tracker: false,
     custom_sections: [],
+  }),
+  reference_check: () => ({
+    required_count: 3,
+    reference_types: ['Professional', 'Personal'],
+    collect_method: 'manual' as const,
+    require_all_before_advance: true,
+  }),
+  checklist: () => ({
+    items: [{ label: '' }] as ChecklistItemConfig[],
+    require_all: true,
+  }),
+  interview_requirement: () => ({
+    required_count: 2,
+  }),
+  multi_approval: () => ({
+    required_approvers: [],
+    require_notes: false,
+    approval_order: 'any' as const,
+  }),
+  medical_screening: () => ({
+    required_screenings: ['physical_exam'],
+    require_all_passed: true,
   }),
 };
 
@@ -484,6 +606,43 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
       if (!c.email_subject.trim()) newErrors.email_subject = 'Email subject is required';
     }
 
+    if (stageType === StageTypeConst.REFERENCE_CHECK) {
+      const c = config as ReferenceCheckConfig;
+      if (!Number.isFinite(c.required_count) || c.required_count < 1) {
+        newErrors.required_count = 'At least 1 reference is required';
+      }
+      const validTypes = c.reference_types.filter((t) => t.trim());
+      if (validTypes.length === 0) newErrors.reference_types = 'At least one reference type is required';
+    }
+
+    if (stageType === StageTypeConst.CHECKLIST) {
+      const c = config as ChecklistConfig;
+      const validItems = c.items.filter((item) => item.label.trim());
+      if (validItems.length === 0) newErrors.checklist_items = 'At least one checklist item is required';
+    }
+
+    if (stageType === StageTypeConst.INTERVIEW_REQUIREMENT) {
+      const c = config as InterviewRequirementConfig;
+      if (!Number.isFinite(c.required_count) || c.required_count < 1) {
+        newErrors.required_count = 'At least 1 interview is required';
+      }
+    }
+
+    if (stageType === StageTypeConst.MULTI_APPROVAL) {
+      const c = config as MultiApprovalConfig;
+      if (!c.required_approvers || c.required_approvers.length === 0) {
+        newErrors.required_approvers = 'At least one approver role is required';
+      }
+    }
+
+    if (stageType === StageTypeConst.MEDICAL_SCREENING) {
+      const c = config as MedicalScreeningStageConfig;
+      const validScreenings = c.required_screenings.filter((s) => s.trim());
+      if (validScreenings.length === 0) {
+        newErrors.required_screenings = 'At least one screening type is required';
+      }
+    }
+
     if (hasTimeoutOverride) {
       if (!Number.isFinite(timeoutOverrideDays) || timeoutOverrideDays < 1) {
         newErrors.timeout_override = 'Timeout override must be at least 1 day';
@@ -521,6 +680,11 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   const meetingConfig = config as MeetingStageConfig;
   const statusPageConfig = config as StatusPageToggleConfig;
   const emailConfig = config as AutomatedEmailStageConfig;
+  const referenceCheckConfig = config as ReferenceCheckConfig;
+  const checklistConfig = config as ChecklistConfig;
+  const interviewReqConfig = config as InterviewRequirementConfig;
+  const multiApprovalConfig = config as MultiApprovalConfig;
+  const medicalScreeningConfig = config as MedicalScreeningStageConfig;
 
   return (
     <div
@@ -1427,6 +1591,395 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     <Plus className="h-3 w-3" aria-hidden="true" /> Add custom section
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* Reference Check Config */}
+            {stageType === StageTypeConst.REFERENCE_CHECK && (
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="stage-ref-count" className="text-theme-text-muted mb-2 block text-sm">
+                    Required Number of References
+                  </label>
+                  <input
+                    id="stage-ref-count"
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={referenceCheckConfig.required_count}
+                    onChange={(e) =>
+                      setConfig({ ...referenceCheckConfig, required_count: Number(e.target.value) })
+                    }
+                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-32 rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
+                  />
+                  {errors.required_count && (
+                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.required_count}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="text-theme-text-muted mb-2 block text-sm">Reference Types</label>
+                  {referenceCheckConfig.reference_types.map((refType, idx) => (
+                    <div key={idx} className="mb-2 flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={refType}
+                        onChange={(e) => {
+                          const updated = [...referenceCheckConfig.reference_types];
+                          updated[idx] = e.target.value;
+                          setConfig({ ...referenceCheckConfig, reference_types: updated });
+                        }}
+                        placeholder="e.g., Professional, Personal, Supervisor"
+                        aria-label={`Reference type ${idx + 1}`}
+                        className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring flex-1 rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
+                      />
+                      {referenceCheckConfig.reference_types.length > 1 && (
+                        <button
+                          onClick={() => {
+                            const updated = referenceCheckConfig.reference_types.filter((_, i) => i !== idx);
+                            setConfig({ ...referenceCheckConfig, reference_types: updated });
+                          }}
+                          className="text-theme-text-muted transition-colors hover:text-red-700 dark:hover:text-red-400"
+                          aria-label={`Remove reference type ${idx + 1}`}
+                        >
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    onClick={() =>
+                      setConfig({
+                        ...referenceCheckConfig,
+                        reference_types: [...referenceCheckConfig.reference_types, ''],
+                      })
+                    }
+                    className="flex items-center gap-1 text-sm text-red-700 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                  >
+                    <Plus className="h-3 w-3" aria-hidden="true" /> Add reference type
+                  </button>
+                  {errors.reference_types && (
+                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.reference_types}</p>
+                  )}
+                </div>
+                <div>
+                  <label htmlFor="stage-ref-method" className="text-theme-text-muted mb-2 block text-sm">
+                    Collection Method
+                  </label>
+                  <select
+                    id="stage-ref-method"
+                    value={referenceCheckConfig.collect_method}
+                    onChange={(e) =>
+                      setConfig({
+                        ...referenceCheckConfig,
+                        collect_method: e.target.value as 'form' | 'manual',
+                      })
+                    }
+                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
+                  >
+                    <option value="manual">Manual — coordinator enters reference info</option>
+                    <option value="form">Form — prospect submits reference contacts</option>
+                  </select>
+                </div>
+                <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={referenceCheckConfig.require_all_before_advance}
+                    onChange={(e) =>
+                      setConfig({ ...referenceCheckConfig, require_all_before_advance: e.target.checked })
+                    }
+                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                  />
+                  Require all references verified before advancing
+                </label>
+              </div>
+            )}
+
+            {/* Checklist Config */}
+            {stageType === StageTypeConst.CHECKLIST && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-theme-text-muted mb-2 block text-sm">Checklist Items</label>
+                  {checklistConfig.items.map((item, idx) => (
+                    <div key={idx} className="mb-3 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={item.label}
+                          onChange={(e) => {
+                            const updated = [...checklistConfig.items];
+                            const current = updated[idx];
+                            if (current) {
+                              updated[idx] = { ...current, label: e.target.value };
+                              setConfig({ ...checklistConfig, items: updated });
+                            }
+                          }}
+                          placeholder="Checklist item label"
+                          aria-label={`Checklist item ${idx + 1}`}
+                          className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring flex-1 rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
+                        />
+                        {checklistConfig.items.length > 1 && (
+                          <button
+                            onClick={() => {
+                              const updated = checklistConfig.items.filter((_, i) => i !== idx);
+                              setConfig({ ...checklistConfig, items: updated });
+                            }}
+                            className="text-theme-text-muted transition-colors hover:text-red-700 dark:hover:text-red-400"
+                            aria-label={`Remove checklist item ${idx + 1}`}
+                          >
+                            <Trash2 className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        value={item.description ?? ''}
+                        onChange={(e) => {
+                          const updated = [...checklistConfig.items];
+                          const current = updated[idx];
+                          if (current) {
+                            updated[idx] = { ...current, description: e.target.value || undefined };
+                            setConfig({ ...checklistConfig, items: updated });
+                          }
+                        }}
+                        placeholder="Optional description"
+                        aria-label={`Checklist item ${idx + 1} description`}
+                        className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring ml-0 w-full rounded-lg border px-4 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
+                      />
+                    </div>
+                  ))}
+                  <button
+                    onClick={() =>
+                      setConfig({
+                        ...checklistConfig,
+                        items: [...checklistConfig.items, { label: '' }],
+                      })
+                    }
+                    className="flex items-center gap-1 text-sm text-red-700 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                  >
+                    <Plus className="h-3 w-3" aria-hidden="true" /> Add checklist item
+                  </button>
+                  {errors.checklist_items && (
+                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.checklist_items}</p>
+                  )}
+                </div>
+                <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={checklistConfig.require_all}
+                    onChange={(e) => setConfig({ ...checklistConfig, require_all: e.target.checked })}
+                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                  />
+                  Require all items completed before advancing
+                </label>
+              </div>
+            )}
+
+            {/* Interview Requirement Config */}
+            {stageType === StageTypeConst.INTERVIEW_REQUIREMENT && (
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="stage-interview-count" className="text-theme-text-muted mb-2 block text-sm">
+                    Required Number of Interviews
+                  </label>
+                  <input
+                    id="stage-interview-count"
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={interviewReqConfig.required_count}
+                    onChange={(e) =>
+                      setConfig({ ...interviewReqConfig, required_count: Number(e.target.value) })
+                    }
+                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-32 rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
+                  />
+                  {errors.required_count && (
+                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.required_count}</p>
+                  )}
+                </div>
+                <div>
+                  <label htmlFor="stage-interview-recommendation" className="text-theme-text-muted mb-2 block text-sm">
+                    Minimum Recommendation (optional)
+                  </label>
+                  <select
+                    id="stage-interview-recommendation"
+                    value={interviewReqConfig.required_recommendation ?? ''}
+                    onChange={(e) =>
+                      setConfig({
+                        ...interviewReqConfig,
+                        required_recommendation: (e.target.value || undefined) as InterviewRequirementConfig['required_recommendation'],
+                      })
+                    }
+                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
+                  >
+                    <option value="">Any recommendation</option>
+                    <option value="recommend">Recommend</option>
+                    <option value="recommend_with_reservations">Recommend with Reservations</option>
+                  </select>
+                  <p className="text-theme-text-muted mt-1 text-xs">
+                    If set, at least one interview must have this recommendation (or better) to advance.
+                  </p>
+                </div>
+                <p className="text-theme-text-muted text-xs">
+                  Interviews are managed in the applicant detail view. This stage gates advancement until the required
+                  number of interviews are recorded.
+                </p>
+              </div>
+            )}
+
+            {/* Multi-Signer Approval Config */}
+            {stageType === StageTypeConst.MULTI_APPROVAL && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-theme-text-muted mb-2 block text-sm">Required Approver Roles</label>
+                  <p className="text-theme-text-muted mb-2 text-xs">
+                    All listed roles must sign off before this stage advances.
+                  </p>
+                  {multiApprovalConfig.required_approvers.map((role, idx) => (
+                    <div key={idx} className="mb-2 flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={role}
+                        onChange={(e) => {
+                          const updated = [...multiApprovalConfig.required_approvers];
+                          updated[idx] = e.target.value;
+                          setConfig({ ...multiApprovalConfig, required_approvers: updated });
+                        }}
+                        placeholder="e.g., chief, president, safety_officer"
+                        aria-label={`Approver role ${idx + 1}`}
+                        className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring flex-1 rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
+                      />
+                      {multiApprovalConfig.required_approvers.length > 1 && (
+                        <button
+                          onClick={() => {
+                            const updated = multiApprovalConfig.required_approvers.filter((_, i) => i !== idx);
+                            setConfig({ ...multiApprovalConfig, required_approvers: updated });
+                          }}
+                          className="text-theme-text-muted transition-colors hover:text-red-700 dark:hover:text-red-400"
+                          aria-label={`Remove approver role ${idx + 1}`}
+                        >
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    onClick={() =>
+                      setConfig({
+                        ...multiApprovalConfig,
+                        required_approvers: [...multiApprovalConfig.required_approvers, ''],
+                      })
+                    }
+                    className="flex items-center gap-1 text-sm text-red-700 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                  >
+                    <Plus className="h-3 w-3" aria-hidden="true" /> Add approver role
+                  </button>
+                  {errors.required_approvers && (
+                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.required_approvers}</p>
+                  )}
+                </div>
+                <div>
+                  <label htmlFor="stage-approval-order" className="text-theme-text-muted mb-2 block text-sm">
+                    Approval Order
+                  </label>
+                  <select
+                    id="stage-approval-order"
+                    value={multiApprovalConfig.approval_order}
+                    onChange={(e) =>
+                      setConfig({
+                        ...multiApprovalConfig,
+                        approval_order: e.target.value as 'any' | 'sequential',
+                      })
+                    }
+                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
+                  >
+                    <option value="any">Any order — approvers can sign off in parallel</option>
+                    <option value="sequential">Sequential — must approve in the listed order</option>
+                  </select>
+                </div>
+                <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={multiApprovalConfig.require_notes}
+                    onChange={(e) =>
+                      setConfig({ ...multiApprovalConfig, require_notes: e.target.checked })
+                    }
+                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                  />
+                  Require notes with each approval
+                </label>
+              </div>
+            )}
+
+            {/* Medical Screening Config */}
+            {stageType === StageTypeConst.MEDICAL_SCREENING && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-theme-text-muted mb-2 block text-sm">Required Screening Types</label>
+                  {medicalScreeningConfig.required_screenings.map((screening, idx) => (
+                    <div key={idx} className="mb-2 flex items-center gap-2">
+                      <select
+                        value={screening}
+                        onChange={(e) => {
+                          const updated = [...medicalScreeningConfig.required_screenings];
+                          updated[idx] = e.target.value;
+                          setConfig({ ...medicalScreeningConfig, required_screenings: updated });
+                        }}
+                        aria-label={`Screening type ${idx + 1}`}
+                        className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring flex-1 rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
+                      >
+                        <option value="physical_exam">Physical Exam</option>
+                        <option value="medical_clearance">Medical Clearance</option>
+                        <option value="drug_screening">Drug Screening</option>
+                        <option value="vision_hearing">Vision & Hearing Test</option>
+                        <option value="fitness_assessment">Fitness Assessment (CPAT)</option>
+                        <option value="psychological">Psychological Evaluation</option>
+                      </select>
+                      {medicalScreeningConfig.required_screenings.length > 1 && (
+                        <button
+                          onClick={() => {
+                            const updated = medicalScreeningConfig.required_screenings.filter(
+                              (_, i) => i !== idx
+                            );
+                            setConfig({ ...medicalScreeningConfig, required_screenings: updated });
+                          }}
+                          className="text-theme-text-muted transition-colors hover:text-red-700 dark:hover:text-red-400"
+                          aria-label={`Remove screening type ${idx + 1}`}
+                        >
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    onClick={() =>
+                      setConfig({
+                        ...medicalScreeningConfig,
+                        required_screenings: [...medicalScreeningConfig.required_screenings, 'physical_exam'],
+                      })
+                    }
+                    className="flex items-center gap-1 text-sm text-red-700 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                  >
+                    <Plus className="h-3 w-3" aria-hidden="true" /> Add screening type
+                  </button>
+                  {errors.required_screenings && (
+                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.required_screenings}</p>
+                  )}
+                </div>
+                <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={medicalScreeningConfig.require_all_passed}
+                    onChange={(e) =>
+                      setConfig({ ...medicalScreeningConfig, require_all_passed: e.target.checked })
+                    }
+                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                  />
+                  Require all screenings passed before advancing
+                </label>
+                <p className="text-theme-text-muted text-xs">
+                  Medical screening records are managed in the Medical Screening module. This stage checks that the
+                  prospect has current, passing records for each required screening type.
+                </p>
               </div>
             )}
           </div>

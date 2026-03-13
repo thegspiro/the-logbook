@@ -43,8 +43,10 @@ export interface Event {
   recurrence_weekday?: number;
   recurrence_week_ordinal?: number;
   recurrence_month?: number;
+  recurrence_exceptions?: string[];
   recurrence_parent_id?: string;
   template_id?: string;
+  is_draft?: boolean;
   is_cancelled: boolean;
   cancellation_reason?: string;
   cancelled_at?: string;
@@ -70,6 +72,7 @@ export interface EventListItem {
   location_name?: string;
   requires_rsvp: boolean;
   is_mandatory: boolean;
+  is_draft?: boolean;
   is_cancelled: boolean;
   is_recurring?: boolean;
   recurrence_parent_id?: string;
@@ -103,6 +106,7 @@ export interface EventCreate {
   require_checkout?: boolean | undefined;
   custom_fields?: Record<string, string | number | boolean | null> | undefined;
   attachments?: EventAttachment[] | undefined;
+  is_draft?: boolean | undefined;
 }
 
 export interface EventUpdate {
@@ -172,8 +176,8 @@ export interface RSVP {
 
 export interface RSVPCreate {
   status: RSVPStatus;
-  guest_count?: number;
-  notes?: string;
+  guest_count?: number | undefined;
+  notes?: string | undefined;
 }
 
 export interface CheckInRequest {
@@ -320,6 +324,7 @@ export interface RecurringEventCreate {
   recurrence_weekday?: number | undefined;
   recurrence_week_ordinal?: number | undefined;
   recurrence_month?: number | undefined;
+  recurrence_exceptions?: string[] | undefined;
   requires_rsvp?: boolean | undefined;
   rsvp_deadline?: string | undefined;
   max_attendees?: number | undefined;

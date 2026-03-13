@@ -37,6 +37,7 @@ import {
   Activity,
   CreditCard,
   ScanLine,
+  Stethoscope,
 } from "lucide-react";
 import { Sun, Moon, Monitor, Contrast } from "lucide-react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
@@ -345,6 +346,16 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                 icon: ShieldCheck,
                 permission: "members.manage",
               },
+              ...(isModuleOn("medical_screening")
+                ? [
+                    {
+                      label: "Medical Screening",
+                      path: "/medical-screening",
+                      icon: Stethoscope,
+                      permission: "medical_screening.view",
+                    },
+                  ]
+                : []),
             ],
           } as NavItem,
           {

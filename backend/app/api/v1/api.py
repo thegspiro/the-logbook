@@ -34,6 +34,7 @@ from app.api.v1.endpoints import (
     inventory,
     locations,
     meetings,
+    medical_screening,
     member_leaves,
     member_status,
     membership_pipeline,
@@ -120,6 +121,11 @@ api_router.include_router(
     membership_pipeline.router,
     prefix="/prospective-members",
     tags=["prospective-members"],
+)
+api_router.include_router(
+    medical_screening.router,
+    prefix="/medical-screening",
+    tags=["medical-screening"],
 )
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
 api_router.include_router(meetings.router, prefix="/meetings", tags=["meetings"])

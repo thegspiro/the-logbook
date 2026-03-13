@@ -8,9 +8,11 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Calendar, ArrowLeft, Info } from 'lucide-react';
 import { AxiosError } from 'axios';
+import toast from 'react-hot-toast';
 import { eventService } from '../services/api';
 import type { EventCreate, Event } from '../types/event';
 import { EventForm } from '../components/EventForm';
+import type { ConflictEvent, InitialRecurrence } from '../components/EventForm';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 
 export const EventEditPage: React.FC = () => {
@@ -20,6 +22,19 @@ export const EventEditPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [userEvents, setUserEvents] = useState<ConflictEvent[]>([]);
+  const [updateScope, setUpdateScope] = useState<'single' | 'future'>('single');
+
+  useEffect(() => {
+    void eventService.getEvents({ end_after: new Date().toISOString() }).then((data) => {
+      setUserEvents(data.map((e) => ({
+        id: e.id,
+        title: e.title,
+        start_datetime: e.start_datetime,
+        end_datetime: e.end_datetime,
+      })));
+    }).catch(() => { /* non-critical */ });
+  }, []);
 
   useEffect(() => {
     if (eventId) {
@@ -49,7 +64,14 @@ export const EventEditPage: React.FC = () => {
     setIsSubmitting(true);
     setError(null);
     try {
-      await eventService.updateEvent(eventId, data);
+      const isRecurring = event?.is_recurring || event?.recurrence_parent_id;
+      if (isRecurring && updateScope === 'future') {
+        const result = await eventService.updateFutureEvents(eventId, data);
+        toast.success(`Updated ${result.updated_count} event(s) in the series`);
+      } else {
+        await eventService.updateEvent(eventId, data);
+        toast.success('Event updated successfully');
+      }
       navigate(`/events/${eventId}`);
     } catch (err: unknown) {
       const apiError = err as { response?: { data?: { detail?: string } } };
@@ -111,6 +133,21 @@ export const EventEditPage: React.FC = () => {
     attachments: event.attachments ?? undefined,
   };
 
+  // Build initial recurrence state when editing a recurring event
+  const initialRecurrence: InitialRecurrence | undefined =
+    (event.is_recurring || event.recurrence_parent_id)
+      ? {
+          is_recurring: true,
+          recurrence_pattern: event.recurrence_pattern,
+          recurrence_end_date: event.recurrence_end_date,
+          recurrence_custom_days: event.recurrence_custom_days,
+          recurrence_weekday: event.recurrence_weekday,
+          recurrence_week_ordinal: event.recurrence_week_ordinal,
+          recurrence_month: event.recurrence_month,
+          recurrence_exceptions: event.recurrence_exceptions,
+        }
+      : undefined;
+
   return (
     <div className="min-h-screen">
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -143,7 +180,33 @@ export const EventEditPage: React.FC = () => {
             <Info className="mt-0.5 h-5 w-5 shrink-0 text-indigo-600 dark:text-indigo-400" />
             <div className="text-sm text-indigo-700 dark:text-indigo-300">
               <p className="font-medium">This event is part of a recurring series.</p>
-              <p className="mt-1">Changes made here will only affect this individual occurrence, not the entire series.</p>
+              <fieldset className="mt-3">
+                <legend className="sr-only">Update scope</legend>
+                <div className="flex flex-col gap-2">
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="updateScope"
+                      value="single"
+                      checked={updateScope === 'single'}
+                      onChange={() => setUpdateScope('single')}
+                      className="text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span>This event only</span>
+                  </label>
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="updateScope"
+                      value="future"
+                      checked={updateScope === 'future'}
+                      onChange={() => setUpdateScope('future')}
+                      className="text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span>This and all future events</span>
+                  </label>
+                </div>
+              </fieldset>
             </div>
           </div>
         )}
@@ -156,6 +219,9 @@ export const EventEditPage: React.FC = () => {
             onCancel={handleCancel}
             submitLabel="Save Changes"
             isSubmitting={isSubmitting}
+            initialRecurrence={initialRecurrence}
+            userEvents={userEvents}
+            editingEventId={eventId}
           />
         </div>
       </main>

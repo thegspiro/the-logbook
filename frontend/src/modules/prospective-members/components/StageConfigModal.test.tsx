@@ -542,10 +542,10 @@ describe('StageConfigModal', () => {
   });
 
   // =========================================================================
-  // All 7 Stage Types Present
+  // All 12 Stage Types Present
   // =========================================================================
 
-  it('shows all 7 stage type options', () => {
+  it('shows all 12 stage type options', () => {
     render(<StageConfigModal {...defaultProps} />);
     expect(screen.getByText('Form Submission')).toBeInTheDocument();
     expect(screen.getByText('Document Upload')).toBeInTheDocument();
@@ -554,5 +554,10 @@ describe('StageConfigModal', () => {
     expect(screen.getByText('Manual Approval')).toBeInTheDocument();
     expect(screen.getByText('Enable Status Page')).toBeInTheDocument();
     expect(screen.getByText('Automated Email')).toBeInTheDocument();
+    expect(screen.getByText('Reference Check')).toBeInTheDocument();
+    expect(screen.getByText('Checklist')).toBeInTheDocument();
+    expect(screen.getByText('Interview Requirement')).toBeInTheDocument();
+    expect(screen.getByText('Multi-Signer Approval')).toBeInTheDocument();
+    expect(screen.getByText('Medical Screening')).toBeInTheDocument();
   });
 });

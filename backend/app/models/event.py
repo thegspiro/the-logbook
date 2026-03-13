@@ -34,6 +34,7 @@ class RSVPStatus(str, Enum):
     GOING = "going"
     NOT_GOING = "not_going"
     MAYBE = "maybe"
+    WAITLISTED = "waitlisted"
 
 
 class CheckInWindowType(str, Enum):
@@ -160,6 +161,9 @@ class Event(Base):
     recurrence_month = Column(
         Integer, nullable=True
     )  # For annually_weekday: target month (1-12)
+    recurrence_exceptions = Column(
+        JSON, nullable=True
+    )  # List of ISO date strings to skip in a recurring series
     recurrence_parent_id = Column(
         String(36), ForeignKey("events.id"), nullable=True
     )  # Links instances to their parent
@@ -174,6 +178,7 @@ class Event(Base):
     attachments = Column(JSON, nullable=True)  # List of attachment URLs/metadata
 
     # Status
+    is_draft = Column(Boolean, default=False, server_default="0")
     is_cancelled = Column(Boolean, nullable=False, default=False)
     cancellation_reason = Column(Text, nullable=True)
     cancelled_at = Column(DateTime(timezone=True), nullable=True)

@@ -141,6 +141,7 @@ class EventService:
         end_after: Optional[datetime] = None,
         end_before: Optional[datetime] = None,
         include_cancelled: bool = False,
+        include_drafts: bool = False,
         skip: int = 0,
         limit: int = 100,
     ) -> List[Event]:
@@ -150,6 +151,11 @@ class EventService:
             .where(Event.organization_id == str(organization_id))
             .options(selectinload(Event.rsvps), selectinload(Event.location_obj))
         )
+
+        if not include_drafts:
+            query = query.where(
+                or_(Event.is_draft == False, Event.is_draft.is_(None))  # noqa: E712
+            )
 
         if event_type:
             query = query.where(Event.event_type == event_type)
@@ -242,6 +248,89 @@ class EventService:
         await self.db.refresh(event)
 
         return event
+
+    async def publish_event(
+        self, event_id: UUID, organization_id: UUID
+    ) -> Optional[Event]:
+        """Publish a draft event by setting is_draft to False"""
+        result = await self.db.execute(
+            select(Event)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
+            .options(selectinload(Event.location_obj))
+        )
+        event = result.scalar_one_or_none()
+
+        if not event:
+            return None
+
+        if not event.is_draft:
+            raise ValueError("Event is already published")
+
+        event.is_draft = False
+        await self.db.commit()
+        await self.db.refresh(event)
+
+        return event
+
+    async def update_future_events(
+        self,
+        event_id: UUID,
+        organization_id: UUID,
+        event_data: EventUpdate,
+        updated_by: Optional[UUID] = None,
+    ) -> int:
+        """Update this event and all future events in the same recurring series.
+
+        Returns the count of updated events.
+        """
+        # Fetch the anchor event
+        result = await self.db.execute(
+            select(Event)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
+        )
+        anchor = result.scalar_one_or_none()
+
+        if not anchor:
+            raise ValueError("Event not found")
+
+        if anchor.is_cancelled:
+            raise ValueError("Cannot update cancelled event")
+
+        # Determine the series parent id
+        parent_id = anchor.recurrence_parent_id or anchor.id
+
+        # Query all events in the series with start_datetime >= anchor's start
+        result = await self.db.execute(
+            select(Event).where(
+                Event.organization_id == str(organization_id),
+                Event.is_cancelled == False,  # noqa: E712
+                or_(
+                    Event.id == str(parent_id),
+                    Event.recurrence_parent_id == str(parent_id),
+                ),
+                Event.start_datetime >= anchor.start_datetime,
+            )
+        )
+        future_events = result.scalars().all()
+
+        update_data = event_data.model_dump(exclude_unset=True)
+        now = datetime.now(dt_timezone.utc)
+        updated_count = 0
+
+        for event in future_events:
+            for field, value in update_data.items():
+                setattr(event, field, value)
+            if updated_by:
+                event.updated_by = str(updated_by)
+            event.updated_at = now
+            updated_count += 1
+
+        if updated_count > 0:
+            await self.db.commit()
+
+        return updated_count
 
     async def cancel_event(
         self,
@@ -488,6 +577,10 @@ class EventService:
             self.db.add(rsvp)
 
         # Check capacity if user is going
+        old_status_was_going = (
+            existing_rsvp
+            and existing_rsvp.status == RSVPStatus.GOING
+        )
         if rsvp_data.status == RSVPStatus.GOING.value and event.max_attendees:
             # Count current "going" RSVPs, excluding this user's RSVP if updating
             capacity_query = (
@@ -502,12 +595,111 @@ class EventService:
             going_count = going_count_result.scalar() or 0
 
             if going_count >= event.max_attendees:
-                return None, "Event is at capacity"
+                # Auto-waitlist instead of rejecting
+                rsvp.status = RSVPStatus.WAITLISTED
 
         await self.db.commit()
         await self.db.refresh(rsvp)
 
+        # Auto-promote from waitlist if someone changed from going to not_going
+        if (
+            old_status_was_going
+            and rsvp_data.status != RSVPStatus.GOING.value
+            and event.max_attendees
+        ):
+            await self.promote_from_waitlist(event_id, organization_id)
+
         return rsvp, None
+
+    async def promote_from_waitlist(
+        self, event_id: UUID, organization_id: UUID
+    ) -> Optional[EventRSVP]:
+        """
+        Promote the earliest waitlisted RSVP for an event to 'going'.
+
+        Returns the promoted RSVP or None if no waitlisted users exist.
+        """
+        # Find the earliest waitlisted RSVP by responded_at
+        result = await self.db.execute(
+            select(EventRSVP)
+            .where(EventRSVP.event_id == str(event_id))
+            .where(EventRSVP.organization_id == str(organization_id))
+            .where(EventRSVP.status == RSVPStatus.WAITLISTED)
+            .order_by(EventRSVP.responded_at.asc())
+            .limit(1)
+        )
+        waitlisted_rsvp = result.scalar_one_or_none()
+
+        if not waitlisted_rsvp:
+            return None
+
+        waitlisted_rsvp.status = RSVPStatus.GOING
+        waitlisted_rsvp.updated_at = datetime.now(dt_timezone.utc)
+
+        await self.db.commit()
+        await self.db.refresh(waitlisted_rsvp)
+
+        return waitlisted_rsvp
+
+    async def rsvp_to_series(
+        self,
+        parent_event_id: UUID,
+        user_id: UUID,
+        organization_id: UUID,
+        rsvp_data: RSVPCreate,
+    ) -> int:
+        """
+        RSVP to all future, non-cancelled events in a recurring series.
+
+        Returns the count of RSVPs created/updated.
+        """
+        now = datetime.now(dt_timezone.utc)
+
+        # Find all future events in the series (parent + children)
+        result = await self.db.execute(
+            select(Event)
+            .where(Event.organization_id == str(organization_id))
+            .where(Event.is_cancelled.is_(False))
+            .where(Event.start_datetime > now)
+            .where(
+                or_(
+                    Event.id == str(parent_event_id),
+                    Event.recurrence_parent_id == str(parent_event_id),
+                )
+            )
+        )
+        series_events = result.scalars().all()
+
+        rsvp_count = 0
+        for event in series_events:
+            if not event.requires_rsvp:
+                continue
+
+            # Check for existing RSVP
+            existing_result = await self.db.execute(
+                select(EventRSVP)
+                .where(EventRSVP.event_id == event.id)
+                .where(EventRSVP.user_id == str(user_id))
+            )
+            existing_rsvp = existing_result.scalar_one_or_none()
+
+            if existing_rsvp:
+                for field, value in rsvp_data.model_dump().items():
+                    setattr(existing_rsvp, field, value)
+                existing_rsvp.updated_at = now
+            else:
+                new_rsvp = EventRSVP(
+                    organization_id=organization_id,
+                    event_id=event.id,
+                    user_id=user_id,
+                    **rsvp_data.model_dump(),
+                )
+                self.db.add(new_rsvp)
+
+            rsvp_count += 1
+
+        await self.db.commit()
+        return rsvp_count
 
     async def get_rsvp(self, event_id: UUID, user_id: UUID) -> Optional[EventRSVP]:
         """Get a user's RSVP for an event"""
@@ -747,8 +939,13 @@ class EventService:
         if not rsvp:
             return "RSVP not found for this user"
 
+        was_going = rsvp.status == RSVPStatus.GOING
         await self.db.delete(rsvp)
         await self.db.commit()
+
+        # Auto-promote from waitlist if a "going" attendee was removed
+        if was_going and event.max_attendees:
+            await self.promote_from_waitlist(event_id, organization_id)
 
         return None
 
@@ -1608,6 +1805,7 @@ class EventService:
         weekday: Optional[int] = None,
         week_ordinal: Optional[int] = None,
         month: Optional[int] = None,
+        exceptions: Optional[List[str]] = None,
     ) -> List[Tuple[datetime, datetime]]:
         """
         Generate all occurrence dates for a recurring event.
@@ -1703,6 +1901,14 @@ class EventService:
             else:
                 break
 
+        # Filter out exception dates (compare date parts only)
+        if exceptions:
+            exception_dates = set(exceptions)
+            occurrences = [
+                (s, e) for s, e in occurrences
+                if s.strftime("%Y-%m-%d") not in exception_dates
+            ]
+
         return occurrences
 
     async def create_recurring_event(
@@ -1722,6 +1928,7 @@ class EventService:
         recurrence_weekday = event_data.pop("recurrence_weekday", None)
         recurrence_week_ordinal = event_data.pop("recurrence_week_ordinal", None)
         recurrence_month = event_data.pop("recurrence_month", None)
+        recurrence_exceptions = event_data.pop("recurrence_exceptions", None)
 
         # Generate occurrence dates
         occurrences = self._generate_recurrence_dates(
@@ -1733,6 +1940,7 @@ class EventService:
             weekday=recurrence_weekday,
             week_ordinal=recurrence_week_ordinal,
             month=recurrence_month,
+            exceptions=recurrence_exceptions,
         )
 
         if len(occurrences) == 0:
@@ -1752,6 +1960,7 @@ class EventService:
             recurrence_weekday=recurrence_weekday,
             recurrence_week_ordinal=recurrence_week_ordinal,
             recurrence_month=recurrence_month,
+            recurrence_exceptions=recurrence_exceptions,
             start_datetime=occurrences[0][0],
             end_datetime=occurrences[0][1],
             **{
