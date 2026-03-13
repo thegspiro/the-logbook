@@ -642,6 +642,66 @@ class EventService:
 
         return waitlisted_rsvp
 
+    async def rsvp_to_series(
+        self,
+        parent_event_id: UUID,
+        user_id: UUID,
+        organization_id: UUID,
+        rsvp_data: RSVPCreate,
+    ) -> int:
+        """
+        RSVP to all future, non-cancelled events in a recurring series.
+
+        Returns the count of RSVPs created/updated.
+        """
+        now = datetime.now(dt_timezone.utc)
+
+        # Find all future events in the series (parent + children)
+        result = await self.db.execute(
+            select(Event)
+            .where(Event.organization_id == str(organization_id))
+            .where(Event.is_cancelled.is_(False))
+            .where(Event.start_datetime > now)
+            .where(
+                or_(
+                    Event.id == str(parent_event_id),
+                    Event.recurrence_parent_id == str(parent_event_id),
+                )
+            )
+        )
+        series_events = result.scalars().all()
+
+        rsvp_count = 0
+        for event in series_events:
+            if not event.requires_rsvp:
+                continue
+
+            # Check for existing RSVP
+            existing_result = await self.db.execute(
+                select(EventRSVP)
+                .where(EventRSVP.event_id == event.id)
+                .where(EventRSVP.user_id == str(user_id))
+            )
+            existing_rsvp = existing_result.scalar_one_or_none()
+
+            if existing_rsvp:
+                for field, value in rsvp_data.model_dump().items():
+                    setattr(existing_rsvp, field, value)
+                existing_rsvp.updated_at = now
+            else:
+                new_rsvp = EventRSVP(
+                    organization_id=organization_id,
+                    event_id=event.id,
+                    user_id=user_id,
+                    **rsvp_data.model_dump(),
+                )
+                self.db.add(new_rsvp)
+
+            rsvp_count += 1
+
+        await self.db.commit()
+        return rsvp_count
+
     async def get_rsvp(self, event_id: UUID, user_id: UUID) -> Optional[EventRSVP]:
         """Get a user's RSVP for an event"""
         result = await self.db.execute(
@@ -1736,6 +1796,7 @@ class EventService:
         weekday: Optional[int] = None,
         week_ordinal: Optional[int] = None,
         month: Optional[int] = None,
+        exceptions: Optional[List[str]] = None,
     ) -> List[Tuple[datetime, datetime]]:
         """
         Generate all occurrence dates for a recurring event.
@@ -1833,6 +1894,14 @@ class EventService:
             else:
                 break
 
+        # Filter out exception dates (compare date parts only)
+        if exceptions:
+            exception_dates = set(exceptions)
+            occurrences = [
+                (s, e) for s, e in occurrences
+                if s.strftime("%Y-%m-%d") not in exception_dates
+            ]
+
         return occurrences
 
     async def create_recurring_event(
@@ -1852,6 +1921,7 @@ class EventService:
         recurrence_weekday = event_data.pop("recurrence_weekday", None)
         recurrence_week_ordinal = event_data.pop("recurrence_week_ordinal", None)
         recurrence_month = event_data.pop("recurrence_month", None)
+        recurrence_exceptions = event_data.pop("recurrence_exceptions", None)
 
         # Generate occurrence dates
         occurrences = self._generate_recurrence_dates(
@@ -1863,6 +1933,7 @@ class EventService:
             weekday=recurrence_weekday,
             week_ordinal=recurrence_week_ordinal,
             month=recurrence_month,
+            exceptions=recurrence_exceptions,
         )
 
         if len(occurrences) == 0:
@@ -1882,6 +1953,7 @@ class EventService:
             recurrence_weekday=recurrence_weekday,
             recurrence_week_ordinal=recurrence_week_ordinal,
             recurrence_month=recurrence_month,
+            recurrence_exceptions=recurrence_exceptions,
             start_datetime=occurrences[0][0],
             end_datetime=occurrences[0][1],
             **{

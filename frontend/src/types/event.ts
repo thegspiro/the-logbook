@@ -43,6 +43,7 @@ export interface Event {
   recurrence_weekday?: number;
   recurrence_week_ordinal?: number;
   recurrence_month?: number;
+  recurrence_exceptions?: string[];
   recurrence_parent_id?: string;
   template_id?: string;
   is_draft?: boolean;
@@ -322,6 +323,7 @@ export interface RecurringEventCreate {
   recurrence_weekday?: number | undefined;
   recurrence_week_ordinal?: number | undefined;
   recurrence_month?: number | undefined;
+  recurrence_exceptions?: string[] | undefined;
   requires_rsvp?: boolean | undefined;
   rsvp_deadline?: string | undefined;
   max_attendees?: number | undefined;

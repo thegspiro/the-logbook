@@ -171,6 +171,8 @@ export const EventForm: React.FC<EventFormProps> = ({
   const [recurrenceWeekday, setRecurrenceWeekday] = useState(0);
   const [recurrenceWeekOrdinal, setRecurrenceWeekOrdinal] = useState(1);
   const [recurrenceMonth, setRecurrenceMonth] = useState(1);
+  const [recurrenceExceptions, setRecurrenceExceptions] = useState<string[]>([]);
+  const [newExceptionDate, setNewExceptionDate] = useState('');
 
   // Conflict detection: check if the selected time range overlaps with user's existing events
   const conflicts = useMemo(() => {
@@ -346,6 +348,7 @@ export const EventForm: React.FC<EventFormProps> = ({
           recurrence_weekday: needsWeekday ? recurrenceWeekday : undefined,
           recurrence_week_ordinal: needsWeekday ? recurrenceWeekOrdinal : undefined,
           recurrence_month: recurrencePattern === 'annually_weekday' ? recurrenceMonth : undefined,
+          recurrence_exceptions: recurrenceExceptions.length > 0 ? recurrenceExceptions : undefined,
         };
         await onSubmitRecurring(recurringData);
       } else {
@@ -680,6 +683,48 @@ export const EventForm: React.FC<EventFormProps> = ({
                     </select>
                   </div>
                 )}
+
+                {/* Exception Dates */}
+                <div>
+                  <label className={labelClass}>Exception Dates (dates to skip)</label>
+                  <div className="flex items-center gap-2 mb-2">
+                    <input
+                      type="date"
+                      value={newExceptionDate}
+                      onChange={(e) => setNewExceptionDate(e.target.value)}
+                      className={inputClass}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (newExceptionDate && !recurrenceExceptions.includes(newExceptionDate)) {
+                          setRecurrenceExceptions((prev) => [...prev, newExceptionDate]);
+                          setNewExceptionDate('');
+                        }
+                      }}
+                      disabled={!newExceptionDate}
+                      className="px-4 py-2 text-sm font-medium rounded-lg bg-red-700 text-white hover:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  {recurrenceExceptions.length > 0 && (
+                    <ul className="space-y-1">
+                      {recurrenceExceptions.map((date) => (
+                        <li key={date} className="flex items-center justify-between bg-theme-surface-secondary rounded px-3 py-1.5 text-sm">
+                          <span className="text-theme-text-primary">{date}</span>
+                          <button
+                            type="button"
+                            onClick={() => setRecurrenceExceptions((prev) => prev.filter((d) => d !== date))}
+                            className="text-red-500 hover:text-red-700 text-xs font-medium"
+                          >
+                            Remove
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
 
                 <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
                   <p className="text-sm text-blue-700 dark:text-blue-300">

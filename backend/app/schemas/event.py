@@ -249,6 +249,7 @@ class EventResponse(EventBase):
     recurrence_weekday: Optional[int] = None
     recurrence_week_ordinal: Optional[int] = None
     recurrence_month: Optional[int] = None
+    recurrence_exceptions: Optional[List[str]] = None
     recurrence_parent_id: Optional[UUID] = None
     template_id: Optional[UUID] = None
 
@@ -583,6 +584,8 @@ class RecurringEventCreate(BaseModel):
         None, ge=1, le=12,
         description="For annually_weekday: target month (1=Jan, 12=Dec)",
     )
+
+    recurrence_exceptions: Optional[List[str]] = None
 
     # Event settings (same as EventCreate)
     requires_rsvp: bool = False

@@ -7,9 +7,9 @@
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, Plus, Download, Search, Repeat, SlidersHorizontal, User } from 'lucide-react';
+import { Calendar, Plus, Download, Search, Repeat, SlidersHorizontal, User, Check, X, Users } from 'lucide-react';
 import { eventService } from '../services/api';
-import type { EventListItem, EventType, EventCategoryConfig } from '../types/event';
+import type { EventListItem, EventType, EventCategoryConfig, RSVPCreate } from '../types/event';
 import { getEventTypeLabel, getEventTypeBadgeColor, getRSVPStatusLabel, getRSVPStatusColor } from '../utils/eventHelpers';
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
@@ -42,6 +42,8 @@ export const EventsPage: React.FC = () => {
   const [showPastEvents, setShowPastEvents] = useState(false);
   const [showMyEventsOnly, setShowMyEventsOnly] = useState(false);
   const [sortBy, setSortBy] = useState<'date' | 'title' | 'rsvp_count'>('date');
+  const [rsvpLoading, setRsvpLoading] = useState<Record<string, boolean>>({});
+  const [rsvpChanging, setRsvpChanging] = useState<Record<string, boolean>>({});
 
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('events.manage');
@@ -72,6 +74,32 @@ export const EventsPage: React.FC = () => {
       setLoading(false);
     }
   }, [showPastEvents, canManage]);
+
+  const handleQuickRSVP = useCallback(async (eventId: string, status: 'going' | 'not_going') => {
+    try {
+      setRsvpLoading((prev) => ({ ...prev, [eventId]: true }));
+      const rsvpData: RSVPCreate = { status, guest_count: 0 };
+      await eventService.createOrUpdateRSVP(eventId, rsvpData);
+      setEvents((prev) =>
+        prev.map((e) =>
+          e.id === eventId
+            ? {
+                ...e,
+                user_rsvp_status: status,
+                going_count: status === 'going'
+                  ? (e.going_count ?? 0) + (e.user_rsvp_status === 'going' ? 0 : 1)
+                  : (e.going_count ?? 0) - (e.user_rsvp_status === 'going' ? 1 : 0),
+              }
+            : e
+        )
+      );
+      setRsvpChanging((prev) => ({ ...prev, [eventId]: false }));
+    } catch {
+      // Silently fail — user can retry
+    } finally {
+      setRsvpLoading((prev) => ({ ...prev, [eventId]: false }));
+    }
+  }, []);
 
   useEffect(() => {
     void fetchEvents();
@@ -445,11 +473,63 @@ export const EventsPage: React.FC = () => {
                   )}
 
                   {event.requires_rsvp && (
-                    <div className="flex items-center text-sm text-theme-text-muted">
-                      <svg className="shrink-0 mr-1.5 h-5 w-5 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                      </svg>
-                      {event.going_count} attending
+                    <div className="flex items-center text-sm">
+                      <Users className="shrink-0 mr-1.5 h-5 w-5 text-theme-text-muted" aria-hidden="true" />
+                      <span className="text-green-600 dark:text-green-400 font-medium">
+                        {event.going_count ?? 0} going
+                      </span>
+                      {(event.rsvp_count ?? 0) > (event.going_count ?? 0) && (
+                        <span className="text-theme-text-muted ml-1">
+                          / {event.rsvp_count ?? 0} RSVP'd
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Inline Quick RSVP */}
+                  {event.requires_rsvp && !event.is_cancelled && (
+                    <div
+                      className="flex items-center gap-2 pt-1"
+                      onClick={(e) => e.preventDefault()}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.preventDefault(); }}
+                      role="group"
+                      aria-label="Quick RSVP"
+                    >
+                      {(!event.user_rsvp_status || rsvpChanging[event.id]) ? (
+                        <>
+                          <button
+                            onClick={(e) => { e.preventDefault(); void handleQuickRSVP(event.id, 'going'); }}
+                            disabled={!!rsvpLoading[event.id]}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-500/20 dark:text-green-400 dark:hover:bg-green-500/30 transition-colors disabled:opacity-50"
+                          >
+                            <Check className="h-3 w-3" aria-hidden="true" />
+                            Going
+                          </button>
+                          <button
+                            onClick={(e) => { e.preventDefault(); void handleQuickRSVP(event.id, 'not_going'); }}
+                            disabled={!!rsvpLoading[event.id]}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30 transition-colors disabled:opacity-50"
+                          >
+                            <X className="h-3 w-3" aria-hidden="true" />
+                            Not Going
+                          </button>
+                          {event.user_rsvp_status && (
+                            <button
+                              onClick={(e) => { e.preventDefault(); setRsvpChanging((prev) => ({ ...prev, [event.id]: false })); }}
+                              className="text-xs text-theme-text-muted hover:text-theme-text-primary"
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <button
+                          onClick={(e) => { e.preventDefault(); setRsvpChanging((prev) => ({ ...prev, [event.id]: true })); }}
+                          className="text-xs text-theme-text-muted hover:text-theme-text-primary underline"
+                        >
+                          Change RSVP
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

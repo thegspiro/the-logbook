@@ -257,6 +257,14 @@ export const eventService = {
     await api.delete(`/events/templates/${templateId}`);
   },
 
+  /**
+   * RSVP to all future events in a recurring series
+   */
+  async rsvpToSeries(parentEventId: string, rsvpData: RSVPCreate): Promise<{ message: string; rsvp_count: number }> {
+    const response = await api.post<{ message: string; rsvp_count: number }>(`/events/${parentEventId}/rsvp-series`, rsvpData);
+    return response.data;
+  },
+
   // Recurring Events
   async createRecurringEvent(data: import('../types/event').RecurringEventCreate): Promise<import('../types/event').Event[]> {
     const response = await api.post<import('../types/event').Event[]>('/events/recurring', data);

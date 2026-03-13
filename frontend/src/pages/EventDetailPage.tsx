@@ -52,6 +52,7 @@ export const EventDetailPage: React.FC = () => {
   const [overrideCheckOut, setOverrideCheckOut] = useState('');
   const [removeConfirmUserId, setRemoveConfirmUserId] = useState<string | null>(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [rsvpApplyToSeries, setRsvpApplyToSeries] = useState(false);
   const [seriesEvents, setSeriesEvents] = useState<EventListItem[]>([]);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [templateName, setTemplateName] = useState('');
@@ -202,17 +203,25 @@ export const EventDetailPage: React.FC = () => {
       setSubmitting(true);
       setSubmitError(null);
 
-      await eventService.createOrUpdateRSVP(eventId, {
+      const rsvpPayload = {
         status: rsvpStatus,
         guest_count: guestCount,
-        notes: rsvpNotes,
-      });
+        notes: rsvpNotes || undefined,
+      };
+
+      if (rsvpApplyToSeries && event && (event.is_recurring || event.recurrence_parent_id)) {
+        const result = await eventService.rsvpToSeries(eventId, rsvpPayload);
+        toast.success(`RSVP applied to ${result.rsvp_count} events in the series`);
+      } else {
+        await eventService.createOrUpdateRSVP(eventId, rsvpPayload);
+        toast.success('RSVP submitted successfully');
+      }
 
       setShowRSVPModal(false);
       setRsvpStatus(RSVPStatusEnum.GOING);
       setGuestCount(0);
       setRsvpNotes('');
-      toast.success('RSVP submitted successfully');
+      setRsvpApplyToSeries(false);
       await fetchEvent();
       if (canManage) {
         await fetchRSVPs();
@@ -1314,6 +1323,20 @@ export const EventDetailPage: React.FC = () => {
                         placeholder="Dietary restrictions, special accommodations, etc."
                       />
                     </div>
+
+                    {event && (event.is_recurring || event.recurrence_parent_id) && (
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={rsvpApplyToSeries}
+                          onChange={(e) => setRsvpApplyToSeries(e.target.checked)}
+                          className="h-4 w-4 text-blue-600 focus:ring-theme-focus-ring border-theme-surface-border rounded"
+                        />
+                        <span className="text-sm text-theme-text-secondary">
+                          Apply to all future events in this series
+                        </span>
+                      </label>
+                    )}
                   </div>
                 </div>
 

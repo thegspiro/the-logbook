@@ -1036,6 +1036,53 @@ async def create_or_update_rsvp(
     )
 
 
+@router.post("/{event_id}/rsvp-series")
+async def rsvp_to_series(
+    event_id: UUID,
+    rsvp_data: RSVPCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    RSVP to all future events in a recurring series
+
+    **Authentication required**
+    """
+    service = EventService(db)
+
+    # Resolve the parent event id — if this is a child, use its parent
+    event_result = await db.execute(
+        select(Event).where(Event.id == str(event_id))
+    )
+    event = event_result.scalar_one_or_none()
+    if not event:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+        )
+
+    parent_id = event.recurrence_parent_id or event.id
+
+    try:
+        rsvp_count = await service.rsvp_to_series(
+            parent_event_id=parent_id,
+            user_id=current_user.id,
+            organization_id=current_user.organization_id,
+            rsvp_data=rsvp_data,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
+
+    return {"message": f"RSVP applied to {rsvp_count} events in the series", "rsvp_count": rsvp_count}
+
+
 @router.get("/{event_id}/rsvps", response_model=list[RSVPResponse])
 async def list_event_rsvps(
     event_id: UUID,
