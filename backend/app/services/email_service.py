@@ -4,6 +4,7 @@ Email Service
 Handles sending emails using SMTP or organization-specific email service configuration.
 """
 
+import asyncio
 import html as _html
 import os
 import smtplib
@@ -131,6 +132,24 @@ class EmailService:
             "use_tls": True,
         }
 
+    def _smtp_send(self, recipients: List[str], message: str) -> None:
+        """Synchronous SMTP send — called via asyncio.to_thread."""
+        with smtplib.SMTP(
+            self._smtp_config["host"], self._smtp_config["port"]
+        ) as server:
+            if self._smtp_config["use_tls"]:
+                server.starttls()
+            if self._smtp_config["user"] and self._smtp_config["password"]:
+                server.login(
+                    self._smtp_config["user"],
+                    self._smtp_config["password"],
+                )
+            server.sendmail(
+                self._smtp_config["from_email"],
+                recipients,
+                message,
+            )
+
     async def send_email(
         self,
         to_emails: List[str],
@@ -222,23 +241,12 @@ class EmailService:
                     # BCC recipients are NOT added to headers (invisible to other recipients)
                     all_recipients.extend(bcc_emails)
 
-                # Send email
-                with smtplib.SMTP(
-                    self._smtp_config["host"], self._smtp_config["port"]
-                ) as server:
-                    if self._smtp_config["use_tls"]:
-                        server.starttls()
-
-                    if self._smtp_config["user"] and self._smtp_config["password"]:
-                        server.login(
-                            self._smtp_config["user"], self._smtp_config["password"]
-                        )
-
-                    server.sendmail(
-                        self._smtp_config["from_email"],
-                        all_recipients,
-                        msg.as_string(),
-                    )
+                # Send email in a thread to avoid blocking the event loop
+                await asyncio.to_thread(
+                    self._smtp_send,
+                    all_recipients,
+                    msg.as_string(),
+                )
 
                 success_count += 1
 
