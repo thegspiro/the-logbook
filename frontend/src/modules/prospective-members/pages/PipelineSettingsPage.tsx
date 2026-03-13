@@ -37,6 +37,10 @@ import {
   Globe,
   Mail,
   BarChart3,
+  UserCheck,
+  ClipboardList,
+  MessageSquare,
+  Stethoscope,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
@@ -65,6 +69,11 @@ const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
   meeting: CalendarCheck,
   status_page_toggle: Globe,
   automated_email: Mail,
+  reference_check: UserCheck,
+  checklist: ClipboardList,
+  interview_requirement: MessageSquare,
+  multi_approval: Users,
+  medical_screening: Stethoscope,
 };
 
 const STAGE_TYPE_COLORS: Record<StageType, string> = {
@@ -75,6 +84,11 @@ const STAGE_TYPE_COLORS: Record<StageType, string> = {
   meeting: 'text-teal-600 dark:text-teal-400 bg-teal-500/10',
   status_page_toggle: 'text-sky-600 dark:text-sky-400 bg-sky-500/10',
   automated_email: 'text-rose-600 dark:text-rose-400 bg-rose-500/10',
+  reference_check: 'text-orange-600 dark:text-orange-400 bg-orange-500/10',
+  checklist: 'text-cyan-600 dark:text-cyan-400 bg-cyan-500/10',
+  interview_requirement: 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/10',
+  multi_approval: 'text-lime-600 dark:text-lime-400 bg-lime-500/10',
+  medical_screening: 'text-pink-600 dark:text-pink-400 bg-pink-500/10',
 };
 
 export const PipelineSettingsPage: React.FC = () => {

@@ -15,6 +15,10 @@ import {
   CalendarCheck,
   Globe,
   Mail,
+  UserCheck,
+  ClipboardList,
+  MessageSquare,
+  Stethoscope,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type {
@@ -42,6 +46,11 @@ const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
   meeting: CalendarCheck,
   status_page_toggle: Globe,
   automated_email: Mail,
+  reference_check: UserCheck,
+  checklist: ClipboardList,
+  interview_requirement: MessageSquare,
+  multi_approval: Users,
+  medical_screening: Stethoscope,
 };
 
 const STAGE_HEADER_COLORS: Record<StageType, string> = {
@@ -52,6 +61,11 @@ const STAGE_HEADER_COLORS: Record<StageType, string> = {
   meeting: 'border-teal-500',
   status_page_toggle: 'border-sky-500',
   automated_email: 'border-rose-500',
+  reference_check: 'border-orange-500',
+  checklist: 'border-cyan-500',
+  interview_requirement: 'border-indigo-500',
+  multi_approval: 'border-lime-500',
+  medical_screening: 'border-pink-500',
 };
 
 export const PipelineKanban: React.FC<PipelineKanbanProps> = ({

@@ -158,6 +158,12 @@ from app.models.meeting import (
     MeetingStatus,
     MeetingType,
 )
+from app.models.medical_screening import (
+    ScreeningRecord,
+    ScreeningRequirement,
+    ScreeningStatus,
+    ScreeningType,
+)
 from app.models.membership_pipeline import (
     ActionType,
     MembershipPipeline,
@@ -471,6 +477,11 @@ __all__ = [
     "WriteOffStatus",
     "ReturnRequestStatus",
     "ReturnRequestType",
+    # Medical screening models
+    "ScreeningRequirement",
+    "ScreeningRecord",
+    "ScreeningType",
+    "ScreeningStatus",
     # Membership pipeline models
     "MembershipPipeline",
     "MembershipPipelineStep",

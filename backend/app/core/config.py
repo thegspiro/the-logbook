@@ -459,6 +459,7 @@ class Settings(BaseSettings):
     MODULE_MEETINGS_ENABLED: bool = True
     MODULE_ELECTIONS_ENABLED: bool = False
     MODULE_FUNDRAISING_ENABLED: bool = False
+    MODULE_MEDICAL_SCREENING_ENABLED: bool = True
 
     # ============================================
     # Monitoring

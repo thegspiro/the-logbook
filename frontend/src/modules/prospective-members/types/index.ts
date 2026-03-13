@@ -173,6 +173,41 @@ export interface AutomatedEmailStageConfig {
   custom_sections?: AutomatedEmailSection[] | undefined;
 }
 
+export interface ReferenceCheckConfig {
+  required_count: number;
+  reference_types: string[];
+  collect_method: 'form' | 'manual';
+  require_all_before_advance: boolean;
+}
+
+export interface ChecklistItemConfig {
+  label: string;
+  description?: string | undefined;
+  assignee_role?: string | undefined;
+}
+
+export interface ChecklistConfig {
+  items: ChecklistItemConfig[];
+  require_all: boolean;
+}
+
+export interface InterviewRequirementConfig {
+  required_count: number;
+  required_recommendation?: InterviewRecommendation | undefined;
+  interviewer_roles?: string[] | undefined;
+}
+
+export interface MultiApprovalConfig {
+  required_approvers: string[];
+  require_notes: boolean;
+  approval_order: 'any' | 'sequential';
+}
+
+export interface MedicalScreeningStageConfig {
+  required_screenings: string[];
+  require_all_passed: boolean;
+}
+
 export type StageConfig =
   | FormStageConfig
   | DocumentStageConfig
@@ -180,7 +215,12 @@ export type StageConfig =
   | ManualApprovalConfig
   | MeetingStageConfig
   | StatusPageToggleConfig
-  | AutomatedEmailStageConfig;
+  | AutomatedEmailStageConfig
+  | ReferenceCheckConfig
+  | ChecklistConfig
+  | InterviewRequirementConfig
+  | MultiApprovalConfig
+  | MedicalScreeningStageConfig;
 
 // =============================================================================
 // Pipeline Stage

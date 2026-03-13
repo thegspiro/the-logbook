@@ -38,6 +38,9 @@ import {
   CalendarCheck,
   Globe,
   ClipboardList,
+  UserCheck,
+  Users,
+  Stethoscope,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type {
@@ -113,6 +116,11 @@ const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
   meeting: CalendarCheck,
   status_page_toggle: Globe,
   automated_email: Mail,
+  reference_check: UserCheck,
+  checklist: ClipboardList,
+  interview_requirement: MessageSquare,
+  multi_approval: Users,
+  medical_screening: Stethoscope,
 };
 
 export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
