@@ -388,8 +388,18 @@ class TrainingSessionService:
             # Build approval URL
             approval_url = f"{settings.FRONTEND_URL}/training/approve/{approval_token}"
 
+            # Load organization for org-specific email settings
+            from app.models.user import Organization
+
+            org_result = await self.db.execute(
+                select(Organization).where(
+                    Organization.id == str(organization_id)
+                )
+            )
+            org = org_result.scalar_one_or_none()
+
             # Send email
-            email_service = EmailService()
+            email_service = EmailService(organization=org)
             await email_service.send_training_approval_request(
                 to_emails=to_emails,
                 event_title=event_title,
