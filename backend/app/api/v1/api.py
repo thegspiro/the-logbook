@@ -13,6 +13,7 @@ from app.api.v1.endpoints import (
     analytics,
     apparatus,
     auth,
+    compliance_config,
     dashboard,
     documents,
     elections,
@@ -169,6 +170,11 @@ api_router.include_router(
     compliance_officer.router,
     prefix="/compliance",
     tags=["compliance-officer"],
+)
+api_router.include_router(
+    compliance_config.router,
+    prefix="/compliance",
+    tags=["compliance-config"],
 )
 api_router.include_router(public_portal_admin.router)
 
