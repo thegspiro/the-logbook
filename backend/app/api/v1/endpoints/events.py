@@ -9,6 +9,7 @@ import os
 import uuid as uuid_lib
 from datetime import datetime
 from datetime import timezone as dt_timezone
+from typing import Optional
 
 from uuid import UUID
 
@@ -27,12 +28,15 @@ from app.models.event import Event, EventExternalAttendee, EventType, RSVPStatus
 from app.models.user import Organization, User
 from app.schemas.documents import DocumentFolderResponse
 from app.schemas.event import (
+    AnalyticsSummary,
     BulkAddAttendees,
     CheckInMonitoringStats,
     CheckInRequest,
     EventCancel,
     EventCreate,
     EventListItem,
+    EventNotificationRequest,
+    EventNotificationResponse,
     EventResponse,
     EventSettingsUpdate,
     EventStats,
@@ -45,12 +49,15 @@ from app.schemas.event import (
     RecordActualTimes,
     RecurringEventCreate,
     RSVPCreate,
+    RSVPHistoryResponse,
     RSVPOverride,
     RSVPResponse,
     SelfCheckInRequest,
 )
+from app.models.notification import NotificationChannel
 from app.services.documents_service import DocumentsService
 from app.services.event_service import EventService
+from app.services.notifications_service import NotificationsService
 
 router = APIRouter()
 
@@ -420,6 +427,42 @@ EVENT_SETTINGS_DEFAULTS = {
 }
 
 
+@router.get("/analytics/summary", response_model=AnalyticsSummary)
+async def get_analytics_summary(
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("analytics.view", "events.manage")
+    ),
+):
+    """
+    Get aggregated event analytics for the attendance trends dashboard.
+
+    Features #44 (attendance trends), #46 (event type distribution),
+    #47 (check-in analytics).
+
+    **Authentication required**
+    **Requires permission: analytics.view OR events.manage**
+    """
+    try:
+        service = EventService(db)
+        result = await service.get_analytics_summary(
+            organization_id=current_user.organization_id,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        return AnalyticsSummary(**result)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400, detail=safe_error_detail(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=safe_error_detail(e)
+        )
+
+
 @router.get("/settings")
 async def get_event_settings(
     db: AsyncSession = Depends(get_db),
@@ -704,6 +747,30 @@ async def update_event(
     service = EventService(db)
 
     try:
+        # Capture old values for significant field change detection
+        update_fields = event_data.model_dump(exclude_unset=True)
+        significant_fields = {
+            "title", "start_datetime", "end_datetime", "location",
+        }
+        changed_significant = significant_fields & set(update_fields.keys())
+
+        # Snapshot old values and RSVPs before update
+        old_values: dict = {}
+        rsvps_to_notify = []
+        if changed_significant:
+            result = await service.get_event(
+                event_id=event_id,
+                organization_id=current_user.organization_id,
+            )
+            if result:
+                old_event_obj = result[0]
+                for field in changed_significant:
+                    old_values[field] = getattr(old_event_obj, field, None)
+                rsvps_to_notify = [
+                    rsvp for rsvp in old_event_obj.rsvps
+                    if rsvp.status in (RSVPStatus.GOING, RSVPStatus.MAYBE)
+                ]
+
         event = await service.update_event(
             event_id=event_id,
             organization_id=current_user.organization_id,
@@ -728,6 +795,40 @@ async def update_event(
             user_id=str(current_user.id),
             username=current_user.username,
         )
+
+        # Notify RSVP'd members if significant fields changed
+        if changed_significant and rsvps_to_notify:
+            # Check if values actually changed
+            actually_changed = []
+            for field in changed_significant:
+                new_val = getattr(event, field, None)
+                if str(old_values.get(field, "")) != str(new_val):
+                    actually_changed.append(field)
+
+            if actually_changed:
+                changes_desc = ", ".join(
+                    f.replace("_", " ") for f in actually_changed
+                )
+                try:
+                    notifications_service = NotificationsService(db)
+                    for rsvp in rsvps_to_notify:
+                        await notifications_service.log_notification(
+                            organization_id=current_user.organization_id,
+                            log_data={
+                                "channel": NotificationChannel.IN_APP,
+                                "recipient_id": str(rsvp.user_id),
+                                "subject": f"Event Updated: {event.title}",
+                                "message": (
+                                    f'The event "{event.title}" has been '
+                                    f"updated ({changes_desc}). "
+                                    f"Please review the latest details."
+                                ),
+                            },
+                        )
+                except Exception as notif_err:
+                    logger.error(
+                        f"Failed to send update notifications: {notif_err}"
+                    )
 
         return _build_event_response(event)
     except ValueError as e:
@@ -1135,6 +1236,40 @@ async def list_event_rsvps(
         )
 
     return rsvp_responses
+
+
+@router.get("/{event_id}/rsvp-history", response_model=list[RSVPHistoryResponse])
+async def get_rsvp_history(
+    event_id: UUID,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Get RSVP change history for an event.
+
+    **Requires events.manage permission**
+    """
+    service = EventService(db)
+
+    try:
+        history = await service.get_rsvp_history(
+            event_id=event_id,
+            organization_id=current_user.organization_id,
+            limit=limit,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=safe_error_detail(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
+
+    return history
 
 
 @router.post("/{event_id}/check-in", response_model=RSVPResponse)
@@ -2403,3 +2538,226 @@ async def remove_external_attendee(
 
     await db.delete(attendee)
     await db.commit()
+
+
+# ─── Reminders ──────────────────────────────────────────────
+
+
+class SendRemindersRequest(BaseModel):
+    """Request body for sending event reminders."""
+    reminder_type: str  # "non_respondents" or "all"
+
+
+@router.post("/{event_id}/send-reminders")
+async def send_event_reminders(
+    event_id: UUID,
+    body: SendRemindersRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Send reminders for an event.
+
+    - **non_respondents**: only members who have not RSVP'd
+    - **all**: every active member in the organization
+    """
+    if body.reminder_type not in ("non_respondents", "all"):
+        raise HTTPException(
+            status_code=400,
+            detail="reminder_type must be 'non_respondents' or 'all'",
+        )
+
+    service = EventService(db)
+    try:
+        user_ids, error = await service.send_event_reminders(
+            event_id=event_id,
+            organization_id=current_user.organization_id,
+            reminder_type=body.reminder_type,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+
+    await log_audit_event(
+        db=db,
+        user_id=str(current_user.id),
+        action="event.send_reminders",
+        resource_type="event",
+        resource_id=str(event_id),
+        details={
+            "reminder_type": body.reminder_type,
+            "sent_count": len(user_ids),
+        },
+        organization_id=str(current_user.organization_id),
+    )
+
+    logger.info(
+        "User {} sent {} reminders ({}) for event {}",
+        current_user.id,
+        len(user_ids),
+        body.reminder_type,
+        event_id,
+    )
+
+    return {"message": "Reminders sent successfully", "sent_count": len(user_ids)}
+
+
+# ============================================
+# Event Notifications
+# ============================================
+
+
+@router.post(
+    "/{event_id}/notify",
+    response_model=EventNotificationResponse,
+)
+async def send_event_notification(
+    event_id: UUID,
+    body: EventNotificationRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Send a notification about an event.
+
+    Supports multiple notification types (announcement, reminder,
+    follow_up, missed_event, check_in_confirmation) and target
+    audiences (all, going, not_responded, checked_in, not_checked_in).
+    """
+    service = EventService(db)
+    try:
+        recipients_count, summary = await service.send_event_notification(
+            event_id=event_id,
+            organization_id=current_user.organization_id,
+            notification_type=body.notification_type.value,
+            target=body.target.value,
+            message=body.message,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+    await log_audit_event(
+        db=db,
+        user_id=str(current_user.id),
+        action="event.send_notification",
+        resource_type="event",
+        resource_id=str(event_id),
+        details={
+            "notification_type": body.notification_type.value,
+            "target": body.target.value,
+            "recipients_count": recipients_count,
+            "has_custom_message": body.message is not None,
+        },
+        organization_id=str(current_user.organization_id),
+    )
+
+    logger.info(
+        "User {} sent {} notification (target={}) for event {}: {} recipients",
+        current_user.id,
+        body.notification_type.value,
+        body.target.value,
+        event_id,
+        recipients_count,
+    )
+
+    return EventNotificationResponse(
+        message=summary,
+        recipients_count=recipients_count,
+    )
+
+
+# ============================================
+# CSV Import
+# ============================================
+
+
+class CSVImportRowError(BaseModel):
+    row: int
+    error: str
+
+
+class CSVImportResponse(BaseModel):
+    imported_count: int
+    errors: list[CSVImportRowError]
+
+
+@router.post(
+    "/import-csv",
+    response_model=CSVImportResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def import_events_csv(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Import events from a CSV file.
+
+    Expected columns: title, event_type, start_datetime, end_datetime,
+    location, description, is_mandatory.
+    """
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(
+            status_code=400,
+            detail="File must be a CSV (.csv) file",
+        )
+
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:  # 5 MB limit
+        raise HTTPException(
+            status_code=400,
+            detail="File size must be under 5 MB",
+        )
+
+    try:
+        rows = EventService.parse_csv_file(contents)
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to parse CSV: {safe_error_detail(e)}",
+        )
+
+    if not rows:
+        raise HTTPException(
+            status_code=400,
+            detail="CSV file is empty or contains only headers",
+        )
+
+    service = EventService(db)
+    try:
+        imported_count, errors = await service.import_events_from_csv(
+            rows=rows,
+            organization_id=current_user.organization_id,
+            created_by=current_user.id,
+        )
+    except Exception as e:
+        logger.error(f"CSV import failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=safe_error_detail(e),
+        )
+
+    await log_audit_event(
+        db=db,
+        user_id=current_user.id,
+        action="events.import_csv",
+        resource_type="event",
+        details={
+            "imported_count": imported_count,
+            "error_count": len(errors),
+            "filename": file.filename,
+        },
+        organization_id=current_user.organization_id,
+    )
+
+    return CSVImportResponse(
+        imported_count=imported_count,
+        errors=[CSVImportRowError(row=e["row"], error=e["error"]) for e in errors],
+    )

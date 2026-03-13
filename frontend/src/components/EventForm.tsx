@@ -6,7 +6,7 @@
  * check-in window configuration, and reminder settings.
  */
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
   FileText,
   Clock,
@@ -17,8 +17,14 @@ import {
   Bell,
   Repeat,
   AlertTriangle,
+  Upload,
+  Paperclip,
+  Bold,
+  Italic,
+  List,
+  Link,
 } from 'lucide-react';
-import type { EventCreate, RecurringEventCreate, RecurrencePattern, EventType, EventCategoryConfig, RSVPStatus } from '../types/event';
+import type { EventCreate, RecurringEventCreate, RecurrencePattern, EventType, EventCategoryConfig, RSVPStatus, EventAttachment } from '../types/event';
 import { eventService, locationsService } from '../services/api';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum, CheckInWindowType } from '../constants/enums';
 import type { Location } from '../services/api';
@@ -26,6 +32,7 @@ import { getEventTypeLabel } from '../utils/eventHelpers';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
+import { Collapsible } from './ux/Collapsible';
 
 export interface ConflictEvent {
   id: string;
@@ -121,6 +128,13 @@ const RECURRENCE_PATTERNS: { value: RecurrencePattern; label: string }[] = [
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+/** Format a file size in bytes to a human-readable string. */
+const formatAttachmentSize = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
 const ORDINALS = [
   { value: 1, label: '1st' },
   { value: 2, label: '2nd' },
@@ -187,6 +201,63 @@ export const EventForm: React.FC<EventFormProps> = ({
   const [recurrenceMonth, setRecurrenceMonth] = useState(initialRecurrence?.recurrence_month ?? 1);
   const [recurrenceExceptions, setRecurrenceExceptions] = useState<string[]>(initialRecurrence?.recurrence_exceptions || []);
   const [newExceptionDate, setNewExceptionDate] = useState('');
+
+  // Existing attachments from initialData (shown when editing)
+  const existingAttachments: EventAttachment[] = initialData?.attachments || [];
+
+  // Ref for the description textarea (used by formatting toolbar)
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+
+  /**
+   * Insert markdown syntax around the current selection in the description textarea,
+   * or insert a template at the cursor position.
+   */
+  const insertMarkdown = (syntax: 'bold' | 'italic' | 'list' | 'link') => {
+    const textarea = descriptionRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const value = textarea.value;
+    const selected = value.slice(start, end);
+
+    let insertion: string;
+    let cursorOffset: number;
+
+    switch (syntax) {
+      case 'bold':
+        insertion = `**${selected || 'bold text'}**`;
+        cursorOffset = selected ? insertion.length : 2;
+        break;
+      case 'italic':
+        insertion = `*${selected || 'italic text'}*`;
+        cursorOffset = selected ? insertion.length : 1;
+        break;
+      case 'list':
+        insertion = `\n- ${selected || 'list item'}`;
+        cursorOffset = selected ? insertion.length : 3;
+        break;
+      case 'link':
+        if (selected) {
+          insertion = `[${selected}](url)`;
+          cursorOffset = insertion.length - 4; // position cursor inside (url)
+        } else {
+          insertion = '[link text](url)';
+          cursorOffset = 1; // position cursor after [
+        }
+        break;
+    }
+
+    const newValue = value.slice(0, start) + insertion + value.slice(end);
+    update({ description: newValue });
+
+    // Restore focus and cursor position after React re-renders
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const pos = start + cursorOffset;
+      textarea.setSelectionRange(pos, pos);
+    });
+  };
 
   // Conflict detection: check if the selected time range overlaps with user's existing events
   const conflicts = useMemo(() => {
@@ -412,13 +483,56 @@ export const EventForm: React.FC<EventFormProps> = ({
           <label htmlFor="event-description" className={labelClass}>
             Description
           </label>
+          {/* Formatting toolbar */}
+          <div className="flex items-center gap-1 mb-1">
+            <button
+              type="button"
+              onClick={() => insertMarkdown('bold')}
+              className="p-1.5 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+              title="Bold (**text**)"
+              aria-label="Insert bold text"
+            >
+              <Bold className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => insertMarkdown('italic')}
+              className="p-1.5 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+              title="Italic (*text*)"
+              aria-label="Insert italic text"
+            >
+              <Italic className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => insertMarkdown('list')}
+              className="p-1.5 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+              title="Bullet list (- item)"
+              aria-label="Insert bullet list"
+            >
+              <List className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => insertMarkdown('link')}
+              className="p-1.5 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+              title="Link ([text](url))"
+              aria-label="Insert link"
+            >
+              <Link className="h-4 w-4" />
+            </button>
+            <span className="ml-2 text-xs text-theme-text-muted">
+              Supports **bold**, *italic*, - lists, [links](url)
+            </span>
+          </div>
           <textarea
+            ref={descriptionRef}
             id="event-description"
             rows={4}
             value={formData.description || ''}
             onChange={(e) => update({ description: e.target.value })}
             className={inputClass}
-            placeholder="What is this event about?"
+            placeholder="What is this event about? Use **bold**, *italic*, - lists, or [links](url)"
           />
         </div>
 
@@ -1140,6 +1254,64 @@ export const EventForm: React.FC<EventFormProps> = ({
           </div>
         )}
       </section>
+
+      <hr className="border-theme-surface-border" />
+
+      {/* === Attachments === */}
+      <Collapsible
+        title={
+          <span className="flex items-center space-x-2 text-xl font-bold text-theme-text-primary">
+            <Paperclip className="w-5 h-5 text-red-700" />
+            <span>Attachments</span>
+            {existingAttachments.length > 0 && (
+              <span className="ml-2 text-xs font-normal bg-theme-surface-secondary text-theme-text-muted px-2 py-0.5 rounded-full">
+                {existingAttachments.length}
+              </span>
+            )}
+          </span>
+        }
+        defaultOpen={existingAttachments.length > 0}
+      >
+        <div className="space-y-4">
+          {/* Existing attachments (editing mode) */}
+          {existingAttachments.length > 0 && (
+            <div className="space-y-2">
+              <label className={labelClass}>Current Attachments</label>
+              <ul className="divide-y divide-theme-surface-border border border-theme-surface-border rounded-lg overflow-hidden">
+                {existingAttachments.map((attachment) => (
+                  <li
+                    key={attachment.id}
+                    className="flex items-center justify-between px-4 py-3 bg-theme-surface hover:bg-theme-surface-hover transition-colors"
+                  >
+                    <div className="flex items-center space-x-3 min-w-0">
+                      <FileText className="w-4 h-4 text-theme-text-muted shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-theme-text-primary truncate">
+                          {attachment.file_name}
+                        </p>
+                        <p className="text-xs text-theme-text-muted">
+                          {formatAttachmentSize(attachment.file_size)} &middot; {attachment.file_type}
+                        </p>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Upload note */}
+          <div className="flex items-start space-x-3 bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+            <Upload className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+            <div className="text-sm text-blue-700 dark:text-blue-300">
+              <p className="font-medium">Upload attachments after creating the event.</p>
+              <p className="mt-1 text-blue-600 dark:text-blue-400">
+                Once saved, you can upload files from the event detail page.
+              </p>
+            </div>
+          </div>
+        </div>
+      </Collapsible>
 
       {/* === Actions === */}
       <div className="flex items-center justify-between gap-3 pt-6 border-t border-theme-surface-border">

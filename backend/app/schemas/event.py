@@ -8,6 +8,8 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
+from enum import Enum
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # ============================================================
@@ -298,6 +300,8 @@ class RSVPBase(BaseModel):
     status: str = Field(..., description="RSVP status: going, not_going, maybe")
     guest_count: int = Field(default=0, ge=0, le=10)
     notes: Optional[str] = Field(None, max_length=500)
+    dietary_restrictions: Optional[str] = Field(None, max_length=500)
+    accessibility_needs: Optional[str] = Field(None, max_length=500)
 
 
 class RSVPCreate(RSVPBase):
@@ -315,6 +319,9 @@ class RSVPResponse(RSVPBase):
     checked_in: bool = False
     checked_in_at: Optional[datetime] = None
     checked_out_at: Optional[datetime] = None
+
+    dietary_restrictions: Optional[str] = None
+    accessibility_needs: Optional[str] = None
 
     # User details (populated by service)
     user_name: Optional[str] = None
@@ -559,6 +566,74 @@ class EventTemplateResponse(BaseModel):
 # ============================================================
 
 
+class RSVPHistoryResponse(BaseModel):
+    """Schema for RSVP history response"""
+
+    id: UUID
+    rsvp_id: UUID
+    event_id: UUID
+    user_id: UUID
+    old_status: Optional[str] = None
+    new_status: str
+    changed_at: datetime
+    changed_by: Optional[UUID] = None
+
+    # Populated by service
+    user_name: Optional[str] = None
+    changer_name: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================================
+# Event Notifications
+# ============================================================
+
+
+class EventNotificationType(str, Enum):
+    """Types of event notifications."""
+
+    ANNOUNCEMENT = "announcement"
+    REMINDER = "reminder"
+    FOLLOW_UP = "follow_up"
+    MISSED_EVENT = "missed_event"
+    CHECK_IN_CONFIRMATION = "check_in_confirmation"
+
+
+class EventNotificationTarget(str, Enum):
+    """Target audience for event notifications."""
+
+    ALL = "all"
+    GOING = "going"
+    NOT_RESPONDED = "not_responded"
+    CHECKED_IN = "checked_in"
+    NOT_CHECKED_IN = "not_checked_in"
+
+
+class EventNotificationRequest(BaseModel):
+    """Schema for sending an event notification."""
+
+    notification_type: EventNotificationType = Field(
+        ..., description="Type of notification to send"
+    )
+    message: Optional[str] = Field(
+        None,
+        max_length=2000,
+        description="Optional custom message to include in the notification",
+    )
+    target: EventNotificationTarget = Field(
+        default=EventNotificationTarget.ALL,
+        description="Target audience for the notification",
+    )
+
+
+class EventNotificationResponse(BaseModel):
+    """Response after sending an event notification."""
+
+    message: str
+    recipients_count: int
+
+
 class RecurringEventCreate(BaseModel):
     """Schema for creating a recurring event series"""
 
@@ -647,3 +722,48 @@ class RecurringEventCreate(BaseModel):
             if self.recurrence_month is None:
                 raise ValueError("recurrence_month is required for annually_weekday")
         return self
+
+
+# ============================================================
+# Analytics Schemas (#44, #46, #47)
+# ============================================================
+
+
+class EventTypeDistribution(BaseModel):
+    """Count of events per event type."""
+
+    event_type: str
+    count: int
+
+
+class MonthlyEventCount(BaseModel):
+    """Number of events per month (for trend chart)."""
+
+    month: str  # "YYYY-MM"
+    count: int
+
+
+class TopEventByAttendance(BaseModel):
+    """An event ranked by check-in attendance."""
+
+    event_id: str
+    title: str
+    event_type: str
+    start_datetime: datetime
+    going_count: int
+    checked_in_count: int
+    attendance_rate: float  # checked_in / going as 0-1
+
+
+class AnalyticsSummary(BaseModel):
+    """Aggregated analytics for the attendance trends dashboard."""
+
+    total_events: int
+    total_rsvps: int
+    total_checked_in: int
+    avg_attendance_rate: float  # 0-1
+    check_in_rate: float  # 0-1
+    avg_checkin_minutes_before: Optional[float] = None
+    event_type_distribution: List[EventTypeDistribution]
+    monthly_event_counts: List[MonthlyEventCount]
+    top_events: List[TopEventByAttendance]

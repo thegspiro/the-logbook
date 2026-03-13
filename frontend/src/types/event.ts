@@ -160,7 +160,9 @@ export interface RSVP {
   user_id: string;
   status: RSVPStatus;
   guest_count: number;
-  notes?: string | undefined;
+  notes?: string;
+  dietary_restrictions?: string;
+  accessibility_needs?: string;
   responded_at: string;
   updated_at: string;
   checked_in: boolean;
@@ -178,6 +180,8 @@ export interface RSVPCreate {
   status: RSVPStatus;
   guest_count?: number | undefined;
   notes?: string | undefined;
+  dietary_restrictions?: string | undefined;
+  accessibility_needs?: string | undefined;
 }
 
 export interface CheckInRequest {
@@ -245,6 +249,19 @@ export interface CheckInMonitoringStats {
   last_check_in_at: string | null;
 }
 
+export interface RSVPHistory {
+  id: string;
+  rsvp_id: string;
+  event_id: string;
+  user_id: string;
+  old_status: string | null;
+  new_status: string;
+  changed_at: string;
+  changed_by: string | null;
+  user_name: string | null;
+  changer_name: string | null;
+}
+
 // Event Templates
 export type RecurrencePattern =
   | 'daily'
@@ -287,26 +304,26 @@ export interface EventTemplate {
 
 export interface EventTemplateCreate {
   name: string;
-  description?: string;
-  event_type?: EventType;
-  default_title?: string;
-  default_description?: string;
-  default_location_id?: string;
-  default_location?: string;
-  default_location_details?: string;
-  default_duration_minutes?: number;
-  requires_rsvp?: boolean;
-  max_attendees?: number;
-  is_mandatory?: boolean;
+  description?: string | undefined;
+  event_type?: EventType | undefined;
+  default_title?: string | undefined;
+  default_description?: string | undefined;
+  default_location_id?: string | undefined;
+  default_location?: string | undefined;
+  default_location_details?: string | undefined;
+  default_duration_minutes?: number | undefined;
+  requires_rsvp?: boolean | undefined;
+  max_attendees?: number | undefined;
+  is_mandatory?: boolean | undefined;
 
-  allow_guests?: boolean;
-  check_in_window_type?: 'flexible' | 'strict' | 'window';
-  check_in_minutes_before?: number;
-  check_in_minutes_after?: number;
-  require_checkout?: boolean;
-  send_reminders?: boolean;
-  reminder_schedule?: number[];
-  custom_fields_template?: Record<string, unknown>;
+  allow_guests?: boolean | undefined;
+  check_in_window_type?: 'flexible' | 'strict' | 'window' | undefined;
+  check_in_minutes_before?: number | undefined;
+  check_in_minutes_after?: number | undefined;
+  require_checkout?: boolean | undefined;
+  send_reminders?: boolean | undefined;
+  reminder_schedule?: number[] | undefined;
+  custom_fields_template?: Record<string, unknown> | undefined;
 }
 
 export interface RecurringEventCreate {

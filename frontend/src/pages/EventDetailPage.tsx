@@ -9,7 +9,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { eventService, meetingsService } from '../services/api';
-import type { Event, EventListItem, RSVP, RSVPStatus, EventStats } from '../types/event';
+import type { Event, EventListItem, RSVP, RSVPStatus, EventStats, RSVPHistory } from '../types/event';
 import { useAuthStore } from '../stores/authStore';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { EventTypeBadge } from '../components/EventTypeBadge';
@@ -18,7 +18,13 @@ import { getRSVPStatusLabel, getRSVPStatusColor, downloadICSFile } from '../util
 import { formatDateTime, formatShortDateTime, formatTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum } from '../constants/enums';
-import { Repeat, Paperclip, Download, CalendarPlus, Clock, Printer, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Bell, Repeat, CalendarPlus, Clock, ChevronDown, MapPin } from 'lucide-react';
+import { renderSimpleMarkdown } from '../utils/simpleMarkdown';
+import { EventAttachmentsList } from '../components/event-detail/EventAttachmentsList';
+import { EventRecurrenceInfo } from '../components/event-detail/EventRecurrenceInfo';
+import { EventNotificationPanel } from '../components/event-detail/EventNotificationPanel';
+import { EventRSVPSection } from '../components/event-detail/EventRSVPSection';
+import type { NotificationType, NotificationTarget } from '../components/event-detail/EventNotificationPanel';
 
 export const EventDetailPage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
@@ -35,6 +41,8 @@ export const EventDetailPage: React.FC = () => {
   const [rsvpStatus, setRsvpStatus] = useState<RSVPStatus>(RSVPStatusEnum.GOING);
   const [guestCount, setGuestCount] = useState(0);
   const [rsvpNotes, setRsvpNotes] = useState('');
+  const [rsvpDietaryRestrictions, setRsvpDietaryRestrictions] = useState('');
+  const [rsvpAccessibilityNeeds, setRsvpAccessibilityNeeds] = useState('');
   const [cancelReason, setCancelReason] = useState('');
   const [sendCancelNotifications, setSendCancelNotifications] = useState(false);
   const [showCancelSeriesModal, setShowCancelSeriesModal] = useState(false);
@@ -54,21 +62,36 @@ export const EventDetailPage: React.FC = () => {
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [rsvpApplyToSeries, setRsvpApplyToSeries] = useState(false);
   const [seriesEvents, setSeriesEvents] = useState<EventListItem[]>([]);
+  const [showAllOccurrences, setShowAllOccurrences] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [templateDescription, setTemplateDescription] = useState('');
   const [bulkAddLoading, setBulkAddLoading] = useState(false);
+  const [rsvpHistory, setRsvpHistory] = useState<RSVPHistory[]>([]);
+  const [showReminderMenu, setShowReminderMenu] = useState(false);
+  const [sendingReminders, setSendingReminders] = useState(false);
+  // Notification panel state
+  const [notificationType, setNotificationType] = useState<NotificationType>('announcement');
+  const [notificationTarget, setNotificationTarget] = useState<NotificationTarget>('all');
+  const [notificationMessage, setNotificationMessage] = useState('');
+  const [sendingNotification, setSendingNotification] = useState(false);
+  const [showNotifyConfirm, setShowNotifyConfirm] = useState(false);
+  const [lastNotification, setLastNotification] = useState<{ type: string; target: string; recipients: number; sentAt: string } | null>(null);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
+  const reminderMenuRef = useRef<HTMLDivElement>(null);
 
   const { checkPermission } = useAuthStore();
   const tz = useTimezone();
   const canManage = checkPermission('events.manage');
 
-  // Close actions menu on click outside
+  // Close actions menu and reminder menu on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target as Node)) {
         setShowActionsMenu(false);
+      }
+      if (reminderMenuRef.current && !reminderMenuRef.current.contains(e.target as Node)) {
+        setShowReminderMenu(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -81,6 +104,7 @@ export const EventDetailPage: React.FC = () => {
       if (canManage) {
         void fetchRSVPs();
         void fetchStats();
+        void fetchRSVPHistory();
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -121,6 +145,17 @@ export const EventDetailPage: React.FC = () => {
       setStats(data);
     } catch {
       toast.error('Failed to load event statistics');
+    }
+  };
+
+  const fetchRSVPHistory = async () => {
+    if (!eventId) return;
+
+    try {
+      const data = await eventService.getRSVPHistory(eventId, 50);
+      setRsvpHistory(data);
+    } catch {
+      // Silently fail — history is supplementary info
     }
   };
 
@@ -239,6 +274,8 @@ export const EventDetailPage: React.FC = () => {
         status: rsvpStatus,
         guest_count: guestCount,
         notes: rsvpNotes || undefined,
+        dietary_restrictions: rsvpDietaryRestrictions || undefined,
+        accessibility_needs: rsvpAccessibilityNeeds || undefined,
       };
 
       if (rsvpApplyToSeries && event && (event.is_recurring || event.recurrence_parent_id)) {
@@ -253,6 +290,8 @@ export const EventDetailPage: React.FC = () => {
       setRsvpStatus(RSVPStatusEnum.GOING);
       setGuestCount(0);
       setRsvpNotes('');
+      setRsvpDietaryRestrictions('');
+      setRsvpAccessibilityNeeds('');
       setRsvpApplyToSeries(false);
       await fetchEvent();
       if (canManage) {
@@ -347,6 +386,49 @@ export const EventDetailPage: React.FC = () => {
       toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to duplicate event');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleSendReminders = async (reminderType: 'non_respondents' | 'all') => {
+    if (!eventId) return;
+
+    try {
+      setSendingReminders(true);
+      setShowReminderMenu(false);
+      const result = await eventService.sendReminders(eventId, reminderType);
+      toast.success(`${result.sent_count} reminder(s) queued`);
+    } catch (err) {
+      const axiosErr = err as AxiosError<{ detail?: string }>;
+      toast.error(axiosErr.response?.data?.detail || 'Failed to send reminders');
+    } finally {
+      setSendingReminders(false);
+    }
+  };
+
+  const handleSendNotification = async () => {
+    if (!eventId) return;
+
+    try {
+      setSendingNotification(true);
+      setShowNotifyConfirm(false);
+      const result = await eventService.sendEventNotification(eventId, {
+        notification_type: notificationType,
+        message: notificationMessage.trim() || undefined,
+        target: notificationTarget,
+      });
+      toast.success(result.message);
+      setLastNotification({
+        type: notificationType,
+        target: notificationTarget,
+        recipients: result.recipients_count,
+        sentAt: new Date().toISOString(),
+      });
+      setNotificationMessage('');
+    } catch (err) {
+      const axiosErr = err as AxiosError<{ detail?: string }>;
+      toast.error(axiosErr.response?.data?.detail || 'Failed to send notification');
+    } finally {
+      setSendingNotification(false);
     }
   };
 
@@ -606,42 +688,17 @@ export const EventDetailPage: React.FC = () => {
             </div>
             {/* Series navigation for recurring events */}
             {(event.is_recurring || event.recurrence_parent_id) && seriesEvents.length > 1 && (
-              <div className="mt-2 flex items-center gap-3 text-sm">
-                <span className="text-theme-text-muted">
-                  Occurrence {seriesPosition} of {seriesTotal}
-                </span>
-                <div className="flex items-center gap-1">
-                  {prevOccurrence ? (
-                    <Link
-                      to={`/events/${prevOccurrence.id}`}
-                      className="inline-flex items-center gap-0.5 text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                      Previous
-                    </Link>
-                  ) : (
-                    <span className="inline-flex items-center gap-0.5 text-theme-text-muted cursor-default">
-                      <ChevronLeft className="h-4 w-4" />
-                      Previous
-                    </span>
-                  )}
-                  <span className="text-theme-text-muted mx-1">|</span>
-                  {nextOccurrence ? (
-                    <Link
-                      to={`/events/${nextOccurrence.id}`}
-                      className="inline-flex items-center gap-0.5 text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
-                    >
-                      Next
-                      <ChevronRight className="h-4 w-4" />
-                    </Link>
-                  ) : (
-                    <span className="inline-flex items-center gap-0.5 text-theme-text-muted cursor-default">
-                      Next
-                      <ChevronRight className="h-4 w-4" />
-                    </span>
-                  )}
-                </div>
-              </div>
+              <EventRecurrenceInfo
+                eventId={eventId || ''}
+                seriesEvents={seriesEvents}
+                seriesPosition={seriesPosition}
+                seriesTotal={seriesTotal}
+                prevOccurrence={prevOccurrence}
+                nextOccurrence={nextOccurrence}
+                showAllOccurrences={showAllOccurrences}
+                onToggleAllOccurrences={() => setShowAllOccurrences((prev) => !prev)}
+                timezone={tz}
+              />
             )}
           </div>
 
@@ -721,6 +778,39 @@ export const EventDetailPage: React.FC = () => {
                     </svg>
                     Check In
                   </button>
+
+                  {/* Send Reminders dropdown */}
+                  {!event.is_cancelled && (
+                    <div className="relative" ref={reminderMenuRef}>
+                      <button
+                        onClick={() => setShowReminderMenu(!showReminderMenu)}
+                        disabled={sendingReminders}
+                        className="inline-flex items-center px-4 py-2 border border-theme-surface-border rounded-md shadow-xs text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-hover disabled:opacity-50"
+                      >
+                        <Bell className="mr-2 h-4 w-4" />
+                        {sendingReminders ? 'Sending...' : 'Send Reminders'}
+                        <ChevronDown className="ml-1 h-4 w-4" />
+                      </button>
+                      {showReminderMenu && (
+                        <div className="absolute right-0 mt-2 w-56 rounded-lg bg-theme-surface border border-theme-surface-border shadow-lg z-20">
+                          <div className="py-1">
+                            <button
+                              onClick={() => void handleSendReminders('non_respondents')}
+                              className="w-full text-left px-4 py-2.5 text-sm text-theme-text-secondary hover:bg-theme-surface-hover"
+                            >
+                              Non-respondents only
+                            </button>
+                            <button
+                              onClick={() => void handleSendReminders('all')}
+                              className="w-full text-left px-4 py-2.5 text-sm text-theme-text-secondary hover:bg-theme-surface-hover"
+                            >
+                              All members
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* "More" dropdown for secondary actions */}
                   <div className="relative" ref={actionsMenuRef}>
@@ -841,7 +931,10 @@ export const EventDetailPage: React.FC = () => {
             {event.description && (
               <div className="mb-4">
                 <h3 className="text-sm font-medium text-theme-text-secondary mb-1">Description</h3>
-                <p className="text-theme-text-secondary whitespace-pre-wrap">{event.description}</p>
+                <div
+                  className="text-theme-text-secondary prose-sm"
+                  dangerouslySetInnerHTML={{ __html: renderSimpleMarkdown(event.description) }}
+                />
               </div>
             )}
 
@@ -873,134 +966,135 @@ export const EventDetailPage: React.FC = () => {
                     {event.location_details && (
                       <p className="text-sm text-theme-text-muted mt-1">{event.location_details}</p>
                     )}
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location_name || event.location || '')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-red-600 hover:text-red-700 dark:text-red-400 inline-flex items-center gap-1 mt-1"
+                    >
+                      <MapPin className="h-3.5 w-3.5" />
+                      Get Directions
+                    </a>
                   </div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Training Session Details */}
-          {event.event_type === EventTypeEnum.TRAINING && event.custom_fields && (
+          {/* Custom Fields / Training Session Details */}
+          {event.custom_fields && Object.keys(event.custom_fields).length > 0 && (
             <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-sm p-6 border-l-4 border-purple-600">
               <div className="flex items-center mb-4">
                 <svg className="h-6 w-6 text-purple-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                 </svg>
-                <h2 className="text-lg font-medium text-theme-text-primary">Training Session Details</h2>
+                <h2 className="text-lg font-medium text-theme-text-primary">
+                  {event.event_type === EventTypeEnum.TRAINING ? 'Training Session Details' : 'Event Details'}
+                </h2>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {event.custom_fields.course_name && (
-                  <div>
-                    <p className="text-sm font-medium text-theme-text-secondary">Course Name</p>
-                    <p className="text-sm text-theme-text-primary">{event.custom_fields.course_name}</p>
-                  </div>
+                {event.event_type === EventTypeEnum.TRAINING && (
+                  <>
+                    {event.custom_fields.course_name && (
+                      <div>
+                        <p className="text-sm font-medium text-theme-text-secondary">Course Name</p>
+                        <p className="text-sm text-theme-text-primary">{event.custom_fields.course_name}</p>
+                      </div>
+                    )}
+
+                    {event.custom_fields.course_code && (
+                      <div>
+                        <p className="text-sm font-medium text-theme-text-secondary">Course Code</p>
+                        <p className="text-sm text-theme-text-primary">{event.custom_fields.course_code}</p>
+                      </div>
+                    )}
+
+                    {event.custom_fields.credit_hours && (
+                      <div>
+                        <p className="text-sm font-medium text-theme-text-secondary">Credit Hours</p>
+                        <p className="text-sm text-theme-text-primary">{event.custom_fields.credit_hours} hours</p>
+                      </div>
+                    )}
+
+                    {event.custom_fields.training_type && (
+                      <div>
+                        <p className="text-sm font-medium text-theme-text-secondary">Training Type</p>
+                        <p className="text-sm text-theme-text-primary capitalize">
+                          {typeof event.custom_fields.training_type === 'string'
+                            ? event.custom_fields.training_type.replace('_', ' ')
+                            : event.custom_fields.training_type}
+                        </p>
+                      </div>
+                    )}
+
+                    {event.custom_fields.instructor && (
+                      <div>
+                        <p className="text-sm font-medium text-theme-text-secondary">Instructor</p>
+                        <p className="text-sm text-theme-text-primary">{event.custom_fields.instructor}</p>
+                      </div>
+                    )}
+
+                    {event.custom_fields.issuing_agency && (
+                      <div>
+                        <p className="text-sm font-medium text-theme-text-secondary">Issuing Agency</p>
+                        <p className="text-sm text-theme-text-primary">{event.custom_fields.issuing_agency}</p>
+                      </div>
+                    )}
+
+                    {event.custom_fields.expiration_months && (
+                      <div>
+                        <p className="text-sm font-medium text-theme-text-secondary">Certification Valid For</p>
+                        <p className="text-sm text-theme-text-primary">{event.custom_fields.expiration_months} months</p>
+                      </div>
+                    )}
+
+                    {event.custom_fields.issues_certification && (
+                      <div className="col-span-2">
+                        <div className="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg">
+                          <svg className="h-5 w-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span className="text-sm font-medium text-green-800">This training issues a certification upon completion</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {event.custom_fields.auto_create_records && (
+                      <div className="col-span-2">
+                        <div className="flex items-center p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <svg className="h-5 w-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          <span className="text-sm font-medium text-blue-800">Training records are automatically created when members check in</span>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
 
-                {event.custom_fields.course_code && (
-                  <div>
-                    <p className="text-sm font-medium text-theme-text-secondary">Course Code</p>
-                    <p className="text-sm text-theme-text-primary">{event.custom_fields.course_code}</p>
+                {/* Generic custom fields (excludes training-specific keys) */}
+                {Object.entries(event.custom_fields).filter(([key]) =>
+                  !['course_name', 'course_code', 'credit_hours', 'training_type', 'instructor',
+                    'issuing_agency', 'certification_name', 'certification_expiry_months',
+                    'issues_certification', 'auto_create_records', 'expiration_months'].includes(key)
+                ).map(([key, value]) => (
+                  <div key={key}>
+                    <p className="text-sm font-medium text-theme-text-secondary">{key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</p>
+                    <p className="text-sm text-theme-text-primary">{String(value)}</p>
                   </div>
-                )}
-
-                {event.custom_fields.credit_hours && (
-                  <div>
-                    <p className="text-sm font-medium text-theme-text-secondary">Credit Hours</p>
-                    <p className="text-sm text-theme-text-primary">{event.custom_fields.credit_hours} hours</p>
-                  </div>
-                )}
-
-                {event.custom_fields.training_type && (
-                  <div>
-                    <p className="text-sm font-medium text-theme-text-secondary">Training Type</p>
-                    <p className="text-sm text-theme-text-primary capitalize">
-                      {typeof event.custom_fields.training_type === 'string'
-                        ? event.custom_fields.training_type.replace('_', ' ')
-                        : event.custom_fields.training_type}
-                    </p>
-                  </div>
-                )}
-
-                {event.custom_fields.instructor && (
-                  <div>
-                    <p className="text-sm font-medium text-theme-text-secondary">Instructor</p>
-                    <p className="text-sm text-theme-text-primary">{event.custom_fields.instructor}</p>
-                  </div>
-                )}
-
-                {event.custom_fields.issuing_agency && (
-                  <div>
-                    <p className="text-sm font-medium text-theme-text-secondary">Issuing Agency</p>
-                    <p className="text-sm text-theme-text-primary">{event.custom_fields.issuing_agency}</p>
-                  </div>
-                )}
-
-                {event.custom_fields.expiration_months && (
-                  <div>
-                    <p className="text-sm font-medium text-theme-text-secondary">Certification Valid For</p>
-                    <p className="text-sm text-theme-text-primary">{event.custom_fields.expiration_months} months</p>
-                  </div>
-                )}
-
-                {event.custom_fields.issues_certification && (
-                  <div className="col-span-2">
-                    <div className="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <svg className="h-5 w-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span className="text-sm font-medium text-green-800">This training issues a certification upon completion</span>
-                    </div>
-                  </div>
-                )}
-
-                {event.custom_fields.auto_create_records && (
-                  <div className="col-span-2">
-                    <div className="flex items-center p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                      <svg className="h-5 w-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                      <span className="text-sm font-medium text-blue-800">Training records are automatically created when members check in</span>
-                    </div>
-                  </div>
-                )}
+                ))}
               </div>
             </div>
           )}
 
           {/* Attachments */}
           {event.attachments && event.attachments.length > 0 && (
-            <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-sm p-6">
-              <h2 className="text-lg font-medium text-theme-text-primary mb-4 flex items-center gap-2">
-                <Paperclip className="h-5 w-5" />
-                Attachments ({event.attachments.length})
-              </h2>
-              <div className="space-y-2">
-                {event.attachments.map((attachment) => (
-                  <div key={attachment.id} className="flex items-center justify-between p-3 bg-theme-surface-secondary rounded-lg">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <Paperclip className="h-4 w-4 text-theme-text-muted shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-theme-text-primary truncate">{attachment.file_name}</p>
-                        <p className="text-xs text-theme-text-muted">
-                          {attachment.file_size < 1024 * 1024
-                            ? `${Math.round(attachment.file_size / 1024)} KB`
-                            : `${(attachment.file_size / (1024 * 1024)).toFixed(1)} MB`}
-                        </p>
-                      </div>
-                    </div>
-                    <a
-                      href={eventService.getAttachmentDownloadUrl(event.id, attachment.id)}
-                      className="inline-flex items-center gap-1 text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                      download
-                    >
-                      <Download className="h-4 w-4" />
-                      Download
-                    </a>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <EventAttachmentsList
+              attachments={event.attachments}
+              eventId={event.id}
+              getAttachmentDownloadUrl={(eid, aid) => eventService.getAttachmentDownloadUrl(eid, aid)}
+            />
           )}
 
           {/* User's RSVP Status */}
@@ -1032,121 +1126,37 @@ export const EventDetailPage: React.FC = () => {
             </div>
           )}
 
-          {/* RSVPs List (for managers) */}
-          {canManage && rsvps.length > 0 && (
-            <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-medium text-theme-text-primary">Attendance</h2>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={printRoster}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-theme-text-secondary hover:text-theme-text-primary bg-theme-surface-secondary hover:bg-theme-surface rounded-md transition-colors"
-                  >
-                    <Printer className="h-4 w-4" />
-                    Print Roster
-                  </button>
-                  <button
-                    onClick={exportAttendanceCSV}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-theme-text-secondary hover:text-theme-text-primary bg-theme-surface-secondary hover:bg-theme-surface rounded-md transition-colors"
-                  >
-                    <Download className="h-4 w-4" />
-                    Export CSV
-                  </button>
-                </div>
-              </div>
-              <div className="space-y-3">
-                {rsvps.map((rsvp) => {
-                  const effectiveCheckIn = rsvp.override_check_in_at || rsvp.checked_in_at;
-                  const effectiveCheckOut = rsvp.override_check_out_at || rsvp.checked_out_at;
-                  const effectiveDuration = rsvp.override_duration_minutes ?? rsvp.attendance_duration_minutes;
-                  const isRemoving = removeConfirmUserId === rsvp.user_id;
-
-                  return (
-                    <div key={rsvp.id} className="p-3 bg-theme-surface-secondary rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-theme-text-primary">{rsvp.user_name}</p>
-                          <p className="text-xs text-theme-text-muted">{rsvp.user_email}</p>
-                          {rsvp.guest_count > 0 && (
-                            <p className="text-xs text-theme-text-muted mt-0.5">+{rsvp.guest_count} guest{rsvp.guest_count > 1 ? 's' : ''}</p>
-                          )}
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRSVPStatusColor(rsvp.status)}`}>
-                            {getRSVPStatusLabel(rsvp.status)}
-                          </span>
-                          {rsvp.status === RSVPStatusEnum.GOING && !rsvp.checked_in && (
-                            <button
-                              onClick={() => { void handleCheckIn(rsvp.user_id); }}
-                              className="text-xs text-red-400 hover:text-red-300"
-                            >
-                              Check In
-                            </button>
-                          )}
-                          {rsvp.checked_in && (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400">
-                              Checked In
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Attendance times */}
-                      {rsvp.checked_in && (
-                        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-theme-text-muted">
-                          {effectiveCheckIn && (
-                            <span>In: {formatTime(effectiveCheckIn, tz)}</span>
-                          )}
-                          {effectiveCheckOut && (
-                            <span>Out: {formatTime(effectiveCheckOut, tz)}</span>
-                          )}
-                          {effectiveDuration != null && (
-                            <span>Duration: {effectiveDuration} min</span>
-                          )}
-                          {rsvp.override_check_in_at && (
-                            <span className="text-amber-500 text-[10px]">(times overridden)</span>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Action buttons */}
-                      <div className="mt-2 flex items-center gap-3">
-                        <button
-                          onClick={() => openOverrideModal(rsvp)}
-                          className="text-xs text-blue-400 hover:text-blue-300"
-                        >
-                          Edit Times
-                        </button>
-                        {!isRemoving ? (
-                          <button
-                            onClick={() => setRemoveConfirmUserId(rsvp.user_id)}
-                            className="text-xs text-red-400 hover:text-red-300"
-                          >
-                            Remove
-                          </button>
-                        ) : (
-                          <span className="flex items-center gap-2">
-                            <span className="text-xs text-theme-text-muted">Remove?</span>
-                            <button
-                              onClick={() => { void handleRemoveAttendee(rsvp.user_id); }}
-                              className="text-xs font-medium text-red-400 hover:text-red-300"
-                            >
-                              Yes
-                            </button>
-                            <button
-                              onClick={() => setRemoveConfirmUserId(null)}
-                              className="text-xs text-theme-text-muted hover:text-theme-text-secondary"
-                            >
-                              No
-                            </button>
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+          {/* RSVPs List & RSVP Activity (for managers) */}
+          {canManage && (
+            <EventRSVPSection
+              rsvps={rsvps}
+              rsvpHistory={rsvpHistory}
+              timezone={tz}
+              removeConfirmUserId={removeConfirmUserId}
+              onSetRemoveConfirmUserId={setRemoveConfirmUserId}
+              onCheckIn={(userId) => { void handleCheckIn(userId); }}
+              onOpenOverrideModal={openOverrideModal}
+              onRemoveAttendee={(userId) => { void handleRemoveAttendee(userId); }}
+              onPrintRoster={printRoster}
+              onExportCSV={exportAttendanceCSV}
+            />
+          )}
+          {/* Notifications Panel (for managers) */}
+          {canManage && !event.is_cancelled && (
+            <EventNotificationPanel
+              notificationType={notificationType}
+              onNotificationTypeChange={setNotificationType}
+              notificationTarget={notificationTarget}
+              onNotificationTargetChange={setNotificationTarget}
+              notificationMessage={notificationMessage}
+              onNotificationMessageChange={setNotificationMessage}
+              sendingNotification={sendingNotification}
+              showNotifyConfirm={showNotifyConfirm}
+              onShowNotifyConfirm={setShowNotifyConfirm}
+              onSendNotification={() => void handleSendNotification()}
+              lastNotification={lastNotification}
+              timezone={tz}
+            />
           )}
         </div>
 
@@ -1352,7 +1362,37 @@ export const EventDetailPage: React.FC = () => {
                         value={rsvpNotes}
                         onChange={(e) => setRsvpNotes(e.target.value)}
                         className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
-                        placeholder="Dietary restrictions, special accommodations, etc."
+                        placeholder="Any special requests or comments"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="dietary_restrictions" className="block text-sm font-medium text-theme-text-secondary">
+                        Dietary Restrictions (optional)
+                      </label>
+                      <input
+                        type="text"
+                        id="dietary_restrictions"
+                        value={rsvpDietaryRestrictions}
+                        onChange={(e) => setRsvpDietaryRestrictions(e.target.value)}
+                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
+                        placeholder="e.g., Vegetarian, Nut allergy"
+                        maxLength={500}
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="accessibility_needs" className="block text-sm font-medium text-theme-text-secondary">
+                        Accessibility Needs (optional)
+                      </label>
+                      <input
+                        type="text"
+                        id="accessibility_needs"
+                        value={rsvpAccessibilityNeeds}
+                        onChange={(e) => setRsvpAccessibilityNeeds(e.target.value)}
+                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
+                        placeholder="e.g., Wheelchair access"
+                        maxLength={500}
                       />
                     </div>
 

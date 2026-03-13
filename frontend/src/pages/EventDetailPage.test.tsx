@@ -695,8 +695,8 @@ describe('EventDetailPage', () => {
 
       await waitFor(() => {
         expect(screen.getByText('RSVP Required')).toBeInTheDocument();
-        expect(screen.getByText('Max Attendees')).toBeInTheDocument();
-        expect(screen.getByText('50')).toBeInTheDocument();
+        expect(screen.getByText('Capacity')).toBeInTheDocument();
+        expect(screen.getByText('0 / 50')).toBeInTheDocument();
       });
     });
 

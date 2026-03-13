@@ -6,6 +6,16 @@ import api from './apiClient';
 import type { CheckInMonitoringStats, CheckInRequest, Event, EventCancel, EventCreate, EventListItem, EventStats, EventUpdate, RSVP, RSVPCreate } from '../types/event';
 import type { DocumentFolder } from './formsServices';
 
+export interface CSVImportRowError {
+  row: number;
+  error: string;
+}
+
+export interface CSVImportResponse {
+  imported_count: number;
+  errors: CSVImportRowError[];
+}
+
 export const eventService = {
   /**
    * Get all events with optional filtering
@@ -332,6 +342,67 @@ export const eventService = {
   },
   async removeExternalAttendee(eventId: string, attendeeId: string): Promise<void> {
     await api.delete(`/events/${eventId}/external-attendees/${attendeeId}`);
+  },
+
+  /**
+   * Send reminders for an event (non-respondents or all members)
+   */
+  async sendReminders(
+    eventId: string,
+    reminderType: 'non_respondents' | 'all',
+  ): Promise<{ message: string; sent_count: number }> {
+    const response = await api.post<{ message: string; sent_count: number }>(
+      `/events/${eventId}/send-reminders`,
+      { reminder_type: reminderType },
+    );
+    return response.data;
+  },
+
+  /**
+   * Send a notification about an event (announcement, reminder, follow-up, etc.)
+   */
+  async sendEventNotification(
+    eventId: string,
+    data: {
+      notification_type: 'announcement' | 'reminder' | 'follow_up' | 'missed_event' | 'check_in_confirmation';
+      message?: string | undefined;
+      target?: 'all' | 'going' | 'not_responded' | 'checked_in' | 'not_checked_in' | undefined;
+    },
+  ): Promise<{ message: string; recipients_count: number }> {
+    const response = await api.post<{ message: string; recipients_count: number }>(
+      `/events/${eventId}/notify`,
+      data,
+    );
+    return response.data;
+  },
+
+  /**
+   * Get RSVP change history for an event (admin only)
+   */
+  async getRSVPHistory(eventId: string, limit?: number): Promise<import('../types/event').RSVPHistory[]> {
+    const params = limit ? { limit } : undefined;
+    const response = await api.get<import('../types/event').RSVPHistory[]>(`/events/${eventId}/rsvp-history`, { params });
+    return response.data;
+  },
+
+  /**
+   * Import events from a CSV file
+   */
+  async importEventsCSV(file: File): Promise<CSVImportResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post<CSVImportResponse>('/events/import-csv', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  /**
+   * Get analytics summary for attendance trends dashboard (#44, #46, #47)
+   */
+  async getAnalyticsSummary(params?: Record<string, string>): Promise<Record<string, unknown>> {
+    const response = await api.get<Record<string, unknown>>('/events/analytics/summary', { params });
+    return response.data;
   },
 };
 
