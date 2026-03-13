@@ -290,6 +290,7 @@ export const EventForm: React.FC<EventFormProps> = ({
     if (!submitData.location) submitData.location = undefined;
     if (!submitData.location_details) submitData.location_details = undefined;
     if (!submitData.rsvp_deadline) submitData.rsvp_deadline = undefined;
+    if (!submitData.custom_category) submitData.custom_category = undefined;
 
     // Convert local datetime-local values to UTC before sending to backend
     submitData.start_datetime = localToUTC(submitData.start_datetime, tz);

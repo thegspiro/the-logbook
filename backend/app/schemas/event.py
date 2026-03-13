@@ -571,7 +571,9 @@ class RecurringEventCreate(BaseModel):
         None, description="For custom: weekday numbers (0=Mon, 6=Sun)"
     )
     recurrence_weekday: Optional[int] = Field(
-        None, ge=0, le=6,
+        None,
+        ge=0,
+        le=6,
         description="For monthly_weekday/annually_weekday: weekday (0=Mon, 6=Sun)",
     )
     recurrence_week_ordinal: Optional[int] = Field(
@@ -579,7 +581,9 @@ class RecurringEventCreate(BaseModel):
         description="Which occurrence: 1=first, 2=second, ..., 5=fifth, -1=last",
     )
     recurrence_month: Optional[int] = Field(
-        None, ge=1, le=12,
+        None,
+        ge=1,
+        le=12,
         description="For annually_weekday: target month (1=Jan, 12=Dec)",
     )
 
@@ -595,6 +599,17 @@ class RecurringEventCreate(BaseModel):
     check_in_minutes_before: Optional[int] = Field(default=30, ge=0)
     check_in_minutes_after: Optional[int] = Field(default=15, ge=0)
     require_checkout: bool = False
+    custom_category: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="Organization-defined custom event category",
+    )
+    custom_fields: Optional[Dict[str, Any]] = None
+    attachments: Optional[List[Dict[str, str]]] = None
+    allowed_rsvp_statuses: Optional[List[str]] = Field(
+        default=None,
+        description="Allowed RSVP statuses. Defaults to ['going', 'not_going']",
+    )
     template_id: Optional[UUID] = None  # Created from a template
 
     @model_validator(mode="after")
@@ -614,7 +629,5 @@ class RecurringEventCreate(BaseModel):
                 )
         if self.recurrence_pattern == "annually_weekday":
             if self.recurrence_month is None:
-                raise ValueError(
-                    "recurrence_month is required for annually_weekday"
-                )
+                raise ValueError("recurrence_month is required for annually_weekday")
         return self
