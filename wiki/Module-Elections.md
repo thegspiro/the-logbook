@@ -63,6 +63,20 @@ PATCH  /api/v1/elections/settings               # Update election settings
 
 ---
 
+## Recent Improvements (2026-03-12)
+
+- **Ballot email notifications**: Election creators can send ballot notification emails to eligible voters directly from the election detail page. Emails include election title, voting period, direct ballot link, and organization logo
+- **Org logo in election emails**: All election-related emails (ballot notifications, result announcements) now include the organization's logo in the header using the shared `build_logo_html()` utility
+- **Settings persistence fix**: Election settings (proxy voting config) now use `copy.deepcopy()` for JSON column mutations, fixing silent write failures
+
+### API Endpoints — Ballot Notifications
+
+```
+POST   /api/v1/elections/{id}/send-ballot-emails   # Send ballot notification to eligible voters
+```
+
+---
+
 ## Recent Improvements (2026-03-06)
 
 - **BallotBuilder redesigned**: Modern card-based UI with `@dnd-kit` drag-and-drop reordering, expandable inline editing, color-coded type badges (emerald/purple/blue), two-step inline delete, template popover, and summary pills

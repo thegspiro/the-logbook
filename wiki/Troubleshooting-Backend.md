@@ -659,4 +659,58 @@ Each email template now supports default CC/BCC. BCC also available for schedule
 
 ---
 
+## SQLAlchemy JSON Column Silent Write Failures (2026-03-12)
+
+### Problem: Organization/event settings changes not persisting after save
+
+**Status (Fixed):** `dict()` shallow copy shares nested dict references with SQLAlchemy's committed state. Mutations appear to work in-memory but are silently skipped during flush because SQLAlchemy sees old == new.
+
+**Fix:** Use `copy.deepcopy()` for independent copy, or `flag_modified()` after in-place mutation. Affected endpoints: event settings, election settings, organization settings.
+
+**Edge Case:** `MutableDict.as_mutable(JSON)` detects top-level key changes but misses nested mutations.
+
+---
+
+## Minutes Module Table Name Mismatch (2026-03-12)
+
+### Problem: Backend startup fails with "Table 'meeting_action_items' doesn't exist"
+
+**Status (Fixed):** Alembic migration `20260312_0200` renames table to match SQLAlchemy model. Run `alembic upgrade head`.
+
+---
+
+## Auth Cookies on LAN HTTP (2026-03-12)
+
+### Problem: Auth cookies not set on plain HTTP deployments
+
+**Status (Fixed):** `Secure` flag was hardcoded `True`. Now auto-detects from `ALLOWED_ORIGINS` scheme. HTTP origins → `Secure=False`.
+
+**New env var:** `NGINX_WORKER_PROCESSES` (default: `auto`) prevents excessive Nginx workers on high-core servers.
+
+---
+
+## Custom Event Categories Schema (2026-03-12)
+
+### Problem: Saving custom categories returns 422
+
+**Status (Fixed):** Pydantic schema expected strings but frontend sends objects (`{id, label, color}`). Schema updated.
+
+---
+
+## Flake8 Violations in Elections, Onboarding, Org Service (2026-03-12)
+
+### Problem: Pre-existing flake8 violations (F401, E303, W291)
+
+**Status (Fixed):** Unused imports removed, excess blank lines cleaned, trailing whitespace removed in `elections.py`, `onboarding.py`, `organization_service.py`, `ip_security.py`, `sms_service.py`, `scheduled_tasks.py`.
+
+---
+
+## Email Logo Duplication (2026-03-12)
+
+### Improvement: DRY email logo utility
+
+Duplicated org logo HTML building code across 7 service files extracted into shared `build_logo_html()` and `get_org_logo_url()` in `email_service.py`. All email notifications now consistently include org logo.
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Database Issues](Troubleshooting-Database)

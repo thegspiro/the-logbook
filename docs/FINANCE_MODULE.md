@@ -1,4 +1,10 @@
-# Finance Module — Implementation Plan
+# Finance Module
+
+> **Status**: Phase 1 (Foundation & Budget Tracking), Phase 1B (Approval Chains), Phase 2 (Purchase Requests), Phase 3 (Expense Reports & Check Requests), and Phase 4 (Dues & Assessments) are **implemented** as of 2026-03-12. Phase 5 (Dashboard, Reports & QuickBooks Export) is planned.
+>
+> **Feature Flag**: `MODULE_FINANCE_ENABLED` (default: `false`)
+>
+> **Permissions**: `finance.view`, `finance.manage`, `finance.approve`, `finance.configure_approvals`
 
 ## Context
 

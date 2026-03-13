@@ -67,6 +67,14 @@ This guide covers common issues and their solutions for The Logbook deployment.
 61. [Onboarding Auth State Reset](#onboarding-auth-state-reset-2026-03-05)
 62. [Unraid App Removal](#unraid-app-removal-2026-03-05)
 63. [Facilities MissingGreenlet](#facilities-missinggreenlet-2026-03-05)
+64. [QR Check-In Timezone Display](#qr-check-in-timezone-display-2026-03-12)
+65. [Recurring Event Edge Cases](#recurring-event-edge-cases-2026-03-12)
+66. [Events Settings JSON Persistence](#events-settings-json-persistence-2026-03-12)
+67. [Custom Categories Schema Mismatch](#custom-categories-schema-mismatch-2026-03-12)
+68. [Form Value Empty String 422s](#form-value-empty-string-422s-2026-03-12)
+69. [Minutes Module Table Name](#minutes-module-table-name-2026-03-12)
+70. [Auth Cookies LAN HTTP](#auth-cookies-lan-http-2026-03-12)
+71. [TypeScript 94 Error Batch Fix](#typescript-94-error-batch-fix-2026-03-12)
 
 ---
 
