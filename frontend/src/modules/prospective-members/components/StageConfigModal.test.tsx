@@ -446,6 +446,126 @@ describe('StageConfigModal', () => {
     expect(screen.getByText('Custom Section')).toBeInTheDocument();
   });
 
+  it('can type in custom section title and content after adding', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Automated Email'));
+    await user.click(screen.getByText('Add custom section'));
+
+    const titleInput = screen.getByLabelText('Custom section 1 title');
+    const contentInput = screen.getByLabelText('Custom section 1 content');
+
+    await user.type(titleInput, 'Important Info');
+    await user.type(contentInput, 'Here is some custom content');
+
+    expect(titleInput).toHaveValue('Important Info');
+    expect(contentInput).toHaveValue('Here is some custom content');
+  });
+
+  it('can add multiple custom sections', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Automated Email'));
+    await user.click(screen.getByText('Add custom section'));
+    await user.click(screen.getByText('Add custom section'));
+
+    expect(screen.getByLabelText('Custom section 1 title')).toBeInTheDocument();
+    expect(screen.getByLabelText('Custom section 2 title')).toBeInTheDocument();
+  });
+
+  it('can remove a custom section', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Automated Email'));
+    await user.click(screen.getByText('Add custom section'));
+
+    expect(screen.getByText('Custom Section')).toBeInTheDocument();
+
+    await user.click(screen.getByLabelText('Remove custom section 1'));
+
+    expect(screen.queryByText('Custom Section')).not.toBeInTheDocument();
+  });
+
+  it('preserves custom sections when editing an existing automated email stage', async () => {
+    const user = userEvent.setup();
+    const editingStage = {
+      id: 'stage-1',
+      pipeline_id: 'pipeline-1',
+      name: 'Welcome Email',
+      description: 'Send welcome info',
+      stage_type: 'automated_email' as const,
+      config: {
+        email_subject: 'Welcome!',
+        include_welcome: true,
+        welcome_message: 'Hello there',
+        include_faq_link: false,
+        include_next_meeting: false,
+        include_status_tracker: false,
+        custom_sections: [
+          { id: 'existing-1', title: 'Parking Info', content: 'Park in lot B', enabled: true },
+        ],
+      },
+      sort_order: 0,
+      is_required: true,
+      notify_prospect_on_completion: false,
+      public_visible: true,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+
+    render(
+      <StageConfigModal
+        {...defaultProps}
+        editingStage={editingStage}
+      />
+    );
+
+    // Existing custom section should be visible with its data
+    const titleInput = screen.getByLabelText('Custom section 1 title');
+    expect(titleInput).toHaveValue('Parking Info');
+    const contentInput = screen.getByLabelText('Custom section 1 content');
+    expect(contentInput).toHaveValue('Park in lot B');
+
+    // Should be able to add another custom section
+    await user.click(screen.getByText('Add custom section'));
+    expect(screen.getByLabelText('Custom section 2 title')).toBeInTheDocument();
+
+    // Should be able to type in the new section
+    const newTitleInput = screen.getByLabelText('Custom section 2 title');
+    await user.type(newTitleInput, 'Dress Code');
+    expect(newTitleInput).toHaveValue('Dress Code');
+  });
+
+  it('saves custom sections in the stage config when submitting', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<StageConfigModal {...defaultProps} onSave={onSave} />);
+
+    // Set required fields
+    await user.type(screen.getByLabelText(/stage name/i), 'Welcome Email');
+    await user.click(screen.getByText('Automated Email'));
+
+    // Add a custom section
+    await user.click(screen.getByText('Add custom section'));
+    await user.type(screen.getByLabelText('Custom section 1 title'), 'Important');
+    await user.type(screen.getByLabelText('Custom section 1 content'), 'Details here');
+
+    // Save
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+    const savedData = onSave.mock.calls[0]?.[0];
+    expect(savedData?.config?.custom_sections).toHaveLength(1);
+    expect(savedData?.config?.custom_sections?.[0]).toMatchObject({
+      title: 'Important',
+      content: 'Details here',
+      enabled: true,
+    });
+  });
+
   // =========================================================================
   // Event Linking Tests
   // =========================================================================

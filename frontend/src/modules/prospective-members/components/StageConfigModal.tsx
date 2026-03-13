@@ -4,7 +4,7 @@
  * Modal for configuring a pipeline stage's type and requirements.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   X,
   FileText,
@@ -40,6 +40,7 @@ import type {
   MeetingType,
   StatusPageToggleConfig,
   AutomatedEmailStageConfig,
+  AutomatedEmailSection,
   ReferenceCheckConfig,
   ChecklistConfig,
   ChecklistItemConfig,
@@ -380,6 +381,64 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   const [upcomingEvents, setUpcomingEvents] = useState<EventListItem[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const customSectionsEndRef = useRef<HTMLDivElement>(null);
+
+  /** Generate a unique ID for custom sections (works in non-secure contexts too). */
+  const generateSectionId = useCallback(
+    () =>
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `cs-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`,
+    [],
+  );
+
+  /** Add a new custom section and scroll it into view. */
+  const handleAddCustomSection = useCallback(() => {
+    const newSection: AutomatedEmailSection = {
+      id: generateSectionId(),
+      title: '',
+      content: '',
+      enabled: true,
+    };
+    setConfig((prev) => {
+      const email = prev as AutomatedEmailStageConfig;
+      return {
+        ...email,
+        custom_sections: [...(email.custom_sections ?? []), newSection],
+      };
+    });
+    // Scroll the new section into view after the next render
+    requestAnimationFrame(() => {
+      customSectionsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  }, [generateSectionId]);
+
+  /** Remove a custom section by index. */
+  const handleRemoveCustomSection = useCallback((removeIdx: number) => {
+    setConfig((prev) => {
+      const email = prev as AutomatedEmailStageConfig;
+      return {
+        ...email,
+        custom_sections: (email.custom_sections ?? []).filter((_, i) => i !== removeIdx),
+      };
+    });
+  }, []);
+
+  /** Update a single field on a custom section. */
+  const handleUpdateCustomSection = useCallback(
+    (idx: number, field: keyof AutomatedEmailSection, value: string | boolean) => {
+      setConfig((prev) => {
+        const email = prev as AutomatedEmailStageConfig;
+        const sections = [...(email.custom_sections ?? [])];
+        const item = sections[idx];
+        if (item) {
+          sections[idx] = { ...item, [field]: value };
+        }
+        return { ...email, custom_sections: sections };
+      });
+    },
+    [],
+  );
 
   // Fetch published forms when the modal opens
   useEffect(() => {
@@ -703,6 +762,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
             {editingStage ? 'Edit Stage' : 'Add Pipeline Stage'}
           </h2>
           <button
+            type="button"
             onClick={onClose}
             className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
             aria-label="Close dialog"
@@ -783,6 +843,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                 return (
                   <button
                     key={opt.value}
+                    type="button"
                     onClick={() => handleStageTypeChange(opt.value)}
                     className={`flex flex-col items-start rounded-lg border p-4 text-left transition-all ${
                       selected
@@ -986,6 +1047,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                       />
                       {docConfig.required_document_types.length > 1 && (
                         <button
+                          type="button"
                           onClick={() => {
                             const updated = docConfig.required_document_types.filter((_, i) => i !== idx);
                             setConfig({ ...docConfig, required_document_types: updated });
@@ -999,6 +1061,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     </div>
                   ))}
                   <button
+                    type="button"
                     onClick={() =>
                       setConfig({
                         ...docConfig,
@@ -1518,23 +1581,14 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                           <input
                             type="checkbox"
                             checked={section.enabled}
-                            onChange={(e) => {
-                              const updated = [...(emailConfig.custom_sections ?? [])];
-                              const item = updated[idx];
-                              if (item) {
-                                updated[idx] = { ...item, enabled: e.target.checked };
-                                setConfig({ ...emailConfig, custom_sections: updated });
-                              }
-                            }}
+                            onChange={(e) => handleUpdateCustomSection(idx, 'enabled', e.target.checked)}
                             className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
                           />
                           Custom Section
                         </label>
                         <button
-                          onClick={() => {
-                            const updated = (emailConfig.custom_sections ?? []).filter((_, i) => i !== idx);
-                            setConfig({ ...emailConfig, custom_sections: updated });
-                          }}
+                          type="button"
+                          onClick={() => handleRemoveCustomSection(idx)}
                           className="text-theme-text-muted transition-colors hover:text-red-700 dark:hover:text-red-400"
                           aria-label={`Remove custom section ${idx + 1}`}
                         >
@@ -1544,28 +1598,14 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                       <input
                         type="text"
                         value={section.title}
-                        onChange={(e) => {
-                          const updated = [...(emailConfig.custom_sections ?? [])];
-                          const item = updated[idx];
-                          if (item) {
-                            updated[idx] = { ...item, title: e.target.value };
-                            setConfig({ ...emailConfig, custom_sections: updated });
-                          }
-                        }}
+                        onChange={(e) => handleUpdateCustomSection(idx, 'title', e.target.value)}
                         placeholder="Section title"
                         aria-label={`Custom section ${idx + 1} title`}
                         className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2 text-sm focus:ring-2 focus:outline-hidden"
                       />
                       <textarea
                         value={section.content}
-                        onChange={(e) => {
-                          const updated = [...(emailConfig.custom_sections ?? [])];
-                          const item = updated[idx];
-                          if (item) {
-                            updated[idx] = { ...item, content: e.target.value };
-                            setConfig({ ...emailConfig, custom_sections: updated });
-                          }
-                        }}
+                        onChange={(e) => handleUpdateCustomSection(idx, 'content', e.target.value)}
                         placeholder="Section content..."
                         rows={2}
                         aria-label={`Custom section ${idx + 1} content`}
@@ -1573,19 +1613,10 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                       />
                     </div>
                   ))}
+                  <div ref={customSectionsEndRef} />
                   <button
-                    onClick={() => {
-                      const newSection = {
-                        id: crypto.randomUUID(),
-                        title: '',
-                        content: '',
-                        enabled: true,
-                      };
-                      setConfig({
-                        ...emailConfig,
-                        custom_sections: [...(emailConfig.custom_sections ?? []), newSection],
-                      });
-                    }}
+                    type="button"
+                    onClick={handleAddCustomSection}
                     className="flex items-center gap-1 text-sm text-red-700 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                   >
                     <Plus className="h-3 w-3" aria-hidden="true" /> Add custom section
@@ -1634,6 +1665,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                       />
                       {referenceCheckConfig.reference_types.length > 1 && (
                         <button
+                          type="button"
                           onClick={() => {
                             const updated = referenceCheckConfig.reference_types.filter((_, i) => i !== idx);
                             setConfig({ ...referenceCheckConfig, reference_types: updated });
@@ -1647,6 +1679,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     </div>
                   ))}
                   <button
+                    type="button"
                     onClick={() =>
                       setConfig({
                         ...referenceCheckConfig,
@@ -1719,6 +1752,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                         />
                         {checklistConfig.items.length > 1 && (
                           <button
+                            type="button"
                             onClick={() => {
                               const updated = checklistConfig.items.filter((_, i) => i !== idx);
                               setConfig({ ...checklistConfig, items: updated });
@@ -1748,6 +1782,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     </div>
                   ))}
                   <button
+                    type="button"
                     onClick={() =>
                       setConfig({
                         ...checklistConfig,
@@ -1850,6 +1885,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                       />
                       {multiApprovalConfig.required_approvers.length > 1 && (
                         <button
+                          type="button"
                           onClick={() => {
                             const updated = multiApprovalConfig.required_approvers.filter((_, i) => i !== idx);
                             setConfig({ ...multiApprovalConfig, required_approvers: updated });
@@ -1863,6 +1899,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     </div>
                   ))}
                   <button
+                    type="button"
                     onClick={() =>
                       setConfig({
                         ...multiApprovalConfig,
@@ -1936,6 +1973,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                       </select>
                       {medicalScreeningConfig.required_screenings.length > 1 && (
                         <button
+                          type="button"
                           onClick={() => {
                             const updated = medicalScreeningConfig.required_screenings.filter(
                               (_, i) => i !== idx
@@ -1951,6 +1989,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     </div>
                   ))}
                   <button
+                    type="button"
                     onClick={() =>
                       setConfig({
                         ...medicalScreeningConfig,
@@ -2067,12 +2106,13 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
         {/* Footer */}
         <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
           <button
+            type="button"
             onClick={onClose}
             className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
           >
             Cancel
           </button>
-          <button onClick={handleSave} className="btn-primary px-6">
+          <button type="button" onClick={handleSave} className="btn-primary px-6">
             {editingStage ? 'Update Stage' : 'Add Stage'}
           </button>
         </div>
