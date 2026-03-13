@@ -18,7 +18,7 @@ import { getRSVPStatusLabel, getRSVPStatusColor, downloadICSFile } from '../util
 import { formatDateTime, formatShortDateTime, formatTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum } from '../constants/enums';
-import { Repeat, Paperclip, Download, CalendarPlus, Clock, Printer, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Repeat, Paperclip, Download, CalendarPlus, Clock, Printer, ChevronLeft, ChevronRight, ChevronDown, MapPin } from 'lucide-react';
 
 export const EventDetailPage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
@@ -54,6 +54,7 @@ export const EventDetailPage: React.FC = () => {
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [rsvpApplyToSeries, setRsvpApplyToSeries] = useState(false);
   const [seriesEvents, setSeriesEvents] = useState<EventListItem[]>([]);
+  const [showAllOccurrences, setShowAllOccurrences] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [templateDescription, setTemplateDescription] = useState('');
@@ -606,6 +607,7 @@ export const EventDetailPage: React.FC = () => {
             </div>
             {/* Series navigation for recurring events */}
             {(event.is_recurring || event.recurrence_parent_id) && seriesEvents.length > 1 && (
+              <>
               <div className="mt-2 flex items-center gap-3 text-sm">
                 <span className="text-theme-text-muted">
                   Occurrence {seriesPosition} of {seriesTotal}
@@ -641,7 +643,46 @@ export const EventDetailPage: React.FC = () => {
                     </span>
                   )}
                 </div>
+                <span className="text-theme-text-muted mx-1">|</span>
+                <button
+                  onClick={() => setShowAllOccurrences((prev) => !prev)}
+                  className="inline-flex items-center gap-0.5 text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                >
+                  View All ({seriesEvents.length})
+                  <ChevronDown className={`h-4 w-4 transition-transform ${showAllOccurrences ? 'rotate-180' : ''}`} />
+                </button>
               </div>
+              {showAllOccurrences && (
+                <div className="mt-2 ml-1 space-y-1 max-h-60 overflow-y-auto">
+                  {seriesEvents.map((se) => {
+                    const isCurrent = se.id === eventId;
+                    const isUpcoming = new Date(se.start_datetime) > new Date();
+                    return (
+                      <div key={se.id} className={`flex items-center gap-2 text-sm ${isCurrent ? 'font-medium text-theme-text-primary' : ''}`}>
+                        {isCurrent ? (
+                          <span className="text-theme-text-primary">
+                            {formatShortDateTime(se.start_datetime, tz)} &mdash; {se.title}
+                          </span>
+                        ) : (
+                          <Link
+                            to={`/events/${se.id}`}
+                            className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                          >
+                            {formatShortDateTime(se.start_datetime, tz)} &mdash; {se.title}
+                          </Link>
+                        )}
+                        {se.is_cancelled && (
+                          <span className="text-xs text-red-500">Cancelled</span>
+                        )}
+                        {!se.is_cancelled && isUpcoming && (
+                          <span className="text-xs text-green-600 dark:text-green-400">Upcoming</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              </>
             )}
           </div>
 
@@ -873,6 +914,15 @@ export const EventDetailPage: React.FC = () => {
                     {event.location_details && (
                       <p className="text-sm text-theme-text-muted mt-1">{event.location_details}</p>
                     )}
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location_name || event.location || '')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-red-600 hover:text-red-700 dark:text-red-400 inline-flex items-center gap-1 mt-1"
+                    >
+                      <MapPin className="h-3.5 w-3.5" />
+                      Get Directions
+                    </a>
                   </div>
                 </div>
               )}

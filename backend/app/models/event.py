@@ -254,6 +254,8 @@ class EventRSVP(Base):
         Integer, nullable=False, default=0
     )  # Number of additional guests
     notes = Column(Text, nullable=True)  # Special requests, dietary restrictions, etc.
+    dietary_restrictions = Column(String(500), nullable=True)
+    accessibility_needs = Column(String(500), nullable=True)
 
     # Tracking
     responded_at = Column(

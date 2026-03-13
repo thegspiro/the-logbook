@@ -161,6 +161,8 @@ export interface RSVP {
   status: RSVPStatus;
   guest_count: number;
   notes?: string;
+  dietary_restrictions?: string;
+  accessibility_needs?: string;
   responded_at: string;
   updated_at: string;
   checked_in: boolean;
@@ -178,6 +180,8 @@ export interface RSVPCreate {
   status: RSVPStatus;
   guest_count?: number | undefined;
   notes?: string | undefined;
+  dietary_restrictions?: string | undefined;
+  accessibility_needs?: string | undefined;
 }
 
 export interface CheckInRequest {

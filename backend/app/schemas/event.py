@@ -298,6 +298,8 @@ class RSVPBase(BaseModel):
     status: str = Field(..., description="RSVP status: going, not_going, maybe")
     guest_count: int = Field(default=0, ge=0, le=10)
     notes: Optional[str] = Field(None, max_length=500)
+    dietary_restrictions: Optional[str] = Field(None, max_length=500)
+    accessibility_needs: Optional[str] = Field(None, max_length=500)
 
 
 class RSVPCreate(RSVPBase):
@@ -315,6 +317,9 @@ class RSVPResponse(RSVPBase):
     checked_in: bool = False
     checked_in_at: Optional[datetime] = None
     checked_out_at: Optional[datetime] = None
+
+    dietary_restrictions: Optional[str] = None
+    accessibility_needs: Optional[str] = None
 
     # User details (populated by service)
     user_name: Optional[str] = None
