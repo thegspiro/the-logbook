@@ -6,7 +6,7 @@
  * check-in window configuration, and reminder settings.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   FileText,
   Clock,
@@ -16,6 +16,7 @@ import {
   QrCode,
   Bell,
   Repeat,
+  AlertTriangle,
 } from 'lucide-react';
 import type { EventCreate, RecurringEventCreate, RecurrencePattern, EventType, EventCategoryConfig, RSVPStatus } from '../types/event';
 import { eventService, locationsService } from '../services/api';
@@ -26,14 +27,25 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 
+export interface ConflictEvent {
+  id: string;
+  title: string;
+  start_datetime: string;
+  end_datetime: string;
+}
+
 interface EventFormProps {
-  initialData?: Partial<EventCreate>;
+  initialData?: Partial<EventCreate> | undefined;
   onSubmit: (data: EventCreate) => Promise<void>;
   onSubmitRecurring?: (data: RecurringEventCreate) => Promise<void>;
   onCancel: () => void;
   submitLabel?: string;
   isSubmitting?: boolean;
   showRecurrence?: boolean;
+  /** Events the user has RSVP'd to, used for conflict detection */
+  userEvents?: ConflictEvent[] | undefined;
+  /** When editing, the ID of the current event (excluded from conflict checks) */
+  editingEventId?: string | undefined;
 }
 
 const EVENT_TYPES: EventType[] = [
@@ -117,6 +129,8 @@ export const EventForm: React.FC<EventFormProps> = ({
   submitLabel = 'Create Event',
   isSubmitting = false,
   showRecurrence = false,
+  userEvents,
+  editingEventId,
 }) => {
   const tz = useTimezone();
 
@@ -156,6 +170,20 @@ export const EventForm: React.FC<EventFormProps> = ({
   const [recurrenceWeekday, setRecurrenceWeekday] = useState(0);
   const [recurrenceWeekOrdinal, setRecurrenceWeekOrdinal] = useState(1);
   const [recurrenceMonth, setRecurrenceMonth] = useState(1);
+
+  // Conflict detection: check if the selected time range overlaps with user's existing events
+  const conflicts = useMemo(() => {
+    if (!userEvents || !formData.start_datetime || !formData.end_datetime) return [];
+    const startA = new Date(formData.start_datetime).getTime();
+    const endA = new Date(formData.end_datetime).getTime();
+    if (isNaN(startA) || isNaN(endA) || endA <= startA) return [];
+    return userEvents.filter((evt) => {
+      if (editingEventId && evt.id === editingEventId) return false;
+      const startB = new Date(evt.start_datetime).getTime();
+      const endB = new Date(evt.end_datetime).getTime();
+      return startA < endB && endA > startB;
+    });
+  }, [userEvents, formData.start_datetime, formData.end_datetime, editingEventId]);
 
   useEffect(() => {
     void loadLocations();
@@ -482,6 +510,30 @@ export const EventForm: React.FC<EventFormProps> = ({
             />
           </div>
         </div>
+
+        {/* Conflict Warning */}
+        {conflicts.length > 0 && (
+          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4" role="status">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">
+                  Schedule Conflict Detected
+                </p>
+                <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                  This time overlaps with {conflicts.length === 1 ? 'an event' : 'events'} you have RSVP&apos;d to:
+                </p>
+                <ul className="mt-2 space-y-1">
+                  {conflicts.map((evt) => (
+                    <li key={evt.id} className="text-sm text-yellow-700 dark:text-yellow-300">
+                      &bull; {evt.title} ({formatForDateTimeInput(evt.start_datetime, tz)} &ndash; {formatForDateTimeInput(evt.end_datetime, tz)})
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Quick Duration */}
         <div>

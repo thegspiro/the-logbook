@@ -11,6 +11,7 @@ import { AxiosError } from 'axios';
 import { eventService } from '../services/api';
 import type { EventCreate, Event } from '../types/event';
 import { EventForm } from '../components/EventForm';
+import type { ConflictEvent } from '../components/EventForm';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 
 export const EventEditPage: React.FC = () => {
@@ -20,6 +21,18 @@ export const EventEditPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [userEvents, setUserEvents] = useState<ConflictEvent[]>([]);
+
+  useEffect(() => {
+    void eventService.getEvents({ end_after: new Date().toISOString() }).then((data) => {
+      setUserEvents(data.map((e) => ({
+        id: e.id,
+        title: e.title,
+        start_datetime: e.start_datetime,
+        end_datetime: e.end_datetime,
+      })));
+    }).catch(() => { /* non-critical */ });
+  }, []);
 
   useEffect(() => {
     if (eventId) {
@@ -156,6 +169,8 @@ export const EventEditPage: React.FC = () => {
             onCancel={handleCancel}
             submitLabel="Save Changes"
             isSubmitting={isSubmitting}
+            userEvents={userEvents}
+            editingEventId={eventId}
           />
         </div>
       </main>

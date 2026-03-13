@@ -11,6 +11,7 @@ import { Calendar, ArrowLeft, FileText } from 'lucide-react';
 import { eventService } from '../services/api';
 import type { EventCreate, EventTemplate, RecurringEventCreate } from '../types/event';
 import { EventForm } from '../components/EventForm';
+import type { ConflictEvent } from '../components/EventForm';
 import toast from 'react-hot-toast';
 
 /**
@@ -61,6 +62,18 @@ export const EventCreatePage: React.FC = () => {
   const [templates, setTemplates] = useState<EventTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [templateInitialData, setTemplateInitialData] = useState<Partial<EventCreate> | undefined>(undefined);
+  const [userEvents, setUserEvents] = useState<ConflictEvent[]>([]);
+
+  useEffect(() => {
+    void eventService.getEvents({ end_after: new Date().toISOString() }).then((data) => {
+      setUserEvents(data.map((e) => ({
+        id: e.id,
+        title: e.title,
+        start_datetime: e.start_datetime,
+        end_datetime: e.end_datetime,
+      })));
+    }).catch(() => { /* non-critical */ });
+  }, []);
 
   useEffect(() => {
     void eventService.getTemplates().then((data) => {
@@ -180,6 +193,7 @@ export const EventCreatePage: React.FC = () => {
             submitLabel="Create Event"
             isSubmitting={isSubmitting}
             showRecurrence
+            userEvents={userEvents}
           />
         </div>
       </main>

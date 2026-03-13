@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, Plus, Download, Search, Repeat } from 'lucide-react';
+import { Calendar, Plus, Download, Search, Repeat, SlidersHorizontal, User } from 'lucide-react';
 import { eventService } from '../services/api';
 import type { EventListItem, EventType, EventCategoryConfig } from '../types/event';
 import { getEventTypeLabel, getEventTypeBadgeColor, getRSVPStatusLabel, getRSVPStatusColor } from '../utils/eventHelpers';
@@ -40,10 +40,22 @@ export const EventsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [showPastEvents, setShowPastEvents] = useState(false);
+  const [showMyEventsOnly, setShowMyEventsOnly] = useState(false);
+  const [sortBy, setSortBy] = useState<'date' | 'title' | 'rsvp_count'>('date');
 
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('events.manage');
   const tz = useTimezone();
+
+  const tzAbbr = useMemo(() => {
+    try {
+      return new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'short' })
+        .formatToParts(new Date())
+        .find(p => p.type === 'timeZoneName')?.value ?? '';
+    } catch {
+      return '';
+    }
+  }, [tz]);
 
   const fetchEvents = useCallback(async () => {
     try {
@@ -106,29 +118,56 @@ export const EventsPage: React.FC = () => {
   }, [events, typeFilter, hiddenTypes]);
 
   const searchFilteredEvents = useMemo(() => {
-    if (!searchQuery.trim()) return typeFilteredEvents;
-    const query = searchQuery.toLowerCase();
-    return typeFilteredEvents.filter(
-      (e) =>
-        e.title.toLowerCase().includes(query) ||
-        (e.location_name || e.location || '').toLowerCase().includes(query)
-    );
-  }, [typeFilteredEvents, searchQuery]);
+    let filtered = typeFilteredEvents;
+    if (showMyEventsOnly) {
+      filtered = filtered.filter((e) => e.user_rsvp_status);
+    }
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (e) =>
+          e.title.toLowerCase().includes(query) ||
+          (e.location_name || e.location || '').toLowerCase().includes(query)
+      );
+    }
+    return filtered;
+  }, [typeFilteredEvents, searchQuery, showMyEventsOnly]);
+
+  const sortedEvents = useMemo(() => {
+    const sorted = [...searchFilteredEvents];
+    switch (sortBy) {
+      case 'title':
+        sorted.sort((a, b) => (a.title ?? '').localeCompare(b.title ?? ''));
+        break;
+      case 'rsvp_count':
+        sorted.sort((a, b) => (b.going_count ?? 0) - (a.going_count ?? 0));
+        break;
+      case 'date':
+      default:
+        sorted.sort((a, b) => {
+          const dateA = new Date(a.start_datetime).getTime();
+          const dateB = new Date(b.start_datetime).getTime();
+          return showPastEvents ? dateB - dateA : dateA - dateB;
+        });
+        break;
+    }
+    return sorted;
+  }, [searchFilteredEvents, sortBy, showPastEvents]);
 
   const paginatedEvents = useMemo(() => {
     const start = (currentPage - 1) * DEFAULT_PAGE_SIZE;
-    return searchFilteredEvents.slice(start, start + DEFAULT_PAGE_SIZE);
-  }, [searchFilteredEvents, currentPage]);
+    return sortedEvents.slice(start, start + DEFAULT_PAGE_SIZE);
+  }, [sortedEvents, currentPage]);
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [typeFilter, searchQuery, showPastEvents]);
+  }, [typeFilter, searchQuery, showPastEvents, showMyEventsOnly, sortBy]);
 
   // #48: CSV export for events
   const handleExportCSV = useCallback(() => {
     const headers = ['Title', 'Type', 'Date', 'Location', 'Mandatory', 'Cancelled'];
-    const rows = searchFilteredEvents.map(e => [
+    const rows = sortedEvents.map(e => [
       e.title,
       getEventTypeLabel(e.event_type),
       formatShortDateTime(e.start_datetime, tz),
@@ -144,7 +183,7 @@ export const EventsPage: React.FC = () => {
     a.download = `events-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [searchFilteredEvents, tz]);
+  }, [sortedEvents, tz]);
 
   if (loading) {
     return (
@@ -189,7 +228,7 @@ export const EventsPage: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {searchFilteredEvents.length > 0 && (
+          {sortedEvents.length > 0 && (
             <button
               onClick={handleExportCSV}
               className="btn-secondary inline-flex items-center gap-2"
@@ -223,7 +262,7 @@ export const EventsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Upcoming / Past Toggle + Search */}
+      {/* Upcoming / Past Toggle + Search + My Events + Sort */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
         <div className="inline-flex rounded-lg border border-theme-surface-border bg-theme-surface p-1">
           <button
@@ -247,6 +286,17 @@ export const EventsPage: React.FC = () => {
             Past
           </button>
         </div>
+        <button
+          onClick={() => setShowMyEventsOnly((prev) => !prev)}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors ${
+            showMyEventsOnly
+              ? 'bg-red-600 text-white border-red-600 shadow-sm'
+              : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:text-theme-text-primary'
+          }`}
+        >
+          <User className="h-4 w-4" aria-hidden="true" />
+          My Events
+        </button>
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-theme-text-muted" aria-hidden="true" />
           <input
@@ -256,6 +306,18 @@ export const EventsPage: React.FC = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
           />
+        </div>
+        <div className="relative">
+          <SlidersHorizontal className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-theme-text-muted pointer-events-none" aria-hidden="true" />
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as 'date' | 'title' | 'rsvp_count')}
+            className="pl-9 pr-8 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring appearance-none"
+          >
+            <option value="date">Sort by Date</option>
+            <option value="title">Sort by Title</option>
+            <option value="rsvp_count">Sort by RSVP Count</option>
+          </select>
         </div>
       </div>
 
@@ -358,7 +420,7 @@ export const EventsPage: React.FC = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                     <span title={formatAbsoluteDate(event.start_datetime, tz)}>
-                      {formatShortDateTime(event.start_datetime, tz)}
+                      {formatShortDateTime(event.start_datetime, tz)}{tzAbbr ? ` ${tzAbbr}` : ''}
                       <span className="text-theme-text-muted ml-1">
                         ({formatRelativeTime(event.start_datetime)})
                       </span>
@@ -389,11 +451,11 @@ export const EventsPage: React.FC = () => {
           ))}
         </div>
 
-        {searchFilteredEvents.length > DEFAULT_PAGE_SIZE && (
+        {sortedEvents.length > DEFAULT_PAGE_SIZE && (
           <div className="mt-6">
             <Pagination
               currentPage={currentPage}
-              totalItems={searchFilteredEvents.length}
+              totalItems={sortedEvents.length}
               pageSize={DEFAULT_PAGE_SIZE}
               onPageChange={setCurrentPage}
             />

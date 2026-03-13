@@ -306,32 +306,32 @@ export interface EventTemplateCreate {
 
 export interface RecurringEventCreate {
   title: string;
-  description?: string;
-  event_type?: EventType;
-  location_id?: string;
-  location?: string;
-  location_details?: string;
+  description?: string | undefined;
+  event_type?: EventType | undefined;
+  location_id?: string | undefined;
+  location?: string | undefined;
+  location_details?: string | undefined;
   start_datetime: string;
   end_datetime: string;
   recurrence_pattern: RecurrencePattern;
   recurrence_end_date: string;
-  recurrence_custom_days?: number[];
-  recurrence_weekday?: number;
-  recurrence_week_ordinal?: number;
-  recurrence_month?: number;
-  requires_rsvp?: boolean;
-  rsvp_deadline?: string;
-  max_attendees?: number;
-  is_mandatory?: boolean;
+  recurrence_custom_days?: number[] | undefined;
+  recurrence_weekday?: number | undefined;
+  recurrence_week_ordinal?: number | undefined;
+  recurrence_month?: number | undefined;
+  requires_rsvp?: boolean | undefined;
+  rsvp_deadline?: string | undefined;
+  max_attendees?: number | undefined;
+  is_mandatory?: boolean | undefined;
 
-  allow_guests?: boolean;
-  send_reminders?: boolean;
-  reminder_schedule?: number[];
-  check_in_window_type?: 'flexible' | 'strict' | 'window';
-  check_in_minutes_before?: number;
-  check_in_minutes_after?: number;
-  require_checkout?: boolean;
-  template_id?: string;
+  allow_guests?: boolean | undefined;
+  send_reminders?: boolean | undefined;
+  reminder_schedule?: number[] | undefined;
+  check_in_window_type?: 'flexible' | 'strict' | 'window' | undefined;
+  check_in_minutes_before?: number | undefined;
+  check_in_minutes_after?: number | undefined;
+  require_checkout?: boolean | undefined;
+  template_id?: string | undefined;
 }
 
 // Event Attachments & Document Folder
