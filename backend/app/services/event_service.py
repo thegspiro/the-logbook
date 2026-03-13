@@ -22,6 +22,7 @@ from app.models.event import (
     EventTemplate,
     EventType,
     RecurrencePattern,
+    RSVPHistory,
     RSVPStatus,
 )
 from app.models.notification import NotificationChannel
@@ -561,7 +562,12 @@ class EventService:
         )
         existing_rsvp = existing_result.scalar_one_or_none()
 
+        old_status = None
         if existing_rsvp:
+            # Capture old status before updating
+            old_status = existing_rsvp.status
+            if isinstance(old_status, RSVPStatus):
+                old_status = old_status.value
             # Update existing RSVP
             for field, value in rsvp_data.model_dump().items():
                 setattr(existing_rsvp, field, value)
@@ -599,6 +605,24 @@ class EventService:
                 # Auto-waitlist instead of rejecting
                 rsvp.status = RSVPStatus.WAITLISTED
 
+        # Flush to ensure rsvp.id is available for history record
+        await self.db.flush()
+
+        # Record RSVP history if status changed or this is a new RSVP
+        new_status = rsvp.status
+        if isinstance(new_status, RSVPStatus):
+            new_status = new_status.value
+        if old_status != new_status:
+            history_entry = RSVPHistory(
+                rsvp_id=rsvp.id,
+                event_id=str(event_id),
+                user_id=str(user_id),
+                old_status=old_status,
+                new_status=new_status,
+                changed_at=datetime.now(dt_timezone.utc),
+            )
+            self.db.add(history_entry)
+
         await self.db.commit()
         await self.db.refresh(rsvp)
 
@@ -611,6 +635,70 @@ class EventService:
             await self.promote_from_waitlist(event_id, organization_id)
 
         return rsvp, None
+
+    async def get_rsvp_history(
+        self,
+        event_id: UUID,
+        organization_id: UUID,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """Get RSVP change history for an event"""
+        # Verify event belongs to organization
+        event_result = await self.db.execute(
+            select(Event)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
+        )
+        event = event_result.scalar_one_or_none()
+        if not event:
+            raise ValueError("Event not found")
+
+        # Fetch history with user names
+        result = await self.db.execute(
+            select(RSVPHistory)
+            .where(RSVPHistory.event_id == str(event_id))
+            .order_by(RSVPHistory.changed_at.desc())
+            .limit(limit)
+        )
+        history_entries = result.scalars().all()
+
+        # Collect user IDs for name lookup
+        user_ids = set()
+        for entry in history_entries:
+            user_ids.add(entry.user_id)
+            if entry.changed_by:
+                user_ids.add(entry.changed_by)
+
+        # Fetch user names
+        user_names: Dict[str, str] = {}
+        if user_ids:
+            users_result = await self.db.execute(
+                select(User).where(User.id.in_(list(user_ids)))
+            )
+            for u in users_result.scalars().all():
+                name = f"{u.first_name} {u.last_name}".strip()
+                user_names[u.id] = name or u.email
+
+        # Build response
+        items = []
+        for entry in history_entries:
+            items.append({
+                "id": entry.id,
+                "rsvp_id": entry.rsvp_id,
+                "event_id": entry.event_id,
+                "user_id": entry.user_id,
+                "old_status": entry.old_status,
+                "new_status": entry.new_status,
+                "changed_at": entry.changed_at,
+                "changed_by": entry.changed_by,
+                "user_name": user_names.get(entry.user_id, "Unknown"),
+                "changer_name": (
+                    user_names.get(entry.changed_by, "Unknown")
+                    if entry.changed_by
+                    else None
+                ),
+            })
+        return items
 
     async def promote_from_waitlist(
         self, event_id: UUID, organization_id: UUID

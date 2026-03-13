@@ -436,3 +436,45 @@ class EventExternalAttendee(Base):
         Index("ix_ext_attendees_org_id", "organization_id"),
         Index("ix_ext_attendees_email", "email"),
     )
+
+
+class RSVPHistory(Base):
+    """
+    RSVP History model for tracking RSVP status changes.
+
+    Records each status change for audit and activity tracking purposes.
+    """
+
+    __tablename__ = "rsvp_history"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    rsvp_id = Column(
+        String(36), ForeignKey("event_rsvps.id", ondelete="CASCADE"), nullable=False
+    )
+    event_id = Column(
+        String(36), ForeignKey("events.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id = Column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    old_status = Column(String(20), nullable=True)  # Null for initial RSVP
+    new_status = Column(String(20), nullable=False)
+    changed_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    changed_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )  # Null means self-change
+
+    # Relationships
+    rsvp = relationship("EventRSVP", foreign_keys=[rsvp_id])
+    event = relationship("Event", foreign_keys=[event_id])
+    user = relationship("User", foreign_keys=[user_id])
+    changer = relationship("User", foreign_keys=[changed_by])
+
+    __table_args__ = (
+        Index("ix_rsvp_history_event_id", "event_id"),
+        Index("ix_rsvp_history_rsvp_id", "rsvp_id"),
+        Index("ix_rsvp_history_user_id", "user_id"),
+        Index("ix_rsvp_history_changed_at", "changed_at"),
+    )

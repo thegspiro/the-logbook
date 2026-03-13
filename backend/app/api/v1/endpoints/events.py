@@ -44,12 +44,15 @@ from app.schemas.event import (
     RecordActualTimes,
     RecurringEventCreate,
     RSVPCreate,
+    RSVPHistoryResponse,
     RSVPOverride,
     RSVPResponse,
     SelfCheckInRequest,
 )
+from app.models.notification import NotificationChannel
 from app.services.documents_service import DocumentsService
 from app.services.event_service import EventService
+from app.services.notifications_service import NotificationsService
 
 router = APIRouter()
 
@@ -701,6 +704,30 @@ async def update_event(
     service = EventService(db)
 
     try:
+        # Capture old values for significant field change detection
+        update_fields = event_data.model_dump(exclude_unset=True)
+        significant_fields = {
+            "title", "start_datetime", "end_datetime", "location",
+        }
+        changed_significant = significant_fields & set(update_fields.keys())
+
+        # Snapshot old values and RSVPs before update
+        old_values: dict = {}
+        rsvps_to_notify = []
+        if changed_significant:
+            result = await service.get_event(
+                event_id=event_id,
+                organization_id=current_user.organization_id,
+            )
+            if result:
+                old_event_obj = result[0]
+                for field in changed_significant:
+                    old_values[field] = getattr(old_event_obj, field, None)
+                rsvps_to_notify = [
+                    rsvp for rsvp in old_event_obj.rsvps
+                    if rsvp.status in (RSVPStatus.GOING, RSVPStatus.MAYBE)
+                ]
+
         event = await service.update_event(
             event_id=event_id,
             organization_id=current_user.organization_id,
@@ -725,6 +752,40 @@ async def update_event(
             user_id=str(current_user.id),
             username=current_user.username,
         )
+
+        # Notify RSVP'd members if significant fields changed
+        if changed_significant and rsvps_to_notify:
+            # Check if values actually changed
+            actually_changed = []
+            for field in changed_significant:
+                new_val = getattr(event, field, None)
+                if str(old_values.get(field, "")) != str(new_val):
+                    actually_changed.append(field)
+
+            if actually_changed:
+                changes_desc = ", ".join(
+                    f.replace("_", " ") for f in actually_changed
+                )
+                try:
+                    notifications_service = NotificationsService(db)
+                    for rsvp in rsvps_to_notify:
+                        await notifications_service.log_notification(
+                            organization_id=current_user.organization_id,
+                            log_data={
+                                "channel": NotificationChannel.IN_APP,
+                                "recipient_id": str(rsvp.user_id),
+                                "subject": f"Event Updated: {event.title}",
+                                "message": (
+                                    f'The event "{event.title}" has been '
+                                    f"updated ({changes_desc}). "
+                                    f"Please review the latest details."
+                                ),
+                            },
+                        )
+                except Exception as notif_err:
+                    logger.error(
+                        f"Failed to send update notifications: {notif_err}"
+                    )
 
         return _build_event_response(event)
     except ValueError as e:
@@ -1132,6 +1193,40 @@ async def list_event_rsvps(
         )
 
     return rsvp_responses
+
+
+@router.get("/{event_id}/rsvp-history", response_model=list[RSVPHistoryResponse])
+async def get_rsvp_history(
+    event_id: UUID,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Get RSVP change history for an event.
+
+    **Requires events.manage permission**
+    """
+    service = EventService(db)
+
+    try:
+        history = await service.get_rsvp_history(
+            event_id=event_id,
+            organization_id=current_user.organization_id,
+            limit=limit,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=safe_error_detail(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
+
+    return history
 
 
 @router.post("/{event_id}/check-in", response_model=RSVPResponse)

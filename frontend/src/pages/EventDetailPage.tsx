@@ -9,7 +9,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { eventService, meetingsService } from '../services/api';
-import type { Event, EventListItem, RSVP, RSVPStatus, EventStats } from '../types/event';
+import type { Event, EventListItem, RSVP, RSVPStatus, EventStats, RSVPHistory } from '../types/event';
 import { useAuthStore } from '../stores/authStore';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { EventTypeBadge } from '../components/EventTypeBadge';
@@ -18,7 +18,8 @@ import { getRSVPStatusLabel, getRSVPStatusColor, downloadICSFile } from '../util
 import { formatDateTime, formatShortDateTime, formatTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum } from '../constants/enums';
-import { Repeat, Paperclip, Download, CalendarPlus, Clock, Printer, ChevronLeft, ChevronRight, ChevronDown, MapPin } from 'lucide-react';
+import { Repeat, Paperclip, Download, CalendarPlus, Clock, Printer, ChevronLeft, ChevronRight, ChevronDown, MapPin, History as HistoryIcon } from 'lucide-react';
+import { Collapsible } from '../components/ux';
 
 export const EventDetailPage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
@@ -35,6 +36,8 @@ export const EventDetailPage: React.FC = () => {
   const [rsvpStatus, setRsvpStatus] = useState<RSVPStatus>(RSVPStatusEnum.GOING);
   const [guestCount, setGuestCount] = useState(0);
   const [rsvpNotes, setRsvpNotes] = useState('');
+  const [rsvpDietaryRestrictions, setRsvpDietaryRestrictions] = useState('');
+  const [rsvpAccessibilityNeeds, setRsvpAccessibilityNeeds] = useState('');
   const [cancelReason, setCancelReason] = useState('');
   const [sendCancelNotifications, setSendCancelNotifications] = useState(false);
   const [showCancelSeriesModal, setShowCancelSeriesModal] = useState(false);
@@ -59,6 +62,7 @@ export const EventDetailPage: React.FC = () => {
   const [templateName, setTemplateName] = useState('');
   const [templateDescription, setTemplateDescription] = useState('');
   const [bulkAddLoading, setBulkAddLoading] = useState(false);
+  const [rsvpHistory, setRsvpHistory] = useState<RSVPHistory[]>([]);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
 
   const { checkPermission } = useAuthStore();
@@ -82,6 +86,7 @@ export const EventDetailPage: React.FC = () => {
       if (canManage) {
         void fetchRSVPs();
         void fetchStats();
+        void fetchRSVPHistory();
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -122,6 +127,17 @@ export const EventDetailPage: React.FC = () => {
       setStats(data);
     } catch {
       toast.error('Failed to load event statistics');
+    }
+  };
+
+  const fetchRSVPHistory = async () => {
+    if (!eventId) return;
+
+    try {
+      const data = await eventService.getRSVPHistory(eventId, 50);
+      setRsvpHistory(data);
+    } catch {
+      // Silently fail — history is supplementary info
     }
   };
 
@@ -240,6 +256,8 @@ export const EventDetailPage: React.FC = () => {
         status: rsvpStatus,
         guest_count: guestCount,
         notes: rsvpNotes || undefined,
+        dietary_restrictions: rsvpDietaryRestrictions || undefined,
+        accessibility_needs: rsvpAccessibilityNeeds || undefined,
       };
 
       if (rsvpApplyToSeries && event && (event.is_recurring || event.recurrence_parent_id)) {
@@ -254,6 +272,8 @@ export const EventDetailPage: React.FC = () => {
       setRsvpStatus(RSVPStatusEnum.GOING);
       setGuestCount(0);
       setRsvpNotes('');
+      setRsvpDietaryRestrictions('');
+      setRsvpAccessibilityNeeds('');
       setRsvpApplyToSeries(false);
       await fetchEvent();
       if (canManage) {
@@ -929,91 +949,109 @@ export const EventDetailPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Training Session Details */}
-          {event.event_type === EventTypeEnum.TRAINING && event.custom_fields && (
+          {/* Custom Fields / Training Session Details */}
+          {event.custom_fields && Object.keys(event.custom_fields).length > 0 && (
             <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-sm p-6 border-l-4 border-purple-600">
               <div className="flex items-center mb-4">
                 <svg className="h-6 w-6 text-purple-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                 </svg>
-                <h2 className="text-lg font-medium text-theme-text-primary">Training Session Details</h2>
+                <h2 className="text-lg font-medium text-theme-text-primary">
+                  {event.event_type === EventTypeEnum.TRAINING ? 'Training Session Details' : 'Event Details'}
+                </h2>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {event.custom_fields.course_name && (
-                  <div>
-                    <p className="text-sm font-medium text-theme-text-secondary">Course Name</p>
-                    <p className="text-sm text-theme-text-primary">{event.custom_fields.course_name}</p>
-                  </div>
+                {event.event_type === EventTypeEnum.TRAINING && (
+                  <>
+                    {event.custom_fields.course_name && (
+                      <div>
+                        <p className="text-sm font-medium text-theme-text-secondary">Course Name</p>
+                        <p className="text-sm text-theme-text-primary">{event.custom_fields.course_name}</p>
+                      </div>
+                    )}
+
+                    {event.custom_fields.course_code && (
+                      <div>
+                        <p className="text-sm font-medium text-theme-text-secondary">Course Code</p>
+                        <p className="text-sm text-theme-text-primary">{event.custom_fields.course_code}</p>
+                      </div>
+                    )}
+
+                    {event.custom_fields.credit_hours && (
+                      <div>
+                        <p className="text-sm font-medium text-theme-text-secondary">Credit Hours</p>
+                        <p className="text-sm text-theme-text-primary">{event.custom_fields.credit_hours} hours</p>
+                      </div>
+                    )}
+
+                    {event.custom_fields.training_type && (
+                      <div>
+                        <p className="text-sm font-medium text-theme-text-secondary">Training Type</p>
+                        <p className="text-sm text-theme-text-primary capitalize">
+                          {typeof event.custom_fields.training_type === 'string'
+                            ? event.custom_fields.training_type.replace('_', ' ')
+                            : event.custom_fields.training_type}
+                        </p>
+                      </div>
+                    )}
+
+                    {event.custom_fields.instructor && (
+                      <div>
+                        <p className="text-sm font-medium text-theme-text-secondary">Instructor</p>
+                        <p className="text-sm text-theme-text-primary">{event.custom_fields.instructor}</p>
+                      </div>
+                    )}
+
+                    {event.custom_fields.issuing_agency && (
+                      <div>
+                        <p className="text-sm font-medium text-theme-text-secondary">Issuing Agency</p>
+                        <p className="text-sm text-theme-text-primary">{event.custom_fields.issuing_agency}</p>
+                      </div>
+                    )}
+
+                    {event.custom_fields.expiration_months && (
+                      <div>
+                        <p className="text-sm font-medium text-theme-text-secondary">Certification Valid For</p>
+                        <p className="text-sm text-theme-text-primary">{event.custom_fields.expiration_months} months</p>
+                      </div>
+                    )}
+
+                    {event.custom_fields.issues_certification && (
+                      <div className="col-span-2">
+                        <div className="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg">
+                          <svg className="h-5 w-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span className="text-sm font-medium text-green-800">This training issues a certification upon completion</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {event.custom_fields.auto_create_records && (
+                      <div className="col-span-2">
+                        <div className="flex items-center p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <svg className="h-5 w-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          <span className="text-sm font-medium text-blue-800">Training records are automatically created when members check in</span>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
 
-                {event.custom_fields.course_code && (
-                  <div>
-                    <p className="text-sm font-medium text-theme-text-secondary">Course Code</p>
-                    <p className="text-sm text-theme-text-primary">{event.custom_fields.course_code}</p>
+                {/* Generic custom fields (excludes training-specific keys) */}
+                {Object.entries(event.custom_fields).filter(([key]) =>
+                  !['course_name', 'course_code', 'credit_hours', 'training_type', 'instructor',
+                    'issuing_agency', 'certification_name', 'certification_expiry_months',
+                    'issues_certification', 'auto_create_records', 'expiration_months'].includes(key)
+                ).map(([key, value]) => (
+                  <div key={key}>
+                    <p className="text-sm font-medium text-theme-text-secondary">{key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</p>
+                    <p className="text-sm text-theme-text-primary">{String(value)}</p>
                   </div>
-                )}
-
-                {event.custom_fields.credit_hours && (
-                  <div>
-                    <p className="text-sm font-medium text-theme-text-secondary">Credit Hours</p>
-                    <p className="text-sm text-theme-text-primary">{event.custom_fields.credit_hours} hours</p>
-                  </div>
-                )}
-
-                {event.custom_fields.training_type && (
-                  <div>
-                    <p className="text-sm font-medium text-theme-text-secondary">Training Type</p>
-                    <p className="text-sm text-theme-text-primary capitalize">
-                      {typeof event.custom_fields.training_type === 'string'
-                        ? event.custom_fields.training_type.replace('_', ' ')
-                        : event.custom_fields.training_type}
-                    </p>
-                  </div>
-                )}
-
-                {event.custom_fields.instructor && (
-                  <div>
-                    <p className="text-sm font-medium text-theme-text-secondary">Instructor</p>
-                    <p className="text-sm text-theme-text-primary">{event.custom_fields.instructor}</p>
-                  </div>
-                )}
-
-                {event.custom_fields.issuing_agency && (
-                  <div>
-                    <p className="text-sm font-medium text-theme-text-secondary">Issuing Agency</p>
-                    <p className="text-sm text-theme-text-primary">{event.custom_fields.issuing_agency}</p>
-                  </div>
-                )}
-
-                {event.custom_fields.expiration_months && (
-                  <div>
-                    <p className="text-sm font-medium text-theme-text-secondary">Certification Valid For</p>
-                    <p className="text-sm text-theme-text-primary">{event.custom_fields.expiration_months} months</p>
-                  </div>
-                )}
-
-                {event.custom_fields.issues_certification && (
-                  <div className="col-span-2">
-                    <div className="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <svg className="h-5 w-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span className="text-sm font-medium text-green-800">This training issues a certification upon completion</span>
-                    </div>
-                  </div>
-                )}
-
-                {event.custom_fields.auto_create_records && (
-                  <div className="col-span-2">
-                    <div className="flex items-center p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                      <svg className="h-5 w-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                      <span className="text-sm font-medium text-blue-800">Training records are automatically created when members check in</span>
-                    </div>
-                  </div>
-                )}
+                ))}
               </div>
             </div>
           )}
@@ -1197,6 +1235,56 @@ export const EventDetailPage: React.FC = () => {
                 })}
               </div>
             </div>
+          )}
+
+          {/* RSVP Activity (for managers) */}
+          {canManage && rsvpHistory.length > 0 && (
+            <Collapsible
+              title={
+                <span className="flex items-center gap-2">
+                  <HistoryIcon className="h-4 w-4" />
+                  RSVP Activity ({rsvpHistory.length})
+                </span>
+              }
+              className="bg-theme-surface backdrop-blur-xs shadow-sm"
+            >
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {rsvpHistory.map((entry) => {
+                  const userName = entry.user_name || 'Unknown';
+                  const isInitial = !entry.old_status;
+                  const changerLabel = entry.changer_name
+                    ? `by ${entry.changer_name}`
+                    : '';
+
+                  return (
+                    <div
+                      key={entry.id}
+                      className="flex items-start gap-3 py-2 border-b border-theme-surface-border last:border-0"
+                    >
+                      <div className="flex-shrink-0 mt-0.5">
+                        <div className="h-2 w-2 rounded-full bg-indigo-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-theme-text-primary">
+                          <span className="font-medium">{userName}</span>
+                          {isInitial ? (
+                            <> RSVP&apos;d as <span className="font-medium">{entry.new_status}</span></>
+                          ) : (
+                            <> changed from <span className="font-medium">{entry.old_status}</span> to <span className="font-medium">{entry.new_status}</span></>
+                          )}
+                          {changerLabel && (
+                            <span className="text-theme-text-muted"> ({changerLabel})</span>
+                          )}
+                        </p>
+                        <p className="text-xs text-theme-text-muted mt-0.5">
+                          {formatDateTime(entry.changed_at, tz)}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Collapsible>
           )}
         </div>
 
@@ -1402,7 +1490,37 @@ export const EventDetailPage: React.FC = () => {
                         value={rsvpNotes}
                         onChange={(e) => setRsvpNotes(e.target.value)}
                         className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
-                        placeholder="Dietary restrictions, special accommodations, etc."
+                        placeholder="Any special requests or comments"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="dietary_restrictions" className="block text-sm font-medium text-theme-text-secondary">
+                        Dietary Restrictions (optional)
+                      </label>
+                      <input
+                        type="text"
+                        id="dietary_restrictions"
+                        value={rsvpDietaryRestrictions}
+                        onChange={(e) => setRsvpDietaryRestrictions(e.target.value)}
+                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
+                        placeholder="e.g., Vegetarian, Nut allergy"
+                        maxLength={500}
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="accessibility_needs" className="block text-sm font-medium text-theme-text-secondary">
+                        Accessibility Needs (optional)
+                      </label>
+                      <input
+                        type="text"
+                        id="accessibility_needs"
+                        value={rsvpAccessibilityNeeds}
+                        onChange={(e) => setRsvpAccessibilityNeeds(e.target.value)}
+                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
+                        placeholder="e.g., Wheelchair access"
+                        maxLength={500}
                       />
                     </div>
 

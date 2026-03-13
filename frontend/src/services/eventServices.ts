@@ -333,6 +333,15 @@ export const eventService = {
   async removeExternalAttendee(eventId: string, attendeeId: string): Promise<void> {
     await api.delete(`/events/${eventId}/external-attendees/${attendeeId}`);
   },
+
+  /**
+   * Get RSVP change history for an event (admin only)
+   */
+  async getRSVPHistory(eventId: string, limit?: number): Promise<import('../types/event').RSVPHistory[]> {
+    const params = limit ? { limit } : undefined;
+    const response = await api.get<import('../types/event').RSVPHistory[]>(`/events/${eventId}/rsvp-history`, { params });
+    return response.data;
+  },
 };
 
 // ============================================

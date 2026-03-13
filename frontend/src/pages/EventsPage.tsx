@@ -8,7 +8,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Calendar, Plus, Download, Search, Repeat, SlidersHorizontal, User, Check, X, Users, CheckSquare, Square, XCircle, Copy } from 'lucide-react';
+import { Calendar, List, Plus, Download, Search, Repeat, SlidersHorizontal, User, Check, X, Users, CheckSquare, Square, XCircle, Copy, FileText } from 'lucide-react';
 import { eventService } from '../services/api';
 import type { EventListItem, EventType, EventCategoryConfig, RSVPCreate } from '../types/event';
 import { getEventTypeLabel, getEventTypeBadgeColor, getRSVPStatusLabel, getRSVPStatusColor } from '../utils/eventHelpers';
@@ -19,6 +19,7 @@ import { Breadcrumbs, SkeletonCardGrid, EmptyState, Pagination } from '../compon
 import { formatRelativeTime, formatAbsoluteDate } from '../hooks/useRelativeTime';
 import { DEFAULT_PAGE_SIZE } from '../constants/config';
 import { EventType as EventTypeEnum } from '../constants/enums';
+import { CalendarView } from '../components/CalendarView';
 
 const ALL_EVENT_TYPES: EventType[] = [
   EventTypeEnum.BUSINESS_MEETING,
@@ -48,6 +49,7 @@ export const EventsPage: React.FC = () => {
   const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set());
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
 
   const navigate = useNavigate();
   const { checkPermission } = useAuthStore();
@@ -362,6 +364,14 @@ export const EventsPage: React.FC = () => {
           {canManage && (
             <>
             <Link
+              to="/events/templates"
+              className="btn-secondary inline-flex items-center gap-2"
+              title="Event Templates"
+            >
+              <FileText className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Templates</span>
+            </Link>
+            <Link
               to="/events/admin"
               className="btn-secondary btn-icon"
               title="Module Settings"
@@ -383,7 +393,7 @@ export const EventsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Upcoming / Past Toggle + Search + My Events + Sort */}
+      {/* Upcoming / Past Toggle + View Mode + Search + My Events + Sort */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
         <div className="inline-flex rounded-lg border border-theme-surface-border bg-theme-surface p-1">
           <button
@@ -405,6 +415,32 @@ export const EventsPage: React.FC = () => {
             }`}
           >
             Past
+          </button>
+        </div>
+        <div className="inline-flex rounded-lg border border-theme-surface-border bg-theme-surface p-1">
+          <button
+            onClick={() => setViewMode('list')}
+            className={`p-1.5 rounded-md transition-colors ${
+              viewMode === 'list'
+                ? 'bg-red-600 text-white shadow-sm'
+                : 'text-theme-text-secondary hover:text-theme-text-primary'
+            }`}
+            aria-label="List view"
+            title="List view"
+          >
+            <List className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => setViewMode('calendar')}
+            className={`p-1.5 rounded-md transition-colors ${
+              viewMode === 'calendar'
+                ? 'bg-red-600 text-white shadow-sm'
+                : 'text-theme-text-secondary hover:text-theme-text-primary'
+            }`}
+            aria-label="Calendar view"
+            title="Calendar view"
+          >
+            <Calendar className="h-4 w-4" />
           </button>
         </div>
         <button
@@ -465,8 +501,10 @@ export const EventsPage: React.FC = () => {
         </nav>
       </div>
 
-      {/* Events List */}
-      {paginatedEvents.length === 0 ? (
+      {/* Events: Calendar or List View */}
+      {viewMode === 'calendar' ? (
+        <CalendarView events={sortedEvents} timezone={tz} />
+      ) : paginatedEvents.length === 0 ? (
         <EmptyState
           icon={Calendar}
           title="No events found"

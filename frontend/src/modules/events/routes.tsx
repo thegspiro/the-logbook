@@ -36,6 +36,11 @@ const EventCheckInMonitoringPage = lazyWithRetry(
 const AnalyticsDashboardPage = lazyWithRetry(
   () => import('../../pages/AnalyticsDashboardPage'),
 );
+const EventTemplatesPage = lazyWithRetry(() =>
+  import('../../pages/EventTemplatesPage').then((m) => ({
+    default: m.EventTemplatesPage,
+  })),
+);
 
 export const getEventsRoutes = () => {
   return (
@@ -71,6 +76,18 @@ export const getEventsRoutes = () => {
           <Suspense fallback={null}>
             <EventSelfCheckInPage />
           </Suspense>
+        }
+      />
+
+      {/* Events Module - Template Management */}
+      <Route
+        path="/events/templates"
+        element={
+          <ProtectedRoute requiredPermission="events.manage">
+            <Suspense fallback={null}>
+              <EventTemplatesPage />
+            </Suspense>
+          </ProtectedRoute>
         }
       />
 

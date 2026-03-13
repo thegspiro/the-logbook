@@ -561,6 +561,25 @@ class EventTemplateResponse(BaseModel):
 # ============================================================
 
 
+class RSVPHistoryResponse(BaseModel):
+    """Schema for RSVP history response"""
+
+    id: UUID
+    rsvp_id: UUID
+    event_id: UUID
+    user_id: UUID
+    old_status: Optional[str] = None
+    new_status: str
+    changed_at: datetime
+    changed_by: Optional[UUID] = None
+
+    # Populated by service
+    user_name: Optional[str] = None
+    changer_name: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class RecurringEventCreate(BaseModel):
     """Schema for creating a recurring event series"""
 
