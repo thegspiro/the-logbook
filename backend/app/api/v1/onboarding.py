@@ -5,6 +5,7 @@ Handles first-time system setup and configuration.
 """
 
 import asyncio
+import copy
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -533,7 +534,7 @@ async def _persist_session_data_to_org(
     if not organization:
         return
 
-    org_settings = dict(organization.settings or {})
+    org_settings = copy.deepcopy(organization.settings or {})
 
     # Persist IT team data and create user accounts for IT team members
     it_team_data = session_data.get("it_team")
@@ -559,6 +560,66 @@ async def _persist_session_data_to_org(
                     )
             except Exception as e:
                 logger.warning(f"Could not create IT team user accounts: {e}")
+
+    # Persist email configuration
+    email_data = session_data.get("email")
+    if email_data and email_data.get("config_encrypted"):
+        try:
+            import json
+
+            from app.core.security import decrypt_data
+            from app.schemas.organization import encrypt_settings_secrets
+
+            raw_config = json.loads(
+                decrypt_data(email_data["config_encrypted"])
+            )
+            platform = email_data.get("platform", "other")
+
+            # Map camelCase onboarding keys to snake_case org settings keys
+            email_settings = {
+                "enabled": True,
+                "platform": platform,
+                "smtp_host": raw_config.get("smtpHost"),
+                "smtp_port": int(raw_config.get("smtpPort", 587)),
+                "smtp_user": raw_config.get("smtpUsername"),
+                "smtp_password": raw_config.get("smtpPassword"),
+                "smtp_encryption": raw_config.get(
+                    "smtpEncryption", "tls"
+                ),
+                "from_email": raw_config.get("fromEmail"),
+                "from_name": raw_config.get("fromName"),
+                "use_tls": raw_config.get("smtpEncryption", "tls")
+                != "none",
+                "google_client_id": raw_config.get("googleClientId"),
+                "google_client_secret": raw_config.get(
+                    "googleClientSecret"
+                ),
+                "google_app_password": raw_config.get(
+                    "googleAppPassword"
+                ),
+                "microsoft_tenant_id": raw_config.get(
+                    "microsoftTenantId"
+                ),
+                "microsoft_client_id": raw_config.get(
+                    "microsoftClientId"
+                ),
+                "microsoft_client_secret": raw_config.get(
+                    "microsoftClientSecret"
+                ),
+            }
+            # Remove None values so only configured fields are stored
+            email_settings = {
+                k: v for k, v in email_settings.items() if v is not None
+            }
+            org_settings["email_service"] = email_settings
+
+            # Encrypt secret fields before persisting
+            org_settings = encrypt_settings_secrets(org_settings)
+            logger.info("Persisted email configuration from onboarding")
+        except Exception as e:
+            logger.warning(
+                f"Could not persist email config from onboarding: {e}"
+            )
 
     # Persist auth provider choice
     auth_data = session_data.get("auth")
