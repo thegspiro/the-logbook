@@ -8,8 +8,10 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Calendar, List, Plus, Download, Search, Repeat, SlidersHorizontal, User, Check, X, Users, CheckSquare, Square, XCircle, Copy, FileText } from 'lucide-react';
+import { Calendar, List, Plus, Download, Upload, Search, Repeat, SlidersHorizontal, User, Check, X, Users, CheckSquare, Square, XCircle, Copy, FileText, Bookmark, BookmarkPlus, Trash2, AlertCircle } from 'lucide-react';
 import { eventService } from '../services/api';
+import { eventService as eventServiceDirect } from '../services/eventServices';
+import type { CSVImportRowError } from '../services/eventServices';
 import type { EventListItem, EventType, EventCategoryConfig, RSVPCreate } from '../types/event';
 import { getEventTypeLabel, getEventTypeBadgeColor, getRSVPStatusLabel, getRSVPStatusColor } from '../utils/eventHelpers';
 import { useAuthStore } from '../stores/authStore';
@@ -20,6 +22,36 @@ import { formatRelativeTime, formatAbsoluteDate } from '../hooks/useRelativeTime
 import { DEFAULT_PAGE_SIZE } from '../constants/config';
 import { EventType as EventTypeEnum } from '../constants/enums';
 import { CalendarView } from '../components/CalendarView';
+
+// --- Filter Presets (localStorage) ---
+
+const PRESETS_STORAGE_KEY = 'event-filter-presets';
+
+interface FilterPreset {
+  id: string;
+  name: string;
+  eventTypeFilter: string;
+  sortField: string;
+  searchQuery: string;
+  myEventsOnly: boolean;
+  viewMode: 'list' | 'calendar';
+}
+
+function loadPresets(): FilterPreset[] {
+  try {
+    const raw = localStorage.getItem(PRESETS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed as FilterPreset[];
+  } catch {
+    return [];
+  }
+}
+
+function savePresets(presets: FilterPreset[]): void {
+  localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(presets));
+}
 
 const ALL_EVENT_TYPES: EventType[] = [
   EventTypeEnum.BUSINESS_MEETING,
@@ -50,6 +82,71 @@ export const EventsPage: React.FC = () => {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+
+  // CSV Import state
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importResult, setImportResult] = useState<{ importedCount: number; errors: CSVImportRowError[] } | null>(null);
+  const importFileRef = React.useRef<HTMLInputElement>(null);
+
+  // Filter presets
+  const [presets, setPresets] = useState<FilterPreset[]>(loadPresets);
+  const [showPresetMenu, setShowPresetMenu] = useState(false);
+  const [showSavePresetInput, setShowSavePresetInput] = useState(false);
+  const [presetName, setPresetName] = useState('');
+  const presetMenuRef = React.useRef<HTMLDivElement>(null);
+
+  const handleSavePreset = useCallback(() => {
+    const name = presetName.trim();
+    if (!name) return;
+    const newPreset: FilterPreset = {
+      id: crypto.randomUUID(),
+      name,
+      eventTypeFilter: typeFilter,
+      sortField: sortBy,
+      searchQuery,
+      myEventsOnly: showMyEventsOnly,
+      viewMode,
+    };
+    const updated = [...presets, newPreset];
+    setPresets(updated);
+    savePresets(updated);
+    setPresetName('');
+    setShowSavePresetInput(false);
+    toast.success(`Preset "${name}" saved`);
+  }, [presetName, typeFilter, sortBy, searchQuery, showMyEventsOnly, viewMode, presets]);
+
+  const handleLoadPreset = useCallback((preset: FilterPreset) => {
+    setTypeFilter(preset.eventTypeFilter);
+    setSortBy(preset.sortField as 'date' | 'title' | 'rsvp_count');
+    setSearchQuery(preset.searchQuery);
+    setShowMyEventsOnly(preset.myEventsOnly);
+    setViewMode(preset.viewMode);
+    setShowPresetMenu(false);
+    toast.success(`Loaded preset "${preset.name}"`);
+  }, []);
+
+  const handleDeletePreset = useCallback((presetId: string) => {
+    const updated = presets.filter((p) => p.id !== presetId);
+    setPresets(updated);
+    savePresets(updated);
+  }, [presets]);
+
+  // Close preset menu on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (presetMenuRef.current && !presetMenuRef.current.contains(e.target as Node)) {
+        setShowPresetMenu(false);
+        setShowSavePresetInput(false);
+        setPresetName('');
+      }
+    };
+    if (showPresetMenu) {
+      document.addEventListener('mousedown', handler);
+    }
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showPresetMenu]);
 
   const navigate = useNavigate();
   const { checkPermission } = useAuthStore();
@@ -303,6 +400,50 @@ export const EventsPage: React.FC = () => {
     }
   }, [sortedEvents, selectedEvents, fetchEvents]);
 
+  // CSV Import handlers
+  const handleDownloadTemplate = useCallback(() => {
+    const headers = 'title,event_type,start_datetime,end_datetime,location,description,is_mandatory';
+    const sampleRow = 'Monthly Business Meeting,business_meeting,2026-04-01 18:00,2026-04-01 20:00,Station 1,Regular monthly meeting,true';
+    const csv = `${headers}\n${sampleRow}`;
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'events-import-template.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  }, []);
+
+  const handleImportCSV = useCallback(async () => {
+    if (!importFile) return;
+    setImportLoading(true);
+    setImportResult(null);
+    try {
+      const result = await eventServiceDirect.importEventsCSV(importFile);
+      setImportResult({ importedCount: result.imported_count, errors: result.errors });
+      if (result.imported_count > 0) {
+        toast.success(`Imported ${result.imported_count} event${result.imported_count !== 1 ? 's' : ''}`);
+        void fetchEvents();
+      }
+      if (result.errors.length > 0 && result.imported_count === 0) {
+        toast.error('No events were imported. Check the errors below.');
+      }
+    } catch {
+      toast.error('Failed to import CSV file');
+    } finally {
+      setImportLoading(false);
+    }
+  }, [importFile, fetchEvents]);
+
+  const handleCloseImportModal = useCallback(() => {
+    setShowImportModal(false);
+    setImportFile(null);
+    setImportResult(null);
+    if (importFileRef.current) {
+      importFileRef.current.value = '';
+    }
+  }, []);
+
   // Clear selection when filters change
   useEffect(() => {
     setSelectedEvents(new Set());
@@ -363,6 +504,14 @@ export const EventsPage: React.FC = () => {
           )}
           {canManage && (
             <>
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="btn-secondary inline-flex items-center gap-2"
+              title="Import from CSV"
+            >
+              <Upload className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Import</span>
+            </button>
             <Link
               to="/events/templates"
               className="btn-secondary inline-flex items-center gap-2"
@@ -475,6 +624,82 @@ export const EventsPage: React.FC = () => {
             <option value="title">Sort by Title</option>
             <option value="rsvp_count">Sort by RSVP Count</option>
           </select>
+        </div>
+
+        {/* Filter Presets */}
+        <div className="relative" ref={presetMenuRef}>
+          <button
+            onClick={() => { setShowPresetMenu((prev) => !prev); setShowSavePresetInput(false); setPresetName(''); }}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+            title="Filter presets"
+          >
+            <Bookmark className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden sm:inline">Presets</span>
+          </button>
+
+          {showPresetMenu && (
+            <div className="absolute right-0 top-full mt-1 w-72 bg-theme-surface border border-theme-surface-border rounded-lg shadow-lg z-40">
+              <div className="p-2 border-b border-theme-surface-border">
+                {!showSavePresetInput ? (
+                  <button
+                    onClick={() => setShowSavePresetInput(true)}
+                    className="w-full inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-theme-text-primary rounded-md hover:bg-theme-surface-hover transition-colors"
+                  >
+                    <BookmarkPlus className="h-4 w-4" aria-hidden="true" />
+                    Save Current Filters
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={presetName}
+                      onChange={(e) => setPresetName(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleSavePreset(); if (e.key === 'Escape') { setShowSavePresetInput(false); setPresetName(''); } }}
+                      placeholder="Preset name..."
+                      className="flex-1 px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                      autoFocus
+                    />
+                    <button
+                      onClick={handleSavePreset}
+                      disabled={!presetName.trim()}
+                      className="px-3 py-1.5 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors"
+                    >
+                      Save
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="max-h-60 overflow-y-auto">
+                {presets.length === 0 ? (
+                  <p className="px-3 py-4 text-sm text-theme-text-muted text-center">
+                    No saved presets yet
+                  </p>
+                ) : (
+                  <ul className="py-1">
+                    {presets.map((preset) => (
+                      <li key={preset.id} className="flex items-center gap-1 px-2">
+                        <button
+                          onClick={() => handleLoadPreset(preset)}
+                          className="flex-1 text-left px-2 py-2 text-sm text-theme-text-primary rounded-md hover:bg-theme-surface-hover transition-colors truncate"
+                          title={`Load "${preset.name}"`}
+                        >
+                          {preset.name}
+                        </button>
+                        <button
+                          onClick={() => handleDeletePreset(preset.id)}
+                          className="p-1.5 text-theme-text-muted hover:text-red-600 dark:hover:text-red-400 rounded-md hover:bg-theme-surface-hover transition-colors shrink-0"
+                          title={`Delete "${preset.name}"`}
+                          aria-label={`Delete preset ${preset.name}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -744,6 +969,130 @@ export const EventsPage: React.FC = () => {
             <X className="h-4 w-4" aria-hidden="true" />
             Clear
           </button>
+        </div>
+      )}
+
+      {/* CSV Import Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Import Events from CSV">
+          <div className="fixed inset-0 bg-black/50" onClick={handleCloseImportModal} />
+          <div className="relative bg-theme-surface-modal rounded-lg shadow-xl p-6 max-w-lg w-full mx-4">
+            <h3 className="text-lg font-medium text-theme-text-primary mb-4">Import Events from CSV</h3>
+
+            {!importResult ? (
+              <>
+                <p className="text-sm text-theme-text-secondary mb-4">
+                  Upload a CSV file with columns: <code className="text-xs bg-theme-surface-hover px-1 py-0.5 rounded">title</code>, <code className="text-xs bg-theme-surface-hover px-1 py-0.5 rounded">event_type</code>, <code className="text-xs bg-theme-surface-hover px-1 py-0.5 rounded">start_datetime</code>, <code className="text-xs bg-theme-surface-hover px-1 py-0.5 rounded">end_datetime</code>, <code className="text-xs bg-theme-surface-hover px-1 py-0.5 rounded">location</code>, <code className="text-xs bg-theme-surface-hover px-1 py-0.5 rounded">description</code>, <code className="text-xs bg-theme-surface-hover px-1 py-0.5 rounded">is_mandatory</code>.
+                </p>
+                <p className="text-xs text-theme-text-muted mb-4">
+                  Valid event types: business_meeting, public_education, training, social, fundraiser, ceremony, other.
+                  Dates can be in formats like <code className="bg-theme-surface-hover px-1 py-0.5 rounded">YYYY-MM-DD HH:MM</code> or <code className="bg-theme-surface-hover px-1 py-0.5 rounded">MM/DD/YYYY HH:MM</code>.
+                </p>
+
+                <div className="mb-4">
+                  <input
+                    ref={importFileRef}
+                    type="file"
+                    accept=".csv"
+                    onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                    className="block w-full text-sm text-theme-text-primary file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-red-50 file:text-red-700 hover:file:bg-red-100 dark:file:bg-red-500/20 dark:file:text-red-400"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={handleDownloadTemplate}
+                    className="text-sm text-red-600 dark:text-red-400 hover:underline inline-flex items-center gap-1"
+                  >
+                    <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                    Download Template
+                  </button>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleCloseImportModal}
+                      className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => { void handleImportCSV(); }}
+                      disabled={!importFile || importLoading}
+                      className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 inline-flex items-center gap-2"
+                    >
+                      {importLoading ? (
+                        <>
+                          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                          Importing...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-4 w-4" aria-hidden="true" />
+                          Import
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Import Results */}
+                <div className="space-y-4">
+                  <div className={`flex items-center gap-3 p-3 rounded-lg ${
+                    importResult.importedCount > 0
+                      ? 'bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/30'
+                      : 'bg-yellow-50 dark:bg-yellow-500/10 border border-yellow-200 dark:border-yellow-500/30'
+                  }`}>
+                    <Check className={`h-5 w-5 shrink-0 ${importResult.importedCount > 0 ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}`} />
+                    <span className="text-sm font-medium text-theme-text-primary">
+                      {importResult.importedCount} event{importResult.importedCount !== 1 ? 's' : ''} imported successfully
+                    </span>
+                  </div>
+
+                  {importResult.errors.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertCircle className="h-4 w-4 text-red-500" aria-hidden="true" />
+                        <span className="text-sm font-medium text-red-700 dark:text-red-400">
+                          {importResult.errors.length} error{importResult.errors.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      <div className="max-h-48 overflow-y-auto rounded-lg border border-theme-surface-border">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="bg-theme-surface-hover">
+                              <th className="px-3 py-2 text-left font-medium text-theme-text-secondary">Row</th>
+                              <th className="px-3 py-2 text-left font-medium text-theme-text-secondary">Error</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {importResult.errors.map((err, i) => (
+                              <tr key={i} className="border-t border-theme-surface-border">
+                                <td className="px-3 py-2 text-theme-text-muted">{err.row}</td>
+                                <td className="px-3 py-2 text-red-600 dark:text-red-400">{err.error}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex justify-end mt-4">
+                  <button
+                    onClick={handleCloseImportModal}
+                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
+                  >
+                    Done
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 

@@ -5,6 +5,8 @@ Business logic for event management.
 """
 
 import calendar
+import csv
+import io
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -2090,3 +2092,236 @@ class EventService:
         created_events = list(result.scalars().all())
 
         return created_events, None
+
+    async def import_events_from_csv(
+        self,
+        rows: List[Dict[str, str]],
+        organization_id: UUID,
+        created_by: UUID,
+    ) -> Tuple[int, List[Dict[str, Any]]]:
+        """
+        Import events from parsed CSV rows.
+
+        Args:
+            rows: List of dicts with keys matching CSV columns.
+            organization_id: The org to create events for.
+            created_by: The user performing the import.
+
+        Returns:
+            (imported_count, errors) where errors is a list of
+            {"row": int, "error": str}.
+        """
+        valid_event_types = {et.value for et in EventType}
+        imported_count = 0
+        errors: List[Dict[str, Any]] = []
+
+        date_formats = [
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%dT%H:%M",
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d %H:%M",
+            "%m/%d/%Y %H:%M:%S",
+            "%m/%d/%Y %H:%M",
+            "%m/%d/%Y %I:%M %p",
+        ]
+
+        def _parse_datetime(value: str) -> Optional[datetime]:
+            """Try multiple datetime formats, return UTC datetime or None."""
+            stripped = value.strip()
+            for fmt in date_formats:
+                try:
+                    dt = datetime.strptime(stripped, fmt)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=dt_timezone.utc)
+                    return dt
+                except ValueError:
+                    continue
+            return None
+
+        for idx, row in enumerate(rows, start=2):
+            # Row numbering starts at 2 (1 = header row)
+            title = row.get("title", "").strip()
+            if not title:
+                errors.append({"row": idx, "error": "Missing required field: title"})
+                continue
+
+            raw_event_type = row.get("event_type", "").strip().lower()
+            if not raw_event_type:
+                errors.append(
+                    {"row": idx, "error": "Missing required field: event_type"}
+                )
+                continue
+            # Allow underscore or space-separated values
+            event_type_value = raw_event_type.replace(" ", "_")
+            if event_type_value not in valid_event_types:
+                errors.append(
+                    {
+                        "row": idx,
+                        "error": (
+                            f"Invalid event_type '{raw_event_type}'. "
+                            f"Valid types: {', '.join(sorted(valid_event_types))}"
+                        ),
+                    }
+                )
+                continue
+
+            raw_start = row.get("start_datetime", "").strip()
+            if not raw_start:
+                errors.append(
+                    {"row": idx, "error": "Missing required field: start_datetime"}
+                )
+                continue
+            start_dt = _parse_datetime(raw_start)
+            if start_dt is None:
+                errors.append(
+                    {
+                        "row": idx,
+                        "error": f"Invalid start_datetime format: '{raw_start}'",
+                    }
+                )
+                continue
+
+            raw_end = row.get("end_datetime", "").strip()
+            if not raw_end:
+                errors.append(
+                    {"row": idx, "error": "Missing required field: end_datetime"}
+                )
+                continue
+            end_dt = _parse_datetime(raw_end)
+            if end_dt is None:
+                errors.append(
+                    {
+                        "row": idx,
+                        "error": f"Invalid end_datetime format: '{raw_end}'",
+                    }
+                )
+                continue
+
+            if end_dt <= start_dt:
+                errors.append(
+                    {"row": idx, "error": "end_datetime must be after start_datetime"}
+                )
+                continue
+
+            location = row.get("location", "").strip() or None
+            description = row.get("description", "").strip() or None
+
+            raw_mandatory = row.get("is_mandatory", "").strip().lower()
+            is_mandatory = raw_mandatory in ("true", "yes", "1")
+
+            try:
+                event = Event(
+                    organization_id=str(organization_id),
+                    created_by=str(created_by),
+                    title=title,
+                    event_type=EventType(event_type_value),
+                    start_datetime=start_dt,
+                    end_datetime=end_dt,
+                    location=location,
+                    description=description,
+                    is_mandatory=is_mandatory,
+                )
+                self.db.add(event)
+                await self.db.flush()
+                imported_count += 1
+            except Exception as exc:
+                errors.append({"row": idx, "error": str(exc)})
+
+        if imported_count > 0:
+            await self.db.commit()
+
+        return imported_count, errors
+
+    @staticmethod
+    def parse_csv_file(file_content: bytes) -> List[Dict[str, str]]:
+        """
+        Parse CSV bytes into a list of dicts.
+
+        Normalizes header names to lowercase with underscores.
+        """
+        text = file_content.decode("utf-8-sig")
+        reader = csv.DictReader(io.StringIO(text))
+        rows: List[Dict[str, str]] = []
+        for raw_row in reader:
+            normalized: Dict[str, str] = {}
+            for key, value in raw_row.items():
+                if key is None:
+                    continue
+                norm_key = key.strip().lower().replace(" ", "_")
+                normalized[norm_key] = (value or "").strip()
+            rows.append(normalized)
+        return rows
+
+    async def send_event_reminders(
+        self,
+        event_id: UUID,
+        organization_id: UUID,
+        reminder_type: str = "non_respondents",
+    ) -> Tuple[List[str], Optional[str]]:
+        """
+        Identify members who need reminders for an event.
+
+        Args:
+            event_id: The event to send reminders for.
+            organization_id: The organization scope.
+            reminder_type: "non_respondents" (only those without RSVPs)
+                           or "all" (every active member).
+
+        Returns:
+            Tuple of (list of user IDs to remind, error message or None).
+        """
+        from loguru import logger as _logger
+
+        # Verify the event exists and belongs to the organization
+        result = await self.db.execute(
+            select(Event)
+            .where(
+                Event.id == str(event_id),
+                Event.organization_id == str(organization_id),
+            )
+        )
+        event = result.scalar_one_or_none()
+        if not event:
+            return [], "Event not found"
+
+        if event.is_cancelled:
+            return [], "Cannot send reminders for a cancelled event"
+
+        # Get all active members in the organization
+        members_result = await self.db.execute(
+            select(User.id)
+            .where(
+                User.organization_id == str(organization_id),
+                User.is_active == True,  # noqa: E712
+            )
+        )
+        all_member_ids = [str(row[0]) for row in members_result.all()]
+
+        if reminder_type == "all":
+            _logger.info(
+                "Sending reminders to all {} members for event {}",
+                len(all_member_ids),
+                event_id,
+            )
+            return all_member_ids, None
+
+        # For non_respondents: exclude members who already have an RSVP
+        rsvp_result = await self.db.execute(
+            select(EventRSVP.user_id)
+            .where(EventRSVP.event_id == str(event_id))
+        )
+        rsvp_user_ids = {str(row[0]) for row in rsvp_result.all()}
+
+        non_respondents = [
+            uid for uid in all_member_ids if uid not in rsvp_user_ids
+        ]
+
+        _logger.info(
+            "Sending reminders to {} non-respondents (out of {} total) "
+            "for event {}",
+            len(non_respondents),
+            len(all_member_ids),
+            event_id,
+        )
+
+        return non_respondents, None

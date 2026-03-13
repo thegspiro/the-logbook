@@ -18,7 +18,7 @@ import { getRSVPStatusLabel, getRSVPStatusColor, downloadICSFile } from '../util
 import { formatDateTime, formatShortDateTime, formatTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum } from '../constants/enums';
-import { Repeat, Paperclip, Download, CalendarPlus, Clock, Printer, ChevronLeft, ChevronRight, ChevronDown, MapPin, History as HistoryIcon } from 'lucide-react';
+import { Bell, Repeat, Paperclip, Download, CalendarPlus, Clock, Printer, ChevronLeft, ChevronRight, ChevronDown, MapPin, History as HistoryIcon } from 'lucide-react';
 import { Collapsible } from '../components/ux';
 
 export const EventDetailPage: React.FC = () => {
@@ -63,17 +63,23 @@ export const EventDetailPage: React.FC = () => {
   const [templateDescription, setTemplateDescription] = useState('');
   const [bulkAddLoading, setBulkAddLoading] = useState(false);
   const [rsvpHistory, setRsvpHistory] = useState<RSVPHistory[]>([]);
+  const [showReminderMenu, setShowReminderMenu] = useState(false);
+  const [sendingReminders, setSendingReminders] = useState(false);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
+  const reminderMenuRef = useRef<HTMLDivElement>(null);
 
   const { checkPermission } = useAuthStore();
   const tz = useTimezone();
   const canManage = checkPermission('events.manage');
 
-  // Close actions menu on click outside
+  // Close actions menu and reminder menu on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target as Node)) {
         setShowActionsMenu(false);
+      }
+      if (reminderMenuRef.current && !reminderMenuRef.current.contains(e.target as Node)) {
+        setShowReminderMenu(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -368,6 +374,22 @@ export const EventDetailPage: React.FC = () => {
       toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to duplicate event');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleSendReminders = async (reminderType: 'non_respondents' | 'all') => {
+    if (!eventId) return;
+
+    try {
+      setSendingReminders(true);
+      setShowReminderMenu(false);
+      const result = await eventService.sendReminders(eventId, reminderType);
+      toast.success(`${result.sent_count} reminder(s) queued`);
+    } catch (err) {
+      const axiosErr = err as AxiosError<{ detail?: string }>;
+      toast.error(axiosErr.response?.data?.detail || 'Failed to send reminders');
+    } finally {
+      setSendingReminders(false);
     }
   };
 
@@ -782,6 +804,39 @@ export const EventDetailPage: React.FC = () => {
                     </svg>
                     Check In
                   </button>
+
+                  {/* Send Reminders dropdown */}
+                  {!event.is_cancelled && (
+                    <div className="relative" ref={reminderMenuRef}>
+                      <button
+                        onClick={() => setShowReminderMenu(!showReminderMenu)}
+                        disabled={sendingReminders}
+                        className="inline-flex items-center px-4 py-2 border border-theme-surface-border rounded-md shadow-xs text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-hover disabled:opacity-50"
+                      >
+                        <Bell className="mr-2 h-4 w-4" />
+                        {sendingReminders ? 'Sending...' : 'Send Reminders'}
+                        <ChevronDown className="ml-1 h-4 w-4" />
+                      </button>
+                      {showReminderMenu && (
+                        <div className="absolute right-0 mt-2 w-56 rounded-lg bg-theme-surface border border-theme-surface-border shadow-lg z-20">
+                          <div className="py-1">
+                            <button
+                              onClick={() => void handleSendReminders('non_respondents')}
+                              className="w-full text-left px-4 py-2.5 text-sm text-theme-text-secondary hover:bg-theme-surface-hover"
+                            >
+                              Non-respondents only
+                            </button>
+                            <button
+                              onClick={() => void handleSendReminders('all')}
+                              className="w-full text-left px-4 py-2.5 text-sm text-theme-text-secondary hover:bg-theme-surface-hover"
+                            >
+                              All members
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* "More" dropdown for secondary actions */}
                   <div className="relative" ref={actionsMenuRef}>

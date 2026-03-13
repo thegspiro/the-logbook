@@ -2495,3 +2495,160 @@ async def remove_external_attendee(
 
     await db.delete(attendee)
     await db.commit()
+
+
+# ─── Reminders ──────────────────────────────────────────────
+
+
+class SendRemindersRequest(BaseModel):
+    """Request body for sending event reminders."""
+    reminder_type: str  # "non_respondents" or "all"
+
+
+@router.post("/{event_id}/send-reminders")
+async def send_event_reminders(
+    event_id: UUID,
+    body: SendRemindersRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Send reminders for an event.
+
+    - **non_respondents**: only members who have not RSVP'd
+    - **all**: every active member in the organization
+    """
+    if body.reminder_type not in ("non_respondents", "all"):
+        raise HTTPException(
+            status_code=400,
+            detail="reminder_type must be 'non_respondents' or 'all'",
+        )
+
+    service = EventService(db)
+    try:
+        user_ids, error = await service.send_event_reminders(
+            event_id=event_id,
+            organization_id=current_user.organization_id,
+            reminder_type=body.reminder_type,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+
+    await log_audit_event(
+        db=db,
+        user_id=str(current_user.id),
+        action="event.send_reminders",
+        resource_type="event",
+        resource_id=str(event_id),
+        details={
+            "reminder_type": body.reminder_type,
+            "sent_count": len(user_ids),
+        },
+        organization_id=str(current_user.organization_id),
+    )
+
+    logger.info(
+        "User {} sent {} reminders ({}) for event {}",
+        current_user.id,
+        len(user_ids),
+        body.reminder_type,
+        event_id,
+    )
+
+    return {"message": "Reminders sent successfully", "sent_count": len(user_ids)}
+
+
+# ============================================
+# CSV Import
+# ============================================
+
+
+class CSVImportRowError(BaseModel):
+    row: int
+    error: str
+
+
+class CSVImportResponse(BaseModel):
+    imported_count: int
+    errors: list[CSVImportRowError]
+
+
+@router.post(
+    "/import-csv",
+    response_model=CSVImportResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def import_events_csv(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Import events from a CSV file.
+
+    Expected columns: title, event_type, start_datetime, end_datetime,
+    location, description, is_mandatory.
+    """
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(
+            status_code=400,
+            detail="File must be a CSV (.csv) file",
+        )
+
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:  # 5 MB limit
+        raise HTTPException(
+            status_code=400,
+            detail="File size must be under 5 MB",
+        )
+
+    try:
+        rows = EventService.parse_csv_file(contents)
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to parse CSV: {safe_error_detail(e)}",
+        )
+
+    if not rows:
+        raise HTTPException(
+            status_code=400,
+            detail="CSV file is empty or contains only headers",
+        )
+
+    service = EventService(db)
+    try:
+        imported_count, errors = await service.import_events_from_csv(
+            rows=rows,
+            organization_id=current_user.organization_id,
+            created_by=current_user.id,
+        )
+    except Exception as e:
+        logger.error(f"CSV import failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=safe_error_detail(e),
+        )
+
+    await log_audit_event(
+        db=db,
+        user_id=current_user.id,
+        action="events.import_csv",
+        resource_type="event",
+        details={
+            "imported_count": imported_count,
+            "error_count": len(errors),
+            "filename": file.filename,
+        },
+        organization_id=current_user.organization_id,
+    )
+
+    return CSVImportResponse(
+        imported_count=imported_count,
+        errors=[CSVImportRowError(row=e["row"], error=e["error"]) for e in errors],
+    )
