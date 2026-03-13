@@ -3177,5 +3177,5 @@ class MembershipPipelineService:
                 "step_id": step.id,
                 "step_name": step.name,
             },
-            performed_by="system",
+            performed_by=None,
         )
