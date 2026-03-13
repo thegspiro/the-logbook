@@ -6,7 +6,7 @@
  * check-in window configuration, and reminder settings.
  */
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
   FileText,
   Clock,
@@ -19,6 +19,10 @@ import {
   AlertTriangle,
   Upload,
   Paperclip,
+  Bold,
+  Italic,
+  List,
+  Link,
 } from 'lucide-react';
 import type { EventCreate, RecurringEventCreate, RecurrencePattern, EventType, EventCategoryConfig, RSVPStatus, EventAttachment } from '../types/event';
 import { eventService, locationsService } from '../services/api';
@@ -200,6 +204,60 @@ export const EventForm: React.FC<EventFormProps> = ({
 
   // Existing attachments from initialData (shown when editing)
   const existingAttachments: EventAttachment[] = initialData?.attachments || [];
+
+  // Ref for the description textarea (used by formatting toolbar)
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+
+  /**
+   * Insert markdown syntax around the current selection in the description textarea,
+   * or insert a template at the cursor position.
+   */
+  const insertMarkdown = (syntax: 'bold' | 'italic' | 'list' | 'link') => {
+    const textarea = descriptionRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const value = textarea.value;
+    const selected = value.slice(start, end);
+
+    let insertion: string;
+    let cursorOffset: number;
+
+    switch (syntax) {
+      case 'bold':
+        insertion = `**${selected || 'bold text'}**`;
+        cursorOffset = selected ? insertion.length : 2;
+        break;
+      case 'italic':
+        insertion = `*${selected || 'italic text'}*`;
+        cursorOffset = selected ? insertion.length : 1;
+        break;
+      case 'list':
+        insertion = `\n- ${selected || 'list item'}`;
+        cursorOffset = selected ? insertion.length : 3;
+        break;
+      case 'link':
+        if (selected) {
+          insertion = `[${selected}](url)`;
+          cursorOffset = insertion.length - 4; // position cursor inside (url)
+        } else {
+          insertion = '[link text](url)';
+          cursorOffset = 1; // position cursor after [
+        }
+        break;
+    }
+
+    const newValue = value.slice(0, start) + insertion + value.slice(end);
+    update({ description: newValue });
+
+    // Restore focus and cursor position after React re-renders
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const pos = start + cursorOffset;
+      textarea.setSelectionRange(pos, pos);
+    });
+  };
 
   // Conflict detection: check if the selected time range overlaps with user's existing events
   const conflicts = useMemo(() => {
@@ -424,13 +482,56 @@ export const EventForm: React.FC<EventFormProps> = ({
           <label htmlFor="event-description" className={labelClass}>
             Description
           </label>
+          {/* Formatting toolbar */}
+          <div className="flex items-center gap-1 mb-1">
+            <button
+              type="button"
+              onClick={() => insertMarkdown('bold')}
+              className="p-1.5 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+              title="Bold (**text**)"
+              aria-label="Insert bold text"
+            >
+              <Bold className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => insertMarkdown('italic')}
+              className="p-1.5 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+              title="Italic (*text*)"
+              aria-label="Insert italic text"
+            >
+              <Italic className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => insertMarkdown('list')}
+              className="p-1.5 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+              title="Bullet list (- item)"
+              aria-label="Insert bullet list"
+            >
+              <List className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => insertMarkdown('link')}
+              className="p-1.5 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+              title="Link ([text](url))"
+              aria-label="Insert link"
+            >
+              <Link className="h-4 w-4" />
+            </button>
+            <span className="ml-2 text-xs text-theme-text-muted">
+              Supports **bold**, *italic*, - lists, [links](url)
+            </span>
+          </div>
           <textarea
+            ref={descriptionRef}
             id="event-description"
             rows={4}
             value={formData.description || ''}
             onChange={(e) => update({ description: e.target.value })}
             className={inputClass}
-            placeholder="What is this event about?"
+            placeholder="What is this event about? Use **bold**, *italic*, - lists, or [links](url)"
           />
         </div>
 

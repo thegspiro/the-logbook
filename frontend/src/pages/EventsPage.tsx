@@ -8,11 +8,11 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Calendar, List, Plus, Download, Upload, Search, Repeat, SlidersHorizontal, User, Check, X, Users, CheckSquare, Square, XCircle, Copy, FileText, Bookmark, BookmarkPlus, Trash2, AlertCircle, BarChart3 } from 'lucide-react';
+import { Calendar, List, Plus, Download, Upload, Search, Repeat, SlidersHorizontal, User, Check, X, Users, CheckSquare, Square, XCircle, Copy, FileText, Bookmark, BookmarkPlus, Trash2, AlertCircle, BarChart3, Zap } from 'lucide-react';
 import { eventService } from '../services/api';
 import { eventService as eventServiceDirect } from '../services/eventServices';
 import type { CSVImportRowError } from '../services/eventServices';
-import type { EventListItem, EventType, EventCategoryConfig, RSVPCreate } from '../types/event';
+import type { EventListItem, EventType, EventCategoryConfig, RSVPCreate, EventTemplate } from '../types/event';
 import { getEventTypeLabel, getEventTypeBadgeColor, getRSVPStatusLabel, getRSVPStatusColor } from '../utils/eventHelpers';
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
@@ -83,6 +83,12 @@ export const EventsPage: React.FC = () => {
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
 
+  // Quick-create from template state
+  const [templates, setTemplates] = useState<EventTemplate[]>([]);
+  const [showQuickCreate, setShowQuickCreate] = useState(false);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const quickCreateRef = React.useRef<HTMLDivElement>(null);
+
   // CSV Import state
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -148,10 +154,44 @@ export const EventsPage: React.FC = () => {
     return () => document.removeEventListener('mousedown', handler);
   }, [showPresetMenu]);
 
+  // Close quick-create dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (quickCreateRef.current && !quickCreateRef.current.contains(e.target as Node)) {
+        setShowQuickCreate(false);
+      }
+    };
+    if (showQuickCreate) {
+      document.addEventListener('mousedown', handler);
+    }
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showQuickCreate]);
+
   const navigate = useNavigate();
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('events.manage');
   const tz = useTimezone();
+
+  // Fetch event templates on mount for quick-create dropdown
+  useEffect(() => {
+    if (!canManage) return;
+    let cancelled = false;
+    const fetchTemplates = async () => {
+      setTemplatesLoading(true);
+      try {
+        const data = await eventServiceDirect.getTemplates();
+        if (!cancelled) {
+          setTemplates(data.filter(t => t.is_active));
+        }
+      } catch {
+        // Silently fail — quick-create is optional enhancement
+      } finally {
+        if (!cancelled) setTemplatesLoading(false);
+      }
+    };
+    void fetchTemplates();
+    return () => { cancelled = true; };
+  }, [canManage]);
 
   const tzAbbr = useMemo(() => {
     try {
@@ -538,6 +578,46 @@ export const EventsPage: React.FC = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </Link>
+            <div className="relative" ref={quickCreateRef}>
+              <button
+                onClick={() => setShowQuickCreate(prev => !prev)}
+                className="btn-primary inline-flex items-center gap-2"
+                title="Quick Create from Template"
+              >
+                <Zap className="h-5 w-5" aria-hidden="true" />
+                <span className="hidden sm:inline">Quick Create</span>
+              </button>
+              {showQuickCreate && (
+                <div className="absolute right-0 mt-2 w-64 rounded-lg border border-theme-surface-border bg-theme-surface shadow-lg z-50">
+                  <div className="p-2">
+                    <p className="px-3 py-1.5 text-xs font-semibold text-theme-text-secondary uppercase tracking-wider">
+                      Create from Template
+                    </p>
+                    {templatesLoading ? (
+                      <p className="px-3 py-2 text-sm text-theme-text-secondary">Loading templates...</p>
+                    ) : templates.length === 0 ? (
+                      <p className="px-3 py-2 text-sm text-theme-text-secondary">No templates available</p>
+                    ) : (
+                      templates.map(template => (
+                        <button
+                          key={template.id}
+                          onClick={() => {
+                            setShowQuickCreate(false);
+                            navigate(`/events/admin?tab=create&template=${template.id}`);
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm text-theme-text-primary rounded-md hover:bg-theme-surface-hover transition-colors"
+                        >
+                          <span className="font-medium">{template.name}</span>
+                          {template.description && (
+                            <span className="block text-xs text-theme-text-secondary truncate">{template.description}</span>
+                          )}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             <Link
               to="/events/new"
               className="btn-primary inline-flex items-center gap-2"

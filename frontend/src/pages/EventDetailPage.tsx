@@ -18,8 +18,13 @@ import { getRSVPStatusLabel, getRSVPStatusColor, downloadICSFile } from '../util
 import { formatDateTime, formatShortDateTime, formatTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum } from '../constants/enums';
-import { Bell, Repeat, Paperclip, Download, CalendarPlus, Clock, Printer, ChevronLeft, ChevronRight, ChevronDown, MapPin, History as HistoryIcon, Send } from 'lucide-react';
-import { Collapsible } from '../components/ux';
+import { Bell, Repeat, CalendarPlus, Clock, ChevronDown, MapPin } from 'lucide-react';
+import { renderSimpleMarkdown } from '../utils/simpleMarkdown';
+import { EventAttachmentsList } from '../components/event-detail/EventAttachmentsList';
+import { EventRecurrenceInfo } from '../components/event-detail/EventRecurrenceInfo';
+import { EventNotificationPanel } from '../components/event-detail/EventNotificationPanel';
+import { EventRSVPSection } from '../components/event-detail/EventRSVPSection';
+import type { NotificationType, NotificationTarget } from '../components/event-detail/EventNotificationPanel';
 
 export const EventDetailPage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
@@ -66,8 +71,8 @@ export const EventDetailPage: React.FC = () => {
   const [showReminderMenu, setShowReminderMenu] = useState(false);
   const [sendingReminders, setSendingReminders] = useState(false);
   // Notification panel state
-  const [notificationType, setNotificationType] = useState<'announcement' | 'reminder' | 'follow_up' | 'missed_event' | 'check_in_confirmation'>('announcement');
-  const [notificationTarget, setNotificationTarget] = useState<'all' | 'going' | 'not_responded' | 'checked_in' | 'not_checked_in'>('all');
+  const [notificationType, setNotificationType] = useState<NotificationType>('announcement');
+  const [notificationTarget, setNotificationTarget] = useState<NotificationTarget>('all');
   const [notificationMessage, setNotificationMessage] = useState('');
   const [sendingNotification, setSendingNotification] = useState(false);
   const [showNotifyConfirm, setShowNotifyConfirm] = useState(false);
@@ -683,82 +688,17 @@ export const EventDetailPage: React.FC = () => {
             </div>
             {/* Series navigation for recurring events */}
             {(event.is_recurring || event.recurrence_parent_id) && seriesEvents.length > 1 && (
-              <>
-              <div className="mt-2 flex items-center gap-3 text-sm">
-                <span className="text-theme-text-muted">
-                  Occurrence {seriesPosition} of {seriesTotal}
-                </span>
-                <div className="flex items-center gap-1">
-                  {prevOccurrence ? (
-                    <Link
-                      to={`/events/${prevOccurrence.id}`}
-                      className="inline-flex items-center gap-0.5 text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                      Previous
-                    </Link>
-                  ) : (
-                    <span className="inline-flex items-center gap-0.5 text-theme-text-muted cursor-default">
-                      <ChevronLeft className="h-4 w-4" />
-                      Previous
-                    </span>
-                  )}
-                  <span className="text-theme-text-muted mx-1">|</span>
-                  {nextOccurrence ? (
-                    <Link
-                      to={`/events/${nextOccurrence.id}`}
-                      className="inline-flex items-center gap-0.5 text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
-                    >
-                      Next
-                      <ChevronRight className="h-4 w-4" />
-                    </Link>
-                  ) : (
-                    <span className="inline-flex items-center gap-0.5 text-theme-text-muted cursor-default">
-                      Next
-                      <ChevronRight className="h-4 w-4" />
-                    </span>
-                  )}
-                </div>
-                <span className="text-theme-text-muted mx-1">|</span>
-                <button
-                  onClick={() => setShowAllOccurrences((prev) => !prev)}
-                  className="inline-flex items-center gap-0.5 text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
-                >
-                  View All ({seriesEvents.length})
-                  <ChevronDown className={`h-4 w-4 transition-transform ${showAllOccurrences ? 'rotate-180' : ''}`} />
-                </button>
-              </div>
-              {showAllOccurrences && (
-                <div className="mt-2 ml-1 space-y-1 max-h-60 overflow-y-auto">
-                  {seriesEvents.map((se) => {
-                    const isCurrent = se.id === eventId;
-                    const isUpcoming = new Date(se.start_datetime) > new Date();
-                    return (
-                      <div key={se.id} className={`flex items-center gap-2 text-sm ${isCurrent ? 'font-medium text-theme-text-primary' : ''}`}>
-                        {isCurrent ? (
-                          <span className="text-theme-text-primary">
-                            {formatShortDateTime(se.start_datetime, tz)} &mdash; {se.title}
-                          </span>
-                        ) : (
-                          <Link
-                            to={`/events/${se.id}`}
-                            className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
-                          >
-                            {formatShortDateTime(se.start_datetime, tz)} &mdash; {se.title}
-                          </Link>
-                        )}
-                        {se.is_cancelled && (
-                          <span className="text-xs text-red-500">Cancelled</span>
-                        )}
-                        {!se.is_cancelled && isUpcoming && (
-                          <span className="text-xs text-green-600 dark:text-green-400">Upcoming</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              </>
+              <EventRecurrenceInfo
+                eventId={eventId || ''}
+                seriesEvents={seriesEvents}
+                seriesPosition={seriesPosition}
+                seriesTotal={seriesTotal}
+                prevOccurrence={prevOccurrence}
+                nextOccurrence={nextOccurrence}
+                showAllOccurrences={showAllOccurrences}
+                onToggleAllOccurrences={() => setShowAllOccurrences((prev) => !prev)}
+                timezone={tz}
+              />
             )}
           </div>
 
@@ -991,7 +931,10 @@ export const EventDetailPage: React.FC = () => {
             {event.description && (
               <div className="mb-4">
                 <h3 className="text-sm font-medium text-theme-text-secondary mb-1">Description</h3>
-                <p className="text-theme-text-secondary whitespace-pre-wrap">{event.description}</p>
+                <div
+                  className="text-theme-text-secondary prose-sm"
+                  dangerouslySetInnerHTML={{ __html: renderSimpleMarkdown(event.description) }}
+                />
               </div>
             )}
 
@@ -1147,37 +1090,11 @@ export const EventDetailPage: React.FC = () => {
 
           {/* Attachments */}
           {event.attachments && event.attachments.length > 0 && (
-            <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-sm p-6">
-              <h2 className="text-lg font-medium text-theme-text-primary mb-4 flex items-center gap-2">
-                <Paperclip className="h-5 w-5" />
-                Attachments ({event.attachments.length})
-              </h2>
-              <div className="space-y-2">
-                {event.attachments.map((attachment) => (
-                  <div key={attachment.id} className="flex items-center justify-between p-3 bg-theme-surface-secondary rounded-lg">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <Paperclip className="h-4 w-4 text-theme-text-muted shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-theme-text-primary truncate">{attachment.file_name}</p>
-                        <p className="text-xs text-theme-text-muted">
-                          {attachment.file_size < 1024 * 1024
-                            ? `${Math.round(attachment.file_size / 1024)} KB`
-                            : `${(attachment.file_size / (1024 * 1024)).toFixed(1)} MB`}
-                        </p>
-                      </div>
-                    </div>
-                    <a
-                      href={eventService.getAttachmentDownloadUrl(event.id, attachment.id)}
-                      className="inline-flex items-center gap-1 text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                      download
-                    >
-                      <Download className="h-4 w-4" />
-                      Download
-                    </a>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <EventAttachmentsList
+              attachments={event.attachments}
+              eventId={event.id}
+              getAttachmentDownloadUrl={(eid, aid) => eventService.getAttachmentDownloadUrl(eid, aid)}
+            />
           )}
 
           {/* User's RSVP Status */}
@@ -1209,291 +1126,37 @@ export const EventDetailPage: React.FC = () => {
             </div>
           )}
 
-          {/* RSVPs List (for managers) */}
-          {canManage && rsvps.length > 0 && (
-            <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-medium text-theme-text-primary">Attendance</h2>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={printRoster}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-theme-text-secondary hover:text-theme-text-primary bg-theme-surface-secondary hover:bg-theme-surface rounded-md transition-colors"
-                  >
-                    <Printer className="h-4 w-4" />
-                    Print Roster
-                  </button>
-                  <button
-                    onClick={exportAttendanceCSV}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-theme-text-secondary hover:text-theme-text-primary bg-theme-surface-secondary hover:bg-theme-surface rounded-md transition-colors"
-                  >
-                    <Download className="h-4 w-4" />
-                    Export CSV
-                  </button>
-                </div>
-              </div>
-              <div className="space-y-3">
-                {rsvps.map((rsvp) => {
-                  const effectiveCheckIn = rsvp.override_check_in_at || rsvp.checked_in_at;
-                  const effectiveCheckOut = rsvp.override_check_out_at || rsvp.checked_out_at;
-                  const effectiveDuration = rsvp.override_duration_minutes ?? rsvp.attendance_duration_minutes;
-                  const isRemoving = removeConfirmUserId === rsvp.user_id;
-
-                  return (
-                    <div key={rsvp.id} className="p-3 bg-theme-surface-secondary rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-theme-text-primary">{rsvp.user_name}</p>
-                          <p className="text-xs text-theme-text-muted">{rsvp.user_email}</p>
-                          {rsvp.guest_count > 0 && (
-                            <p className="text-xs text-theme-text-muted mt-0.5">+{rsvp.guest_count} guest{rsvp.guest_count > 1 ? 's' : ''}</p>
-                          )}
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRSVPStatusColor(rsvp.status)}`}>
-                            {getRSVPStatusLabel(rsvp.status)}
-                          </span>
-                          {rsvp.status === RSVPStatusEnum.GOING && !rsvp.checked_in && (
-                            <button
-                              onClick={() => { void handleCheckIn(rsvp.user_id); }}
-                              className="text-xs text-red-400 hover:text-red-300"
-                            >
-                              Check In
-                            </button>
-                          )}
-                          {rsvp.checked_in && (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400">
-                              Checked In
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Attendance times */}
-                      {rsvp.checked_in && (
-                        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-theme-text-muted">
-                          {effectiveCheckIn && (
-                            <span>In: {formatTime(effectiveCheckIn, tz)}</span>
-                          )}
-                          {effectiveCheckOut && (
-                            <span>Out: {formatTime(effectiveCheckOut, tz)}</span>
-                          )}
-                          {effectiveDuration != null && (
-                            <span>Duration: {effectiveDuration} min</span>
-                          )}
-                          {rsvp.override_check_in_at && (
-                            <span className="text-amber-500 text-[10px]">(times overridden)</span>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Action buttons */}
-                      <div className="mt-2 flex items-center gap-3">
-                        <button
-                          onClick={() => openOverrideModal(rsvp)}
-                          className="text-xs text-blue-400 hover:text-blue-300"
-                        >
-                          Edit Times
-                        </button>
-                        {!isRemoving ? (
-                          <button
-                            onClick={() => setRemoveConfirmUserId(rsvp.user_id)}
-                            className="text-xs text-red-400 hover:text-red-300"
-                          >
-                            Remove
-                          </button>
-                        ) : (
-                          <span className="flex items-center gap-2">
-                            <span className="text-xs text-theme-text-muted">Remove?</span>
-                            <button
-                              onClick={() => { void handleRemoveAttendee(rsvp.user_id); }}
-                              className="text-xs font-medium text-red-400 hover:text-red-300"
-                            >
-                              Yes
-                            </button>
-                            <button
-                              onClick={() => setRemoveConfirmUserId(null)}
-                              className="text-xs text-theme-text-muted hover:text-theme-text-secondary"
-                            >
-                              No
-                            </button>
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* RSVP Activity (for managers) */}
-          {canManage && rsvpHistory.length > 0 && (
-            <Collapsible
-              title={
-                <span className="flex items-center gap-2">
-                  <HistoryIcon className="h-4 w-4" />
-                  RSVP Activity ({rsvpHistory.length})
-                </span>
-              }
-              className="bg-theme-surface backdrop-blur-xs shadow-sm"
-            >
-              <div className="space-y-2 max-h-80 overflow-y-auto">
-                {rsvpHistory.map((entry) => {
-                  const userName = entry.user_name || 'Unknown';
-                  const isInitial = !entry.old_status;
-                  const changerLabel = entry.changer_name
-                    ? `by ${entry.changer_name}`
-                    : '';
-
-                  return (
-                    <div
-                      key={entry.id}
-                      className="flex items-start gap-3 py-2 border-b border-theme-surface-border last:border-0"
-                    >
-                      <div className="flex-shrink-0 mt-0.5">
-                        <div className="h-2 w-2 rounded-full bg-indigo-400" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-theme-text-primary">
-                          <span className="font-medium">{userName}</span>
-                          {isInitial ? (
-                            <> RSVP&apos;d as <span className="font-medium">{entry.new_status}</span></>
-                          ) : (
-                            <> changed from <span className="font-medium">{entry.old_status}</span> to <span className="font-medium">{entry.new_status}</span></>
-                          )}
-                          {changerLabel && (
-                            <span className="text-theme-text-muted"> ({changerLabel})</span>
-                          )}
-                        </p>
-                        <p className="text-xs text-theme-text-muted mt-0.5">
-                          {formatDateTime(entry.changed_at, tz)}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </Collapsible>
+          {/* RSVPs List & RSVP Activity (for managers) */}
+          {canManage && (
+            <EventRSVPSection
+              rsvps={rsvps}
+              rsvpHistory={rsvpHistory}
+              timezone={tz}
+              removeConfirmUserId={removeConfirmUserId}
+              onSetRemoveConfirmUserId={setRemoveConfirmUserId}
+              onCheckIn={(userId) => { void handleCheckIn(userId); }}
+              onOpenOverrideModal={openOverrideModal}
+              onRemoveAttendee={(userId) => { void handleRemoveAttendee(userId); }}
+              onPrintRoster={printRoster}
+              onExportCSV={exportAttendanceCSV}
+            />
           )}
           {/* Notifications Panel (for managers) */}
           {canManage && !event.is_cancelled && (
-            <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-sm p-6">
-              <h2 className="text-lg font-medium text-theme-text-primary mb-4 flex items-center gap-2">
-                <Send className="h-5 w-5" />
-                Notifications
-              </h2>
-
-              <div className="space-y-4">
-                {/* Notification Type */}
-                <div>
-                  <label htmlFor="notification-type" className="block text-sm font-medium text-theme-text-secondary mb-1">
-                    Notification Type
-                  </label>
-                  <select
-                    id="notification-type"
-                    value={notificationType}
-                    onChange={(e) => setNotificationType(e.target.value as typeof notificationType)}
-                    className="block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
-                  >
-                    <option value="announcement">Announcement</option>
-                    <option value="reminder">Pre-Event Reminder</option>
-                    <option value="follow_up">Post-Event Follow-Up</option>
-                    <option value="missed_event">Missed Event Notice</option>
-                    <option value="check_in_confirmation">Check-In Confirmation</option>
-                  </select>
-                </div>
-
-                {/* Target Audience */}
-                <fieldset>
-                  <legend className="block text-sm font-medium text-theme-text-secondary mb-2">
-                    Target Audience
-                  </legend>
-                  <div className="space-y-2">
-                    {([
-                      { value: 'all', label: 'All members' },
-                      { value: 'going', label: 'Going (RSVP\'d yes)' },
-                      { value: 'not_responded', label: 'Not responded' },
-                      { value: 'checked_in', label: 'Checked in' },
-                      { value: 'not_checked_in', label: 'Not checked in (RSVP\'d but absent)' },
-                    ] as const).map((opt) => (
-                      <label key={opt.value} className="flex items-center">
-                        <input
-                          type="radio"
-                          name="notification-target"
-                          value={opt.value}
-                          checked={notificationTarget === opt.value}
-                          onChange={(e) => setNotificationTarget(e.target.value as typeof notificationTarget)}
-                          className="h-4 w-4 text-blue-600 focus:ring-theme-focus-ring border-theme-surface-border"
-                        />
-                        <span className="ml-2 text-sm text-theme-text-secondary">{opt.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
-
-                {/* Custom Message */}
-                <div>
-                  <label htmlFor="notification-message" className="block text-sm font-medium text-theme-text-secondary mb-1">
-                    Custom Message (optional)
-                  </label>
-                  <textarea
-                    id="notification-message"
-                    rows={3}
-                    maxLength={2000}
-                    value={notificationMessage}
-                    onChange={(e) => setNotificationMessage(e.target.value)}
-                    className="block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
-                    placeholder="Add a custom message to include with the notification..."
-                  />
-                </div>
-
-                {/* Send Button / Confirmation */}
-                {!showNotifyConfirm ? (
-                  <button
-                    onClick={() => setShowNotifyConfirm(true)}
-                    disabled={sendingNotification}
-                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
-                  >
-                    <Send className="h-4 w-4" />
-                    {sendingNotification ? 'Sending...' : 'Send Notification'}
-                  </button>
-                ) : (
-                  <div className="rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 p-3">
-                    <p className="text-sm text-amber-800 dark:text-amber-300 mb-3">
-                      Send a <strong>{notificationType.replace(/_/g, ' ')}</strong> notification to <strong>{notificationTarget.replace(/_/g, ' ')}</strong>?
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => void handleSendNotification()}
-                        disabled={sendingNotification}
-                        className="flex-1 inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50 transition-colors"
-                      >
-                        {sendingNotification ? 'Sending...' : 'Confirm & Send'}
-                      </button>
-                      <button
-                        onClick={() => setShowNotifyConfirm(false)}
-                        className="flex-1 inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium text-theme-text-secondary bg-theme-surface-secondary hover:bg-theme-surface-hover rounded-md transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Last notification sent */}
-                {lastNotification && (
-                  <div className="rounded-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 p-3">
-                    <p className="text-xs font-medium text-green-800 dark:text-green-300">Last notification sent</p>
-                    <p className="text-xs text-green-700 dark:text-green-400 mt-1">
-                      {lastNotification.type.replace(/_/g, ' ')} to {lastNotification.target.replace(/_/g, ' ')} ({lastNotification.recipients} recipient{lastNotification.recipients !== 1 ? 's' : ''})
-                    </p>
-                    <p className="text-xs text-green-600 dark:text-green-500 mt-0.5">
-                      {formatDateTime(lastNotification.sentAt, tz)}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
+            <EventNotificationPanel
+              notificationType={notificationType}
+              onNotificationTypeChange={setNotificationType}
+              notificationTarget={notificationTarget}
+              onNotificationTargetChange={setNotificationTarget}
+              notificationMessage={notificationMessage}
+              onNotificationMessageChange={setNotificationMessage}
+              sendingNotification={sendingNotification}
+              showNotifyConfirm={showNotifyConfirm}
+              onShowNotifyConfirm={setShowNotifyConfirm}
+              onSendNotification={() => void handleSendNotification()}
+              lastNotification={lastNotification}
+              timezone={tz}
+            />
           )}
         </div>
 
