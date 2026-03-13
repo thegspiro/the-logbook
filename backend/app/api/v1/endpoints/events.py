@@ -109,6 +109,7 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         recurrence_month=event.recurrence_month,
         recurrence_parent_id=event.recurrence_parent_id,
         template_id=event.template_id,
+        is_draft=event.is_draft or False,
         is_cancelled=event.is_cancelled,
         cancellation_reason=event.cancellation_reason,
         cancelled_at=event.cancelled_at,
@@ -135,6 +136,7 @@ async def list_events(
     end_after: datetime | None = None,
     end_before: datetime | None = None,
     include_cancelled: bool = False,
+    include_drafts: bool = False,
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
@@ -168,6 +170,7 @@ async def list_events(
         end_after=end_after,
         end_before=end_before,
         include_cancelled=include_cancelled,
+        include_drafts=include_drafts,
         skip=skip,
         limit=limit,
     )
@@ -207,6 +210,7 @@ async def list_events(
                 location_name=location_name,
                 requires_rsvp=event.requires_rsvp,
                 is_mandatory=event.is_mandatory,
+                is_draft=event.is_draft or False,
                 is_cancelled=event.is_cancelled,
                 is_recurring=event.is_recurring or False,
                 recurrence_parent_id=event.recurrence_parent_id,
@@ -249,6 +253,51 @@ async def create_event(
                 "event_id": str(event.id),
                 "title": event.title,
                 "event_type": event.event_type.value,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+        return _build_event_response(event)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+
+
+@router.post("/{event_id}/publish", response_model=EventResponse)
+async def publish_event(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Publish a draft event (sets is_draft to False)
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+
+    try:
+        event = await service.publish_event(
+            event_id=event_id,
+            organization_id=current_user.organization_id,
+        )
+
+        if not event:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+            )
+
+        await log_audit_event(
+            db=db,
+            event_type="event_published",
+            event_category="events",
+            severity="info",
+            event_data={
+                "event_id": str(event.id),
+                "title": event.title,
             },
             user_id=str(current_user.id),
             username=current_user.username,
@@ -680,6 +729,67 @@ async def update_event(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+
+
+@router.patch("/{event_id}/update-future")
+async def update_future_events(
+    event_id: UUID,
+    event_data: EventUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Update this event and all future events in the same recurring series.
+
+    Applies the same update to this event and all subsequent occurrences.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+
+    try:
+        updated_count = await service.update_future_events(
+            event_id=event_id,
+            organization_id=current_user.organization_id,
+            event_data=event_data,
+            updated_by=current_user.id,
+        )
+
+        if updated_count == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No events found to update",
+            )
+
+        await log_audit_event(
+            db=db,
+            event_type="event.future_series_updated",
+            event_category="events",
+            severity="info",
+            event_data={
+                "event_id": str(event_id),
+                "updated_count": updated_count,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+        return {
+            "message": f"Successfully updated {updated_count} event(s)",
+            "updated_count": updated_count,
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
         )
 
 

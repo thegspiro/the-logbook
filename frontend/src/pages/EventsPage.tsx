@@ -62,8 +62,8 @@ export const EventsPage: React.FC = () => {
       setLoading(true);
       setError(null);
       const params = showPastEvents
-        ? { end_before: new Date().toISOString() }
-        : { end_after: new Date().toISOString() };
+        ? { end_before: new Date().toISOString(), include_drafts: canManage }
+        : { end_after: new Date().toISOString(), include_drafts: canManage };
       const data = await eventService.getEvents(params);
       setEvents(data);
     } catch (_err) {
@@ -71,7 +71,7 @@ export const EventsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [showPastEvents]);
+  }, [showPastEvents, canManage]);
 
   useEffect(() => {
     void fetchEvents();
@@ -127,7 +127,9 @@ export const EventsPage: React.FC = () => {
       filtered = filtered.filter(
         (e) =>
           e.title.toLowerCase().includes(query) ||
-          (e.location_name || e.location || '').toLowerCase().includes(query)
+          (e.location ?? '').toLowerCase().includes(query) ||
+          (e.location_name ?? '').toLowerCase().includes(query) ||
+          (e.custom_category ?? '').toLowerCase().includes(query)
       );
     }
     return filtered;
@@ -389,6 +391,11 @@ export const EventsPage: React.FC = () => {
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getEventTypeBadgeColor(event.event_type)}`}>
                         {getEventTypeLabel(event.event_type)}
                       </span>
+                      {event.is_draft && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300">
+                          Draft
+                        </span>
+                      )}
                       {event.is_mandatory && (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400">
                           Mandatory

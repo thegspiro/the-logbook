@@ -155,6 +155,7 @@ class EventBase(BaseModel):
     )
     custom_fields: Optional[Dict[str, Any]] = None
     attachments: Optional[List[Dict[str, str]]] = None
+    is_draft: bool = False
 
 
 class EventCreate(EventBase):
@@ -205,6 +206,7 @@ class EventUpdate(BaseModel):
     )
     custom_fields: Optional[Dict[str, Any]] = None
     attachments: Optional[List[Dict[str, str]]] = None
+    is_draft: Optional[bool] = None
 
     @model_validator(mode="after")
     def validate_dates(self) -> "EventUpdate":
@@ -230,6 +232,7 @@ class EventResponse(EventBase):
     organization_id: UUID
     actual_start_time: Optional[datetime] = None
     actual_end_time: Optional[datetime] = None
+    is_draft: bool = False
     is_cancelled: bool = False
     cancellation_reason: Optional[str] = None
     cancelled_at: Optional[datetime] = None
@@ -274,6 +277,7 @@ class EventListItem(BaseModel):
     location_name: Optional[str] = None  # Resolved location name if location_id is set
     requires_rsvp: bool
     is_mandatory: bool
+    is_draft: bool = False
     is_cancelled: bool
     is_recurring: bool = False
     recurrence_parent_id: Optional[UUID] = None

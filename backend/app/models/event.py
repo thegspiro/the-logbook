@@ -175,6 +175,7 @@ class Event(Base):
     attachments = Column(JSON, nullable=True)  # List of attachment URLs/metadata
 
     # Status
+    is_draft = Column(Boolean, default=False, server_default="0")
     is_cancelled = Column(Boolean, nullable=False, default=False)
     cancellation_reason = Column(Text, nullable=True)
     cancelled_at = Column(DateTime(timezone=True), nullable=True)

@@ -53,6 +53,9 @@ export const EventDetailPage: React.FC = () => {
   const [removeConfirmUserId, setRemoveConfirmUserId] = useState<string | null>(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [seriesEvents, setSeriesEvents] = useState<EventListItem[]>([]);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [templateDescription, setTemplateDescription] = useState('');
   const actionsMenuRef = useRef<HTMLDivElement>(null);
 
   const { checkPermission } = useAuthStore();
@@ -538,6 +541,11 @@ export const EventDetailPage: React.FC = () => {
             <h1 className="text-2xl sm:text-3xl font-bold text-theme-text-primary wrap-break-word">{event.title}</h1>
             <div className="mt-2 flex items-center space-x-2">
               <EventTypeBadge type={event.event_type} size="sm" />
+              {event.is_draft && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300">
+                  Draft
+                </span>
+              )}
               {event.is_cancelled && (
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300">
                   Cancelled
@@ -599,6 +607,29 @@ export const EventDetailPage: React.FC = () => {
           {!event.is_cancelled && (
             <div className="flex flex-wrap gap-2 sm:gap-3">
               {/* Primary actions — always visible */}
+              {event.is_draft && canManage && (
+                <button
+                  onClick={() => {
+                    if (!eventId) return;
+                    void (async () => {
+                      try {
+                        setSubmitting(true);
+                        await eventService.publishEvent(eventId);
+                        toast.success('Event published successfully');
+                        await fetchEvent();
+                      } catch (err) {
+                        toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to publish event');
+                      } finally {
+                        setSubmitting(false);
+                      }
+                    })();
+                  }}
+                  disabled={submitting}
+                  className="btn-primary font-medium inline-flex items-center rounded-md text-sm"
+                >
+                  Publish
+                </button>
+              )}
               {canRSVP && (
                 <button
                   onClick={() => setShowRSVPModal(true)}
@@ -711,6 +742,12 @@ export const EventDetailPage: React.FC = () => {
                             className="w-full text-left px-4 py-2.5 text-sm text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50"
                           >
                             Create Meeting
+                          </button>
+                          <button
+                            onClick={() => { setShowActionsMenu(false); setTemplateName(event.title); setTemplateDescription(''); setShowTemplateModal(true); }}
+                            className="w-full text-left px-4 py-2.5 text-sm text-theme-text-secondary hover:bg-theme-surface-hover"
+                          >
+                            Save as Template
                           </button>
                           <div className="border-t border-theme-surface-border my-1" />
                           <button
@@ -1900,6 +1937,115 @@ export const EventDetailPage: React.FC = () => {
                   Go Back
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Save as Template Modal */}
+      {showTemplateModal && (
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="save-template-modal-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowTemplateModal(false); }}
+        >
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+              <div className="absolute inset-0 bg-black/75"></div>
+            </div>
+
+            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                const name = templateName.trim();
+                if (!name || !event) return;
+                void (async () => {
+                  try {
+                    setSubmitting(true);
+                    setSubmitError(null);
+                    const templateData: import('../types/event').EventTemplateCreate = {
+                      name,
+                      event_type: event.event_type,
+                      requires_rsvp: event.requires_rsvp,
+                      is_mandatory: event.is_mandatory,
+                      allow_guests: event.allow_guests,
+                      require_checkout: event.require_checkout || false,
+                      send_reminders: event.send_reminders,
+                      reminder_schedule: event.reminder_schedule,
+                    };
+                    const descTrimmed = templateDescription.trim();
+                    if (descTrimmed) templateData.description = descTrimmed;
+                    if (event.title) templateData.default_title = event.title;
+                    if (event.description) templateData.default_description = event.description;
+                    if (event.location_id) templateData.default_location_id = event.location_id;
+                    if (event.location) templateData.default_location = event.location;
+                    if (event.location_details) templateData.default_location_details = event.location_details;
+                    if (event.max_attendees) templateData.max_attendees = event.max_attendees;
+                    if (event.check_in_window_type) templateData.check_in_window_type = event.check_in_window_type;
+                    if (event.check_in_minutes_before != null) templateData.check_in_minutes_before = event.check_in_minutes_before;
+                    if (event.check_in_minutes_after != null) templateData.check_in_minutes_after = event.check_in_minutes_after;
+                    await eventService.createTemplate(templateData);
+                    setShowTemplateModal(false);
+                    toast.success('Template saved successfully');
+                  } catch (err) {
+                    toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to save template');
+                  } finally {
+                    setSubmitting(false);
+                  }
+                })();
+              }}>
+                <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6">
+                  <h3 id="save-template-modal-title" className="text-lg leading-6 font-medium text-theme-text-primary mb-4">
+                    Save as Template
+                  </h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                        Template Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={templateName}
+                        onChange={(e) => setTemplateName(e.target.value)}
+                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                        placeholder="e.g., Weekly Business Meeting"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                        Description (optional)
+                      </label>
+                      <textarea
+                        value={templateDescription}
+                        onChange={(e) => setTemplateDescription(e.target.value)}
+                        rows={3}
+                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                        placeholder="Brief description of this template..."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-theme-surface-secondary px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                  <button
+                    type="submit"
+                    disabled={submitting || !templateName.trim()}
+                    className="btn-primary font-medium inline-flex justify-center rounded-md sm:ml-3 sm:text-sm sm:w-auto text-base w-full disabled:opacity-50"
+                  >
+                    {submitting ? 'Saving...' : 'Save Template'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowTemplateModal(false)}
+                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-xs px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>

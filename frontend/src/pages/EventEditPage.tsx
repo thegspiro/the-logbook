@@ -8,6 +8,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Calendar, ArrowLeft, Info } from 'lucide-react';
 import { AxiosError } from 'axios';
+import toast from 'react-hot-toast';
 import { eventService } from '../services/api';
 import type { EventCreate, Event } from '../types/event';
 import { EventForm } from '../components/EventForm';
@@ -22,6 +23,7 @@ export const EventEditPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [userEvents, setUserEvents] = useState<ConflictEvent[]>([]);
+  const [updateScope, setUpdateScope] = useState<'single' | 'future'>('single');
 
   useEffect(() => {
     void eventService.getEvents({ end_after: new Date().toISOString() }).then((data) => {
@@ -62,7 +64,14 @@ export const EventEditPage: React.FC = () => {
     setIsSubmitting(true);
     setError(null);
     try {
-      await eventService.updateEvent(eventId, data);
+      const isRecurring = event?.is_recurring || event?.recurrence_parent_id;
+      if (isRecurring && updateScope === 'future') {
+        const result = await eventService.updateFutureEvents(eventId, data);
+        toast.success(`Updated ${result.updated_count} event(s) in the series`);
+      } else {
+        await eventService.updateEvent(eventId, data);
+        toast.success('Event updated successfully');
+      }
       navigate(`/events/${eventId}`);
     } catch (err: unknown) {
       const apiError = err as { response?: { data?: { detail?: string } } };
@@ -156,7 +165,33 @@ export const EventEditPage: React.FC = () => {
             <Info className="mt-0.5 h-5 w-5 shrink-0 text-indigo-600 dark:text-indigo-400" />
             <div className="text-sm text-indigo-700 dark:text-indigo-300">
               <p className="font-medium">This event is part of a recurring series.</p>
-              <p className="mt-1">Changes made here will only affect this individual occurrence, not the entire series.</p>
+              <fieldset className="mt-3">
+                <legend className="sr-only">Update scope</legend>
+                <div className="flex flex-col gap-2">
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="updateScope"
+                      value="single"
+                      checked={updateScope === 'single'}
+                      onChange={() => setUpdateScope('single')}
+                      className="text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span>This event only</span>
+                  </label>
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="updateScope"
+                      value="future"
+                      checked={updateScope === 'future'}
+                      onChange={() => setUpdateScope('future')}
+                      className="text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span>This and all future events</span>
+                  </label>
+                </div>
+              </fieldset>
             </div>
           </div>
         )}

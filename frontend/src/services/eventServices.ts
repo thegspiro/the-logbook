@@ -17,6 +17,7 @@ export const eventService = {
     end_after?: string;
     end_before?: string;
     include_cancelled?: boolean;
+    include_drafts?: boolean;
     skip?: number;
     limit?: number;
   }): Promise<EventListItem[]> {
@@ -29,6 +30,14 @@ export const eventService = {
    */
   async createEvent(eventData: EventCreate): Promise<Event> {
     const response = await api.post<Event>('/events', eventData);
+    return response.data;
+  },
+
+  /**
+   * Publish a draft event
+   */
+  async publishEvent(eventId: string): Promise<Event> {
+    const response = await api.post<Event>(`/events/${eventId}/publish`);
     return response.data;
   },
 
@@ -60,6 +69,14 @@ export const eventService = {
    */
   async duplicateEvent(eventId: string): Promise<Event> {
     const response = await api.post<Event>(`/events/${eventId}/duplicate`);
+    return response.data;
+  },
+
+  /**
+   * Update this event and all future events in the recurring series
+   */
+  async updateFutureEvents(eventId: string, data: EventUpdate): Promise<{ updated_count: number }> {
+    const response = await api.patch<{ updated_count: number }>(`/events/${eventId}/update-future`, data);
     return response.data;
   },
 

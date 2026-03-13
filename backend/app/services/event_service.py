@@ -141,6 +141,7 @@ class EventService:
         end_after: Optional[datetime] = None,
         end_before: Optional[datetime] = None,
         include_cancelled: bool = False,
+        include_drafts: bool = False,
         skip: int = 0,
         limit: int = 100,
     ) -> List[Event]:
@@ -150,6 +151,11 @@ class EventService:
             .where(Event.organization_id == str(organization_id))
             .options(selectinload(Event.rsvps), selectinload(Event.location_obj))
         )
+
+        if not include_drafts:
+            query = query.where(
+                or_(Event.is_draft == False, Event.is_draft.is_(None))  # noqa: E712
+            )
 
         if event_type:
             query = query.where(Event.event_type == event_type)
@@ -242,6 +248,89 @@ class EventService:
         await self.db.refresh(event)
 
         return event
+
+    async def publish_event(
+        self, event_id: UUID, organization_id: UUID
+    ) -> Optional[Event]:
+        """Publish a draft event by setting is_draft to False"""
+        result = await self.db.execute(
+            select(Event)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
+            .options(selectinload(Event.location_obj))
+        )
+        event = result.scalar_one_or_none()
+
+        if not event:
+            return None
+
+        if not event.is_draft:
+            raise ValueError("Event is already published")
+
+        event.is_draft = False
+        await self.db.commit()
+        await self.db.refresh(event)
+
+        return event
+
+    async def update_future_events(
+        self,
+        event_id: UUID,
+        organization_id: UUID,
+        event_data: EventUpdate,
+        updated_by: Optional[UUID] = None,
+    ) -> int:
+        """Update this event and all future events in the same recurring series.
+
+        Returns the count of updated events.
+        """
+        # Fetch the anchor event
+        result = await self.db.execute(
+            select(Event)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
+        )
+        anchor = result.scalar_one_or_none()
+
+        if not anchor:
+            raise ValueError("Event not found")
+
+        if anchor.is_cancelled:
+            raise ValueError("Cannot update cancelled event")
+
+        # Determine the series parent id
+        parent_id = anchor.recurrence_parent_id or anchor.id
+
+        # Query all events in the series with start_datetime >= anchor's start
+        result = await self.db.execute(
+            select(Event).where(
+                Event.organization_id == str(organization_id),
+                Event.is_cancelled == False,  # noqa: E712
+                or_(
+                    Event.id == str(parent_id),
+                    Event.recurrence_parent_id == str(parent_id),
+                ),
+                Event.start_datetime >= anchor.start_datetime,
+            )
+        )
+        future_events = result.scalars().all()
+
+        update_data = event_data.model_dump(exclude_unset=True)
+        now = datetime.now(dt_timezone.utc)
+        updated_count = 0
+
+        for event in future_events:
+            for field, value in update_data.items():
+                setattr(event, field, value)
+            if updated_by:
+                event.updated_by = str(updated_by)
+            event.updated_at = now
+            updated_count += 1
+
+        if updated_count > 0:
+            await self.db.commit()
+
+        return updated_count
 
     async def cancel_event(
         self,

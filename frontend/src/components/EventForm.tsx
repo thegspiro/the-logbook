@@ -80,6 +80,7 @@ const DEFAULT_FORM_DATA: EventCreate = {
   check_in_minutes_before: 15,
   check_in_minutes_after: 15,
   require_checkout: false,
+  is_draft: false,
 };
 
 /* Shared Tailwind classes for consistency */
@@ -1081,21 +1082,32 @@ export const EventForm: React.FC<EventFormProps> = ({
       </section>
 
       {/* === Actions === */}
-      <div className="flex justify-end gap-3 pt-6 border-t border-theme-surface-border">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-6 py-3 border border-theme-surface-border rounded-lg text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring transition-colors"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="btn-primary border border-transparent disabled:cursor-not-allowed font-medium px-8 py-3 text-sm"
-        >
-          {isSubmitting ? 'Saving...' : submitLabel}
-        </button>
+      <div className="flex items-center justify-between gap-3 pt-6 border-t border-theme-surface-border">
+        <label className="inline-flex items-center gap-2 text-sm text-theme-text-secondary cursor-pointer">
+          <input
+            type="checkbox"
+            checked={formData.is_draft || false}
+            onChange={(e) => setFormData({ ...formData, is_draft: e.target.checked })}
+            className="rounded border-theme-input-border text-red-600 focus:ring-red-500"
+          />
+          Save as Draft
+        </label>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-6 py-3 border border-theme-surface-border rounded-lg text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="btn-primary border border-transparent disabled:cursor-not-allowed font-medium px-8 py-3 text-sm"
+          >
+            {isSubmitting ? 'Saving...' : submitLabel}
+          </button>
+        </div>
       </div>
     </form>
   );
