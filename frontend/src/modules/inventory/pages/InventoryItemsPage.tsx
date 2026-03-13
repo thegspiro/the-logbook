@@ -377,7 +377,7 @@ const InventoryItemsPage: React.FC = () => {
                 ))}
                 <th className="px-3 py-3 text-left text-theme-text-secondary font-medium">Category</th>
                 <th className="px-3 py-3 text-left text-theme-text-secondary font-medium">Tracking</th>
-                <th className="px-3 py-3 text-left text-theme-text-secondary font-medium">Serial / Tag</th>
+                <th className="px-3 py-3 text-left text-theme-text-secondary font-medium">Barcode / Serial / Tag</th>
                 <th className="px-3 py-3 text-left text-theme-text-secondary font-medium">Location</th>
                 <th className="px-3 py-3 text-right text-theme-text-secondary font-medium">Cost</th>
                 <th className="px-3 py-3 w-10" />
@@ -387,7 +387,7 @@ const InventoryItemsPage: React.FC = () => {
               {items.map((item) => {
                 const c = categories.find((ct) => ct.id === item.category_id);
                 const loc = locLabel(item, locations);
-                const ids = [item.serial_number, item.asset_tag].filter(Boolean).join(' / ');
+                const ids = [item.barcode, item.serial_number, item.asset_tag].filter(Boolean).join(' / ');
                 return (
                   <tr key={item.id} className={`hover:bg-theme-surface-hover transition-colors ${selIds.has(item.id) ? 'bg-theme-surface-hover/50' : ''}`}>
                     <td className="px-3 py-3"><input type="checkbox" checked={selIds.has(item.id)} onChange={() => toggle(item.id)} className="form-checkbox" aria-label={`Select ${item.name}`} /></td>

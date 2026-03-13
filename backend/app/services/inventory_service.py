@@ -1885,6 +1885,10 @@ class InventoryService:
         Search items by partial barcode, serial number, asset tag, or name.
         Returns a list of (item, matched_field, matched_value) tuples.
         Uses substring matching so partial codes return results.
+
+        Runs a single DB query with OR across all searchable fields, then
+        assigns the best matched_field in Python based on priority order:
+        barcode > serial_number > asset_tag > name > size > color.
         """
         code = code.strip()
         if not code:
@@ -1893,40 +1897,50 @@ class InventoryService:
         org_id = str(organization_id)
         safe_code = code.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         search_term = f"%{safe_code}%"
-        results: List[Tuple[InventoryItem, str, str]] = []
-        seen_ids: set = set()
 
-        # Search barcode, serial_number, asset_tag, name, size, then color in order of priority
-        fields = [
-            ("barcode", InventoryItem.barcode),
-            ("serial_number", InventoryItem.serial_number),
-            ("asset_tag", InventoryItem.asset_tag),
-            ("name", InventoryItem.name),
-            ("size", InventoryItem.size),
-            ("color", InventoryItem.color),
+        # Priority-ordered fields to search
+        field_names = ["barcode", "serial_number", "asset_tag", "name", "size", "color"]
+        field_cols = [
+            InventoryItem.barcode,
+            InventoryItem.serial_number,
+            InventoryItem.asset_tag,
+            InventoryItem.name,
+            InventoryItem.size,
+            InventoryItem.color,
         ]
 
-        for field_name, field_col in fields:
-            if len(results) >= limit:
-                break
-
-            result = await self.db.execute(
-                select(InventoryItem)
-                .where(
-                    InventoryItem.organization_id == org_id,
-                    field_col.ilike(search_term),
-                    InventoryItem.active == True,  # noqa: E712
-                )
-                .options(selectinload(InventoryItem.category))
-                .limit(limit - len(results))
+        # Single query: match any of the fields
+        result = await self.db.execute(
+            select(InventoryItem)
+            .where(
+                InventoryItem.organization_id == org_id,
+                InventoryItem.active == True,  # noqa: E712
+                or_(*[col.ilike(search_term) for col in field_cols]),
             )
-            for item in result.scalars().all():
-                if item.id not in seen_ids:
-                    seen_ids.add(item.id)
-                    matched_value = getattr(item, field_name) or ""
-                    results.append((item, field_name, matched_value))
+            .options(selectinload(InventoryItem.category))
+            .limit(limit * 2)  # fetch extra to allow dedup headroom
+        )
+        items = result.scalars().all()
 
-        return results
+        # Determine the highest-priority matched field for each item
+        results: List[Tuple[InventoryItem, str, str]] = []
+        safe_lower = safe_code.lower()
+        for item in items:
+            matched_field = "name"
+            matched_value = item.name or ""
+            for fname in field_names:
+                val = getattr(item, fname) or ""
+                if val and safe_lower in val.lower():
+                    matched_field = fname
+                    matched_value = val
+                    break
+            results.append((item, matched_field, matched_value))
+
+        # Sort by field priority so barcode matches come first
+        priority = {name: i for i, name in enumerate(field_names)}
+        results.sort(key=lambda r: priority.get(r[1], 99))
+
+        return results[:limit]
 
     # ============================================
     # Batch Checkout (scan-to-assign)
@@ -2351,6 +2365,12 @@ class InventoryService:
             "description": "Dymo 30334 Multi-Purpose Label (2.25 x 1.25 in)",
             "width": 2.25,
             "height": 1.25,
+            "type": "thermal",
+        },
+        "dymo_30336": {
+            "description": "Dymo 30336 Small Multipurpose Label (2.125 x 1 in)",
+            "width": 2.125,
+            "height": 1.0,
             "type": "thermal",
         },
         "rollo_4x6": {

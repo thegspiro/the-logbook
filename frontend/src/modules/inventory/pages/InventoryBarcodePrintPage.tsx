@@ -96,7 +96,7 @@ const DEFAULT_PRESET_ID = 'dymo-30252';
 /** Map frontend preset IDs to backend label format keys */
 const PRESET_TO_BACKEND: Record<string, string> = {
   'dymo-30252': 'dymo_30252',
-  'dymo-30336': 'dymo_30334',
+  'dymo-30336': 'dymo_30336',
   'rollo-2x1': 'custom',
   'thermal-1x1': 'custom',
   'letter-grid': 'letter',
