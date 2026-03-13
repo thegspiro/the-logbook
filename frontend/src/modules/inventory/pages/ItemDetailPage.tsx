@@ -319,12 +319,8 @@ const ItemDetailPage: React.FC = () => {
             <Field label="Serial Number" value={item.serial_number || '--'} />
             <Field label="Model Number" value={item.model_number || '--'} />
             <Field label="Manufacturer" value={item.manufacturer || '--'} />
-            {itemType !== 'ppe' && (
-              <>
-                <Field label="Asset Tag" value={item.asset_tag || '--'} />
-                <Field label="Barcode" value={item.barcode || '--'} />
-              </>
-            )}
+            <Field label="Asset Tag" value={item.asset_tag || '--'} />
+            <Field label="Barcode" value={item.barcode || '--'} />
           </Card>
         )}
 

@@ -161,17 +161,15 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
           </div>
         </fieldset>
 
-        {/* Identity */}
-        {(has('serial_number') || has('asset_tag')) && (
-          <fieldset>
-            <legend className="text-sm font-semibold text-theme-text-primary mb-2">Identity</legend>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {has('serial_number') && <div><label className={lbl}>Serial #</label><input className={inp} value={f.serial_number} onChange={(e) => up('serial_number', e.target.value)} /></div>}
-              {has('asset_tag') && <div><label className={lbl}>Asset Tag</label><input className={inp} value={f.asset_tag} onChange={(e) => up('asset_tag', e.target.value)} /></div>}
-              <div><label className={lbl}>Barcode</label><input className={inp} value={f.barcode} onChange={(e) => up('barcode', e.target.value)} /></div>
-            </div>
-          </fieldset>
-        )}
+        {/* Identity — barcode is always available; serial/asset tag depend on category */}
+        <fieldset>
+          <legend className="text-sm font-semibold text-theme-text-primary mb-2">Identity</legend>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {has('serial_number') && <div><label className={lbl}>Serial #</label><input className={inp} value={f.serial_number} onChange={(e) => up('serial_number', e.target.value)} /></div>}
+            {has('asset_tag') && <div><label className={lbl}>Asset Tag</label><input className={inp} value={f.asset_tag} onChange={(e) => up('asset_tag', e.target.value)} /></div>}
+            <div><label className={lbl}>Barcode</label><input className={inp} value={f.barcode} onChange={(e) => up('barcode', e.target.value)} /></div>
+          </div>
+        </fieldset>
 
         {/* Physical */}
         {(has('size') || has('color')) && (
