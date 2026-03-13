@@ -320,9 +320,7 @@ class EventService:
             )
         )
 
-        result = await self.db.execute(
-            select(Event).where(*conditions)
-        )
+        result = await self.db.execute(select(Event).where(*conditions))
         events = result.scalars().all()
 
         now = datetime.now(dt_timezone.utc)
@@ -383,6 +381,7 @@ class EventService:
             check_in_minutes_before=source_event.check_in_minutes_before,
             check_in_minutes_after=source_event.check_in_minutes_after,
             require_checkout=source_event.require_checkout,
+            custom_category=source_event.custom_category,
             custom_fields=source_event.custom_fields,
             attachments=source_event.attachments,
             template_id=source_event.template_id,
@@ -852,9 +851,7 @@ class EventService:
                 EventRSVP.status,
                 func.count(EventRSVP.id),
                 func.sum(EventRSVP.guest_count),
-                func.sum(
-                    case((EventRSVP.checked_in.is_(True), 1), else_=0)
-                ),
+                func.sum(case((EventRSVP.checked_in.is_(True), 1), else_=0)),
             )
             .where(EventRSVP.event_id == str(event_id))
             .group_by(EventRSVP.status)
@@ -1092,7 +1089,8 @@ class EventService:
             "event_name": event.title,
             "event_type": event.event_type.value if event.event_type else None,
             "event_description": event.description,
-            "start_datetime": event.start_datetime.replace(tzinfo=None).isoformat() + "Z",
+            "start_datetime": event.start_datetime.replace(tzinfo=None).isoformat()
+            + "Z",
             "end_datetime": event.end_datetime.replace(tzinfo=None).isoformat() + "Z",
             "actual_end_time": (
                 (event.actual_end_time.replace(tzinfo=None).isoformat() + "Z")
@@ -1565,7 +1563,10 @@ class EventService:
 
     @staticmethod
     def _nth_weekday_of_month(
-        year: int, month: int, weekday: int, ordinal: int,
+        year: int,
+        month: int,
+        weekday: int,
+        ordinal: int,
         reference: datetime,
     ) -> Optional[datetime]:
         """
@@ -1673,9 +1674,7 @@ class EventService:
                     current = current.replace(year=current.year + 1)
                 except ValueError:
                     # Feb 29 in a non-leap year → Feb 28
-                    current = current.replace(
-                        year=current.year + 1, day=28
-                    )
+                    current = current.replace(year=current.year + 1, day=28)
             elif (
                 pattern == RecurrencePattern.ANNUALLY_WEEKDAY.value
                 and weekday is not None

@@ -1710,8 +1710,8 @@ async def upload_event_attachment(
     with open(file_path, "wb") as f:
         f.write(content)
 
-    # Update event attachments list
-    attachments = event.attachments or []
+    # Update event attachments list (deep copy to ensure SQLAlchemy detects the change)
+    attachments = copy.deepcopy(event.attachments or [])
     attachments.append(
         {
             "id": uuid_lib.uuid4().hex,

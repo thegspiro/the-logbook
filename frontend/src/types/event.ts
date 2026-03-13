@@ -332,6 +332,10 @@ export interface RecurringEventCreate {
   check_in_minutes_before?: number | undefined;
   check_in_minutes_after?: number | undefined;
   require_checkout?: boolean | undefined;
+  custom_category?: string | undefined;
+  custom_fields?: Record<string, string | number | boolean | null> | undefined;
+  attachments?: EventAttachment[] | undefined;
+  allowed_rsvp_statuses?: RSVPStatus[] | undefined;
   template_id?: string | undefined;
 }
 
