@@ -12,8 +12,6 @@ import {
   Loader2,
   AlertTriangle,
   CheckCircle,
-  XCircle,
-  Clock,
   Shield,
   Trash2,
   Edit2,
@@ -393,7 +391,7 @@ export const MedicalScreeningPage: React.FC = () => {
         confirmLabel="Delete"
         variant="danger"
         onConfirm={() => void handleDelete()}
-        onCancel={() => setDeleteTarget(null)}
+        onClose={() => setDeleteTarget(null)}
       />
     </div>
   );
