@@ -19,6 +19,7 @@ from loguru import logger
 
 from app.core.config import settings
 from app.models.user import Organization
+from app.schemas.organization import decrypt_settings_secrets
 
 
 def build_email_logo_img(organization: Optional[Organization]) -> str:
@@ -103,7 +104,9 @@ class EmailService:
         """
         # Check if organization has custom email settings
         if self.organization and self.organization.settings:
-            org_email_config = self.organization.settings.get("email_service", {})
+            # Decrypt secret fields (smtp_password, etc.) before reading
+            decrypted = decrypt_settings_secrets(self.organization.settings)
+            org_email_config = decrypted.get("email_service", {})
             if org_email_config.get("enabled"):
                 return {
                     "host": org_email_config.get("smtp_host"),
@@ -155,7 +158,9 @@ class EmailService:
         """
         if not settings.EMAIL_ENABLED and not (
             self.organization
-            and self.organization.settings.get("email_service", {}).get("enabled")
+            and (self.organization.settings or {}).get("email_service", {}).get(
+                "enabled"
+            )
         ):
             logger.info(
                 f"Email disabled. Would send to {len(to_emails)} recipients: {subject}"
