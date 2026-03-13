@@ -1,8 +1,5 @@
 /**
  * Meeting Minutes Type Definitions
- *
- * Canonical location: modules/minutes/types/minutes.ts
- * This file is kept for backward compatibility — new imports should use the module path.
  */
 
 export type MeetingType = 'business' | 'special' | 'committee' | 'board' | 'trustee' | 'executive' | 'annual' | 'other';
