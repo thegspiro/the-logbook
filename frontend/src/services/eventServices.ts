@@ -190,6 +190,30 @@ export const eventService = {
     await api.delete(`/events/${eventId}/rsvps/${userId}`);
   },
 
+  // Event Attachments
+  async getAttachments(eventId: string): Promise<import('../types/event').EventAttachment[]> {
+    const response = await api.get<import('../types/event').EventAttachment[]>(`/events/${eventId}/attachments`);
+    return response.data;
+  },
+
+  async uploadAttachment(eventId: string, file: File, description?: string): Promise<import('../types/event').EventAttachmentUploadResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (description) formData.append('description', description);
+    const response = await api.post<import('../types/event').EventAttachmentUploadResponse>(`/events/${eventId}/attachments`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  async deleteAttachment(eventId: string, attachmentId: string): Promise<void> {
+    await api.delete(`/events/${eventId}/attachments/${attachmentId}`);
+  },
+
+  getAttachmentDownloadUrl(eventId: string, attachmentId: string): string {
+    return `/api/v1/events/${eventId}/attachments/${attachmentId}/download`;
+  },
+
   // Event Templates
   async getTemplates(includeInactive?: boolean): Promise<import('../types/event').EventTemplate[]> {
     const params = includeInactive ? { include_inactive: true } : undefined;

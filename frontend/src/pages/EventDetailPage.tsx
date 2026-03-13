@@ -14,11 +14,11 @@ import { useAuthStore } from '../stores/authStore';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { EventTypeBadge } from '../components/EventTypeBadge';
 import { RSVPStatusBadge } from '../components/RSVPStatusBadge';
-import { getRSVPStatusLabel, getRSVPStatusColor } from '../utils/eventHelpers';
+import { getRSVPStatusLabel, getRSVPStatusColor, downloadICSFile } from '../utils/eventHelpers';
 import { formatDateTime, formatShortDateTime, formatTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum } from '../constants/enums';
-import { Repeat } from 'lucide-react';
+import { Repeat, Paperclip, Download, CalendarPlus } from 'lucide-react';
 
 export const EventDetailPage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
@@ -462,6 +462,13 @@ export const EventDetailPage: React.FC = () => {
                 </svg>
                 View QR Code
               </button>
+              <button
+                onClick={() => downloadICSFile(event)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-theme-surface-border px-3 py-2 text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
+              >
+                <CalendarPlus className="h-4 w-4" />
+                Add to Calendar
+              </button>
               {canManage && (
                 <>
                   <button
@@ -723,6 +730,41 @@ export const EventDetailPage: React.FC = () => {
             </div>
           )}
 
+          {/* Attachments */}
+          {event.attachments && event.attachments.length > 0 && (
+            <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-sm p-6">
+              <h2 className="text-lg font-medium text-theme-text-primary mb-4 flex items-center gap-2">
+                <Paperclip className="h-5 w-5" />
+                Attachments ({event.attachments.length})
+              </h2>
+              <div className="space-y-2">
+                {event.attachments.map((attachment) => (
+                  <div key={attachment.id} className="flex items-center justify-between p-3 bg-theme-surface-secondary rounded-lg">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Paperclip className="h-4 w-4 text-theme-text-muted shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-theme-text-primary truncate">{attachment.file_name}</p>
+                        <p className="text-xs text-theme-text-muted">
+                          {attachment.file_size < 1024 * 1024
+                            ? `${Math.round(attachment.file_size / 1024)} KB`
+                            : `${(attachment.file_size / (1024 * 1024)).toFixed(1)} MB`}
+                        </p>
+                      </div>
+                    </div>
+                    <a
+                      href={eventService.getAttachmentDownloadUrl(event.id, attachment.id)}
+                      className="inline-flex items-center gap-1 text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                      download
+                    >
+                      <Download className="h-4 w-4" />
+                      Download
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* User's RSVP Status */}
           {event.user_rsvp_status && (
             <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-sm p-6">
@@ -876,10 +918,26 @@ export const EventDetailPage: React.FC = () => {
                     </div>
                     <div className="w-full bg-theme-surface rounded-full h-2">
                       <div
-                        className="bg-red-600 h-2 rounded-full"
+                        className={`h-2 rounded-full transition-all ${
+                          stats.capacity_percentage >= 90
+                            ? 'bg-red-600'
+                            : stats.capacity_percentage >= 75
+                              ? 'bg-amber-500'
+                              : 'bg-green-500'
+                        }`}
                         style={{ width: `${Math.min(stats.capacity_percentage, 100)}%` }}
                       ></div>
                     </div>
+                    {event.max_attendees && (
+                      <p className="text-xs text-theme-text-muted mt-1">
+                        {event.going_count ?? 0} / {event.max_attendees} spots filled
+                      </p>
+                    )}
+                    {event.max_attendees && (event.going_count ?? 0) >= event.max_attendees && (
+                      <span className="inline-flex items-center mt-2 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300">
+                        Event Full
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
@@ -904,12 +962,40 @@ export const EventDetailPage: React.FC = () => {
                       </p>
                     </div>
                   )}
-                  {event.max_attendees && (
-                    <div>
-                      <p className="text-sm text-theme-text-secondary">Max Attendees</p>
-                      <p className="text-sm font-medium text-theme-text-primary">{event.max_attendees}</p>
-                    </div>
-                  )}
+                  {event.max_attendees && (() => {
+                    const goingCount = event.going_count ?? 0;
+                    const pct = Math.min(Math.round((goingCount / event.max_attendees) * 100), 100);
+                    const isFull = goingCount >= event.max_attendees;
+                    const barColor = pct >= 90
+                      ? 'bg-red-600'
+                      : pct >= 75
+                        ? 'bg-amber-500'
+                        : 'bg-green-500';
+                    return (
+                      <div>
+                        <div className="flex justify-between mb-1">
+                          <p className="text-sm text-theme-text-secondary">Capacity</p>
+                          <p className="text-sm font-medium text-theme-text-primary">
+                            {goingCount} / {event.max_attendees}
+                          </p>
+                        </div>
+                        <div className="w-full bg-theme-surface rounded-full h-2">
+                          <div
+                            className={`h-2 rounded-full transition-all ${barColor}`}
+                            style={{ width: `${pct}%` }}
+                          ></div>
+                        </div>
+                        <p className="text-xs text-theme-text-muted mt-1">
+                          {goingCount} / {event.max_attendees} spots filled
+                        </p>
+                        {isFull && (
+                          <span className="inline-flex items-center mt-2 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300">
+                            Event Full
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </>
               )}
               {event.allow_guests && (

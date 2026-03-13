@@ -5,18 +5,70 @@
  * Supports both single and recurring event creation.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Calendar, ArrowLeft } from 'lucide-react';
+import { Calendar, ArrowLeft, FileText } from 'lucide-react';
 import { eventService } from '../services/api';
-import type { EventCreate, RecurringEventCreate } from '../types/event';
+import type { EventCreate, EventTemplate, RecurringEventCreate } from '../types/event';
 import { EventForm } from '../components/EventForm';
 import toast from 'react-hot-toast';
+
+/**
+ * Convert an EventTemplate into a partial EventCreate suitable for pre-populating the form.
+ * start_datetime is set to the next full hour; end_datetime is offset by the template's
+ * default_duration_minutes (or 60 min if unset).
+ */
+function templateToInitialData(template: EventTemplate): Partial<EventCreate> {
+  const now = new Date();
+  now.setMinutes(0, 0, 0);
+  now.setHours(now.getHours() + 1);
+  const durationMs = (template.default_duration_minutes || 60) * 60 * 1000;
+  const end = new Date(now.getTime() + durationMs);
+
+  // Format as datetime-local value (YYYY-MM-DDTHH:mm)
+  const toLocal = (d: Date) => {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  return {
+    title: template.default_title || '',
+    description: template.default_description || undefined,
+    event_type: template.event_type,
+    location_id: template.default_location_id || undefined,
+    location: template.default_location || undefined,
+    location_details: template.default_location_details || undefined,
+    start_datetime: toLocal(now),
+    end_datetime: toLocal(end),
+    requires_rsvp: template.requires_rsvp,
+    max_attendees: template.max_attendees || undefined,
+    is_mandatory: template.is_mandatory,
+    allow_guests: template.allow_guests,
+    check_in_window_type: template.check_in_window_type || undefined,
+    check_in_minutes_before: template.check_in_minutes_before || undefined,
+    check_in_minutes_after: template.check_in_minutes_after || undefined,
+    require_checkout: template.require_checkout,
+    send_reminders: template.send_reminders,
+    reminder_schedule: template.reminder_schedule,
+    custom_fields: (template.custom_fields_template as Record<string, string | number | boolean | null> | undefined) || undefined,
+  };
+}
 
 export const EventCreatePage: React.FC = () => {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<EventTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [templateInitialData, setTemplateInitialData] = useState<Partial<EventCreate> | undefined>(undefined);
+
+  useEffect(() => {
+    void eventService.getTemplates().then((data) => {
+      setTemplates(data.filter((t) => t.is_active));
+    }).catch(() => {
+      // Templates are optional — silently ignore fetch errors
+    });
+  }, []);
 
   const handleSubmit = async (data: EventCreate) => {
     setIsSubmitting(true);
@@ -45,6 +97,19 @@ export const EventCreatePage: React.FC = () => {
       setError(apiError.response?.data?.detail || 'Failed to create recurring events. Please try again.');
       setIsSubmitting(false);
       throw err;
+    }
+  };
+
+  const handleTemplateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const id = e.target.value;
+    setSelectedTemplateId(id);
+    if (!id) {
+      setTemplateInitialData(undefined);
+      return;
+    }
+    const template = templates.find((t) => t.id === id);
+    if (template) {
+      setTemplateInitialData(templateToInitialData(template));
     }
   };
 
@@ -79,9 +144,36 @@ export const EventCreatePage: React.FC = () => {
           </div>
         )}
 
+        {/* Template Selector */}
+        {templates.length > 0 && (
+          <div className="card p-6 mb-6">
+            <div className="flex items-center space-x-2 mb-3">
+              <FileText className="w-5 h-5 text-theme-text-muted" />
+              <h2 className="text-lg font-semibold text-theme-text-primary">Start from a Template</h2>
+            </div>
+            <p className="text-sm text-theme-text-muted mb-3">
+              Optionally select a template to pre-fill common event settings.
+            </p>
+            <select
+              value={selectedTemplateId}
+              onChange={handleTemplateChange}
+              className="w-full sm:w-96 rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+            >
+              <option value="">— No template —</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}{t.description ? ` — ${t.description}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Form Card */}
         <div className="card p-8">
           <EventForm
+            key={selectedTemplateId || 'no-template'}
+            initialData={templateInitialData}
             onSubmit={handleSubmit}
             onSubmitRecurring={handleSubmitRecurring}
             onCancel={handleCancel}
