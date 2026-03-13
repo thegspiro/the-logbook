@@ -9,9 +9,12 @@ import React from 'react';
 import { Timer, StopCircle, RefreshCw } from 'lucide-react';
 import { useAdminHoursStore } from '../store/adminHoursStore';
 import { formatDuration } from '../utils/formatDuration';
+import { formatTime } from '../../../../utils/dateFormatting';
+import { useTimezone } from '../../../../hooks/useTimezone';
 import toast from 'react-hot-toast';
 
 const ActiveSessionsTab: React.FC = () => {
+  const tz = useTimezone();
   const activeSessions = useAdminHoursStore((s) => s.activeSessions);
   const activeSessionsLoading = useAdminHoursStore((s) => s.activeSessionsLoading);
   const fetchActiveSessions = useAdminHoursStore((s) => s.fetchActiveSessions);
@@ -90,7 +93,7 @@ const ActiveSessionsTab: React.FC = () => {
                           {formatDuration(session.elapsedMinutes)}
                         </span>
                         <span className="text-theme-text-muted">
-                          Started {new Date(session.clockInAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          Started {formatTime(session.clockInAt, tz)}
                         </span>
                         {session.maxSessionMinutes !== null && (
                           <span className="text-theme-text-muted">

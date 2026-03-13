@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import { grantsService } from '../services/api';
 import type { GrantOpportunity, GrantCategory } from '../types';
+import { formatDate } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('en-US', {
@@ -30,13 +32,6 @@ const formatCurrency = (amount: number) =>
     currency: 'USD',
     maximumFractionDigits: 0,
   }).format(amount);
-
-const formatDate = (dateStr: string) =>
-  new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
 
 const CATEGORY_LABELS: Record<string, string> = {
   equipment: 'Equipment',
@@ -106,7 +101,7 @@ const FEDERAL_PROGRAMS: FederalProgram[] = [
 ];
 
 /** Returns urgency info based on how close the deadline is. */
-function getDeadlineUrgency(deadlineDate: string | null): {
+function getDeadlineUrgency(deadlineDate: string | null, timezone?: string): {
   label: string;
   color: string;
   isUrgent: boolean;
@@ -138,7 +133,7 @@ function getDeadlineUrgency(deadlineDate: string | null): {
     };
   }
   return {
-    label: formatDate(deadlineDate),
+    label: formatDate(deadlineDate, timezone),
     color: 'text-theme-text-secondary',
     isUrgent: false,
   };
@@ -146,6 +141,7 @@ function getDeadlineUrgency(deadlineDate: string | null): {
 
 export const GrantOpportunitiesPage: React.FC = () => {
   const navigate = useNavigate();
+  const tz = useTimezone();
   const [opportunities, setOpportunities] = useState<GrantOpportunity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -312,7 +308,7 @@ export const GrantOpportunitiesPage: React.FC = () => {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {filteredOpportunities.map((opp) => {
               const isExpanded = expandedIds.has(opp.id);
-              const urgency = getDeadlineUrgency(opp.deadlineDate);
+              const urgency = getDeadlineUrgency(opp.deadlineDate, tz);
 
               return (
                 <div
@@ -354,7 +350,7 @@ export const GrantOpportunitiesPage: React.FC = () => {
                   <div className="mb-2 flex items-center gap-2 text-sm">
                     <Calendar className="h-4 w-4 text-theme-text-muted shrink-0" />
                     <span className={urgency.color}>
-                      {opp.deadlineDate ? formatDate(opp.deadlineDate) : 'Rolling deadline'}
+                      {opp.deadlineDate ? formatDate(opp.deadlineDate, tz) : 'Rolling deadline'}
                     </span>
                     {urgency.isUrgent && (
                       <span className="inline-flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700">

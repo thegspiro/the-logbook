@@ -24,6 +24,8 @@ import {
   Pause,
 } from 'lucide-react';
 import { eventRequestService } from '../services/api';
+import { formatDate } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 import type { EventRequestPublicStatus, EventRequestStatus } from '../types/event';
 
 const STATUS_STEPS: { key: EventRequestStatus; label: string; icon: React.ElementType }[] = [
@@ -46,17 +48,9 @@ const DATE_FLEXIBILITY_LABELS: Record<string, string> = {
   flexible: 'Flexible',
 };
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-}
-
 const EventRequestStatusPage: React.FC = () => {
   const { token } = useParams<{ token: string }>();
+  const tz = useTimezone();
   const [data, setData] = useState<EventRequestPublicStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

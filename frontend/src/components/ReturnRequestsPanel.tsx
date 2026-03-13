@@ -3,6 +3,8 @@ import { ArrowDownToLine, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { inventoryService } from '../services/inventoryService';
 import type { ReturnRequestItem } from '../services/eventServices';
 import { getErrorMessage } from '../utils/errorHandling';
+import { formatDate } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 import toast from 'react-hot-toast';
 import { RequestStatus } from '../constants/enums';
 
@@ -15,11 +17,8 @@ const STATUS_BADGES: Record<string, string> = {
 
 const CONDITION_OPTIONS = ['excellent', 'good', 'fair', 'poor', 'damaged', 'out_of_service'] as const;
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
 const ReturnRequestsPanel: React.FC = () => {
+  const tz = useTimezone();
   const [requests, setRequests] = useState<ReturnRequestItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('pending');
@@ -116,7 +115,7 @@ const ReturnRequestsPanel: React.FC = () => {
                   </p>
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-xs text-theme-text-muted">
                     <span>Reported condition: <span className="capitalize">{req.reported_condition.replace('_', ' ')}</span></span>
-                    <span>{formatDate(req.created_at)}</span>
+                    <span>{formatDate(req.created_at, tz)}</span>
                   </div>
                   {req.member_notes && (
                     <p className="text-xs text-theme-text-muted mt-1 italic">&ldquo;{req.member_notes}&rdquo;</p>

@@ -16,6 +16,8 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { platformAnalyticsService } from '../services/api';
+import { formatTime, formatDate } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 import type { PlatformAnalytics, DailyCount, ModuleUsage } from '../types/platformAnalytics';
 
 /**
@@ -25,6 +27,7 @@ import type { PlatformAnalytics, DailyCount, ModuleUsage } from '../types/platfo
  * module usage, operational activity, system health, and content metrics.
  */
 const PlatformAnalyticsPage: React.FC = () => {
+  const tz = useTimezone();
   const [data, setData] = useState<PlatformAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -110,7 +113,7 @@ const PlatformAnalyticsPage: React.FC = () => {
           </p>
           {lastRefreshed && (
             <p className="text-xs text-theme-text-muted mt-1">
-              Last refreshed: {lastRefreshed.toLocaleTimeString()}
+              Last refreshed: {formatTime(lastRefreshed, tz)}
             </p>
           )}
         </div>
@@ -262,11 +265,7 @@ interface ModuleCardProps {
 }
 
 const ModuleCard: React.FC<ModuleCardProps> = ({ module }) => {
-  const formatDate = (iso: string | null) => {
-    if (!iso) return 'Never';
-    const d = new Date(iso);
-    return d.toLocaleDateString();
-  };
+  const tz = useTimezone();
 
   return (
     <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-5">
@@ -289,7 +288,7 @@ const ModuleCard: React.FC<ModuleCardProps> = ({ module }) => {
       <p className="text-xs text-theme-text-muted">records</p>
       <div className="flex items-center gap-1 mt-2 text-xs text-theme-text-muted">
         <Activity className="w-3 h-3" />
-        <span>Last activity: {formatDate(module.lastActivity)}</span>
+        <span>Last activity: {module.lastActivity ? formatDate(module.lastActivity, tz) : 'Never'}</span>
       </div>
     </div>
   );

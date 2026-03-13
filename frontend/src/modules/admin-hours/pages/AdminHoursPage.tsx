@@ -11,10 +11,13 @@ import { useAdminHoursStore } from '../store/adminHoursStore';
 import type { AdminHoursEntryCreate } from '../types';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { formatDate, formatTime } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
 
 const PAGE_SIZE = 20;
 
 const AdminHoursPage: React.FC = () => {
+  const tz = useTimezone();
   const {
     categories,
     myEntries,
@@ -204,7 +207,7 @@ const AdminHoursPage: React.FC = () => {
                     <span className="text-lg font-bold">{formatDuration(localElapsed ?? activeSession.elapsedMinutes)}</span>
                   </span>
                   <span className="text-theme-text-muted">
-                    Started at {new Date(activeSession.clockInAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    Started at {formatTime(activeSession.clockInAt, tz)}
                   </span>
                   {activeSession.maxSessionMinutes && (
                     <span className="text-theme-text-muted">
@@ -417,7 +420,7 @@ const AdminHoursPage: React.FC = () => {
                       </span>
                     </div>
                     <div className="text-sm text-theme-text-muted">
-                      {new Date(entry.clockInAt).toLocaleDateString()} | {formatDuration(entry.durationMinutes)} | {entry.entryMethod.replace('_', ' ')}
+                      {formatDate(entry.clockInAt, tz)} | {formatDuration(entry.durationMinutes)} | {entry.entryMethod.replace('_', ' ')}
                     </div>
                     {entry.description && (
                       <p className="text-sm text-theme-text-muted truncate">{entry.description}</p>
@@ -428,7 +431,7 @@ const AdminHoursPage: React.FC = () => {
                     {entry.approverName && entry.status !== 'active' && entry.status !== 'pending' && (
                       <p className="text-xs text-theme-text-muted mt-0.5">
                         {entry.status === 'approved' ? 'Approved' : 'Reviewed'} by {entry.approverName}
-                        {entry.approvedAt && ` on ${new Date(entry.approvedAt).toLocaleDateString()}`}
+                        {entry.approvedAt && ` on ${formatDate(entry.approvedAt, tz)}`}
                       </p>
                     )}
                   </div>

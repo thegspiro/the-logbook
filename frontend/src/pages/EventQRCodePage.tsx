@@ -17,11 +17,16 @@ import { formatShortDateTime } from '../utils/dateFormatting';
  */
 const EventQRCodePage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
-  const tz = useTimezone();
+  const userTz = useTimezone();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [qrData, setQrData] = useState<QRCheckInData | null>(null);
+
+  // Prefer the organization timezone from the API response so times display
+  // correctly even when viewed on a kiosk/shared device whose system clock
+  // or user profile may be set to a different timezone.
+  const tz = qrData?.timezone || userTz;
   const hasDataRef = React.useRef(false);
 
   const fetchQRData = useCallback(async (isRefresh = false) => {

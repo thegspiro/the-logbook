@@ -11,9 +11,12 @@ import { adminHoursEntryService } from '../services/api';
 import { formatDuration } from '../utils/formatDuration';
 import { DEFAULT_PAGE_SIZE } from '../../../constants/config';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { formatDate } from '../../../../utils/dateFormatting';
+import { useTimezone } from '../../../../hooks/useTimezone';
 import toast from 'react-hot-toast';
 
 const AllEntriesTab: React.FC = () => {
+  const tz = useTimezone();
   const allEntries = useAdminHoursStore((s) => s.allEntries);
   const allEntriesTotal = useAdminHoursStore((s) => s.allEntriesTotal);
   const entriesLoading = useAdminHoursStore((s) => s.entriesLoading);
@@ -137,7 +140,7 @@ const AllEntriesTab: React.FC = () => {
                         <span className="text-theme-text-primary">{entry.categoryName}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm text-theme-text-secondary">{new Date(entry.clockInAt).toLocaleDateString()}</td>
+                    <td className="px-4 py-3 text-sm text-theme-text-secondary">{formatDate(entry.clockInAt, tz)}</td>
                     <td className="px-4 py-3 text-sm text-theme-text-secondary">{formatDuration(entry.durationMinutes)}</td>
                     <td className="px-4 py-3 text-sm text-theme-text-secondary capitalize">{entry.entryMethod.replace('_', ' ')}</td>
                     <td className="px-4 py-3 text-sm">

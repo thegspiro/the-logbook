@@ -25,6 +25,8 @@ import {
   type UserIssuedItem,
 } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
+import { formatDate } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 import toast from 'react-hot-toast';
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -75,6 +77,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
   memberName,
   onComplete,
 }) => {
+  const tz = useTimezone();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [heldItems, setHeldItems] = useState<HeldItem[]>([]);
@@ -114,7 +117,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
       // Active checkouts
       (data.active_checkouts ?? []).forEach((c: UserCheckoutItem) => {
         const details: string[] = [];
-        details.push(`Checked out: ${new Date(c.checked_out_at).toLocaleDateString()}`);
+        details.push(`Checked out: ${formatDate(c.checked_out_at, tz)}`);
         if (c.is_overdue) details.push('OVERDUE');
         items.push({
           kind: 'checkout',
@@ -130,7 +133,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
         const details: string[] = [];
         details.push(`Qty: ${i.quantity_issued}`);
         if (i.size) details.push(`Size: ${i.size}`);
-        details.push(`Issued: ${new Date(i.issued_at).toLocaleDateString()}`);
+        details.push(`Issued: ${formatDate(i.issued_at, tz)}`);
         items.push({
           kind: 'issuance',
           recordId: i.issuance_id,

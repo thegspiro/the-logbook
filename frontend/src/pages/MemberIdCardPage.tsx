@@ -22,6 +22,8 @@ import { userService, organizationService } from "../services/api";
 import type { OrganizationProfile } from "../services/api";
 import { useAuthStore } from "../stores/authStore";
 import { getErrorMessage } from "../utils/errorHandling";
+import { formatDate } from "../utils/dateFormatting";
+import { useTimezone } from "../hooks/useTimezone";
 import { useRanks } from "../hooks/useRanks";
 import type { UserWithRoles } from "../types/role";
 
@@ -45,6 +47,7 @@ export const MemberIdCardPage: React.FC = () => {
   const { userId } = useParams<{ userId: string }>();
   const { user: currentUser } = useAuthStore();
   const { formatRank } = useRanks();
+  const tz = useTimezone();
   const barcodeRef = useRef<SVGSVGElement>(null);
   const [barcodeReady, setBarcodeReady] = useState(false);
 
@@ -301,7 +304,7 @@ export const MemberIdCardPage: React.FC = () => {
               {org?.name ?? "Organization"} &middot; Digital Member ID
             </p>
             <p className="text-[10px] text-theme-text-muted/70 mt-0.5 print:text-gray-400">
-              Generated {new Date().toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+              Generated {formatDate(new Date(), tz)}
             </p>
           </div>
         </div>

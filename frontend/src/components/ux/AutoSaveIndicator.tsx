@@ -7,6 +7,8 @@
 
 import React from 'react';
 import { Check, Cloud, CloudOff, Loader2 } from 'lucide-react';
+import { formatTime } from '../../utils/dateFormatting';
+import { useTimezone } from '../../hooks/useTimezone';
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'unsaved' | 'error';
 
@@ -21,6 +23,7 @@ export const AutoSaveIndicator: React.FC<AutoSaveIndicatorProps> = ({
   className = '',
   lastSaved,
 }) => {
+  const tz = useTimezone();
   const configs = {
     idle: { icon: Cloud, text: '', color: 'text-theme-text-muted' },
     saving: { icon: Loader2, text: 'Saving...', color: 'text-theme-text-muted' },
@@ -34,10 +37,6 @@ export const AutoSaveIndicator: React.FC<AutoSaveIndicatorProps> = ({
 
   if (status === 'idle') return null;
 
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-  };
-
   return (
     <div
       className={`inline-flex items-center gap-1.5 text-xs ${config.color} ${className}`}
@@ -47,7 +46,7 @@ export const AutoSaveIndicator: React.FC<AutoSaveIndicatorProps> = ({
       <Icon className={`w-3.5 h-3.5 ${status === 'saving' ? 'animate-spin' : ''}`} />
       <span>{config.text}</span>
       {status === 'saved' && lastSaved && (
-        <span className="text-theme-text-muted">at {formatTime(lastSaved)}</span>
+        <span className="text-theme-text-muted">at {formatTime(lastSaved, tz)}</span>
       )}
     </div>
   );

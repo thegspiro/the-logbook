@@ -430,6 +430,7 @@ const Dashboard: React.FC = () => {
               month: "long",
               day: "numeric",
               timeZone: tz,
+              timeZone: tz,
             })}
           </p>
         </div>
