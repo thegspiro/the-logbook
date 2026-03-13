@@ -765,6 +765,151 @@ class MembershipPipelineService:
     # Step Progression
     # =========================================================================
 
+    async def _validate_step_completion(
+        self,
+        prospect: ProspectiveMember,
+        step: MembershipPipelineStep,
+    ) -> None:
+        """
+        Validate that stage-specific requirements are met before allowing
+        step completion. Raises ValueError if requirements are not satisfied.
+        """
+        config = step.config or {}
+        step_type = step.step_type
+
+        if step_type == PipelineStepType.INTERVIEW_REQUIREMENT:
+            required_count = config.get("required_count", 1)
+            required_rec = config.get("required_recommendation")
+            interviews = [
+                i
+                for i in getattr(prospect, "interviews", [])
+                if str(i.step_id) == str(step.id)
+            ]
+            if len(interviews) < required_count:
+                raise ValueError(
+                    f"This step requires at least {required_count} "
+                    f"interview(s); only {len(interviews)} recorded."
+                )
+            if required_rec:
+                matching = [
+                    i
+                    for i in interviews
+                    if i.recommendation
+                    and i.recommendation.value == required_rec
+                ]
+                if not matching:
+                    raise ValueError(
+                        f"At least one interview must have a "
+                        f"'{required_rec}' recommendation."
+                    )
+
+        elif step_type == PipelineStepType.CHECKLIST:
+            items = config.get("items", [])
+            require_all = config.get("require_all", True)
+            if require_all and items:
+                progress = next(
+                    (
+                        p
+                        for p in prospect.step_progress
+                        if str(p.step_id) == str(step.id)
+                    ),
+                    None,
+                )
+                completed_items = (
+                    (progress.action_result or {}).get("completed_items", [])
+                    if progress
+                    else []
+                )
+                if len(completed_items) < len(items):
+                    raise ValueError(
+                        f"All {len(items)} checklist items must be "
+                        f"completed; only {len(completed_items)} done."
+                    )
+
+        elif step_type == PipelineStepType.MULTI_APPROVAL:
+            required_approvers = config.get("required_approvers", [])
+            if required_approvers:
+                progress = next(
+                    (
+                        p
+                        for p in prospect.step_progress
+                        if str(p.step_id) == str(step.id)
+                    ),
+                    None,
+                )
+                approvals = (
+                    (progress.action_result or {}).get("approvals", [])
+                    if progress
+                    else []
+                )
+                approved_roles = {a.get("role") for a in approvals}
+                missing = [
+                    r for r in required_approvers if r not in approved_roles
+                ]
+                if missing:
+                    raise ValueError(
+                        f"Approval still needed from: {', '.join(missing)}."
+                    )
+
+        elif step_type == PipelineStepType.REFERENCE_CHECK:
+            required_count = config.get("required_count", 1)
+            require_all = config.get("require_all_before_advance", True)
+            if require_all:
+                progress = next(
+                    (
+                        p
+                        for p in prospect.step_progress
+                        if str(p.step_id) == str(step.id)
+                    ),
+                    None,
+                )
+                references = (
+                    (progress.action_result or {}).get("references", [])
+                    if progress
+                    else []
+                )
+                if len(references) < required_count:
+                    raise ValueError(
+                        f"This step requires at least {required_count} "
+                        f"reference(s); only {len(references)} received."
+                    )
+
+        elif step_type == PipelineStepType.MEDICAL_SCREENING:
+            required_screenings = config.get("required_screenings", [])
+            require_all_passed = config.get("require_all_passed", True)
+            if required_screenings and require_all_passed:
+                from app.models.medical_screening import (
+                    ScreeningRecord,
+                    ScreeningStatus,
+                )
+
+                result = await self.db.execute(
+                    select(ScreeningRecord).where(
+                        and_(
+                            ScreeningRecord.prospect_id == prospect.id,
+                            ScreeningRecord.screening_type.in_(
+                                required_screenings
+                            ),
+                            ScreeningRecord.status.in_(
+                                [
+                                    ScreeningStatus.PASSED,
+                                    ScreeningStatus.COMPLETED,
+                                ]
+                            ),
+                        )
+                    )
+                )
+                records = result.scalars().all()
+                passed_types = {r.screening_type.value for r in records}
+                missing = [
+                    s for s in required_screenings if s not in passed_types
+                ]
+                if missing:
+                    raise ValueError(
+                        f"Medical screenings not yet passed: "
+                        f"{', '.join(missing)}."
+                    )
+
     async def complete_step(
         self,
         prospect_id: str,
@@ -778,6 +923,14 @@ class MembershipPipelineService:
         prospect = await self.get_prospect(prospect_id, organization_id)
         if not prospect:
             return None
+
+        # Validate stage-specific requirements before allowing completion
+        step = next(
+            (s for s in prospect.pipeline.steps if str(s.id) == str(step_id)),
+            None,
+        )
+        if step:
+            await self._validate_step_completion(prospect, step)
 
         # Find or create the progress record
         progress = next(

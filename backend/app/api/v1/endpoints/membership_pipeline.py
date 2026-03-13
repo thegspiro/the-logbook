@@ -787,14 +787,19 @@ async def complete_step(
     **Requires permission: members.manage**
     """
     service = MembershipPipelineService(db)
-    prospect = await service.complete_step(
-        prospect_id=str(prospect_id),
-        organization_id=current_user.organization_id,
-        step_id=str(data.step_id),
-        completed_by=current_user.id,
-        notes=data.notes,
-        action_result=data.action_result,
-    )
+    try:
+        prospect = await service.complete_step(
+            prospect_id=str(prospect_id),
+            organization_id=current_user.organization_id,
+            step_id=str(data.step_id),
+            completed_by=current_user.id,
+            notes=data.notes,
+            action_result=data.action_result,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        )
     if not prospect:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
