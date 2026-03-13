@@ -68,6 +68,36 @@ async def list_email_templates(
     return templates
 
 
+@router.get("/scheduled", response_model=list[ScheduledEmailResponse])
+async def list_scheduled_emails(
+    status_filter: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+):
+    """List scheduled emails for the current organization."""
+    from sqlalchemy import select
+
+    q = (
+        select(ScheduledEmail)
+        .where(ScheduledEmail.organization_id == current_user.organization_id)
+        .order_by(ScheduledEmail.scheduled_at.desc())
+    )
+    if status_filter:
+        try:
+            s = ScheduledEmailStatus(status_filter)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid status: {status_filter}",
+            )
+        q = q.where(ScheduledEmail.status == s)
+
+    result = await db.execute(q)
+    return list(result.scalars().all())
+
+
 @router.get("/{template_id}", response_model=EmailTemplateResponse)
 async def get_email_template(
     template_id: str,
@@ -481,36 +511,6 @@ async def schedule_email(
         f"type={body.template_type} at={body.scheduled_at}"
     )
     return scheduled
-
-
-@router.get("/scheduled", response_model=list[ScheduledEmailResponse])
-async def list_scheduled_emails(
-    status_filter: str | None = None,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("settings.manage", "organization.update_settings")
-    ),
-):
-    """List scheduled emails for the current organization."""
-    from sqlalchemy import select
-
-    q = (
-        select(ScheduledEmail)
-        .where(ScheduledEmail.organization_id == current_user.organization_id)
-        .order_by(ScheduledEmail.scheduled_at.desc())
-    )
-    if status_filter:
-        try:
-            s = ScheduledEmailStatus(status_filter)
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid status: {status_filter}",
-            )
-        q = q.where(ScheduledEmail.status == s)
-
-    result = await db.execute(q)
-    return list(result.scalars().all())
 
 
 @router.patch("/scheduled/{scheduled_id}", response_model=ScheduledEmailResponse)
