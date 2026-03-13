@@ -11,8 +11,8 @@ import { adminHoursEntryService } from '../services/api';
 import { formatDuration } from '../utils/formatDuration';
 import { DEFAULT_PAGE_SIZE } from '../../../constants/config';
 import { getErrorMessage } from '@/utils/errorHandling';
-import { formatDate } from '../../../../utils/dateFormatting';
-import { useTimezone } from '../../../../hooks/useTimezone';
+import { formatDate } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
 import toast from 'react-hot-toast';
 
 const AllEntriesTab: React.FC = () => {

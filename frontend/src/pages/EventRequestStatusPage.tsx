@@ -185,7 +185,7 @@ const EventRequestStatusPage: React.FC = () => {
               </div>
               <p className="text-sm text-theme-text-secondary">
                 This event has been postponed. {data.event_date
-                  ? `A tentative new date has been set for ${formatDate(data.event_date)}.`
+                  ? `A tentative new date has been set for ${formatDate(data.event_date, tz)}.`
                   : 'A new date has not been set yet. We will notify you when it is rescheduled.'
                 }
               </p>
@@ -276,13 +276,13 @@ const EventRequestStatusPage: React.FC = () => {
               <div>
                 <span className="block text-theme-text-muted mb-0.5">Submitted</span>
                 <span className="text-theme-text-primary font-medium">
-                  {formatDate(data.created_at)}
+                  {formatDate(data.created_at, tz)}
                 </span>
               </div>
               <div>
                 <span className="block text-theme-text-muted mb-0.5">Last Updated</span>
                 <span className="text-theme-text-primary font-medium">
-                  {formatDate(data.updated_at)}
+                  {formatDate(data.updated_at, tz)}
                 </span>
               </div>
               {data.date_flexibility && (
@@ -297,8 +297,8 @@ const EventRequestStatusPage: React.FC = () => {
                 <div>
                   <span className="block text-theme-text-muted mb-0.5">Preferred Date</span>
                   <span className="text-theme-text-primary font-medium">
-                    {formatDate(data.preferred_date_start)}
-                    {data.preferred_date_end && ` — ${formatDate(data.preferred_date_end)}`}
+                    {formatDate(data.preferred_date_start, tz)}
+                    {data.preferred_date_end && ` — ${formatDate(data.preferred_date_end, tz)}`}
                   </span>
                 </div>
               )}
@@ -314,7 +314,7 @@ const EventRequestStatusPage: React.FC = () => {
                 <div>
                   <span className="block text-theme-text-muted mb-0.5">Scheduled Date</span>
                   <span className="text-theme-accent-green font-semibold">
-                    {formatDate(data.event_date)}
+                    {formatDate(data.event_date, tz)}
                   </span>
                 </div>
               )}

@@ -11,8 +11,8 @@ import { useAdminHoursStore } from '../store/adminHoursStore';
 import { formatDuration } from '../utils/formatDuration';
 import { DEFAULT_PAGE_SIZE } from '../../../constants/config';
 import type { AdminHoursEntryEdit } from '../types';
-import { formatDate } from '../../../../utils/dateFormatting';
-import { useTimezone } from '../../../../hooks/useTimezone';
+import { formatDate } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
 import toast from 'react-hot-toast';
 
 const PendingReviewTab: React.FC = () => {
