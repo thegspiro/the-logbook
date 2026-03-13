@@ -45,6 +45,9 @@ Recommended crontab (add to host or container cron):
 
 # Weekly on Mondays at 8:00 AM — NFPA PPE retirement alerts
 0 8 * * 1 curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=nfpa_retirement_alerts
+
+# Daily at 6:30 AM — compliance auto-report generation (monthly on configured day, yearly on Jan 1)
+30 6 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=compliance_auto_reports
 -----------------------------------------------------
 """
 

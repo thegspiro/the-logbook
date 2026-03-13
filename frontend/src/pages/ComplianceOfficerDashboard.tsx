@@ -12,6 +12,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Shield,
   FileText,
@@ -25,6 +26,7 @@ import {
   Users,
   Award,
   TrendingUp,
+  Settings,
 } from 'lucide-react';
 import { complianceOfficerService, reportExportService } from '../services/trainingServices';
 import type {
@@ -43,6 +45,7 @@ type ActiveSection =
   | 'forecast';
 
 const ComplianceOfficerDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState<ActiveSection>('annual-report');
 
   const sections: Array<{ id: ActiveSection; label: string; icon: React.ElementType }> = [
@@ -56,7 +59,7 @@ const ComplianceOfficerDashboard: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Section Tabs */}
-      <div className="flex flex-wrap gap-2 mb-6">
+      <div className="flex flex-wrap items-center gap-2 mb-6">
         {sections.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -71,6 +74,16 @@ const ComplianceOfficerDashboard: React.FC = () => {
             {label}
           </button>
         ))}
+        <div className="ml-auto">
+          <button
+            onClick={() => navigate('/training/compliance-config')}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-theme-input-bg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
+            title="Compliance Requirements Configuration"
+          >
+            <Settings className="w-4 h-4" />
+            Configure
+          </button>
+        </div>
       </div>
 
       {/* Section Content */}
