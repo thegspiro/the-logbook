@@ -367,8 +367,34 @@ const InventoryBarcodePrintPage: React.FC = () => {
       <style>
         {`
           @media print {
+            /* ── Hide everything except labels ── */
             .print-controls { display: none !important; }
-            body, html { margin: 0; padding: 0; background: white !important; }
+            footer, [role="contentinfo"] { display: none !important; }
+
+            /* Reset body/html — override global 12pt font-size so label
+               preset sizes (6-9pt) are respected */
+            body, html {
+              margin: 0 !important;
+              padding: 0 !important;
+              background: white !important;
+              font-size: unset !important;
+            }
+
+            /* Remove the sidebar left-margin offset so labels aren't
+               shifted off-center when the sidebar is hidden */
+            .md\\:ml-64 {
+              margin-left: 0 !important;
+            }
+
+            /* Remove the top padding added for the mobile top-bar */
+            .pt-16 {
+              padding-top: 0 !important;
+            }
+
+            /* Strip background gradient from the layout root */
+            .min-h-screen {
+              background: white !important;
+            }
 
             @page {
               size: ${preset.pageWidth} ${preset.pageHeight};
@@ -415,6 +441,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
               }
             ` : ''}
 
+            /* Suppress the global rule that appends link URLs after text */
             a[href]:after { content: "" !important; }
           }
 
