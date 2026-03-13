@@ -9,8 +9,8 @@ import React from 'react';
 import { Timer, StopCircle, RefreshCw } from 'lucide-react';
 import { useAdminHoursStore } from '../store/adminHoursStore';
 import { formatDuration } from '../utils/formatDuration';
-import { formatTime } from '../../../../utils/dateFormatting';
-import { useTimezone } from '../../../../hooks/useTimezone';
+import { formatTime } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
 import toast from 'react-hot-toast';
 
 const ActiveSessionsTab: React.FC = () => {
