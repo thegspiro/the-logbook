@@ -20,7 +20,6 @@ export const RoleManagementPage: React.FC = () => {
   // Form state
   const [formData, setFormData] = useState({
     name: '',
-    slug: '',
     description: '',
     permissions: [] as string[],
     priority: 50,
@@ -52,7 +51,6 @@ export const RoleManagementPage: React.FC = () => {
   const handleCreate = () => {
     setFormData({
       name: '',
-      slug: '',
       description: '',
       permissions: [],
       priority: 50,
@@ -64,7 +62,6 @@ export const RoleManagementPage: React.FC = () => {
   const handleEdit = (role: Role) => {
     setFormData({
       name: role.name,
-      slug: role.slug,
       description: role.description || '',
       permissions: role.permissions,
       priority: role.priority,
@@ -244,8 +241,7 @@ export const RoleManagementPage: React.FC = () => {
                 {editingRole?.is_system && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                     <p className="text-sm text-yellow-800">
-                      System roles can only have their permissions modified.
-                      Name and priority cannot be changed.
+                      This is a system role. Only the description and permissions can be modified.
                     </p>
                   </div>
                 )}
@@ -263,20 +259,6 @@ export const RoleManagementPage: React.FC = () => {
                     className="mt-1 block w-full rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-xs focus:border-theme-focus-ring focus:ring-theme-focus-ring sm:text-sm disabled:bg-theme-surface-hover"
                   />
                 </div>
-
-                {!editingRole && (
-                  <div>
-                    <label htmlFor="role-slug" className="block text-sm font-medium text-theme-text-secondary">Slug</label>
-                    <input
-                      id="role-slug"
-                      type="text"
-                      value={formData.slug}
-                      onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
-                      className="mt-1 block w-full rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-xs focus:border-theme-focus-ring focus:ring-theme-focus-ring sm:text-sm"
-                      placeholder="custom_role"
-                    />
-                  </div>
-                )}
 
                 <div>
                   <label htmlFor="role-description" className="block text-sm font-medium text-theme-text-secondary">Description</label>

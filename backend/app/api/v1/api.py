@@ -13,6 +13,7 @@ from app.api.v1.endpoints import (
     analytics,
     apparatus,
     auth,
+    compliance_config,
     dashboard,
     documents,
     elections,
@@ -24,6 +25,7 @@ from app.api.v1.endpoints import (
     external_training,
     facilities,
     compliance_officer,
+    finance,
     ip_security,
     training_enhancements,
     forms,
@@ -32,6 +34,7 @@ from app.api.v1.endpoints import (
     inventory,
     locations,
     meetings,
+    medical_screening,
     member_leaves,
     member_status,
     membership_pipeline,
@@ -119,6 +122,11 @@ api_router.include_router(
     prefix="/prospective-members",
     tags=["prospective-members"],
 )
+api_router.include_router(
+    medical_screening.router,
+    prefix="/medical-screening",
+    tags=["medical-screening"],
+)
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
 api_router.include_router(meetings.router, prefix="/meetings", tags=["meetings"])
 api_router.include_router(minutes.router, prefix="/minutes-records", tags=["minutes"])
@@ -158,6 +166,7 @@ api_router.include_router(
     admin_hours.router, prefix="/admin-hours", tags=["admin-hours"]
 )
 api_router.include_router(grants.router, prefix="/grants", tags=["grants"])
+api_router.include_router(finance.router, prefix="/finance", tags=["finance"])
 api_router.include_router(
     training_enhancements.router,
     prefix="/training",
@@ -167,6 +176,11 @@ api_router.include_router(
     compliance_officer.router,
     prefix="/compliance",
     tags=["compliance-officer"],
+)
+api_router.include_router(
+    compliance_config.router,
+    prefix="/compliance",
+    tags=["compliance-config"],
 )
 api_router.include_router(public_portal_admin.router)
 

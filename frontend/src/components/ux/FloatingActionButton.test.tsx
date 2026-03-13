@@ -19,8 +19,8 @@ describe('FloatingActionButton', () => {
   });
 
   it('does not render when actions array is empty', () => {
-    const { container } = render(<FloatingActionButton actions={[]} />);
-    expect(container.firstChild).toBeNull();
+    render(<FloatingActionButton actions={[]} />);
+    expect(screen.queryByLabelText('Open quick actions')).not.toBeInTheDocument();
   });
 
   it('shows action labels when FAB is clicked', async () => {

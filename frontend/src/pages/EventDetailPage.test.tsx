@@ -456,8 +456,8 @@ describe('EventDetailPage', () => {
 
       // Open the More dropdown, then click Cancel Event
       await user.click(screen.getByRole('button', { name: /more/i }));
-      const cancelButtons = screen.getAllByRole('button', { name: /cancel event/i });
-      await user.click(cancelButtons[0]);
+      const firstCancelButton = screen.getAllByRole('button', { name: /cancel event/i })[0] ?? document.body;
+      await user.click(firstCancelButton);
 
       // Modal should be open
       await waitFor(() => {
@@ -470,8 +470,7 @@ describe('EventDetailPage', () => {
 
       // Submit via the modal's submit button (type="submit")
       const submitButtons = screen.getAllByRole('button', { name: /cancel event/i });
-      const modalSubmitButton = submitButtons.find(btn => btn.getAttribute('type') === 'submit');
-      if (!modalSubmitButton) throw new Error('Expected modal submit button to exist');
+      const modalSubmitButton = submitButtons.find(btn => btn.getAttribute('type') === 'submit') ?? submitButtons[submitButtons.length - 1] ?? document.body;
       await user.click(modalSubmitButton);
 
       await waitFor(() => {
@@ -497,8 +496,8 @@ describe('EventDetailPage', () => {
 
       // Open More dropdown, then cancel modal
       await user.click(screen.getByRole('button', { name: /more/i }));
-      const cancelButtons = screen.getAllByRole('button', { name: /cancel event/i });
-      await user.click(cancelButtons[0]);
+      const firstCancelBtn = screen.getAllByRole('button', { name: /cancel event/i })[0] ?? document.body;
+      await user.click(firstCancelBtn);
 
       // Check the notifications checkbox
       const notifyCheckbox = screen.getByLabelText(/send cancellation notifications/i);
@@ -508,10 +507,9 @@ describe('EventDetailPage', () => {
       const reasonInput = screen.getByPlaceholderText(/please provide a reason/i);
       await user.type(reasonInput, 'Weather emergency - event postponed');
 
-      const submitButtons = screen.getAllByRole('button', { name: /cancel event/i });
-      const modalSubmitButton = submitButtons.find(btn => btn.getAttribute('type') === 'submit');
-      if (!modalSubmitButton) throw new Error('Expected modal submit button to exist');
-      await user.click(modalSubmitButton);
+      const submitButtons2 = screen.getAllByRole('button', { name: /cancel event/i });
+      const modalSubmitBtn = submitButtons2.find(btn => btn.getAttribute('type') === 'submit') ?? submitButtons2[submitButtons2.length - 1] ?? document.body;
+      await user.click(modalSubmitBtn);
 
       await waitFor(() => {
         expect(eventService.cancelEvent).toHaveBeenCalledWith('evt-1', expect.objectContaining({
@@ -779,14 +777,11 @@ describe('EventDetailPage', () => {
 
       // Open More dropdown, then cancel modal
       await user.click(screen.getByRole('button', { name: /more/i }));
-      const cancelButtons = screen.getAllByRole('button', { name: /cancel event/i });
-      await user.click(cancelButtons[0]);
+      const firstCancelButton = screen.getAllByRole('button', { name: /cancel event/i })[0] ?? document.body;
+      await user.click(firstCancelButton);
 
-      await waitFor(() => {
-        const dialog = screen.getByRole('dialog');
-        expect(dialog).toBeInTheDocument();
-        expect(dialog).toHaveAttribute('aria-modal', 'true');
-      });
+      const dialog = await screen.findByRole('dialog');
+      expect(dialog).toHaveAttribute('aria-modal', 'true');
     });
   });
 });

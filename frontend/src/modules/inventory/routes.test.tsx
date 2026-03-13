@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Routes } from 'react-router-dom';
 
 // Mock all lazy-loaded pages to avoid importing real modules
@@ -68,72 +68,72 @@ function renderRoute(path: string) {
 
 describe('getInventoryRoutes', () => {
   it('renders InventoryItemsPage at /inventory', async () => {
-    const { findByTestId } = renderRoute('/inventory');
-    expect(await findByTestId('inventory-items-page')).toBeInTheDocument();
+    renderRoute('/inventory');
+    expect(await screen.findByTestId('inventory-items-page')).toBeInTheDocument();
   });
 
   it('renders MyEquipmentPage at /inventory/my-equipment', async () => {
-    const { findByTestId } = renderRoute('/inventory/my-equipment');
-    expect(await findByTestId('my-equipment-page')).toBeInTheDocument();
+    renderRoute('/inventory/my-equipment');
+    expect(await screen.findByTestId('my-equipment-page')).toBeInTheDocument();
   });
 
   it('renders AdminHub at /inventory/admin', async () => {
-    const { findByTestId } = renderRoute('/inventory/admin');
-    expect(await findByTestId('admin-hub')).toBeInTheDocument();
+    renderRoute('/inventory/admin');
+    expect(await screen.findByTestId('admin-hub')).toBeInTheDocument();
   });
 
   it('renders PoolItemsPage at /inventory/admin/pool', async () => {
-    const { findByTestId } = renderRoute('/inventory/admin/pool');
-    expect(await findByTestId('pool-items-page')).toBeInTheDocument();
+    renderRoute('/inventory/admin/pool');
+    expect(await screen.findByTestId('pool-items-page')).toBeInTheDocument();
   });
 
   it('renders CategoriesPage at /inventory/admin/categories', async () => {
-    const { findByTestId } = renderRoute('/inventory/admin/categories');
-    expect(await findByTestId('categories-page')).toBeInTheDocument();
+    renderRoute('/inventory/admin/categories');
+    expect(await screen.findByTestId('categories-page')).toBeInTheDocument();
   });
 
   it('renders MaintenancePage at /inventory/admin/maintenance', async () => {
-    const { findByTestId } = renderRoute('/inventory/admin/maintenance');
-    expect(await findByTestId('maintenance-page')).toBeInTheDocument();
+    renderRoute('/inventory/admin/maintenance');
+    expect(await screen.findByTestId('maintenance-page')).toBeInTheDocument();
   });
 
   it('renders MembersPage at /inventory/admin/members', async () => {
-    const { findByTestId } = renderRoute('/inventory/admin/members');
-    expect(await findByTestId('members-page')).toBeInTheDocument();
+    renderRoute('/inventory/admin/members');
+    expect(await screen.findByTestId('members-page')).toBeInTheDocument();
   });
 
   it('renders ChargesPage at /inventory/admin/charges', async () => {
-    const { findByTestId } = renderRoute('/inventory/admin/charges');
-    expect(await findByTestId('charges-page')).toBeInTheDocument();
+    renderRoute('/inventory/admin/charges');
+    expect(await screen.findByTestId('charges-page')).toBeInTheDocument();
   });
 
   it('renders ReturnRequestsPage at /inventory/admin/returns', async () => {
-    const { findByTestId } = renderRoute('/inventory/admin/returns');
-    expect(await findByTestId('returns-page')).toBeInTheDocument();
+    renderRoute('/inventory/admin/returns');
+    expect(await screen.findByTestId('returns-page')).toBeInTheDocument();
   });
 
   it('renders EquipmentRequestsPage at /inventory/admin/requests', async () => {
-    const { findByTestId } = renderRoute('/inventory/admin/requests');
-    expect(await findByTestId('requests-page')).toBeInTheDocument();
+    renderRoute('/inventory/admin/requests');
+    expect(await screen.findByTestId('requests-page')).toBeInTheDocument();
   });
 
   it('renders WriteOffsPage at /inventory/admin/write-offs', async () => {
-    const { findByTestId } = renderRoute('/inventory/admin/write-offs');
-    expect(await findByTestId('write-offs-page')).toBeInTheDocument();
+    renderRoute('/inventory/admin/write-offs');
+    expect(await screen.findByTestId('write-offs-page')).toBeInTheDocument();
   });
 
   it('renders StorageAreasPage at /inventory/storage-areas', async () => {
-    const { findByTestId } = renderRoute('/inventory/storage-areas');
-    expect(await findByTestId('storage-page')).toBeInTheDocument();
+    renderRoute('/inventory/storage-areas');
+    expect(await screen.findByTestId('storage-page')).toBeInTheDocument();
   });
 
   it('renders ItemDetailPage at /inventory/items/:id', async () => {
-    const { findByTestId } = renderRoute('/inventory/items/test-id-123');
-    expect(await findByTestId('item-detail-page')).toBeInTheDocument();
+    renderRoute('/inventory/items/test-id-123');
+    expect(await screen.findByTestId('item-detail-page')).toBeInTheDocument();
   });
 
   it('renders barcode page at /inventory/print-labels', async () => {
-    const { findByTestId } = renderRoute('/inventory/print-labels');
-    expect(await findByTestId('barcode-page')).toBeInTheDocument();
+    renderRoute('/inventory/print-labels');
+    expect(await screen.findByTestId('barcode-page')).toBeInTheDocument();
   });
 });

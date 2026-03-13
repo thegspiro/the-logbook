@@ -158,6 +158,12 @@ from app.models.meeting import (
     MeetingStatus,
     MeetingType,
 )
+from app.models.medical_screening import (
+    ScreeningRecord,
+    ScreeningRequirement,
+    ScreeningStatus,
+    ScreeningType,
+)
 from app.models.membership_pipeline import (
     ActionType,
     MembershipPipeline,
@@ -227,6 +233,34 @@ from app.models.training import (
     TrainingRequirement,
     TrainingSession,
 )
+from app.models.finance import (
+    ApprovalChain,
+    ApprovalChainStep,
+    ApprovalEntityType,
+    ApprovalStepRecord,
+    ApprovalStepStatus,
+    ApprovalStepType,
+    ApproverType,
+    Budget,
+    BudgetCategory,
+    CheckRequest,
+    CheckRequestStatus,
+    DuesFrequency,
+    DuesSchedule,
+    DuesStatus,
+    ExpenseLineItem,
+    ExpenseReport,
+    ExpenseReportStatus,
+    ExpenseType,
+    ExportLog,
+    ExportMapping,
+    FiscalYear,
+    FiscalYearStatus,
+    MemberDues,
+    PurchaseRequest,
+    PurchaseRequestPriority,
+    PurchaseRequestStatus,
+)
 from app.models.grant import (
     ApplicationStatus,
     BudgetItemCategory,
@@ -258,6 +292,14 @@ from app.models.grant import (
     PledgeStatus,
     RecurringFrequency,
     ReportingFrequency,
+)
+from app.models.compliance_config import (
+    ComplianceConfig,
+    ComplianceProfile,
+    ComplianceReport,
+    ComplianceThresholdType,
+    ReportFrequency,
+    ReportStatus,
 )
 from app.models.user import (
     LeaveType,
@@ -471,6 +513,11 @@ __all__ = [
     "WriteOffStatus",
     "ReturnRequestStatus",
     "ReturnRequestType",
+    # Medical screening models
+    "ScreeningRequirement",
+    "ScreeningRecord",
+    "ScreeningType",
+    "ScreeningStatus",
     # Membership pipeline models
     "MembershipPipeline",
     "MembershipPipelineStep",
@@ -490,6 +537,33 @@ __all__ = [
     "IPExceptionApprovalStatus",
     # Operational rank models
     "OperationalRank",
+    # Finance models
+    "FiscalYear",
+    "FiscalYearStatus",
+    "BudgetCategory",
+    "Budget",
+    "ApprovalChain",
+    "ApprovalChainStep",
+    "ApprovalStepRecord",
+    "ApprovalEntityType",
+    "ApprovalStepType",
+    "ApproverType",
+    "ApprovalStepStatus",
+    "PurchaseRequest",
+    "PurchaseRequestStatus",
+    "PurchaseRequestPriority",
+    "ExpenseReport",
+    "ExpenseReportStatus",
+    "ExpenseLineItem",
+    "ExpenseType",
+    "CheckRequest",
+    "CheckRequestStatus",
+    "DuesSchedule",
+    "DuesFrequency",
+    "MemberDues",
+    "DuesStatus",
+    "ExportMapping",
+    "ExportLog",
     # Grant & Fundraising models
     "GrantOpportunity",
     "GrantApplication",
@@ -546,4 +620,11 @@ __all__ = [
     "FacilityCategory",
     "DefaultFacilityType",
     "DefaultFacilityStatus",
+    # Compliance config models
+    "ComplianceConfig",
+    "ComplianceProfile",
+    "ComplianceReport",
+    "ComplianceThresholdType",
+    "ReportFrequency",
+    "ReportStatus",
 ]

@@ -49,10 +49,10 @@ describe('WriteOffsPage', () => {
     renderWithRouter(<WriteOffsPage />);
     expect(screen.getByText('Write-Off Requests')).toBeInTheDocument();
     expect(screen.getByText('Process loss and damage write-off requests')).toBeInTheDocument();
-    const backLink = screen.getByText('Back to Admin');
-    expect(backLink.closest('a')).toHaveAttribute('href', '/inventory/admin');
+    const backLink = screen.getByRole('link', { name: /Back to Admin/ });
+    expect(backLink).toHaveAttribute('href', '/inventory/admin');
     await waitFor(() => {
-      expect(mockGetWriteOffRequests).toHaveBeenCalled();
+      expect(mockGetWriteOffRequests).toHaveBeenCalledWith();
     });
   });
 
@@ -155,7 +155,7 @@ describe('WriteOffsPage', () => {
     mockGetWriteOffRequests.mockRejectedValue(new Error('Failed'));
     renderWithRouter(<WriteOffsPage />);
     await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalled();
+      expect(mockToastError).toHaveBeenCalledWith();
     });
   });
 });

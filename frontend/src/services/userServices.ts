@@ -459,7 +459,6 @@ export const roleService = {
    */
   async createRole(roleData: {
     name: string;
-    slug: string;
     description?: string;
     permissions: string[];
     priority?: number;

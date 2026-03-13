@@ -1136,3 +1136,66 @@ export const complianceOfficerService = {
   },
 };
 
+// ============================================
+// Compliance Configuration Services
+// ============================================
+
+export const complianceConfigService = {
+  async getConfig(): Promise<import('../types/training').ComplianceConfigData | null> {
+    const response = await api.get<import('../types/training').ComplianceConfigData | null>('/compliance/config');
+    return response.data;
+  },
+
+  async updateConfig(data: import('../types/training').ComplianceConfigUpdate): Promise<import('../types/training').ComplianceConfigData> {
+    const response = await api.put<import('../types/training').ComplianceConfigData>('/compliance/config', data);
+    return response.data;
+  },
+
+  async initializeConfig(data: import('../types/training').ComplianceConfigUpdate): Promise<import('../types/training').ComplianceConfigData> {
+    const response = await api.post<import('../types/training').ComplianceConfigData>('/compliance/config/initialize', data);
+    return response.data;
+  },
+
+  async getAvailableRequirements(): Promise<{ requirements: import('../types/training').AvailableRequirement[] }> {
+    const response = await api.get<{ requirements: import('../types/training').AvailableRequirement[] }>('/compliance/config/requirements');
+    return response.data;
+  },
+
+  async createProfile(data: import('../types/training').ComplianceProfileCreate): Promise<import('../types/training').ComplianceProfile> {
+    const response = await api.post<import('../types/training').ComplianceProfile>('/compliance/config/profiles', data);
+    return response.data;
+  },
+
+  async updateProfile(profileId: string, data: import('../types/training').ComplianceProfileUpdate): Promise<import('../types/training').ComplianceProfile> {
+    const response = await api.put<import('../types/training').ComplianceProfile>(`/compliance/config/profiles/${profileId}`, data);
+    return response.data;
+  },
+
+  async deleteProfile(profileId: string): Promise<void> {
+    await api.delete(`/compliance/config/profiles/${profileId}`);
+  },
+
+  async generateReport(data: import('../types/training').ComplianceReportGenerate): Promise<import('../types/training').ComplianceReportDetail> {
+    const response = await api.post<import('../types/training').ComplianceReportDetail>('/compliance/reports/generate', data);
+    return response.data;
+  },
+
+  async listReports(params?: { report_type?: string; year?: number; limit?: number; offset?: number }): Promise<{ reports: import('../types/training').ComplianceReportSummary[]; total: number }> {
+    const response = await api.get<{ reports: import('../types/training').ComplianceReportSummary[]; total: number }>('/compliance/reports', { params });
+    return response.data;
+  },
+
+  async getReport(reportId: string): Promise<import('../types/training').ComplianceReportDetail> {
+    const response = await api.get<import('../types/training').ComplianceReportDetail>(`/compliance/reports/${reportId}`);
+    return response.data;
+  },
+
+  async deleteReport(reportId: string): Promise<void> {
+    await api.delete(`/compliance/reports/${reportId}`);
+  },
+
+  async emailReport(reportId: string, recipients: string[]): Promise<void> {
+    await api.post(`/compliance/reports/${reportId}/email`, recipients);
+  },
+};
+

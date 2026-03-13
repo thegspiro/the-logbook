@@ -47,6 +47,7 @@ class PermissionCategory(str, Enum):
     REPORTS = "reports"
     PROSPECTIVE_MEMBERS = "prospective_members"
     ADMIN_HOURS = "admin_hours"
+    FINANCE = "finance"
 
 
 class Permission:
@@ -407,6 +408,26 @@ ADMIN_HOURS_MANAGE = Permission(
     PermissionCategory.ADMIN_HOURS,
 )
 
+# Finance
+FINANCE_VIEW = Permission(
+    "finance.view", "View financial data and budgets", PermissionCategory.FINANCE
+)
+FINANCE_MANAGE = Permission(
+    "finance.manage",
+    "Manage budgets, fiscal years, categories, and process payments",
+    PermissionCategory.FINANCE,
+)
+FINANCE_APPROVE = Permission(
+    "finance.approve",
+    "Approve purchase requests, expenses, and check requests",
+    PermissionCategory.FINANCE,
+)
+FINANCE_CONFIGURE_APPROVALS = Permission(
+    "finance.configure_approvals",
+    "Manage approval chains and routing configuration",
+    PermissionCategory.FINANCE,
+)
+
 # ============================================
 # All Permissions Registry
 # ============================================
@@ -514,6 +535,11 @@ ALL_PERMISSIONS: list[Permission] = [
     ADMIN_HOURS_VIEW,
     ADMIN_HOURS_LOG,
     ADMIN_HOURS_MANAGE,
+    # Finance
+    FINANCE_VIEW,
+    FINANCE_MANAGE,
+    FINANCE_APPROVE,
+    FINANCE_CONFIGURE_APPROVALS,
 ]
 
 

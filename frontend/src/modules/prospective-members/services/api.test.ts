@@ -32,6 +32,8 @@ function makeStepProgress(
       inactivity_timeout_days: null,
       notify_prospect_on_completion: false,
       public_visible: false,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
     },
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
@@ -60,6 +62,7 @@ function makeProspectResponse(
     interest_reason: null,
     referral_source: null,
     referred_by: null,
+    desired_membership_type: null,
     notes: null,
     current_step_id: 'step-1',
     status: 'active',
@@ -165,6 +168,8 @@ describe('mapProspectToApplicant', () => {
           inactivity_timeout_days: null,
           notify_prospect_on_completion: false,
           public_visible: false,
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
         },
         created_at: '2026-01-01T00:00:00Z',
       }),
@@ -204,7 +209,7 @@ describe('mapProspectToApplicant', () => {
   it('handles object-style status from backend', () => {
     const data = makeProspectResponse([]);
     // Backend sometimes returns status as { value: string }
-    (data as Record<string, unknown>).status = { value: 'on_hold' };
+    data.status = { value: 'on_hold' };
 
     const result = mapProspectToApplicant(data);
 

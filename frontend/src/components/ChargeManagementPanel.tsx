@@ -3,6 +3,8 @@ import { DollarSign, CheckCircle, XCircle, Clock, AlertTriangle } from 'lucide-r
 import { inventoryService } from '../services/inventoryService';
 import type { IssuanceChargeListItem } from '../services/eventServices';
 import { getErrorMessage } from '../utils/errorHandling';
+import { formatDate } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 import toast from 'react-hot-toast';
 
 const CHARGE_STATUS_BADGES: Record<string, string> = {
@@ -16,11 +18,8 @@ function formatCurrency(amount?: number | null): string {
   return `$${Number(amount).toFixed(2)}`;
 }
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
 const ChargeManagementPanel: React.FC = () => {
+  const tz = useTimezone();
   const [items, setItems] = useState<IssuanceChargeListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('');
@@ -197,7 +196,7 @@ const ChargeManagementPanel: React.FC = () => {
                         {item.charge_status}
                       </span>
                     </td>
-                    <td className="p-3 text-theme-text-muted text-xs">{formatDate(item.issued_at)}</td>
+                    <td className="p-3 text-theme-text-muted text-xs">{formatDate(item.issued_at, tz)}</td>
                     <td className="p-3 text-center">
                       {item.charge_status === 'pending' && (
                         <div className="flex items-center justify-center gap-1.5">

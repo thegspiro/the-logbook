@@ -128,6 +128,7 @@ export const Modal: React.FC<ModalProps> = ({
     >
       <div
         className="flex items-center justify-center min-h-screen px-4 py-4 text-center sm:block sm:p-0"
+        data-testid="modal-backdrop"
         onClick={handleBackdropClick}
       >
         {/* Background overlay */}
@@ -145,6 +146,7 @@ export const Modal: React.FC<ModalProps> = ({
         <div
           ref={modalRef}
           className={`relative z-10 inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle ${sizeClasses[size]} w-full max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-4rem)] overflow-y-auto`}
+          data-testid="modal-panel"
           tabIndex={-1}
         >
           {/* Header */}
@@ -172,7 +174,7 @@ export const Modal: React.FC<ModalProps> = ({
 
           {/* Footer */}
           {footer && (
-            <div className="bg-theme-surface-secondary px-4 py-3 sm:px-6 flex flex-col-reverse gap-2 sm:flex-row-reverse sm:gap-0">
+            <div data-testid="modal-footer" className="bg-theme-surface-secondary px-4 py-3 sm:px-6 flex flex-col-reverse gap-2 sm:flex-row-reverse sm:gap-0">
               {footer}
             </div>
           )}

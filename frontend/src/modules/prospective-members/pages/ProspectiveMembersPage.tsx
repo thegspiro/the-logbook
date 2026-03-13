@@ -38,6 +38,7 @@ import { applicantService } from '../services/api';
 import type { ApplicantListItem, Applicant, ApplicantStatus } from '../types';
 import { isValidEmail, getInitials } from '../utils';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { formatDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 
 export const ProspectiveMembersPage: React.FC = () => {
@@ -844,12 +845,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                       <td className="p-3 text-sm text-theme-text-muted table-col-secondary">{applicant.current_stage_name ?? '—'}</td>
                       <td className="p-3 text-sm text-theme-text-muted table-col-tertiary">
                         {applicant.deactivated_at
-                          ? new Date(applicant.deactivated_at).toLocaleDateString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
-                              timeZone: tz,
-                            })
+                          ? formatDate(applicant.deactivated_at, tz)
                           : '—'}
                       </td>
                       <td className="p-3 text-sm text-theme-text-muted">
@@ -971,12 +967,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                       <td className="p-3 text-sm text-theme-text-muted table-col-secondary">{applicant.current_stage_name ?? '—'}</td>
                       <td className="p-3 text-sm text-theme-text-muted table-col-tertiary">
                         {applicant.withdrawn_at
-                          ? new Date(applicant.withdrawn_at).toLocaleDateString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
-                              timeZone: tz,
-                            })
+                          ? formatDate(applicant.withdrawn_at, tz)
                           : '—'}
                       </td>
                       <td className="p-3 text-sm text-theme-text-muted max-w-[200px] truncate table-col-tertiary">

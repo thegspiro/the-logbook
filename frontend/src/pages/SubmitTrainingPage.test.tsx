@@ -78,14 +78,14 @@ describe('SubmitTrainingPage', () => {
   it('loads config on mount', async () => {
     renderWithRouter(<SubmitTrainingPage />);
     await waitFor(() => {
-      expect(mockGetConfig).toHaveBeenCalled();
+      expect(mockGetConfig).toHaveBeenCalledWith();
     });
   });
 
   it('loads submission history', async () => {
     renderWithRouter(<SubmitTrainingPage />);
     await waitFor(() => {
-      expect(mockGetMySubmissions).toHaveBeenCalled();
+      expect(mockGetMySubmissions).toHaveBeenCalledWith();
     });
   });
 
@@ -93,7 +93,7 @@ describe('SubmitTrainingPage', () => {
     mockGetConfig.mockRejectedValue(new Error('Failed'));
     renderWithRouter(<SubmitTrainingPage />);
     await waitFor(() => {
-      expect(mockGetConfig).toHaveBeenCalled();
+      expect(mockGetConfig).toHaveBeenCalledWith();
     });
     expect(document.body).toBeInTheDocument();
   });

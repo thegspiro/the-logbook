@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import InventoryMembersTab from './InventoryMembersTab';
 
@@ -131,10 +131,11 @@ describe('InventoryMembersTab', () => {
     // Header row + 3 member rows
     expect(rows.length).toBe(4);
     // Default sort is name A-Z: Alice, Bob, John
-    const nameElements = rows.slice(1).map((row) => row.querySelector('td:nth-child(2)')?.textContent);
-    expect(nameElements[0]).toContain('Alice Smith');
-    expect(nameElements[1]).toContain('Bob Wilson');
-    expect(nameElements[2]).toContain('John Doe');
+    const dataRows = rows.slice(1);
+    const nameCells = dataRows.map((row) => within(row).getAllByRole('cell')[1]);
+    expect(nameCells[0]).toHaveTextContent('Alice Smith');
+    expect(nameCells[1]).toHaveTextContent('Bob Wilson');
+    expect(nameCells[2]).toHaveTextContent('John Doe');
   });
 
   it('sorts by overdue when selected', async () => {
@@ -147,11 +148,12 @@ describe('InventoryMembersTab', () => {
     fireEvent.change(sortSelect, { target: { value: 'overdue' } });
 
     const rows = screen.getAllByRole('row');
-    const nameElements = rows.slice(1).map((row) => row.querySelector('td:nth-child(2)')?.textContent);
+    const dataRows = rows.slice(1);
+    const nameCells = dataRows.map((row) => within(row).getAllByRole('cell')[1]);
     // Alice (2 overdue) first, then John (5 total), then Bob (0 total)
-    expect(nameElements[0]).toContain('Alice Smith');
-    expect(nameElements[1]).toContain('John Doe');
-    expect(nameElements[2]).toContain('Bob Wilson');
+    expect(nameCells[0]).toHaveTextContent('Alice Smith');
+    expect(nameCells[1]).toHaveTextContent('John Doe');
+    expect(nameCells[2]).toHaveTextContent('Bob Wilson');
   });
 
   it('sorts by total items when selected', async () => {
@@ -164,11 +166,12 @@ describe('InventoryMembersTab', () => {
     fireEvent.change(sortSelect, { target: { value: 'total_items' } });
 
     const rows = screen.getAllByRole('row');
-    const nameElements = rows.slice(1).map((row) => row.querySelector('td:nth-child(2)')?.textContent);
+    const dataRows = rows.slice(1);
+    const nameCells = dataRows.map((row) => within(row).getAllByRole('cell')[1]);
     // John (5) first, then Alice (2), then Bob (0)
-    expect(nameElements[0]).toContain('John Doe');
-    expect(nameElements[1]).toContain('Alice Smith');
-    expect(nameElements[2]).toContain('Bob Wilson');
+    expect(nameCells[0]).toHaveTextContent('John Doe');
+    expect(nameCells[1]).toHaveTextContent('Alice Smith');
+    expect(nameCells[2]).toHaveTextContent('Bob Wilson');
   });
 
   it('filters by search query', async () => {

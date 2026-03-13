@@ -11,8 +11,11 @@ import { useParams, Link } from 'react-router-dom';
 import { adminHoursCategoryService, adminHoursClockService } from '../services/api';
 import type { AdminHoursQRData, AdminHoursActiveSession, AdminHoursClockOutResponse } from '../types';
 import { toAppError } from '../../../utils/errorHandling';
+import { formatTime } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
 
 const AdminHoursClockInPage: React.FC = () => {
+  const tz = useTimezone();
   const { categoryId } = useParams<{ categoryId: string }>();
 
   const [loading, setLoading] = useState(true);
@@ -159,7 +162,7 @@ const AdminHoursClockInPage: React.FC = () => {
               </div>
               <p className="text-blue-800">
                 <span className="font-medium">Clocked In At:</span>{' '}
-                {new Date(activeSession.clockInAt).toLocaleTimeString()}
+                {formatTime(activeSession.clockInAt, tz)}
               </p>
               <p className="text-blue-800">
                 <span className="font-medium">Elapsed:</span>{' '}
@@ -270,7 +273,7 @@ const AdminHoursClockInPage: React.FC = () => {
               </div>
               <p className="text-blue-800">
                 <span className="font-medium">Started At:</span>{' '}
-                {new Date().toLocaleTimeString()}
+                {formatTime(new Date(), tz)}
               </p>
               <p className="text-sm text-blue-700 mt-2">
                 Scan the same QR code when you&apos;re done to clock out

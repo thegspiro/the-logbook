@@ -137,13 +137,14 @@ export interface ManualApprovalConfig {
   require_notes: boolean;
 }
 
-export type MeetingType = 'chief_meeting' | 'informational' | 'business_meeting' | 'other';
+export type MeetingType = 'chief_meeting' | 'president_meeting' | 'informational' | 'business_meeting' | 'other';
 
 export interface MeetingStageConfig {
   meeting_type: MeetingType;
   meeting_description?: string | undefined;
   required_attendees?: string[] | undefined;
   linked_event_type?: string | undefined;
+  linked_event_category?: string | undefined;
   linked_event_id?: string | undefined;
 }
 
@@ -173,6 +174,41 @@ export interface AutomatedEmailStageConfig {
   custom_sections?: AutomatedEmailSection[] | undefined;
 }
 
+export interface ReferenceCheckConfig {
+  required_count: number;
+  reference_types: string[];
+  collect_method: 'form' | 'manual';
+  require_all_before_advance: boolean;
+}
+
+export interface ChecklistItemConfig {
+  label: string;
+  description?: string | undefined;
+  assignee_role?: string | undefined;
+}
+
+export interface ChecklistConfig {
+  items: ChecklistItemConfig[];
+  require_all: boolean;
+}
+
+export interface InterviewRequirementConfig {
+  required_count: number;
+  required_recommendation?: InterviewRecommendation | undefined;
+  interviewer_roles?: string[] | undefined;
+}
+
+export interface MultiApprovalConfig {
+  required_approvers: string[];
+  require_notes: boolean;
+  approval_order: 'any' | 'sequential';
+}
+
+export interface MedicalScreeningStageConfig {
+  required_screenings: string[];
+  require_all_passed: boolean;
+}
+
 export type StageConfig =
   | FormStageConfig
   | DocumentStageConfig
@@ -180,7 +216,12 @@ export type StageConfig =
   | ManualApprovalConfig
   | MeetingStageConfig
   | StatusPageToggleConfig
-  | AutomatedEmailStageConfig;
+  | AutomatedEmailStageConfig
+  | ReferenceCheckConfig
+  | ChecklistConfig
+  | InterviewRequirementConfig
+  | MultiApprovalConfig
+  | MedicalScreeningStageConfig;
 
 // =============================================================================
 // Pipeline Stage
@@ -849,6 +890,27 @@ export interface BackendStepUpdatePayload {
   config?: Record<string, unknown> | undefined;
   notify_prospect_on_completion?: boolean | undefined;
   public_visible?: boolean | undefined;
+}
+
+// =============================================================================
+// Linked Events
+// =============================================================================
+
+export interface ProspectEventLink {
+  id: string;
+  prospect_id: string;
+  event_id: string;
+  event_title?: string | undefined;
+  event_type?: string | undefined;
+  custom_category?: string | undefined;
+  event_start?: string | undefined;
+  event_end?: string | undefined;
+  event_location?: string | undefined;
+  is_cancelled: boolean;
+  notes?: string | undefined;
+  linked_by?: string | undefined;
+  linked_by_name?: string | undefined;
+  created_at: string;
 }
 
 // =============================================================================

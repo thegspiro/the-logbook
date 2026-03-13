@@ -45,6 +45,9 @@ Recommended crontab (add to host or container cron):
 
 # Weekly on Mondays at 8:00 AM — NFPA PPE retirement alerts
 0 8 * * 1 curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=nfpa_retirement_alerts
+
+# Daily at 6:30 AM — compliance auto-report generation (monthly on configured day, yearly on Jan 1)
+30 6 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=compliance_auto_reports
 -----------------------------------------------------
 """
 
@@ -143,6 +146,12 @@ SCHEDULE = {
         "frequency": "weekly",
         "recommended_time": "Monday 08:00",
         "cron": "0 8 * * 1",
+    },
+    "compliance_auto_reports": {
+        "description": "Generate and email scheduled compliance reports (monthly on configured day, yearly on Jan 1)",
+        "frequency": "daily",
+        "recommended_time": "06:30",
+        "cron": "30 6 * * *",
     },
 }
 
@@ -423,7 +432,7 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
     from app.models.event import Event, RSVPStatus
     from app.models.notification import NotificationChannel, NotificationLog
     from app.models.user import User
-    from app.services.email_service import EmailService, build_email_logo_html
+    from app.services.email_service import EmailService
 
     now = datetime.now(dt_timezone.utc)
     orgs = await db.execute(select(Organization))
@@ -845,7 +854,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
     from app.models.notification import NotificationChannel, NotificationLog
     from app.models.training import Shift, ShiftAttendance
     from app.models.user import User
-    from app.services.email_service import EmailService
+    from app.services.email_service import EmailService, build_email_logo_html
 
     now = datetime.now(dt_timezone.utc)
     lookback = now - timedelta(hours=2)
@@ -1575,6 +1584,101 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
     }
 
 
+async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
+    """Generate and email scheduled compliance reports for all organizations.
+
+    Checks each organization's compliance config for auto_report_frequency.
+    On the configured report_day_of_month, generates monthly reports.
+    On January 1st, generates yearly reports.
+    """
+    from app.models.compliance_config import ComplianceConfig
+    from app.services.compliance_config_service import ComplianceReportService
+
+    today = datetime.now()
+    results = []
+    total_generated = 0
+
+    configs = await db.execute(
+        select(ComplianceConfig).where(
+            ComplianceConfig.auto_report_frequency != "none"
+        )
+    )
+    all_configs = list(configs.scalars().all())
+
+    for config in all_configs:
+        try:
+            freq = config.auto_report_frequency
+            report_day = config.report_day_of_month or 1
+            org_id = str(config.organization_id)
+
+            should_generate_monthly = (
+                freq in ("monthly", "quarterly")
+                and today.day == report_day
+            )
+            # For quarterly, only generate on quarter months
+            if freq == "quarterly" and today.month not in (1, 4, 7, 10):
+                should_generate_monthly = False
+
+            should_generate_yearly = (
+                freq == "yearly"
+                and today.month == 1
+                and today.day == report_day
+            )
+
+            service = ComplianceReportService(db)
+
+            if should_generate_monthly:
+                # Generate for the previous month
+                prev_month = today.month - 1 if today.month > 1 else 12
+                prev_year = today.year if today.month > 1 else today.year - 1
+                await service.generate_report(
+                    organization_id=org_id,
+                    report_type="monthly",
+                    year=prev_year,
+                    month=prev_month,
+                    send_email=True,
+                )
+                total_generated += 1
+                results.append({
+                    "org_id": org_id,
+                    "type": "monthly",
+                    "period": f"{prev_year}-{prev_month:02d}",
+                })
+
+            if should_generate_yearly:
+                prev_year = today.year - 1
+                await service.generate_report(
+                    organization_id=org_id,
+                    report_type="yearly",
+                    year=prev_year,
+                    send_email=True,
+                )
+                total_generated += 1
+                results.append({
+                    "org_id": org_id,
+                    "type": "yearly",
+                    "period": str(prev_year),
+                })
+
+        except Exception as e:
+            logger.error(
+                f"Compliance auto-report failed for org {config.organization_id}: {e}"
+            )
+            results.append({
+                "org_id": str(config.organization_id),
+                "error": str(e),
+            })
+
+    await db.commit()
+
+    logger.info(f"Compliance auto-reports: {total_generated} reports generated")
+    return {
+        "task": "compliance_auto_reports",
+        "total_generated": total_generated,
+        "details": results,
+    }
+
+
 # Task runner map
 TASK_RUNNERS = {
     "cert_expiration_alerts": run_cert_expiration_alerts,
@@ -1591,4 +1695,5 @@ TASK_RUNNERS = {
     "inventory_low_stock_alerts": run_inventory_low_stock_alerts,
     "inventory_overdue_alerts": run_inventory_overdue_alerts,
     "nfpa_retirement_alerts": run_nfpa_retirement_alerts,
+    "compliance_auto_reports": run_compliance_auto_reports,
 }

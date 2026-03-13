@@ -46,7 +46,6 @@ interface AddressData {
 interface OrganizationFormData {
   // Basic Info
   name: string;
-  slug: string;
   organizationType: OrganizationType;
   timezone: string;
   // Contact Info
@@ -146,7 +145,6 @@ const emptyAddress: AddressData = {
 
 const initialFormData: OrganizationFormData = {
   name: '',
-  slug: '',
   organizationType: 'fire_department',
   timezone: 'America/New_York',
   phone: '',
@@ -424,17 +422,6 @@ const OrganizationSetup: React.FC = () => {
     }
   }, [departmentName, logoData]);
 
-  // Auto-generate slug from name
-  useEffect(() => {
-    if (formData.name && !formData.slug) {
-      const slug = formData.name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '');
-      setFormData((prev) => ({ ...prev, slug }));
-    }
-  }, [formData.name, formData.slug]);
-
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
@@ -586,7 +573,7 @@ const OrganizationSetup: React.FC = () => {
     setValidationErrors(errors);
 
     // Expand sections with errors
-    if (errors.name || errors.slug) {
+    if (errors.name) {
       setExpandedSections((prev) => ({ ...prev, basic: true }));
     }
     if (errors.email || errors.phone) {
@@ -647,7 +634,6 @@ const OrganizationSetup: React.FC = () => {
       // preventing Pydantic validation errors on optional fields (e.g., phone regex rejects "")
       const payload = {
         name: formData.name.trim(),
-        slug: formData.slug?.trim() || undefined,
         organization_type: formData.organizationType,
         timezone: formData.timezone,
         phone: formData.phone?.trim() || undefined,
@@ -764,16 +750,6 @@ const OrganizationSetup: React.FC = () => {
                   required
                   maxLength={255}
                   error={validationErrors.name}
-                />
-
-                <InputField
-                  label="URL Slug"
-                  id="org-slug"
-                  value={formData.slug}
-                  onChange={(v) => updateFormData('slug', v.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                  placeholder="e.g., springfield-vfd"
-                  maxLength={100}
-                  helpText="Used in URLs. Auto-generated from name if left blank."
                 />
 
                 <SelectField

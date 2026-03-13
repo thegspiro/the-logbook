@@ -95,6 +95,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const handleCodeScannedRef = useRef<(code: string) => void>(() => {});
 
   // ── Camera scanning ──────────────────────────────────────────
@@ -204,6 +205,11 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
     if (searchTimerRef.current) {
       clearTimeout(searchTimerRef.current);
     }
+    // Cancel any in-flight request so stale responses don't overwrite newer ones
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
 
     const trimmed = manualCode.trim();
     if (trimmed.length < 2) {
@@ -215,17 +221,23 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
 
     setSearchLoading(true);
     searchTimerRef.current = setTimeout(() => {
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
       void (async () => {
         try {
           const response: ScanLookupResponse = await inventoryService.lookupByCode(trimmed);
+          if (controller.signal.aborted) return;
           setSearchResults(response.results);
           setShowDropdown(response.results.length > 0);
           setActiveDropdownIndex(-1);
         } catch {
+          if (controller.signal.aborted) return;
           setSearchResults([]);
           setShowDropdown(false);
         } finally {
-          setSearchLoading(false);
+          if (!controller.signal.aborted) {
+            setSearchLoading(false);
+          }
         }
       })();
     }, 300);
@@ -233,6 +245,10 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
     return () => {
       if (searchTimerRef.current) {
         clearTimeout(searchTimerRef.current);
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
       }
     };
   }, [manualCode]);
@@ -290,12 +306,8 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
     const trimmed = code.trim();
     if (!trimmed) return;
 
-    // Don't add duplicates
-    if (scannedItems.some((si) => si.code === trimmed)) {
-      setLookupError(`"${trimmed}" is already in the list`);
-      setTimeout(() => setLookupError(null), 2000);
-      return;
-    }
+    // Don't add duplicates (check by item ID via lookup first)
+    // Note: code-based dedup removed — addItemFromResult checks by itemId
 
     setLookupLoading(true);
     setLookupError(null);

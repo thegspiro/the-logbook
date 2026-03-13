@@ -4,6 +4,7 @@ Election API Endpoints
 Endpoints for election management including elections, candidates, voting, and results.
 """
 
+import copy
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID, uuid4
@@ -473,7 +474,9 @@ async def update_election_settings(
             detail="Organization not found",
         )
 
-    org_settings = org.settings or {}
+    # Deep copy to avoid mutating SQLAlchemy's committed state via shared
+    # nested references, which would prevent change detection on JSON columns.
+    org_settings = copy.deepcopy(org.settings or {})
     election_defaults = org_settings.get("election_defaults", {})
     proxy_config = org_settings.get("proxy_voting", {})
 
@@ -602,7 +605,10 @@ async def update_election(
         if disallowed_fields:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot update {', '.join(disallowed_fields)} for open election. Only end_date can be updated while voting is active.",
+                detail=(
+                    f"Cannot update {', '.join(disallowed_fields)} for open election. "
+                    "Only end_date can be updated while voting is active."
+                ),
             )
 
         # If updating end_date, validate it's in the future and after start_date
@@ -633,7 +639,10 @@ async def update_election(
         if disallowed_fields:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot update {', '.join(disallowed_fields)} for closed election. Only results_visible_immediately can be updated.",
+                detail=(
+                    f"Cannot update {', '.join(disallowed_fields)} for closed election. "
+                    "Only results_visible_immediately can be updated."
+                ),
             )
 
     # For draft elections, validate dates if they're being updated
@@ -1004,7 +1013,10 @@ async def create_candidate(
         if candidate.position not in election.positions:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Position '{candidate.position}' is not defined for this election. Valid positions: {', '.join(election.positions)}",
+                detail=(
+                    f"Position '{candidate.position}' is not defined for this election. "
+                    f"Valid positions: {', '.join(election.positions)}"
+                ),
             )
 
     new_candidate = Candidate(

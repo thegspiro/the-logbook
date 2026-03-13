@@ -4,15 +4,13 @@ Organization Service
 Business logic for organization-related operations.
 """
 
+import copy
 import logging
 from typing import Any, Dict, Optional
 from uuid import UUID
 
-logger = logging.getLogger(__name__)
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.onboarding import OnboardingStatus
 from app.models.user import Organization
@@ -27,6 +25,8 @@ from app.schemas.organization import (
     decrypt_settings_secrets,
     encrypt_settings_secrets,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class OrganizationService:
@@ -125,11 +125,10 @@ class OrganizationService:
             # Persist to org.settings.modules so we never need the
             # fallback again — single source of truth going forward.
             if org is not None:
-                new_settings = dict(settings_dict)
+                new_settings = copy.deepcopy(settings_dict)
                 new_settings["modules"] = {f: getattr(migrated, f) for f in field_names}
                 new_settings["modules"]["_user_configured"] = True
                 org.settings = new_settings
-                flag_modified(org, "settings")
                 await self.db.flush()
 
             return migrated
@@ -255,8 +254,8 @@ class OrganizationService:
         if not org:
             raise ValueError("Organization not found")
 
-        # Get current settings
-        current_settings = org.settings or {}
+        # Deep copy to avoid mutating SQLAlchemy's committed state
+        current_settings = copy.deepcopy(org.settings or {})
 
         # SEC: If the update contains redacted placeholder values ('••••••••'),
         # preserve the existing encrypted values instead of overwriting them.
@@ -274,11 +273,7 @@ class OrganizationService:
         # SEC: Encrypt secret fields before persisting to the database
         updated_settings = encrypt_settings_secrets(updated_settings)
 
-        # Update in database — flag_modified is required because the
-        # Organization.settings column uses plain JSON (not MutableDict),
-        # so SQLAlchemy may not detect the change without an explicit hint.
         org.settings = updated_settings
-        flag_modified(org, "settings")
         await self.db.commit()
         await self.db.refresh(org)
 
@@ -350,8 +345,8 @@ class OrganizationService:
         # from onboarding data if org.settings.modules is empty.
         current_settings = org.settings or {}
         resolved = await self._resolve_module_settings(current_settings, org=org)
-        # Re-read settings after potential migration flush
-        current_settings = org.settings or {}
+        # Deep copy after potential migration flush to avoid shared references
+        current_settings = copy.deepcopy(org.settings or {})
         field_names = list(ModuleSettings.model_fields.keys())
         current_modules = current_settings.get(
             "modules",
@@ -366,9 +361,7 @@ class OrganizationService:
         }
         current_settings["modules"] = updated_modules
 
-        # Update in database — flag_modified needed for plain JSON column
         org.settings = current_settings
-        flag_modified(org, "settings")
         await self.db.commit()
         await self.db.refresh(org)
 

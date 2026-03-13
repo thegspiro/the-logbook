@@ -35,7 +35,7 @@ Object.defineProperty(window, 'print', {
 });
 
 // Mock IntersectionObserver
-global.IntersectionObserver = class IntersectionObserver {
+globalThis.IntersectionObserver = class IntersectionObserver {
   readonly root: Element | null = null;
   readonly rootMargin: string = '';
   readonly thresholds: ReadonlyArray<number> = [];
@@ -49,7 +49,7 @@ global.IntersectionObserver = class IntersectionObserver {
 };
 
 // Mock ResizeObserver
-global.ResizeObserver = class ResizeObserver {
+globalThis.ResizeObserver = class ResizeObserver {
   constructor(_callback: ResizeObserverCallback) {}
   disconnect() {}
   observe(_target: Element, _options?: ResizeObserverOptions) {}

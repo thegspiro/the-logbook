@@ -10,9 +10,9 @@ import React, { Suspense } from 'react';
 import { Route } from 'react-router-dom';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
-const MinutesPage = lazyWithRetry(() => import('../../pages/MinutesPage'));
+const MinutesPage = lazyWithRetry(() => import('./pages/MinutesPage'));
 const MinutesDetailPage = lazyWithRetry(
-  () => import('../../pages/MinutesDetailPage'),
+  () => import('./pages/MinutesDetailPage'),
 );
 
 /** Protected minutes routes (rendered inside AppLayout). */

@@ -48,8 +48,8 @@ describe('MyShiftsTab', () => {
 
   it('should render loading state initially', () => {
     renderWithRouter(<MyShiftsTab onViewShift={mockOnViewShift} />);
-    // Component starts loading, should show spinner or loading indicator
-    expect(document.querySelector('.animate-spin')).toBeInTheDocument();
+    // Component starts loading — Upcoming/Past toggle is not yet visible
+    expect(screen.queryByText(/^Upcoming/)).not.toBeInTheDocument();
   });
 
   it('should render empty state when no shifts', async () => {
@@ -59,7 +59,7 @@ describe('MyShiftsTab', () => {
     renderWithRouter(<MyShiftsTab onViewShift={mockOnViewShift} />);
 
     await waitFor(() => {
-      expect(document.querySelector('.animate-spin')).not.toBeInTheDocument();
+      expect(screen.getByText(/^Upcoming/)).toBeInTheDocument();
     });
   });
 
@@ -88,7 +88,7 @@ describe('MyShiftsTab', () => {
     renderWithRouter(<MyShiftsTab onViewShift={mockOnViewShift} />);
 
     await waitFor(() => {
-      expect(document.querySelector('.animate-spin')).not.toBeInTheDocument();
+      expect(screen.getByText(/^Upcoming/)).toBeInTheDocument();
     });
   });
 

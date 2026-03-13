@@ -628,7 +628,7 @@ const InventoryPage: React.FC = () => {
     setPrintingLabels(true);
     setShowLabelMenu(false);
     try {
-      const blob = await inventoryService.generateBarcodeLabels(
+      const { blob, autoPopulated } = await inventoryService.generateBarcodeLabels(
         Array.from(selectedItemIds),
         labelFormat,
       );
@@ -637,6 +637,9 @@ const InventoryPage: React.FC = () => {
       setTimeout(() => URL.revokeObjectURL(url), 60000);
       const fmt = labelFormats.find(f => f.id === labelFormat);
       toast.success(`Generated ${fmt?.description || labelFormat} labels for ${selectedItemIds.size} item(s)`);
+      if (autoPopulated > 0) {
+        toast.success(`${autoPopulated} item${autoPopulated !== 1 ? 's' : ''} had barcode values auto-generated`);
+      }
       // Refresh items so auto-populated barcode values are visible in edit form
       void loadData();
     } catch {

@@ -1709,12 +1709,12 @@ export const MemberProfilePage: React.FC = () => {
                       <p className="text-xs text-theme-text-secondary">
                         {new Date(
                           leave.start_date + "T00:00:00",
-                        ).toLocaleDateString()}{" "}
+                        ).toLocaleDateString("en-US", { timeZone: tz })}{" "}
                         &ndash;{" "}
                         {leave.end_date
                           ? new Date(
                               leave.end_date + "T00:00:00",
-                            ).toLocaleDateString()
+                            ).toLocaleDateString("en-US", { timeZone: tz })
                           : "Permanent"}
                       </p>
                       {leave.reason && (

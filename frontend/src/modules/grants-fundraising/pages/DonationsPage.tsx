@@ -10,18 +10,13 @@ import {
 } from 'lucide-react';
 import { fundraisingService } from '../services/api';
 import type { Donation } from '../types';
+import { formatDate } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(
     amount,
   );
-
-const formatDate = (dateStr: string) =>
-  new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cash: 'Cash',
@@ -42,6 +37,7 @@ const PAYMENT_STATUS_COLORS: Record<string, string> = {
 };
 
 const DonationsPage: React.FC = () => {
+  const tz = useTimezone();
   const [donations, setDonations] = useState<Donation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -188,7 +184,7 @@ const DonationsPage: React.FC = () => {
                     className="hover:bg-theme-surface-hover transition-colors"
                   >
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-theme-text-primary">
-                      {formatDate(donation.donationDate)}
+                      {formatDate(donation.donationDate, tz)}
                     </td>
                     <td className="px-4 py-3 text-sm">
                       <div>

@@ -114,8 +114,8 @@ describe('InventoryBarcodePrintPage', () => {
     await user.click(screen.getByText('Dymo 30336'));
 
     // The preset button should be visually selected (has ring class)
-    const presetBtn = screen.getByText('Dymo 30336').closest('button');
-    expect(presetBtn?.className).toContain('ring-emerald-500');
+    const presetBtn = screen.getByRole('button', { name: /Dymo 30336/ });
+    expect(presetBtn.className).toContain('ring-emerald-500');
   });
 
   it('allows changing copies count', async () => {
@@ -146,7 +146,7 @@ describe('InventoryBarcodePrintPage', () => {
     });
 
     await user.click(printBtn);
-    expect(window.print).toHaveBeenCalled();
+    expect(window.print).toHaveBeenCalledWith();
   });
 
   it('shows asset tag as subtitle when available', async () => {

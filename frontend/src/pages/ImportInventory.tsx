@@ -97,7 +97,7 @@ const ImportInventory: React.FC = () => {
 
         if (preview.length < 5) {
           const getValue = (idx: number) =>
-            idx >= 0 ? (row[idx]?.trim().replace(/"/g, '') ?? '') : '';
+            idx >= 0 ? (row[idx]?.trim().replace(/"/g, '') || '') : '';
           preview.push({
             name: getValue(nameIdx),
             category: getValue(catIdx),
@@ -255,6 +255,7 @@ const ImportInventory: React.FC = () => {
               ref={fileInputRef}
               type="file"
               accept=".csv"
+              data-testid="csv-file-input"
               onChange={handleFileSelect}
               className="hidden"
             />

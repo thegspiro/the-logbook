@@ -2,6 +2,7 @@ import React, { ReactElement } from 'react';
 import { render, RenderOptions } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { vi } from 'vitest';
+import type { RSVP, QRCheckInData } from '../types/event';
 
 /**
  * Custom render function that wraps components with common providers
@@ -42,7 +43,7 @@ export const mockEvent = {
 /**
  * Mock QR check-in data
  */
-export const mockQRCheckInData = {
+export const mockQRCheckInData: QRCheckInData = {
   event_id: '1',
   event_name: 'Test Event',
   event_type: 'business_meeting',
@@ -52,13 +53,14 @@ export const mockQRCheckInData = {
   check_in_start: '2026-01-25T17:00:00Z',
   check_in_end: '2026-01-25T20:00:00Z',
   is_valid: true,
-  actual_end_time: null,
+  actual_end_time: undefined,
+  timezone: 'America/New_York',
 };
 
 /**
  * Mock RSVP data
  */
-export const mockRSVP = {
+export const mockRSVP: RSVP = {
   id: '1',
   event_id: '1',
   user_id: '1',
@@ -66,8 +68,8 @@ export const mockRSVP = {
   guest_count: 0,
   checked_in: true,
   checked_in_at: '2026-01-25T18:15:00Z',
-  attendance_duration_minutes: null,
-  created_at: '2026-01-20T10:00:00Z',
+  attendance_duration_minutes: undefined,
+  responded_at: '2026-01-20T10:00:00Z',
   updated_at: '2026-01-25T18:15:00Z',
 };
 

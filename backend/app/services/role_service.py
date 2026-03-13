@@ -5,6 +5,7 @@ Comprehensive service for managing roles, permissions, and user-role assignments
 Includes audit logging for all role-related changes.
 """
 
+import re
 from typing import Any, Dict, List, Optional, Set
 from uuid import uuid4
 
@@ -15,6 +16,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import log_audit_event
 from app.core.permissions import DEFAULT_ROLES, get_all_permissions
 from app.models.user import Role, User, user_roles
+
+
+def slugify(name: str) -> str:
+    """Convert a role name to a URL/DB-safe slug.
+
+    Examples:
+        "Training Officer" -> "training_officer"
+        "Assistant Chief" -> "assistant_chief"
+    """
+    slug = name.lower().strip()
+    slug = re.sub(r"[^a-z0-9]+", "_", slug)
+    slug = slug.strip("_")
+    return slug
 
 
 class RoleManagementService:
@@ -118,9 +132,9 @@ class RoleManagementService:
         db: AsyncSession,
         organization_id: str,
         name: str,
-        slug: str,
         permissions: List[str],
         created_by: str,
+        slug: Optional[str] = None,
         description: Optional[str] = None,
         priority: int = 0,
         is_system: bool = False,
@@ -131,7 +145,8 @@ class RoleManagementService:
         Args:
             organization_id: Organization ID
             name: Role display name
-            slug: Role slug (unique per organization)
+            slug: Role slug (unique per organization). Auto-generated from
+                name when not provided.
             permissions: List of permission names
             created_by: User ID creating the role
             description: Optional description
@@ -144,10 +159,16 @@ class RoleManagementService:
         Raises:
             ValueError: If slug already exists or permissions are invalid
         """
-        # Check for existing slug
-        existing = await self.get_role_by_slug(db, slug, organization_id)
-        if existing:
-            raise ValueError(f"Role with slug '{slug}' already exists")
+        # Auto-generate slug from name when not provided
+        if not slug:
+            slug = slugify(name)
+
+        # Deduplicate: append _2, _3, … when the slug already exists
+        base_slug = slug
+        counter = 1
+        while await self.get_role_by_slug(db, slug, organization_id):
+            counter += 1
+            slug = f"{base_slug}_{counter}"
 
         # Validate permissions
         valid_permissions = set(get_all_permissions())
@@ -359,20 +380,19 @@ class RoleManagementService:
         source_role_id: str,
         organization_id: str,
         new_name: str,
-        new_slug: str,
         created_by: str,
         new_description: Optional[str] = None,
     ) -> Role:
         """
-        Clone an existing role with new name and slug.
+        Clone an existing role with a new name.
 
-        Copies all permissions from the source role.
+        Copies all permissions from the source role.  The slug is
+        auto-generated from *new_name*.
 
         Args:
             source_role_id: Role ID to clone
             organization_id: Organization ID
             new_name: Name for the new role
-            new_slug: Slug for the new role
             created_by: User ID creating the clone
             new_description: Optional new description
 
@@ -387,7 +407,6 @@ class RoleManagementService:
             db=db,
             organization_id=organization_id,
             name=new_name,
-            slug=new_slug,
             permissions=source.permissions or [],
             created_by=created_by,
             description=new_description or f"Clone of {source.name}",

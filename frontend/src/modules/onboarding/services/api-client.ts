@@ -471,14 +471,12 @@ class SecureApiClient {
    */
   async createOrganization(data: {
     name: string;
-    slug: string;
     organization_type?: string | undefined;
     description?: string | undefined;
     timezone?: string | undefined;
   }): Promise<ApiResponse<Record<string, unknown>>> {
     return this.request('POST', '/onboarding/organization', {
       name: data.name,
-      slug: data.slug,
       organization_type: data.organization_type || 'fire_department',
       description: data.description,
       timezone: data.timezone || 'America/New_York'
@@ -491,7 +489,6 @@ class SecureApiClient {
    */
   async saveOrganization(data: {
     name: string;
-    slug?: string | undefined;
     description?: string | undefined;
     organization_type: 'fire_department' | 'ems_only' | 'fire_ems_combined';
     timezone: string;

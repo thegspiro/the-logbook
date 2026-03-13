@@ -24,12 +24,14 @@ from app.models.membership_pipeline import (
     ProspectActivityLog,
     ProspectDocument,
     ProspectElectionPackage,
+    ProspectEventLink,
     ProspectInterview,
     ProspectiveMember,
     ProspectStatus,
     ProspectStepProgress,
     StepProgressStatus,
 )
+from app.models.event import Event
 from app.models.user import Organization, User, UserStatus, generate_uuid
 from app.utils.prospect_fields import (
     FIELD_TYPE_MAP as _SHARED_FIELD_TYPE_MAP,
@@ -765,6 +767,151 @@ class MembershipPipelineService:
     # Step Progression
     # =========================================================================
 
+    async def _validate_step_completion(
+        self,
+        prospect: ProspectiveMember,
+        step: MembershipPipelineStep,
+    ) -> None:
+        """
+        Validate that stage-specific requirements are met before allowing
+        step completion. Raises ValueError if requirements are not satisfied.
+        """
+        config = step.config or {}
+        step_type = step.step_type
+
+        if step_type == PipelineStepType.INTERVIEW_REQUIREMENT:
+            required_count = config.get("required_count", 1)
+            required_rec = config.get("required_recommendation")
+            interviews = [
+                i
+                for i in getattr(prospect, "interviews", [])
+                if str(i.step_id) == str(step.id)
+            ]
+            if len(interviews) < required_count:
+                raise ValueError(
+                    f"This step requires at least {required_count} "
+                    f"interview(s); only {len(interviews)} recorded."
+                )
+            if required_rec:
+                matching = [
+                    i
+                    for i in interviews
+                    if i.recommendation
+                    and i.recommendation.value == required_rec
+                ]
+                if not matching:
+                    raise ValueError(
+                        f"At least one interview must have a "
+                        f"'{required_rec}' recommendation."
+                    )
+
+        elif step_type == PipelineStepType.CHECKLIST:
+            items = config.get("items", [])
+            require_all = config.get("require_all", True)
+            if require_all and items:
+                progress = next(
+                    (
+                        p
+                        for p in prospect.step_progress
+                        if str(p.step_id) == str(step.id)
+                    ),
+                    None,
+                )
+                completed_items = (
+                    (progress.action_result or {}).get("completed_items", [])
+                    if progress
+                    else []
+                )
+                if len(completed_items) < len(items):
+                    raise ValueError(
+                        f"All {len(items)} checklist items must be "
+                        f"completed; only {len(completed_items)} done."
+                    )
+
+        elif step_type == PipelineStepType.MULTI_APPROVAL:
+            required_approvers = config.get("required_approvers", [])
+            if required_approvers:
+                progress = next(
+                    (
+                        p
+                        for p in prospect.step_progress
+                        if str(p.step_id) == str(step.id)
+                    ),
+                    None,
+                )
+                approvals = (
+                    (progress.action_result or {}).get("approvals", [])
+                    if progress
+                    else []
+                )
+                approved_roles = {a.get("role") for a in approvals}
+                missing = [
+                    r for r in required_approvers if r not in approved_roles
+                ]
+                if missing:
+                    raise ValueError(
+                        f"Approval still needed from: {', '.join(missing)}."
+                    )
+
+        elif step_type == PipelineStepType.REFERENCE_CHECK:
+            required_count = config.get("required_count", 1)
+            require_all = config.get("require_all_before_advance", True)
+            if require_all:
+                progress = next(
+                    (
+                        p
+                        for p in prospect.step_progress
+                        if str(p.step_id) == str(step.id)
+                    ),
+                    None,
+                )
+                references = (
+                    (progress.action_result or {}).get("references", [])
+                    if progress
+                    else []
+                )
+                if len(references) < required_count:
+                    raise ValueError(
+                        f"This step requires at least {required_count} "
+                        f"reference(s); only {len(references)} received."
+                    )
+
+        elif step_type == PipelineStepType.MEDICAL_SCREENING:
+            required_screenings = config.get("required_screenings", [])
+            require_all_passed = config.get("require_all_passed", True)
+            if required_screenings and require_all_passed:
+                from app.models.medical_screening import (
+                    ScreeningRecord,
+                    ScreeningStatus,
+                )
+
+                result = await self.db.execute(
+                    select(ScreeningRecord).where(
+                        and_(
+                            ScreeningRecord.prospect_id == prospect.id,
+                            ScreeningRecord.screening_type.in_(
+                                required_screenings
+                            ),
+                            ScreeningRecord.status.in_(
+                                [
+                                    ScreeningStatus.PASSED,
+                                    ScreeningStatus.COMPLETED,
+                                ]
+                            ),
+                        )
+                    )
+                )
+                records = result.scalars().all()
+                passed_types = {r.screening_type.value for r in records}
+                missing = [
+                    s for s in required_screenings if s not in passed_types
+                ]
+                if missing:
+                    raise ValueError(
+                        f"Medical screenings not yet passed: "
+                        f"{', '.join(missing)}."
+                    )
+
     async def complete_step(
         self,
         prospect_id: str,
@@ -778,6 +925,14 @@ class MembershipPipelineService:
         prospect = await self.get_prospect(prospect_id, organization_id)
         if not prospect:
             return None
+
+        # Validate stage-specific requirements before allowing completion
+        step = next(
+            (s for s in prospect.pipeline.steps if str(s.id) == str(step_id)),
+            None,
+        )
+        if step:
+            await self._validate_step_completion(prospect, step)
 
         # Find or create the progress record
         progress = next(
@@ -871,6 +1026,9 @@ class MembershipPipelineService:
                 )
             )
 
+        # Auto-link event if the new step requires meeting attendance
+        await self._auto_link_event_for_step(prospect, next_step)
+
         await self._log_activity(
             prospect_id=prospect_id,
             action="prospect_advanced",
@@ -917,6 +1075,9 @@ class MembershipPipelineService:
             )
             if next_progress:
                 next_progress.status = StepProgressStatus.IN_PROGRESS
+
+            # Auto-link event if the new step requires meeting attendance
+            await self._auto_link_event_for_step(prospect, next_step)
 
     # =========================================================================
     # Transfer to Membership
@@ -2746,3 +2907,275 @@ class MembershipPipelineService:
 
         await self.db.commit()
         return True
+
+    # =========================================================================
+    # Event Links
+    # =========================================================================
+
+    async def list_event_links(
+        self,
+        prospect_id: str,
+        organization_id: str,
+    ) -> List[Dict[str, Any]]:
+        """List all event links for a prospect, enriched with event details."""
+        # Verify prospect belongs to org
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            raise ValueError("Prospect not found")
+
+        query = (
+            select(ProspectEventLink)
+            .where(ProspectEventLink.prospect_id == prospect_id)
+            .order_by(ProspectEventLink.created_at.desc())
+        )
+        result = await self.db.execute(query)
+        links = list(result.scalars().all())
+
+        enriched: List[Dict[str, Any]] = []
+        for link in links:
+            event_result = await self.db.execute(
+                select(Event).where(Event.id == link.event_id)
+            )
+            event = event_result.scalar_one_or_none()
+
+            linker_name = None
+            if link.linked_by:
+                linker_result = await self.db.execute(
+                    select(User).where(User.id == link.linked_by)
+                )
+                linker = linker_result.scalar_one_or_none()
+                if linker:
+                    linker_name = (
+                        f"{linker.first_name} {linker.last_name}".strip()
+                    )
+
+            enriched.append(
+                {
+                    "id": link.id,
+                    "prospect_id": link.prospect_id,
+                    "event_id": link.event_id,
+                    "event_title": event.title if event else None,
+                    "event_type": (
+                        event.event_type.value
+                        if event and event.event_type
+                        else None
+                    ),
+                    "custom_category": (
+                        event.custom_category if event else None
+                    ),
+                    "event_start": event.start_datetime if event else None,
+                    "event_end": event.end_datetime if event else None,
+                    "event_location": event.location if event else None,
+                    "is_cancelled": event.is_cancelled if event else False,
+                    "notes": link.notes,
+                    "linked_by": link.linked_by,
+                    "linked_by_name": linker_name,
+                    "created_at": link.created_at,
+                }
+            )
+        return enriched
+
+    async def link_event(
+        self,
+        prospect_id: str,
+        event_id: str,
+        organization_id: str,
+        linked_by: str,
+        notes: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Link an event to a prospect."""
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            raise ValueError("Prospect not found")
+
+        # Verify event exists and belongs to same org
+        event_result = await self.db.execute(
+            select(Event).where(
+                and_(
+                    Event.id == event_id,
+                    Event.organization_id == organization_id,
+                )
+            )
+        )
+        event = event_result.scalar_one_or_none()
+        if not event:
+            raise ValueError("Event not found")
+
+        # Check for duplicate link
+        existing = await self.db.execute(
+            select(ProspectEventLink).where(
+                and_(
+                    ProspectEventLink.prospect_id == prospect_id,
+                    ProspectEventLink.event_id == event_id,
+                )
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise ValueError("Event is already linked to this prospect")
+
+        link = ProspectEventLink(
+            id=generate_uuid(),
+            prospect_id=prospect_id,
+            event_id=event_id,
+            notes=notes,
+            linked_by=linked_by,
+        )
+        self.db.add(link)
+
+        await self._log_activity(
+            prospect_id=prospect_id,
+            action="event_linked",
+            details={
+                "event_id": event_id,
+                "event_title": event.title,
+            },
+            performed_by=linked_by,
+        )
+
+        await self.db.commit()
+
+        # Return enriched response
+        linker_result = await self.db.execute(
+            select(User).where(User.id == linked_by)
+        )
+        linker = linker_result.scalar_one_or_none()
+        linker_name = (
+            f"{linker.first_name} {linker.last_name}".strip()
+            if linker
+            else None
+        )
+
+        return {
+            "id": link.id,
+            "prospect_id": link.prospect_id,
+            "event_id": link.event_id,
+            "event_title": event.title,
+            "event_type": (
+                event.event_type.value if event.event_type else None
+            ),
+            "custom_category": event.custom_category,
+            "event_start": event.start_datetime,
+            "event_end": event.end_datetime,
+            "event_location": event.location,
+            "is_cancelled": event.is_cancelled,
+            "notes": link.notes,
+            "linked_by": link.linked_by,
+            "linked_by_name": linker_name,
+            "created_at": link.created_at,
+        }
+
+    async def unlink_event(
+        self,
+        prospect_id: str,
+        link_id: str,
+        organization_id: str,
+        unlinked_by: str,
+    ) -> bool:
+        """Remove an event link from a prospect."""
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            return False
+
+        result = await self.db.execute(
+            select(ProspectEventLink).where(
+                and_(
+                    ProspectEventLink.id == link_id,
+                    ProspectEventLink.prospect_id == prospect_id,
+                )
+            )
+        )
+        link = result.scalar_one_or_none()
+        if not link:
+            return False
+
+        event_id = link.event_id
+        await self.db.execute(
+            delete(ProspectEventLink).where(ProspectEventLink.id == link_id)
+        )
+
+        await self._log_activity(
+            prospect_id=prospect_id,
+            action="event_unlinked",
+            details={"event_id": event_id, "link_id": link_id},
+            performed_by=unlinked_by,
+        )
+
+        await self.db.commit()
+        return True
+
+    async def _auto_link_event_for_step(
+        self,
+        prospect: ProspectiveMember,
+        step: MembershipPipelineStep,
+    ) -> None:
+        """
+        Auto-link the next upcoming event when a prospect enters a meeting
+        step that has a linked_event_type configured.
+
+        The event is selected based on the current date (not when the prospect
+        entered the pipeline), so even if months have passed, it always finds
+        the *next* upcoming event matching the type and optional category.
+        """
+        if not step.config or not isinstance(step.config, dict):
+            return
+
+        event_type = step.config.get("linked_event_type")
+        if not event_type:
+            return
+
+        event_category = step.config.get("linked_event_category")
+        now = datetime.now(timezone.utc)
+
+        # Build query for next upcoming event matching type (and category)
+        conditions = [
+            Event.organization_id == prospect.organization_id,
+            Event.event_type == event_type,
+            Event.end_datetime > now,
+            Event.is_cancelled.is_(False),
+        ]
+        if event_category:
+            conditions.append(Event.custom_category == event_category)
+
+        query = (
+            select(Event)
+            .where(and_(*conditions))
+            .order_by(Event.start_datetime.asc())
+            .limit(1)
+        )
+        result = await self.db.execute(query)
+        event = result.scalar_one_or_none()
+        if not event:
+            return
+
+        # Check if already linked
+        existing = await self.db.execute(
+            select(ProspectEventLink).where(
+                and_(
+                    ProspectEventLink.prospect_id == prospect.id,
+                    ProspectEventLink.event_id == event.id,
+                )
+            )
+        )
+        if existing.scalar_one_or_none():
+            return
+
+        link = ProspectEventLink(
+            id=generate_uuid(),
+            prospect_id=prospect.id,
+            event_id=event.id,
+            notes=f"Auto-linked: next {event_type}"
+            + (f" ({event_category})" if event_category else ""),
+        )
+        self.db.add(link)
+
+        await self._log_activity(
+            prospect_id=prospect.id,
+            action="event_auto_linked",
+            details={
+                "event_id": event.id,
+                "event_title": event.title,
+                "step_id": step.id,
+                "step_name": step.name,
+            },
+            performed_by="system",
+        )

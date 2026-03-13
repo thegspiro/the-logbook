@@ -156,12 +156,38 @@ Create a series of repeating events:
 
 1. Navigate to **Events Admin**.
 2. Click **Create Recurring Event**.
-3. Set the recurrence pattern (weekly, bi-weekly, monthly).
+3. Set the recurrence pattern:
+   - **Daily** — Every day or every N days
+   - **Weekly** — Every week on selected days (e.g., every Monday and Wednesday)
+   - **Monthly** — On the same date each month (e.g., the 15th)
+   - **Monthly by Weekday** — On a specific weekday occurrence (e.g., "2nd Tuesday of every month" or "last Friday of every month"). The weekday auto-populates from your event date
+   - **Annual** — On the same date each year
 4. Set the start and end dates for the series.
 5. Each occurrence is created as an individual event that can be modified independently.
 
 > **Screenshot placeholder:**
-> _[Screenshot of the recurring event creation form showing the base event settings plus the recurrence pattern selector (weekly/bi-weekly/monthly), weekday selectors, and the series date range]_
+> _[Screenshot of the recurring event creation form showing the base event settings plus the recurrence pattern selector (daily/weekly/monthly/monthly-by-weekday/annual), weekday selectors, and the series date range]_
+
+### Managing Recurring Event Series
+
+Once a recurring series is created, each occurrence appears as an individual event with a **recurring event badge** on the events list. From any event in the series:
+
+- **View All in Series** — See all events in the series on a single page
+- **Edit All Future** — Modify all future occurrences at once (past events are unchanged)
+- **Delete Series** — Remove all events in the series
+- **Edit Single** — Modify just this one occurrence without affecting others
+
+> **Hint:** Deleting a single occurrence from a series does not affect other occurrences. The system warns you when an edit will affect multiple events.
+
+### Recurring Event Edge Cases
+
+| Scenario | What Happens |
+|----------|-------------|
+| Monthly-by-weekday "5th Tuesday" | Falls back to the last Tuesday when the month has fewer than 5 weeks |
+| Annual event on Feb 29 | Shifts to Feb 28 in non-leap years |
+| Conflicting times/locations | The system checks for scheduling conflicts before creating each occurrence and warns you |
+| Past events in "Edit All Future" | Only events after today are modified — historical records remain intact |
+| Series spanning timezone changes (DST) | Event times are stored in UTC and displayed in local time; times may shift by 1 hour across DST boundaries |
 
 ---
 
@@ -597,12 +623,18 @@ Thank you for working with Riverside Fire-Rescue!
 | Pipeline tasks not visible to requester | Public progress visibility is off by default. Enable it in **Events > Settings > Request Pipeline > Public Progress Visibility**. |
 | Custom event categories not appearing in form | Configure categories in **Events Settings > Custom Event Categories**. Then toggle visibility in **Event Type & Category Visibility** section. |
 | Custom categories not showing as filter tabs | Category visibility must be enabled separately — go to Events Settings and enable each custom category under the visibility section. |
-| Events Settings page layout changed | As of 2026-03-04, the Events Settings page uses a sidebar + content panel layout (matching Organization Settings) instead of collapsible sections. Desktop shows a sidebar with section descriptions; mobile uses horizontal scrollable tabs. |
+| Events Settings page layout changed | As of 2026-03-04, the Events Settings page uses a sidebar + content panel layout (matching Organization Settings) instead of collapsible sections. Desktop shows a sidebar with section descriptions; mobile uses horizontal scrollable tabs. As of 2026-03-12, the settings tab is further refactored into 6 focused section components. |
 | EventRequestStatusPage colors look wrong in light mode | Fixed in March 2026 — hardcoded colors replaced with theme-aware CSS variables. Pull latest and rebuild. |
 | Email templates missing CC/BCC fields | As of 2026-03-04, each email template now supports configurable CC/BCC addresses. Run the latest migration and restart. |
 | Members show 0 hours despite checking in | As of 2026-03-06, use **Finalize Attendance** from the event detail "More" menu to calculate duration for members who checked in but didn't check out. Auto-triggers when recording actual end time. |
 | Past events not visible to regular members | As of 2026-03-06, all users can toggle between Upcoming and Past events. Previously past events were only accessible via the admin hub. |
 | Facility rooms not in event location picker | As of 2026-03-06, facility rooms auto-create linked Location records. Existing rooms get locations on next update. |
+| QR check-in window shows "N/A" | Fixed 2026-03-12 — backend was returning bare date/time strings instead of ISO 8601 format. Pull latest and restart. |
+| QR check-in times showing in wrong timezone | Fixed 2026-03-12 — QR data now includes `organizationTimezone` for local time display. Self check-in falls back to browser timezone if missing. |
+| Recurring event dates seem wrong | Monthly-by-weekday events with "5th week" fall back to last occurrence. Annual Feb 29 events shift to Feb 28 in non-leap years. These are expected behaviors. |
+| Custom categories sent as strings cause 422 | Fixed 2026-03-12 — schema now accepts objects (`{id, label, color}`). Existing string-format categories auto-migrate on next save. |
+| Settings changes not persisting | Fixed 2026-03-12 — SQLAlchemy JSON column shallow copy issue. Pull latest to get `deepcopy()` fix. |
+| Event form sending empty strings causes 422 | Fixed 2026-03-12 — `??` replaced with `||` for all optional form fields to coerce empty strings to `undefined`. |
 
 ---
 

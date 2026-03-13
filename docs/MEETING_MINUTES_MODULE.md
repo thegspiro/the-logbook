@@ -50,8 +50,15 @@ The Meeting Minutes module enables organizations to create, manage, and publish 
 | `backend/app/services/document_service.py` | Document/folder CRUD, system folder initialization, publish target |
 | `backend/app/api/v1/endpoints/minutes.py` | Minutes and template API endpoints |
 | `backend/app/api/v1/endpoints/documents.py` | Document and folder API endpoints |
-| `frontend/src/pages/MinutesPage.tsx` | Minutes list, create modal with template selector |
-| `frontend/src/pages/MinutesDetailPage.tsx` | Section editor, reorder, publish |
+| `frontend/src/modules/minutes/pages/MinutesPage.tsx` | Minutes list, create modal with template selector |
+| `frontend/src/modules/minutes/pages/MinutesDetailPage.tsx` | Section editor, reorder, publish |
+| `frontend/src/modules/minutes/index.ts` | Module barrel export |
+| `frontend/src/modules/minutes/routes.tsx` | Route definitions |
+| `frontend/src/modules/minutes/services/api.ts` | Module axios instance with auth interceptors |
+| `frontend/src/modules/minutes/store/minutesStore.ts` | Zustand store for minutes CRUD |
+| `frontend/src/modules/minutes/types/minutes.ts` | TypeScript types and interfaces |
+| `frontend/src/pages/MinutesPage.tsx` | Re-export from module (backward compatibility) |
+| `frontend/src/pages/MinutesDetailPage.tsx` | Re-export from module (backward compatibility) |
 | `frontend/src/pages/DocumentsPage.tsx` | Folder browsing, document viewer |
 
 ---
@@ -316,6 +323,7 @@ All write operations are logged to the tamper-proof audit trail:
     → add_meeting_minutes (minutes table)
         → 20260213_0800 (templates, documents, dynamic sections)
             → a7f3e2d91b04 (new meeting types)
+                → 20260312_0200 (rename meeting_action_items table)
 ```
 
 ---
@@ -332,6 +340,35 @@ See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#meeting-minutes-module-issues) for
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2026-02-13
+---
+
+## Module Refactoring (2026-03-12)
+
+The minutes module was refactored to follow the standard module conventions used by other modules in the application:
+
+### Changes
+- **Module extraction**: Pages moved from `frontend/src/pages/` to `frontend/src/modules/minutes/pages/`. Original files re-export from the module for backward compatibility with existing routes and deep links
+- **Dedicated Zustand store**: `minutesStore.ts` manages loading/error states for all minutes CRUD operations, replacing ad-hoc state management in page components
+- **Module API service**: `services/api.ts` provides a dedicated axios instance with auth interceptors (CSRF, `withCredentials: true`), matching the pattern used by other modules
+- **TypeScript types**: All minutes-related interfaces and types extracted to `types/minutes.ts`
+- **Table name migration**: `20260312_0200_rename_meeting_action_items_table.py` renames the table to match the expected SQLAlchemy model table name. Handles index recreation
+
+### Backend Tests
+- `backend/tests/test_minute_service.py` — comprehensive test suite covering:
+  - Minutes CRUD (create, read, update, delete)
+  - Section operations (add, remove, reorder, edit content)
+  - Full-text search across titles and section content
+  - Template management (create, list, delete, defaults)
+  - Publish workflow (draft → review → approved → publish)
+  - Edge cases: empty sections, duplicate keys, publish without approval, re-publish
+
+### Edge Cases
+- Existing deployments must run `alembic upgrade head` for the table rename migration
+- Deep links to `/minutes/:id` continue to work via re-exported route definitions
+- The old `meetingsServices.ts` API methods remain functional alongside the new module API service
+
+---
+
+**Document Version**: 1.1
+**Last Updated**: 2026-03-12
 **Maintainer**: Development Team

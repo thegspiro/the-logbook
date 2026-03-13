@@ -8,9 +8,13 @@ Used by both the dashboard admin-summary and the training compliance-matrix endp
 import calendar
 from datetime import date, timedelta
 
+from typing import Dict, List, Optional, Tuple
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
+from app.models.compliance_config import ComplianceConfig, ComplianceProfile
 from app.models.training import (
     RequirementFrequency,
     RequirementType,
@@ -419,14 +423,112 @@ def evaluate_member_requirement(req, member_records, today: date, waivers=None):
     return "not_started", None, None
 
 
+def _find_matching_profile(
+    member: User,
+    profiles: List[ComplianceProfile],
+) -> Optional[ComplianceProfile]:
+    """Find the highest-priority active profile that matches a member.
+
+    Matches by membership_type and/or role_ids. A profile with no
+    membership_types and no role_ids matches all members. Returns None
+    if no profile matches.
+    """
+    member_type = getattr(member, "membership_type", None)
+    member_role_ids: List[str] = []
+    if hasattr(member, "positions") and member.positions:
+        for pos in member.positions:
+            role_id = getattr(pos, "role_id", None)
+            if role_id:
+                member_role_ids.append(str(role_id))
+
+    for profile in profiles:
+        if not profile.is_active:
+            continue
+
+        type_match = True
+        role_match = True
+
+        if profile.membership_types:
+            type_match = member_type in profile.membership_types
+
+        if profile.role_ids:
+            role_match = bool(set(member_role_ids) & set(profile.role_ids))
+
+        if type_match and role_match:
+            return profile
+
+    return None
+
+
+def _evaluate_member_compliance(
+    member_reqs: list,
+    member_records: list,
+    today: date,
+    waivers: list,
+    compliant_threshold: float,
+    at_risk_threshold: float,
+    threshold_type: str,
+) -> Tuple[str, float]:
+    """Evaluate a member's compliance status against a set of requirements.
+
+    Returns (status, compliance_pct) where status is one of:
+    "compliant", "at_risk", "non_compliant".
+    """
+    if not member_reqs:
+        return "compliant", 100.0
+
+    completed_count = 0
+    for req in member_reqs:
+        req_status, _, _ = evaluate_member_requirement(
+            req, member_records, today, waivers=waivers
+        )
+        if req_status == TrainingStatus.COMPLETED.value:
+            completed_count += 1
+
+    pct = round(completed_count / len(member_reqs) * 100, 1)
+
+    if threshold_type == "all_required":
+        if completed_count >= len(member_reqs):
+            return "compliant", pct
+        elif pct >= at_risk_threshold:
+            return "at_risk", pct
+        else:
+            return "non_compliant", pct
+    else:
+        # percentage mode
+        if pct >= compliant_threshold:
+            return "compliant", pct
+        elif pct >= at_risk_threshold:
+            return "at_risk", pct
+        else:
+            return "non_compliant", pct
+
+
+async def _load_compliance_config(
+    db: AsyncSession, org_id: str,
+) -> Optional[ComplianceConfig]:
+    """Load compliance config with profiles for an organization."""
+    result = await db.execute(
+        select(ComplianceConfig)
+        .options(selectinload(ComplianceConfig.profiles))
+        .where(ComplianceConfig.organization_id == org_id)
+    )
+    return result.scalars().first()
+
+
 async def compute_org_compliance_pct(db: AsyncSession, org_id: str) -> float:
     """Compute organization-wide training compliance percentage.
 
-    Uses the same logic as the compliance-matrix endpoint:
-    for each active member, evaluate every active training requirement.
-    Returns the percentage of members who are fully compliant (100%).
+    When a compliance configuration exists with profiles, each member is
+    matched to a profile (by membership type / role). The profile's
+    ``required_requirement_ids`` determines which training requirements
+    count, and the configured thresholds determine compliant vs not.
 
-    If there are no active requirements, returns 100.0 (nothing to comply with).
+    Without a compliance config, falls back to the legacy behaviour:
+    evaluate every active training requirement for every member.
+
+    Returns the percentage of members who are fully compliant.
+    If there are no active requirements, returns 100.0.
     If there are no active members, returns 0.0.
     """
     # Get active members (exclude compliance-exempt members)
@@ -455,6 +557,29 @@ async def compute_org_compliance_pct(db: AsyncSession, org_id: str) -> float:
     if not requirements:
         return 100.0  # No requirements = fully compliant
 
+    # Build requirements lookup by ID
+    reqs_by_id: Dict[str, TrainingRequirement] = {
+        str(r.id): r for r in requirements
+    }
+
+    # Load compliance config (if configured)
+    config = await _load_compliance_config(db, org_id)
+    profiles: List[ComplianceProfile] = []
+    if config and config.profiles:
+        # Sort by priority descending (higher priority first)
+        profiles = sorted(
+            config.profiles, key=lambda p: p.priority, reverse=True,
+        )
+
+    # Default thresholds
+    compliant_threshold = 100.0
+    at_risk_threshold = 75.0
+    threshold_type = "percentage"
+    if config:
+        compliant_threshold = config.compliant_threshold
+        at_risk_threshold = config.at_risk_threshold
+        threshold_type = config.threshold_type or "percentage"
+
     # Get all training records for these members
     records_result = await db.execute(
         select(TrainingRecord).where(
@@ -465,7 +590,7 @@ async def compute_org_compliance_pct(db: AsyncSession, org_id: str) -> float:
     all_records = records_result.scalars().all()
 
     # Build lookup: user_id -> [records]
-    records_by_user = {}
+    records_by_user: Dict[str, list] = {}
     for r in all_records:
         records_by_user.setdefault(r.user_id, []).append(r)
 
@@ -478,16 +603,41 @@ async def compute_org_compliance_pct(db: AsyncSession, org_id: str) -> float:
     for member in members:
         member_records = records_by_user.get(member.id, [])
         member_waivers = waivers_by_user.get(str(member.id), [])
-        completed_count = 0
 
-        for req in requirements:
-            req_status, _, _ = evaluate_member_requirement(
-                req, member_records, today, waivers=member_waivers
-            )
-            if req_status == TrainingStatus.COMPLETED.value:
-                completed_count += 1
+        # Determine which requirements apply to this member
+        member_reqs = list(requirements)  # default: all requirements
+        member_compliant_threshold = compliant_threshold
+        member_at_risk_threshold = at_risk_threshold
 
-        if completed_count >= len(requirements):
+        if profiles:
+            profile = _find_matching_profile(member, profiles)
+            if profile and profile.required_requirement_ids:
+                # Use only the requirements specified in the profile
+                member_reqs = [
+                    reqs_by_id[rid]
+                    for rid in profile.required_requirement_ids
+                    if rid in reqs_by_id
+                ]
+                # Use profile threshold overrides if set
+                if profile.compliant_threshold_override is not None:
+                    member_compliant_threshold = (
+                        profile.compliant_threshold_override
+                    )
+                if profile.at_risk_threshold_override is not None:
+                    member_at_risk_threshold = (
+                        profile.at_risk_threshold_override
+                    )
+
+        status, _ = _evaluate_member_compliance(
+            member_reqs,
+            member_records,
+            today,
+            member_waivers,
+            member_compliant_threshold,
+            member_at_risk_threshold,
+            threshold_type,
+        )
+        if status == "compliant":
             compliant_count += 1
 
     return round(compliant_count / len(members) * 100, 1)

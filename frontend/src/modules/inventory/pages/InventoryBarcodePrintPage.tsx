@@ -96,7 +96,7 @@ const DEFAULT_PRESET_ID = 'dymo-30252';
 /** Map frontend preset IDs to backend label format keys */
 const PRESET_TO_BACKEND: Record<string, string> = {
   'dymo-30252': 'dymo_30252',
-  'dymo-30336': 'dymo_30334',
+  'dymo-30336': 'dymo_30336',
   'rollo-2x1': 'custom',
   'thermal-1x1': 'custom',
   'letter-grid': 'letter',
@@ -303,12 +303,15 @@ const InventoryBarcodePrintPage: React.FC = () => {
       const backendFormat = PRESET_TO_BACKEND[preset.id] || 'letter';
       const customW = backendFormat === 'custom' ? parseFloat(preset.width) : undefined;
       const customH = backendFormat === 'custom' ? parseFloat(preset.height) : undefined;
-      const blob = await inventoryService.generateBarcodeLabels(
+      const { blob, autoPopulated } = await inventoryService.generateBarcodeLabels(
         items.map(i => i.id),
         backendFormat,
         customW,
         customH,
       );
+      if (autoPopulated > 0) {
+        toast.success(`${autoPopulated} item${autoPopulated !== 1 ? 's' : ''} had barcode values auto-generated`);
+      }
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -364,8 +367,34 @@ const InventoryBarcodePrintPage: React.FC = () => {
       <style>
         {`
           @media print {
+            /* ── Hide everything except labels ── */
             .print-controls { display: none !important; }
-            body, html { margin: 0; padding: 0; background: white !important; }
+            footer, [role="contentinfo"] { display: none !important; }
+
+            /* Reset body/html — override global 12pt font-size so label
+               preset sizes (6-9pt) are respected */
+            body, html {
+              margin: 0 !important;
+              padding: 0 !important;
+              background: white !important;
+              font-size: unset !important;
+            }
+
+            /* Remove the sidebar left-margin offset so labels aren't
+               shifted off-center when the sidebar is hidden */
+            .md\\:ml-64 {
+              margin-left: 0 !important;
+            }
+
+            /* Remove the top padding added for the mobile top-bar */
+            .pt-16 {
+              padding-top: 0 !important;
+            }
+
+            /* Strip background gradient from the layout root */
+            .min-h-screen {
+              background: white !important;
+            }
 
             @page {
               size: ${preset.pageWidth} ${preset.pageHeight};
@@ -412,6 +441,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
               }
             ` : ''}
 
+            /* Suppress the global rule that appends link URLs after text */
             a[href]:after { content: "" !important; }
           }
 

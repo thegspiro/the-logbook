@@ -38,19 +38,29 @@ import {
   CalendarCheck,
   Globe,
   ClipboardList,
+  Link2,
+  Trash2,
+  CalendarPlus,
+  Search,
+  UserCheck,
+  Users,
+  Stethoscope,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type {
   Applicant,
+  ProspectEventLink,
   StageType,
   StageHistoryEntry,
 } from '../types';
 import { isSafeUrl, getInitials } from '../utils';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
-import { applicantService } from '../services/api';
+import { applicantService, eventLinkService } from '../services/api';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
 import { ApplicantStatus, StageType as StageTypeEnum, ElectionStatus } from '../../../constants/enums';
+import { eventService } from '../../../services/eventServices';
+import type { EventListItem } from '../../../types/event';
 
 /** Maps snake_case backend field keys to human-readable labels. */
 const FORM_FIELD_LABELS: Record<string, string> = {
@@ -113,6 +123,11 @@ const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
   meeting: CalendarCheck,
   status_page_toggle: Globe,
   automated_email: Mail,
+  reference_check: UserCheck,
+  checklist: ClipboardList,
+  interview_requirement: MessageSquare,
+  multi_approval: Users,
+  medical_screening: Stethoscope,
 };
 
 export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
@@ -159,6 +174,14 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   const [activityLog, setActivityLog] = useState<Array<{ id: string; action: string; details: Record<string, unknown>; performer_name: string; created_at: string }>>([]);
   const [isLoadingActivity, setIsLoadingActivity] = useState(false);
   const [showActivityLog, setShowActivityLog] = useState(false);
+
+  // Linked events state
+  const [linkedEvents, setLinkedEvents] = useState<ProspectEventLink[]>([]);
+  const [isLoadingLinkedEvents, setIsLoadingLinkedEvents] = useState(false);
+  const [showEventPicker, setShowEventPicker] = useState(false);
+  const [upcomingEvents, setUpcomingEvents] = useState<EventListItem[]>([]);
+  const [isLoadingUpcoming, setIsLoadingUpcoming] = useState(false);
+  const [eventSearchQuery, setEventSearchQuery] = useState('');
 
   // Editable contact info state
   const [isEditingContact, setIsEditingContact] = useState(false);
@@ -277,6 +300,62 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
     setActivityLog([]);
     setShowActivityLog(false);
   }, [applicant?.id]);
+
+  // Load linked events when applicant changes
+  useEffect(() => {
+    if (!applicant?.id) {
+      setLinkedEvents([]);
+      return;
+    }
+    setIsLoadingLinkedEvents(true);
+    eventLinkService
+      .getLinkedEvents(applicant.id)
+      .then(setLinkedEvents)
+      .catch(() => setLinkedEvents([]))
+      .finally(() => setIsLoadingLinkedEvents(false));
+  }, [applicant?.id]);
+
+  const handleOpenEventPicker = async () => {
+    setShowEventPicker(true);
+    setEventSearchQuery('');
+    setIsLoadingUpcoming(true);
+    try {
+      const now = new Date().toISOString();
+      const events = await eventService.getEvents({
+        end_after: now,
+        include_cancelled: false,
+        limit: 50,
+      });
+      setUpcomingEvents(events);
+    } catch {
+      setUpcomingEvents([]);
+    } finally {
+      setIsLoadingUpcoming(false);
+    }
+  };
+
+  const handleLinkEvent = async (eventId: string) => {
+    if (!applicant) return;
+    try {
+      const link = await eventLinkService.linkEvent(applicant.id, eventId);
+      setLinkedEvents((prev) => [link, ...prev]);
+      setShowEventPicker(false);
+      toast.success('Event linked');
+    } catch {
+      toast.error('Failed to link event');
+    }
+  };
+
+  const handleUnlinkEvent = async (linkId: string) => {
+    if (!applicant) return;
+    try {
+      await eventLinkService.unlinkEvent(applicant.id, linkId);
+      setLinkedEvents((prev) => prev.filter((l) => l.id !== linkId));
+      toast.success('Event unlinked');
+    } catch {
+      toast.error('Failed to unlink event');
+    }
+  };
 
   // Refresh applicant data when the drawer becomes visible (catches
   // pipeline changes made by other coordinators or from settings page).
@@ -940,6 +1019,324 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   )}
                 </div>
               )}
+
+              {/* Linked Events */}
+              <div className="p-4 border-b border-theme-surface-border">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider flex items-center gap-1.5">
+                    <Link2 className="w-3.5 h-3.5" />
+                    Linked Events
+                  </h3>
+                  {applicant.status === ApplicantStatus.ACTIVE && (
+                    <button
+                      onClick={() => { void handleOpenEventPicker(); }}
+                      className="flex items-center gap-1 text-xs text-red-500 hover:text-red-400 transition-colors"
+                    >
+                      <CalendarPlus className="w-3 h-3" />
+                      Link Event
+                    </button>
+                  )}
+                </div>
+
+                {/* Event picker dropdown */}
+                {showEventPicker && (
+                  <div className="mb-3 bg-theme-surface border border-theme-surface-border rounded-lg shadow-lg overflow-hidden">
+                    <div className="p-2 border-b border-theme-surface-border">
+                      <div className="flex items-center gap-2 px-2 py-1.5 bg-theme-input-bg border border-theme-surface-border rounded-sm">
+                        <Search className="w-3.5 h-3.5 text-theme-text-muted" />
+                        <input
+                          type="text"
+                          value={eventSearchQuery}
+                          onChange={(e) => setEventSearchQuery(e.target.value)}
+                          placeholder="Search upcoming events..."
+                          className="flex-1 bg-transparent text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => setShowEventPicker(false)}
+                          className="text-theme-text-muted hover:text-theme-text-primary"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto">
+                      {isLoadingUpcoming ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="w-4 h-4 animate-spin text-theme-text-muted" />
+                        </div>
+                      ) : (() => {
+                        const alreadyLinkedIds = new Set(linkedEvents.map((l) => l.event_id));
+                        const query = eventSearchQuery.toLowerCase();
+                        const filtered = upcomingEvents.filter(
+                          (ev) =>
+                            !alreadyLinkedIds.has(ev.id) &&
+                            (ev.title.toLowerCase().includes(query) ||
+                              ev.event_type.toLowerCase().includes(query) ||
+                              (ev.custom_category ?? '').toLowerCase().includes(query))
+                        );
+                        if (filtered.length === 0) {
+                          return (
+                            <p className="text-xs text-theme-text-muted text-center py-4">
+                              No matching upcoming events
+                            </p>
+                          );
+                        }
+                        return filtered.map((ev) => (
+                          <button
+                            key={ev.id}
+                            onClick={() => { void handleLinkEvent(ev.id); }}
+                            className="w-full flex items-center gap-3 px-3 py-2 hover:bg-theme-surface-hover text-left transition-colors"
+                          >
+                            <Calendar className="w-4 h-4 text-theme-text-muted shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm text-theme-text-primary truncate">{ev.title}</p>
+                              <p className="text-xs text-theme-text-muted">
+                                {formatDateTime(ev.start_datetime, tz)}
+                                {ev.custom_category && (
+                                  <span className="ml-1.5 px-1.5 py-0.5 bg-theme-surface-secondary rounded text-[10px]">
+                                    {ev.custom_category}
+                                  </span>
+                                )}
+                                {!ev.custom_category && (
+                                  <span className="ml-1.5 px-1.5 py-0.5 bg-theme-surface-secondary rounded text-[10px] capitalize">
+                                    {ev.event_type.replace(/_/g, ' ')}
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                          </button>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                {/* Linked events list */}
+                {isLoadingLinkedEvents ? (
+                  <div className="flex items-center justify-center py-3">
+                    <Loader2 className="w-4 h-4 animate-spin text-theme-text-muted" />
+                  </div>
+                ) : linkedEvents.length === 0 ? (
+                  <p className="text-xs text-theme-text-muted">No events linked yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {linkedEvents.map((link) => (
+                      <div
+                        key={link.id}
+                        className={`flex items-center gap-3 p-2.5 rounded-lg border transition-colors ${
+                          link.is_cancelled
+                            ? 'border-red-500/20 bg-red-500/5 opacity-60'
+                            : 'border-theme-surface-border bg-theme-surface'
+                        }`}
+                      >
+                        <Calendar className="w-4 h-4 text-theme-text-muted shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm text-theme-text-primary truncate">
+                            {link.event_title ?? 'Deleted event'}
+                            {link.is_cancelled && (
+                              <span className="ml-1.5 text-[10px] text-red-500 font-medium">CANCELLED</span>
+                            )}
+                          </p>
+                          <p className="text-xs text-theme-text-muted">
+                            {link.event_start ? formatDateTime(link.event_start, tz) : 'No date'}
+                            {(link.custom_category || link.event_type) && (
+                              <span className="ml-1.5 px-1.5 py-0.5 bg-theme-surface-secondary rounded text-[10px] capitalize">
+                                {link.custom_category ?? (link.event_type ?? '').replace(/_/g, ' ')}
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                        {applicant.status === ApplicantStatus.ACTIVE && (
+                          <button
+                            onClick={() => { void handleUnlinkEvent(link.id); }}
+                            className="text-theme-text-muted hover:text-red-500 transition-colors shrink-0"
+                            title="Unlink event"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Checklist Stage Section */}
+              {applicant.current_stage_type === StageTypeEnum.CHECKLIST && applicant.status === ApplicantStatus.ACTIVE && (() => {
+                const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
+                const actionResult = currentEntry?.action_result ?? {};
+                const completedItems = (actionResult.completed_items as string[] | undefined) ?? [];
+                const totalItems = (actionResult.total_items as number | undefined) ?? 0;
+                return (
+                  <div className="p-4 border-b border-theme-surface-border">
+                    <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
+                      Checklist Progress
+                    </h3>
+                    {totalItems > 0 ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs text-theme-text-secondary">
+                          <span>{completedItems.length} of {totalItems} items completed</span>
+                          <span className={completedItems.length === totalItems ? 'text-emerald-500' : 'text-amber-500'}>
+                            {Math.round((completedItems.length / totalItems) * 100)}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-theme-surface-hover rounded-full h-1.5">
+                          <div
+                            className={`h-1.5 rounded-full transition-all ${completedItems.length === totalItems ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                            style={{ width: `${(completedItems.length / totalItems) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-theme-text-muted">No checklist data recorded yet.</p>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Multi-Approval Stage Section */}
+              {applicant.current_stage_type === StageTypeEnum.MULTI_APPROVAL && applicant.status === ApplicantStatus.ACTIVE && (() => {
+                const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
+                const actionResult = currentEntry?.action_result ?? {};
+                const approvals = (actionResult.approvals as Array<{ role: string; approved_by?: string; approved_at?: string }> | undefined) ?? [];
+                const requiredApprovers = (actionResult.required_approvers as string[] | undefined) ?? [];
+                return (
+                  <div className="p-4 border-b border-theme-surface-border">
+                    <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
+                      Approval Status
+                    </h3>
+                    {requiredApprovers.length > 0 ? (
+                      <div className="space-y-2">
+                        {requiredApprovers.map((role) => {
+                          const approval = approvals.find((a) => a.role === role);
+                          return (
+                            <div key={role} className="flex items-center justify-between text-xs">
+                              <span className="text-theme-text-secondary capitalize">{role.replace(/_/g, ' ')}</span>
+                              {approval ? (
+                                <span className="flex items-center gap-1 text-emerald-500">
+                                  <CheckCircle className="w-3 h-3" />
+                                  Approved
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1 text-theme-text-muted">
+                                  <Clock className="w-3 h-3" />
+                                  Pending
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-theme-text-muted">No approval data recorded yet.</p>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Reference Check Stage Section */}
+              {applicant.current_stage_type === StageTypeEnum.REFERENCE_CHECK && applicant.status === ApplicantStatus.ACTIVE && (() => {
+                const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
+                const actionResult = currentEntry?.action_result ?? {};
+                const references = (actionResult.references as Array<{ name?: string; status?: string; submitted_at?: string }> | undefined) ?? [];
+                const requiredCount = (actionResult.required_count as number | undefined) ?? 0;
+                return (
+                  <div className="p-4 border-b border-theme-surface-border">
+                    <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
+                      Reference Checks
+                    </h3>
+                    <div className="space-y-2">
+                      <p className="text-xs text-theme-text-secondary">
+                        {references.length} of {requiredCount || '?'} references received
+                      </p>
+                      {references.map((ref, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-xs bg-theme-surface rounded-lg p-2 border border-theme-surface-border">
+                          <span className="text-theme-text-primary">{ref.name ?? `Reference ${idx + 1}`}</span>
+                          <span className={ref.status === 'completed' ? 'text-emerald-500' : 'text-amber-500'}>
+                            {ref.status ?? 'pending'}
+                          </span>
+                        </div>
+                      ))}
+                      {references.length === 0 && (
+                        <p className="text-xs text-theme-text-muted">No references submitted yet.</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Interview Requirement Stage Section */}
+              {applicant.current_stage_type === StageTypeEnum.INTERVIEW_REQUIREMENT && applicant.status === ApplicantStatus.ACTIVE && (() => {
+                const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
+                const actionResult = currentEntry?.action_result ?? {};
+                const interviewCount = (actionResult.interview_count as number | undefined) ?? 0;
+                const requiredCount = (actionResult.required_count as number | undefined) ?? 1;
+                return (
+                  <div className="p-4 border-b border-theme-surface-border">
+                    <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
+                      Interview Requirement
+                    </h3>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-theme-text-secondary">
+                        {interviewCount} of {requiredCount} interview{requiredCount !== 1 ? 's' : ''} completed
+                      </span>
+                      {interviewCount >= requiredCount ? (
+                        <span className="flex items-center gap-1 text-emerald-500">
+                          <CheckCircle className="w-3 h-3" />
+                          Requirement met
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-amber-500">
+                          <Clock className="w-3 h-3" />
+                          In progress
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Medical Screening Stage Section */}
+              {applicant.current_stage_type === StageTypeEnum.MEDICAL_SCREENING && applicant.status === ApplicantStatus.ACTIVE && (() => {
+                const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
+                const actionResult = currentEntry?.action_result ?? {};
+                const screenings = (actionResult.screenings as Array<{ type: string; status: string; date?: string }> | undefined) ?? [];
+                const requiredScreenings = (actionResult.required_screenings as string[] | undefined) ?? [];
+                return (
+                  <div className="p-4 border-b border-theme-surface-border">
+                    <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
+                      Medical Screenings
+                    </h3>
+                    {requiredScreenings.length > 0 || screenings.length > 0 ? (
+                      <div className="space-y-2">
+                        {(requiredScreenings.length > 0 ? requiredScreenings : screenings.map((s) => s.type)).map((type) => {
+                          const screening = screenings.find((s) => s.type === type);
+                          const isPassed = screening?.status === 'passed' || screening?.status === 'completed';
+                          return (
+                            <div key={type} className="flex items-center justify-between text-xs bg-theme-surface rounded-lg p-2 border border-theme-surface-border">
+                              <span className="text-theme-text-primary capitalize">{type.replace(/_/g, ' ')}</span>
+                              {screening ? (
+                                <span className={`flex items-center gap-1 ${isPassed ? 'text-emerald-500' : 'text-amber-500'}`}>
+                                  {isPassed ? <CheckCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                                  {screening.status.replace(/_/g, ' ')}
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1 text-theme-text-muted">
+                                  <Clock className="w-3 h-3" />
+                                  Not started
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-theme-text-muted">No screening data recorded yet.</p>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Visual Stage Progress */}
               {applicant.total_stages > 0 && (

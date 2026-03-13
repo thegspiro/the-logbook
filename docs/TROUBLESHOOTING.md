@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-03-06 (added login auth cookie delivery fixes — Set-Cookie stripping by BaseHTTPMiddleware, Bearer token bridge, cookie settle polling, CSRF on refresh; security middleware ASGI conversion and memory growth caps; elections ballot preview/position matching/BallotBuilder redesign/proxy voting; events attendance finalization/search/pagination/RSVP badges; facilities NFPA compliance fields, container startup crash chain, route ordering, room-location integration, type safety improvements; onboarding empty string 422s and error message formatting; plus all previous updates)
+**Last Updated**: 2026-03-12 (added finance module; recurring events with monthly-by-weekday and annual patterns; prospective members event linking; minutes module refactoring; QR check-in timezone fixes; timezone standardization across 34 files; ballot email notifications with org logo; auth cookie LAN HTTP fix; events settings refactor and JSON persistence fix; custom categories schema fix; form value `??` to `||` migration; 94 TypeScript error fixes; ESLint zero errors; slug internalization; plus all previous updates)
 
 ---
 
@@ -108,7 +108,16 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 94. [Facilities NFPA Compliance Fields](#facilities-nfpa-compliance-fields)
 95. [Onboarding Empty String 422 Errors](#onboarding-empty-string-422-errors)
 96. [Pydantic 422 Error Display Issues](#pydantic-422-error-display-issues)
-97. [Getting Help](#getting-help)
+97. [QR Check-In Timezone & ISO String Issues](#qr-check-in-timezone--iso-string-issues)
+98. [Recurring Event Pattern Issues](#recurring-event-pattern-issues)
+99. [Events Settings JSON Persistence Issues](#events-settings-json-persistence-issues)
+100. [Custom Event Categories Schema Issues](#custom-event-categories-schema-issues)
+101. [Form Value Empty String 422 Errors](#form-value-empty-string-422-errors)
+102. [Minutes Module Table Name Issues](#minutes-module-table-name-issues)
+103. [Auth Cookie LAN HTTP Issues](#auth-cookie-lan-http-issues)
+104. [TypeScript Build Error Batch Fix](#typescript-build-error-batch-fix)
+105. [Prospective Members Event Linking](#prospective-members-event-linking)
+106. [Getting Help](#getting-help)
 
 ---
 
@@ -6499,6 +6508,161 @@ Facilities now include NFPA compliance tracking:
 **Fix:** `toAppError()` now detects array detail and formats it as "field: reason" joined by periods. `ErrorAlert` returns `null` for empty/whitespace messages. `LoginPage` guards against rendering empty error boxes.
 
 **Edge Case:** If you have custom error handling that accesses `response.data.detail`, always check whether it's a string or an array before displaying.
+
+---
+
+## QR Check-In Timezone & ISO String Issues
+
+### Problem: QR check-in window shows "N/A" for start and end times
+
+**Status (Fixed 2026-03-12):** The backend was returning bare date and time strings separately (e.g., `"2026-03-15"` and `"09:00"`) instead of combined ISO 8601 datetime strings (`"2026-03-15T09:00:00"`). The frontend datetime parser couldn't construct a valid Date object from the separate values.
+
+**Fix:** Backend now constructs proper ISO datetime strings by combining event date with start/end times. Also added `organizationTimezone` (IANA timezone string) to the QR check-in response data.
+
+**Edge Cases:**
+- Organizations without a configured timezone default to UTC display
+- Events spanning midnight (overnight training) show the correct check-in window across the date boundary
+- Self check-in page gracefully handles missing timezone data by falling back to the browser's local timezone
+- The `organizationTimezone` field is included in `QRCheckInData` type and `mockQRCheckInData` test utility
+
+---
+
+## Recurring Event Pattern Issues
+
+### Problem: Monthly-by-weekday events create events on wrong dates
+
+**Status (Expected Behavior):** This is intentional. Monthly-by-weekday with "5th week" (e.g., "5th Tuesday") falls back to the last occurrence when the month has fewer than 5 weeks. For example, if there's no 5th Tuesday in April, the event is created on the 4th (last) Tuesday.
+
+### Problem: Annual event on Feb 29 doesn't appear in non-leap years
+
+**Status (Expected Behavior):** Annual events set for February 29 shift to February 28 in non-leap years. This ensures the event still occurs once per year.
+
+### Problem: Duplicate events created when making a recurring series
+
+**Status (Fixed 2026-03-12):** The recurring event creation now checks for existing events at the same time and location before creating each occurrence. Conflicts are reported and those occurrences are skipped.
+
+**Edge Cases:**
+- Deleting a single occurrence does NOT affect other occurrences in the series
+- "Edit All Future" only modifies events after the current date — past occurrences are preserved
+- Series spanning DST transitions may show times shifted by 1 hour; this is expected since events are stored in UTC
+- The `RecurringEventCreate` type was updated to support `exactOptionalPropertyTypes` with proper `undefined` union types
+
+---
+
+## Events Settings JSON Persistence Issues
+
+### Problem: Event settings changes are lost after saving
+
+**Status (Fixed 2026-03-12):** SQLAlchemy JSON column mutation detection failed because `dict()` (shallow copy) shares nested dict references with SQLAlchemy's committed state. When you modify a nested key in the copy, you also mutate the original, so SQLAlchemy sees old == new and skips the UPDATE.
+
+**Fix:** Changed to `copy.deepcopy()` which creates a fully independent copy. Also added orphan cleanup for event types and categories that were removed from settings but left in the database.
+
+**Verification:** New test suite `test_event_settings.py` with 6 tests covering deep copy consistency, orphan cleanup, and concurrent save scenarios.
+
+**Edge Cases:**
+- `flag_modified()` is an alternative to `deepcopy()` but requires remembering to call it after every mutation
+- `MutableDict.as_mutable(JSON)` auto-detects top-level key changes but still misses nested mutations
+- This same pattern applies to the `Organization.settings` JSON column and any other JSON column with nested values
+
+---
+
+## Custom Event Categories Schema Issues
+
+### Problem: Saving custom event categories returns 422 Unprocessable Entity
+
+**Status (Fixed 2026-03-12):** The Pydantic schema for `custom_event_categories` was expecting an array of strings, but the frontend sends an array of objects with `{id, label, color}` fields.
+
+**Fix:** Updated the Pydantic schema to accept the object format with `id` (string), `label` (string), and `color` (string, optional) fields.
+
+**Edge Case:** Existing custom categories stored as plain strings are automatically migrated to object format on the next save operation.
+
+---
+
+## Form Value Empty String 422 Errors
+
+### Problem: Multiple forms across different modules return 422 errors on optional fields
+
+**Status (Fixed 2026-03-12):** This is the most common recurring bug in the project. React form fields initialize as empty strings (`""`). The nullish coalescing operator (`??`) only filters `null`/`undefined` — it does NOT filter `""`. So `"" ?? undefined === ""`, and the empty string gets sent to the backend where Pydantic validators reject it.
+
+**Fix:** Changed `??` to `||` (logical OR) for optional form field coercion across 14+ files:
+- Events: `EventRequestStatusPage`, `EventRequestsTab`, `EventsSettingsTab`
+- Scheduling: `OpenShiftsTab`, `PatternsTab`, `ShiftReportsTab`, `MyShiftsTab`
+- Inventory: `ImportInventory`
+- Prospective Members: `ApplicantDetailDrawer`, `ConversionModal`, `CreatePipelinePage`, `PipelineDetailPage`
+- Training: `SubmitTrainingPage`, `TrainingRequirementsPage`
+- Other: `PublicFormPage`, `ReviewSubmissionsPage`, `WaiverManagementPage`, `MemberProfilePage`, `MyEquipmentPage`
+
+**Rule:** When converting form values to send to the API, always use `||` (logical OR), never `??` (nullish coalescing), to coerce empty strings to `undefined`. See CLAUDE.md Pitfall #1.
+
+---
+
+## Minutes Module Table Name Issues
+
+### Problem: Backend startup fails with "Table 'meeting_action_items' doesn't exist"
+
+**Status (Fixed 2026-03-12):** The SQLAlchemy model expected a different table name than what existed in the database. Alembic migration `20260312_0200_rename_meeting_action_items_table.py` renames the table and recreates indexes.
+
+**Fix:** Run `alembic upgrade head` to apply the table rename migration.
+
+**Edge Cases:**
+- Existing deployments with partially applied migrations should run the full migration chain
+- The migration handles both table rename and index recreation
+- Fresh installs create the table with the correct name from the start
+
+---
+
+## Auth Cookie LAN HTTP Issues
+
+### Problem: Authentication cookies not being set on LAN HTTP deployments
+
+**Status (Fixed 2026-03-12):** The `Secure` flag on auth cookies was hardcoded to `True`. Browsers only send `Secure` cookies over HTTPS, so LAN deployments using plain HTTP (e.g., `http://192.168.1.100:3000`) silently dropped all auth cookies.
+
+**Fix:** Auth cookies now auto-detect the `Secure` flag from the `ALLOWED_ORIGINS` environment variable. If `ALLOWED_ORIGINS` contains only `http://` URLs, `Secure` is set to `False`. If it contains `https://` URLs, `Secure` is set to `True`.
+
+**New env vars:**
+- `NGINX_WORKER_PROCESSES` (default: `auto`) — prevents Nginx from spawning excessive workers (36+) on high-core-count servers
+
+**Edge Cases:**
+- Mixed-scheme `ALLOWED_ORIGINS` (both HTTP and HTTPS) defaults to `Secure=False` with a log warning
+- Deployments behind a TLS-terminating reverse proxy should set `ALLOWED_ORIGINS` to the HTTPS URL, even though backend-to-proxy traffic is HTTP
+- Cookie `path` includes trailing slash (`/api/v1/auth/`) to ensure the refresh endpoint receives the cookie on all browsers
+
+---
+
+## TypeScript Build Error Batch Fix
+
+### Problem: Frontend build fails with 94+ TypeScript errors after update
+
+**Status (Fixed 2026-03-12):** Batch fix resolved:
+- Wrong import paths in admin-hours module (`ActiveSessionsTab`, `AllEntriesTab`, `PendingReviewTab`)
+- Duplicate CSS class property in `EventRequestStatusPage`
+- Unused variables in `Dashboard.tsx`
+- `noUncheckedIndexedAccess` violations requiring `?? fallback` patterns
+- Missing type annotations on test mock data
+
+ESLint also cleaned to 0 errors, 0 warnings across 59 files.
+
+**Edge Case:** If you have local modifications in affected files, resolve merge conflicts and run `npx tsc --noEmit` to verify.
+
+---
+
+## Prospective Members Event Linking
+
+### Problem: No way to link events to prospective member applicants
+
+**Status (New Feature 2026-03-12):** Coordinators can now link upcoming events (interviews, orientations, meetings) to individual applicants.
+
+**How it works:**
+- New `prospect_event_links` table stores the link between applicants and events
+- When a pipeline stage of type `meeting` activates for an applicant, the system auto-links the next upcoming matching event
+- The ApplicantDetailDrawer shows linked events with date, time, type, and status
+- Coordinators can manually add/remove event links
+
+**Edge Cases:**
+- If no upcoming events match when a meeting stage activates, no link is created — the coordinator is prompted to schedule manually
+- Events that are cancelled after linking show a "Cancelled" badge on the applicant's event list
+- Multiple applicants can be linked to the same event (e.g., group orientation)
+- The "President Interview" preset in StageConfigModal pre-configures a meeting stage with one click
 
 ---
 

@@ -266,6 +266,7 @@ describe('StageConfigModal', () => {
 
     expect(screen.getByLabelText('Meeting Type')).toBeInTheDocument();
     expect(screen.getByText('Meeting with Chief')).toBeInTheDocument();
+    expect(screen.getByText('Meeting with President')).toBeInTheDocument();
     expect(screen.getByText('Informational Meeting')).toBeInTheDocument();
     expect(screen.getByText('Business Meeting')).toBeInTheDocument();
     expect(screen.getByText('Other')).toBeInTheDocument();
@@ -477,7 +478,7 @@ describe('StageConfigModal', () => {
     await user.click(screen.getByText('Meeting'));
 
     await waitFor(() => {
-      expect(mockGetEvents).toHaveBeenCalled();
+      expect(mockGetEvents).toHaveBeenCalledWith();
     });
 
     await user.selectOptions(screen.getByLabelText(/link to upcoming event/i), 'business_meeting');
@@ -508,7 +509,7 @@ describe('StageConfigModal', () => {
     await user.click(screen.getByText('Automated Email'));
 
     await waitFor(() => {
-      expect(mockGetEvents).toHaveBeenCalled();
+      expect(mockGetEvents).toHaveBeenCalledWith();
     });
 
     const meetingCheckbox = screen.getByRole('checkbox', { name: 'Next Meeting Details' });
@@ -529,7 +530,7 @@ describe('StageConfigModal', () => {
     await user.click(screen.getByText('Meeting'));
 
     await waitFor(() => {
-      expect(mockGetEvents).toHaveBeenCalled();
+      expect(mockGetEvents).toHaveBeenCalledWith();
     });
 
     // Select an event type with no upcoming events
@@ -541,10 +542,10 @@ describe('StageConfigModal', () => {
   });
 
   // =========================================================================
-  // All 7 Stage Types Present
+  // All 12 Stage Types Present
   // =========================================================================
 
-  it('shows all 7 stage type options', () => {
+  it('shows all 12 stage type options', () => {
     render(<StageConfigModal {...defaultProps} />);
     expect(screen.getByText('Form Submission')).toBeInTheDocument();
     expect(screen.getByText('Document Upload')).toBeInTheDocument();
@@ -553,5 +554,10 @@ describe('StageConfigModal', () => {
     expect(screen.getByText('Manual Approval')).toBeInTheDocument();
     expect(screen.getByText('Enable Status Page')).toBeInTheDocument();
     expect(screen.getByText('Automated Email')).toBeInTheDocument();
+    expect(screen.getByText('Reference Check')).toBeInTheDocument();
+    expect(screen.getByText('Checklist')).toBeInTheDocument();
+    expect(screen.getByText('Interview Requirement')).toBeInTheDocument();
+    expect(screen.getByText('Multi-Signer Approval')).toBeInTheDocument();
+    expect(screen.getByText('Medical Screening')).toBeInTheDocument();
   });
 });

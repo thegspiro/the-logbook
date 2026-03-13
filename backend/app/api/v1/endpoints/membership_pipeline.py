@@ -34,6 +34,8 @@ from app.schemas.membership_pipeline import (
     PipelineUpdate,
     ProspectCreate,
     ProspectDocumentResponse,
+    ProspectEventLinkCreate,
+    ProspectEventLinkResponse,
     ProspectListResponse,
     ProspectResponse,
     ProspectUpdate,
@@ -787,14 +789,19 @@ async def complete_step(
     **Requires permission: members.manage**
     """
     service = MembershipPipelineService(db)
-    prospect = await service.complete_step(
-        prospect_id=str(prospect_id),
-        organization_id=current_user.organization_id,
-        step_id=str(data.step_id),
-        completed_by=current_user.id,
-        notes=data.notes,
-        action_result=data.action_result,
-    )
+    try:
+        prospect = await service.complete_step(
+            prospect_id=str(prospect_id),
+            organization_id=current_user.organization_id,
+            step_id=str(data.step_id),
+            completed_by=current_user.id,
+            notes=data.notes,
+            action_result=data.action_result,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        )
     if not prospect:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
@@ -1331,3 +1338,88 @@ async def delete_interview(
     )
     if not deleted:
         raise HTTPException(status_code=404, detail="Interview not found")
+
+
+# ============================================
+# Event Link Endpoints
+# ============================================
+
+
+@router.get(
+    "/prospects/{prospect_id}/events",
+    response_model=list[ProspectEventLinkResponse],
+)
+async def list_prospect_event_links(
+    prospect_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("prospective_members.view")),
+):
+    """
+    List all events linked to a prospect.
+
+    **Requires permission: prospective_members.view**
+    """
+    service = MembershipPipelineService(db)
+    try:
+        links = await service.list_event_links(
+            prospect_id=str(prospect_id),
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return links
+
+
+@router.post(
+    "/prospects/{prospect_id}/events",
+    response_model=ProspectEventLinkResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def link_event_to_prospect(
+    prospect_id: UUID,
+    data: ProspectEventLinkCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("prospective_members.manage")),
+):
+    """
+    Link an event to a prospect.
+
+    **Requires permission: prospective_members.manage**
+    """
+    service = MembershipPipelineService(db)
+    try:
+        link = await service.link_event(
+            prospect_id=str(prospect_id),
+            event_id=str(data.event_id),
+            organization_id=current_user.organization_id,
+            linked_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return link
+
+
+@router.delete(
+    "/prospects/{prospect_id}/events/{link_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def unlink_event_from_prospect(
+    prospect_id: UUID,
+    link_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("prospective_members.manage")),
+):
+    """
+    Remove an event link from a prospect.
+
+    **Requires permission: prospective_members.manage**
+    """
+    service = MembershipPipelineService(db)
+    deleted = await service.unlink_event(
+        prospect_id=str(prospect_id),
+        link_id=str(link_id),
+        organization_id=current_user.organization_id,
+        unlinked_by=current_user.id,
+    )
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Event link not found")

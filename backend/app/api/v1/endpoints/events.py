@@ -4,6 +4,7 @@ Event API Endpoints
 Endpoints for event management including events, RSVPs, and attendance tracking.
 """
 
+import copy
 import os
 import uuid as uuid_lib
 from datetime import datetime
@@ -512,7 +513,9 @@ async def update_event_settings(
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    current_settings = dict(org.settings or {})
+    # Deep copy to avoid mutating SQLAlchemy's committed state via shared
+    # nested references, which would prevent change detection on JSON columns.
+    current_settings = copy.deepcopy(dict(org.settings or {}))
     current_events = current_settings.get("events", {})
 
     # Deep merge the validated updates into existing event settings
@@ -2116,8 +2119,8 @@ async def upload_event_attachment(
     with open(file_path, "wb") as f:
         f.write(content)
 
-    # Update event attachments list
-    attachments = event.attachments or []
+    # Update event attachments list (deep copy to ensure SQLAlchemy detects the change)
+    attachments = copy.deepcopy(event.attachments or [])
     attachments.append(
         {
             "id": uuid_lib.uuid4().hex,

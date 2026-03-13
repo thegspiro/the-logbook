@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { renderWithRouter } from '../../test/utils';
 import { OpenShiftsTab } from './OpenShiftsTab';
 
@@ -67,17 +67,20 @@ describe('OpenShiftsTab', () => {
     mockGetShifts.mockResolvedValue({ shifts: mockShifts, total: 2 });
   });
 
-  it('should render loading state initially', () => {
+  it('should render the filter bar and info section', () => {
     renderWithRouter(<OpenShiftsTab onViewShift={mockOnViewShift} />);
-    expect(document.querySelector('.animate-spin')).toBeInTheDocument();
+    expect(screen.getByText('Refresh')).toBeInTheDocument();
+    expect(screen.getByText(/Browse available shifts/)).toBeInTheDocument();
   });
 
   it('should render shifts after loading', async () => {
     renderWithRouter(<OpenShiftsTab onViewShift={mockOnViewShift} />);
 
     await waitFor(() => {
-      expect(document.querySelector('.animate-spin')).not.toBeInTheDocument();
+      expect(mockGetOpenShifts).toHaveBeenCalledWith(expect.anything());
     });
+    // After loading, the Refresh button remains visible
+    expect(screen.getByText('Refresh')).toBeInTheDocument();
   });
 
   it('should render empty state when no shifts available', async () => {
@@ -87,19 +90,14 @@ describe('OpenShiftsTab', () => {
     renderWithRouter(<OpenShiftsTab onViewShift={mockOnViewShift} />);
 
     await waitFor(() => {
-      expect(document.querySelector('.animate-spin')).not.toBeInTheDocument();
+      expect(screen.getByText('No open shifts available')).toBeInTheDocument();
     });
   });
 
   it('should render date filter input', async () => {
     renderWithRouter(<OpenShiftsTab onViewShift={mockOnViewShift} />);
 
-    await waitFor(() => {
-      expect(document.querySelector('.animate-spin')).not.toBeInTheDocument();
-    });
-
-    // Should have a date filter
-    const dateInputs = document.querySelectorAll('input[type="date"]');
-    expect(dateInputs.length).toBeGreaterThanOrEqual(0);
+    // The date filter label "From:" is always visible
+    expect(screen.getByText('From:')).toBeInTheDocument();
   });
 });

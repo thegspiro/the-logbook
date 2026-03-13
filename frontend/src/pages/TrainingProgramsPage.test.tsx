@@ -72,7 +72,7 @@ describe('TrainingProgramsPage', () => {
   it('loads programs on mount', async () => {
     renderWithRouter(<TrainingProgramsPage />);
     await waitFor(() => {
-      expect(mockGetPrograms).toHaveBeenCalled();
+      expect(mockGetPrograms).toHaveBeenCalledWith();
     });
   });
 

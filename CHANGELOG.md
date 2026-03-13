@@ -7,6 +7,149 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Finance Module — Budgets, Purchase Requests, Expenses & Approval Chains (2026-03-12)
+
+- **New finance module**: Full-stack finance module (`/finance`) for internal operational finance workflows — budgets, purchase requests, expense reports, check requests, and dues management. Standalone from the grants-fundraising module
+- **Configurable approval chains**: Multi-step approval workflows with chain resolution by entity type, amount range, and budget category. Step types include APPROVAL (requires human action) and NOTIFICATION (auto-advances with email). Supports POSITION, PERMISSION, SPECIFIC_USER, and EMAIL approver types — EMAIL enables external approvers via secure token links
+- **Fiscal year management**: Create, activate, and lock fiscal years with constraint enforcement (one active per org). Budget tracking with amount_budgeted, amount_spent, and amount_encumbered
+- **Budget categories**: Hierarchical category system with 13 default categories (APPARATUS, TRAINING, FACILITIES, etc.) and optional QuickBooks account mapping
+- **Purchase request workflow**: Full lifecycle (DRAFT → SUBMITTED → PENDING_APPROVAL → APPROVED → ORDERED → RECEIVED → PAID) with auto-numbering (PR-YYYY-0001), budget encumbrance on approval, and encumbrance-to-spent conversion on payment
+- **Expense reports**: Multi-line-item expense reports with per-item budget linking, receipt URLs, and merchant tracking. Auto-numbered (ER-YYYY-0001)
+- **Check requests**: Request workflow for check issuance with payee management and check number tracking (CK-YYYY-0001)
+- **Dues management**: Dues schedule creation with frequency options (annual, semi-annual, quarterly, monthly), bulk member dues generation, late fee calculation, and waiver support
+- **Finance dashboard**: Budget health gauges, pending approval queue widget, dues collection rates, and recent transaction feed
+- **Permissions**: `finance.view`, `finance.manage`, `finance.approve`, `finance.configure_approvals`
+- **Feature flag**: `MODULE_FINANCE_ENABLED` in backend config
+- **Frontend**: 12 pages including dashboard, budgets, purchase requests, expense reports, check requests, dues management, approval chain settings, and fiscal year settings
+- **Backend tests**: Comprehensive test suite covering CRUD, approval state machine transitions, and budget calculations
+
+### Recurring Events — Monthly-by-Weekday & Annual Patterns (2026-03-12)
+
+- **Monthly-by-weekday recurrence**: Events can recur on patterns like "2nd Tuesday of every month" or "last Friday of every month". New `recurrence_week` and `recurrence_day_of_week` database columns store the pattern
+- **Annual recurrence**: Events can recur yearly on a specific date. Combined with monthly-by-weekday, this supports patterns like "first Monday in October every year"
+- **Recurring event UI**: New recurrence pattern selector in EventForm with radio buttons for daily/weekly/monthly/monthly-by-weekday/annual patterns. Weekday picker auto-populates from the event date
+- **Series management UX**: Event detail page shows recurring event badges, "View All in Series" link, and series management actions (edit all future, delete series). Events list shows recurrence indicator badges
+- **Duplicate event prevention**: Creating recurring events now checks for existing events at the same time/location to prevent accidental duplicates
+- **RecurringEventCreate type**: Fixed to support `exactOptionalPropertyTypes` with proper `undefined` union types on optional fields
+
+**Edge Cases:**
+- Monthly-by-weekday with "5th week" falls back to "last occurrence" when the month has fewer than 5 weeks
+- Annual events on Feb 29 shift to Feb 28 in non-leap years
+- Deleting a single occurrence from a series does not affect other occurrences
+- Series with past occurrences: "edit all future" only modifies events after the current date
+
+### Prospective Members Pipeline — Event Linking (2026-03-12)
+
+- **Link events to applicants**: Coordinators can link upcoming events (interviews, orientations, meetings) to individual applicants in the pipeline. New `prospect_event_links` table with full CRUD API
+- **Auto-link events to meeting stages**: When a pipeline stage of type `meeting` is activated for an applicant, the system automatically links the next upcoming event matching the stage configuration
+- **Applicant detail drawer**: Shows linked events with date, time, type, and status. Coordinators can manually add/remove event links
+- **President Interview preset**: New quick-setup preset in StageConfigModal for configuring a "President Interview" meeting stage with one click
+
+**Edge Cases:**
+- If no upcoming events match when a meeting stage activates, no link is created and the coordinator is prompted to schedule manually
+- Linking an event that is subsequently cancelled shows a "Cancelled" badge on the applicant's event list
+- Multiple applicants can be linked to the same event (e.g., group orientation)
+
+### Minutes Module — Refactoring & Module Conventions (2026-03-12)
+
+- **Module extraction**: Minutes pages (`MinutesPage`, `MinutesDetailPage`) moved from top-level `pages/` to `modules/minutes/` following module conventions. Original files now re-export from the module for backward compatibility
+- **Dedicated module structure**: New `modules/minutes/` with `index.ts`, `routes.tsx`, `services/api.ts`, `store/minutesStore.ts`, and `types/minutes.ts`
+- **Table name migration**: Alembic migration renames `meeting_action_items` table to match the expected model table name, fixing startup errors on fresh installs
+- **Zustand store**: New `minutesStore` with loading/error states for minutes CRUD operations
+- **Backend test suite**: Comprehensive `test_minute_service.py` covering CRUD, search, section operations, template management, and publish workflow
+
+**Edge Cases:**
+- Existing deployments with the old table name need to run the migration (`alembic upgrade head`) — the migration handles both rename and index recreation
+- Deep links to `/minutes/:id` continue to work via the re-exported route definitions
+
+### QR Check-In Timezone Fixes (2026-03-12)
+
+- **Organization timezone in QR data**: QR check-in response now includes `organizationTimezone` (IANA timezone string) so the check-in window displays times in the organization's local timezone instead of UTC
+- **ISO datetime string fix**: Check-in window was showing "N/A" because the backend was returning bare date/time strings instead of ISO 8601 format. Fixed to construct proper ISO datetime strings by combining event date with start/end times
+
+**Edge Cases:**
+- Organizations without a configured timezone default to UTC display
+- Events spanning midnight (e.g., overnight training) show the correct check-in window across the date boundary
+- Self check-in page gracefully handles missing timezone data by falling back to the browser's local timezone
+
+### Timezone Standardization Across Frontend (2026-03-12)
+
+- **34 files updated**: Standardized timezone-aware date/time formatting across all frontend pages using `dateFormatting.ts` utilities with optional `timezone` parameter
+- **Affected modules**: Admin hours, grants-fundraising, inventory, onboarding, scheduling, compliance, events, member profile, platform analytics, skills testing, and elections
+- **Pattern**: All `new Date().toLocaleString()` / `toLocaleDateString()` calls replaced with `formatDate()` / `formatDateTime()` / `formatTime()` utilities that accept an IANA timezone
+
+**Edge Cases:**
+- Pages that previously showed UTC times now show organization-local times — users may notice time "shifts" after the update
+- `AutoSaveIndicator` and `AutoSaveNotification` components now show save timestamps in local time
+
+### Ballot Email Notifications & Org Logo in Emails (2026-03-12)
+
+- **Ballot email notifications**: Election creators can send ballot notification emails to eligible voters from the election detail page. Emails include election title, voting period, and a direct link to the ballot
+- **Organization logo in all emails**: All email notifications (event requests, skills testing, member archive, scheduled tasks, cert alerts, election ballots, inventory, property returns) now include the organization's logo in the email header
+- **DRY email utility**: Extracted shared `build_logo_html()` and `get_org_logo_url()` helper functions into `email_service.py` to eliminate duplicated logo-building code across 7 service files
+
+**Edge Cases:**
+- Organizations without an uploaded logo get a text-only header (no broken image)
+- Logo URLs respect the `ALLOWED_ORIGINS` setting for correct absolute URL generation
+- Email clients that block images still show the organization name as alt text
+
+### Auth Cookie & Deployment Fixes (2026-03-12)
+
+- **Secure cookie auto-detection**: Auth cookies now auto-detect the `Secure` flag from the `ALLOWED_ORIGINS` scheme — HTTPS origins set `Secure=True`, HTTP origins (LAN deployments) set `Secure=False`. Removes the need for manual `COOKIE_SECURE` configuration
+- **LAN HTTP cookie fix**: Auth cookies were being dropped on LAN HTTP deployments because `Secure=True` was hardcoded. Now correctly serves cookies over plain HTTP when `ALLOWED_ORIGINS` uses `http://`
+- **Nginx worker count**: Added `NGINX_WORKER_PROCESSES` env var (default: `auto`) to prevent Nginx from spawning excessive workers (36+) on high-core-count servers
+
+**Edge Cases:**
+- Mixed-scheme `ALLOWED_ORIGINS` (both HTTP and HTTPS) defaults to `Secure=False` for compatibility — log a warning
+- Cookie `path` includes trailing slash (`/api/v1/auth/`) to ensure refresh endpoint receives the cookie on all browsers
+- Deployments behind a TLS-terminating reverse proxy should set `ALLOWED_ORIGINS` to the HTTPS URL even though backend-to-proxy traffic is HTTP
+
+### Events Settings Refactor & Form Redirect (2026-03-12)
+
+- **Settings page refactored**: `EventsSettingsTab` extracted into 6 focused section components (`CategoriesSection`, `EmailSection`, `FormSection`, `OutreachSection`, `PipelineSection`, `VisibilitySection`) with shared types and deduplicated save logic
+- **Form generation redirect**: After generating an event request form from Events Settings, the user is now redirected to the Forms page with the new form pre-selected, instead of staying on the settings page
+- **Custom categories schema fix**: `custom_event_categories` field in the Pydantic schema now accepts objects (with `id`, `label`, `color` fields) instead of plain strings, matching what the frontend actually sends
+
+**Edge Cases:**
+- Existing custom categories stored as plain strings are automatically migrated to object format on next save
+- The refactored settings page preserves unsaved changes when navigating between sections via the sidebar
+
+### Settings Persistence — SQLAlchemy JSON Mutation Fix (2026-03-12)
+
+- **Deep copy for JSON columns**: Organization settings updates now use `copy.deepcopy()` instead of `dict()` shallow copy when modifying nested JSON values, preventing silent write failures where SQLAlchemy didn't detect changes
+- **Orphan cleanup**: Settings save endpoint now cleans up orphaned event types and categories that were removed from the settings but left in the database
+- **Backend test suite**: New `test_event_settings.py` with 6 tests covering deep copy consistency, orphan cleanup, and concurrent save scenarios
+
+**Edge Cases:**
+- Shallow copy (`dict()`) of JSON columns shares nested dict references with SQLAlchemy's committed state — mutations appear to work in-memory but are never written to the database
+- `flag_modified()` is an alternative to `deepcopy()` but requires remembering to call it after every mutation
+- The `MutableDict.as_mutable(JSON)` type decorator auto-detects top-level key changes but still misses nested mutations
+
+### Slugs Made Internal (2026-03-12)
+
+- **Slugs removed from user-facing UIs**: Role slugs are now auto-generated server-side and hidden from role management, onboarding, and user profile pages. Previously, users could edit slugs directly, causing lookup failures when slugs were changed
+- **Backend auto-generation**: `RoleService` generates slugs from role names on create/update using `slugify()`. Duplicate slugs get a numeric suffix
+
+**Edge Cases:**
+- Existing roles retain their current slugs — no migration needed
+- API consumers that relied on user-provided slugs should use role IDs instead
+- The `slug` field remains in the database and API responses for internal lookups but is not editable via the UI
+
+### Code Quality & Build Fixes (2026-03-12)
+
+- **94 TypeScript errors resolved**: Fixed wrong import paths, duplicate properties, unused variables, missing type annotations, and `noUncheckedIndexedAccess` violations across 18 source and test files
+- **ESLint zero errors**: Resolved all ESLint errors and warnings across 59 files — 0 errors, 0 warnings
+- **Form value `??` to `||` migration**: Replaced `??` (nullish coalescing) with `||` (logical OR) for form value coercion across 14+ files to prevent empty strings from being sent to the backend. Affected modules: events, scheduling, inventory, onboarding, prospective members, training, member profile
+- **Python lint fixes**: Resolved flake8 violations (F401 unused imports, trailing whitespace, blank line formatting) in `elections.py`, `onboarding.py`, `organization_service.py`, `ip_security.py`, `sms_service.py`, `scheduled_tasks.py`
+- **Import path fixes**: Corrected wrong import paths in admin-hours module components (`ActiveSessionsTab`, `AllEntriesTab`, `PendingReviewTab`)
+- **`tsbuildinfo` gitignored**: Added TypeScript build info file to `.gitignore`
+- **Events module fixes**: Fixed `custom_category` field handling, attachment mutation in event update, and test file alignment with schema changes
+
+### CLAUDE.md Updates (2026-03-12)
+
+- **Package version accuracy**: Updated Vite, Zod, Tailwind, Vitest, and other package versions to match actual `package.json` values
+- **JSON column deep copy pitfall**: Added Pitfall #12 documenting the `dict()` shallow copy issue with SQLAlchemy JSON columns, with correct patterns using `copy.deepcopy()` and `flag_modified()`
+
 ### Comprehensive Security Audit & Remediation (2026-03-07)
 
 - **25-issue security audit completed**: Full audit report (`SECURITY_AUDIT.md`) covering backend, frontend, infrastructure, and deployment. Issues prioritized across critical, high, medium, and low severity tiers

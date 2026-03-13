@@ -114,7 +114,8 @@ class TestQRCheckInTimeValidation:
             start_datetime=now + timedelta(minutes=30),
             end_datetime=now + timedelta(hours=2),
         )
-        mock_db = _mock_db_returning(event)
+        org = _make_org(org_id=org_id, timezone_val="America/New_York")
+        mock_db = _mock_db_returning(event, org)
 
         service = EventService(mock_db)
         data, error = await service.get_qr_check_in_data(event.id, org_id)
@@ -124,6 +125,7 @@ class TestQRCheckInTimeValidation:
         assert data["is_valid"] is True
         assert data["event_id"] == str(event.id)
         assert data["event_name"] == "Test Event"
+        assert data["timezone"] == "America/New_York"
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -154,7 +156,8 @@ class TestQRCheckInTimeValidation:
             end_datetime=now + end_offset,
             **extra_kwargs,
         )
-        mock_db = _mock_db_returning(event)
+        org = _make_org(org_id=org_id)
+        mock_db = _mock_db_returning(event, org)
 
         service = EventService(mock_db)
         data, error = await service.get_qr_check_in_data(event.id, org_id)
@@ -165,7 +168,7 @@ class TestQRCheckInTimeValidation:
 
     @pytest.mark.asyncio
     async def test_qr_data_cancelled_event(self):
-        """Test that cancelled events return an error"""
+        """Test that cancelled events return an error (org not queried)"""
         now = datetime.now(timezone.utc)
         org_id = uuid4()
         event = _make_event(

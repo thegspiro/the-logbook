@@ -179,6 +179,7 @@ export const MemberScanPage: React.FC = () => {
       >
         <div
           id="scanner-viewport"
+          data-testid="scanner-viewport"
           className="w-full aspect-square bg-black/90"
         />
       </div>

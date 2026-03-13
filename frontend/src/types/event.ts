@@ -166,14 +166,14 @@ export interface RSVP {
   responded_at: string;
   updated_at: string;
   checked_in: boolean;
-  checked_in_at?: string;
-  checked_out_at?: string;
-  attendance_duration_minutes?: number;
-  override_check_in_at?: string;
-  override_check_out_at?: string;
-  override_duration_minutes?: number;
-  user_name?: string;
-  user_email?: string;
+  checked_in_at?: string | undefined;
+  checked_out_at?: string | undefined;
+  attendance_duration_minutes?: number | undefined;
+  override_check_in_at?: string | undefined;
+  override_check_out_at?: string | undefined;
+  override_duration_minutes?: number | undefined;
+  user_name?: string | undefined;
+  user_email?: string | undefined;
 }
 
 export interface RSVPCreate {
@@ -207,18 +207,19 @@ export interface EventStats {
 export interface QRCheckInData {
   event_id: string;
   event_name: string;
-  event_type?: string;
-  event_description?: string;
+  event_type?: string | undefined;
+  event_description?: string | undefined;
   start_datetime: string;
   end_datetime: string;
-  actual_end_time?: string;
+  actual_end_time?: string | undefined;
   check_in_start: string;
   check_in_end: string;
   is_valid: boolean;
-  location?: string;
-  location_id?: string;
-  location_name?: string;
-  require_checkout?: boolean;
+  location?: string | undefined;
+  location_id?: string | undefined;
+  location_name?: string | undefined;
+  require_checkout?: boolean | undefined;
+  timezone?: string | undefined;
 }
 
 export interface CheckInActivity {
@@ -353,6 +354,10 @@ export interface RecurringEventCreate {
   check_in_minutes_before?: number | undefined;
   check_in_minutes_after?: number | undefined;
   require_checkout?: boolean | undefined;
+  custom_category?: string | undefined;
+  custom_fields?: Record<string, string | number | boolean | null> | undefined;
+  attachments?: EventAttachment[] | undefined;
+  allowed_rsvp_statuses?: RSVPStatus[] | undefined;
   template_id?: string | undefined;
 }
 

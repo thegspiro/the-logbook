@@ -143,7 +143,6 @@ async def create_role(
             db=db,
             organization_id=str(current_user.organization_id),
             name=role_data.name,
-            slug=role_data.slug,
             permissions=role_data.permissions,
             created_by=str(current_user.id),
             description=role_data.description,
@@ -335,7 +334,6 @@ async def clone_role(
             source_role_id=str(role_id),
             organization_id=str(current_user.organization_id),
             new_name=clone_request.name,
-            new_slug=clone_request.slug,
             created_by=str(current_user.id),
             new_description=clone_request.description,
         )

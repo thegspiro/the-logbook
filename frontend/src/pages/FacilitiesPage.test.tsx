@@ -193,7 +193,7 @@ describe('FacilitiesDashboard', () => {
 
     // Find the submit button in the modal (the last "Add Facility" button)
     const submitButtons = screen.getAllByText('Add Facility');
-    const modalSubmit = submitButtons[submitButtons.length - 1] ?? submitButtons[0];
+    const modalSubmit = submitButtons[submitButtons.length - 1] ?? submitButtons[0] ?? document.body;
     await user.click(modalSubmit);
 
     await waitFor(() => {
