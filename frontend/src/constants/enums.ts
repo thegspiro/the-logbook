@@ -39,6 +39,7 @@ export const RSVPStatus = {
   GOING: 'going',
   NOT_GOING: 'not_going',
   MAYBE: 'maybe',
+  WAITLISTED: 'waitlisted',
 } as const;
 export type RSVPStatus = (typeof RSVPStatus)[keyof typeof RSVPStatus];
 

@@ -34,6 +34,7 @@ class RSVPStatus(str, Enum):
     GOING = "going"
     NOT_GOING = "not_going"
     MAYBE = "maybe"
+    WAITLISTED = "waitlisted"
 
 
 class CheckInWindowType(str, Enum):

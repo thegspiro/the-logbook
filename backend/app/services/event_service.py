@@ -489,6 +489,10 @@ class EventService:
             self.db.add(rsvp)
 
         # Check capacity if user is going
+        old_status_was_going = (
+            existing_rsvp
+            and existing_rsvp.status == RSVPStatus.GOING
+        )
         if rsvp_data.status == RSVPStatus.GOING.value and event.max_attendees:
             # Count current "going" RSVPs, excluding this user's RSVP if updating
             capacity_query = (
@@ -503,12 +507,51 @@ class EventService:
             going_count = going_count_result.scalar() or 0
 
             if going_count >= event.max_attendees:
-                return None, "Event is at capacity"
+                # Auto-waitlist instead of rejecting
+                rsvp.status = RSVPStatus.WAITLISTED
 
         await self.db.commit()
         await self.db.refresh(rsvp)
 
+        # Auto-promote from waitlist if someone changed from going to not_going
+        if (
+            old_status_was_going
+            and rsvp_data.status != RSVPStatus.GOING.value
+            and event.max_attendees
+        ):
+            await self.promote_from_waitlist(event_id, organization_id)
+
         return rsvp, None
+
+    async def promote_from_waitlist(
+        self, event_id: UUID, organization_id: UUID
+    ) -> Optional[EventRSVP]:
+        """
+        Promote the earliest waitlisted RSVP for an event to 'going'.
+
+        Returns the promoted RSVP or None if no waitlisted users exist.
+        """
+        # Find the earliest waitlisted RSVP by responded_at
+        result = await self.db.execute(
+            select(EventRSVP)
+            .where(EventRSVP.event_id == str(event_id))
+            .where(EventRSVP.organization_id == str(organization_id))
+            .where(EventRSVP.status == RSVPStatus.WAITLISTED)
+            .order_by(EventRSVP.responded_at.asc())
+            .limit(1)
+        )
+        waitlisted_rsvp = result.scalar_one_or_none()
+
+        if not waitlisted_rsvp:
+            return None
+
+        waitlisted_rsvp.status = RSVPStatus.GOING
+        waitlisted_rsvp.updated_at = datetime.now(dt_timezone.utc)
+
+        await self.db.commit()
+        await self.db.refresh(waitlisted_rsvp)
+
+        return waitlisted_rsvp
 
     async def get_rsvp(self, event_id: UUID, user_id: UUID) -> Optional[EventRSVP]:
         """Get a user's RSVP for an event"""
@@ -748,8 +791,13 @@ class EventService:
         if not rsvp:
             return "RSVP not found for this user"
 
+        was_going = rsvp.status == RSVPStatus.GOING
         await self.db.delete(rsvp)
         await self.db.commit()
+
+        # Auto-promote from waitlist if a "going" attendee was removed
+        if was_going and event.max_attendees:
+            await self.promote_from_waitlist(event_id, organization_id)
 
         return None
 

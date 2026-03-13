@@ -1210,6 +1210,67 @@ async def remove_attendee(
     )
 
 
+@router.post("/{event_id}/promote-waitlist", response_model=RSVPResponse)
+async def promote_from_waitlist(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Promote the next waitlisted user to 'going' status (manager action)
+
+    Finds the earliest waitlisted RSVP (by responded_at) and promotes it.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+    rsvp = await service.promote_from_waitlist(
+        event_id=event_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not rsvp:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No waitlisted users found for this event",
+        )
+
+    # Get user info for response
+    user_result = await db.execute(
+        select(User).where(User.id == rsvp.user_id)
+    )
+    user = user_result.scalar_one_or_none()
+
+    await log_audit_event(
+        db=db,
+        event_type="event_waitlist_promoted",
+        event_category="events",
+        severity="info",
+        event_data={
+            "event_id": str(event_id),
+            "promoted_user_id": str(rsvp.user_id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return RSVPResponse(
+        id=rsvp.id,
+        event_id=rsvp.event_id,
+        user_id=rsvp.user_id,
+        status=rsvp.status.value,
+        guest_count=rsvp.guest_count,
+        notes=rsvp.notes,
+        responded_at=rsvp.responded_at,
+        updated_at=rsvp.updated_at,
+        checked_in=rsvp.checked_in,
+        checked_in_at=rsvp.checked_in_at,
+        user_name=f"{user.first_name} {user.last_name}" if user else None,
+        user_email=user.email if user else None,
+    )
+
+
 @router.get("/{event_id}/stats", response_model=EventStats)
 async def get_event_stats(
     event_id: UUID,

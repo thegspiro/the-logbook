@@ -4,12 +4,12 @@
  * Shows detailed information about an event including RSVPs and attendee management.
  */
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { eventService, meetingsService } from '../services/api';
-import type { Event, RSVP, RSVPStatus, EventStats } from '../types/event';
+import type { Event, EventListItem, RSVP, RSVPStatus, EventStats } from '../types/event';
 import { useAuthStore } from '../stores/authStore';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { EventTypeBadge } from '../components/EventTypeBadge';
@@ -18,7 +18,7 @@ import { getRSVPStatusLabel, getRSVPStatusColor, downloadICSFile } from '../util
 import { formatDateTime, formatShortDateTime, formatTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum } from '../constants/enums';
-import { Repeat, Paperclip, Download, CalendarPlus } from 'lucide-react';
+import { Repeat, Paperclip, Download, CalendarPlus, Clock, Printer, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export const EventDetailPage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
@@ -52,6 +52,7 @@ export const EventDetailPage: React.FC = () => {
   const [overrideCheckOut, setOverrideCheckOut] = useState('');
   const [removeConfirmUserId, setRemoveConfirmUserId] = useState<string | null>(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [seriesEvents, setSeriesEvents] = useState<EventListItem[]>([]);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
 
   const { checkPermission } = useAuthStore();
@@ -88,6 +89,7 @@ export const EventDetailPage: React.FC = () => {
       setError(null);
       const data = await eventService.getEvent(eventId);
       setEvent(data);
+      void fetchSeriesEvents(data);
     } catch (err) {
       setError((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to load event');
     } finally {
@@ -115,6 +117,61 @@ export const EventDetailPage: React.FC = () => {
     } catch {
       toast.error('Failed to load event statistics');
     }
+  };
+
+  const fetchSeriesEvents = useCallback(async (ev: Event) => {
+    const parentId = ev.recurrence_parent_id || (ev.is_recurring ? ev.id : null);
+    if (!parentId) {
+      setSeriesEvents([]);
+      return;
+    }
+    try {
+      const allEvents = await eventService.getEvents({ limit: 200 });
+      const siblings = allEvents
+        .filter(e => e.recurrence_parent_id === parentId || e.id === parentId)
+        .sort((a, b) => new Date(a.start_datetime).getTime() - new Date(b.start_datetime).getTime());
+      setSeriesEvents(siblings);
+    } catch {
+      // Silently fail — series navigation is non-critical
+      setSeriesEvents([]);
+    }
+  }, []);
+
+  const printRoster = () => {
+    if (!rsvps || !event) return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const rows = rsvps.map(r => `
+      <tr>
+        <td style="padding:8px;border:1px solid #ddd">${r.user_name ?? ''}</td>
+        <td style="padding:8px;border:1px solid #ddd">${r.status}</td>
+        <td style="padding:8px;border:1px solid #ddd">${r.checked_in ? 'Yes' : 'No'}</td>
+        <td style="padding:8px;border:1px solid #ddd">${r.guest_count ?? 0}</td>
+        <td style="padding:8px;border:1px solid #ddd"></td>
+      </tr>
+    `).join('');
+
+    printWindow.document.write(`
+      <html><head><title>Attendance Roster - ${event.title}</title></head>
+      <body style="font-family:Arial,sans-serif;padding:20px">
+        <h1 style="font-size:24px;margin-bottom:4px">${event.title}</h1>
+        <p style="color:#666;margin-bottom:16px">${new Date(event.start_datetime).toLocaleString()}</p>
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:#f3f4f6">
+            <th style="padding:8px;border:1px solid #ddd;text-align:left">Name</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:left">RSVP Status</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:left">Checked In</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:left">Guests</th>
+            <th style="padding:8px;border:1px solid #ddd;text-align:left">Signature</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <p style="margin-top:16px;color:#999;font-size:12px">Total RSVPs: ${rsvps.length}</p>
+      </body></html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
   };
 
   const fetchEligibleMembers = async () => {
@@ -403,6 +460,64 @@ export const EventDetailPage: React.FC = () => {
   const canRSVP = event.requires_rsvp && !event.is_cancelled && !isPastEvent &&
     (!event.rsvp_deadline || new Date(event.rsvp_deadline) > new Date());
 
+  // RSVP deadline countdown
+  const rsvpCountdown = (() => {
+    if (!event.requires_rsvp || !event.rsvp_deadline) return null;
+    const remaining = new Date(event.rsvp_deadline).getTime() - Date.now();
+    const ONE_MINUTE = 60 * 1000;
+    const ONE_HOUR = 60 * ONE_MINUTE;
+    const ONE_DAY = 24 * ONE_HOUR;
+    const SEVEN_DAYS = 7 * ONE_DAY;
+
+    if (remaining <= 0) {
+      return { text: 'RSVP Closed', color: 'text-red-500' };
+    } else if (remaining < ONE_HOUR) {
+      const minutes = Math.max(1, Math.ceil(remaining / ONE_MINUTE));
+      return { text: `RSVP closes in ${minutes} minute${minutes !== 1 ? 's' : ''}`, color: 'text-red-500' };
+    } else if (remaining < ONE_DAY) {
+      const hours = Math.ceil(remaining / ONE_HOUR);
+      return { text: `RSVP closes in ${hours} hour${hours !== 1 ? 's' : ''}`, color: 'text-amber-500' };
+    } else if (remaining < SEVEN_DAYS) {
+      const days = Math.ceil(remaining / ONE_DAY);
+      return { text: `RSVP closes in ${days} day${days !== 1 ? 's' : ''}`, color: 'text-amber-500' };
+    } else {
+      return { text: `RSVP deadline: ${formatShortDateTime(event.rsvp_deadline, tz)}`, color: 'text-theme-text-secondary' };
+    }
+  })();
+
+  const exportAttendanceCSV = () => {
+    if (!rsvps || !event) return;
+    const headers = ['Name', 'Email', 'RSVP Status', 'Guest Count', 'Checked In', 'Check-In Time', 'Notes'];
+    const rows = rsvps.map(r => [
+      r.user_name || '',
+      r.user_email || '',
+      r.status,
+      String(r.guest_count ?? 0),
+      r.checked_in ? 'Yes' : 'No',
+      r.checked_in_at ? new Date(r.checked_in_at).toLocaleString() : '',
+      (r.notes || '').replace(/"/g, '""'),
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.map(c => `"${c}"`).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${event.title.replace(/[^a-zA-Z0-9]/g, '_')}_attendance.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Compute series navigation (prev/next occurrence)
+  const currentSeriesIndex = seriesEvents.findIndex(e => e.id === eventId);
+  const prevOccurrence = currentSeriesIndex > 0 ? seriesEvents[currentSeriesIndex - 1] ?? null : null;
+  const nextOccurrence = currentSeriesIndex >= 0 && currentSeriesIndex < seriesEvents.length - 1
+    ? seriesEvents[currentSeriesIndex + 1] ?? null
+    : null;
+  const seriesPosition = currentSeriesIndex >= 0 ? currentSeriesIndex + 1 : null;
+  const seriesTotal = seriesEvents.length > 0 ? seriesEvents.length : null;
+
   return (
     <div className="min-h-screen">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -440,6 +555,45 @@ export const EventDetailPage: React.FC = () => {
                 </span>
               )}
             </div>
+            {/* Series navigation for recurring events */}
+            {(event.is_recurring || event.recurrence_parent_id) && seriesEvents.length > 1 && (
+              <div className="mt-2 flex items-center gap-3 text-sm">
+                <span className="text-theme-text-muted">
+                  Occurrence {seriesPosition} of {seriesTotal}
+                </span>
+                <div className="flex items-center gap-1">
+                  {prevOccurrence ? (
+                    <Link
+                      to={`/events/${prevOccurrence.id}`}
+                      className="inline-flex items-center gap-0.5 text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Previous
+                    </Link>
+                  ) : (
+                    <span className="inline-flex items-center gap-0.5 text-theme-text-muted cursor-default">
+                      <ChevronLeft className="h-4 w-4" />
+                      Previous
+                    </span>
+                  )}
+                  <span className="text-theme-text-muted mx-1">|</span>
+                  {nextOccurrence ? (
+                    <Link
+                      to={`/events/${nextOccurrence.id}`}
+                      className="inline-flex items-center gap-0.5 text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                    >
+                      Next
+                      <ChevronRight className="h-4 w-4" />
+                    </Link>
+                  ) : (
+                    <span className="inline-flex items-center gap-0.5 text-theme-text-muted cursor-default">
+                      Next
+                      <ChevronRight className="h-4 w-4" />
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {!event.is_cancelled && (
@@ -452,6 +606,12 @@ export const EventDetailPage: React.FC = () => {
                 >
                   {event.user_rsvp_status ? 'Update RSVP' : 'RSVP Now'}
                 </button>
+              )}
+              {rsvpCountdown && !event.user_rsvp_status && (
+                <span className={`inline-flex items-center gap-1.5 text-sm ${rsvpCountdown.color}`}>
+                  <Clock className="h-4 w-4" />
+                  {rsvpCountdown.text}
+                </span>
               )}
               <button
                 onClick={() => navigate(`/events/${eventId}/qr-code`)}
@@ -780,13 +940,42 @@ export const EventDetailPage: React.FC = () => {
                   </button>
                 )}
               </div>
+              {event.user_rsvp_status === RSVPStatusEnum.WAITLISTED && (
+                <p className="mt-3 text-sm text-purple-600 dark:text-purple-400">
+                  You&apos;re on the waitlist. You&apos;ll be automatically moved to &quot;Going&quot; if a spot opens up.
+                </p>
+              )}
+              {rsvpCountdown && (
+                <div className={`flex items-center gap-1.5 mt-3 text-sm ${rsvpCountdown.color}`}>
+                  <Clock className="h-4 w-4" />
+                  <span>{rsvpCountdown.text}</span>
+                </div>
+              )}
             </div>
           )}
 
           {/* RSVPs List (for managers) */}
           {canManage && rsvps.length > 0 && (
             <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-sm p-6">
-              <h2 className="text-lg font-medium text-theme-text-primary mb-4">Attendance</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-medium text-theme-text-primary">Attendance</h2>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={printRoster}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-theme-text-secondary hover:text-theme-text-primary bg-theme-surface-secondary hover:bg-theme-surface rounded-md transition-colors"
+                  >
+                    <Printer className="h-4 w-4" />
+                    Print Roster
+                  </button>
+                  <button
+                    onClick={exportAttendanceCSV}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-theme-text-secondary hover:text-theme-text-primary bg-theme-surface-secondary hover:bg-theme-surface rounded-md transition-colors"
+                  >
+                    <Download className="h-4 w-4" />
+                    Export CSV
+                  </button>
+                </div>
+              </div>
               <div className="space-y-3">
                 {rsvps.map((rsvp) => {
                   const effectiveCheckIn = rsvp.override_check_in_at || rsvp.checked_in_at;

@@ -47,6 +47,7 @@ export const getRSVPStatusLabel = (status: RSVPStatus): string => {
     going: 'Going',
     not_going: 'Not Going',
     maybe: 'Maybe',
+    waitlisted: 'Waitlisted',
   };
   return labels[status];
 };
@@ -59,6 +60,7 @@ export const getRSVPStatusColor = (status: RSVPStatus): string => {
     going: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
     not_going: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
     maybe: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
+    waitlisted: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-300',
   };
   return colors[status];
 };
