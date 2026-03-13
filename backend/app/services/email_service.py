@@ -109,6 +109,9 @@ class EmailService:
             decrypted = decrypt_settings_secrets(self.organization.settings)
             org_email_config = decrypted.get("email_service", {})
             if org_email_config.get("enabled"):
+                encryption = org_email_config.get(
+                    "smtp_encryption", "tls"
+                )
                 return {
                     "host": org_email_config.get("smtp_host"),
                     "port": org_email_config.get("smtp_port", 587),
@@ -118,7 +121,7 @@ class EmailService:
                     "from_name": org_email_config.get(
                         "from_name", self.organization.name
                     ),
-                    "use_tls": org_email_config.get("use_tls", True),
+                    "encryption": encryption,
                 }
 
         # Fall back to global settings
@@ -129,17 +132,39 @@ class EmailService:
             "password": settings.SMTP_PASSWORD,
             "from_email": settings.SMTP_FROM_EMAIL,
             "from_name": settings.SMTP_FROM_NAME,
-            "use_tls": True,
+            "encryption": "tls",
         }
 
     def _smtp_send(self, recipients: List[str], message: str) -> None:
         """Synchronous SMTP send — called via asyncio.to_thread."""
-        with smtplib.SMTP(
-            self._smtp_config["host"], self._smtp_config["port"]
-        ) as server:
-            if self._smtp_config["use_tls"]:
+        host = self._smtp_config["host"]
+        port = self._smtp_config["port"]
+        encryption = self._smtp_config.get("encryption", "tls")
+
+        if not host or not self._smtp_config.get("from_email"):
+            raise ValueError(
+                "SMTP host and from_email are required"
+            )
+
+        timeout = 30
+
+        if encryption == "ssl":
+            import ssl
+
+            ctx = ssl.create_default_context()
+            server = smtplib.SMTP_SSL(
+                host, port, context=ctx, timeout=timeout
+            )
+        else:
+            server = smtplib.SMTP(host, port, timeout=timeout)
+
+        try:
+            if encryption in ("tls", "starttls"):
                 server.starttls()
-            if self._smtp_config["user"] and self._smtp_config["password"]:
+            if (
+                self._smtp_config["user"]
+                and self._smtp_config["password"]
+            ):
                 server.login(
                     self._smtp_config["user"],
                     self._smtp_config["password"],
@@ -149,6 +174,8 @@ class EmailService:
                 recipients,
                 message,
             )
+        finally:
+            server.quit()
 
     async def send_email(
         self,

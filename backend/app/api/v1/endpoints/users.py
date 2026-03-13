@@ -341,6 +341,7 @@ async def create_member(
                     temp_password=initial_password,
                     organization_name=org_name,
                     login_url=login_url,
+                    db=db,
                     organization_id=welcome_org_id,
                 )
             except Exception as e:
