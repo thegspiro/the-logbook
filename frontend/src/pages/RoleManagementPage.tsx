@@ -241,8 +241,7 @@ export const RoleManagementPage: React.FC = () => {
                 {editingRole?.is_system && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                     <p className="text-sm text-yellow-800">
-                      System roles can only have their permissions modified.
-                      Name and priority cannot be changed.
+                      This is a system role. Only the description and permissions can be modified.
                     </p>
                   </div>
                 )}

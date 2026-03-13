@@ -163,10 +163,12 @@ class RoleManagementService:
         if not slug:
             slug = slugify(name)
 
-        # Check for existing slug
-        existing = await self.get_role_by_slug(db, slug, organization_id)
-        if existing:
-            raise ValueError(f"Role with slug '{slug}' already exists")
+        # Deduplicate: append _2, _3, … when the slug already exists
+        base_slug = slug
+        counter = 1
+        while await self.get_role_by_slug(db, slug, organization_id):
+            counter += 1
+            slug = f"{base_slug}_{counter}"
 
         # Validate permissions
         valid_permissions = set(get_all_permissions())

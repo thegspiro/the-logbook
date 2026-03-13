@@ -28,6 +28,8 @@ class RoleCreate(RoleBase):
     permissions: List[str] = Field(default_factory=list)
     priority: int = Field(default=0, ge=0, le=100)
 
+    model_config = ConfigDict(extra="forbid")
+
 
 class RoleUpdate(BaseModel):
     """Schema for updating a role"""
@@ -36,6 +38,8 @@ class RoleUpdate(BaseModel):
     description: Optional[str] = None
     permissions: Optional[List[str]] = None
     priority: Optional[int] = Field(None, ge=0, le=100)
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class RoleResponse(BaseModel):
@@ -107,6 +111,8 @@ class RoleCloneRequest(BaseModel):
     description: Optional[str] = Field(
         None, description="Optional description for the new role"
     )
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class RoleWithUserCount(RoleResponse):
