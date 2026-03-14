@@ -713,4 +713,106 @@ Duplicated org logo HTML building code across 7 service files extracted into sha
 
 ---
 
+## SMTP Credential Decryption Failure (2026-03-13)
+
+### Problem: Encrypted SMTP password sent as-is to mail server
+
+**Symptoms:** All outbound emails fail with SMTP authentication error. Logs show `smtplib.SMTPAuthenticationError`.
+
+**Root Cause:** The email service was reading SMTP credentials from organization settings without decrypting them. The encrypted string was sent as the password.
+
+**Fix (Commit `831d72b`):** Email service now decrypts stored SMTP credentials before establishing the SMTP connection. Also guards against `None` settings to prevent `TypeError`.
+
+---
+
+## SMTP Provider Compatibility (2026-03-13)
+
+### Problem: Email sending fails for Gmail, Office 365, or self-hosted SMTP
+
+**Symptoms:** Emails fail with SSL/TLS handshake errors or connection timeouts depending on the SMTP provider.
+
+**Root Cause:** The email service used a single connection strategy that didn't account for different SMTP providers' TLS requirements.
+
+**Fix (Commit `d809426`):**
+- **Gmail**: Uses STARTTLS on port 587 (not SSL). Set `EMAIL_USE_SSL=false`
+- **Office 365**: Uses STARTTLS on port 587. Set `EMAIL_USE_SSL=false`
+- **Self-hosted (SSL)**: Uses SSL on port 465. Set `EMAIL_USE_SSL=true`
+- **Self-hosted (plain)**: Uses plain SMTP on port 25. Set `EMAIL_USE_SSL=false`
+
+New `EMAIL_USE_SSL` environment variable added to `.env.example` and `.env.example.full`.
+
+---
+
+## Scheduled Email Pipeline Bugs (2026-03-13–14)
+
+### Problem: Scheduled emails not being delivered
+
+**Symptoms:** Emails configured in pipeline stages are not sent. Scheduled emails stay in `PENDING` status indefinitely.
+
+**Root Cause:** Multiple cascading issues:
+
+1. **Stale Redis claim** — Background email loop gave up permanently when finding a stale Redis claim from a crashed worker, instead of waiting for TTL expiry and reclaiming
+2. **Missing org context** — Email template rendering failed because organization data (name, settings, logo) was not loaded before sending
+3. **Route ordering** — `GET /api/v1/email-templates/{template_id}` was matching before `GET /api/v1/email-templates/scheduled`, treating "scheduled" as a template ID
+4. **UTC future check** — Server rejected emails scheduled in the user's local timezone because it compared against UTC
+5. **UTC time display** — Scheduled email times showed raw UTC instead of local timezone
+6. **Date picker min** — Date picker used UTC date for minimum constraint, rejecting valid local dates
+
+**Fixes:**
+- `7810f32`: Redis claim recovery instead of permanent give-up
+- `49defff`: Redis key cleanup on application shutdown
+- `a76148d`: Polling interval reduced from 5 minutes to 60 seconds
+- `b4f86e3`: Load org context before email template rendering
+- `f1cce9e`: Route ordering fixed — `/scheduled` before `/{template_id}`
+- `8eaf002`: Removed server-side UTC-based future check on `scheduled_at`
+- `e7b5a3d`: Display scheduled times in user's local timezone
+- `e4c6e5c`: Date picker uses local date for min constraint
+- `4dc7ad2`: Message history cleanup, date filtering, email validation
+
+---
+
+## Automated Email Not Sending on Pipeline Advance (2026-03-14)
+
+### Problem: Prospect advances to automated_email stage but no email is sent
+
+**Root Cause:** The `advance_prospect()` method was not triggering the automated email logic when the target stage type was `AUTOMATED_EMAIL`.
+
+**Fix (Commit `cbaec8b`):** Added email trigger in `advance_prospect()` — when the target stage is `automated_email`, the service now builds and sends the configured email using the stage's email configuration (subject, welcome message, FAQ link, custom sections, etc.).
+
+---
+
+## IntegrityError on Prospect Activity Log (2026-03-13)
+
+### Problem: `IntegrityError` when system performs automated pipeline actions
+
+**Symptoms:** Background operations (e.g., auto-advance after form submission) fail with `IntegrityError: foreign key constraint fails` on the `prospect_activity_log` table.
+
+**Root Cause:** The `performed_by` column has a foreign key to the `users` table. Automated actions were setting `performed_by = 'system'`, which is not a valid user ID.
+
+**Fix (Commit `addbbb0`):** Changed automated actions to use `performed_by = None` instead of `'system'`. The column is `nullable=True`, so `None` is valid.
+
+---
+
+## Custom Section Add/Edit in Pipeline Email Config (2026-03-13)
+
+### Problem: Custom sections in pipeline email stage config not persisting
+
+**Symptoms:** Adding or editing custom sections (title + content blocks) in the automated email stage configuration does not save correctly. Sections disappear on reload.
+
+**Fix (Commit `49ba979`):** Fixed state management in the StageConfigModal for custom section CRUD operations. Sections now persist correctly.
+
+---
+
+## Email Config Not Persisting from Onboarding (2026-03-13)
+
+### Problem: SMTP settings configured during onboarding don't carry over
+
+**Symptoms:** Email works during onboarding but stops working after setup is complete. Organization settings show no SMTP configuration.
+
+**Root Cause:** The onboarding flow configured email in a temporary context but did not persist the SMTP settings to the organization's settings record.
+
+**Fix (Commit `b64cde7`):** Onboarding email configuration step now writes SMTP settings to the organization's persistent settings.
+
+---
+
 **See also:** [Main Troubleshooting](Troubleshooting) | [Container Issues](Troubleshooting-Containers) | [Database Issues](Troubleshooting-Database)

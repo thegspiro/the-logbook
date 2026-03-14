@@ -54,7 +54,7 @@ frontend/src/modules/prospective-members/
 | Type | Description |
 |------|-------------|
 | `ApplicantStatus` | `'active' \| 'on_hold' \| 'withdrawn' \| 'converted' \| 'rejected' \| 'inactive'` |
-| `PipelineStageType` | `'form_submission' \| 'document_upload' \| 'election_vote' \| 'manual_approval' \| 'automated_email' \| 'form_dropdown' \| 'meeting'` |
+| `PipelineStageType` | `'form_submission' \| 'document_upload' \| 'election_vote' \| 'manual_approval' \| 'automated_email' \| 'form_dropdown' \| 'meeting'` — see [Stage Types](#stage-types) for details on each |
 | `InactivityTimeoutPreset` | `'3_months' \| '6_months' \| '1_year' \| 'never' \| 'custom'` |
 | `InactivityAlertLevel` | `'normal' \| 'warning' \| 'critical'` |
 | `PipelineTab` | `'active' \| 'inactive' \| 'withdrawn'` |
@@ -120,12 +120,13 @@ The Pipeline Builder (on the Pipeline Settings page) allows coordinators to:
 Each stage can be configured with:
 - **Name**: Display name for the stage
 - **Description**: Optional description explaining the stage's purpose
-- **Type**: One of the four stage types above
+- **Type**: One of the seven stage types above
 - **Inactivity timeout override**: Optional custom timeout (in days) for this specific stage
+- **Auto-advance** (form_submission and document_upload only): When enabled, the prospect is automatically advanced to the next stage when the form is submitted or all required documents are uploaded. Toggled via checkbox: "Auto-advance when form is submitted" / "Auto-advance when documents are uploaded". Default: off
 - **Election package fields** (election_vote only): Choose which applicant data to include in election packages (email, phone, address, DOB, documents, stage history, custom coordinator prompt)
-- **Email configuration** (automated_email only): Select email template, configure variable interpolation, set send delay
-- **Form selection** (form_dropdown only): Choose a form from the Forms module for applicant data collection
-- **Event linking** (meeting and others): Link a stage to a specific event for scheduling
+- **Email configuration** (automated_email only): Configure email subject, welcome message, FAQ link, next meeting details, custom sections (title + content), and application status tracker. Email is automatically sent when a prospect advances to this stage
+- **Form selection** (form_dropdown only): Choose a form from the Forms module for applicant data collection via dropdown selector
+- **Event linking** (meeting and others): Link a stage to a specific event for scheduling. Meeting stages auto-link the next upcoming event matching the stage configuration
 - **Status page visibility**: Toggle whether the stage appears on the public application status page
 
 ---
@@ -262,7 +263,8 @@ When enabled, auto-purge permanently deletes inactive applicant records after th
 
 | Action | Available When | Effect |
 |--------|---------------|--------|
-| Advance | Active | Moves applicant to the next pipeline stage; auto-creates election package if target is election_vote stage |
+| Advance | Active | Moves applicant to the next pipeline stage; auto-creates election package if target is election_vote stage; auto-sends email if target is automated_email stage |
+| Regress | Active (not first stage) | Moves applicant back to the previous pipeline stage; resets that stage's progress to `IN_PROGRESS`. Logged as `prospect_regressed` |
 | Hold | Active | Sets status to on_hold |
 | Reject | Active, On Hold, Inactive | Sets status to rejected |
 | Withdraw | Active, On Hold | Sets status to withdrawn; archives the application |
@@ -440,7 +442,8 @@ The `useProspectiveMembersStore` manages all module state:
 | `fetchApplicants(page?)` | Load active applicants with pagination |
 | `fetchInactiveApplicants(page?)` | Load inactive applicants with pagination |
 | `fetchStats()` | Load pipeline statistics |
-| `advanceApplicant(id)` | Move applicant to next stage; auto-creates election package for election_vote stages |
+| `advanceApplicant(id)` | Move applicant to next stage; auto-creates election package for election_vote stages; auto-sends email for automated_email stages |
+| `regressApplicant(id, notes?)` | Move applicant back to previous stage; resets previous stage progress to IN_PROGRESS |
 | `holdApplicant(id)` | Put applicant on hold |
 | `rejectApplicant(id)` | Reject applicant |
 | `withdrawApplicant(id, reason?)` | Withdraw/archive applicant from pipeline |
@@ -479,6 +482,7 @@ The `useProspectiveMembersStore` manages all module state:
 | `GET` | `/api/v1/prospective-members/applicants/{id}` | `view` | Get applicant details |
 | `PATCH` | `/api/v1/prospective-members/applicants/{id}` | `manage` | Update applicant |
 | `POST` | `/api/v1/prospective-members/applicants/{id}/advance` | `manage` | Advance to next stage |
+| `POST` | `/api/v1/membership-pipeline/prospects/{id}/regress` | `manage` | Move back to previous stage |
 | `POST` | `/api/v1/prospective-members/applicants/{id}/hold` | `manage` | Put on hold |
 | `POST` | `/api/v1/prospective-members/applicants/{id}/reject` | `manage` | Reject applicant |
 | `POST` | `/api/v1/prospective-members/applicants/{id}/withdraw` | `manage` | Withdraw applicant from pipeline |
@@ -515,6 +519,112 @@ The `useProspectiveMembersStore` manages all module state:
 
 ---
 
+## Automated Email System (2026-03-14)
+
+When a prospect advances to an `automated_email` stage, the system automatically sends a configurable email to the applicant's email address.
+
+### Email Configuration (StageConfigModal)
+
+Each `automated_email` stage supports the following configuration in the stage config:
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `email_subject` | `string` | "Update on Your Membership Application" | Email subject line |
+| `include_welcome` | `boolean` | `false` | Include a welcome/introduction section |
+| `welcome_message` | `string` | — | Custom welcome text (shown when include_welcome is true) |
+| `include_faq_link` | `boolean` | `false` | Include a link to the department FAQ |
+| `faq_url` | `string` | — | URL to the FAQ page |
+| `include_next_meeting` | `boolean` | `false` | Include next meeting details |
+| `next_meeting_details` | `string` | — | Meeting date, time, and location text |
+| `custom_sections` | `array` | `[]` | Array of `{title, content, enabled}` sections |
+| `include_status_tracker` | `boolean` | `false` | Include a link to the application status page |
+
+### How It Works
+
+```
+Prospect advances to automated_email stage
+  → System loads stage email config
+  → Builds HTML email from configured sections
+  → Sends via organization's SMTP settings
+  → Logs success/failure in prospect activity log
+```
+
+### Email Pipeline Architecture
+
+- **Background scheduler**: A background loop in `main.py` polls for pending scheduled emails every 60 seconds
+- **Redis coordination**: Uses Redis lock (`lock:run_scheduled_emails`, TTL 120s) to prevent concurrent workers from processing the same emails
+- **Worker claim**: A single worker claims the scheduler role via Redis key; claim is released on shutdown and auto-expires on crash
+- **Batch processing**: Processes up to 100 pending emails per cycle
+- **SMTP provider support**: Gmail (STARTTLS, port 587), Office 365 (STARTTLS, port 587), self-hosted (SSL on 465 or plain on 25)
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Organization has no SMTP settings configured | Email sending is skipped with a warning log; stage advancement is not blocked |
+| Email sending fails (SMTP error) | Email marked as `FAILED` with error message; prospect still advances |
+| Multiple workers running | Redis lock ensures only one worker processes emails at a time |
+| Worker crashes while holding Redis claim | Claim auto-expires after TTL; next cycle reclaims |
+| Application shutdown | Redis claim key is explicitly deleted |
+| Empty custom section content | Section is omitted from email body |
+| HTML in user-provided content | All content is HTML-escaped before inclusion in email template |
+
+---
+
+## Auto-Advance (2026-03-14)
+
+Form submission and document upload stages support auto-advance, which automatically moves the prospect to the next pipeline stage when the stage's condition is met.
+
+### Configuration
+
+In the Stage Configuration Modal:
+- **Form submission stages**: Check "Auto-advance when form is submitted"
+- **Document upload stages**: Check "Auto-advance when documents are uploaded"
+
+The setting is stored as `auto_advance: boolean` in the stage's `FormStageConfig` or `DocumentStageConfig`.
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Auto-advance disabled (default) | Coordinator must manually advance the prospect |
+| Auto-advance enabled, form submitted | Prospect automatically moves to next stage |
+| Auto-advance enabled, last stage | Auto-advance does not trigger conversion — coordinator must manually convert |
+| Stage config missing auto_advance field | Treated as `false` (defaults to off) |
+
+---
+
+## Stage Regression (2026-03-14)
+
+Coordinators can move a prospect back to the previous pipeline stage using the "Move Back" action in the Applicant Detail Drawer.
+
+### How It Works
+
+1. Coordinator clicks "Move Back" in the applicant detail drawer
+2. Optionally enters notes explaining the reason
+3. System moves prospect to the previous step
+4. Previous step's progress is reset to `IN_PROGRESS`
+5. Activity is logged as `prospect_regressed` with source and target stage details
+
+### API
+
+```
+POST /api/v1/membership-pipeline/prospects/{prospect_id}/regress
+Body: { "notes": "optional reason" }
+Response: ProspectResponse
+```
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Prospect is at the first stage | Regression is blocked; prospect returned unchanged |
+| Prospect is on hold or inactive | Regression only applies to active prospects |
+| Repeated regression | Prospect can be regressed multiple times until reaching the first stage |
+| Audit trail | All regressions are logged in the prospect's activity history with user, timestamp, and notes |
+
+---
+
 ## Troubleshooting
 
 See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#prospective-members-module-issues) for common issues including:
@@ -531,10 +641,33 @@ See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#prospective-members-module-issues)
 - Reprocessed submissions not updating prospects *(fixed 2026-03-04)*
 - Duplicate prospects not detected *(fixed 2026-03-04)*
 - ProspectResponse metadata returning SQLAlchemy MetaData object *(fixed 2026-03-04)*
+- Automated email not sending when prospect advances to email stage *(fixed 2026-03-14)*
+- SMTP credentials not decrypted before use *(fixed 2026-03-13)*
+- IntegrityError when system performs automated pipeline actions *(fixed 2026-03-13)*
+- Custom section add/edit not persisting in email config *(fixed 2026-03-13)*
+- Scheduled email displaying UTC time instead of local time *(fixed 2026-03-14)*
+- Scheduled email loop giving up permanently on stale Redis claim *(fixed 2026-03-14)*
 
 ---
 
 ## Recent Changes (March 2026)
+
+### March 14, 2026
+- **Auto-advance for form submission and document upload stages**: New `auto_advance` config option in `FormStageConfig` and `DocumentStageConfig`. Checkbox in StageConfigModal. When enabled, prospects automatically advance when the form is submitted or documents are uploaded
+- **Stage regression (move back)**: New `POST /regress` endpoint and "Move Back" action in the Applicant Detail Drawer. Moves prospect to previous stage, resets progress to `IN_PROGRESS`, logs as `prospect_regressed`
+- **Automated email trigger on advance**: Advancing a prospect to an `automated_email` stage now automatically sends the configured email with subject, welcome message, FAQ link, next meeting details, custom sections, and status tracker
+- **Email pipeline fixes**: Fixed email not sending on advance, Redis claim recovery, polling interval reduced to 60s, Redis key cleanup on shutdown
+
+### March 13, 2026
+- **SMTP provider compatibility**: Fixed sending for Gmail (STARTTLS/587), Office 365 (STARTTLS/587), and self-hosted SMTP servers (SSL/465, plain/25). New `EMAIL_USE_SSL` env var
+- **SMTP credential decryption**: Encrypted SMTP passwords are now decrypted before connection
+- **Email config from onboarding**: SMTP settings configured during onboarding are persisted to organization settings
+- **IntegrityError fix**: Automated actions use `None` instead of `'system'` for `performed_by` FK
+- **Custom section reliability**: Fixed custom section add/edit persistence in pipeline email configuration
+- **Route ordering**: `GET /scheduled` moved before `GET /{template_id}` to prevent route conflicts
+- **Scheduled email date/time fixes**: Removed UTC-based future checks; display times in user's local timezone
+- **Message history cleanup**: Added cleanup, date filtering, and email validation to scheduled email pipeline
+- **New stage types**: `form_dropdown` (links a Forms module form via dropdown) and `meeting` (schedule interview/orientation with auto-event linking and President Interview preset)
 
 ### March 6, 2026
 - **Desired membership type field**: Added `desired_membership_type` column to `ProspectiveMember` model (nullable `String(50)`) to track whether an applicant wants to be a regular or administrative member. Options presented as "Regular Member" (starts as probationary) and "Administrative Member" — probationary is not offered as a direct choice since it is a transitional status
@@ -554,6 +687,6 @@ See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#prospective-members-module-issues)
 
 ---
 
-**Document Version**: 1.3
-**Last Updated**: 2026-03-06
+**Document Version**: 1.4
+**Last Updated**: 2026-03-14
 **Maintainer**: Development Team

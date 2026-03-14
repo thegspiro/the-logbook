@@ -41,7 +41,9 @@
 - [Finance](../docs/FINANCE_MODULE.md)
 - [Meeting Minutes](../docs/MEETING_MINUTES_MODULE.md)
 - [Prospective Members](../docs/PROSPECTIVE_MEMBERS_MODULE.md)
+- [Medical Screening](../docs/MEDICAL_SCREENING_MODULE.md)
 - [Compliance](Module-Compliance)
+- [Compliance Config](../docs/COMPLIANCE_CONFIG.md)
 
 ### 🔐 Security
 - [Overview](Security-Overview)

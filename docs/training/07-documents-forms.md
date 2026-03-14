@@ -484,6 +484,8 @@ She clicks **Export CSV** to download the data for the monthly operations report
 | Duplicate prospect not detected on form submission | As of 2026-03-04, duplicate detection by email is active. The pipeline coordinator receives a notification with a link to the existing prospect. |
 | Form field compatibility warning on save | This is a new validation (2026-03-04) that checks if form fields match expected pipeline field mappings. Review the warning and update field names to match. |
 | Modal dialog buttons unresponsive (delete, confirm) | Fixed in March 2026 — backdrop overlay no longer intercepts button clicks. Pull latest and rebuild. |
+| Form submission does not auto-advance prospect | As of 2026-03-14, auto-advance must be explicitly enabled in the pipeline stage configuration. Open Pipeline Settings, edit the form_submission stage, and check "Auto-advance when form is submitted". |
+| Automated pipeline email not sent on form submission | The email is triggered when advancing to an `automated_email` stage, not when submitting a form. Verify the pipeline has an `automated_email` stage after the `form_submission` stage and that SMTP is configured. *(added 2026-03-14)* |
 
 ---
 
