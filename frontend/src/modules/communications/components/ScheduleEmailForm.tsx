@@ -32,6 +32,9 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({
   const [scheduledDate, setScheduledDate] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
 
+  const now = new Date();
+  const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -157,7 +160,7 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({
               value={scheduledDate}
               onChange={(e) => setScheduledDate(e.target.value)}
               className={inputClass}
-              min={new Date().toISOString().split('T')[0] ?? ''}
+              min={todayLocal}
               required
             />
           </div>

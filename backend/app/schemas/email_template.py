@@ -4,10 +4,10 @@ Email Template Schemas
 Pydantic schemas for email template API requests and responses.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class TemplateVariable(BaseModel):
@@ -145,6 +145,16 @@ class ScheduledEmailResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @field_validator("scheduled_at", "sent_at", "created_at", "updated_at", mode="before")
+    @classmethod
+    def ensure_utc_timezone(cls, v: datetime | None) -> datetime | None:
+        """Attach UTC tzinfo to naive datetimes returned by MySQL."""
+        if v is None:
+            return v
+        if isinstance(v, datetime) and v.tzinfo is None:
+            return v.replace(tzinfo=timezone.utc)
+        return v
 
 
 # --- Message History schemas ---
