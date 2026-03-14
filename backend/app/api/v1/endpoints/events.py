@@ -81,7 +81,11 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         organization_id=event.organization_id,
         title=event.title,
         description=event.description,
-        event_type=event.event_type.value if event.event_type else "other",
+        event_type=(
+            event.event_type.value
+            if hasattr(event.event_type, "value")
+            else event.event_type
+        ) if event.event_type else "other",
         custom_category=event.custom_category,
         location_id=event.location_id,
         location=event.location,
@@ -101,9 +105,9 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         reminder_schedule=event.reminder_schedule or [24],
         check_in_window_type=(
             event.check_in_window_type.value
-            if event.check_in_window_type
-            else "flexible"
-        ),
+            if hasattr(event.check_in_window_type, "value")
+            else event.check_in_window_type
+        ) if event.check_in_window_type else "flexible",
         check_in_minutes_before=event.check_in_minutes_before,
         check_in_minutes_after=event.check_in_minutes_after,
         require_checkout=event.require_checkout,
@@ -203,14 +207,22 @@ async def list_events(
         if event.rsvps:
             for rsvp in event.rsvps:
                 if str(rsvp.user_id) == str(current_user.id):
-                    user_rsvp_status = rsvp.status.value if rsvp.status else None
+                    user_rsvp_status = (
+                        rsvp.status.value
+                        if hasattr(rsvp.status, "value")
+                        else rsvp.status
+                    ) if rsvp.status else None
                     break
 
         event_list.append(
             EventListItem(
                 id=event.id,
                 title=event.title,
-                event_type=event.event_type.value if event.event_type else "other",
+                event_type=(
+                    event.event_type.value
+                    if hasattr(event.event_type, "value")
+                    else event.event_type
+                ) if event.event_type else "other",
                 custom_category=event.custom_category,
                 start_datetime=event.start_datetime,
                 end_datetime=event.end_datetime,
@@ -727,7 +739,11 @@ async def get_event(
         going_count=going_count,
         not_going_count=not_going_count,
         maybe_count=maybe_count,
-        user_rsvp_status=user_rsvp.status.value if user_rsvp else None,
+        user_rsvp_status=(
+            user_rsvp.status.value
+            if hasattr(user_rsvp.status, "value")
+            else user_rsvp.status
+        ) if user_rsvp else None,
     )
 
 

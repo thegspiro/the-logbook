@@ -51,6 +51,9 @@ Recommended crontab (add to host or container cron):
 
 # Daily at 3:00 AM — message history cleanup (delete records older than 90 days)
 0 3 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=message_history_cleanup
+
+# Daily at 7:00 AM — recurring event series end reminders (6 months prior)
+0 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=series_end_reminders
 -----------------------------------------------------
 """
 
@@ -161,6 +164,12 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "03:00",
         "cron": "0 3 * * *",
+    },
+    "series_end_reminders": {
+        "description": "Send email reminders 6 months before recurring event series end dates",
+        "frequency": "daily",
+        "recommended_time": "07:00",
+        "cron": "0 7 * * *",
     },
 }
 
@@ -563,9 +572,14 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                 elif event.location:
                     location_name = event.location
 
+                raw_event_type = (
+                    event.event_type.value
+                    if hasattr(event.event_type, "value")
+                    else event.event_type
+                ) if event.event_type else None
                 event_type_label = (
-                    event.event_type.value.replace("_", " ").title()
-                    if event.event_type
+                    raw_event_type.replace("_", " ").title()
+                    if raw_event_type
                     else "Event"
                 )
                 event_url = f"{settings.FRONTEND_URL}/events/{event.id}"
@@ -1820,6 +1834,252 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
     }
 
 
+async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Send email reminders 6 months before a recurring event series ends.
+
+    Queries all parent recurring events whose recurrence_end_date falls
+    within the next 6 months (180 days). For each, sends an email to
+    users with events.manage permission so they can extend or modify the
+    series before it expires.
+
+    Tracks sent reminders in custom_fields.series_end_reminder_sent to
+    ensure each series only triggers one notification.
+    """
+    import copy
+    from datetime import timedelta
+    from datetime import timezone as dt_timezone
+    from zoneinfo import ZoneInfo
+
+    from sqlalchemy.orm import selectinload
+
+    from app.core.config import settings
+    from app.core.utils import generate_uuid
+    from app.models.email_template import EmailTemplateType
+    from app.models.event import Event
+    from app.models.notification import NotificationChannel, NotificationLog
+    from app.services.email_service import EmailService
+    from app.services.email_template_service import EmailTemplateService
+
+    now = datetime.now(dt_timezone.utc)
+    six_months_from_now = now + timedelta(days=180)
+
+    orgs = await db.execute(select(Organization))
+    organizations = list(orgs.scalars().all())
+
+    total_reminders = 0
+    total_emails = 0
+    results = []
+
+    for org in organizations:
+        org_reminders = 0
+        org_emails = 0
+
+        try:
+            org_tz_name = org.timezone or "America/New_York"
+            try:
+                org_tz = ZoneInfo(org_tz_name)
+            except Exception:
+                org_tz = ZoneInfo("America/New_York")
+
+            # Find parent recurring events whose series ends within 6 months
+            events_result = await db.execute(
+                select(Event)
+                .options(selectinload(Event.recurrence_children))
+                .where(Event.organization_id == str(org.id))
+                .where(Event.is_recurring == True)  # noqa: E712
+                .where(Event.is_cancelled == False)  # noqa: E712
+                .where(Event.recurrence_parent_id.is_(None))
+                .where(Event.recurrence_end_date.isnot(None))
+                .where(Event.recurrence_end_date > now)
+                .where(Event.recurrence_end_date <= six_months_from_now)
+                .where(Event.created_by.isnot(None))
+            )
+            events = list(events_result.scalars().all())
+
+            if not events:
+                continue
+
+            email_service = EmailService(organization=org)
+            template_service = EmailTemplateService(db)
+
+            for event in events:
+                custom = event.custom_fields or {}
+                if custom.get("series_end_reminder_sent"):
+                    continue
+
+                # Notify the event creator
+                creator_result = await db.execute(
+                    select(User).where(
+                        User.id == event.created_by,
+                        User.is_active == True,  # noqa: E712
+                    )
+                )
+                creator = creator_result.scalar_one_or_none()
+                if not creator:
+                    continue
+
+                # Count remaining future occurrences
+                remaining = sum(
+                    1 for child in (event.recurrence_children or [])
+                    if not child.is_cancelled
+                    and child.start_datetime
+                    and child.start_datetime > now
+                )
+                # Include parent if it's in the future
+                if (
+                    not event.is_cancelled
+                    and event.start_datetime
+                    and event.start_datetime > now
+                ):
+                    remaining += 1
+
+                recurrence_pattern_val = (
+                    event.recurrence_pattern.value
+                    if hasattr(event.recurrence_pattern, "value")
+                    else event.recurrence_pattern
+                ) if event.recurrence_pattern else "unknown"
+                pattern_label = recurrence_pattern_val.replace(
+                    "_", " "
+                ).title()
+
+                end_date_local = event.recurrence_end_date.astimezone(org_tz)
+                series_end_str = end_date_local.strftime("%B %d, %Y")
+
+                event_url = f"{settings.FRONTEND_URL}/events/{event.id}"
+
+                # Try to load custom template
+                template = await template_service.get_template(
+                    str(org.id),
+                    EmailTemplateType.SERIES_END_REMINDER,
+                )
+
+                prefs = creator.notification_preferences or {}
+                user_name = (
+                    f"{creator.first_name} {creator.last_name}"
+                )
+
+                # In-app notification
+                try:
+                    in_app_log = NotificationLog(
+                        id=generate_uuid(),
+                        organization_id=str(org.id),
+                        recipient_id=str(creator.id),
+                        channel=NotificationChannel.IN_APP,
+                        category="series_end_reminder",
+                        subject=(
+                            f"Recurring series ending soon: {event.title}"
+                        ),
+                        message=(
+                            f'The recurring event series "{event.title}" '
+                            f"({pattern_label}) ends on {series_end_str} "
+                            f"with {remaining} occurrence(s) remaining."
+                        ),
+                    )
+                    db.add(in_app_log)
+                    org_reminders += 1
+                except Exception as e:
+                    logger.error(
+                        f"Failed to create series-end in-app notification "
+                        f"for user {creator.id}: {e}"
+                    )
+
+                # Email notification
+                wants_email = prefs.get("email_notifications", True)
+                wants_reminders = prefs.get("event_reminders", True)
+                if wants_reminders and wants_email and creator.email:
+                    try:
+                        context = {
+                            "recipient_name": user_name,
+                            "event_title": event.title,
+                            "recurrence_pattern": pattern_label,
+                            "series_end_date": series_end_str,
+                            "remaining_occurrences": str(remaining),
+                            "event_url": event_url,
+                        }
+
+                        if template:
+                            subject, html_body, text_body = (
+                                template_service.render(
+                                    template, context, org
+                                )
+                            )
+                        else:
+                            from app.services.email_template_service import (
+                                DEFAULT_SERIES_END_REMINDER_HTML,
+                                DEFAULT_SERIES_END_REMINDER_SUBJECT,
+                                DEFAULT_SERIES_END_REMINDER_TEXT,
+                            )
+
+                            subject = DEFAULT_SERIES_END_REMINDER_SUBJECT
+                            html_body = DEFAULT_SERIES_END_REMINDER_HTML
+                            text_body = DEFAULT_SERIES_END_REMINDER_TEXT
+                            for key, val in context.items():
+                                placeholder = "{{" + key + "}}"
+                                subject = subject.replace(
+                                    placeholder, val
+                                )
+                                html_body = html_body.replace(
+                                    placeholder, val
+                                )
+                                text_body = text_body.replace(
+                                    placeholder, val
+                                )
+
+                        success, _ = await email_service.send_email(
+                            to_emails=[creator.email],
+                            subject=subject,
+                            html_body=html_body,
+                            text_body=text_body,
+                            db=db,
+                            template_type="series_end_reminder",
+                        )
+                        if success > 0:
+                            org_emails += 1
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to send series-end email to "
+                            f"{creator.email}: {e}"
+                        )
+
+                # Mark reminder as sent using deep copy to avoid
+                # SQLAlchemy shallow-copy pitfall with JSON columns
+                updated_custom = copy.deepcopy(custom)
+                updated_custom["series_end_reminder_sent"] = True
+                event.custom_fields = updated_custom
+
+            await db.commit()
+
+        except Exception as e:
+            logger.error(
+                f"Series end reminders failed for org {org.id}: {e}"
+            )
+            results.append({"org_id": str(org.id), "error": str(e)})
+            continue
+
+        total_reminders += org_reminders
+        total_emails += org_emails
+        if org_reminders > 0 or org_emails > 0:
+            results.append(
+                {
+                    "org_id": str(org.id),
+                    "in_app_reminders": org_reminders,
+                    "emails_sent": org_emails,
+                }
+            )
+
+    logger.info(
+        f"Series end reminders complete: {total_reminders} in-app, "
+        f"{total_emails} emails across {len(organizations)} orgs"
+    )
+    return {
+        "task": "series_end_reminders",
+        "total_in_app_reminders": total_reminders,
+        "total_emails_sent": total_emails,
+        "organizations": results,
+    }
+
+
 # Task runner map
 TASK_RUNNERS = {
     "cert_expiration_alerts": run_cert_expiration_alerts,
@@ -1838,4 +2098,5 @@ TASK_RUNNERS = {
     "nfpa_retirement_alerts": run_nfpa_retirement_alerts,
     "compliance_auto_reports": run_compliance_auto_reports,
     "message_history_cleanup": run_message_history_cleanup,
+    "series_end_reminders": run_series_end_reminders,
 }

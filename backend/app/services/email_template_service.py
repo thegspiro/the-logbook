@@ -137,6 +137,14 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "location_details", "description": "Additional location details"},
         {"name": "event_url", "description": "Link to view the event"},
     ],
+    "series_end_reminder": [
+        {"name": "recipient_name", "description": "Recipient's display name"},
+        {"name": "event_title", "description": "Title of the recurring event series"},
+        {"name": "recurrence_pattern", "description": "Recurrence pattern (e.g. Weekly, Monthly)"},
+        {"name": "series_end_date", "description": "Date the recurring series ends"},
+        {"name": "remaining_occurrences", "description": "Number of remaining occurrences"},
+        {"name": "event_url", "description": "Link to view the parent event"},
+    ],
     "event_cancellation": [
         {"name": "recipient_name", "description": "Recipient's display name"},
         {"name": "event_title", "description": "Title of the cancelled event"},
@@ -318,6 +326,20 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "location_name": "Main Station \u2014 Meeting Room A",
         "location_details": "123 Main St, Anytown, USA",
         "event_url": "https://example.com/events/123",
+        "organization_name": "Sample Fire Department",
+        "organization_logo": "https://example.com/logo.png",
+        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_phone": "(555) 555-1234",
+        "organization_email": "info@samplefd.org",
+    },
+    "series_end_reminder": {
+        "recipient_name": "John Doe",
+        "event_title": "Weekly Officers Meeting",
+        "recurrence_pattern": "Weekly",
+        "series_end_date": "September 15, 2026",
+        "remaining_occurrences": "26",
+        "event_url": "https://example.com/events/456",
         "organization_name": "Sample Fire Department",
         "organization_logo": "https://example.com/logo.png",
         "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
@@ -1553,6 +1575,60 @@ Please do not reply to this email."""
 DEFAULT_EVENT_REMINDER_SUBJECT = "Reminder: {{event_title}} — {{event_start}}"
 
 
+# Default series end reminder email
+DEFAULT_SERIES_END_REMINDER_HTML = """<div class="container">
+    <div class="logo">{{organization_logo_img}}</div>
+    <div class="header" style="background-color: #f59e0b;">
+        <h1>Recurring Series Ending Soon</h1>
+    </div>
+    <div class="content">
+        <p>Hello {{recipient_name}},</p>
+
+        <p>This is a reminder that the following recurring event series is scheduled to end in approximately <strong>6 months</strong>:</p>
+
+        <div class="details">
+            <p><strong>Event:</strong> {{event_title}}</p>
+            <p><strong>Pattern:</strong> {{recurrence_pattern}}</p>
+            <p><strong>Series Ends:</strong> {{series_end_date}}</p>
+            <p><strong>Remaining Occurrences:</strong> {{remaining_occurrences}}</p>
+        </div>
+
+        <p>If you would like to extend or modify this series, please update the event before the series end date.</p>
+
+        <p style="text-align: center;">
+            <a href="{{event_url}}" class="button">View Event</a>
+        </p>
+    </div>
+    <div class="footer">
+        <p>This is an automated reminder from {{organization_name}}.</p>
+        <p>Please do not reply to this email.</p>
+    </div>
+</div>"""
+
+DEFAULT_SERIES_END_REMINDER_TEXT = """Recurring Series Ending Soon
+
+Hello {{recipient_name}},
+
+This is a reminder that the following recurring event series is scheduled to end in approximately 6 months:
+
+Event: {{event_title}}
+Pattern: {{recurrence_pattern}}
+Series Ends: {{series_end_date}}
+Remaining Occurrences: {{remaining_occurrences}}
+
+If you would like to extend or modify this series, please update the event before the series end date.
+
+View event: {{event_url}}
+
+---
+This is an automated reminder from {{organization_name}}.
+Please do not reply to this email."""
+
+DEFAULT_SERIES_END_REMINDER_SUBJECT = (
+    "Recurring Series Ending Soon: {{event_title}} — Ends {{series_end_date}}"
+)
+
+
 # Default training approval email
 DEFAULT_TRAINING_APPROVAL_HTML = """<div class="container">
     <div class="logo">{{organization_logo_img}}</div>
@@ -2098,6 +2174,33 @@ class EmailTemplateService:
             created.append(template)
             logger.info(
                 f"Created default event reminder email template for org {organization_id}"
+            )
+
+        # Check for series end reminder template
+        existing = await self.get_template(
+            organization_id,
+            EmailTemplateType.SERIES_END_REMINDER,
+            active_only=False,
+        )
+        if not existing:
+            template = await self.create_template(
+                organization_id=organization_id,
+                template_type=EmailTemplateType.SERIES_END_REMINDER,
+                name="Series End Reminder",
+                subject=DEFAULT_SERIES_END_REMINDER_SUBJECT,
+                html_body=DEFAULT_SERIES_END_REMINDER_HTML,
+                text_body=DEFAULT_SERIES_END_REMINDER_TEXT,
+                description=(
+                    "Sent to event managers 6 months before a recurring event "
+                    "series is scheduled to end. Includes series details and "
+                    "remaining occurrences."
+                ),
+                allow_attachments=False,
+                created_by=created_by,
+            )
+            created.append(template)
+            logger.info(
+                f"Created default series end reminder email template for org {organization_id}"
             )
 
         # Check for training approval template

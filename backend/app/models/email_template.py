@@ -39,6 +39,7 @@ class EmailTemplateType(str, enum.Enum):
     EVENT_REQUEST_STATUS = "event_request_status"
     IT_PASSWORD_NOTIFICATION = "it_password_notification"
     DUPLICATE_APPLICATION = "duplicate_application"
+    SERIES_END_REMINDER = "series_end_reminder"
     CUSTOM = "custom"
 
 
