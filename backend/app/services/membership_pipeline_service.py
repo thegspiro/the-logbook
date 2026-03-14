@@ -1048,6 +1048,71 @@ class MembershipPipelineService:
 
         return await self.get_prospect(prospect_id, organization_id)
 
+    async def regress_prospect(
+        self,
+        prospect_id: str,
+        organization_id: str,
+        regressed_by: str,
+        notes: Optional[str] = None,
+    ) -> Optional[ProspectiveMember]:
+        """Move a prospect back to the previous step."""
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect or not prospect.pipeline:
+            return None
+
+        sorted_steps = sorted(
+            prospect.pipeline.steps, key=lambda s: s.sort_order
+        )
+        current_idx = next(
+            (
+                i
+                for i, s in enumerate(sorted_steps)
+                if str(s.id) == str(prospect.current_step_id)
+            ),
+            -1,
+        )
+
+        if current_idx <= 0:
+            return prospect  # Already at the first step
+
+        prev_step = sorted_steps[current_idx - 1]
+        prospect.current_step_id = prev_step.id
+
+        # Reset the previous step's progress to in_progress
+        prev_progress = next(
+            (
+                p
+                for p in prospect.step_progress
+                if str(p.step_id) == str(prev_step.id)
+            ),
+            None,
+        )
+        if prev_progress:
+            prev_progress.status = StepProgressStatus.IN_PROGRESS
+        else:
+            self.db.add(
+                ProspectStepProgress(
+                    id=generate_uuid(),
+                    prospect_id=prospect_id,
+                    step_id=prev_step.id,
+                    status=StepProgressStatus.IN_PROGRESS,
+                )
+            )
+
+        await self._log_activity(
+            prospect_id=prospect_id,
+            action="prospect_regressed",
+            details={
+                "to_step_id": str(prev_step.id),
+                "to_step_name": prev_step.name,
+                "notes": notes,
+            },
+            performed_by=regressed_by,
+        )
+
+        await self.db.commit()
+        return await self.get_prospect(prospect_id, organization_id)
+
     async def _advance_current_step(
         self, prospect: ProspectiveMember, completed_step_id: str
     ):

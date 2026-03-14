@@ -15,6 +15,7 @@ import {
   MapPin,
   CheckCircle2,
   Circle,
+  ArrowLeft,
   ArrowRight,
   Pause,
   XCircle,
@@ -113,6 +114,7 @@ interface ApplicantDetailDrawerProps {
   onClose: () => void;
   onConvert: (applicant: Applicant) => void;
   isLastStage: boolean;
+  isFirstStage: boolean;
 }
 
 const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
@@ -136,12 +138,14 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   onClose,
   onConvert,
   isLastStage,
+  isFirstStage,
 }) => {
   const tz = useTimezone();
   const navigate = useNavigate();
 
   const {
     advanceApplicant,
+    regressApplicant,
     rejectApplicant,
     holdApplicant,
     resumeApplicant,
@@ -153,6 +157,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
     currentElectionPackage,
     isLoadingElectionPackage,
     isAdvancing,
+    isRegressing,
     isRejecting,
     isHolding,
     isResuming,
@@ -372,7 +377,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
   if (!isOpen) return null;
 
-  const isActionInProgress = isAdvancing || isRejecting || isHolding || isResuming || isWithdrawing || isSkipping;
+  const isActionInProgress = isAdvancing || isRegressing || isRejecting || isHolding || isResuming || isWithdrawing || isSkipping;
 
   const handleAdvance = async () => {
     if (!applicant) return;
@@ -389,6 +394,18 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
       setShowNotesInput(false);
     } catch {
       toast.error('Failed to advance applicant');
+    }
+  };
+
+  const handleRegress = async () => {
+    if (!applicant) return;
+    try {
+      await regressApplicant(applicant.id, actionNotes || undefined);
+      toast.success('Applicant moved back to previous stage');
+      setActionNotes('');
+      setShowNotesInput(false);
+    } catch {
+      toast.error('Failed to move applicant back');
     }
   };
 
@@ -1689,6 +1706,18 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     <ClipboardList className="w-3.5 h-3.5" />
                     <span className="action-label">Interview</span>
                   </button>
+
+                  {!isFirstStage && (
+                    <button
+                      onClick={() => { void handleRegress(); }}
+                      disabled={isActionInProgress}
+                      className="flex items-center gap-1.5 px-3 py-2 text-sm text-theme-text-muted border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors disabled:opacity-50"
+                      title="Move back to previous stage"
+                    >
+                      {isRegressing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowLeft className="w-3.5 h-3.5" />}
+                      <span className="action-label">Back</span>
+                    </button>
+                  )}
 
                   <div className="flex-1" />
 

@@ -235,6 +235,15 @@ export const ProspectiveMembersPage: React.FC = () => {
     return lastStage?.id === currentApplicant.current_stage_id;
   }, [currentPipeline, currentApplicant]);
 
+  const isFirstStage = useMemo(() => {
+    if (!currentPipeline || !currentApplicant) return true;
+    const sortedStages = [...currentPipeline.stages].sort(
+      (a, b) => a.sort_order - b.sort_order
+    );
+    const firstStage = sortedStages[0];
+    return firstStage?.id === currentApplicant.current_stage_id;
+  }, [currentPipeline, currentApplicant]);
+
   const handleCreateApplicant = async () => {
     if (!currentPipeline) return;
     if (!newApplicant.first_name.trim() || !newApplicant.last_name.trim() || !newApplicant.email.trim()) {
@@ -1101,6 +1110,7 @@ export const ProspectiveMembersPage: React.FC = () => {
         onClose={() => setDetailDrawerOpen(false)}
         onConvert={handleConvert}
         isLastStage={isLastStage}
+        isFirstStage={isFirstStage}
       />
 
       {/* Conversion Modal */}

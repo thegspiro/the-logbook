@@ -721,6 +721,14 @@ export const applicantService = {
     return mapProspectToApplicant(response.data);
   },
 
+  async regressStage(applicantId: string, data?: AdvanceStageRequest): Promise<Applicant> {
+    const response = await api.post<BackendProspectResponse>(
+      `/prospective-members/prospects/${applicantId}/regress`,
+      data ? { notes: data.notes } : {}
+    );
+    return mapProspectToApplicant(response.data);
+  },
+
   async rejectApplicant(applicantId: string, reason?: string): Promise<Applicant> {
     // Backend doesn't have a dedicated reject endpoint; use update with status
     const response = await api.put<BackendProspectResponse>(`/prospective-members/prospects/${applicantId}`, {
