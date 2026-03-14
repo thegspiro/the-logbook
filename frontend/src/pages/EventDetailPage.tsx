@@ -1650,18 +1650,18 @@ export const EventDetailPage: React.FC = () => {
           onKeyDown={(e) => { if (e.key === 'Escape') setShowCheckInModal(false); }}
         >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true" onClick={() => setShowCheckInModal(false)}>
               <div className="absolute inset-0 bg-black/75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full">
+            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full relative z-10">
               <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6">
                 <div className="flex justify-between items-center mb-4">
                   <h3 id="checkin-modal-title" className="text-lg font-medium text-theme-text-primary">Check In Members</h3>
                   <button
                     type="button"
                     onClick={() => setShowCheckInModal(false)}
-                    className="text-theme-text-muted hover:text-theme-text-muted"
+                    className="text-theme-text-muted hover:text-theme-text-primary"
                     aria-label="Close dialog"
                   >
                     <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

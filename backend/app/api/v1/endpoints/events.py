@@ -25,7 +25,7 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import generate_uuid, safe_error_detail
 from app.models.event import Event, EventExternalAttendee, EventType, RSVPStatus
-from app.models.user import Organization, User
+from app.models.user import Organization, User, UserStatus
 from app.schemas.documents import DocumentFolderResponse
 from app.schemas.event import (
     AnalyticsSummary,
@@ -1270,6 +1270,53 @@ async def get_rsvp_history(
         )
 
     return history
+
+
+@router.get("/{event_id}/eligible-members")
+async def get_eligible_members(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Get all active organization members eligible for check-in at an event.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    # Verify event belongs to organization
+    event_result = await db.execute(
+        select(Event)
+        .where(Event.id == str(event_id))
+        .where(Event.organization_id == str(current_user.organization_id))
+    )
+    event = event_result.scalar_one_or_none()
+
+    if not event:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Event not found",
+        )
+
+    # Get all active members in the organization
+    members_result = await db.execute(
+        select(User)
+        .where(User.organization_id == str(current_user.organization_id))
+        .where(User.status == UserStatus.ACTIVE)
+        .where(User.deleted_at.is_(None))
+        .order_by(User.last_name, User.first_name)
+    )
+    members = members_result.scalars().all()
+
+    return [
+        {
+            "id": member.id,
+            "first_name": member.first_name,
+            "last_name": member.last_name,
+            "email": member.email,
+        }
+        for member in members
+    ]
 
 
 @router.post("/{event_id}/check-in", response_model=RSVPResponse)
