@@ -4,6 +4,8 @@
  * Client-side CSV and PDF generation for report data.
  */
 
+import { toLocalISODate, formatDate as fmtDate, formatTime as fmtTime } from '../../../utils/dateFormatting';
+
 /** Escape HTML special characters to prevent XSS in generated HTML. */
 const escapeHtml = (s: string): string =>
   s
@@ -95,9 +97,7 @@ export function exportReportAsCsv(
   timezone?: string
 ): void {
   const csv = generateCsv(rows, columns);
-  const todayStr = timezone
-    ? new Date().toLocaleDateString('en-CA', { timeZone: timezone })
-    : new Date().toISOString().slice(0, 10);
+  const todayStr = toLocalISODate(new Date(), timezone);
   const filename = `${reportTitle.replace(/\s+/g, '_').toLowerCase()}_${todayStr}.csv`;
   downloadFile(csv, filename, 'text/csv;charset=utf-8;');
 }
@@ -144,7 +144,7 @@ export function exportReportAsPrintablePdf(
   table { border-collapse: collapse; width: 100%; }
 </style></head><body>
 <h1>${safeTitle}</h1>
-<div class="meta">Generated: ${new Date().toLocaleDateString(undefined, timezone ? { timeZone: timezone } : undefined)} ${new Date().toLocaleTimeString(undefined, timezone ? { timeZone: timezone } : undefined)}</div>
+<div class="meta">Generated: ${fmtDate(new Date(), timezone)} ${fmtTime(new Date(), timezone)}</div>
 ${summaryHtml ? `<div style="margin-bottom:16px">${summaryHtml}</div>` : ''}
 <table><thead><tr>${headerRow}</tr></thead><tbody>${bodyRows}</tbody></table>
 </body></html>`;

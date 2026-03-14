@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { Fuel } from 'lucide-react';
 import type { ApparatusFuelLog } from '../types';
 import { formatCurrency } from '@/utils/currencyFormatting';
-import { formatDate } from '../../../utils/dateFormatting';
+import { formatDate, formatNumber } from '../../../utils/dateFormatting';
 
 interface FuelLogsTabProps {
   id: string;
@@ -66,7 +66,7 @@ export const FuelLogsTab: React.FC<FuelLogsTabProps> = ({
                   <td className="px-4 py-3 text-right text-theme-text-primary">{log.gallons.toFixed(2)}</td>
                   <td className="px-4 py-3 text-right text-theme-text-primary">{formatCurrency(log.totalCost)}</td>
                   <td className="px-4 py-3 text-right text-theme-text-secondary">
-                    {log.mileageAtFill?.toLocaleString() || '-'}
+                    {log.mileageAtFill != null ? formatNumber(log.mileageAtFill) : '-'}
                   </td>
                 </tr>
               ))}

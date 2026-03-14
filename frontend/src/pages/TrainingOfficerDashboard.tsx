@@ -17,7 +17,7 @@ import {
   ClipboardList,
 } from 'lucide-react';
 import { trainingService, userService, trainingSubmissionService } from '../services/api';
-import { formatDate } from '../utils/dateFormatting';
+import { formatDate, formatNumber } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import type { TrainingRequirement } from '../types/training';
 
@@ -651,7 +651,7 @@ const TrainingHoursSummaryWidget: React.FC<TrainingHoursSummaryWidgetProps> = ({
         <div>
           <div className="flex justify-between text-sm mb-1">
             <span className="text-theme-text-muted">Department Total</span>
-            <span className="text-theme-text-primary font-semibold">{stats.totalHoursThisYear.toLocaleString()} hrs</span>
+            <span className="text-theme-text-primary font-semibold">{formatNumber(stats.totalHoursThisYear)} hrs</span>
           </div>
           <div className="w-full bg-theme-surface rounded-full h-2">
             <div className="bg-green-600 h-2 rounded-full" style={{ width: `${progressPercent}%` }}></div>

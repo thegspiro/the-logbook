@@ -53,6 +53,8 @@ import { getProgressBarColor, getEventTypeLabel, getRSVPStatusLabel, getRSVPStat
 import { useTimezone } from "../hooks/useTimezone";
 import {
   formatDate,
+  formatDateCustom,
+  formatNumber,
   formatTime,
   formatShortDateTime,
   getTodayLocalDate,
@@ -402,13 +404,11 @@ const Dashboard: React.FC = () => {
   };
 
   const formatShiftDate = (dateStr: string) => {
-    const date = new Date(dateStr + "T00:00:00");
-    return date.toLocaleDateString("en-US", {
+    return formatDateCustom(dateStr + "T00:00:00", {
       weekday: "short",
       month: "short",
       day: "numeric",
-      timeZone: tz,
-    });
+    }, tz);
   };
 
   const formatShiftTime = (_dateStr: string, timeStr?: string) => {
@@ -451,13 +451,12 @@ const Dashboard: React.FC = () => {
             Welcome to {departmentName}
           </h2>
           <p className="text-theme-text-secondary text-sm sm:text-base">
-            {new Date().toLocaleDateString("en-US", {
+            {formatDateCustom(new Date(), {
               weekday: "long",
               year: "numeric",
               month: "long",
               day: "numeric",
-              timeZone: tz,
-            })}
+            }, tz)}
           </p>
         </div>
 
@@ -1439,7 +1438,7 @@ const Dashboard: React.FC = () => {
                   </p>
                   <p className="text-emerald-700 dark:text-emerald-400 text-xl font-bold mt-1">
                     $
-                    {inventorySummary.total_value.toLocaleString("en-US", {
+                    {formatNumber(inventorySummary.total_value, {
                       minimumFractionDigits: 0,
                       maximumFractionDigits: 0,
                     })}

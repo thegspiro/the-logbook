@@ -29,7 +29,7 @@ import {
   Settings,
 } from 'lucide-react';
 import { complianceOfficerService, reportExportService } from '../services/trainingServices';
-import { formatDate } from '../utils/dateFormatting';
+import { formatDate, formatNumber } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import type {
   ISOReadiness,
@@ -197,7 +197,7 @@ const AnnualReportSection: React.FC = () => {
         />
         <SummaryCard
           label="Training Hours"
-          value={summary.total_training_hours.toLocaleString()}
+          value={formatNumber(summary.total_training_hours)}
           color="purple"
           icon={Award}
         />

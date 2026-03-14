@@ -52,6 +52,7 @@ import {
 import type { Role } from '../types/role';
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
+import { formatCurrency } from '../utils/dateFormatting';
 import { ITEM_CONDITION_OPTIONS } from '../constants/enums';
 import { useInventoryWebSocket } from '../hooks/useInventoryWebSocket';
 import { useRanks } from '../hooks/useRanks';
@@ -1083,7 +1084,7 @@ const InventoryPage: React.FC = () => {
             <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Total Value</p>
               <p className="text-emerald-700 dark:text-emerald-400 text-2xl font-bold mt-1">
-                ${summary.total_value.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                {formatCurrency(summary.total_value)}
               </p>
             </div>
             <div className="card p-4">

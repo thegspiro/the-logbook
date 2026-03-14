@@ -16,7 +16,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { platformAnalyticsService } from '../services/api';
-import { formatTime, formatDate } from '../utils/dateFormatting';
+import { formatTime, formatDate, formatNumber, getTodayLocalDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import type { PlatformAnalytics, DailyCount, ModuleUsage } from '../types/platformAnalytics';
 
@@ -73,7 +73,7 @@ const PlatformAnalyticsPage: React.FC = () => {
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `platform-analytics-${new Date().toISOString()}.json`;
+    link.download = `platform-analytics-${getTodayLocalDate(tz)}.json`;
     link.click();
     URL.revokeObjectURL(url);
   }, []);
@@ -244,7 +244,7 @@ const colorMap: Record<string, string> = {
 };
 
 const StatCard: React.FC<StatCardProps> = ({ icon: Icon, label, sublabel, value, color }) => {
-  const displayValue = typeof value === 'number' ? (value ?? 0).toLocaleString() : (value ?? '—');
+  const displayValue = typeof value === 'number' ? formatNumber(value ?? 0) : (value ?? '—');
 
   return (
     <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
@@ -283,7 +283,7 @@ const ModuleCard: React.FC<ModuleCardProps> = ({ module }) => {
         </span>
       </div>
       <div className="text-2xl font-bold text-theme-text-primary mb-1">
-        {(module.recordCount ?? 0).toLocaleString()}
+        {formatNumber(module.recordCount ?? 0)}
       </div>
       <p className="text-xs text-theme-text-muted">records</p>
       <div className="flex items-center gap-1 mt-2 text-xs text-theme-text-muted">

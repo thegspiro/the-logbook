@@ -266,3 +266,105 @@ export const isFutureDate = (dateString: string | Date): boolean => {
   if (!date) return false;
   return date > new Date();
 };
+
+/**
+ * Convert a date to YYYY-MM-DD in the given timezone.
+ * Use this instead of `new Date(x).toISOString().slice(0,10)` which
+ * returns the UTC date (can be off by a day near midnight).
+ * @param dateString - ISO date string or Date object
+ * @param timezone - Optional IANA timezone
+ * @returns Date string "YYYY-MM-DD"
+ */
+export const toLocalISODate = (dateString?: string | Date | null, timezone?: string): string => {
+  const date = parseDate(dateString);
+  if (!date) return '';
+  const opts: Intl.DateTimeFormatOptions = {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  };
+  if (timezone) opts.timeZone = timezone;
+  return new Intl.DateTimeFormat('en-CA', opts).format(date);
+};
+
+/**
+ * Format a date with custom Intl.DateTimeFormat options, ensuring timezone is applied.
+ * Use this when the standard formatDate/formatDateTime/formatTime don't
+ * provide the exact format you need (e.g., weekday + short month).
+ * @param dateString - ISO date string or Date object
+ * @param options - Intl.DateTimeFormatOptions (timeZone will be overwritten)
+ * @param timezone - Optional IANA timezone
+ * @returns Formatted string
+ */
+export const formatDateCustom = (
+  dateString: string | Date | null | undefined,
+  options: Intl.DateTimeFormatOptions,
+  timezone?: string,
+): string => {
+  const date = parseDate(dateString);
+  if (!date) return 'N/A';
+  const opts = { ...options };
+  if (timezone) opts.timeZone = timezone;
+  return date.toLocaleString('en-US', opts);
+};
+
+/**
+ * Format a number for display (currency, counts, measurements).
+ * Use this instead of `value.toLocaleString()` to avoid ESLint
+ * conflicts with the date-method restrictions.
+ * @param value - Numeric value
+ * @param options - Optional Intl.NumberFormatOptions
+ * @returns Formatted number string
+ */
+export const formatNumber = (
+  value: number | null | undefined,
+  options?: Intl.NumberFormatOptions,
+): string => {
+  if (value == null) return '0';
+  return new Intl.NumberFormat('en-US', options).format(value);
+};
+
+/**
+ * Format a number as USD currency.
+ * @param value - Numeric value
+ * @param includeSymbol - Whether to include the $ symbol (default true)
+ * @returns Formatted currency string (e.g., "$1,234.56")
+ */
+export const formatCurrency = (
+  value: number | null | undefined,
+  includeSymbol = true,
+): string => {
+  if (value == null) return includeSymbol ? '$0.00' : '0.00';
+  if (includeSymbol) {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(value);
+  }
+  return new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+};
+
+/**
+ * Calculate the difference in days between a date string and today, accounting
+ * for timezone so that "days remaining" calculations near midnight are correct.
+ * @param dateString - ISO date string or Date object (target date)
+ * @param timezone - Optional IANA timezone
+ * @returns Number of full days between today and the target date (negative if past)
+ */
+export const daysBetween = (
+  dateString: string | Date,
+  timezone?: string,
+): number => {
+  const targetDate = parseDate(dateString);
+  if (!targetDate) return NaN;
+  // Get today's date string and target date string in the timezone
+  const todayStr = getTodayLocalDate(timezone);
+  const targetStr = toLocalISODate(targetDate, timezone);
+  // Parse as date-only values (no time component) and compute difference
+  const todayMs = new Date(todayStr + 'T00:00:00Z').getTime();
+  const targetMs = new Date(targetStr + 'T00:00:00Z').getTime();
+  return Math.round((targetMs - todayMs) / (1000 * 60 * 60 * 24));
+};

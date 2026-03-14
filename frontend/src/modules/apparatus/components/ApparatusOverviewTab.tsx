@@ -17,7 +17,7 @@ import {
 import { ApparatusTypeBadge } from './ApparatusTypeBadge';
 import type { Apparatus, ApparatusType } from '../types';
 import { formatCurrency } from '@/utils/currencyFormatting';
-import { formatDate } from '../../../utils/dateFormatting';
+import { formatDate, formatNumber } from '../../../utils/dateFormatting';
 
 interface ApparatusOverviewTabProps {
   currentApparatus: Apparatus;
@@ -105,7 +105,7 @@ export const ApparatusOverviewTab: React.FC<ApparatusOverviewTabProps> = ({
             </div>
             <div>
               <p className="text-theme-text-muted text-xs uppercase">GVWR</p>
-              <p className="text-theme-text-primary">{currentApparatus.gvwr ? `${currentApparatus.gvwr.toLocaleString()} lbs` : '-'}</p>
+              <p className="text-theme-text-primary">{currentApparatus.gvwr ? `${formatNumber(currentApparatus.gvwr)} lbs` : '-'}</p>
             </div>
             {currentApparatus.pumpCapacityGpm && (
               <div>
@@ -189,7 +189,7 @@ export const ApparatusOverviewTab: React.FC<ApparatusOverviewTabProps> = ({
                 <span>Mileage</span>
               </div>
               <span className="text-theme-text-primary font-semibold">
-                {currentApparatus.currentMileage?.toLocaleString() || '-'}
+                {currentApparatus.currentMileage != null ? formatNumber(currentApparatus.currentMileage) : '-'}
               </span>
             </div>
             <div className="flex items-center justify-between">
@@ -198,7 +198,7 @@ export const ApparatusOverviewTab: React.FC<ApparatusOverviewTabProps> = ({
                 <span>Hours</span>
               </div>
               <span className="text-theme-text-primary font-semibold">
-                {currentApparatus.currentHours?.toLocaleString() || '-'}
+                {currentApparatus.currentHours != null ? formatNumber(currentApparatus.currentHours) : '-'}
               </span>
             </div>
           </div>

@@ -83,6 +83,53 @@ export default tseslint.config(
 
       // Disallow console.* in production code (use proper logging/error tracking)
       'no-console': ['warn', { allow: ['warn', 'error'] }],
+
+      // ── Timezone enforcement ──────────────────────────────────────────
+      // Ban raw Date display methods — use utils/dateFormatting.ts instead.
+      // For numbers use formatNumber() / formatCurrency() from the same module.
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "CallExpression[callee.property.name='toLocaleString']",
+          message:
+            'Use formatDateTime() or formatNumber() from @/utils/dateFormatting instead of .toLocaleString(). See CLAUDE.md § Date/Time Display Rules.',
+        },
+        {
+          selector: "CallExpression[callee.property.name='toLocaleDateString']",
+          message:
+            'Use formatDate() or formatDateCustom() from @/utils/dateFormatting instead of .toLocaleDateString().',
+        },
+        {
+          selector: "CallExpression[callee.property.name='toLocaleTimeString']",
+          message:
+            'Use formatTime() from @/utils/dateFormatting instead of .toLocaleTimeString().',
+        },
+      ],
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'date-fns',
+              message:
+                'Import from @/utils/dateFormatting instead. Direct date-fns usage bypasses timezone conversion.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // Exempt date formatting utilities from the locale-method ban (they ARE the
+  // canonical wrappers) and from the date-fns import restriction.
+  {
+    files: [
+      'src/utils/dateFormatting.ts',
+      'src/hooks/useRelativeTime.ts',
+    ],
+    rules: {
+      'no-restricted-syntax': 'off',
+      'no-restricted-imports': 'off',
     },
   },
 

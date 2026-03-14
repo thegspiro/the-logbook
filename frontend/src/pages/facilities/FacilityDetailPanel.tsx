@@ -10,6 +10,7 @@ import {
   Loader2, Phone, Mail, Settings, Users, AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { formatNumber } from '../../utils/dateFormatting';
 import { facilitiesService } from '../../services/api';
 import type { FacilityCreate, EmergencyContact } from '../../services/facilitiesServices';
 import type { Facility, FacilityType, FacilityStatus, Room, FacilitySystem, ROOM_TYPES } from './types';
@@ -299,7 +300,7 @@ export default function FacilityDetailPanel({
           {(facility.yearBuilt || facility.squareFootage || facility.numFloors || facility.numBays) && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 bg-theme-surface-hover/50 rounded-lg">
               {facility.yearBuilt && <div><p className="text-xs text-theme-text-muted">Year Built</p><p className="text-sm font-medium text-theme-text-primary">{facility.yearBuilt}</p></div>}
-              {facility.squareFootage && <div><p className="text-xs text-theme-text-muted">Sq. Footage</p><p className="text-sm font-medium text-theme-text-primary">{facility.squareFootage.toLocaleString()}</p></div>}
+              {facility.squareFootage && <div><p className="text-xs text-theme-text-muted">Sq. Footage</p><p className="text-sm font-medium text-theme-text-primary">{formatNumber(facility.squareFootage)}</p></div>}
               {facility.numFloors && <div><p className="text-xs text-theme-text-muted">Floors</p><p className="text-sm font-medium text-theme-text-primary">{facility.numFloors}</p></div>}
               {facility.numBays && <div><p className="text-xs text-theme-text-muted">Bays</p><p className="text-sm font-medium text-theme-text-primary">{facility.numBays}</p></div>}
               {facility.maxOccupancy && <div><p className="text-xs text-theme-text-muted">Max Occupancy</p><p className="text-sm font-medium text-theme-text-primary">{facility.maxOccupancy}</p></div>}

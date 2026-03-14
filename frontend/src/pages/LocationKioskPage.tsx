@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { MapPin, Wifi, WifiOff } from 'lucide-react';
 import { useTimezone } from '../hooks/useTimezone';
+import { formatDateCustom } from '../utils/dateFormatting';
 
 /**
  * Location Kiosk Page (Public — No Authentication Required)
@@ -104,11 +105,11 @@ const LocationKioskPage: React.FC = () => {
   };
 
   const formatTime = (isoString: string) => {
-    return new Date(isoString).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: tz });
+    return formatDateCustom(isoString, { hour: 'numeric', minute: '2-digit' }, tz);
   };
 
   const formatDate = (isoString: string) => {
-    return new Date(isoString).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
+    return formatDateCustom(isoString, { weekday: 'short', month: 'short', day: 'numeric' }, tz);
   };
 
   // Loading state
@@ -157,7 +158,7 @@ const LocationKioskPage: React.FC = () => {
             <WifiOff className="w-5 h-5 text-red-400 animate-pulse" />
           )}
           <span className="text-lg text-theme-text-primary font-mono">
-            {currentTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: tz })}
+            {formatDateCustom(currentTime, { hour: 'numeric', minute: '2-digit' }, tz)}
           </span>
         </div>
       </div>

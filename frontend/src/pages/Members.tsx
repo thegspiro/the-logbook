@@ -18,7 +18,7 @@ import { userService } from '../services/api';
 import { User } from '../types/user';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatDate } from '../utils/dateFormatting';
+import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { useAuthStore } from '../stores/authStore';
 import { DeleteMemberModal } from '../components/DeleteMemberModal';
 import { Breadcrumbs, SkeletonPage, EmptyState, Pagination } from '../components/ux';
@@ -213,7 +213,7 @@ const Members: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `members-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `members-${getTodayLocalDate(tz)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }, [filteredMembers, selectedIds, tz]);

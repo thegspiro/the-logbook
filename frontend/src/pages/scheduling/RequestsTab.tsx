@@ -15,7 +15,7 @@ import { schedulingService } from '../../modules/scheduling/services/api';
 import type { SwapRequest, TimeOffRequest } from '../../types/scheduling';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatDate, formatTime } from '../../utils/dateFormatting';
+import { formatDate, formatTime, formatDateCustom } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { REQUEST_STATUS_COLORS, RequestStatus } from '../../constants/enums';
 
@@ -194,14 +194,14 @@ export const RequestsTab: React.FC = () => {
                         <p className="text-xs text-theme-text-muted mt-0.5">
                           {req.offering_shift_date ? (
                             <>
-                              Offering: {new Date(req.offering_shift_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: tz })}
+                              Offering: {formatDateCustom(req.offering_shift_date + 'T12:00:00', { month: 'short', day: 'numeric' }, tz)}
                               {req.offering_shift_start_time ? ` ${formatTime(req.offering_shift_start_time, tz)}` : ''}
                             </>
                           ) : (
                             <>Offering shift (details unavailable)</>
                           )}
                           {req.requesting_shift_date ? (
-                            <> {' \u2192 '} {new Date(req.requesting_shift_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: tz })}
+                            <> {' \u2192 '} {formatDateCustom(req.requesting_shift_date + 'T12:00:00', { month: 'short', day: 'numeric' }, tz)}
                               {req.requesting_shift_start_time ? ` ${formatTime(req.requesting_shift_start_time, tz)}` : ''}
                             </>
                           ) : req.requesting_shift_id ? (
@@ -284,8 +284,8 @@ export const RequestsTab: React.FC = () => {
                           </span>
                         </div>
                         <p className="text-xs text-theme-text-muted mt-0.5">
-                          {new Date(req.start_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: tz })}
-                          {req.end_date !== req.start_date && ` - ${new Date(req.end_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: tz })}`}
+                          {formatDateCustom(req.start_date + 'T12:00:00', { month: 'short', day: 'numeric' }, tz)}
+                          {req.end_date !== req.start_date && ` - ${formatDateCustom(req.end_date + 'T12:00:00', { month: 'short', day: 'numeric' }, tz)}`}
                         </p>
                         {req.reason && <p className="text-xs text-theme-text-secondary mt-1 line-clamp-2">{req.reason}</p>}
                       </div>

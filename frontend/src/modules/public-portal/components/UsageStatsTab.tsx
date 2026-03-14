@@ -5,6 +5,7 @@
  */
 
 import React from 'react';
+import { formatNumber } from '../../../utils/dateFormatting';
 import { useUsageStats } from '../hooks/usePublicPortal';
 
 interface StatCardProps {
@@ -54,7 +55,7 @@ const EndpointBar: React.FC<EndpointStatsProps> = ({ endpoint, count, percentage
     <div className="space-y-1">
       <div className="flex justify-between text-sm">
         <span className="font-mono text-theme-text-secondary">{endpoint}</span>
-        <span className="text-theme-text-muted">{count.toLocaleString()} ({percentage.toFixed(1)}%)</span>
+        <span className="text-theme-text-muted">{formatNumber(count)} ({percentage.toFixed(1)}%)</span>
       </div>
       <div className="w-full bg-theme-surface-border rounded-full h-2">
         <div
@@ -131,7 +132,7 @@ export const UsageStatsTab: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <StatCard
             title="Last 24 Hours"
-            value={(stats.total_requests_24h ?? 0).toLocaleString()}
+            value={formatNumber(stats.total_requests_24h ?? 0)}
             subtitle={`Avg: ${Math.round((stats.total_requests_24h ?? 0) / 24)}/hour`}
             color="blue"
             icon={
@@ -142,7 +143,7 @@ export const UsageStatsTab: React.FC = () => {
           />
           <StatCard
             title="Last 7 Days"
-            value={(stats.total_requests_7d ?? 0).toLocaleString()}
+            value={formatNumber(stats.total_requests_7d ?? 0)}
             subtitle={`Avg: ${Math.round((stats.total_requests_7d ?? 0) / 7)}/day`}
             color="green"
             icon={
@@ -153,7 +154,7 @@ export const UsageStatsTab: React.FC = () => {
           />
           <StatCard
             title="Last 30 Days"
-            value={(stats.total_requests_30d ?? 0).toLocaleString()}
+            value={formatNumber(stats.total_requests_30d ?? 0)}
             subtitle={`Avg: ${Math.round((stats.total_requests_30d ?? 0) / 30)}/day`}
             color="purple"
             icon={

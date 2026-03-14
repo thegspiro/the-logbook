@@ -27,7 +27,7 @@ import type { Assignment, ShiftCall } from '../../types/scheduling';
 import type { ShiftCheckSummary } from '../../modules/scheduling/types/equipmentCheck';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatTime, getTodayLocalDate } from '../../utils/dateFormatting';
+import { formatTime, getTodayLocalDate, formatDateCustom } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, UserStatus, AssignmentStatus } from '../../constants/enums';
 
@@ -551,7 +551,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
             <div className="min-w-0 pr-2">
               <h2 className="text-lg sm:text-xl font-bold text-theme-text-primary">Shift Details</h2>
               <p className="text-xs sm:text-sm text-theme-text-secondary mt-1 truncate">
-                {shiftDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: tz })}
+                {formatDateCustom(shiftDate, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }, tz)}
               </p>
             </div>
             <div className="flex items-center gap-1 shrink-0">

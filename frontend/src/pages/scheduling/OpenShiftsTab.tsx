@@ -15,7 +15,7 @@ import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ShiftRecord } from '../../modules/scheduling/services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatTime, getTodayLocalDate, toLocalDateString } from '../../utils/dateFormatting';
+import { formatTime, getTodayLocalDate, toLocalDateString, formatDateCustom } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { POSITION_LABELS } from '../../constants/enums';
 
@@ -146,7 +146,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
             return (
               <div key={date}>
                 <h3 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider mb-3">
-                  {dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: tz })}
+                  {formatDateCustom(dateObj, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }, tz)}
                 </h3>
                 <div className="space-y-3">
                   {dayShifts?.map(shift => (

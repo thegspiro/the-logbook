@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 import { useTimezone } from "../hooks/useTimezone";
-import { formatTime } from "../utils/dateFormatting";
+import { formatTime, formatDateCustom } from "../utils/dateFormatting";
 import { schedulingService, useSchedulingStore } from "../modules/scheduling";
 import type {
   ShiftRecord,
@@ -296,22 +296,19 @@ const SchedulingPage: React.FC = () => {
 
   const dateRangeLabel = useMemo(() => {
     if (viewMode === "month") {
-      return currentDate.toLocaleString("en-US", {
+      return formatDateCustom(currentDate, {
         month: "long",
         year: "numeric",
-        timeZone: tz,
-      });
+      }, tz);
     }
     const start = weekDates[0] ?? currentDate;
     const end = weekDates[6] ?? currentDate;
-    const startMonth = start.toLocaleString("en-US", {
+    const startMonth = formatDateCustom(start, {
       month: "short",
-      timeZone: tz,
-    });
-    const endMonth = end.toLocaleString("en-US", {
+    }, tz);
+    const endMonth = formatDateCustom(end, {
       month: "short",
-      timeZone: tz,
-    });
+    }, tz);
     if (startMonth === endMonth) {
       return `${startMonth} ${start.getDate()} - ${end.getDate()}, ${start.getFullYear()}`;
     }
@@ -732,11 +729,10 @@ const SchedulingPage: React.FC = () => {
                             }`}
                           >
                             {DAYS_OF_WEEK[i]},{" "}
-                            {date.toLocaleDateString("en-US", {
+                            {formatDateCustom(date, {
                               month: "short",
                               day: "numeric",
-                              timeZone: tz,
-                            })}
+                            }, tz)}
                           </span>
                           {isToday(date) && (
                             <span className="text-xs px-2 py-0.5 bg-violet-600 text-white rounded-full">
@@ -968,12 +964,11 @@ const SchedulingPage: React.FC = () => {
                                       : "text-theme-text-primary"
                                   }`}
                                 >
-                                  {date.toLocaleDateString("en-US", {
+                                  {formatDateCustom(date, {
                                     weekday: "short",
                                     month: "short",
                                     day: "numeric",
-                                    timeZone: tz,
-                                  })}
+                                  }, tz)}
                                 </span>
                                 <div className="flex items-center gap-2">
                                   <span className="text-xs text-theme-text-muted">

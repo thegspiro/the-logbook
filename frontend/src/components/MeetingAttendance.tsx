@@ -12,6 +12,7 @@ import { userService } from '../services/api';
 import type { Election, Attendee } from '../types/election';
 import type { User } from '../types/user';
 import { getErrorMessage } from '../utils/errorHandling';
+import { formatTime } from '../utils/dateFormatting';
 import { UserStatus, ElectionStatus } from '../constants/enums';
 import { useTimezone } from '../hooks/useTimezone';
 
@@ -141,7 +142,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
               >
                 <span className="text-green-700 dark:text-green-300 font-medium">{attendee.name}</span>
                 <span className="text-green-700 dark:text-green-500 text-xs">
-                  {new Date(attendee.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: tz })}
+                  {formatTime(attendee.checked_in_at, tz)}
                 </span>
                 {!isClosed && (
                   <button
