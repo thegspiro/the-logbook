@@ -517,22 +517,25 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   );
 
   /** Compute the effective section order, filling in any missing IDs for backward compat. */
+  const sectionOrderStored = (config as AutomatedEmailStageConfig).section_order;
+  const customSectionIds = (config as AutomatedEmailStageConfig).custom_sections;
   const effectiveSectionOrder = useMemo(() => {
-    const email = config as AutomatedEmailStageConfig;
-    const stored = email.section_order ?? [];
-    const customIds = (email.custom_sections ?? []).map((s) => s.id);
+    const stored = sectionOrderStored ?? [];
+    const customIds = (customSectionIds ?? []).map((s) => s.id);
     const allIds = [...DEFAULT_EMAIL_SECTION_ORDER, ...customIds];
     // Start with stored order, then append any IDs not yet present
     const order = [...stored];
+    const orderSet = new Set(stored);
     for (const id of allIds) {
-      if (!order.includes(id)) {
+      if (!orderSet.has(id)) {
         order.push(id);
+        orderSet.add(id);
       }
     }
     // Remove IDs that no longer exist (deleted custom sections)
     const validIds = new Set(allIds);
     return order.filter((id) => validIds.has(id));
-  }, [config]);
+  }, [sectionOrderStored, customSectionIds]);
 
   const handleEmailSectionDragEnd = useCallback(
     (event: DragEndEvent) => {

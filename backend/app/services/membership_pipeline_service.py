@@ -1631,16 +1631,23 @@ class MembershipPipelineService:
                     )
                 return None
 
-            def _build_custom_section(section_id: str) -> str | None:
-                custom_sections = config.get("custom_sections", [])
-                for custom in custom_sections:
-                    if custom.get("id") == section_id:
-                        title = _html.escape(custom.get("title", ""))
-                        body = _html.escape(custom.get("content", ""))
-                        if title or body:
-                            heading = f"<strong>{title}</strong><br>" if title else ""
-                            return f'<div class="details">' f"{heading}{body}</div>"
-                        return None
+            def _build_custom_section_html(
+                custom: Dict[str, Any],
+            ) -> str | None:
+                title = _html.escape(custom.get("title", ""))
+                body = _html.escape(custom.get("content", ""))
+                if title or body:
+                    heading = f"<strong>{title}</strong><br>" if title else ""
+                    return f'<div class="details">{heading}{body}</div>'
+                return None
+
+            def _build_custom_section_text(
+                custom: Dict[str, Any],
+            ) -> str | None:
+                title = custom.get("title", "")
+                body = custom.get("content", "")
+                if title or body:
+                    return f"{title}\n{body}" if title else body
                 return None
 
             # Default section order for backward compatibility
@@ -1650,14 +1657,12 @@ class MembershipPipelineService:
                 "next_meeting",
                 "status_tracker",
             ]
-            custom_ids = [
-                s.get("id", "")
-                for s in config.get("custom_sections", [])
-                if s.get("id")
-            ]
+            custom_by_id: Dict[str, Dict[str, Any]] = {
+                s["id"]: s for s in config.get("custom_sections", []) if s.get("id")
+            }
             section_order = config.get("section_order")
             if not section_order:
-                section_order = default_order + custom_ids
+                section_order = default_order + list(custom_by_id.keys())
 
             for sid in section_order:
                 html_part: str | None = None
@@ -1670,7 +1675,9 @@ class MembershipPipelineService:
                 elif sid == "status_tracker":
                     html_part = _build_status_tracker()
                 else:
-                    html_part = _build_custom_section(sid)
+                    custom = custom_by_id.get(sid)
+                    if custom:
+                        html_part = _build_custom_section_html(custom)
                 if html_part:
                     sections.append(html_part)
 
@@ -1739,14 +1746,11 @@ class MembershipPipelineService:
                             )
                             text_parts.append(f"Track your application: {status_url}")
                 else:
-                    for custom in config.get("custom_sections", []):
-                        if custom.get("id") == sid:
-                            title = custom.get("title", "")
-                            body = custom.get("content", "")
-                            if title or body:
-                                section = f"{title}\n{body}" if title else body
-                                text_parts.append(section)
-                            break
+                    custom = custom_by_id.get(sid)
+                    if custom:
+                        text = _build_custom_section_text(custom)
+                        if text:
+                            text_parts.append(text)
             text_parts.append(f"This email was sent by {org.name or 'The Logbook'}.")
             text_body = "\n\n".join(text_parts)
 
