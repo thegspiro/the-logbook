@@ -12,7 +12,7 @@ import { facilitiesService } from '../../services/api';
 import type { MaintenanceRecordCreate } from '../../services/facilitiesServices';
 import type { MaintenanceRecord, MaintenanceType, Facility } from './types';
 import { useTimezone } from '../../hooks/useTimezone';
-import { getTodayLocalDate } from '../../utils/dateFormatting';
+import { getTodayLocalDate, formatNumber } from '../../utils/dateFormatting';
 
 interface Props {
   facilities: Facility[];
@@ -228,7 +228,7 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
                   <span>{getFacilityName(record.facilityId)}</span>
                   {record.scheduledDate && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{record.scheduledDate}</span>}
                   {record.vendor && <span>{record.vendor}</span>}
-                  {record.cost != null && record.cost > 0 && <span className="flex items-center gap-1"><DollarSign className="w-3 h-3" />{record.cost.toLocaleString()}</span>}
+                  {record.cost != null && record.cost > 0 && <span className="flex items-center gap-1"><DollarSign className="w-3 h-3" />{formatNumber(record.cost)}</span>}
                   {record.workOrderNumber && <span>WO# {record.workOrderNumber}</span>}
                 </div>
               </div>

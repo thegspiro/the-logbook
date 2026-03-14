@@ -17,7 +17,7 @@ import { useFacilitiesStore } from '../store/facilitiesStore';
 import type { FacilityCreate } from '../../../services/facilitiesServices';
 import type { Facility, FacilityType, FacilityStatus } from '../types';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { formatDate } from '../../../utils/dateFormatting';
+import { formatDate, formatNumber } from '../../../utils/dateFormatting';
 
 interface Props {
   facility: Facility;
@@ -208,7 +208,7 @@ export default function OverviewSection({ facility, facilityTypes, facilityStatu
                   <InfoItem label="Year Built" value={String(facility.yearBuilt)} />
                 )}
                 {facility.squareFootage != null && (
-                  <InfoItem label="Sq. Footage" value={facility.squareFootage.toLocaleString()} />
+                  <InfoItem label="Sq. Footage" value={formatNumber(facility.squareFootage)} />
                 )}
                 {facility.numFloors != null && (
                   <InfoItem label="Floors" value={String(facility.numFloors)} />

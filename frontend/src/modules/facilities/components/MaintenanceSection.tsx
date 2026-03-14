@@ -12,7 +12,7 @@ import { facilitiesService } from '../../../services/api';
 import type { MaintenanceRecordCreate } from '../../../services/facilitiesServices';
 import type { MaintenanceRecord, MaintenanceType } from '../types';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { getTodayLocalDate, formatDate } from '../../../utils/dateFormatting';
+import { getTodayLocalDate, formatDate, formatNumber } from '../../../utils/dateFormatting';
 
 interface Props {
   facilityId: string;
@@ -209,7 +209,7 @@ export default function MaintenanceSection({ facilityId }: Props) {
                   <div className="flex items-center gap-3 text-xs text-theme-text-muted">
                     {record.scheduledDate && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDate(record.scheduledDate, tz)}</span>}
                     {record.vendor && <span>{record.vendor}</span>}
-                    {record.cost != null && record.cost > 0 && <span className="flex items-center gap-1"><DollarSign className="w-3 h-3" />${record.cost.toLocaleString()}</span>}
+                    {record.cost != null && record.cost > 0 && <span className="flex items-center gap-1"><DollarSign className="w-3 h-3" />${formatNumber(record.cost)}</span>}
                     {record.workOrderNumber && <span>WO# {record.workOrderNumber}</span>}
                   </div>
                 </div>

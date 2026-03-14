@@ -9,6 +9,7 @@ import { facilitiesService } from '../../../services/api';
 import type { RoomCreate } from '../../../services/facilitiesServices';
 import type { Room } from '../types';
 import { enumLabel, ZONE_CLASSIFICATION_COLORS } from '../types';
+import { formatNumber } from '../../../utils/dateFormatting';
 
 const ROOM_TYPE_OPTIONS = [
   'apparatus_bay', 'bunk_room', 'kitchen', 'bathroom', 'office',
@@ -299,7 +300,7 @@ export default function RoomsSection({ facilityId }: Props) {
                       {room.floor != null && <span>Floor {room.floor}</span>}
                       {room.capacity != null && <span>Cap: {room.capacity}</span>}
                       {room.squareFootage != null && (
-                        <span>{room.squareFootage.toLocaleString()} sq ft</span>
+                        <span>{formatNumber(room.squareFootage)} sq ft</span>
                       )}
                       {room.zoneClassification &&
                         room.zoneClassification !== 'unclassified' && (

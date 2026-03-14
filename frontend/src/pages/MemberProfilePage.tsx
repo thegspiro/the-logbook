@@ -30,7 +30,7 @@ import { CreditCard, Pencil } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 import { getErrorMessage } from "../utils/errorHandling";
 import { useTimezone } from "../hooks/useTimezone";
-import { formatDate } from "../utils/dateFormatting";
+import { formatDate, formatDateCustom } from "../utils/dateFormatting";
 import type { UserWithRoles } from "../types/role";
 import type {
   ContactInfoUpdate,
@@ -1707,14 +1707,18 @@ export const MemberProfilePage: React.FC = () => {
                         </span>
                       </div>
                       <p className="text-xs text-theme-text-secondary">
-                        {new Date(
+                        {formatDateCustom(
                           leave.start_date + "T00:00:00",
-                        ).toLocaleDateString("en-US", { timeZone: tz })}{" "}
+                          { year: "numeric", month: "2-digit", day: "2-digit" },
+                          tz,
+                        )}{" "}
                         &ndash;{" "}
                         {leave.end_date
-                          ? new Date(
+                          ? formatDateCustom(
                               leave.end_date + "T00:00:00",
-                            ).toLocaleDateString("en-US", { timeZone: tz })
+                              { year: "numeric", month: "2-digit", day: "2-digit" },
+                              tz,
+                            )
                           : "Permanent"}
                       </p>
                       {leave.reason && (

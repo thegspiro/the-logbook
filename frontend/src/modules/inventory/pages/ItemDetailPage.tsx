@@ -26,7 +26,7 @@ import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
 import { ItemFormModal } from '../components/ItemFormModal';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { formatDate } from '../../../utils/dateFormatting';
+import { formatDate, formatCurrency as fmtCurrencyUtil } from '../../../utils/dateFormatting';
 import toast from 'react-hot-toast';
 
 /* ------------------------------------------------------------------ */
@@ -56,7 +56,7 @@ function typeIcon(itemType: string) {
 
 function fmtCurrency(val: number | undefined | null): string {
   if (val == null) return '--';
-  return `$${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return fmtCurrencyUtil(val);
 }
 
 function labelFor(condition: string): string {
