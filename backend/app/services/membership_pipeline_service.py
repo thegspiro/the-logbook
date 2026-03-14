@@ -2438,6 +2438,46 @@ class MembershipPipelineService:
         )
 
         await self.db.commit()
+
+        # Auto-advance if the step has auto_advance enabled
+        if step_id and prospect.pipeline:
+            step = next(
+                (
+                    s
+                    for s in prospect.pipeline.steps
+                    if str(s.id) == str(step_id)
+                ),
+                None,
+            )
+            if (
+                step
+                and (step.config or {}).get("auto_advance")
+                and str(prospect.current_step_id) == str(step_id)
+            ):
+                try:
+                    await self.complete_step(
+                        prospect_id=prospect_id,
+                        organization_id=organization_id,
+                        step_id=step_id,
+                        completed_by=uploaded_by or "system",
+                        notes="Auto-advanced on document upload",
+                        action_result={
+                            "document_id": doc.id,
+                            "auto_advanced": True,
+                        },
+                    )
+                    logger.info(
+                        f"Auto-advanced prospect {prospect_id} "
+                        f"past step '{step.name}' on "
+                        f"document upload"
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Failed to auto-advance prospect "
+                        f"{prospect_id} on document upload: "
+                        f"{e}"
+                    )
+
         return doc
 
     async def delete_prospect_document(

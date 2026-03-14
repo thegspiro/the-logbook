@@ -1023,6 +1023,19 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     )}
                   </div>
                 )}
+
+                <label className="text-theme-text-secondary flex items-center gap-2 text-sm mt-4">
+                  <input
+                    type="checkbox"
+                    checked={(config as FormStageConfig).auto_advance ?? false}
+                    onChange={(e) => setConfig({ ...(config as FormStageConfig), auto_advance: e.target.checked })}
+                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                  />
+                  Auto-advance when form is submitted
+                </label>
+                <p className="text-theme-text-muted text-xs ml-6">
+                  Automatically complete this step and advance the prospect when the linked form is submitted.
+                </p>
               </div>
             )}
 
@@ -1085,6 +1098,18 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                   />
                   Allow multiple files per document type
                 </label>
+                <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={docConfig.auto_advance ?? false}
+                    onChange={(e) => setConfig({ ...docConfig, auto_advance: e.target.checked })}
+                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                  />
+                  Auto-advance when documents are uploaded
+                </label>
+                <p className="text-theme-text-muted text-xs ml-6">
+                  Automatically complete this step and advance the prospect when documents are uploaded.
+                </p>
               </div>
             )}
 

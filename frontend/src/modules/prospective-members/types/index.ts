@@ -90,6 +90,7 @@ export const FILE_UPLOAD_LIMITS = {
 export interface FormStageConfig {
   form_id: string;
   form_name?: string | undefined;
+  auto_advance?: boolean | undefined;
 }
 
 export interface FormPipelineValidation {
@@ -102,6 +103,7 @@ export interface FormPipelineValidation {
 export interface DocumentStageConfig {
   required_document_types: string[];
   allow_multiple: boolean;
+  auto_advance?: boolean | undefined;
 }
 
 export interface ElectionPackageFieldConfig {

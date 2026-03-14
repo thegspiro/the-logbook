@@ -1271,6 +1271,99 @@ class FormsService:
             submission.integration_result = results
             await self.db.commit()
 
+        # Auto-advance pipeline steps linked to this form
+        await self._auto_advance_pipeline_step(form)
+
+    async def _auto_advance_pipeline_step(
+        self, form: Form
+    ) -> None:
+        """Auto-complete pipeline steps linked to this form.
+
+        When a form_submission pipeline step has ``auto_advance``
+        enabled in its config and its ``form_id`` matches the
+        submitted form, find every prospect currently on that step
+        and complete it (which also advances them to the next step).
+        """
+        from loguru import logger
+
+        from app.models.membership_pipeline import (
+            MembershipPipelineStep,
+            PipelineStepType,
+            ProspectiveMember,
+            ProspectStatus,
+        )
+
+        try:
+            # Find pipeline steps that reference this form
+            # and have auto_advance enabled
+            step_result = await self.db.execute(
+                select(MembershipPipelineStep).where(
+                    MembershipPipelineStep.step_type
+                    == PipelineStepType.FORM_SUBMISSION,
+                    func.json_extract(
+                        MembershipPipelineStep.config,
+                        "$.form_id",
+                    )
+                    == str(form.id),
+                    func.json_extract(
+                        MembershipPipelineStep.config,
+                        "$.auto_advance",
+                    )
+                    == True,  # noqa: E712
+                )
+            )
+            steps = step_result.scalars().all()
+            if not steps:
+                return
+
+            from app.services.membership_pipeline_service import (
+                MembershipPipelineService,
+            )
+
+            pipeline_svc = MembershipPipelineService(self.db)
+
+            for step in steps:
+                # Find prospects on this step
+                prospect_result = await self.db.execute(
+                    select(ProspectiveMember).where(
+                        ProspectiveMember.current_step_id
+                        == step.id,
+                        ProspectiveMember.status
+                        == ProspectStatus.ACTIVE,
+                    )
+                )
+                prospects = prospect_result.scalars().all()
+                for prospect in prospects:
+                    try:
+                        await pipeline_svc.complete_step(
+                            prospect_id=str(prospect.id),
+                            organization_id=str(
+                                prospect.organization_id
+                            ),
+                            step_id=str(step.id),
+                            completed_by="system",
+                            notes="Auto-advanced on form submission",
+                            action_result={
+                                "form_id": str(form.id),
+                                "auto_advanced": True,
+                            },
+                        )
+                        logger.info(
+                            f"Auto-advanced prospect "
+                            f"{prospect.id} past step "
+                            f"'{step.name}' on form "
+                            f"submission"
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to auto-advance "
+                            f"prospect {prospect.id}: {e}"
+                        )
+        except Exception as e:
+            logger.error(
+                f"Pipeline auto-advance check failed: {e}"
+            )
+
     def _apply_label_fallback(
         self,
         integration_type: str,
