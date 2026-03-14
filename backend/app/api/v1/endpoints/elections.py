@@ -1349,13 +1349,15 @@ async def send_ballot_emails(
     )
 
     service = ElectionService(db)
-    recipients_count, failed_count, skipped_count = await service.send_ballot_emails(
-        election_id=election_id,
-        organization_id=current_user.organization_id,
-        recipient_user_ids=email_data.recipient_user_ids,
-        subject=email_data.subject,
-        message=email_data.message,
-        base_ballot_url=base_ballot_url,
+    recipients_count, failed_count, skipped_count, skipped_details = (
+        await service.send_ballot_emails(
+            election_id=election_id,
+            organization_id=current_user.organization_id,
+            recipient_user_ids=email_data.recipient_user_ids,
+            subject=email_data.subject,
+            message=email_data.message,
+            base_ballot_url=base_ballot_url,
+        )
     )
 
     parts = [f"Ballot emails sent to {recipients_count} recipient(s)"]
@@ -1369,6 +1371,7 @@ async def send_ballot_emails(
         recipients_count=recipients_count,
         failed_count=failed_count,
         skipped_count=skipped_count,
+        skipped_details=skipped_details,
         message=". ".join(parts),
     )
 
@@ -2089,13 +2092,15 @@ async def send_test_ballot(
     base_ballot_url = f"{frontend_origin}/ballot"
 
     service = ElectionService(db)
-    recipients_count, failed_count, skipped_count = await service.send_ballot_emails(
-        election_id=election_id,
-        organization_id=current_user.organization_id,
-        recipient_user_ids=[current_user.id],
-        subject=f"[TEST] Ballot: {election.title}",
-        message="This is a TEST ballot. Votes cast will not count toward real results.",
-        base_ballot_url=base_ballot_url,
+    recipients_count, failed_count, skipped_count, _skipped_details = (
+        await service.send_ballot_emails(
+            election_id=election_id,
+            organization_id=current_user.organization_id,
+            recipient_user_ids=[current_user.id],
+            subject=f"[TEST] Ballot: {election.title}",
+            message="This is a TEST ballot. Votes cast will not count toward real results.",
+            base_ballot_url=base_ballot_url,
+        )
     )
 
     return {

@@ -237,6 +237,82 @@ class ElectionService:
 
         return eligible_items
 
+    async def _get_ineligibility_reason_for_user(
+        self,
+        user: "User",
+        election: Election,
+        organization_id: str,
+    ) -> Optional[str]:
+        """
+        Return a human-readable reason explaining why a user has zero
+        eligible ballot items, or None if they are eligible for at least one.
+
+        This is used to build the skipped_details list returned to admins
+        after sending ballot emails.
+        """
+        ballot_items = election.ballot_items or []
+        if not ballot_items:
+            return None
+
+        # Pre-load org tier config
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == organization_id)
+        )
+        org = org_result.scalar_one_or_none()
+        tier_config = (
+            (org.settings or {}).get("membership_tiers", {}) if org else {}
+        )
+        tiers = tier_config.get("tiers", [])
+        member_tier_id = getattr(user, "membership_type", None) or "active"
+        tier_def = next(
+            (t for t in tiers if t.get("id") == member_tier_id), None
+        )
+
+        # Secretary override — if present, they are eligible for everything
+        if election.voter_overrides and any(
+            o.get("user_id") == str(user.id) for o in election.voter_overrides
+        ):
+            return None
+
+        # Tier-level ineligibility (affects all items)
+        if tier_def:
+            benefits = tier_def.get("benefits", {})
+            if not benefits.get("voting_eligible", True):
+                tier_name = tier_def.get("name", member_tier_id)
+                return (
+                    f"Membership tier '{tier_name}' is not eligible to vote"
+                )
+
+        # Check each item for role-type and attendance requirements
+        role_blocked = 0
+        attendance_blocked = 0
+        for item in ballot_items:
+            eligible_types = item.get("eligible_voter_types", ["all"])
+            if not await self._user_has_role_type(user, eligible_types):
+                role_blocked += 1
+                continue
+            if item.get("require_attendance", False):
+                if not self._is_user_attending(str(user.id), election):
+                    attendance_blocked += 1
+                    continue
+
+        total = len(ballot_items)
+        reasons = []
+        if role_blocked > 0:
+            reasons.append(
+                f"role type not eligible for {role_blocked}/{total} item(s)"
+            )
+        if attendance_blocked > 0:
+            reasons.append(
+                f"not checked in for {attendance_blocked}/{total} "
+                f"attendance-required item(s)"
+            )
+
+        if reasons:
+            return "; ".join(reasons)
+
+        return None
+
     # ------------------------------------------------------------------
     # Meeting attendance management
     # ------------------------------------------------------------------
@@ -2975,14 +3051,14 @@ Best regards,
         subject: Optional[str] = None,
         message: Optional[str] = None,
         base_ballot_url: Optional[str] = None,
-    ) -> Tuple[int, int, int]:
+    ) -> Tuple[int, int, int, List[Dict]]:
         """
         Send ballot notification emails to eligible voters with unique hashed links.
 
-        Members with zero eligible ballot items are silently skipped to
-        prevent sending empty ballots.
+        Members with zero eligible ballot items are skipped (not sent
+        an empty ballot). A per-member reason is included in ``skipped_details``.
 
-        Returns: (recipients_count, failed_count, skipped_count)
+        Returns: (recipients_count, failed_count, skipped_count, skipped_details)
         """
         # Get election with organization
         result = await self.db.execute(
@@ -3069,6 +3145,7 @@ Best regards,
         success_count = 0
         failed_count = 0
         skipped_count = 0
+        skipped_details: List[Dict] = []
 
         for recipient in recipients:
             # Empty ballot prevention: skip members who have zero eligible
@@ -3082,9 +3159,24 @@ Best regards,
                 )
                 if not eligible_items:
                     skipped_count += 1
+                    reason = (
+                        await self._get_ineligibility_reason_for_user(
+                            user=recipient,
+                            election=election,
+                            organization_id=str(organization_id),
+                        )
+                        or "No eligible ballot items"
+                    )
+                    skipped_details.append(
+                        {
+                            "user_id": str(recipient.id),
+                            "name": recipient.full_name or recipient.username,
+                            "reason": reason,
+                        }
+                    )
                     logger.info(
                         f"Skipping ballot email for user={recipient.id} "
-                        f"(no eligible ballot items) | election={election_id}"
+                        f"({reason}) | election={election_id}"
                     )
                     continue
 
@@ -3161,7 +3253,7 @@ Best regards,
             },
         )
 
-        return success_count, failed_count, skipped_count
+        return success_count, failed_count, skipped_count, skipped_details
 
     async def has_user_voted(
         self, user_id: UUID, election_id: UUID, election: Optional[Election] = None

@@ -263,10 +263,18 @@ export interface EmailBallot {
   include_ballot_link?: boolean | undefined;
 }
 
+export interface SkippedVoterDetail {
+  user_id: string;
+  name: string;
+  reason: string;
+}
+
 export interface EmailBallotResponse {
   success: boolean;
   recipients_count: number;
   failed_count: number;
+  skipped_count: number;
+  skipped_details: SkippedVoterDetail[];
   message: string;
 }
 
