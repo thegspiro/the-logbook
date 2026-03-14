@@ -625,6 +625,45 @@ class TestEmailBallotResponseSchema:
         )
         assert resp.skipped_count == 3
 
+    def test_skipped_details_defaults_to_empty(self):
+        from app.schemas.election import EmailBallotResponse
+
+        resp = EmailBallotResponse(
+            success=True,
+            recipients_count=5,
+            failed_count=0,
+            message="ok",
+        )
+        assert resp.skipped_details == []
+
+    def test_skipped_details_includes_reasons(self):
+        from app.schemas.election import EmailBallotResponse
+
+        resp = EmailBallotResponse(
+            success=True,
+            recipients_count=3,
+            failed_count=0,
+            skipped_count=2,
+            skipped_details=[
+                {
+                    "user_id": "u1",
+                    "name": "Jane Doe",
+                    "reason": "Membership tier 'probationary' is not eligible to vote",
+                },
+                {
+                    "user_id": "u2",
+                    "name": "John Smith",
+                    "reason": "not checked in for 1/1 attendance-required item(s)",
+                },
+            ],
+            message="ok",
+        )
+        assert len(resp.skipped_details) == 2
+        assert resp.skipped_details[0].name == "Jane Doe"
+        assert "probationary" in resp.skipped_details[0].reason
+        assert resp.skipped_details[1].name == "John Smith"
+        assert "not checked in" in resp.skipped_details[1].reason
+
 
 # ===================================================================
 # 12. Election Results Schema — Quorum Fields

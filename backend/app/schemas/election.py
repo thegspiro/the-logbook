@@ -495,6 +495,14 @@ class EmailBallot(BaseModel):
     )
 
 
+class SkippedVoterDetail(BaseModel):
+    """Detail about a voter who was skipped during ballot email sending"""
+
+    user_id: str
+    name: str
+    reason: str
+
+
 class EmailBallotResponse(BaseModel):
     """Response after sending ballot emails"""
 
@@ -502,6 +510,7 @@ class EmailBallotResponse(BaseModel):
     recipients_count: int
     failed_count: int
     skipped_count: int = 0
+    skipped_details: List[SkippedVoterDetail] = []
     message: str
 
 

@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.membership_pipeline import (
+    ActionType,
     InterviewRecommendation,
     MembershipPipeline,
     MembershipPipelineStep,
@@ -1043,7 +1044,8 @@ class MembershipPipelineService:
         await self.db.commit()
 
         # Send automated email if the new step is an automated_email stage
-        if next_step.step_type == PipelineStepType.AUTOMATED_EMAIL:
+        # (or a legacy action step with action_type=send_email)
+        if self._is_email_step(next_step):
             await self._send_stage_email(prospect, next_step)
 
         return await self.get_prospect(prospect_id, organization_id)
@@ -1150,7 +1152,8 @@ class MembershipPipelineService:
             await self._auto_link_event_for_step(prospect, next_step)
 
             # Send automated email if the next step is an automated_email stage
-            if next_step.step_type == PipelineStepType.AUTOMATED_EMAIL:
+            # (or a legacy action step with action_type=send_email)
+            if self._is_email_step(next_step):
                 await self.db.flush()
                 await self._send_stage_email(prospect, next_step)
 
@@ -1473,6 +1476,22 @@ class MembershipPipelineService:
             logger.error(f"Auto-enrollment failed for user {user_id}: {e}")
             return None
 
+    @staticmethod
+    def _is_email_step(step: MembershipPipelineStep) -> bool:
+        """Return True if the step should trigger an automated email.
+
+        Matches both the modern ``automated_email`` step type and the
+        legacy pattern of ``action`` + ``action_type='send_email'``.
+        """
+        if step.step_type == PipelineStepType.AUTOMATED_EMAIL:
+            return True
+        if step.step_type == PipelineStepType.ACTION:
+            action = step.action_type
+            raw = action.value if isinstance(action, ActionType) else action
+            if raw == ActionType.SEND_EMAIL.value:
+                return True
+        return False
+
     async def _send_stage_email(
         self,
         prospect: ProspectiveMember,
@@ -1486,10 +1505,6 @@ class MembershipPipelineService:
             from app.services.email_template_service import DEFAULT_CSS
 
             config: Dict[str, Any] = step.config or {}
-            subject = config.get(
-                "email_subject",
-                "Update on Your Membership Application",
-            )
             org_result = await self.db.execute(
                 select(Organization).where(
                     Organization.id == prospect.organization_id
@@ -1502,6 +1517,15 @@ class MembershipPipelineService:
 
             org_name = _html.escape(org.name or "The Logbook")
             first_name = _html.escape(prospect.first_name or "")
+
+            # Resolve subject, substituting {{organization_name}} if present
+            raw_subject = config.get(
+                "email_subject",
+                "Update on Your Membership Application",
+            )
+            subject = raw_subject.replace(
+                "{{organization_name}}", org.name or "The Logbook"
+            )
 
             # Build HTML sections from config
             sections: List[str] = []
@@ -1555,10 +1579,20 @@ class MembershipPipelineService:
             text_parts = [f"Hi {prospect.first_name},"]
             if config.get("welcome_message"):
                 text_parts.append(config["welcome_message"])
+            if config.get("include_faq_link") and config.get("faq_url"):
+                text_parts.append(
+                    f"View Membership FAQ: {config['faq_url']}"
+                )
             if include_meeting and meeting_details:
                 text_parts.append(
                     f"Next Meeting: {meeting_details}"
                 )
+            for custom in config.get("custom_sections", []):
+                title = custom.get("title", "")
+                body = custom.get("content", "")
+                if title or body:
+                    section = f"{title}\n{body}" if title else body
+                    text_parts.append(section)
             text_parts.append(f"This email was sent by {org.name or 'The Logbook'}.")
             text_body = "\n\n".join(text_parts)
 
@@ -1809,15 +1843,27 @@ class MembershipPipelineService:
                 "steps": [
                     {
                         "name": "Interest Form Received",
-                        "step_type": "checkbox",
+                        "step_type": "form_submission",
                         "is_first_step": True,
                         "required": True,
                     },
                     {
                         "name": "Send Welcome Email",
-                        "step_type": "action",
-                        "action_type": "send_email",
+                        "step_type": "automated_email",
                         "required": True,
+                        "config": {
+                            "email_subject": "Welcome to {{organization_name}}!",
+                            "include_welcome": True,
+                            "welcome_message": (
+                                "Thank you for your interest in joining our department. "
+                                "We look forward to meeting you!"
+                            ),
+                            "include_next_meeting": True,
+                            "next_meeting_details": (
+                                "Please contact the department for the next meeting date and location."
+                            ),
+                            "include_faq_link": False,
+                        },
                     },
                     {
                         "name": "Interest Meeting Attended",
@@ -1826,9 +1872,17 @@ class MembershipPipelineService:
                     },
                     {
                         "name": "Application Sent",
-                        "step_type": "action",
-                        "action_type": "send_email",
+                        "step_type": "automated_email",
                         "required": True,
+                        "config": {
+                            "email_subject": "Membership Application — Next Steps",
+                            "include_welcome": True,
+                            "welcome_message": (
+                                "Please find the attached membership application. "
+                                "Complete and return it at your earliest convenience."
+                            ),
+                            "include_faq_link": False,
+                        },
                     },
                     {
                         "name": "Application Received",

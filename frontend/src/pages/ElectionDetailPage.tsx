@@ -232,10 +232,29 @@ export const ElectionDetailPage: React.FC = () => {
       setEmailMessage('');
       void fetchElection(); // Refresh to update email_sent status
 
+      const parts = [`Ballots sent to ${response.recipients_count} voter(s)`];
       if (response.failed_count > 0) {
-        toast.success(`Ballots sent to ${response.recipients_count} voters (${response.failed_count} failed)`);
+        parts.push(`${response.failed_count} failed`);
+      }
+      if (response.skipped_count > 0) {
+        parts.push(`${response.skipped_count} skipped (ineligible)`);
+      }
+
+      if (response.failed_count > 0) {
+        toast.error(parts.join(', '));
       } else {
-        toast.success(`Ballots sent successfully to ${response.recipients_count} voters`);
+        toast.success(parts.join(', '));
+      }
+
+      // Log skipped details so admin can see why members were skipped
+      if (response.skipped_details && response.skipped_details.length > 0) {
+        const skippedNames = response.skipped_details
+          .map((d) => `${d.name}: ${d.reason}`)
+          .join('\n');
+        toast(`Members skipped:\n${skippedNames}`, {
+          duration: 8000,
+          icon: '\u26A0\uFE0F',
+        });
       }
     } catch (err: unknown) {
       setSendEmailError(getErrorMessage(err, 'Failed to send ballot emails'));
