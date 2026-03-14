@@ -16,7 +16,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { platformAnalyticsService } from '../services/api';
-import { formatTime, formatDate, formatNumber } from '../utils/dateFormatting';
+import { formatTime, formatDate, formatNumber, getTodayLocalDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import type { PlatformAnalytics, DailyCount, ModuleUsage } from '../types/platformAnalytics';
 
@@ -73,7 +73,7 @@ const PlatformAnalyticsPage: React.FC = () => {
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `platform-analytics-${new Date().toISOString()}.json`;
+    link.download = `platform-analytics-${getTodayLocalDate(tz)}.json`;
     link.click();
     URL.revokeObjectURL(url);
   }, []);

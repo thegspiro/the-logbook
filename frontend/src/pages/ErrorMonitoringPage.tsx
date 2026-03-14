@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { errorTracker, type ErrorLog } from '../services/errorTracking';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatDateTime, formatTime } from '../utils/dateFormatting';
+import { formatDateTime, formatTime, getTodayLocalDate } from '../utils/dateFormatting';
 
 /**
  * Error Monitoring Dashboard
@@ -40,7 +40,7 @@ const ErrorMonitoringPage: React.FC = () => {
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `error-log-${new Date().toISOString()}.json`;
+    link.download = `error-log-${getTodayLocalDate(tz)}.json`;
     link.click();
     URL.revokeObjectURL(url);
   };
