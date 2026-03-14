@@ -1149,6 +1149,11 @@ class MembershipPipelineService:
             # Auto-link event if the new step requires meeting attendance
             await self._auto_link_event_for_step(prospect, next_step)
 
+            # Send automated email if the next step is an automated_email stage
+            if next_step.step_type == PipelineStepType.AUTOMATED_EMAIL:
+                await self.db.flush()
+                await self._send_stage_email(prospect, next_step)
+
     # =========================================================================
     # Transfer to Membership
     # =========================================================================
