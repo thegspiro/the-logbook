@@ -23,19 +23,8 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { useFinanceStore } from '../store/financeStore';
+import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { Skeleton } from '@/components/ux/Skeleton';
-
-// =============================================================================
-// Currency Formatter
-// =============================================================================
-
-const formatCurrency = (amount: number): string =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
 
 // =============================================================================
 // KPI Card Component
@@ -101,7 +90,7 @@ const BudgetGauge: React.FC<BudgetGaugeProps> = ({
       <div className="mb-1 flex items-center justify-between text-sm">
         <span className="text-theme-text-secondary">{label}</span>
         <span className="font-medium text-theme-text-primary">
-          {formatCurrency(amount)}
+          {formatCurrencyWhole(amount)}
         </span>
       </div>
       <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-200">
@@ -111,7 +100,7 @@ const BudgetGauge: React.FC<BudgetGaugeProps> = ({
         />
       </div>
       <p className="mt-0.5 text-xs text-theme-text-secondary">
-        {pct.toFixed(1)}% of {formatCurrency(total)}
+        {pct.toFixed(1)}% of {formatCurrencyWhole(total)}
       </p>
     </div>
   );
@@ -254,14 +243,14 @@ const FinanceDashboardPage: React.FC = () => {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard
           label="Total Budgeted"
-          value={formatCurrency(totalBudgeted)}
+          value={formatCurrencyWhole(totalBudgeted)}
           icon={<DollarSign className="h-5 w-5 text-green-600" />}
           iconBgClass="bg-green-100"
           linkTo="/finance/budgets"
         />
         <KpiCard
           label="Total Spent"
-          value={formatCurrency(totalSpent)}
+          value={formatCurrencyWhole(totalSpent)}
           icon={<CreditCard className="h-5 w-5 text-blue-600" />}
           iconBgClass="bg-blue-100"
           linkTo="/finance/budgets"

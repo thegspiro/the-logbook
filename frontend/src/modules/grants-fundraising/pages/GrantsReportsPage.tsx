@@ -23,16 +23,7 @@ import { grantsService } from '../services/api';
 import type { GrantReport, FundraisingReport } from '../types';
 import { COMPLIANCE_STATUS_COLORS } from '../types';
 
-// =============================================================================
-// Helpers
-// =============================================================================
-
-const formatCurrency = (amount: number): string =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(amount);
+import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 
 const formatPercent = (value: number): string =>
   new Intl.NumberFormat('en-US', {
@@ -304,7 +295,7 @@ const GrantsReportsPage: React.FC = () => {
                 />
                 <KpiCard
                   label="Total Requested"
-                  value={formatCurrency(grantReport.totalRequested)}
+                  value={formatCurrencyWhole(grantReport.totalRequested)}
                   icon={
                     <DollarSign className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
                   }
@@ -312,7 +303,7 @@ const GrantsReportsPage: React.FC = () => {
                 />
                 <KpiCard
                   label="Total Awarded"
-                  value={formatCurrency(grantReport.totalAwarded)}
+                  value={formatCurrencyWhole(grantReport.totalAwarded)}
                   icon={
                     <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
                   }
@@ -320,7 +311,7 @@ const GrantsReportsPage: React.FC = () => {
                 />
                 <KpiCard
                   label="Total Spent"
-                  value={formatCurrency(grantReport.totalSpent)}
+                  value={formatCurrencyWhole(grantReport.totalSpent)}
                   icon={
                     <BarChart3 className="h-5 w-5 text-orange-600 dark:text-orange-400" />
                   }
@@ -402,7 +393,7 @@ const GrantsReportsPage: React.FC = () => {
                   </h3>
                   <HorizontalBarChart
                     items={spendingByCategory}
-                    formatValue={formatCurrency}
+                    formatValue={formatCurrencyWhole}
                   />
                 </div>
               )}
@@ -433,7 +424,7 @@ const GrantsReportsPage: React.FC = () => {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <KpiCard
                   label="Total Donations"
-                  value={formatCurrency(fundraisingReport.totalDonations)}
+                  value={formatCurrencyWhole(fundraisingReport.totalDonations)}
                   icon={
                     <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
                   }
@@ -457,7 +448,7 @@ const GrantsReportsPage: React.FC = () => {
                 />
                 <KpiCard
                   label="Average Gift"
-                  value={formatCurrency(fundraisingReport.averageGift)}
+                  value={formatCurrencyWhole(fundraisingReport.averageGift)}
                   icon={
                     <TrendingUp className="h-5 w-5 text-purple-600 dark:text-purple-400" />
                   }
@@ -488,7 +479,7 @@ const GrantsReportsPage: React.FC = () => {
                           </span>
                           <div className="flex items-center gap-3">
                             <span className="text-sm font-medium text-theme-text-primary">
-                              {formatCurrency(amount)}
+                              {formatCurrencyWhole(amount)}
                             </span>
                             <span className="w-14 text-right text-xs text-theme-text-secondary">
                               {formatPercent(pct)}
@@ -529,7 +520,7 @@ const GrantsReportsPage: React.FC = () => {
                               {row.month}
                             </td>
                             <td className="py-2 text-right font-medium text-theme-text-primary">
-                              {formatCurrency(row.total)}
+                              {formatCurrencyWhole(row.total)}
                             </td>
                           </tr>
                         ))}

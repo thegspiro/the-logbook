@@ -11,6 +11,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+_response_config = ConfigDict(from_attributes=True)
+
 # ============================================
 # Form Field Schemas
 # ============================================
@@ -83,7 +85,7 @@ class FormFieldResponse(FormFieldBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -120,7 +122,7 @@ class FormIntegrationResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -186,7 +188,7 @@ class FormResponse(FormBase):
     field_count: Optional[int] = None
     submission_count: Optional[int] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class FormDetailResponse(FormResponse):
@@ -195,7 +197,7 @@ class FormDetailResponse(FormResponse):
     fields: List[FormFieldResponse] = []
     integrations: List[FormIntegrationResponse] = []
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class FormsListResponse(BaseModel):
@@ -244,7 +246,7 @@ class FormSubmissionResponse(BaseModel):
     integration_result: Optional[Dict[str, Any]] = None
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class FormSubmissionDetailResponse(FormSubmissionResponse):
@@ -289,7 +291,7 @@ class PublicFormFieldResponse(BaseModel):
     sort_order: int = 0
     width: str = "full"
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class PublicFormResponse(BaseModel):
@@ -303,7 +305,7 @@ class PublicFormResponse(BaseModel):
     fields: List[PublicFormFieldResponse] = []
     organization_name: Optional[str] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class PublicFormSubmissionResponse(BaseModel):

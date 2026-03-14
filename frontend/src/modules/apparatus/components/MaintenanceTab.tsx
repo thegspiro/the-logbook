@@ -9,7 +9,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Wrench } from 'lucide-react';
 import type { ApparatusMaintenance } from '../types';
-import { formatCurrency } from '../utils/formatCurrency';
+import { formatCurrency } from '@/utils/currencyFormatting';
 import { formatDate } from '../../../utils/dateFormatting';
 
 interface MaintenanceTabProps {

@@ -10,6 +10,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+_response_config = ConfigDict(from_attributes=True)
+
 # --- Report Stage Groups ---
 
 
@@ -97,7 +99,7 @@ class PipelineStepResponse(PipelineStepBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class PipelineBase(BaseModel):
@@ -150,7 +152,7 @@ class PipelineResponse(PipelineBase):
     prospect_count: Optional[int] = None
     report_stage_groups: Optional[List[ReportStageGroup]] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class PipelineListResponse(BaseModel):
@@ -167,7 +169,7 @@ class PipelineListResponse(BaseModel):
     prospect_count: Optional[int] = None
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class StepReorderRequest(BaseModel):
@@ -297,7 +299,7 @@ class StepProgressResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class ProspectResponse(ProspectBase):
@@ -342,7 +344,7 @@ class ProspectListResponse(BaseModel):
     desired_membership_type: Optional[str] = None
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class PaginatedProspectListResponse(BaseModel):
@@ -432,7 +434,7 @@ class ActivityLogResponse(BaseModel):
     performer_name: Optional[str] = None
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # --- Kanban Board Schema ---
@@ -474,7 +476,7 @@ class ProspectDocumentResponse(BaseModel):
     uploaded_by: Optional[UUID] = None
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # --- Election Package Schemas ---
@@ -514,7 +516,7 @@ class ElectionPackageResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # --- Public Status Check Schema ---
@@ -574,7 +576,7 @@ class ProspectEventLinkResponse(BaseModel):
     linked_by_name: Optional[str] = None
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # --- Interview Schemas ---
@@ -628,4 +630,4 @@ class InterviewResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config

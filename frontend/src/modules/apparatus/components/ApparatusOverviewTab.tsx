@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { ApparatusTypeBadge } from './ApparatusTypeBadge';
 import type { Apparatus, ApparatusType } from '../types';
-import { formatCurrency } from '../utils/formatCurrency';
+import { formatCurrency } from '@/utils/currencyFormatting';
 import { formatDate } from '../../../utils/dateFormatting';
 
 interface ApparatusOverviewTabProps {

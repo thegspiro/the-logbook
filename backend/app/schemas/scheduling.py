@@ -11,6 +11,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+_response_config = ConfigDict(from_attributes=True)
+
 # ============================================
 # Shift Schemas
 # ============================================
@@ -84,7 +86,7 @@ class ShiftResponse(BaseModel):
     updated_at: datetime
     created_by: Optional[UUID] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -120,7 +122,7 @@ class ShiftAttendanceResponse(BaseModel):
     duration_minutes: Optional[int] = None
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -133,7 +135,7 @@ class ShiftDetailResponse(ShiftResponse):
 
     attendees: List[ShiftAttendanceResponse] = []
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class ShiftsListResponse(BaseModel):
@@ -209,7 +211,7 @@ class ShiftCallResponse(BaseModel):
     notes: Optional[str] = None
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -338,7 +340,7 @@ class ShiftTemplateResponse(BaseModel):
     updated_at: datetime
     created_by: Optional[UUID] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -399,7 +401,7 @@ class ShiftPatternResponse(BaseModel):
     updated_at: datetime
     created_by: Optional[UUID] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class GenerateShiftsRequest(BaseModel):
@@ -468,7 +470,7 @@ class ShiftAssignmentResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -515,7 +517,7 @@ class ShiftSwapRequestResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -569,7 +571,7 @@ class ShiftTimeOffResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -684,7 +686,7 @@ class BasicApparatusResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================

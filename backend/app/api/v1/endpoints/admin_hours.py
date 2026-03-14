@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import PaginationParams, get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
@@ -465,8 +465,7 @@ async def list_my_entries(
     category_id: str | None = Query(None),
     start_date: str | None = Query(None),
     end_date: str | None = Query(None),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -482,10 +481,10 @@ async def list_my_entries(
         category_id=category_id,
         start_date=parsed_start,
         end_date=parsed_end,
-        skip=skip,
-        limit=limit,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
-    return {"entries": entries, "total": total, "skip": skip, "limit": limit}
+    return {"entries": entries, "total": total, "skip": pagination.skip, "limit": pagination.limit}
 
 
 @router.get("/entries", response_model=AdminHoursPaginatedEntries)
@@ -495,8 +494,7 @@ async def list_all_entries(
     user_id: str | None = Query(None),
     start_date: str | None = Query(None),
     end_date: str | None = Query(None),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("admin_hours.manage")),
 ):
@@ -512,10 +510,10 @@ async def list_all_entries(
         user_id=user_id,
         start_date=parsed_start,
         end_date=parsed_end,
-        skip=skip,
-        limit=limit,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
-    return {"entries": entries, "total": total, "skip": skip, "limit": limit}
+    return {"entries": entries, "total": total, "skip": pagination.skip, "limit": pagination.limit}
 
 
 # =============================================================================

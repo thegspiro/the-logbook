@@ -11,6 +11,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+_response_config = ConfigDict(from_attributes=True)
+
 # ============================================
 # Enum Literal Types
 # Mirrors the SQLAlchemy enums in app.models.inventory so that
@@ -297,7 +299,7 @@ class InventoryItemResponse(InventoryItemBase):
     updated_at: datetime
     created_by: Optional[UUID] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class InventoryItemDetailResponse(InventoryItemResponse):
@@ -308,7 +310,7 @@ class InventoryItemDetailResponse(InventoryItemResponse):
     checkout_count: int = 0
     maintenance_count: int = 0
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -348,7 +350,7 @@ class ItemAssignmentResponse(ItemAssignmentBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class UnassignItemRequest(BaseModel):
@@ -407,7 +409,7 @@ class ItemIssuanceResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -461,7 +463,7 @@ class CheckOutRecordResponse(CheckOutRecordBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -496,7 +498,7 @@ class NFPAInspectionDetailResponse(NFPAInspectionDetailCreate):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class MaintenanceRecordBase(BaseModel):
@@ -563,7 +565,7 @@ class MaintenanceRecordResponse(MaintenanceRecordBase):
     updated_at: datetime
     created_by: Optional[UUID] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -742,7 +744,7 @@ class ClearanceLineItemResponse(BaseModel):
     resolution_notes: Optional[str] = None
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class DepartureClearanceResponse(BaseModel):
@@ -768,7 +770,7 @@ class DepartureClearanceResponse(BaseModel):
     updated_at: datetime
     line_items: List[ClearanceLineItemResponse] = []
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class DepartureClearanceSummaryResponse(BaseModel):
@@ -979,7 +981,7 @@ class EquipmentRequestResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -1037,7 +1039,7 @@ class StorageAreaResponse(BaseModel):
     location_name: Optional[str] = None
     parent_name: Optional[str] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -1081,7 +1083,7 @@ class WriteOffRequestResponse(BaseModel):
     clearance_id: Optional[str] = None
     created_at: Optional[datetime] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -1150,7 +1152,7 @@ class NFPAComplianceResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class NFPAExposureRecordCreate(BaseModel):
@@ -1185,7 +1187,7 @@ class NFPAExposureRecordResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class NFPASummaryResponse(BaseModel):
@@ -1326,7 +1328,7 @@ class IssuanceAllowanceResponse(BaseModel):
     category_name: Optional[str] = None
     role_name: Optional[str] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class AllowanceCheckResponse(BaseModel):
@@ -1373,7 +1375,7 @@ class IssuanceChargeListItem(BaseModel):
     charge_status: str = "none"
     charge_amount: Optional[Decimal] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class ChargeManagementResponse(BaseModel):
@@ -1442,7 +1444,7 @@ class ReturnRequestResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -1516,7 +1518,7 @@ class ReorderRequestResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -1562,7 +1564,7 @@ class ItemVariantGroupResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class ItemVariantGroupDetailResponse(ItemVariantGroupResponse):
@@ -1570,7 +1572,7 @@ class ItemVariantGroupDetailResponse(ItemVariantGroupResponse):
 
     items: List[InventoryItemResponse] = []
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -1622,7 +1624,7 @@ class EquipmentKitItemResponse(BaseModel):
     size_selectable: bool = False
     sort_order: int = 0
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class EquipmentKitResponse(BaseModel):
@@ -1639,7 +1641,7 @@ class EquipmentKitResponse(BaseModel):
     updated_at: datetime
     created_by: Optional[UUID] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class EquipmentKitDetailResponse(EquipmentKitResponse):
@@ -1647,7 +1649,7 @@ class EquipmentKitDetailResponse(EquipmentKitResponse):
 
     line_items: List[EquipmentKitItemResponse] = []
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -1693,4 +1695,4 @@ class MemberSizePreferencesResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config

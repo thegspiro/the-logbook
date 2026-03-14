@@ -13,21 +13,10 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useFinanceStore } from '../store/financeStore';
+import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { SkeletonPage } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import type { Budget } from '../types';
-
-// =============================================================================
-// Currency Formatter
-// =============================================================================
-
-const formatCurrency = (amount: number): string =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
 
 // =============================================================================
 // Budget Progress Bar
@@ -95,22 +84,22 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({ budgets }) => {
   const cards = [
     {
       label: 'Total Budgeted',
-      value: formatCurrency(totalBudgeted),
+      value: formatCurrencyWhole(totalBudgeted),
       color: 'text-green-600',
     },
     {
       label: 'Total Spent',
-      value: formatCurrency(totalSpent),
+      value: formatCurrencyWhole(totalSpent),
       color: 'text-blue-600',
     },
     {
       label: 'Encumbered',
-      value: formatCurrency(totalEncumbered),
+      value: formatCurrencyWhole(totalEncumbered),
       color: 'text-yellow-600',
     },
     {
       label: 'Remaining',
-      value: formatCurrency(totalRemaining),
+      value: formatCurrencyWhole(totalRemaining),
       color: totalRemaining < 0 ? 'text-red-600' : 'text-green-600',
     },
   ];
@@ -309,18 +298,18 @@ const BudgetsPage: React.FC = () => {
                         </Link>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-theme-text-primary">
-                        {formatCurrency(budget.amountBudgeted)}
+                        {formatCurrencyWhole(budget.amountBudgeted)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-theme-text-primary">
-                        {formatCurrency(budget.amountSpent)}
+                        {formatCurrencyWhole(budget.amountSpent)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-theme-text-secondary">
-                        {formatCurrency(budget.amountEncumbered)}
+                        {formatCurrencyWhole(budget.amountEncumbered)}
                       </td>
                       <td
                         className={`whitespace-nowrap px-4 py-3 text-right text-sm font-medium ${remaining < 0 ? 'text-red-600' : 'text-green-600'}`}
                       >
-                        {formatCurrency(remaining)}
+                        {formatCurrencyWhole(remaining)}
                       </td>
                       <td className="px-4 py-3" style={{ minWidth: 160 }}>
                         <BudgetProgress
@@ -348,22 +337,22 @@ const BudgetsPage: React.FC = () => {
                     Total
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-bold text-theme-text-primary">
-                    {formatCurrency(
+                    {formatCurrencyWhole(
                       budgets.reduce((s, b) => s + b.amountBudgeted, 0),
                     )}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-bold text-theme-text-primary">
-                    {formatCurrency(
+                    {formatCurrencyWhole(
                       budgets.reduce((s, b) => s + b.amountSpent, 0),
                     )}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-bold text-theme-text-secondary">
-                    {formatCurrency(
+                    {formatCurrencyWhole(
                       budgets.reduce((s, b) => s + b.amountEncumbered, 0),
                     )}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-bold text-green-600">
-                    {formatCurrency(
+                    {formatCurrencyWhole(
                       budgets.reduce((s, b) => s + getRemaining(b), 0),
                     )}
                   </td>

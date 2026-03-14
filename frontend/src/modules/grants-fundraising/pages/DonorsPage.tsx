@@ -11,17 +11,8 @@ import toast from 'react-hot-toast';
 import { fundraisingService } from '../services/api';
 import type { Donor, DonorType } from '../types';
 import { formatDate } from '../../../utils/dateFormatting';
+import { formatCurrency } from '@/utils/currencyFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const formatCurrency = (amount: number) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(amount);
 
 // ---------------------------------------------------------------------------
 // Constants

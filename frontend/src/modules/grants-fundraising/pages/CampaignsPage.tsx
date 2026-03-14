@@ -20,6 +20,7 @@ import { fundraisingService } from '../services/api';
 import type { FundraisingCampaign } from '../types';
 import { CAMPAIGN_STATUS_COLORS } from '../types';
 import { formatDate } from '../../../utils/dateFormatting';
+import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 
 // ---------------------------------------------------------------------------
@@ -56,17 +57,6 @@ const STATUS_LABELS: Record<string, string> = {
 
 const STATUS_OPTIONS = ['draft', 'active', 'paused', 'completed', 'cancelled'] as const;
 const TYPE_OPTIONS = ['general', 'equipment', 'training', 'community', 'memorial', 'event', 'other'] as const;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const formatCurrency = (amount: number): string =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(amount);
 
 // ---------------------------------------------------------------------------
 // Inline Create Form
@@ -472,10 +462,10 @@ const CampaignsPage: React.FC = () => {
                 <div>
                   <div className="mb-1 flex items-center justify-between text-sm">
                     <span className="font-medium text-theme-text-primary">
-                      {formatCurrency(campaign.currentAmount)}
+                      {formatCurrencyWhole(campaign.currentAmount)}
                     </span>
                     <span className="text-theme-text-secondary">
-                      of {formatCurrency(campaign.goalAmount)} ({progress}%)
+                      of {formatCurrencyWhole(campaign.goalAmount)} ({progress}%)
                     </span>
                   </div>
                   <div className="h-3 w-full overflow-hidden rounded-full bg-theme-surface-hover">

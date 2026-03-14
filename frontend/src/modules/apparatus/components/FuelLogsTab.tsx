@@ -8,7 +8,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Fuel } from 'lucide-react';
 import type { ApparatusFuelLog } from '../types';
-import { formatCurrency } from '../utils/formatCurrency';
+import { formatCurrency } from '@/utils/currencyFormatting';
 import { formatDate } from '../../../utils/dateFormatting';
 
 interface FuelLogsTabProps {

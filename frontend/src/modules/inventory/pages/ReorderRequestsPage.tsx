@@ -13,6 +13,7 @@ import { inventoryService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate as formatDateUtil } from '../../../utils/dateFormatting';
+import { formatCurrency } from '@/utils/currencyFormatting';
 import { Modal } from '../../../components/Modal';
 import type {
   ReorderRequest, ReorderRequestCreate, ReorderRequestUpdate,
@@ -354,9 +355,6 @@ export const ReorderRequestsPage: React.FC = () => {
       .reduce((sum, r) => sum + (r.estimated_unit_cost ?? 0) * r.quantity_requested, 0);
     return { pending, ordered, totalEstCost };
   }, [requests]);
-
-  const formatCurrency = (val: number) =>
-    val.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 
   const fmtDate = (dateStr: string | undefined) => {
     if (!dateStr) return '—';

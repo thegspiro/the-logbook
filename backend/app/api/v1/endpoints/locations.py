@@ -11,7 +11,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import PaginationParams, get_current_user, require_permission
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors
 from app.models.user import User
@@ -95,8 +95,7 @@ async def list_locations(
         False,
         description="Exclude locations that represent rooms within a facility",
     ),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -110,8 +109,8 @@ async def list_locations(
         organization_id=current_user.organization_id,
         is_active=is_active,
         exclude_rooms=exclude_rooms,
-        skip=skip,
-        limit=limit,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
 
     return [_location_to_list_item(loc) for loc in locations]

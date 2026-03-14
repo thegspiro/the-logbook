@@ -10,6 +10,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+_response_config = ConfigDict(from_attributes=True)
+
 
 class EmergencyContact(BaseModel):
     """Emergency contact schema"""
@@ -174,7 +176,7 @@ class UserResponse(UserBase):
         """Coerce NULL (from DB) to empty list so Pydantic doesn't reject it."""
         return v if v is not None else []
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class UserListResponse(BaseModel):
@@ -201,7 +203,7 @@ class UserListResponse(BaseModel):
     rank: Optional[str] = None
     station: Optional[str] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class RoleResponse(BaseModel):
@@ -221,7 +223,7 @@ class RoleResponse(BaseModel):
         """Coerce NULL (from DB) to empty list so Pydantic doesn't reject it."""
         return v if v is not None else []
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class UserWithRolesResponse(UserResponse):
@@ -232,7 +234,7 @@ class UserWithRolesResponse(UserResponse):
         None, description="Auto-generated temporary password (only present on creation)"
     )
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class NotificationPreferences(BaseModel):
@@ -246,7 +248,7 @@ class NotificationPreferences(BaseModel):
     training_reminders: bool = True
     announcement_notifications: bool = True
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class ContactInfoUpdate(BaseModel):
@@ -275,7 +277,7 @@ class UserProfileResponse(UserResponse):
     roles: List[RoleResponse] = []
     notification_preferences: Optional[dict] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class AdminPasswordReset(BaseModel):
@@ -302,7 +304,7 @@ class MemberAuditLogEntry(BaseModel):
     changed_by_user_id: Optional[str] = None
     event_data: Optional[dict] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class DeletionImpactResponse(BaseModel):

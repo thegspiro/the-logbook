@@ -31,6 +31,7 @@ import {
 } from '../types';
 import { useGrantsStore } from '../store/grantsStore';
 import { formatDate } from '../../../utils/dateFormatting';
+import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 
 // =============================================================================
@@ -83,16 +84,6 @@ type SortField =
   | 'assignedTo';
 type SortDir = 'asc' | 'desc';
 
-const formatCurrency = (amount: number | null | undefined) => {
-  if (amount == null) return '--';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-};
-
 const PRIORITY_SORT_ORDER: Record<string, number> = {
   critical: 0,
   high: 1,
@@ -129,7 +120,7 @@ const PipelineCard: React.FC<PipelineCardProps> = ({ application, timezone }) =>
 
       {application.amountRequested != null && (
         <p className="mt-1 text-lg font-bold text-theme-text-primary">
-          {formatCurrency(application.amountRequested)}
+          {formatCurrencyWhole(application.amountRequested)}
         </p>
       )}
 
@@ -639,10 +630,10 @@ export const GrantApplicationsPage: React.FC = () => {
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-theme-text-primary">
-                        {formatCurrency(app.amountRequested)}
+                        {formatCurrencyWhole(app.amountRequested)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-theme-text-primary">
-                        {formatCurrency(app.amountAwarded)}
+                        {formatCurrencyWhole(app.amountAwarded)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-theme-text-secondary">
                         {app.applicationDeadline

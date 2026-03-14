@@ -8,6 +8,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, FileCheck, AlertTriangle, Search, X } from 'lucide-react';
 import { useFinanceStore } from '../store/financeStore';
+import { formatCurrency } from '@/utils/currencyFormatting';
 import { SkeletonPage } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { formatDate } from '@/utils/dateFormatting';
@@ -19,14 +20,6 @@ import {
 // =============================================================================
 // Constants
 // =============================================================================
-
-const formatCurrency = (amount: number): string =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
 
 const STATUS_TABS: { value: string; label: string }[] = [
   { value: '', label: 'All' },

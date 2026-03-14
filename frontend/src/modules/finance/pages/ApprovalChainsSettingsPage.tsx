@@ -18,6 +18,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { useFinanceStore } from '../store/financeStore';
 import { SkeletonPage } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
@@ -48,16 +49,6 @@ const APPROVER_TYPE_LABELS: Record<string, string> = {
   [ApproverType.PERMISSION]: 'Permission',
   [ApproverType.SPECIFIC_USER]: 'Specific User',
   [ApproverType.EMAIL]: 'Email',
-};
-
-const formatCurrency = (amount: number | undefined | null): string => {
-  if (amount == null) return '--';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
 };
 
 const inputClass = 'form-input';
@@ -101,13 +92,13 @@ const ChainCard: React.FC<ChainCardProps> = ({ chain, onDelete }) => {
               {chain.minAmount != null && (
                 <>
                   <span className="text-theme-text-secondary/50">|</span>
-                  <span>Min: {formatCurrency(chain.minAmount)}</span>
+                  <span>Min: {formatCurrencyWhole(chain.minAmount)}</span>
                 </>
               )}
               {chain.maxAmount != null && (
                 <>
                   <span className="text-theme-text-secondary/50">|</span>
-                  <span>Max: {formatCurrency(chain.maxAmount)}</span>
+                  <span>Max: {formatCurrencyWhole(chain.maxAmount)}</span>
                 </>
               )}
               {chain.isDefault && (
@@ -181,7 +172,7 @@ const ChainCard: React.FC<ChainCardProps> = ({ chain, onDelete }) => {
                     </div>
                     {step.autoApproveUnder != null && (
                       <p className="mt-0.5 text-xs text-theme-text-secondary">
-                        Auto-approves under {formatCurrency(step.autoApproveUnder)}
+                        Auto-approves under {formatCurrencyWhole(step.autoApproveUnder)}
                       </p>
                     )}
                   </div>

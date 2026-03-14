@@ -5,6 +5,7 @@ import type { IssuanceChargeListItem } from '../services/eventServices';
 import { getErrorMessage } from '../utils/errorHandling';
 import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
+import { formatCurrency } from '@/utils/currencyFormatting';
 import toast from 'react-hot-toast';
 
 const CHARGE_STATUS_BADGES: Record<string, string> = {
@@ -12,11 +13,6 @@ const CHARGE_STATUS_BADGES: Record<string, string> = {
   charged: 'bg-red-500/10 text-red-700 dark:text-red-400',
   waived: 'bg-gray-500/10 text-gray-600 dark:text-gray-400',
 };
-
-function formatCurrency(amount?: number | null): string {
-  if (amount == null) return '--';
-  return `$${Number(amount).toFixed(2)}`;
-}
 
 const ChargeManagementPanel: React.FC = () => {
   const tz = useTimezone();

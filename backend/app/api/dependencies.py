@@ -8,7 +8,7 @@ Permission aggregation combines **position permissions** (from the
 (from the ``OPERATIONAL_RANKS`` config keyed by ``User.rank``).
 """
 
-from fastapi import Cookie, Depends, Header, HTTPException, status
+from fastapi import Cookie, Depends, Header, HTTPException, Query, status
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +18,36 @@ from app.core.permissions import get_rank_default_permissions
 from app.models.user import Organization, User
 from app.services.auth_service import AuthService
 from app.utils.db_retry import is_transient_db_error
+
+
+class PaginationParams:
+    """Reusable pagination dependency.
+
+    Injects ``skip`` and ``limit`` query parameters with consistent
+    defaults, validation, and OpenAPI descriptions.
+
+    Usage in an endpoint::
+
+        @router.get("/items")
+        async def list_items(
+            pagination: PaginationParams = Depends(),
+            ...
+        ):
+            items = await service.list(skip=pagination.skip, limit=pagination.limit)
+
+    The default limit is 100 with a max of 1000.  Endpoints can
+    override these by passing custom ``Query()`` defaults.
+    """
+
+    def __init__(
+        self,
+        skip: int = Query(0, ge=0, description="Number of records to skip"),
+        limit: int = Query(
+            100, ge=1, le=1000, description="Maximum records to return"
+        ),
+    ):
+        self.skip = skip
+        self.limit = limit
 
 
 def _collect_user_permissions(user: User) -> set:

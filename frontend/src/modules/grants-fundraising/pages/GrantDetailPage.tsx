@@ -50,6 +50,7 @@ import {
 } from '../types';
 import { useGrantsStore } from '../store/grantsStore';
 import { formatDate } from '../../../utils/dateFormatting';
+import { formatCurrency, formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 
 // =============================================================================
@@ -121,23 +122,6 @@ const COMPLIANCE_TASK_TYPE_ICONS: Record<string, React.ReactNode> = {
   other: <Info className="h-5 w-5 text-theme-text-secondary" />,
 };
 
-const formatCurrency = (amount: number | null | undefined) => {
-  if (amount == null) return '--';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-};
-
-const formatCurrencyPrecise = (amount: number | null | undefined) => {
-  if (amount == null) return '--';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(amount);
-};
 
 // =============================================================================
 // Modal Overlay Component
@@ -548,7 +532,7 @@ export const GrantDetailPage: React.FC = () => {
                 Amount Requested
               </div>
               <p className="mt-1 text-xl font-bold text-theme-text-primary">
-                {formatCurrency(application.amountRequested)}
+                {formatCurrencyWhole(application.amountRequested)}
               </p>
             </div>
             <div className="rounded-lg border border-theme-surface-border bg-theme-bg p-4">
@@ -557,7 +541,7 @@ export const GrantDetailPage: React.FC = () => {
                 Amount Awarded
               </div>
               <p className="mt-1 text-xl font-bold text-emerald-600">
-                {formatCurrency(application.amountAwarded)}
+                {formatCurrencyWhole(application.amountAwarded)}
               </p>
             </div>
             <div className="rounded-lg border border-theme-surface-border bg-theme-bg p-4">
@@ -566,7 +550,7 @@ export const GrantDetailPage: React.FC = () => {
                 Match Required
               </div>
               <p className="mt-1 text-xl font-bold text-theme-text-primary">
-                {formatCurrency(application.matchAmount)}
+                {formatCurrencyWhole(application.matchAmount)}
               </p>
             </div>
             <div className="rounded-lg border border-theme-surface-border bg-theme-bg p-4">
@@ -733,13 +717,13 @@ export const GrantDetailPage: React.FC = () => {
               <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-4 text-center">
                 <p className="text-sm text-theme-text-secondary">Total Budgeted</p>
                 <p className="mt-1 text-xl font-bold text-theme-text-primary">
-                  {formatCurrencyPrecise(budgetTotal)}
+                  {formatCurrency(budgetTotal)}
                 </p>
               </div>
               <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-4 text-center">
                 <p className="text-sm text-theme-text-secondary">Total Spent</p>
                 <p className="mt-1 text-xl font-bold text-red-600">
-                  {formatCurrencyPrecise(spentTotal)}
+                  {formatCurrency(spentTotal)}
                 </p>
               </div>
               <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-4 text-center">
@@ -747,7 +731,7 @@ export const GrantDetailPage: React.FC = () => {
                 <p
                   className={`mt-1 text-xl font-bold ${remainingTotal >= 0 ? 'text-green-600' : 'text-red-600'}`}
                 >
-                  {formatCurrencyPrecise(remainingTotal)}
+                  {formatCurrency(remainingTotal)}
                 </p>
               </div>
             </div>
@@ -819,15 +803,15 @@ export const GrantDetailPage: React.FC = () => {
                               {item.description}
                             </td>
                             <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-theme-text-primary">
-                              {formatCurrencyPrecise(item.amountBudgeted)}
+                              {formatCurrency(item.amountBudgeted)}
                             </td>
                             <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-theme-text-primary">
-                              {formatCurrencyPrecise(item.amountSpent)}
+                              {formatCurrency(item.amountSpent)}
                             </td>
                             <td
                               className={`whitespace-nowrap px-4 py-3 text-right text-sm font-medium ${isOver ? 'text-red-600' : 'text-green-600'}`}
                             >
-                              {formatCurrencyPrecise(remaining)}
+                              {formatCurrency(remaining)}
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
@@ -852,15 +836,15 @@ export const GrantDetailPage: React.FC = () => {
                         </td>
                         <td className="px-4 py-3" />
                         <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-theme-text-primary">
-                          {formatCurrencyPrecise(budgetTotal)}
+                          {formatCurrency(budgetTotal)}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-theme-text-primary">
-                          {formatCurrencyPrecise(spentTotal)}
+                          {formatCurrency(spentTotal)}
                         </td>
                         <td
                           className={`whitespace-nowrap px-4 py-3 text-right text-sm ${remainingTotal >= 0 ? 'text-green-600' : 'text-red-600'}`}
                         >
-                          {formatCurrencyPrecise(remainingTotal)}
+                          {formatCurrency(remainingTotal)}
                         </td>
                         <td className="px-4 py-3" />
                       </tr>
@@ -944,7 +928,7 @@ export const GrantDetailPage: React.FC = () => {
                               {exp.vendor ?? '--'}
                             </td>
                             <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-theme-text-primary">
-                              {formatCurrencyPrecise(exp.amount)}
+                              {formatCurrency(exp.amount)}
                             </td>
                             <td className="whitespace-nowrap px-4 py-3 text-sm text-theme-text-secondary">
                               {linkedBudgetItem

@@ -12,6 +12,8 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+_response_config = ConfigDict(from_attributes=True)
+
 # ============================================================
 # Event Module Settings
 # ============================================================
@@ -263,7 +265,7 @@ class EventResponse(EventBase):
     user_rsvp_status: Optional[str] = None  # Current user's RSVP status
     location_name: Optional[str] = None  # Name of the location if location_id is set
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class EventListItem(BaseModel):
@@ -288,7 +290,7 @@ class EventListItem(BaseModel):
     going_count: Optional[int] = None
     user_rsvp_status: Optional[str] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # RSVP Schemas
@@ -337,7 +339,7 @@ class RSVPResponse(RSVPBase):
     overridden_by: Optional[UUID] = None
     overridden_at: Optional[datetime] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class CheckInRequest(BaseModel):
@@ -532,7 +534,7 @@ class EventTemplateUpdate(BaseModel):
 class EventTemplateResponse(BaseModel):
     """Schema for event template response"""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
     id: UUID
     organization_id: UUID
@@ -582,7 +584,7 @@ class RSVPHistoryResponse(BaseModel):
     user_name: Optional[str] = None
     changer_name: Optional[str] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================================
