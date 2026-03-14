@@ -29,6 +29,7 @@ import { schedulingService } from "../../modules/scheduling/services/api";
 import type { ShiftTemplateRecord } from "../../modules/scheduling/services/api";
 import type { ShiftPattern } from "../../types/scheduling";
 import { useTimezone } from "../../hooks/useTimezone";
+import { formatDateCustom } from "../../utils/dateFormatting";
 import { getErrorMessage } from "../../utils/errorHandling";
 import type { PresetPatternDef, CycleEntry } from "./shiftPatternPresets";
 import { lazyWithRetry } from "../../utils/lazyWithRetry";
@@ -858,26 +859,28 @@ export const PatternsTab: React.FC = () => {
                           <span>Template: {templateName} · </span>
                         )}
                         Starts:{" "}
-                        {new Date(
+                        {formatDateCustom(
                           pattern.start_date + "T12:00:00",
-                        ).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                          timeZone: tz,
-                        })}
+                          {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          },
+                          tz,
+                        )}
                         {pattern.end_date && (
                           <span>
                             {" "}
                             · Ends:{" "}
-                            {new Date(
+                            {formatDateCustom(
                               pattern.end_date + "T12:00:00",
-                            ).toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric",
-                              timeZone: tz,
-                            })}
+                              {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                              },
+                              tz,
+                            )}
                           </span>
                         )}
                       </p>

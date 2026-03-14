@@ -283,7 +283,13 @@ backend/app/
   ```
   All enums live in `constants/enums.ts` — use these constants instead of string literals. Status badge color mappings are also defined here as `Record<string, string>` with Tailwind classes
 - **Floating promises:** Use `void` prefix for intentionally unhandled promises to satisfy `@typescript-eslint/no-floating-promises`: `void fetchData()`, `void handleSubmit()`
-- **Date/time handling:** All dates and times are stored as **UTC** in the database and API layer. They must always be displayed to the user in their **local timezone** (or the organization's configured timezone). Use `utils/dateFormatting.ts` utilities (which use `date-fns` internally) — all formatters accept an optional `timezone` parameter for IANA timezone support. Never display raw UTC values in the UI
+- **Date/time handling (ESLint-enforced):** All dates and times are stored as **UTC** in the database and API layer. They must always be displayed to the user in their **local timezone** (or the organization's configured timezone). Use `utils/dateFormatting.ts` utilities (which use `Intl.DateTimeFormat` internally) — all formatters accept an optional `timezone` parameter for IANA timezone support. Never display raw UTC values in the UI. **The following are banned by ESLint and will fail CI:**
+  - `.toLocaleString()` — use `formatDateTime()` for dates or `formatNumber()` for numbers
+  - `.toLocaleDateString()` — use `formatDate()` or `formatDateCustom()`
+  - `.toLocaleTimeString()` — use `formatTime()`
+  - `import { ... } from 'date-fns'` — use wrappers in `dateFormatting.ts` instead
+  - `new Date().toISOString().slice(0,10)` — use `getTodayLocalDate(tz)` or `toLocalISODate()`
+  - Always obtain `tz` via `const tz = useTimezone()` from `hooks/useTimezone` and pass it to every formatting call
 - **Constants:** Magic numbers and config values are centralized in `constants/config.ts` (`API_TIMEOUT_MS`, `DEFAULT_PAGE_SIZE`, `PAGE_SIZE_OPTIONS`, `AUTO_SAVE_INTERVAL_MS`, etc.). Use these instead of inline values
 
 ### Backend Patterns

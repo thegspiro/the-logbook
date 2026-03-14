@@ -196,7 +196,7 @@ export const EventDetailPage: React.FC = () => {
       <html><head><title>Attendance Roster - ${event.title}</title></head>
       <body style="font-family:Arial,sans-serif;padding:20px">
         <h1 style="font-size:24px;margin-bottom:4px">${event.title}</h1>
-        <p style="color:#666;margin-bottom:16px">${new Date(event.start_datetime).toLocaleString()}</p>
+        <p style="color:#666;margin-bottom:16px">${formatDateTime(event.start_datetime, tz)}</p>
         <table style="width:100%;border-collapse:collapse">
           <thead><tr style="background:#f3f4f6">
             <th style="padding:8px;border:1px solid #ddd;text-align:left">Name</th>
@@ -620,7 +620,7 @@ export const EventDetailPage: React.FC = () => {
       r.status,
       String(r.guest_count ?? 0),
       r.checked_in ? 'Yes' : 'No',
-      r.checked_in_at ? new Date(r.checked_in_at).toLocaleString() : '',
+      r.checked_in_at ? formatDateTime(r.checked_in_at, tz) : '',
       (r.notes || '').replace(/"/g, '""'),
     ]);
     const csv = [headers.join(','), ...rows.map(r => r.map(c => `"${c}"`).join(','))].join('\n');
