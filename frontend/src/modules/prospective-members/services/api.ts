@@ -253,6 +253,7 @@ function mapStageCreateToBackend(stage: PipelineStageCreate): BackendStepCreateP
     config: stage.config as unknown as Record<string, unknown> | undefined,
     notify_prospect_on_completion: stage.notify_prospect_on_completion ?? false,
     public_visible: stage.public_visible ?? true,
+    inactivity_timeout_days: stage.inactivity_timeout_days ?? undefined,
   };
 }
 
@@ -273,6 +274,8 @@ function mapStageUpdateToBackend(stage: PipelineStageUpdate): BackendStepUpdateP
   if (stage.notify_prospect_on_completion !== undefined)
     payload.notify_prospect_on_completion = stage.notify_prospect_on_completion;
   if (stage.public_visible !== undefined) payload.public_visible = stage.public_visible;
+  if (stage.inactivity_timeout_days !== undefined)
+    payload.inactivity_timeout_days = stage.inactivity_timeout_days ?? undefined;
   return payload;
 }
 

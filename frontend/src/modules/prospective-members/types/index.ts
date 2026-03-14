@@ -895,6 +895,7 @@ export interface BackendStepCreatePayload {
   config?: Record<string, unknown> | undefined;
   notify_prospect_on_completion: boolean;
   public_visible: boolean;
+  inactivity_timeout_days?: number | undefined;
 }
 
 /** Payload shape sent to backend when updating a step. */
@@ -908,6 +909,7 @@ export interface BackendStepUpdatePayload {
   config?: Record<string, unknown> | undefined;
   notify_prospect_on_completion?: boolean | undefined;
   public_visible?: boolean | undefined;
+  inactivity_timeout_days?: number | undefined;
 }
 
 // =============================================================================
