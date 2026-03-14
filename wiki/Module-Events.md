@@ -117,6 +117,90 @@ DELETE /api/v1/event-requests/email-templates/{id}         # Delete template
 
 ---
 
+## Recent Changes (2026-03-13)
+
+### Event Detail Page Refactor & Quick-Create
+
+- **EventDetailPage split into sub-components**: Extracted `EventAttachmentsList`, `EventNotificationPanel`, `EventRSVPSection`, `EventRecurrenceInfo` for focused, maintainable detail page sections
+- **Quick-create events**: Streamlined creation flow requiring only title, date, and time with sensible defaults for all other fields
+- **Rich text descriptions**: Event descriptions now support WYSIWYG rich text formatting
+
+### Calendar View & Analytics
+
+- **CalendarView component**: Monthly calendar grid with event dots, day highlighting, collapsible daily event lists, timezone-aware display, navigation between months, event type badges with color coding
+- **EventAnalyticsPage**: Summary cards (total events, RSVPs, check-ins, attendance rate, avg check-in time), event type distribution bar chart, monthly trends line chart, top events table with date range filtering
+- **Event templates management page**: Dedicated `EventTemplatesPage` for CRUD on event templates with list view, create/edit modal, toggle active status, delete confirmation
+
+### RSVP Enhancements
+
+- **RSVP history tracking**: Collapsible activity history feed showing all RSVP changes with timestamps on the event detail page
+- **Dietary/accessibility RSVP fields**: RSVP form collects dietary restrictions and accessibility requirements
+- **Inline RSVP**: RSVP directly from the events list without opening the detail page
+- **Series RSVP**: RSVP to all events in a recurring series at once
+- **RSVP countdown**: Shows time remaining until RSVP deadline
+- **Waitlist system**: Events at capacity auto-waitlist new RSVPs; waitlisted attendees promoted when spots open
+- **Non-respondent reminders**: Send targeted reminders to members who haven't RSVP'd
+- **CSV export**: Export event attendee list as CSV
+- **Print roster**: Print-formatted attendee roster for on-site use
+
+### Event Notification Panel
+
+- **EventNotificationPanel component**: Send targeted notifications from event detail page
+- **Notification types**: announcement, reminder, follow_up, missed_event, check_in_confirmation
+- **Target audiences**: all, going (RSVP'd yes), not_responded, checked_in, not_checked_in (RSVP'd but absent)
+
+### Recurrence Improvements
+
+- **Recurrence editing**: Edit recurrence pattern on existing events
+- **Edit all future**: Updates only future occurrences in a series
+- **Recurrence exceptions**: Exclude individual occurrences from a recurring series without affecting others
+- **Series overview & navigation**: Recurring event detail pages show series badge, "View All in Series" link, and series management actions
+
+### Bulk & Import Features
+
+- **Duplicate/bulk actions**: Duplicate events with one click; bulk actions for managing multiple events
+- **CSV import**: Import events from CSV files for bulk creation (validates required fields, skips invalid rows with error reporting)
+- **Saved filter presets**: Save and recall frequently used event filter combinations
+- **Template picker**: Quick-select from existing templates when creating a new event
+
+### Additional Features
+
+- **Draft/publish workflow**: Events can be saved as drafts and published when ready (drafts hidden from non-admin users)
+- **Save as template**: Save any event configuration as a reusable template
+- **Enhanced search**: Full-text search across event titles, descriptions, and locations
+- **My Events filter**: Filter events to show only those the current user has RSVP'd to
+- **Sort options**: Sort events by date, title, attendance, or creation date
+- **Conflict detection**: Warning when creating events that overlap with existing events at the same location (warns, does not block)
+- **Timezone labels**: All event times display with timezone abbreviation labels
+- **Directions link**: Map/directions link for events with a location
+- **Dashboard widget**: Events widget on the main dashboard showing upcoming events
+- **File upload UI**: Upload attachments (flyers, agendas, maps) directly to events
+- **Capacity bar**: Visual progress bar showing RSVP count vs. capacity on event cards
+- **Calendar export**: Export events to iCal/Google Calendar format
+- **Attendance display**: Visual attendance count on event cards
+
+### New Pages (2026-03-13)
+
+| URL | Page | Permission |
+|-----|------|------------|
+| `/events/analytics` | Event Analytics Dashboard | `analytics.view` |
+| `/events/templates` | Event Templates Management | `events.manage` |
+
+### Edge Cases (2026-03-13)
+
+| Scenario | Behavior |
+|----------|----------|
+| Waitlisted attendees | Promoted in RSVP order when spots open |
+| Draft events | Not visible to non-admin users |
+| Conflict detection | Warns but does not block — departments may intentionally schedule concurrent events |
+| Recurrence exceptions | Tracked per-occurrence; deleting the exception restores the occurrence |
+| CSV import invalid rows | Skipped with error reporting; valid rows are still imported |
+| Calendar export | Respects user's timezone setting |
+| Non-respondent reminders | Excludes members who already responded (going, not going, or maybe) |
+| Template picker | Shows only active templates; deactivated templates hidden but not deleted |
+
+---
+
 ## Recent Changes (2026-03-12)
 
 - **Monthly-by-weekday recurrence**: Events can recur on patterns like "2nd Tuesday of every month" or "last Friday of every month". New `recurrence_week` and `recurrence_day_of_week` database columns

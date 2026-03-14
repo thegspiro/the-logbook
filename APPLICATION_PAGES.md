@@ -132,6 +132,15 @@ Requires `members.manage` permission. Tab-based admin interface.
 | `/events/:id/monitoring` | Check-In Monitoring | `events.manage` |
 | `/events/:id/analytics` | Event Analytics | `analytics.view` |
 
+### Events Module Pages (2026-03-13)
+
+| URL | Page | Permission |
+|-----|------|------------|
+| `/events/analytics` | Event Analytics Dashboard | `analytics.view` |
+| `/events/templates` | Event Templates Management | `events.manage` |
+
+> **Event Analytics Dashboard** shows summary cards (total events, RSVPs, check-ins, attendance rate), event type distribution chart, monthly trends chart, top events table, and date range filtering. **Event Templates Management** lists all templates with create/edit/toggle/delete actions.
+
 ### Events Admin Hub (`/events/admin`)
 
 Requires `events.manage` permission. Tab-based admin interface.
@@ -298,6 +307,26 @@ Tab-based interface with the following views:
 
 ---
 
+## Medical Screening (2026-03-13)
+
+| URL | Page | Permission |
+|-----|------|------------|
+| `/medical-screening` | Medical Screening | `medical_screening.view` |
+
+> Compliance dashboard for tracking member and prospect medical screenings (physicals, drug tests, fitness assessments, psychological evaluations). Includes screening requirements configuration, individual records management, compliance status per member, and expiring screenings alerts. Feature flag: `MODULE_MEDICAL_SCREENING_ENABLED`.
+
+---
+
+## Compliance Requirements Configuration (2026-03-13)
+
+| URL | Page | Permission |
+|-----|------|------------|
+| `/compliance/config` | Compliance Requirements Config | `settings.manage` |
+
+> Configure organization-wide compliance thresholds (percentage or all-required), create compliance profiles targeting specific membership types and roles, schedule automated compliance reports (monthly, quarterly, yearly) with email delivery, and generate on-demand reports. Linked from the compliance officer dashboard.
+
+---
+
 ## Action Items
 
 | URL | Page | Permission |
@@ -359,4 +388,4 @@ Tab-based interface with the following views:
 
 ---
 
-**Total: ~95 direct routes + 25 admin hub tabs across 16 modules**
+**Total: ~102 direct routes + 25 admin hub tabs across 18 modules**

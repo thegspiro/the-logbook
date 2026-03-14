@@ -243,9 +243,13 @@ The pipeline offers two views:
 
 1. **Add a Prospect** - Click **Add Prospect** and fill in their basic information (name, email, phone, interest reason, and **desired membership type** — regular or administrative).
 2. **Complete Steps** - Each pipeline stage has steps (action items, checkboxes, notes). Mark steps as completed as the prospect progresses.
-3. **Advance** - Move the prospect to the next stage when all required steps are complete.
-4. **Upload Documents** - Attach application documents, ID copies, or other requirements to the prospect's record.
-5. **Transfer to Member** - When the prospect is approved, click **Transfer to Membership** to convert them to a full member account. The membership type is pre-filled from the prospect's desired type.
+3. **Advance** - Move the prospect to the next stage when all required steps are complete. If the next stage is an automated email stage, the configured email is sent automatically.
+4. **Move Back** - If a prospect needs to return to a previous stage (e.g., missing documents discovered after advancing), click **Move Back** in the prospect's detail drawer. The previous stage's progress is reset to allow re-completion.
+5. **Upload Documents** - Attach application documents, ID copies, or other requirements to the prospect's record.
+6. **Transfer to Member** - When the prospect is approved, click **Transfer to Membership** to convert them to a full member account. The membership type is pre-filled from the prospect's desired type.
+
+> **Screenshot needed:**
+> _[Screenshot of the Applicant Detail Drawer showing the "Move Back" button alongside the "Advance" button, with a prospect in the middle of a multi-stage pipeline]_
 
 ### Desired Membership Type
 
@@ -269,13 +273,58 @@ Prospective members can indicate their preferred membership type when applying:
 > **Screenshot placeholder:**
 > _[Screenshot of a prospect detail drawer showing the prospect's info at the top, the current pipeline stage, step checklist with some items completed, and the "Transfer to Membership" button]_
 
+### Pipeline Stage Types
+
+The pipeline supports seven stage types, each tailored to a specific step in the membership process:
+
+| Stage Type | Purpose | What Happens |
+|------------|---------|--------------|
+| **Form Submission** | Collect information from the applicant | Links to a form from the Forms module. Can auto-advance when the form is submitted |
+| **Document Upload** | Collect required documents | Applicant uploads documents (ID, certifications, etc.). Can auto-advance when all documents are uploaded |
+| **Election/Vote** | Membership vote | Auto-creates an election package for the Elections module when a prospect reaches this stage |
+| **Manual Approval** | Coordinator sign-off | Coordinator manually marks this stage as complete |
+| **Automated Email** | Send a notification email | Automatically sends a configurable email when the prospect reaches this stage. Configure subject, welcome message, FAQ link, meeting details, and custom sections |
+| **Form Dropdown** | Link an existing form | Select a form from the Forms module via dropdown for data collection |
+| **Meeting** | Schedule interview/orientation | Links to upcoming events. Includes a "President Interview" quick preset |
+
+> **Screenshot needed:**
+> _[Screenshot of the Stage Configuration Modal showing the stage type selector with all seven options, and the configuration panel for an automated email stage showing the email subject, welcome message toggle, and custom sections]_
+
+### Auto-Advance
+
+Form submission and document upload stages can be configured to **auto-advance** the prospect when the condition is met:
+
+1. Open the stage configuration (pencil icon in Pipeline Builder)
+2. Check **"Auto-advance when form is submitted"** or **"Auto-advance when documents are uploaded"**
+3. Save the pipeline
+
+When enabled, the prospect automatically moves to the next stage without coordinator intervention.
+
+> **Edge case:** Auto-advance does not trigger conversion at the final stage. A coordinator must always manually convert a prospect to a full member.
+
+### Automated Email Stages
+
+When a prospect advances to an automated email stage, the system sends the configured email immediately. Configure the email in the stage settings:
+
+- **Subject line** — customize per stage
+- **Welcome message** — optional introduction section
+- **FAQ link** — link to your department's FAQ page
+- **Next meeting details** — date, time, and location of the next relevant meeting
+- **Custom sections** — add titled content blocks (e.g., "What to Bring", "Parking Information")
+- **Status tracker** — link to the application status page
+
+> **Screenshot needed:**
+> _[Screenshot of the email configuration panel in the Stage Config Modal, showing the subject field, welcome message toggle with text area, and a custom section with title and content fields]_
+
+> **Edge case:** If your department has not configured SMTP email settings (in Settings > Email or during onboarding), automated emails will be skipped silently. Check **Settings > Email** to verify your SMTP configuration.
+
 ### Pipeline Configuration
 
 Navigate to **Administration > Members > Pipeline Settings** to:
 
 - Create and customize pipelines
-- Add, remove, or reorder stages
-- Configure step types (Action, Checkbox, Note)
+- Add, remove, or reorder stages (seven stage types available)
+- Configure auto-advance, email templates, form links, and event linking per stage
 - Set a default pipeline for new prospects
 - Enable auto-transfer on final step approval
 
@@ -481,6 +530,11 @@ The **Member Lifecycle Management** page (found under Members Admin) consolidate
 | Member cannot log in after creation | Ensure the welcome email was sent, or manually share the temporary password. Check that the member's status is Active. |
 | CSV import rows failing | Review the error details in the preview. Common issues: duplicate emails, missing required fields, date format (use YYYY-MM-DD). |
 | Prospect not showing in pipeline | Check the pipeline filter. Prospects may be in a different pipeline or have a status of Withdrawn/Transferred. |
+| Auto-advance not triggering | Verify that "Auto-advance when form is submitted" (or documents uploaded) is checked in the stage configuration. The setting defaults to off. |
+| Automated email not sent | Check that SMTP is configured in Settings > Email. Verify the prospect has a valid email address. Check the scheduled email logs for errors. |
+| "Move Back" button not visible | The prospect must be on a stage beyond the first. The "Move Back" action is only available for active prospects not at the first stage. |
+| Email showing UTC times | Ensure the organization's timezone is configured in Settings > Organization. Scheduled emails display times in the organization's timezone. *(fixed 2026-03-14)* |
+| SMTP connection error on email send | Verify SMTP settings: Gmail/Office 365 use STARTTLS on port 587 (`EMAIL_USE_SSL=false`); self-hosted servers may use SSL on port 465 (`EMAIL_USE_SSL=true`). *(fixed 2026-03-13)* |
 | Member still showing as active after being dropped | The status change may not have been saved. Verify from the member's profile. |
 | Property return report not generating | The member must have inventory items assigned. If none are assigned, no report is generated. |
 | Membership tier not advancing | Verify the member has a **hire_date** set and that auto-advance is enabled. The member must have an Active status. |

@@ -7,6 +7,198 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Prospective Members Pipeline — Auto-Advance & Stage Regression (2026-03-14)
+
+- **Auto-advance for form submission and document upload stages**: Pipeline stages of type `form_submission` or `document_upload` can now be configured to auto-advance the prospect when the form is submitted or documents are uploaded. New `auto_advance` boolean field in `FormStageConfig` and `DocumentStageConfig` interfaces, toggled via checkbox in StageConfigModal
+- **Move prospects back to a previous stage**: Coordinators can now regress a prospect to the previous pipeline stage from the Applicant Detail Drawer. New `POST /api/v1/membership-pipeline/prospects/{id}/regress` endpoint. Activity logged as `prospect_regressed` with source and target stage details
+- **Automated email trigger on stage advance**: When a prospect is advanced to an `automated_email` stage, the system now automatically sends the configured email. Email content is built from stage config: subject, welcome message, FAQ link, next meeting details, custom sections, and status tracker. All user inputs are HTML-escaped for security
+- **Email pipeline reliability improvements**: 9 fixes across the email pipeline — SMTP credential decryption, async SMTP processing, org context injection, SSL/TLS support for Gmail/Office365/self-hosted, welcome email templates, onboarding email config persistence to org settings, route ordering for `/scheduled` endpoint, Redis claim cleanup on shutdown, and polling interval reduced from 5 minutes to 60 seconds
+
+**Edge Cases:**
+- Auto-advance only triggers when the stage condition is fulfilled; the `auto_advance` config flag must be explicitly set to `true` (defaults to `false`)
+- Regression is blocked if the prospect is already at the first pipeline stage — the prospect is returned unchanged
+- Regression resets the previous step's progress to `IN_PROGRESS`
+- Email sending failures are logged and the email is marked `FAILED` with an error message; it does not block stage advancement
+- Redis lock (TTL 120s) prevents duplicate emails from concurrent workers
+- Stale Redis claims from crashed workers are automatically recovered instead of permanently blocking the email loop
+
+### Prospective Members Pipeline — Activity Log Fix (2026-03-13)
+
+- **Fix IntegrityError on prospect activity log**: Automated pipeline actions (e.g., stage advancement by the system) were setting `performed_by` to the string `'system'`, which violated the foreign key constraint to the `users` table. Fixed to use `None` instead, which the `nullable=True` column supports
+
+### Events Module — Comprehensive Enhancements (2026-03-13)
+
+- **Quick-create events**: Streamlined event creation flow with minimal required fields (title, date, time) and sensible defaults for all other fields
+- **Rich text descriptions**: Event descriptions now support rich text formatting via a WYSIWYG editor
+- **Split EventDetailPage**: Event detail page refactored into focused sub-components: `EventAttachmentsList`, `EventNotificationPanel`, `EventRSVPSection`, `EventRecurrenceInfo`
+- **Calendar view**: New `CalendarView` component showing a monthly calendar grid with event dots, day highlighting, collapsible daily event lists, timezone support, and navigation between months
+- **Event templates management page**: Dedicated `EventTemplatesPage` for creating, editing, toggling, and deleting event templates with list view, form modal, and delete confirmation
+- **Event analytics dashboard**: New `EventAnalyticsPage` with summary cards (total events, RSVPs, check-ins, attendance rate, avg check-in time), event type distribution bar chart, monthly trends line chart, and top events by attendance table with date range filtering
+- **RSVP history tracking**: Collapsible RSVP activity history feed on the event detail page showing all RSVP changes with timestamps
+- **Dietary/accessibility RSVP fields**: RSVP form now collects dietary restrictions and accessibility requirements from attendees
+- **Series overview & navigation**: Recurring event detail pages show series badge, "View All in Series" link, and series management actions
+- **Directions link**: Event detail page includes a map/directions link for events with a location
+- **Dashboard widget**: Events widget on the main dashboard showing upcoming events
+- **Recurrence editing**: Edit recurrence pattern on existing events; "Edit All Future" updates only future occurrences
+- **Recurrence exceptions**: Individual occurrences can be excluded from a recurring series without affecting other occurrences
+- **Duplicate/bulk actions**: Duplicate an event with one click; bulk actions for managing multiple events
+- **Draft/publish workflow**: Events can be saved as drafts and published when ready
+- **Save as template**: Save any event configuration as a reusable template
+- **Enhanced search**: Full-text search across event titles, descriptions, and locations
+- **My Events filter**: Filter events to show only those the current user has RSVP'd to
+- **Sort options**: Sort events by date, title, attendance, or creation date
+- **Conflict detection**: Warning when creating events that overlap with existing events at the same location
+- **Timezone labels**: All event times display with timezone abbreviation labels
+- **Waitlist system**: Events at capacity automatically waitlist new RSVPs; waitlisted attendees are promoted when spots open
+- **RSVP countdown**: Shows time remaining until RSVP deadline
+- **CSV export**: Export event attendee list as CSV
+- **Print roster**: Print-formatted attendee roster for on-site use
+- **Series RSVP**: RSVP to all events in a recurring series at once
+- **Inline RSVP**: RSVP directly from the events list without opening the detail page
+- **Attendance display**: Visual attendance count and capacity bar on event cards
+- **Template picker**: Quick-select from existing templates when creating a new event
+- **Attachments display**: Dedicated attachments panel on event detail page
+- **Capacity bar**: Visual progress bar showing RSVP count vs. capacity
+- **Calendar export**: Export events to iCal/Google Calendar format
+- **Non-respondent reminders**: Send targeted reminder notifications to members who haven't RSVP'd
+- **CSV import**: Import events from CSV files for bulk event creation
+- **Saved filter presets**: Save and recall frequently used event filter combinations
+- **File upload UI**: Upload attachments (flyers, agendas, maps) directly to events
+- **Event notification panel**: Send targeted notifications (announcements, reminders, follow-ups, missed-event alerts) to specific audiences (all, going, not responded, checked in, not checked in)
+
+**Edge Cases:**
+- Waitlisted attendees are promoted in RSVP order when spots open
+- Draft events are not visible to non-admin users
+- Conflict detection only warns — it does not block event creation (departments may intentionally schedule concurrent events)
+- Recurrence exceptions are tracked per-occurrence; deleting the exception restores the occurrence
+- CSV import validates required fields (title, date) and skips invalid rows with error reporting
+- Calendar export respects the user's timezone setting
+- Non-respondent reminders exclude members who have already responded (going, not going, or maybe)
+- Template picker shows only active templates; deactivated templates are hidden but not deleted
+
+### Medical Screening Module (2026-03-13)
+
+- **New medical screening module**: Full-stack module for tracking medical screenings, physicals, drug tests, fitness assessments, and psychological evaluations for members and prospects
+- **Screening types**: `PHYSICAL_EXAM`, `MEDICAL_CLEARANCE`, `DRUG_SCREENING`, `VISION_HEARING`, `FITNESS_ASSESSMENT`, `PSYCHOLOGICAL`
+- **Screening statuses**: `SCHEDULED`, `COMPLETED`, `PASSED`, `FAILED`, `PENDING_REVIEW`, `WAIVED`, `EXPIRED`
+- **Screening requirements**: Organization-level requirements with configurable frequency (months), role applicability (JSON), grace period, and active/inactive toggle
+- **Screening records**: Individual records linked to either a user or prospect (not both), with scheduled/completed dates, expiration tracking, provider info, result data (JSON), and reviewer chain
+- **Compliance tracking**: Per-user and per-prospect compliance summary endpoints showing which screenings are current, expiring, or overdue
+- **Expiring screenings alert**: Query screenings expiring within a configurable window (1-365 days)
+- **Frontend**: `MedicalScreeningPage` with compliance dashboard, screening record form, and requirement configuration form
+- **Permissions**: `medical_screening.view`, `medical_screening.manage`
+- **Feature flag**: `MODULE_MEDICAL_SCREENING_ENABLED`
+
+**API Endpoints:**
+
+| Method | Path | Permission | Description |
+|--------|------|------------|-------------|
+| `GET` | `/api/v1/medical-screening/requirements` | `view` | List requirements (filter: is_active, screening_type) |
+| `GET` | `/api/v1/medical-screening/requirements/{id}` | `view` | Get requirement |
+| `POST` | `/api/v1/medical-screening/requirements` | `manage` | Create requirement |
+| `PUT` | `/api/v1/medical-screening/requirements/{id}` | `manage` | Update requirement |
+| `DELETE` | `/api/v1/medical-screening/requirements/{id}` | `manage` | Delete requirement |
+| `GET` | `/api/v1/medical-screening/records` | `view` | List records (filter: user_id, prospect_id, type, status) |
+| `GET` | `/api/v1/medical-screening/records/{id}` | `view` | Get record |
+| `POST` | `/api/v1/medical-screening/records` | `manage` | Create record |
+| `PUT` | `/api/v1/medical-screening/records/{id}` | `manage` | Update record |
+| `DELETE` | `/api/v1/medical-screening/records/{id}` | `manage` | Delete record |
+| `GET` | `/api/v1/medical-screening/compliance/{user_id}` | `view` | User compliance summary |
+| `GET` | `/api/v1/medical-screening/compliance/prospect/{prospect_id}` | `view` | Prospect compliance summary |
+| `GET` | `/api/v1/medical-screening/expiring` | `view` | Expiring screenings (query: days=30) |
+
+**Data Models:**
+
+| Table | Key Columns |
+|-------|-------------|
+| `screening_requirements` | id, organization_id, name, screening_type, frequency_months, applies_to_roles (JSON), grace_period_days, is_active |
+| `screening_records` | id, organization_id, requirement_id, user_id (nullable), prospect_id (nullable), screening_type, status, scheduled_date, completed_date, expiration_date, provider_name, result_summary, result_data (JSON), reviewed_by, reviewed_at, notes |
+
+**Edge Cases:**
+- A screening record must link to either `user_id` or `prospect_id`, never both — the service validates this constraint
+- `frequency_months = NULL` indicates a one-time screening that does not recur
+- Grace period (default 30 days) is applied to expiration calculations before marking non-compliant
+- Expiring endpoint accepts `days` query parameter clamped between 1 and 365
+- Screenings for prospects are preserved when the prospect is converted to a member (records are re-linked to the new user_id)
+
+### Compliance Requirements Configuration (2026-03-13)
+
+- **Compliance configuration page**: New `ComplianceRequirementsConfigPage` for configuring organization-wide compliance thresholds, profiles, and automated reporting
+- **Threshold types**: `PERCENTAGE` (compliance based on % of requirements met) or `ALL_REQUIRED` (every requirement must be met)
+- **Compliance profiles**: Named profiles targeting specific membership types and roles, with optional threshold overrides, required/optional requirement lists, priority ordering, and active/inactive toggle
+- **Automated reporting**: Schedule compliance reports monthly, quarterly, or yearly with configurable email recipients and day-of-month
+- **Report generation**: On-demand or scheduled report generation with status tracking (`PENDING` → `GENERATING` → `COMPLETED`/`FAILED`), email delivery, and stored report data (JSON)
+- **Dashboard nav link**: Compliance configuration is now linked from the compliance officer dashboard
+
+**API Endpoints:**
+
+| Method | Path | Permission | Description |
+|--------|------|------------|-------------|
+| `GET` | `/api/v1/compliance/config` | `training.manage` | Get org compliance config |
+| `PUT` | `/api/v1/compliance/config` | `settings.manage` | Create/update compliance config |
+| `POST` | `/api/v1/compliance/config/initialize` | `settings.manage` | First-time setup |
+| `GET` | `/api/v1/compliance/config/requirements` | `training.manage` | Available training requirements |
+| `POST` | `/api/v1/compliance/config/profiles` | `settings.manage` | Create compliance profile |
+| `PUT` | `/api/v1/compliance/config/profiles/{id}` | `settings.manage` | Update compliance profile |
+| `DELETE` | `/api/v1/compliance/config/profiles/{id}` | `settings.manage` | Delete compliance profile |
+| `POST` | `/api/v1/compliance/reports/generate` | `training.manage` | Generate report |
+| `GET` | `/api/v1/compliance/reports` | `training.manage` | List stored reports |
+
+**Data Models:**
+
+| Table | Key Columns |
+|-------|-------------|
+| `compliance_configs` | id, organization_id (unique), threshold_type, compliant_threshold (100.0), at_risk_threshold (75.0), grace_period_days (0), auto_report_frequency, report_email_recipients (JSON), notify_non_compliant_members, notify_days_before_deadline (JSON) |
+| `compliance_profiles` | id, config_id, name, membership_types (JSON), role_ids (JSON), threshold overrides, required/optional requirement_ids (JSON), priority, is_active |
+| `compliance_reports` | id, organization_id, report_type, period_label/year/month, status, report_data (JSON), summary (JSON), emailed_to (JSON), generated_by, generation_duration_ms |
+
+**Edge Cases:**
+- First-time initialization via `/config/initialize` raises an error if config already exists — use `PUT /config` for updates
+- Profiles with overlapping membership types or roles are resolved by priority ordering
+- Profile threshold overrides (null = use org default) allow different compliance standards per role
+- Report generation failures set status to `FAILED` with error_message; failed reports can be regenerated
+- Grace period is applied to deadline calculations before marking members non-compliant
+- `notify_days_before_deadline` is a JSON array allowing multiple notification lead times (e.g., [30, 14, 7])
+
+### Pipeline Email Configuration Improvements (2026-03-13)
+
+- **Custom section add/edit reliability**: Fixed custom section creation and editing in pipeline email stage configuration — sections now persist correctly when adding new ones or editing existing ones
+- **Email config persistence from onboarding**: SMTP settings configured during onboarding are now persisted to the organization's settings, ensuring email functionality works after initial setup without reconfiguration
+
+### Scheduled Email System Hardening (2026-03-13–14)
+
+- **SMTP provider compatibility**: Fixed SMTP sending for Gmail (STARTTLS on port 587), Office 365 (STARTTLS on port 587), and self-hosted servers (SSL on port 465 or plain on port 25). New `EMAIL_USE_SSL` env var for explicit SSL mode selection
+- **SMTP credential decryption**: Email service now correctly decrypts stored SMTP credentials before attempting connection; previously was sending encrypted strings as passwords
+- **Missing org context**: Email processing now loads full organization context (name, settings, logo) before sending, preventing template rendering errors
+- **Route ordering fix**: `GET /api/v1/email-templates/scheduled` moved before `GET /api/v1/email-templates/{template_id}` to prevent FastAPI from matching "scheduled" as a template ID
+- **Scheduled email date handling**: Removed server-side UTC-based future checks that incorrectly rejected emails scheduled in the user's local timezone. Date picker now uses local date for min constraint instead of UTC
+- **Scheduled email time display**: Scheduled emails now display times in the user's local timezone instead of raw UTC
+- **Redis claim recovery**: Scheduled email background loop no longer gives up permanently when encountering a stale Redis claim from a crashed worker — it reclaims after TTL expiry
+- **Redis key cleanup on shutdown**: Application shutdown now explicitly deletes the scheduled email Redis claim key
+- **Message history cleanup**: Added message history cleanup, date filtering, and email validation to the scheduled email pipeline
+
+**Edge Cases:**
+- Gmail requires STARTTLS (not SSL) on port 587 with an app password — `EMAIL_USE_SSL=false` is the correct setting
+- Office 365 uses the same STARTTLS pattern as Gmail on port 587
+- Self-hosted SMTP servers may use SSL on port 465 (`EMAIL_USE_SSL=true`) or plain SMTP on port 25
+- If a Redis claim from a crashed worker is found, the scheduler waits for TTL expiry then reclaims rather than exiting
+- Organizations without configured SMTP settings skip email sending with a warning log instead of crashing
+
+### Pipeline Stage Types — New Stage Types (2026-03-13)
+
+- **`form_dropdown` stage type**: Links an existing form from the Forms module for applicant data collection. Stage config includes form selection via dropdown. Icon: ListChecks
+- **`meeting` stage type**: Schedule an interview or orientation meeting with the applicant. Auto-links upcoming events matching the stage configuration. Includes "President Interview" quick preset. Icon: Calendar
+
+### Code Quality & Build Fixes (2026-03-13)
+
+- **Medical-screening module build fixes**: Resolved frontend build errors in the new medical-screening module
+- **EventDetailPage test update**: Fixed test for updated capacity display format
+- **Slug collision deduplication**: Server-side slug generation now appends numeric suffix for collisions
+- **Accurate modal warning text**: Stage config modal shows correct warning when pipeline has active prospects
+- **Reject extra fields**: Backend rejects unrecognized fields in pipeline stage config requests
+- **Server-side validation for inline stage UIs**: Added backend validation for new stage type configurations
+- **Compliance config wired into calculation**: Compliance calculation engine now reads from the configurable compliance config instead of hardcoded thresholds
+
 ### Finance Module — Budgets, Purchase Requests, Expenses & Approval Chains (2026-03-12)
 
 - **New finance module**: Full-stack finance module (`/finance`) for internal operational finance workflows — budgets, purchase requests, expense reports, check requests, and dues management. Standalone from the grants-fundraising module

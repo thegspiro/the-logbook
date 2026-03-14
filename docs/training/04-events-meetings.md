@@ -11,12 +11,16 @@ The Events module handles department events, attendance tracking with QR code ch
 3. [QR Code Check-In](#qr-code-check-in)
 4. [Creating Events (Officers)](#creating-events-officers)
 5. [Event Templates and Recurring Events](#event-templates-and-recurring-events)
-6. [Meeting Minutes](#meeting-minutes)
-7. [Action Items](#action-items)
-8. [Elections and Voting](#elections-and-voting)
-9. [Public Outreach Request Pipeline](#public-outreach-request-pipeline)
-10. [Realistic Example: Outreach Request from Submission to Completion](#realistic-example-outreach-request-from-submission-to-completion)
-11. [Troubleshooting](#troubleshooting)
+6. [Calendar View, Analytics & Templates](#calendar-view-analytics--templates-2026-03-13)
+7. [RSVP Enhancements](#rsvp-enhancements-2026-03-13)
+8. [Event Notifications](#event-notifications-2026-03-13)
+9. [Bulk Operations & Import](#bulk-operations--import-2026-03-13)
+10. [Meeting Minutes](#meeting-minutes)
+11. [Action Items](#action-items)
+12. [Elections and Voting](#elections-and-voting)
+13. [Public Outreach Request Pipeline](#public-outreach-request-pipeline)
+14. [Realistic Example: Outreach Request from Submission to Completion](#realistic-example-outreach-request-from-submission-to-completion)
+15. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -188,6 +192,205 @@ Once a recurring series is created, each occurrence appears as an individual eve
 | Conflicting times/locations | The system checks for scheduling conflicts before creating each occurrence and warns you |
 | Past events in "Edit All Future" | Only events after today are modified — historical records remain intact |
 | Series spanning timezone changes (DST) | Event times are stored in UTC and displayed in local time; times may shift by 1 hour across DST boundaries |
+
+---
+
+## Calendar View, Analytics & Templates (2026-03-13)
+
+### Calendar View
+
+A monthly calendar view is available alongside the list view:
+
+- Click the **Calendar** toggle on the Events page to switch views
+- Events appear as colored dots on their respective days
+- Click a day to expand and see that day's events with details
+- Navigate between months using the arrow buttons
+- All times display in the organization's configured timezone
+
+> **Screenshot needed:**
+> _[Screenshot of the CalendarView component showing a monthly grid with colored event dots on several days, one day expanded to show a list of events for that day with titles and times]_
+
+### Event Analytics Dashboard
+
+**Required Permission:** `analytics.view`
+
+Navigate to **Events > Analytics** to view department-wide event metrics:
+
+- **Summary Cards**: Total events, total RSVPs, total check-ins, attendance rate, check-in rate, average check-in time (minutes before event start)
+- **Event Type Distribution**: Bar chart showing event counts by type
+- **Monthly Trends**: Line chart showing event frequency over time
+- **Top Events**: Table of highest-attendance events
+- **Date Range Filter**: Filter all analytics by custom date range
+
+> **Screenshot needed:**
+> _[Screenshot of the EventAnalyticsPage showing the summary cards at the top, the event type bar chart on the left, monthly trends line chart on the right, and the top events table below]_
+
+### Event Templates Management
+
+**Required Permission:** `events.manage`
+
+Navigate to **Events > Templates** to manage reusable event configurations:
+
+1. Click **Create Template** to save a new template
+2. Fill in the template form with default event settings (title, type, location, time, description, reminders)
+3. Toggle templates **active/inactive** — inactive templates won't appear in the template picker
+4. Edit or delete existing templates
+
+When creating a new event, the **Template Picker** lets you quick-select from active templates to pre-fill the event form.
+
+> **Screenshot needed:**
+> _[Screenshot of the EventTemplatesPage showing a list of templates with name, type, active toggle, and edit/delete buttons. Show the create template modal open with the form fields]_
+
+### Quick-Create Events
+
+For simple events, use the quick-create flow:
+
+1. Click **Quick Create** on the Events page
+2. Enter only the required fields: **title**, **date**, and **time**
+3. All other settings use sensible defaults
+4. Click **Create** to save immediately
+
+### Rich Text Descriptions
+
+Event descriptions now support rich text formatting:
+
+- Bold, italic, underline
+- Bullet and numbered lists
+- Links
+- Headings
+
+> **Screenshot needed:**
+> _[Screenshot of the event creation form showing the rich text editor for the description field with the formatting toolbar visible]_
+
+---
+
+## RSVP Enhancements (2026-03-13)
+
+### Dietary & Accessibility Information
+
+When RSVPing to an event, members can now provide:
+
+- **Dietary restrictions** — allergies, preferences, or special requirements
+- **Accessibility needs** — wheelchair access, hearing assistance, or other accommodations
+
+This information is visible to event coordinators in the attendee list.
+
+> **Screenshot needed:**
+> _[Screenshot of the RSVP form showing the dietary restrictions text field and accessibility requirements text field below the Going/Maybe/Not Going buttons]_
+
+### RSVP History
+
+The event detail page now includes a collapsible **RSVP Activity History** feed showing all RSVP changes with timestamps (e.g., "John Smith changed from Maybe to Going at 2:15 PM").
+
+### Inline RSVP
+
+RSVP directly from the events list without opening the event detail page — click the RSVP button on any event card.
+
+### Series RSVP
+
+For recurring events, you can RSVP to **all events in the series** at once instead of responding to each individually.
+
+### Waitlist System
+
+When an event reaches its capacity limit:
+
+1. New RSVPs are automatically added to the **waitlist**
+2. If a spot opens (someone changes to "Not Going"), the first waitlisted person is promoted
+3. Waitlisted members are notified when promoted to "Going"
+4. The waitlist position is visible on the event detail page
+
+> **Edge case:** Waitlisted attendees are promoted in the order they RSVP'd. If multiple spots open simultaneously, multiple waitlisted members are promoted in order.
+
+### Additional RSVP Features
+
+- **RSVP Countdown** — Shows time remaining until RSVP deadline on event cards
+- **CSV Export** — Download the attendee list as a CSV file from the event detail page
+- **Print Roster** — Print a formatted attendee roster for on-site check-in use
+- **Capacity Bar** — Visual progress bar on event cards showing RSVP count vs. capacity
+- **Non-Respondent Reminders** — Send targeted reminder notifications to members who haven't RSVP'd. Excludes members who already responded (going, not going, or maybe)
+
+> **Screenshot needed:**
+> _[Screenshot of the EventRSVPSection on an event detail page showing the attendee list with check-in times, RSVP statuses, the CSV Export and Print Roster buttons, and the RSVP activity history collapsed section]_
+
+---
+
+## Event Notifications (2026-03-13)
+
+**Required Permission:** `events.manage`
+
+From any event's detail page, coordinators can send targeted notifications:
+
+### Notification Types
+
+| Type | Purpose |
+|------|---------|
+| **Announcement** | General announcement about the event |
+| **Reminder** | Reminder notification before the event |
+| **Follow-Up** | Post-event follow-up message |
+| **Missed Event** | Alert for members who RSVP'd but didn't attend |
+| **Check-In Confirmation** | Confirmation for members who checked in |
+
+### Target Audiences
+
+| Audience | Who Receives |
+|----------|-------------|
+| **All** | Everyone invited or associated with the event |
+| **Going** | Members who RSVP'd "Going" |
+| **Not Responded** | Members who haven't RSVP'd |
+| **Checked In** | Members who checked in to the event |
+| **Not Checked In** | Members who RSVP'd "Going" but didn't check in |
+
+> **Screenshot needed:**
+> _[Screenshot of the EventNotificationPanel showing the notification type dropdown, target audience radio buttons, message text area, and the Send button with confirmation dialog]_
+
+---
+
+## Bulk Operations & Import (2026-03-13)
+
+### Duplicate Events
+
+Click **Duplicate** from an event's "More" menu to create a copy with the same settings but a new date.
+
+### Bulk Actions
+
+Select multiple events from the events list to perform bulk operations (delete, change type, etc.).
+
+### CSV Import
+
+Import events from a CSV file:
+
+1. Navigate to **Events Admin**
+2. Click **Import from CSV**
+3. Upload a CSV with columns: title, date, start_time, end_time, type, location, description
+4. Preview the import — invalid rows are highlighted with error details
+5. Confirm to import all valid rows
+
+> **Edge case:** Invalid rows (missing title or date) are skipped with error reporting. Valid rows in the same file are still imported.
+
+### Saved Filter Presets
+
+Save frequently used filter combinations (event type, date range, category) as named presets for quick recall.
+
+### Draft/Publish Workflow
+
+Events can be saved as **drafts** before publishing:
+
+1. Create an event and click **Save as Draft** instead of **Create**
+2. Draft events are only visible to users with `events.manage` permission
+3. Edit the draft until ready, then click **Publish** to make it visible to all members
+
+### Additional Features
+
+- **Save as Template** — Save any event's configuration as a reusable template
+- **Enhanced Search** — Full-text search across event titles, descriptions, and locations
+- **My Events Filter** — Filter the events list to show only events you've RSVP'd to
+- **Sort Options** — Sort by date, title, attendance count, or creation date
+- **Conflict Detection** — Warning when creating events that overlap at the same location (warns but does not block)
+- **Timezone Labels** — All event times display with timezone abbreviation
+- **Directions Link** — Map/directions link for events with a location
+- **Dashboard Widget** — Upcoming events widget on the main dashboard
+- **Calendar Export** — Export events to iCal/Google Calendar format
+- **Attendance Display** — Visual attendance count on event cards in list view
 
 ---
 
@@ -635,6 +838,15 @@ Thank you for working with Riverside Fire-Rescue!
 | Custom categories sent as strings cause 422 | Fixed 2026-03-12 — schema now accepts objects (`{id, label, color}`). Existing string-format categories auto-migrate on next save. |
 | Settings changes not persisting | Fixed 2026-03-12 — SQLAlchemy JSON column shallow copy issue. Pull latest to get `deepcopy()` fix. |
 | Event form sending empty strings causes 422 | Fixed 2026-03-12 — `??` replaced with `||` for all optional form fields to coerce empty strings to `undefined`. |
+| Calendar view not showing events | Ensure events exist for the displayed month. Use the navigation arrows to check other months. Events are filtered by the currently selected event type filter. |
+| Analytics page shows no data | Verify `analytics.view` permission is assigned to your role. Analytics require at least one event to have been created. Use the date range filter to widen the search window. |
+| Template picker shows no templates | No active templates exist. Create a template from **Events > Templates** or save an existing event as a template. Deactivated templates are hidden. |
+| Waitlist not promoting attendees | Promotion occurs automatically when a "Going" member changes to "Not Going". Check that the event has a capacity limit set. |
+| CSV import skipping rows | Rows missing required fields (title, date) are skipped. Check the error details in the import preview for specific validation failures. |
+| Draft event visible to regular members | Verify the event was saved as a draft, not published. Only users with `events.manage` permission can see drafts. |
+| Non-respondent reminder sent to someone who already RSVP'd | This should not happen — reminders exclude all members who have responded (going, not going, or maybe). If it occurs, refresh the RSVP data and retry. *(fixed 2026-03-13)* |
+| Conflict detection false positive | Conflict detection checks time + location overlap. Events at different locations at the same time are not flagged. The warning is advisory — you can proceed with creation. |
+| Recurrence exception not restoring | Deleting a recurrence exception should restore the occurrence. If the occurrence doesn't reappear, check the series management view for the full series timeline. *(added 2026-03-13)* |
 
 ---
 

@@ -323,6 +323,10 @@ Integration configuration includes a visual field mapping interface:
 
 ## Recent Changes (March 2026)
 
+### March 14, 2026
+- **Auto-advance integration with pipeline stages**: When a `form_submission` pipeline stage has `auto_advance: true` in its configuration, submitting the linked form automatically advances the prospect to the next pipeline stage. The `forms_service.py` now checks for auto-advance configuration after processing a submission linked to a pipeline stage
+- **Auto-advance for document upload stages**: Similarly, `document_upload` pipeline stages with `auto_advance: true` auto-advance when all required documents are uploaded
+
 ### March 4, 2026
 - **Form-to-pipeline integration hardening (13 improvements)**: Server-side validation, label-based fallback for all integration types, O(N) cleanup query optimization, field compatibility checks before save, step update lifecycle fix
 - **Form data flow fix**: Fixed multiple issues where form submissions were not appearing in the prospective members pipeline — including field mapping failures on reprocessed submissions

@@ -118,6 +118,8 @@ Enable these as needed:
 - Facilities Management
 - Prospective Members Pipeline
 - Public Information
+- Medical Screening *(added 2026-03-13)*
+- Finance *(added 2026-03-12)*
 
 > **Screenshot placeholder:**
 > _[Screenshot of the Module Management section showing the three categories of modules, each with enable/disable toggles. Show some optional modules enabled (green toggle) and some disabled (gray toggle)]_
@@ -297,6 +299,8 @@ Scheduled tasks run automatically on a schedule:
 | **Mark Overdue Checkouts** | Flag inventory checkouts past their expected return date |
 | **Send Event Reminders** | Deliver scheduled event reminders to RSVP'd members |
 | **Clean Up Sessions** | Remove expired login sessions |
+| **Process Scheduled Emails** | Send pending pipeline automated emails (polls every 60 seconds) *(added 2026-03-13)* |
+| **Generate Compliance Reports** | Auto-generate scheduled compliance reports *(added 2026-03-13)* |
 
 For each task you can see:
 - Last run time
@@ -595,6 +599,126 @@ The setup checklist shows all steps complete. The system is ready for use.
 
 ---
 
+## Medical Screening Module (2026-03-13)
+
+**Required Permission:** `medical_screening.view` (view) / `medical_screening.manage` (manage)
+
+The Medical Screening module tracks health screenings, physicals, drug tests, and fitness assessments for members and prospective members. Enable it in **Settings > Organization > Modules**.
+
+### Screening Types
+
+| Type | Description |
+|------|-------------|
+| Physical Exam | Annual or periodic physical examination |
+| Medical Clearance | Clearance for return to duty or specific activities |
+| Drug Screening | Random or scheduled substance screening |
+| Vision/Hearing | Vision and hearing tests |
+| Fitness Assessment | Physical fitness evaluation |
+| Psychological | Psychological evaluation or fitness-for-duty assessment |
+
+### Setting Up Requirements
+
+1. Navigate to **Medical Screening** in the sidebar
+2. Click the **Requirements** tab
+3. Click **Add Requirement**
+4. Configure:
+   - **Name** — descriptive name (e.g., "Annual Physical Exam")
+   - **Type** — select from the screening types above
+   - **Frequency** — how often the screening is required (in months). Leave empty for one-time screenings
+   - **Applies to Roles** — which roles this requirement applies to (e.g., all firefighters, officers only)
+   - **Grace Period** — days after expiration before marking non-compliant (default: 30)
+5. Click **Save**
+
+> **Screenshot needed:**
+> _[Screenshot of the Medical Screening page showing the Requirements tab with a list of configured requirements (Annual Physical, Drug Screening, Fitness Test) with columns for type, frequency, applicable roles, and active toggle]_
+
+### Recording Screenings
+
+1. Click the **Records** tab
+2. Click **Add Record**
+3. Select the **member** (or prospect) and the **requirement**
+4. Enter the scheduled date, provider name, and any notes
+5. After the screening is completed, update the record with:
+   - **Status**: Passed, Failed, Pending Review, or Waived
+   - **Completed date** and **expiration date**
+   - **Result summary** and detailed result data
+
+> **Screenshot needed:**
+> _[Screenshot of the ScreeningRecordForm showing fields for member selection, requirement dropdown, scheduled date, provider name, status dropdown, and result summary text area]_
+
+### Compliance Dashboard
+
+The compliance dashboard shows:
+- Overall compliance rate by screening type
+- Members with expiring screenings (configurable: 30/60/90 days)
+- Overdue screenings requiring immediate attention
+- Drill-down to individual member compliance details
+
+> **Screenshot needed:**
+> _[Screenshot of the ComplianceDashboard showing compliance rate cards for each screening type, a list of expiring screenings with member names and dates, and an overdue screenings alert section]_
+
+### Edge Cases
+
+| Scenario | What Happens |
+|----------|-------------|
+| One-time screening (no frequency) | Does not recur; no automatic expiration tracking |
+| Prospect converted to member | Screening records are preserved and can be re-linked to the new user account |
+| Requirement deactivated | Existing records preserved; requirement excluded from future compliance checks |
+| Grace period exceeded | Member marked non-compliant in compliance dashboard and reports |
+
+---
+
+## Compliance Requirements Configuration (2026-03-13)
+
+**Required Permission:** `settings.manage`
+
+Navigate to the compliance officer dashboard and click **Configure Requirements** to access the compliance configuration page.
+
+### Configuring Thresholds
+
+1. Choose a **threshold type**:
+   - **Percentage** — Members are compliant if they meet X% of requirements
+   - **All Required** — Members must meet 100% of requirements to be compliant
+2. Set the **compliant threshold** (default: 100%) and **at-risk threshold** (default: 75%)
+3. Set the **grace period** (days after deadline before marking non-compliant)
+4. Click **Save**
+
+### Creating Compliance Profiles
+
+Profiles allow different compliance standards for different groups:
+
+1. Click **Add Profile**
+2. Set:
+   - **Name** — e.g., "Line Officers", "Probationary Members"
+   - **Membership types** — which membership types this profile applies to
+   - **Roles** — which roles this profile targets
+   - **Required requirements** — training requirements that must be met
+   - **Optional requirements** — tracked but not required for compliance
+   - **Threshold overrides** — optionally set different thresholds for this group
+3. Set **priority** — when a member matches multiple profiles, the highest-priority profile applies
+
+> **Screenshot needed:**
+> _[Screenshot of the ComplianceRequirementsConfigPage showing the threshold configuration section at the top, a list of compliance profiles with name, targeted groups, and threshold values, and an "Add Profile" button]_
+
+### Automated Reporting
+
+1. Set the **report frequency**: Monthly, Quarterly, or Yearly
+2. Configure **email recipients** — who receives the reports
+3. Set the **day of month** for report generation
+4. Optionally enable **non-compliant member notifications** with configurable lead times (e.g., notify 30, 14, and 7 days before deadline)
+
+### Generating Reports On-Demand
+
+1. Click **Generate Report** from the compliance config page
+2. Select the report type (monthly or yearly)
+3. Optionally check **Send via email**
+4. The report shows overall compliance rates, per-member status, and trends
+
+> **Screenshot needed:**
+> _[Screenshot of the report generation dialog showing report type selector, send via email checkbox, additional recipients field, and a preview of a generated compliance report with member status table]_
+
+---
+
 ## Troubleshooting
 
 | Issue | Solution |
@@ -620,6 +744,11 @@ The setup checklist shows all steps complete. The system is ready for use.
 | Onboarding redirects to /login after Step 7 | Fixed in March 2026 — system owner creation now sets httpOnly auth cookies. Pull latest backend code and restart. |
 | Events Settings page layout changed | As of 2026-03-04, the Events Settings page uses a sidebar + content panel layout matching Organization Settings, replacing the previous collapsible sections. |
 | Reports page only shows basic views | As of 2026-03-04, the Reports module has been expanded into a dedicated feature module with 12 report types. Pull latest to access the full reports experience. |
+| Medical Screening module not visible | Enable `MODULE_MEDICAL_SCREENING_ENABLED` in **Settings > Modules** or via environment variable. *(added 2026-03-13)* |
+| Compliance shows 0% with requirements defined | Verify screening records exist for the member and that the requirement is active. Check that the member's role matches the requirement's `applies_to_roles` configuration. |
+| Compliance report generation fails | Check the error message in the report list. Common causes: no compliance config defined (use **Initialize** first), or SMTP not configured for email delivery. |
+| Scheduled emails not sending | Verify SMTP is configured in Settings > Email. Check that the background email scheduler is running (polls every 60 seconds). For Gmail, use STARTTLS on port 587 with an app password. *(fixed 2026-03-13)* |
+| Compliance config "already exists" error | Use the update endpoint (PUT) instead of initialize (POST) after first-time setup. The initialization endpoint is for first-time configuration only. |
 
 ---
 
