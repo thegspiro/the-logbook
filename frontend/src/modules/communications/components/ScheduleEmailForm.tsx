@@ -9,6 +9,8 @@ import { CalendarClock, Send, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { EmailTemplate, ScheduledEmailCreate } from '../../../services/api';
 import { useScheduledEmailsStore } from '../store/scheduledEmailsStore';
+import { localToUTC } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
 
 interface ScheduleEmailFormProps {
   templates: EmailTemplate[];
@@ -23,7 +25,8 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({
   templates,
   onClose,
 }) => {
-  const { scheduleEmail, isSaving } = useScheduledEmailsStore();
+  const { scheduleEmail, isSaving, error: storeError } = useScheduledEmailsStore();
+  const tz = useTimezone();
 
   const [templateType, setTemplateType] = useState('');
   const [toEmails, setToEmails] = useState('');
@@ -43,6 +46,13 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({
       return;
     }
 
+    // Validate scheduled time is in the future
+    const selectedLocal = new Date(`${scheduledDate}T${scheduledTime}:00`);
+    if (selectedLocal <= new Date()) {
+      toast.error('Scheduled time must be in the future');
+      return;
+    }
+
     const recipients = toEmails
       .split(',')
       .map((e) => e.trim())
@@ -56,9 +66,7 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({
       .map((e) => e.trim())
       .filter(Boolean);
 
-    const scheduledAt = new Date(
-      `${scheduledDate}T${scheduledTime}:00`,
-    ).toISOString();
+    const scheduledAt = localToUTC(`${scheduledDate}T${scheduledTime}`, tz);
 
     const data: ScheduledEmailCreate = {
       template_type: templateType,
@@ -74,7 +82,7 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({
       toast.success('Email scheduled successfully');
       onClose();
     } catch {
-      // Error handled by store
+      toast.error('Failed to schedule email. Please try again.');
     }
   };
 
@@ -99,6 +107,12 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({
           <X className="h-5 w-5" />
         </button>
       </div>
+
+      {storeError && (
+        <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
+          {storeError}
+        </div>
+      )}
 
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
         <div>
