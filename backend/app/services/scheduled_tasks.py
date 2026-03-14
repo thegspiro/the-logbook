@@ -128,9 +128,9 @@ SCHEDULE = {
     },
     "scheduled_emails": {
         "description": "Process pending scheduled emails that are due to be sent",
-        "frequency": "every 5 minutes",
-        "recommended_time": "*/5 * * * *",
-        "cron": "*/5 * * * *",
+        "frequency": "every 1 minute",
+        "recommended_time": "* * * * *",
+        "cron": "* * * * *",
     },
     "inventory_low_stock_alerts": {
         "description": "Send email alerts to admins when inventory items fall below their reorder point",
@@ -1180,7 +1180,7 @@ async def run_scheduled_emails(db: AsyncSession) -> Dict[str, Any]:
 
     # Acquire a Redis lock to prevent concurrent execution
     lock_key = "lock:run_scheduled_emails"
-    lock_ttl = 300  # 5 minutes max
+    lock_ttl = 120  # 2 minutes max (loop runs every 60s)
     if cache_manager.is_connected and cache_manager.redis_client:
         acquired = await cache_manager.redis_client.set(
             lock_key, "1", nx=True, ex=lock_ttl
