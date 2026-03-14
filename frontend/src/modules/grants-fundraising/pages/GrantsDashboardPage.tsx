@@ -35,19 +35,8 @@ import {
 } from '../types';
 import { Skeleton, SkeletonRow } from '../../../components/ux/Skeleton';
 import { formatDate, daysUntil } from '../../../utils/dateFormatting';
+import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
-
-// =============================================================================
-// Currency Formatter
-// =============================================================================
-
-const formatCurrency = (amount: number): string =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
 
 // =============================================================================
 // Payment Method Labels
@@ -535,7 +524,7 @@ const RecentDonationsTable: React.FC<RecentDonationsProps> = ({
                     : donation.donorName ?? 'Unknown'}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-theme-text-primary">
-                  {formatCurrency(Number(donation.amount))}
+                  {formatCurrencyWhole(Number(donation.amount))}
                 </td>
                 <td className="px-4 py-3 text-sm text-theme-text-secondary">
                   {donation.campaignId ? (
@@ -637,7 +626,7 @@ const GrantsDashboardPage: React.FC = () => {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard
           label="Total Grant Funding"
-          value={formatCurrency(dashboard?.totalGrantFunding ?? 0)}
+          value={formatCurrencyWhole(dashboard?.totalGrantFunding ?? 0)}
           icon={<DollarSign className="h-5 w-5 text-green-600" />}
           iconBgClass="bg-green-100"
           linkTo="/grants/applications"
@@ -658,7 +647,7 @@ const GrantsDashboardPage: React.FC = () => {
         />
         <KpiCard
           label="Total Raised YTD"
-          value={formatCurrency(dashboard?.totalRaisedYtd ?? 0)}
+          value={formatCurrencyWhole(dashboard?.totalRaisedYtd ?? 0)}
           icon={<TrendingUp className="h-5 w-5 text-emerald-600" />}
           iconBgClass="bg-emerald-100"
           linkTo="/grants/campaigns"
@@ -683,14 +672,14 @@ const GrantsDashboardPage: React.FC = () => {
         />
         <KpiCard
           label="Outstanding Pledges"
-          value={formatCurrency(dashboard?.outstandingPledges ?? 0)}
+          value={formatCurrencyWhole(dashboard?.outstandingPledges ?? 0)}
           icon={<HandCoins className="h-5 w-5 text-orange-600" />}
           iconBgClass="bg-orange-100"
           linkTo="/grants/pledges"
         />
         <KpiCard
           label="Total Raised (12mo)"
-          value={formatCurrency(dashboard?.totalRaised12mo ?? 0)}
+          value={formatCurrencyWhole(dashboard?.totalRaised12mo ?? 0)}
           icon={<BarChart3 className="h-5 w-5 text-teal-600" />}
           iconBgClass="bg-teal-100"
         />

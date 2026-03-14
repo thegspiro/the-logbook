@@ -11,12 +11,8 @@ import {
 import { fundraisingService } from '../services/api';
 import type { Donation } from '../types';
 import { formatDate } from '../../../utils/dateFormatting';
+import { formatCurrency } from '@/utils/currencyFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
-
-const formatCurrency = (amount: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(
-    amount,
-  );
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cash: 'Cash',

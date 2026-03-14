@@ -10,7 +10,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import PaginationParams, get_current_user, require_permission
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.notifications import (
@@ -153,8 +153,7 @@ async def toggle_rule(
 @router.get("/logs", response_model=NotificationLogsListResponse)
 async def list_logs(
     channel: str | None = None,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("notifications.view")),
 ):
@@ -163,14 +162,14 @@ async def list_logs(
     logs, total = await service.get_logs(
         current_user.organization_id,
         channel=channel,
-        skip=skip,
-        limit=limit,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
     return {
         "logs": logs,
         "total": total,
-        "skip": skip,
-        "limit": limit,
+        "skip": pagination.skip,
+        "limit": pagination.limit,
     }
 
 
@@ -201,8 +200,7 @@ async def get_my_notifications(
         False, description="Include expired notifications (for history view)"
     ),
     include_read: bool = Query(True, description="Include read notifications"),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -217,10 +215,10 @@ async def get_my_notifications(
         user_id=current_user.id,
         include_expired=include_expired,
         include_read=include_read,
-        skip=skip,
-        limit=limit,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
-    return {"logs": logs, "total": total, "skip": skip, "limit": limit}
+    return {"logs": logs, "total": total, "skip": pagination.skip, "limit": pagination.limit}
 
 
 @router.get("/my/unread-count")

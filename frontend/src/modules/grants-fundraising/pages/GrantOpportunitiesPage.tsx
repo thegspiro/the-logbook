@@ -24,14 +24,8 @@ import {
 import { grantsService } from '../services/api';
 import type { GrantOpportunity, GrantCategory } from '../types';
 import { formatDate } from '../../../utils/dateFormatting';
+import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
-
-const formatCurrency = (amount: number) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(amount);
 
 const CATEGORY_LABELS: Record<string, string> = {
   equipment: 'Equipment',
@@ -337,11 +331,11 @@ export const GrantOpportunitiesPage: React.FC = () => {
                     <DollarSign className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
                     <span className="text-theme-text-primary">
                       {opp.typicalAwardMin != null && opp.typicalAwardMax != null
-                        ? `${formatCurrency(opp.typicalAwardMin)} - ${formatCurrency(opp.typicalAwardMax)}`
+                        ? `${formatCurrencyWhole(opp.typicalAwardMin)} - ${formatCurrencyWhole(opp.typicalAwardMax)}`
                         : opp.typicalAwardMax != null
-                          ? `Up to ${formatCurrency(opp.typicalAwardMax)}`
+                          ? `Up to ${formatCurrencyWhole(opp.typicalAwardMax)}`
                           : opp.typicalAwardMin != null
-                            ? `From ${formatCurrency(opp.typicalAwardMin)}`
+                            ? `From ${formatCurrencyWhole(opp.typicalAwardMin)}`
                             : 'Varies'}
                     </span>
                   </div>

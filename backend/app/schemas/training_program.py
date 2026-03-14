@@ -10,6 +10,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+_response_config = ConfigDict(from_attributes=True)
+
 # Enum-like string literals for validation
 RequirementTypeStr = (
     str  # hours, courses, certification, shifts, calls, skills_evaluation, checklist
@@ -92,7 +94,7 @@ class TrainingRequirementEnhancedResponse(TrainingRequirementEnhancedBase):
     updated_at: datetime
     created_by: Optional[UUID] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # Training Program Schemas
@@ -139,7 +141,7 @@ class TrainingProgramResponse(TrainingProgramBase):
     updated_at: datetime
     created_by: Optional[UUID] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # Program Phase Schemas
@@ -179,7 +181,7 @@ class ProgramPhaseResponse(ProgramPhaseBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # Program Requirement Schemas
@@ -218,7 +220,7 @@ class ProgramRequirementResponse(ProgramRequirementBase):
     requirement_id: UUID
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # Program Milestone Schemas
@@ -257,7 +259,7 @@ class ProgramMilestoneResponse(ProgramMilestoneBase):
     phase_id: Optional[UUID] = None
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # Program Enrollment Schemas
@@ -301,7 +303,7 @@ class ProgramEnrollmentResponse(ProgramEnrollmentBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # Requirement Progress Schemas
@@ -345,7 +347,7 @@ class RequirementProgressResponse(RequirementProgressBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # Skill Evaluation Schemas
@@ -386,7 +388,7 @@ class SkillEvaluationResponse(SkillEvaluationBase):
     updated_at: datetime
     created_by: Optional[UUID] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # Skill Checkoff Schemas
@@ -427,7 +429,7 @@ class SkillCheckoffResponse(SkillCheckoffBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # Comprehensive Program Details

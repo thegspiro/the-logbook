@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_db
-from app.core.utils import safe_error_detail
+from app.core.utils import ensure_found, handle_service_errors
 from app.models.user import User
 from app.schemas.training_submission import (
     SelfReportConfigResponse,
@@ -66,15 +66,13 @@ async def create_submission(
 ):
     """Submit self-reported training. Any authenticated member can submit."""
     service = TrainingSubmissionService(db)
-    try:
+    async with handle_service_errors("Failed to create submission"):
         submission = await service.create_submission(
             organization_id=current_user.organization_id,
             submitted_by=current_user.id,
             **data.model_dump(exclude_unset=True),
         )
         return submission
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
 
 @router.get("/my", response_model=list[TrainingSubmissionResponse])
@@ -147,9 +145,10 @@ async def get_submission(
 ):
     """Get a specific submission. Members can see their own; officers can see all."""
     service = TrainingSubmissionService(db)
-    submission = await service.get_submission(submission_id)
-    if not submission:
-        raise HTTPException(status_code=404, detail="Submission not found")
+    submission = ensure_found(
+        await service.get_submission(submission_id),
+        "Submission",
+    )
 
     # Check access: own submission or has training.manage permission
     if submission.submitted_by != current_user.id:
@@ -171,17 +170,13 @@ async def update_submission(
 ):
     """Update a submission (only by submitter, before approval)."""
     service = TrainingSubmissionService(db)
-    try:
+    async with handle_service_errors("Failed to update submission"):
         submission = await service.update_submission(
             submission_id=submission_id,
             user_id=current_user.id,
             **updates.model_dump(exclude_unset=True),
         )
         return submission
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=safe_error_detail(e))
-    except PermissionError as e:
-        raise HTTPException(status_code=403, detail=safe_error_detail(e))
 
 
 @router.delete("/{submission_id}", status_code=204)
@@ -192,12 +187,8 @@ async def delete_submission(
 ):
     """Delete a submission (only by submitter, before approval)."""
     service = TrainingSubmissionService(db)
-    try:
+    async with handle_service_errors("Failed to delete submission"):
         await service.delete_submission(submission_id, current_user.id)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=safe_error_detail(e))
-    except PermissionError as e:
-        raise HTTPException(status_code=403, detail=safe_error_detail(e))
 
 
 # ==================== Officer Review ====================
@@ -212,7 +203,7 @@ async def review_submission(
 ):
     """Review a submission: approve, reject, or request revision."""
     service = TrainingSubmissionService(db)
-    try:
+    async with handle_service_errors("Failed to review submission"):
         submission = await service.review_submission(
             submission_id=submission_id,
             reviewer_id=current_user.id,
@@ -223,5 +214,3 @@ async def review_submission(
             override_training_type=review.override_training_type,
         )
         return submission
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=safe_error_detail(e))

@@ -17,6 +17,7 @@ import { purchaseRequestService } from '../services/api';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { PurchaseRequestPriority } from '../types';
 import type { PurchaseRequest } from '../types';
+import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 
 // =============================================================================
 // Validation Schema
@@ -346,12 +347,7 @@ const PurchaseRequestFormPage: React.FC = () => {
               {budgets.map((b) => (
                 <option key={b.id} value={b.id}>
                   {categoryMap.get(b.categoryId) ?? 'Unknown'} -{' '}
-                  {new Intl.NumberFormat('en-US', {
-                    style: 'currency',
-                    currency: 'USD',
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 0,
-                  }).format(
+                  {formatCurrencyWhole(
                     b.amountBudgeted - b.amountSpent - b.amountEncumbered,
                   )}{' '}
                   remaining

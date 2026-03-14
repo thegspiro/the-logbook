@@ -10,7 +10,7 @@ from datetime import date, datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import require_permission
+from app.api.dependencies import PaginationParams, require_permission
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.user import User
@@ -1054,8 +1054,7 @@ async def list_maintenance_records(
     occurred_before: date | None = Query(
         None, description="Filter records that occurred on or before this date"
     ),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("apparatus.view", "apparatus.manage")
@@ -1080,8 +1079,8 @@ async def list_maintenance_records(
         is_historic=is_historic,
         occurred_after=occurred_after,
         occurred_before=occurred_before,
-        skip=skip,
-        limit=limit,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
     return records
 
@@ -1267,8 +1266,7 @@ async def list_fuel_logs(
     apparatus_id: str | None = Query(None, description="Filter by apparatus"),
     start_date: datetime | None = Query(None, description="Start date filter"),
     end_date: datetime | None = Query(None, description="End date filter"),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("apparatus.view", "apparatus.manage")
@@ -1286,8 +1284,8 @@ async def list_fuel_logs(
         apparatus_id=apparatus_id,
         start_date=start_date,
         end_date=end_date,
-        skip=skip,
-        limit=limit,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
     return logs
 
@@ -1341,8 +1339,7 @@ async def list_operators(
     apparatus_id: str | None = Query(None, description="Filter by apparatus"),
     user_id: str | None = Query(None, description="Filter by user"),
     is_active: bool | None = Query(True, description="Filter by active status"),
-    skip: int = Query(0, ge=0, description="Number of records to skip"),
-    limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("apparatus.view", "apparatus.manage")
@@ -1360,8 +1357,8 @@ async def list_operators(
         apparatus_id=apparatus_id,
         user_id=user_id,
         is_active=is_active,
-        skip=skip,
-        limit=limit,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
     return operators
 
@@ -1479,8 +1476,7 @@ async def list_equipment(
     is_present: bool | None = Query(
         None, description="Filter by presence on apparatus"
     ),
-    skip: int = Query(0, ge=0, description="Number of records to skip"),
-    limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("apparatus.view", "apparatus.manage")
@@ -1497,8 +1493,8 @@ async def list_equipment(
         organization_id=current_user.organization_id,
         apparatus_id=apparatus_id,
         is_present=is_present,
-        skip=skip,
-        limit=limit,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
     return equipment
 
@@ -2160,8 +2156,7 @@ async def list_service_providers(
     ),
     is_preferred: bool | None = Query(None, description="Filter preferred providers"),
     specialty: str | None = Query(None, description="Filter by component specialty"),
-    skip: int = Query(0, ge=0, description="Number of records to skip"),
-    limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("apparatus.view", "apparatus.manage")
@@ -2182,8 +2177,8 @@ async def list_service_providers(
         is_active=is_active,
         specialty=specialty,
         is_preferred=is_preferred,
-        skip=skip,
-        limit=limit,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
 
 
@@ -2347,8 +2342,7 @@ async def list_components(
     apparatus_id: str | None = Query(None, description="Filter by apparatus"),
     component_type: str | None = Query(None, description="Filter by component type"),
     is_active: bool | None = Query(True, description="Filter by active status"),
-    skip: int = Query(0, ge=0, description="Number of records to skip"),
-    limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("apparatus.view", "apparatus.manage")
@@ -2365,8 +2359,8 @@ async def list_components(
         apparatus_id=apparatus_id,
         component_type=component_type,
         is_active=is_active,
-        skip=skip,
-        limit=limit,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
 
 
@@ -2508,8 +2502,7 @@ async def list_component_notes(
     service_provider_id: str | None = Query(
         None, description="Filter by service provider"
     ),
-    skip: int = Query(0, ge=0, description="Number of records to skip"),
-    limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("apparatus.view", "apparatus.manage")
@@ -2529,8 +2522,8 @@ async def list_component_notes(
         severity=severity,
         note_type=note_type,
         service_provider_id=service_provider_id,
-        skip=skip,
-        limit=limit,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
 
 

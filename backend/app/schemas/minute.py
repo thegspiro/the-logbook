@@ -9,6 +9,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+_response_config = ConfigDict(from_attributes=True)
+
 # ============================================
 # Section Schemas (for dynamic sections)
 # ============================================
@@ -121,7 +123,7 @@ class TemplateResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class TemplateListItem(BaseModel):
@@ -134,7 +136,7 @@ class TemplateListItem(BaseModel):
     section_count: int
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -192,7 +194,7 @@ class MotionResponse(MotionBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -245,7 +247,7 @@ class ActionItemResponse(ActionItemBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -378,7 +380,7 @@ class MinutesResponse(BaseModel):
     motions: List[MotionResponse] = []
     action_items: List[ActionItemResponse] = []
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class MinutesListItem(BaseModel):
@@ -397,7 +399,7 @@ class MinutesListItem(BaseModel):
     open_action_items: int = 0
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class MinutesSubmit(BaseModel):
@@ -427,4 +429,4 @@ class MinutesSearchResult(BaseModel):
     snippet: str = Field(..., description="Matching text snippet")
     match_field: str = Field(..., description="Which field matched")
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config

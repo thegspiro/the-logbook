@@ -10,7 +10,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import PaginationParams, get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.models.forms import FormCategory, FormStatus
@@ -49,8 +49,7 @@ async def list_forms(
     category: str | None = None,
     search: str | None = None,
     is_template: bool | None = None,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("forms.view")),
 ):
@@ -88,8 +87,8 @@ async def list_forms(
         category=category_enum,
         search=search,
         is_template=is_template,
-        skip=skip,
-        limit=limit,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
 
     # Enrich with counts
@@ -102,8 +101,8 @@ async def list_forms(
     return FormsListResponse(
         forms=form_responses,
         total=total,
-        skip=skip,
-        limit=limit,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
 
 
@@ -625,8 +624,7 @@ async def submit_form(
 @router.get("/{form_id}/submissions", response_model=SubmissionsListResponse)
 async def list_submissions(
     form_id: UUID,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("forms.manage")),
 ):
@@ -640,15 +638,15 @@ async def list_submissions(
     submissions, total = await service.get_submissions(
         form_id=form_id,
         organization_id=current_user.organization_id,
-        skip=skip,
-        limit=limit,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
 
     return SubmissionsListResponse(
         submissions=submissions,
         total=total,
-        skip=skip,
-        limit=limit,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
 
 

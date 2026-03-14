@@ -17,16 +17,15 @@ from fastapi import (
     File,
     Form,
     HTTPException,
-    Query,
     UploadFile,
     status,
 )
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import require_permission
+from app.api.dependencies import PaginationParams, require_permission
 from app.core.database import get_db
-from app.core.utils import safe_error_detail
+from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
 from app.models.document import Document, DocumentStatus
 from app.models.user import User
 from app.schemas.documents import (
@@ -113,14 +112,9 @@ async def create_folder(
     """Create a new document folder"""
     service = DocumentsService(db)
     folder_data = folder.model_dump(exclude_none=True)
-    try:
+    async with handle_service_errors("Unable to create folder"):
         result = await service.create_folder(
             current_user.organization_id, folder_data, current_user.id
-        )
-    except Exception as e:
-        logger.error(f"Failed to create folder: {e}")
-        raise HTTPException(
-            status_code=400, detail=safe_error_detail(e, "Unable to create folder")
         )
     return result
 
@@ -135,11 +129,12 @@ async def update_folder(
     """Update a document folder"""
     service = DocumentsService(db)
     update_data = folder.model_dump(exclude_none=True)
-    result = await service.update_folder(
-        folder_id, current_user.organization_id, update_data
+    result = ensure_found(
+        await service.update_folder(
+            folder_id, current_user.organization_id, update_data
+        ),
+        "Folder",
     )
-    if not result:
-        raise HTTPException(status_code=404, detail="Folder not found")
     return result
 
 
@@ -165,8 +160,7 @@ async def delete_folder(
 async def list_documents(
     folder_id: str | None = None,
     search: str | None = None,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("documents.view")),
 ):
@@ -176,11 +170,12 @@ async def list_documents(
 
     # Enforce folder-level access when listing by folder
     if folder_uuid:
-        folder = await service.get_folder_by_id(
-            folder_uuid, current_user.organization_id
+        folder = ensure_found(
+            await service.get_folder_by_id(
+                folder_uuid, current_user.organization_id
+            ),
+            "Folder",
         )
-        if not folder:
-            raise HTTPException(status_code=404, detail="Folder not found")
         if not service.can_access_folder(folder, current_user):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -191,15 +186,15 @@ async def list_documents(
         current_user.organization_id,
         folder_id=folder_uuid,
         search=search,
-        skip=skip,
-        limit=limit,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
 
     return {
         "documents": documents,
         "total": total,
-        "skip": skip,
-        "limit": limit,
+        "skip": pagination.skip,
+        "limit": pagination.limit,
     }
 
 
@@ -328,11 +323,12 @@ async def get_document(
 ):
     """Get a document by ID"""
     service = DocumentsService(db)
-    document = await service.get_document_by_id(
-        document_id, current_user.organization_id
+    document = ensure_found(
+        await service.get_document_by_id(
+            document_id, current_user.organization_id
+        ),
+        "Document",
     )
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
     return document
 
 
@@ -346,11 +342,12 @@ async def update_document(
     """Update a document's metadata"""
     service = DocumentsService(db)
     update_data = doc.model_dump(exclude_none=True)
-    result = await service.update_document(
-        document_id, current_user.organization_id, update_data
+    result = ensure_found(
+        await service.update_document(
+            document_id, current_user.organization_id, update_data
+        ),
+        "Document",
     )
-    if not result:
-        raise HTTPException(status_code=404, detail="Document not found")
     return result
 
 

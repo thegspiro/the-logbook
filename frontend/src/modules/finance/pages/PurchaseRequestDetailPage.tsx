@@ -27,23 +27,12 @@ import { purchaseRequestService } from '../services/api';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { formatDateTime } from '@/utils/dateFormatting';
+import { formatCurrency } from '@/utils/currencyFormatting';
 import {
   PurchaseRequestStatus,
   PURCHASE_REQUEST_STATUS_COLORS,
   APPROVAL_STEP_STATUS_COLORS,
 } from '../types';
-
-// =============================================================================
-// Currency Formatter
-// =============================================================================
-
-const formatCurrency = (amount: number): string =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
 
 // =============================================================================
 // Status Labels

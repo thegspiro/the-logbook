@@ -13,6 +13,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
+import { formatCurrency } from '@/utils/currencyFormatting';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { ExpenseType } from '../types';
 import type { ExpenseReport } from '../types';
@@ -72,14 +73,6 @@ const EXPENSE_TYPE_OPTIONS = [
   { value: ExpenseType.EQUIPMENT_PURCHASE, label: 'Equipment Purchase' },
   { value: ExpenseType.OTHER, label: 'Other' },
 ];
-
-const formatCurrency = (amount: number): string =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
 
 // =============================================================================
 // Loading Skeleton

@@ -18,6 +18,7 @@ import { useFinanceStore } from '../store/financeStore';
 import { SkeletonPage } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { formatDate } from '@/utils/dateFormatting';
+import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import {
   PurchaseRequestStatus,
   PURCHASE_REQUEST_STATUS_COLORS,
@@ -26,14 +27,6 @@ import {
 // =============================================================================
 // Constants
 // =============================================================================
-
-const formatCurrency = (amount: number): string =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
 
 const STATUS_TABS: { value: string; label: string }[] = [
   { value: '', label: 'All' },
@@ -249,7 +242,7 @@ const PurchaseRequestsPage: React.FC = () => {
                       {pr.vendor ?? '--'}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-theme-text-primary">
-                      {formatCurrency(pr.estimatedAmount)}
+                      {formatCurrencyWhole(pr.estimatedAmount)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
                       <span

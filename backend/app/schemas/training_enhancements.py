@@ -12,6 +12,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+_response_config = ConfigDict(from_attributes=True)
+
 # ============================================
 # Recertification Pathway Schemas
 # ============================================
@@ -76,7 +78,7 @@ class RecertificationPathwayResponse(RecertificationPathwayBase):
     updated_at: datetime
     created_by: Optional[UUID] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class RenewalTaskStatus(str, Enum):
@@ -114,7 +116,7 @@ class RenewalTaskResponse(BaseModel):
     pathway_name: Optional[str] = None
     required_hours: Optional[float] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -167,7 +169,7 @@ class CompetencyMatrixResponse(CompetencyMatrixBase):
     updated_at: datetime
     created_by: Optional[UUID] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class MemberCompetencyResponse(BaseModel):
@@ -192,7 +194,7 @@ class MemberCompetencyResponse(BaseModel):
     # Enriched fields
     skill_name: Optional[str] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class MemberCompetencyUpdate(BaseModel):
@@ -266,7 +268,7 @@ class InstructorQualificationResponse(InstructorQualificationBase):
     course_name: Optional[str] = None
     skill_name: Optional[str] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -326,7 +328,7 @@ class TrainingEffectivenessResponse(TrainingEffectivenessBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class TrainingEffectivenessSummary(BaseModel):
@@ -414,7 +416,7 @@ class MultiAgencyTrainingResponse(MultiAgencyTrainingBase):
     updated_at: datetime
     created_by: Optional[UUID] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # ============================================
@@ -459,7 +461,7 @@ class XAPIStatementResponse(BaseModel):
     statement_timestamp: datetime
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class XAPIBatchResponse(BaseModel):

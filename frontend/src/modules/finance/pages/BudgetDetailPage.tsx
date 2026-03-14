@@ -9,21 +9,10 @@ import React, { useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, AlertTriangle, DollarSign, FileText } from 'lucide-react';
 import { useFinanceStore } from '../store/financeStore';
+import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import type { Budget } from '../types';
-
-// =============================================================================
-// Currency Formatter
-// =============================================================================
-
-const formatCurrency = (amount: number): string =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
 
 // =============================================================================
 // Budget Info Card
@@ -79,19 +68,19 @@ const BudgetInfoCard: React.FC<BudgetInfoProps> = ({
         <div>
           <p className="text-sm text-theme-text-secondary">Budgeted</p>
           <p className="text-xl font-bold text-theme-text-primary">
-            {formatCurrency(budget.amountBudgeted)}
+            {formatCurrencyWhole(budget.amountBudgeted)}
           </p>
         </div>
         <div>
           <p className="text-sm text-theme-text-secondary">Spent</p>
           <p className="text-xl font-bold text-blue-600">
-            {formatCurrency(budget.amountSpent)}
+            {formatCurrencyWhole(budget.amountSpent)}
           </p>
         </div>
         <div>
           <p className="text-sm text-theme-text-secondary">Encumbered</p>
           <p className="text-xl font-bold text-yellow-600">
-            {formatCurrency(budget.amountEncumbered)}
+            {formatCurrencyWhole(budget.amountEncumbered)}
           </p>
         </div>
         <div>
@@ -99,7 +88,7 @@ const BudgetInfoCard: React.FC<BudgetInfoProps> = ({
           <p
             className={`text-xl font-bold ${remaining < 0 ? 'text-red-600' : 'text-green-600'}`}
           >
-            {formatCurrency(remaining)}
+            {formatCurrencyWhole(remaining)}
           </p>
         </div>
       </div>

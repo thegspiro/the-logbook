@@ -11,6 +11,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+_response_config = ConfigDict(from_attributes=True)
+
 
 class DueDateType(str, Enum):
     """How the due date for a requirement is calculated"""
@@ -86,7 +88,7 @@ class TrainingCategoryResponse(TrainingCategoryBase):
     updated_at: datetime
     created_by: Optional[UUID] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # Training Course Schemas
@@ -142,7 +144,7 @@ class TrainingCourseResponse(TrainingCourseBase):
     created_by: Optional[UUID] = None
     # Note: category_ids is inherited from TrainingCourseBase
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # Training Record Schemas
@@ -214,7 +216,7 @@ class TrainingRecordResponse(TrainingRecordBase):
     updated_at: datetime
     created_by: Optional[UUID] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # Training Requirement Schemas
@@ -290,7 +292,7 @@ class TrainingRequirementResponse(TrainingRequirementBase):
     updated_at: datetime
     created_by: Optional[UUID] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # Training Statistics and Reports
@@ -488,7 +490,7 @@ class ExternalTrainingProviderResponse(ExternalTrainingProviderBase):
     created_by: Optional[UUID] = None
     # Note: api_key, api_secret, client_secret are never returned for security
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # External Category Mapping Schemas
@@ -528,7 +530,7 @@ class ExternalCategoryMappingResponse(ExternalCategoryMappingBase):
     # Include internal category details for convenience
     internal_category_name: Optional[str] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # External User Mapping Schemas
@@ -570,7 +572,7 @@ class ExternalUserMappingResponse(ExternalUserMappingBase):
     internal_user_name: Optional[str] = None
     internal_user_email: Optional[str] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # Sync Log Schemas
@@ -597,7 +599,7 @@ class ExternalTrainingSyncLogResponse(BaseModel):
     created_at: datetime
     initiated_by: Optional[UUID] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # External Training Import Schemas
@@ -628,7 +630,7 @@ class ExternalTrainingImportResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # Sync Request/Response Schemas

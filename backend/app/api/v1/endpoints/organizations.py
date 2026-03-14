@@ -4,7 +4,7 @@ Organizations API Endpoints
 Endpoints for organization settings management.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.core.utils import safe_error_detail
+from app.core.utils import ensure_found, handle_service_errors
 from app.models.user import Role, User
 from app.schemas.organization import (
     AuthSettings,
@@ -97,7 +97,7 @@ async def update_organization_settings(
     # so contact_info_visibility is already in the correct format for JSONB.
 
     # Update settings
-    try:
+    async with handle_service_errors("Failed to update organization settings"):
         updated_settings = await org_service.update_organization_settings(
             current_user.organization_id, settings_dict
         )
@@ -120,10 +120,6 @@ async def update_organization_settings(
             updated_settings, from_attributes=True
         )
         return response.redacted().model_dump()
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
-        )
 
 
 @router.patch("/settings/contact-info", response_model=ContactInfoSettings)
@@ -158,7 +154,7 @@ async def update_contact_info_settings(
         }
     }
 
-    try:
+    async with handle_service_errors("Failed to update contact info settings"):
         await org_service.update_organization_settings(
             current_user.organization_id, settings_dict
         )
@@ -177,10 +173,6 @@ async def update_contact_info_settings(
         )
 
         return contact_settings
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)
-        )
 
 
 @router.patch("/settings/email", response_model=EmailServiceSettings)
@@ -203,7 +195,7 @@ async def update_email_settings(
 
     settings_dict = {"email_service": email_settings.model_dump(exclude_unset=False)}
 
-    try:
+    async with handle_service_errors("Failed to update email settings"):
         await org_service.update_organization_settings(
             current_user.organization_id, settings_dict
         )
@@ -224,10 +216,6 @@ async def update_email_settings(
 
         # SEC: Redact secrets before returning to the client
         return email_settings.redacted()
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)
-        )
 
 
 @router.patch("/settings/file-storage", response_model=FileStorageSettings)
@@ -250,7 +238,7 @@ async def update_file_storage_settings(
 
     settings_dict = {"file_storage": storage_settings.model_dump(exclude_unset=False)}
 
-    try:
+    async with handle_service_errors("Failed to update file storage settings"):
         await org_service.update_organization_settings(
             current_user.organization_id, settings_dict
         )
@@ -270,10 +258,6 @@ async def update_file_storage_settings(
 
         # SEC: Redact secrets before returning to the client
         return storage_settings.redacted()
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)
-        )
 
 
 @router.patch("/settings/auth", response_model=AuthSettings)
@@ -296,7 +280,7 @@ async def update_auth_settings(
 
     settings_dict = {"auth": auth_settings.model_dump(exclude_unset=False)}
 
-    try:
+    async with handle_service_errors("Failed to update auth settings"):
         await org_service.update_organization_settings(
             current_user.organization_id, settings_dict
         )
@@ -315,10 +299,6 @@ async def update_auth_settings(
         )
 
         return auth_settings
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)
-        )
 
 
 @router.patch("/settings/membership-id", response_model=MembershipIdSettings)
@@ -347,7 +327,7 @@ async def update_membership_id_settings(
         }
     }
 
-    try:
+    async with handle_service_errors("Failed to update membership ID settings"):
         await org_service.update_organization_settings(
             current_user.organization_id, settings_dict
         )
@@ -366,10 +346,6 @@ async def update_membership_id_settings(
         )
 
         return membership_id_settings
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)
-        )
 
 
 @router.get("/modules", response_model=EnabledModulesResponse)
@@ -430,7 +406,7 @@ async def update_module_settings(
     # Convert to dict, excluding unset values
     module_updates = module_update.model_dump(exclude_unset=True)
 
-    try:
+    async with handle_service_errors("Failed to update module settings"):
         result = await org_service.update_module_settings(
             current_user.organization_id, module_updates
         )
@@ -449,10 +425,6 @@ async def update_module_settings(
         )
 
         return result
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)
-        )
 
 
 @router.get("/settings/membership-id", response_model=MembershipIdSettings)
@@ -880,9 +852,7 @@ async def get_organization_profile(
     result = await db.execute(
         select(Organization).where(Organization.id == current_user.organization_id)
     )
-    org = result.scalar_one_or_none()
-    if not org:
-        raise HTTPException(status_code=404, detail="Organization not found")
+    org = ensure_found(result.scalar_one_or_none(), "Organization")
 
     return {
         "name": org.name,
@@ -929,9 +899,7 @@ async def update_organization_profile(
     result = await db.execute(
         select(Organization).where(Organization.id == current_user.organization_id)
     )
-    org = result.scalar_one_or_none()
-    if not org:
-        raise HTTPException(status_code=404, detail="Organization not found")
+    org = ensure_found(result.scalar_one_or_none(), "Organization")
 
     # Apply validated scalar fields (only those explicitly provided)
     update_data = updates.model_dump(
