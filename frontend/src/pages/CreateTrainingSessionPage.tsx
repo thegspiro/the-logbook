@@ -128,7 +128,7 @@ const CreateTrainingSessionPage: React.FC = () => {
   }, []);
 
   const updateField = (field: keyof TrainingSessionCreate, value: TrainingSessionCreate[keyof TrainingSessionCreate]) => {
-    setFormData({ ...formData, [field]: value });
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   const getRecurrenceLabel = (): string => {
