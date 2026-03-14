@@ -132,11 +132,13 @@ class EmailService:
             "password": settings.SMTP_PASSWORD,
             "from_email": settings.SMTP_FROM_EMAIL,
             "from_name": settings.SMTP_FROM_NAME,
-            "encryption": "tls",
+            "encryption": getattr(settings, "SMTP_ENCRYPTION", "tls"),
         }
 
     def _smtp_send(self, recipients: List[str], message: str) -> None:
         """Synchronous SMTP send — called via asyncio.to_thread."""
+        import ssl
+
         host = self._smtp_config["host"]
         port = self._smtp_config["port"]
         encryption = self._smtp_config.get("encryption", "tls")
@@ -147,20 +149,25 @@ class EmailService:
             )
 
         timeout = 30
+        context = ssl.create_default_context()
 
         if encryption == "ssl":
-            import ssl
-
-            ctx = ssl.create_default_context()
+            # Implicit TLS (port 465) — entire connection is encrypted
             server = smtplib.SMTP_SSL(
-                host, port, context=ctx, timeout=timeout
+                host, port, context=context, timeout=timeout
             )
-        else:
+        elif encryption in ("tls", "starttls"):
+            # STARTTLS (port 587) — upgrade plain connection to encrypted
             server = smtplib.SMTP(host, port, timeout=timeout)
+            server.ehlo()
+            server.starttls(context=context)
+            server.ehlo()
+        else:
+            # No encryption (port 25) — plain SMTP, not recommended
+            server = smtplib.SMTP(host, port, timeout=timeout)
+            server.ehlo()
 
         try:
-            if encryption in ("tls", "starttls"):
-                server.starttls()
             if (
                 self._smtp_config["user"]
                 and self._smtp_config["password"]

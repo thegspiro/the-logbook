@@ -419,6 +419,7 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str | None = None
     SMTP_FROM_EMAIL: str = "noreply@example.com"
     SMTP_FROM_NAME: str = "Intranet Platform"
+    SMTP_ENCRYPTION: str = "tls"  # tls (STARTTLS/587), ssl (465), none (25)
 
     # ============================================
     # SMS (Twilio)
