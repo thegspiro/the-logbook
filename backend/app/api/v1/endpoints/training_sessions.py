@@ -19,6 +19,7 @@ from app.models.event import Event
 from app.models.training import TrainingSession
 from app.models.user import User
 from app.schemas.training_session import (
+    RecurringTrainingSessionCreate,
     TrainingApprovalRequest,
     TrainingApprovalResponse,
     TrainingSessionCreate,
@@ -97,6 +98,86 @@ async def create_training_session(
         updated_at=training_session.updated_at,
         created_by=training_session.created_by,
     )
+
+
+@router.post(
+    "/recurring",
+    response_model=list[TrainingSessionResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_recurring_training_session(
+    session_data: RecurringTrainingSessionCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Create a recurring training session series
+
+    Generates individual training session + event instances based on the
+    recurrence pattern. Each instance can be independently managed.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = TrainingSessionService(db)
+
+    training_sessions, error = await service.create_recurring_training_session(
+        session_data=session_data,
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
+    )
+
+    if error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+
+    await log_audit_event(
+        db=db,
+        event_type="training_session_recurring_created",
+        event_category="training",
+        severity="info",
+        event_data={
+            "session_count": len(training_sessions),
+            "recurrence_pattern": session_data.recurrence_pattern,
+            "first_session_id": (
+                str(training_sessions[0].id) if training_sessions else None
+            ),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return [
+        TrainingSessionResponse(
+            id=ts.id,
+            organization_id=ts.organization_id,
+            event_id=ts.event_id,
+            course_id=ts.course_id,
+            category_id=ts.category_id,
+            program_id=ts.program_id,
+            phase_id=ts.phase_id,
+            requirement_id=ts.requirement_id,
+            course_name=ts.course_name,
+            course_code=ts.course_code,
+            training_type=ts.training_type.value,
+            credit_hours=ts.credit_hours,
+            instructor=ts.instructor,
+            issues_certification=ts.issues_certification,
+            certification_number_prefix=ts.certification_number_prefix,
+            issuing_agency=ts.issuing_agency,
+            expiration_months=ts.expiration_months,
+            auto_create_records=ts.auto_create_records,
+            require_completion_confirmation=ts.require_completion_confirmation,
+            approval_required=ts.approval_required,
+            approval_deadline_days=ts.approval_deadline_days,
+            is_finalized=ts.is_finalized,
+            finalized_at=ts.finalized_at,
+            finalized_by=ts.finalized_by,
+            created_at=ts.created_at,
+            updated_at=ts.updated_at,
+            created_by=ts.created_by,
+        )
+        for ts in training_sessions
+    ]
 
 
 @router.post("/{training_session_id}/finalize")

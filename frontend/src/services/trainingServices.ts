@@ -6,7 +6,7 @@ import api from './apiClient';
 import type { SkillTemplate, SkillTemplateCreate, SkillTemplateListItem, SkillTemplateUpdate, SkillTest, SkillTestCreate, SkillTestListItem, SkillTestUpdate, SkillTestingSummary } from '../types/skillsTesting';
 import type { BulkEnrollmentRequest, BulkEnrollmentResponse, BulkImportRequest, BulkImportResponse, BulkTrainingRecordCreate, BulkTrainingRecordResult, ComplianceSummary, ExternalCategoryMapping, ExternalCategoryMappingUpdate, ExternalTrainingImport, ExternalTrainingProvider, ExternalTrainingProviderCreate, ExternalTrainingProviderUpdate, ExternalTrainingSyncLog, ExternalUserMapping, ExternalUserMappingUpdate, HistoricalImportConfirmRequest, HistoricalImportParseResponse, HistoricalImportResult, ImportRecordRequest, MemberProgramProgress, ProgramEnrollment, ProgramEnrollmentCreate, ProgramMilestone, ProgramMilestoneCreate, ProgramPhase, ProgramPhaseCreate, ProgramRequirement, ProgramRequirementCreate, ProgramWithDetails, RegistryImportResult, RegistryInfo, RequirementProgress, RequirementProgressRecord, RequirementProgressUpdate, SyncRequest, SyncResponse, TestConnectionResponse, TrainingCategory, TrainingCategoryCreate, TrainingCategoryUpdate, TrainingCourse, TrainingCourseCreate, TrainingCourseUpdate, TrainingProgram, TrainingProgramCreate, TrainingRecord, TrainingRecordCreate, TrainingRecordUpdate, TrainingReport, TrainingRequirement, TrainingRequirementCreate, TrainingRequirementEnhanced, TrainingRequirementEnhancedCreate, TrainingRequirementUpdate, UserTrainingStats } from '../types/training';
 import type { ComplianceMatrix, ExpiringCertification } from './communicationsServices';
-import type { TrainingSessionResponse, TrainingSessionCreate } from './adminServices';
+import type { TrainingSessionResponse, TrainingSessionCreate, RecurringTrainingSessionCreate } from './adminServices';
 
 export const trainingService = {
   /**
@@ -680,6 +680,11 @@ export const trainingSessionService = {
 
   async createSession(data: TrainingSessionCreate): Promise<TrainingSessionResponse> {
     const response = await api.post<TrainingSessionResponse>('/training/sessions', data);
+    return response.data;
+  },
+
+  async createRecurringSessions(data: RecurringTrainingSessionCreate): Promise<TrainingSessionResponse[]> {
+    const response = await api.post<TrainingSessionResponse[]>('/training/sessions/recurring', data);
     return response.data;
   },
 

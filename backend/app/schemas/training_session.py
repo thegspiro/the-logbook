@@ -5,10 +5,10 @@ Request and response schemas for training session endpoints.
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class TrainingSessionCreate(BaseModel):
@@ -89,6 +89,67 @@ class TrainingSessionCreate(BaseModel):
     # Approval settings
     approval_required: bool = Field(default=True)
     approval_deadline_days: int = Field(default=7, ge=1, le=30)
+
+
+class RecurringTrainingSessionCreate(TrainingSessionCreate):
+    """Schema for creating a recurring training session series"""
+
+    # Recurrence settings
+    recurrence_pattern: str = Field(
+        ...,
+        description=(
+            "daily, weekly, biweekly, monthly, monthly_weekday, "
+            "annually, annually_weekday, custom"
+        ),
+    )
+    recurrence_end_date: datetime = Field(
+        ..., description="When the recurring series ends"
+    )
+    recurrence_custom_days: Optional[List[int]] = Field(
+        None, description="For custom pattern: weekday numbers (0=Mon, 6=Sun)"
+    )
+    recurrence_weekday: Optional[int] = Field(
+        None,
+        ge=0,
+        le=6,
+        description="For monthly_weekday/annually_weekday: weekday (0=Mon, 6=Sun)",
+    )
+    recurrence_week_ordinal: Optional[int] = Field(
+        None,
+        description="Which occurrence: 1=first, 2=second, ..., 5=fifth, -1=last",
+    )
+    recurrence_month: Optional[int] = Field(
+        None,
+        ge=1,
+        le=12,
+        description="For annually_weekday: target month (1=Jan, 12=Dec)",
+    )
+    recurrence_exceptions: Optional[List[str]] = Field(
+        None,
+        description="ISO date strings (YYYY-MM-DD) of dates to skip",
+    )
+
+    @model_validator(mode="after")
+    def validate_recurrence_fields(self) -> "RecurringTrainingSessionCreate":
+        pattern = self.recurrence_pattern
+        if pattern == "custom" and not self.recurrence_custom_days:
+            raise ValueError(
+                "recurrence_custom_days is required for custom pattern"
+            )
+        if pattern in ("monthly_weekday", "annually_weekday"):
+            if self.recurrence_weekday is None:
+                raise ValueError(
+                    f"recurrence_weekday is required for {pattern} pattern"
+                )
+            if self.recurrence_week_ordinal is None:
+                raise ValueError(
+                    f"recurrence_week_ordinal is required for {pattern} pattern"
+                )
+        if pattern == "annually_weekday" and self.recurrence_month is None:
+            raise ValueError(
+                "recurrence_month is required for annually_weekday pattern"
+            )
+        return self
 
 
 class TrainingSessionResponse(BaseModel):

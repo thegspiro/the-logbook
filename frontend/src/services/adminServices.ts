@@ -107,6 +107,16 @@ export interface TrainingSessionCreate {
   approval_deadline_days?: number | undefined;
 }
 
+export interface RecurringTrainingSessionCreate extends TrainingSessionCreate {
+  recurrence_pattern: string;
+  recurrence_end_date: string;
+  recurrence_custom_days?: number[] | undefined;
+  recurrence_weekday?: number | undefined;
+  recurrence_week_ordinal?: number | undefined;
+  recurrence_month?: number | undefined;
+  recurrence_exceptions?: string[] | undefined;
+}
+
 export const analyticsApiService = {
   async trackEvent(data: { event_type: string; event_id: string; user_id?: string | undefined; metadata: Record<string, unknown> }): Promise<void> {
     await api.post('/analytics/track', data);

@@ -29,7 +29,12 @@ from app.models.training import (
     TrainingType,
 )
 from app.models.user import Role, User
-from app.schemas.training_session import AttendeeApprovalData, TrainingSessionCreate
+from app.schemas.training_session import (
+    AttendeeApprovalData,
+    RecurringTrainingSessionCreate,
+    TrainingSessionCreate,
+)
+from app.services.event_service import EventService
 from app.services.location_service import LocationService
 
 
@@ -178,6 +183,161 @@ class TrainingSessionService:
         await self.db.refresh(training_session)
 
         return training_session, None
+
+    async def create_recurring_training_session(
+        self,
+        session_data: RecurringTrainingSessionCreate,
+        organization_id: UUID,
+        created_by: UUID,
+    ) -> Tuple[list[TrainingSession], Optional[str]]:
+        """
+        Create a recurring training session series.
+
+        Uses EventService to generate recurring events, then creates a
+        TrainingSession record for each event in the series.
+
+        Returns: (list_of_training_sessions, error_message)
+        """
+        # Validate dates
+        if session_data.end_datetime <= session_data.start_datetime:
+            return [], "End date must be after start date"
+
+        if session_data.requires_rsvp and session_data.rsvp_deadline:
+            if session_data.rsvp_deadline >= session_data.start_datetime:
+                return [], "RSVP deadline must be before event start"
+
+        # Validate course data
+        if session_data.use_existing_course:
+            if not session_data.course_id:
+                return [], "course_id is required when use_existing_course is true"
+
+            course_result = await self.db.execute(
+                select(TrainingCourse)
+                .where(TrainingCourse.id == session_data.course_id)
+                .where(TrainingCourse.organization_id == str(organization_id))
+            )
+            course = course_result.scalar_one_or_none()
+            if not course:
+                return [], "Training course not found"
+
+            course_name = course.name
+            course_code = course.code
+            course_id = course.id
+        else:
+            if not session_data.course_name:
+                return [], "course_name is required when creating a new course"
+
+            course_name = session_data.course_name
+            course_code = session_data.course_code
+            course_id = None
+
+        # Build event data dict for EventService.create_recurring_event
+        event_data = {
+            "title": session_data.title,
+            "description": session_data.description,
+            "event_type": EventType.TRAINING.value,
+            "location_id": (
+                str(session_data.location_id) if session_data.location_id else None
+            ),
+            "location": session_data.location,
+            "location_details": session_data.location_details,
+            "start_datetime": session_data.start_datetime,
+            "end_datetime": session_data.end_datetime,
+            "requires_rsvp": session_data.requires_rsvp,
+            "rsvp_deadline": session_data.rsvp_deadline,
+            "max_attendees": session_data.max_attendees,
+            "is_mandatory": session_data.is_mandatory,
+            "allow_guests": False,
+            "send_reminders": True,
+            "reminder_schedule": [24],
+            "check_in_window_type": CheckInWindowType(
+                session_data.check_in_window_type
+            ).value,
+            "check_in_minutes_before": session_data.check_in_minutes_before,
+            "check_in_minutes_after": session_data.check_in_minutes_after,
+            "require_checkout": session_data.require_checkout,
+            "custom_fields": {
+                "course_name": course_name,
+                "course_code": course_code,
+                "training_type": session_data.training_type,
+                "credit_hours": session_data.credit_hours,
+                "instructor": session_data.instructor,
+                "issues_certification": session_data.issues_certification,
+                "issuing_agency": session_data.issuing_agency,
+                "expiration_months": session_data.expiration_months,
+                "auto_create_records": session_data.auto_create_records,
+            },
+            # Recurrence fields (popped by EventService.create_recurring_event)
+            "recurrence_pattern": session_data.recurrence_pattern,
+            "recurrence_end_date": session_data.recurrence_end_date,
+            "recurrence_custom_days": session_data.recurrence_custom_days,
+            "recurrence_weekday": session_data.recurrence_weekday,
+            "recurrence_week_ordinal": session_data.recurrence_week_ordinal,
+            "recurrence_month": session_data.recurrence_month,
+            "recurrence_exceptions": session_data.recurrence_exceptions,
+        }
+
+        event_service = EventService(self.db)
+        events, error = await event_service.create_recurring_event(
+            event_data=event_data,
+            organization_id=organization_id,
+            created_by=created_by,
+        )
+
+        if error:
+            return [], error
+
+        # Create a TrainingSession for each event in the series
+        training_sessions = []
+        for event in events:
+            training_session = TrainingSession(
+                organization_id=organization_id,
+                event_id=event.id,
+                course_id=course_id,
+                category_id=(
+                    str(session_data.category_id)
+                    if session_data.category_id
+                    else None
+                ),
+                program_id=(
+                    str(session_data.program_id)
+                    if session_data.program_id
+                    else None
+                ),
+                phase_id=(
+                    str(session_data.phase_id)
+                    if session_data.phase_id
+                    else None
+                ),
+                requirement_id=(
+                    str(session_data.requirement_id)
+                    if session_data.requirement_id
+                    else None
+                ),
+                course_name=course_name,
+                course_code=course_code,
+                training_type=TrainingType(session_data.training_type),
+                credit_hours=session_data.credit_hours,
+                instructor=session_data.instructor,
+                issues_certification=session_data.issues_certification,
+                certification_number_prefix=session_data.certification_number_prefix,
+                issuing_agency=session_data.issuing_agency,
+                expiration_months=session_data.expiration_months,
+                auto_create_records=session_data.auto_create_records,
+                require_completion_confirmation=session_data.require_completion_confirmation,
+                approval_required=session_data.approval_required,
+                approval_deadline_days=session_data.approval_deadline_days,
+                created_by=created_by,
+            )
+            self.db.add(training_session)
+            training_sessions.append(training_session)
+
+        await self.db.commit()
+
+        for ts in training_sessions:
+            await self.db.refresh(ts)
+
+        return training_sessions, None
 
     async def finalize_training_session(
         self,

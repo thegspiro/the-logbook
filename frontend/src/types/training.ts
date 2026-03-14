@@ -126,6 +126,16 @@ export interface TrainingSessionCreate {
   require_completion_confirmation?: boolean | undefined;  // Instructor must confirm completion
 }
 
+export interface RecurringTrainingSessionCreate extends TrainingSessionCreate {
+  recurrence_pattern: import('./event').RecurrencePattern;
+  recurrence_end_date: string;
+  recurrence_custom_days?: number[] | undefined;
+  recurrence_weekday?: number | undefined;
+  recurrence_week_ordinal?: number | undefined;
+  recurrence_month?: number | undefined;
+  recurrence_exceptions?: string[] | undefined;
+}
+
 // Training Category Types
 export interface TrainingCategory {
   id: string;

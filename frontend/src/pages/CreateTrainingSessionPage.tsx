@@ -9,9 +9,11 @@ import {
   QrCode,
   ArrowLeft,
   MapPin,
+  Repeat,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { TrainingSessionCreate, TrainingType, TrainingCourse } from '../types/training';
+import type { RecurrencePattern } from '../types/event';
 import type { User } from '../types/user';
 import type { Location } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -21,6 +23,33 @@ import { userService, locationsService, trainingSessionService, trainingService 
 import { schedulingService } from '../modules/scheduling/services/api';
 import { useRanks } from '../hooks/useRanks';
 
+const RECURRENCE_PATTERNS: { value: RecurrencePattern; label: string }[] = [
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'biweekly', label: 'Every 2 Weeks' },
+  { value: 'monthly', label: 'Monthly (same date)' },
+  { value: 'monthly_weekday', label: 'Monthly (by weekday)' },
+  { value: 'annually', label: 'Annually' },
+  { value: 'annually_weekday', label: 'Annually (by weekday)' },
+  { value: 'custom', label: 'Custom Days' },
+];
+
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+const ORDINALS = [
+  { value: 1, label: '1st' },
+  { value: 2, label: '2nd' },
+  { value: 3, label: '3rd' },
+  { value: 4, label: '4th' },
+  { value: 5, label: '5th' },
+  { value: -1, label: 'Last' },
+];
+
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
 /**
  * Create Training Session Page
  *
@@ -28,6 +57,7 @@ import { useRanks } from '../hooks/useRanks';
  * - Generates an Event with QR code for check-in
  * - Links to a TrainingCourse (existing or new)
  * - Auto-creates TrainingRecords when members check in
+ * - Supports recurring sessions with the same recurrence patterns as events
  */
 const CreateTrainingSessionPage: React.FC = () => {
   const navigate = useNavigate();
@@ -42,6 +72,15 @@ const CreateTrainingSessionPage: React.FC = () => {
   const [apparatusId, setApparatusId] = useState('');
   const [locations, setLocations] = useState<Location[]>([]);
   const [locationMode, setLocationMode] = useState<'select' | 'other'>('select');
+
+  // Recurrence state
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrencePattern, setRecurrencePattern] = useState<RecurrencePattern>('weekly');
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
+  const [recurrenceCustomDays, setRecurrenceCustomDays] = useState<number[]>([]);
+  const [recurrenceWeekday, setRecurrenceWeekday] = useState(0);
+  const [recurrenceWeekOrdinal, setRecurrenceWeekOrdinal] = useState(1);
+  const [recurrenceMonth, setRecurrenceMonth] = useState(1);
 
   // Form data
   const [formData, setFormData] = useState<TrainingSessionCreate>({
@@ -92,6 +131,11 @@ const CreateTrainingSessionPage: React.FC = () => {
     setFormData({ ...formData, [field]: value });
   };
 
+  const getRecurrenceLabel = (): string => {
+    const match = RECURRENCE_PATTERNS.find(p => p.value === recurrencePattern);
+    return match?.label ?? recurrencePattern;
+  };
+
   const handleSubmit = async () => {
     // Validation
     if (!formData.title || !formData.start_datetime || !formData.end_datetime) {
@@ -104,26 +148,72 @@ const CreateTrainingSessionPage: React.FC = () => {
       return;
     }
 
+    if (isRecurring && !recurrenceEndDate) {
+      toast.error('Recurrence end date is required');
+      return;
+    }
+
+    if (isRecurring && recurrencePattern === 'custom' && recurrenceCustomDays.length === 0) {
+      toast.error('Select at least one day for custom recurrence');
+      return;
+    }
+
     setSaving(true);
 
     try {
       // Convert local datetime-local values to UTC before sending to backend
+      // Use || to coerce empty strings to undefined so they are omitted from
+      // the JSON payload. Pydantic rejects "" for Optional[UUID] / Optional[datetime].
       const submitData: TrainingSessionCreate = {
         ...formData,
         start_datetime: localToUTC(formData.start_datetime, tz),
         end_datetime: localToUTC(formData.end_datetime, tz),
+        rsvp_deadline: formData.rsvp_deadline ? localToUTC(formData.rsvp_deadline, tz) : undefined,
+        description: formData.description?.trim() || undefined,
+        location_id: formData.location_id || undefined,
+        location: formData.location?.trim() || undefined,
+        location_details: formData.location_details?.trim() || undefined,
+        course_id: formData.course_id || undefined,
+        course_name: formData.course_name?.trim() || undefined,
+        course_code: formData.course_code?.trim() || undefined,
+        instructor: formData.instructor?.trim() || undefined,
+        certification_number_prefix: formData.certification_number_prefix?.trim() || undefined,
+        issuing_agency: formData.issuing_agency?.trim() || undefined,
       };
 
-      // Create training session (creates Event + TrainingCourse link)
-      const response = await trainingSessionService.createSession(submitData);
+      if (isRecurring) {
+        // Create recurring training sessions
+        const needsWeekday = recurrencePattern === 'monthly_weekday' || recurrencePattern === 'annually_weekday';
+        const recurringData = {
+          ...submitData,
+          recurrence_pattern: recurrencePattern,
+          recurrence_end_date: localToUTC(recurrenceEndDate + 'T23:59', tz),
+          recurrence_custom_days: recurrencePattern === 'custom' ? recurrenceCustomDays : undefined,
+          recurrence_weekday: needsWeekday ? recurrenceWeekday : undefined,
+          recurrence_week_ordinal: needsWeekday ? recurrenceWeekOrdinal : undefined,
+          recurrence_month: recurrencePattern === 'annually_weekday' ? recurrenceMonth : undefined,
+        };
 
-      toast.success('Training session created successfully!');
+        const sessions = await trainingSessionService.createRecurringSessions(recurringData);
+        toast.success(`Created ${sessions.length} recurring training sessions!`);
 
-      // Navigate to the event page to view QR code
-      if (response.event_id) {
-        navigate(`/events/${response.event_id}`);
+        // Navigate to the first event in the series
+        const firstSession = sessions[0];
+        if (firstSession?.event_id) {
+          navigate(`/events/${firstSession.event_id}`);
+        } else {
+          navigate('/training/admin');
+        }
       } else {
-        navigate('/training/officer');
+        // Create single training session
+        const response = await trainingSessionService.createSession(submitData);
+        toast.success('Training session created successfully!');
+
+        if (response.event_id) {
+          navigate(`/events/${response.event_id}`);
+        } else {
+          navigate('/training/officer');
+        }
       }
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to create training session'));
@@ -263,6 +353,133 @@ const CreateTrainingSessionPage: React.FC = () => {
                     className="form-input py-3"
                   />
                 </div>
+              </div>
+
+              {/* Recurring Training */}
+              <div className="space-y-4">
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    id="is-recurring"
+                    checked={isRecurring}
+                    onChange={(e) => setIsRecurring(e.target.checked)}
+                    className="form-checkbox"
+                  />
+                  <label htmlFor="is-recurring" className="text-theme-text-secondary text-sm flex items-center gap-2">
+                    <Repeat className="w-4 h-4" />
+                    Make this a recurring training session
+                  </label>
+                </div>
+
+                {isRecurring && (
+                  <div className="space-y-4 pl-6 border-l-2 border-red-500/30">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                          Repeats <span className="text-red-700">*</span>
+                        </label>
+                        <select
+                          value={recurrencePattern}
+                          onChange={(e) => setRecurrencePattern(e.target.value as RecurrencePattern)}
+                          className="form-input py-3"
+                        >
+                          {RECURRENCE_PATTERNS.map((p) => (
+                            <option key={p.value} value={p.value}>{p.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                          Repeat Until <span className="text-red-700">*</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={recurrenceEndDate}
+                          onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                          className="form-input py-3"
+                        />
+                      </div>
+                    </div>
+
+                    {recurrencePattern === 'custom' && (
+                      <div>
+                        <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                          Days of the Week
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          {WEEKDAYS.map((day, index) => (
+                            <button
+                              key={day}
+                              type="button"
+                              onClick={() => {
+                                setRecurrenceCustomDays((prev) =>
+                                  prev.includes(index) ? prev.filter((d) => d !== index) : [...prev, index]
+                                );
+                              }}
+                              className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+                                recurrenceCustomDays.includes(index)
+                                  ? 'bg-red-700 text-white border-red-700'
+                                  : 'text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary'
+                              }`}
+                            >
+                              {day}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {(recurrencePattern === 'monthly_weekday' || recurrencePattern === 'annually_weekday') && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                            Which Occurrence
+                          </label>
+                          <select
+                            value={recurrenceWeekOrdinal}
+                            onChange={(e) => setRecurrenceWeekOrdinal(parseInt(e.target.value))}
+                            className="form-input py-3"
+                          >
+                            {ORDINALS.map((o) => (
+                              <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                            Day of Week
+                          </label>
+                          <select
+                            value={recurrenceWeekday}
+                            onChange={(e) => setRecurrenceWeekday(parseInt(e.target.value))}
+                            className="form-input py-3"
+                          >
+                            {WEEKDAYS.map((day, index) => (
+                              <option key={day} value={index}>{day}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    )}
+
+                    {recurrencePattern === 'annually_weekday' && (
+                      <div className="max-w-xs">
+                        <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                          Month
+                        </label>
+                        <select
+                          value={recurrenceMonth}
+                          onChange={(e) => setRecurrenceMonth(parseInt(e.target.value))}
+                          className="form-input py-3"
+                        >
+                          {MONTHS.map((m, index) => (
+                            <option key={m} value={index + 1}>{m}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Location */}
@@ -458,7 +675,25 @@ const CreateTrainingSessionPage: React.FC = () => {
                   </label>
                   <select
                     value={formData.course_id}
-                    onChange={(e) => updateField('course_id', e.target.value)}
+                    onChange={(e) => {
+                      const courseId = e.target.value;
+                      updateField('course_id', courseId);
+                      // Auto-populate fields from selected course
+                      const course = availableCourses.find(c => c.id === courseId);
+                      if (course) {
+                        setFormData(prev => ({
+                          ...prev,
+                          course_id: courseId,
+                          course_name: course.name,
+                          course_code: course.code || '',
+                          training_type: course.training_type || prev.training_type,
+                          credit_hours: course.credit_hours ?? prev.credit_hours,
+                          instructor: course.instructor || prev.instructor,
+                          expiration_months: course.expiration_months ?? prev.expiration_months,
+                          max_attendees: course.max_participants ?? prev.max_attendees,
+                        }));
+                      }
+                    }}
                     className="form-input py-3"
                   >
                     <option value="">Select a course...</option>
@@ -468,6 +703,25 @@ const CreateTrainingSessionPage: React.FC = () => {
                       </option>
                     ))}
                   </select>
+                  {/* Show selected course details */}
+                  {formData.course_id && (() => {
+                    const course = availableCourses.find(c => c.id === formData.course_id);
+                    if (!course) return null;
+                    return (
+                      <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                        <p className="text-sm font-medium text-theme-text-primary">{course.name}</p>
+                        {course.description && (
+                          <p className="text-xs text-theme-text-secondary mt-1">{course.description}</p>
+                        )}
+                        <div className="flex flex-wrap gap-3 mt-2 text-xs text-theme-text-muted">
+                          <span>Type: {course.training_type}</span>
+                          {course.credit_hours != null && <span>Credits: {course.credit_hours}h</span>}
+                          {course.expiration_months && <span>Expires: {course.expiration_months} months</span>}
+                          {course.instructor && <span>Instructor: {course.instructor}</span>}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               ) : (
                 /* New Course Fields */
@@ -718,6 +972,28 @@ const CreateTrainingSessionPage: React.FC = () => {
                   <ReviewItem label="Mandatory" value={formData.is_mandatory ? 'Yes' : 'No'} />
                 </ReviewSection>
 
+                {isRecurring && (
+                  <ReviewSection title="Recurrence">
+                    <ReviewItem label="Pattern" value={getRecurrenceLabel()} />
+                    <ReviewItem label="Repeat Until" value={recurrenceEndDate} />
+                    {recurrencePattern === 'custom' && recurrenceCustomDays.length > 0 && (
+                      <ReviewItem
+                        label="Days"
+                        value={recurrenceCustomDays.map(d => WEEKDAYS[d] ?? '').join(', ')}
+                      />
+                    )}
+                    {(recurrencePattern === 'monthly_weekday' || recurrencePattern === 'annually_weekday') && (
+                      <ReviewItem
+                        label="Occurrence"
+                        value={`${ORDINALS.find(o => o.value === recurrenceWeekOrdinal)?.label ?? ''} ${WEEKDAYS[recurrenceWeekday] ?? ''}`}
+                      />
+                    )}
+                    {recurrencePattern === 'annually_weekday' && (
+                      <ReviewItem label="Month" value={MONTHS[recurrenceMonth - 1] ?? ''} />
+                    )}
+                  </ReviewSection>
+                )}
+
                 <ReviewSection title="Training Details">
                   <ReviewItem
                     label="Course"
@@ -780,7 +1056,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                 ) : (
                   <>
                     <CheckCircle className="w-5 h-5" />
-                    <span>Create Training Session</span>
+                    <span>{isRecurring ? 'Create Recurring Sessions' : 'Create Training Session'}</span>
                   </>
                 )}
               </button>
