@@ -658,10 +658,19 @@ async def list_prospects(
         if stage_entered_at is None:
             stage_entered_at = p.created_at
 
-        # Compute days metrics
+        # Compute days metrics — ensure datetimes are tz-aware (DB may store naive UTC)
+        def _ensure_utc(dt: datetime | None) -> datetime | None:
+            if dt is not None and dt.tzinfo is None:
+                return dt.replace(tzinfo=timezone.utc)
+            return dt
+
+        stage_entered_at = _ensure_utc(stage_entered_at)
+        p_created_at = _ensure_utc(p.created_at)
+        p_updated_at = _ensure_utc(p.updated_at)
+
         days_in_stage = (now - stage_entered_at).days if stage_entered_at else 0
-        days_in_pipeline = (now - p.created_at).days if p.created_at else 0
-        last_activity = p.updated_at or p.created_at
+        days_in_pipeline = (now - p_created_at).days if p_created_at else 0
+        last_activity = p_updated_at or p_created_at
         days_since_activity = (now - last_activity).days if last_activity else 0
 
         # Determine inactivity alert level based on step timeout
