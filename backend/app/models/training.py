@@ -789,6 +789,11 @@ class TrainingProgram(Base):
         cascade="all, delete-orphan",
         order_by="ProgramPhase.phase_number",
     )
+    program_requirements = relationship(
+        "ProgramRequirement",
+        back_populates="program",
+        cascade="all, delete-orphan",
+    )
     enrollments = relationship(
         "ProgramEnrollment", back_populates="program", cascade="all, delete-orphan"
     )
@@ -913,6 +918,7 @@ class ProgramRequirement(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
+    program = relationship("TrainingProgram", back_populates="program_requirements")
     phase = relationship("ProgramPhase", back_populates="requirements")
     requirement = relationship("TrainingRequirement")
 
