@@ -663,6 +663,9 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
     if (stageType === StageTypeConst.AUTOMATED_EMAIL) {
       const c = config as AutomatedEmailStageConfig;
       if (!c.email_subject.trim()) newErrors.email_subject = 'Email subject is required';
+      if (c.include_welcome && !c.welcome_message?.trim()) {
+        newErrors.welcome_message = 'Welcome message cannot be empty when enabled';
+      }
     }
 
     if (stageType === StageTypeConst.REFERENCE_CHECK) {
@@ -1492,14 +1495,19 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     Welcome Message
                   </label>
                   {emailConfig.include_welcome && (
-                    <textarea
-                      value={emailConfig.welcome_message ?? ''}
-                      onChange={(e) => setConfig({ ...emailConfig, welcome_message: e.target.value })}
-                      placeholder="Thank you for your interest in joining our department! We look forward to getting to know you through this process."
-                      rows={3}
-                      aria-label="Welcome message content"
-                      className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-4 py-2.5 text-sm focus:ring-2 focus:outline-hidden"
-                    />
+                    <>
+                      <textarea
+                        value={emailConfig.welcome_message ?? ''}
+                        onChange={(e) => setConfig({ ...emailConfig, welcome_message: e.target.value })}
+                        placeholder="Thank you for your interest in joining our department! We look forward to getting to know you through this process."
+                        rows={3}
+                        aria-label="Welcome message content"
+                        className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-4 py-2.5 text-sm focus:ring-2 focus:outline-hidden"
+                      />
+                      {errors.welcome_message && (
+                        <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.welcome_message}</p>
+                      )}
+                    </>
                   )}
                 </div>
 
