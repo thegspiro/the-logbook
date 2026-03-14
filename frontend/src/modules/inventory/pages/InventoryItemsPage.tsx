@@ -12,7 +12,7 @@ import {
 import { inventoryService, locationsService } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { getTodayLocalDate } from '../../../utils/dateFormatting';
+import { getTodayLocalDate, formatNumber } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { useInventoryWebSocket } from '../../../hooks/useInventoryWebSocket';
@@ -241,7 +241,7 @@ const InventoryItemsPage: React.FC = () => {
               <span className="flex items-center gap-1.5"><Package className="w-4 h-4" /> {summary.total_items} items</span>
               <span className="flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> {summary.overdue_checkouts} overdue</span>
               <span className="flex items-center gap-1.5"><Wrench className="w-4 h-4" /> {summary.maintenance_due_count} maint. due</span>
-              {summary.total_value > 0 && <span>${summary.total_value.toLocaleString()}</span>}
+              {summary.total_value > 0 && <span>${formatNumber(summary.total_value)}</span>}
             </div>
           )}
         </div>
@@ -276,7 +276,7 @@ const InventoryItemsPage: React.FC = () => {
               <div className="text-lg font-bold text-theme-text-primary">{loc.total_quantity}</div>
               <div className="text-xs text-theme-text-muted">
                 {loc.item_count} item{loc.item_count !== 1 ? 's' : ''}
-                {loc.total_value > 0 && <span className="ml-1">&middot; ${loc.total_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>}
+                {loc.total_value > 0 && <span className="ml-1">&middot; ${formatNumber(loc.total_value, { maximumFractionDigits: 0 })}</span>}
               </div>
             </button>
           ))}
@@ -401,7 +401,7 @@ const InventoryItemsPage: React.FC = () => {
                     <td className="px-3 py-3 text-theme-text-muted capitalize">{item.tracking_type}</td>
                     <td className="px-3 py-3 text-theme-text-muted font-mono text-xs">{ids || '-'}</td>
                     <td className="px-3 py-3 text-theme-text-muted truncate max-w-[160px]">{loc || '-'}</td>
-                    <td className="px-3 py-3 text-right text-theme-text-muted tabular-nums">{item.purchase_price != null ? `$${item.purchase_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
+                    <td className="px-3 py-3 text-right text-theme-text-muted tabular-nums">{item.purchase_price != null ? `$${formatNumber(item.purchase_price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
                     <td className="px-3 py-3"><Link to={`/inventory/items/${item.id}`} className="text-theme-text-muted hover:text-theme-text-primary" aria-label={`View ${item.name}`}><ChevronRight className="w-4 h-4" /></Link></td>
                   </tr>
                 );
@@ -425,7 +425,7 @@ const InventoryItemsPage: React.FC = () => {
                 size={item.size} color={item.color} location={loc || undefined}
                 manufacturer={[item.manufacturer, item.model_number].filter(Boolean).join(' ') || undefined}
                 quantity={item.tracking_type === 'pool' ? item.quantity : undefined}
-                cost={item.purchase_price != null ? `$${item.purchase_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : undefined}
+                cost={item.purchase_price != null ? `$${formatNumber(item.purchase_price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : undefined}
                 selected={selIds.has(item.id)} onSelect={() => toggle(item.id)}
                 onTap={() => navigate(`/inventory/items/${item.id}`)}
                 showActions={canManage} onEdit={() => openEdit(item)}

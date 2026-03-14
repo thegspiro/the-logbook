@@ -18,7 +18,7 @@ import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
 import { useTimezone } from '../../../hooks/useTimezone';
 import toast from 'react-hot-toast';
-import { formatDate, getTodayLocalDate } from '../../../utils/dateFormatting';
+import { formatDate, getTodayLocalDate, formatNumber } from '../../../utils/dateFormatting';
 
 const MAINTENANCE_TYPES = [
   { value: 'inspection', label: 'Inspection' }, { value: 'repair', label: 'Repair' },
@@ -303,7 +303,7 @@ const InventoryMaintenancePage: React.FC = () => {
                   {rec.completed_date && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDate(rec.completed_date, tz)}</span>}
                   {rec.performed_by && <span>By: {rec.performed_by}</span>}
                   {rec.next_due_date && <span>Next due: {formatDate(rec.next_due_date, tz)}</span>}
-                  {rec.cost != null && rec.cost > 0 && <span>${rec.cost.toLocaleString()}</span>}
+                  {rec.cost != null && rec.cost > 0 && <span>${formatNumber(rec.cost)}</span>}
                   {rec.vendor_name && <span>Vendor: {rec.vendor_name}</span>}
                 </div>
                 {rec.description && <p className="text-xs text-theme-text-secondary mt-1">{rec.description}</p>}

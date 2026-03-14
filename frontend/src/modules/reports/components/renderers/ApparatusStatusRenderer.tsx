@@ -7,6 +7,7 @@ import type { ApparatusStatusReport } from '../../types';
 import { toStr } from '../../utils/export';
 import { ReportTable } from '../ReportTable';
 import { StatCard } from '../StatCard';
+import { formatNumber } from '@/utils/dateFormatting';
 
 interface Props {
   data: ApparatusStatusReport;
@@ -40,7 +41,7 @@ export const ApparatusStatusRenderer: React.FC<Props> = ({ data }) => {
       key: 'mileage',
       header: 'Mileage',
       align: 'right' as const,
-      render: (v: unknown) => (v != null ? Number(v).toLocaleString() : '-'),
+      render: (v: unknown) => (v != null ? formatNumber(Number(v)) : '-'),
     },
     { key: 'last_inspection_date', header: 'Last Inspection' },
     { key: 'next_inspection_due', header: 'Next Inspection' },

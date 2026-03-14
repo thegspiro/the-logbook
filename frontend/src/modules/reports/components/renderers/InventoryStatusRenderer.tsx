@@ -7,6 +7,7 @@ import type { InventoryStatusReport } from '../../types';
 import { toStr } from '../../utils/export';
 import { ReportTable } from '../ReportTable';
 import { StatCard } from '../StatCard';
+import { formatNumber } from '@/utils/dateFormatting';
 
 interface Props {
   data: InventoryStatusReport;
@@ -49,7 +50,7 @@ export const InventoryStatusRenderer: React.FC<Props> = ({ data }) => {
         <StatCard label="Total Items" value={data.total_items} />
         <StatCard label="Low Stock" value={data.low_stock_count} />
         <StatCard label="Assigned" value={data.assigned_count} />
-        {data.total_value != null && <StatCard label="Total Value" value={`$${data.total_value.toLocaleString()}`} />}
+        {data.total_value != null && <StatCard label="Total Value" value={`$${formatNumber(data.total_value)}`} />}
       </div>
       <ReportTable
         rows={data.entries as unknown as Array<Record<string, unknown>>}

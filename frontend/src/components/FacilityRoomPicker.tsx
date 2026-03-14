@@ -17,6 +17,7 @@ import { Building2, DoorOpen, ChevronDown, Loader2 } from 'lucide-react';
 import { facilitiesService } from '../services/api';
 import type { Facility, Room } from '../pages/facilities/types';
 import { enumLabel } from '../pages/facilities/types';
+import { formatNumber } from '../utils/dateFormatting';
 
 interface FacilityRoomPickerProps {
   /** Currently selected room ID */
@@ -171,7 +172,7 @@ export default function FacilityRoomPicker({
               )}
               {selectedRoom.floor != null && <span>Floor {selectedRoom.floor}</span>}
               {selectedRoom.capacity && <span>Capacity: {selectedRoom.capacity}</span>}
-              {selectedRoom.squareFootage && <span>{selectedRoom.squareFootage.toLocaleString()} sq ft</span>}
+              {selectedRoom.squareFootage && <span>{formatNumber(selectedRoom.squareFootage)} sq ft</span>}
             </div>
           </div>
         </div>

@@ -6,6 +6,7 @@
 
 import React from 'react';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { formatNumber } from '@/utils/dateFormatting';
 
 interface StatCardProps {
   label: string;
@@ -28,7 +29,7 @@ export const StatCard: React.FC<StatCardProps> = ({ label, value, previousValue,
   return (
     <div className={`bg-theme-surface-secondary rounded-lg p-3 text-center ${className ?? ''}`}>
       <div className="text-theme-text-primary text-xl font-bold">
-        {typeof value === 'number' ? value.toLocaleString() : value}
+        {typeof value === 'number' ? formatNumber(value) : value}
         {suffix && <span className="text-theme-text-muted ml-0.5 text-sm font-normal">{suffix}</span>}
       </div>
       <div className="text-theme-text-muted text-xs">{label}</div>

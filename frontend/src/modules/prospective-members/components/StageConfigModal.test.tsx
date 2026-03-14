@@ -30,7 +30,7 @@ vi.mock('@/utils/eventHelpers', () => ({
 }));
 
 vi.mock('@/utils/dateFormatting', () => ({
-  formatDateTime: (d: string) => new Date(d).toLocaleString(),
+  formatDateTime: (d: string) => new Date(d).toISOString(),
 }));
 
 import { StageConfigModal } from './StageConfigModal';
