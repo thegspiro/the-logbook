@@ -9,7 +9,7 @@ import { CalendarClock, Send, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { EmailTemplate, ScheduledEmailCreate } from '../../../services/api';
 import { useScheduledEmailsStore } from '../store/scheduledEmailsStore';
-import { localToUTC } from '../../../utils/dateFormatting';
+import { localToUTC, getTodayLocalDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 
 interface ScheduleEmailFormProps {
@@ -34,8 +34,7 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({
   const [scheduledDate, setScheduledDate] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
 
-  const now = new Date();
-  const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const todayLocal = getTodayLocalDate(tz);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,9 +44,9 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({
       return;
     }
 
-    // Validate scheduled time is in the future
-    const selectedLocal = new Date(`${scheduledDate}T${scheduledTime}:00`);
-    if (selectedLocal <= new Date()) {
+    // Validate scheduled time is in the future (compare in UTC)
+    const selectedUTC = new Date(localToUTC(`${scheduledDate}T${scheduledTime}`, tz));
+    if (selectedUTC <= new Date()) {
       toast.error('Scheduled time must be in the future');
       return;
     }

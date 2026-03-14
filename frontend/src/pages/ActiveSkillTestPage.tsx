@@ -40,6 +40,7 @@ import {
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { formatDateTime } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 import { FormStatus } from '../constants/enums';
 import type {
   SkillCriterion,
@@ -839,6 +840,7 @@ export const ActiveSkillTestPage: React.FC = () => {
     clearCurrentTest,
   } = useSkillsTestingStore();
 
+  const tz = useTimezone();
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [reviewing, setReviewing] = useState(false);
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
@@ -1186,7 +1188,7 @@ export const ActiveSkillTestPage: React.FC = () => {
                   <p className="text-xs text-theme-text-muted">Completed</p>
                 </div>
                 <p className="font-medium text-theme-text-primary text-sm">
-                  {formatDateTime(currentTest.completed_at)}
+                  {formatDateTime(currentTest.completed_at, tz)}
                 </p>
               </div>
             )}

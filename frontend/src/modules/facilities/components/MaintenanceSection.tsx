@@ -207,7 +207,7 @@ export default function MaintenanceSection({ facilityId }: Props) {
                     )}
                   </div>
                   <div className="flex items-center gap-3 text-xs text-theme-text-muted">
-                    {record.scheduledDate && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDate(record.scheduledDate)}</span>}
+                    {record.scheduledDate && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDate(record.scheduledDate, tz)}</span>}
                     {record.vendor && <span>{record.vendor}</span>}
                     {record.cost != null && record.cost > 0 && <span className="flex items-center gap-1"><DollarSign className="w-3 h-3" />${record.cost.toLocaleString()}</span>}
                     {record.workOrderNumber && <span>WO# {record.workOrderNumber}</span>}

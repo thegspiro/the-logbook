@@ -16,7 +16,7 @@ import type { EventListItem, EventType, EventCategoryConfig, RSVPCreate, EventTe
 import { getEventTypeLabel, getEventTypeBadgeColor, getRSVPStatusLabel, getRSVPStatusColor } from '../utils/eventHelpers';
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatShortDateTime } from '../utils/dateFormatting';
+import { formatShortDateTime, getTodayLocalDate } from '../utils/dateFormatting';
 import { Breadcrumbs, SkeletonCardGrid, EmptyState, Pagination } from '../components/ux';
 import { formatRelativeTime, formatAbsoluteDate } from '../hooks/useRelativeTime';
 import { DEFAULT_PAGE_SIZE } from '../constants/config';
@@ -354,7 +354,7 @@ export const EventsPage: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `events-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `events-${getTodayLocalDate(tz)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }, [sortedEvents, tz]);
@@ -402,7 +402,7 @@ export const EventsPage: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `events-selected-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `events-selected-${getTodayLocalDate(tz)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }, [sortedEvents, selectedEvents, tz]);

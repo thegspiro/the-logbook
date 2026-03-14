@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import { inventoryService, locationsService } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { getTodayLocalDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { useInventoryWebSocket } from '../../../hooks/useInventoryWebSocket';
@@ -47,6 +49,7 @@ function locLabel(item: InventoryItem, locs: Location[]): string {
 /* ------------------------------------------------------------------ */
 const InventoryItemsPage: React.FC = () => {
   const navigate = useNavigate();
+  const tz = useTimezone();
   const canManage = useAuthStore((s) => s.checkPermission)('inventory.manage');
 
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -200,7 +203,7 @@ const InventoryItemsPage: React.FC = () => {
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = `inventory-items-${new Date().toISOString().split('T')[0] ?? 'export'}.csv`;
+      a.href = url; a.download = `inventory-items-${getTodayLocalDate(tz)}.csv`;
       document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
       toast.success('CSV exported');
     } catch (err: unknown) { toast.error(getErrorMessage(err, 'Export failed')); }

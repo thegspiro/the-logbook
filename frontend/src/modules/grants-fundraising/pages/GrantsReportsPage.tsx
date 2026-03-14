@@ -24,6 +24,8 @@ import type { GrantReport, FundraisingReport } from '../types';
 import { COMPLIANCE_STATUS_COLORS } from '../types';
 
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
+import { getTodayLocalDate, toLocalDateString } from '@/utils/dateFormatting';
+import { useTimezone } from '@/hooks/useTimezone';
 
 const formatPercent = (value: number): string =>
   new Intl.NumberFormat('en-US', {
@@ -123,12 +125,12 @@ const HorizontalBarChart: React.FC<{
 // Default date range
 // =============================================================================
 
-function getDefaultDateRange(): { start: string; end: string } {
+function getDefaultDateRange(tz: string): { start: string; end: string } {
   const now = new Date();
   const startOfYear = new Date(now.getFullYear(), 0, 1);
   return {
-    start: startOfYear.toISOString().split('T')[0] ?? '',
-    end: now.toISOString().split('T')[0] ?? '',
+    start: toLocalDateString(startOfYear, tz),
+    end: getTodayLocalDate(tz),
   };
 }
 
@@ -137,7 +139,8 @@ function getDefaultDateRange(): { start: string; end: string } {
 // =============================================================================
 
 const GrantsReportsPage: React.FC = () => {
-  const defaults = getDefaultDateRange();
+  const tz = useTimezone();
+  const defaults = getDefaultDateRange(tz);
 
   const [activeTab, setActiveTab] = useState<TabId>('grants');
   const [startDate, setStartDate] = useState(defaults.start);

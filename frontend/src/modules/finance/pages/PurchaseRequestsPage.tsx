@@ -18,6 +18,7 @@ import { useFinanceStore } from '../store/financeStore';
 import { SkeletonPage } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { formatDate } from '@/utils/dateFormatting';
+import { useTimezone } from '@/hooks/useTimezone';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import {
   PurchaseRequestStatus,
@@ -60,6 +61,7 @@ const PRIORITY_COLORS: Record<string, string> = {
 // =============================================================================
 
 const PurchaseRequestsPage: React.FC = () => {
+  const tz = useTimezone();
   const navigate = useNavigate();
   const {
     purchaseRequests,
@@ -259,7 +261,7 @@ const PurchaseRequestsPage: React.FC = () => {
                       </span>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-theme-text-secondary">
-                      {formatDate(pr.createdAt)}
+                      {formatDate(pr.createdAt, tz)}
                     </td>
                   </tr>
                 ))}

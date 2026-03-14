@@ -58,6 +58,7 @@ import { eventService } from '@/services/eventServices';
 import type { EventListItem } from '@/types/event';
 import { getEventTypeLabel } from '@/utils/eventHelpers';
 import { formatDateTime } from '@/utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
 
 interface StageConfigModalProps {
   isOpen: boolean;
@@ -363,6 +364,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   editingStage,
   existingStageCount,
 }) => {
+  const tz = useTimezone();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [stageType, setStageType] = useState<StageType>('manual_approval');
@@ -591,7 +593,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
         <p className="text-theme-text-muted mb-1 text-xs font-medium">Next upcoming event (auto-linked when stage activates):</p>
         <p className="text-theme-text-primary text-sm font-medium">{nextEvent.title}</p>
         <p className="text-theme-text-muted mt-0.5 text-xs">
-          {formatDateTime(nextEvent.start_datetime)}
+          {formatDateTime(nextEvent.start_datetime, tz)}
           {nextEvent.location_name
             ? ` — ${nextEvent.location_name}`
             : nextEvent.location

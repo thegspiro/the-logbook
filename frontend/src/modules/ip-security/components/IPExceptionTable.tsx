@@ -12,6 +12,7 @@ import {
   IP_EXCEPTION_USE_CASE_LABELS,
 } from '../../../constants/enums';
 import { formatDateTime } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
 import type { IPException } from '../types';
 
 interface IPExceptionTableProps {
@@ -29,6 +30,7 @@ export const IPExceptionTable: React.FC<IPExceptionTableProps> = ({
   onReject,
   onRevoke,
 }) => {
+  const tz = useTimezone();
   if (exceptions.length === 0) {
     return (
       <div className="text-center py-12 text-theme-text-muted">
@@ -76,7 +78,7 @@ export const IPExceptionTable: React.FC<IPExceptionTableProps> = ({
                 {exc.countryName ?? exc.countryCode ?? '—'}
               </td>
               <td className="py-3 px-4 text-theme-text-muted">
-                {exc.requestedAt ? formatDateTime(exc.requestedAt) : '—'}
+                {exc.requestedAt ? formatDateTime(exc.requestedAt, tz) : '—'}
               </td>
               {showActions && (
                 <td className="py-3 px-4">

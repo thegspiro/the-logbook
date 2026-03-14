@@ -22,6 +22,7 @@ import { SkeletonPage } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { ConfirmDialog } from '@/components/ux/ConfirmDialog';
 import { formatDate } from '@/utils/dateFormatting';
+import { useTimezone } from '@/hooks/useTimezone';
 
 // =============================================================================
 // Status Badge
@@ -244,6 +245,7 @@ const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({
 // =============================================================================
 
 const FiscalYearSettingsPage: React.FC = () => {
+  const tz = useTimezone();
   const {
     fiscalYears,
     budgetCategories,
@@ -391,7 +393,7 @@ const FiscalYearSettingsPage: React.FC = () => {
                     )}
                   </div>
                   <p className="mt-0.5 text-xs text-theme-text-secondary">
-                    {formatDate(fy.startDate)} - {formatDate(fy.endDate)}
+                    {formatDate(fy.startDate, tz)} - {formatDate(fy.endDate, tz)}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">

@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { facilitiesService } from '../../../services/api';
 import type { ComplianceChecklist, ComplianceChecklistCreate } from '../../../services/facilitiesServices';
 import { enumLabel } from '../types';
+import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, isPastDate } from '../../../utils/dateFormatting';
 
 const COMPLIANCE_TYPE_OPTIONS = [
@@ -20,6 +21,7 @@ interface Props {
 }
 
 export default function ComplianceSection({ facilityId }: Props) {
+  const tz = useTimezone();
   const [checklists, setChecklists] = useState<ComplianceChecklist[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -152,12 +154,12 @@ export default function ComplianceSection({ facilityId }: Props) {
                       {checklist.dueDate && (
                         <span className={`flex items-center gap-1 ${isPastDate(checklist.dueDate) && !checklist.isCompleted ? 'text-red-500 font-medium' : ''}`}>
                           <Calendar className="w-3 h-3" />
-                          Due: {formatDate(checklist.dueDate)}
+                          Due: {formatDate(checklist.dueDate, tz)}
                         </span>
                       )}
                       {checklist.isCompleted && checklist.completedDate && (
                         <span className="text-emerald-600 dark:text-emerald-400">
-                          Completed: {formatDate(checklist.completedDate)}
+                          Completed: {formatDate(checklist.completedDate, tz)}
                         </span>
                       )}
                     </div>

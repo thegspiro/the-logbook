@@ -11,6 +11,7 @@ import { formatCurrency } from '@/utils/currencyFormatting';
 import { SkeletonPage } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { formatDate } from '@/utils/dateFormatting';
+import { useTimezone } from '@/hooks/useTimezone';
 import {
   DuesStatus,
   DUES_STATUS_COLORS,
@@ -96,6 +97,7 @@ const SummaryCards: React.FC<{ summary: DuesSummary }> = ({ summary }) => (
 // =============================================================================
 
 const DuesManagementPage: React.FC = () => {
+  const tz = useTimezone();
   const {
     duesSchedules,
     memberDues,
@@ -283,7 +285,7 @@ const DuesManagementPage: React.FC = () => {
                       {formatCurrency(md.amountPaid)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-theme-text-secondary">
-                      {formatDate(md.dueDate)}
+                      {formatDate(md.dueDate, tz)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
                       <span
@@ -293,7 +295,7 @@ const DuesManagementPage: React.FC = () => {
                       </span>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-theme-text-secondary">
-                      {md.paidDate ? formatDate(md.paidDate) : '--'}
+                      {md.paidDate ? formatDate(md.paidDate, tz) : '--'}
                     </td>
                   </tr>
                 ))}

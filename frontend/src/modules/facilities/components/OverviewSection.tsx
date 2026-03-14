@@ -16,6 +16,7 @@ import toast from 'react-hot-toast';
 import { useFacilitiesStore } from '../store/facilitiesStore';
 import type { FacilityCreate } from '../../../services/facilitiesServices';
 import type { Facility, FacilityType, FacilityStatus } from '../types';
+import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate } from '../../../utils/dateFormatting';
 
 interface Props {
@@ -25,6 +26,7 @@ interface Props {
 }
 
 export default function OverviewSection({ facility, facilityTypes, facilityStatuses }: Props) {
+  const tz = useTimezone();
   const { updateFacility } = useFacilitiesStore();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -239,8 +241,8 @@ export default function OverviewSection({ facility, facilityTypes, facilityStatu
 
             {/* Timestamps */}
             <div className="flex items-center gap-4 text-xs text-theme-text-muted pt-2 border-t border-theme-surface-border">
-              <span>Created: {formatDate(facility.createdAt)}</span>
-              <span>Updated: {formatDate(facility.updatedAt)}</span>
+              <span>Created: {formatDate(facility.createdAt, tz)}</span>
+              <span>Updated: {formatDate(facility.updatedAt, tz)}</span>
             </div>
           </div>
         ) : (

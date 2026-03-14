@@ -11,7 +11,7 @@ import { useAdminHoursStore } from '../store/adminHoursStore';
 import { formatDuration } from '../utils/formatDuration';
 import { DEFAULT_PAGE_SIZE } from '../../../constants/config';
 import type { AdminHoursEntryEdit } from '../types';
-import { formatDate } from '../../../utils/dateFormatting';
+import { formatDate, formatForDateTimeInput, localToUTC } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import toast from 'react-hot-toast';
 
@@ -82,12 +82,8 @@ const PendingReviewTab: React.FC = () => {
   const startEditEntry = (entry: { id: string; clockInAt: string; clockOutAt: string | null; description: string | null; categoryId: string }) => {
     setEditingEntryId(entry.id);
     setRejectingEntryId(null);
-    // Convert ISO dates to datetime-local format
-    const toLocalInput = (iso: string) => {
-      const d = new Date(iso);
-      const pad = (n: number) => String(n).padStart(2, '0');
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    };
+    // Convert ISO dates to datetime-local format in org timezone
+    const toLocalInput = (iso: string) => formatForDateTimeInput(iso, tz);
     setEditData({
       clock_in_at: toLocalInput(entry.clockInAt),
       clock_out_at: entry.clockOutAt ? toLocalInput(entry.clockOutAt) : undefined,
@@ -113,8 +109,8 @@ const PendingReviewTab: React.FC = () => {
 
   const editDurationMinutes = (() => {
     if (!editData.clock_in_at || !editData.clock_out_at) return null;
-    const start = new Date(editData.clock_in_at).getTime();
-    const end = new Date(editData.clock_out_at).getTime();
+    const start = new Date(localToUTC(editData.clock_in_at, tz)).getTime();
+    const end = new Date(localToUTC(editData.clock_out_at, tz)).getTime();
     if (isNaN(start) || isNaN(end) || end <= start) return null;
     return Math.floor((end - start) / 60000);
   })();

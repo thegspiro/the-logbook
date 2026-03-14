@@ -27,6 +27,7 @@ import { purchaseRequestService } from '../services/api';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { formatDateTime } from '@/utils/dateFormatting';
+import { useTimezone } from '@/hooks/useTimezone';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import {
   PurchaseRequestStatus,
@@ -109,6 +110,7 @@ interface ApprovalTimelineProps {
 }
 
 const ApprovalTimeline: React.FC<ApprovalTimelineProps> = ({ steps }) => {
+  const tz = useTimezone();
   const sorted = [...steps].sort(
     (a, b) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0),
   );
@@ -168,7 +170,7 @@ const ApprovalTimeline: React.FC<ApprovalTimelineProps> = ({ steps }) => {
               </div>
               {step.actedAt && (
                 <p className="mt-0.5 text-xs text-theme-text-secondary">
-                  {formatDateTime(step.actedAt)}
+                  {formatDateTime(step.actedAt, tz)}
                 </p>
               )}
               {step.notes && (
@@ -189,6 +191,7 @@ const ApprovalTimeline: React.FC<ApprovalTimelineProps> = ({ steps }) => {
 // =============================================================================
 
 const PurchaseRequestDetailPage: React.FC = () => {
+  const tz = useTimezone();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const {
@@ -438,14 +441,14 @@ const PurchaseRequestDetailPage: React.FC = () => {
           <div>
             <p className="text-xs text-theme-text-secondary">Created</p>
             <p className="text-sm text-theme-text-primary">
-              {formatDateTime(pr.createdAt)}
+              {formatDateTime(pr.createdAt, tz)}
             </p>
           </div>
           {pr.approvedAt && (
             <div>
               <p className="text-xs text-theme-text-secondary">Approved</p>
               <p className="text-sm text-theme-text-primary">
-                {formatDateTime(pr.approvedAt)}
+                {formatDateTime(pr.approvedAt, tz)}
               </p>
             </div>
           )}
@@ -453,7 +456,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
             <div>
               <p className="text-xs text-theme-text-secondary">Ordered</p>
               <p className="text-sm text-theme-text-primary">
-                {formatDateTime(pr.orderedAt)}
+                {formatDateTime(pr.orderedAt, tz)}
               </p>
             </div>
           )}
@@ -461,7 +464,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
             <div>
               <p className="text-xs text-theme-text-secondary">Received</p>
               <p className="text-sm text-theme-text-primary">
-                {formatDateTime(pr.receivedAt)}
+                {formatDateTime(pr.receivedAt, tz)}
               </p>
             </div>
           )}

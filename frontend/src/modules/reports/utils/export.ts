@@ -91,10 +91,14 @@ export function downloadFile(content: string | Blob, filename: string, mimeType 
 export function exportReportAsCsv(
   reportTitle: string,
   rows: Array<Record<string, unknown>>,
-  columns?: Array<{ key: string; header: string }>
+  columns?: Array<{ key: string; header: string }>,
+  timezone?: string
 ): void {
   const csv = generateCsv(rows, columns);
-  const filename = `${reportTitle.replace(/\s+/g, '_').toLowerCase()}_${new Date().toISOString().slice(0, 10)}.csv`;
+  const todayStr = timezone
+    ? new Date().toLocaleDateString('en-CA', { timeZone: timezone })
+    : new Date().toISOString().slice(0, 10);
+  const filename = `${reportTitle.replace(/\s+/g, '_').toLowerCase()}_${todayStr}.csv`;
   downloadFile(csv, filename, 'text/csv;charset=utf-8;');
 }
 
@@ -106,7 +110,8 @@ export function exportReportAsPrintablePdf(
   reportTitle: string,
   rows: Array<Record<string, unknown>>,
   columns?: Array<{ key: string; header: string }>,
-  summaryHtml?: string
+  summaryHtml?: string,
+  timezone?: string
 ): void {
   const cols =
     columns ??
@@ -139,7 +144,7 @@ export function exportReportAsPrintablePdf(
   table { border-collapse: collapse; width: 100%; }
 </style></head><body>
 <h1>${safeTitle}</h1>
-<div class="meta">Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}</div>
+<div class="meta">Generated: ${new Date().toLocaleDateString(undefined, timezone ? { timeZone: timezone } : undefined)} ${new Date().toLocaleTimeString(undefined, timezone ? { timeZone: timezone } : undefined)}</div>
 ${summaryHtml ? `<div style="margin-bottom:16px">${summaryHtml}</div>` : ''}
 <table><thead><tr>${headerRow}</tr></thead><tbody>${bodyRows}</tbody></table>
 </body></html>`;

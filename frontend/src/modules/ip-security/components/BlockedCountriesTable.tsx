@@ -6,6 +6,7 @@ import React from 'react';
 import { Globe, Trash2 } from 'lucide-react';
 import { COUNTRY_RISK_LEVEL_COLORS } from '../../../constants/enums';
 import { formatDateTime } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
 import type { CountryBlockRule } from '../types';
 
 interface BlockedCountriesTableProps {
@@ -17,6 +18,7 @@ export const BlockedCountriesTable: React.FC<BlockedCountriesTableProps> = ({
   countries,
   onRemove,
 }) => {
+  const tz = useTimezone();
   if (countries.length === 0) {
     return (
       <div className="text-center py-12 text-theme-text-muted">
@@ -64,7 +66,7 @@ export const BlockedCountriesTable: React.FC<BlockedCountriesTableProps> = ({
               </td>
               <td className="py-3 px-4 text-theme-text-muted">{c.blockedAttemptsCount ?? 0}</td>
               <td className="py-3 px-4 text-theme-text-muted">
-                {c.createdAt ? formatDateTime(c.createdAt) : '—'}
+                {c.createdAt ? formatDateTime(c.createdAt, tz) : '—'}
               </td>
               <td className="py-3 px-4">
                 <button

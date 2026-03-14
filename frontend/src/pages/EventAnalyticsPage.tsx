@@ -19,6 +19,7 @@ import {
 import { eventService } from '../services/api';
 import { getEventTypeLabel } from '../utils/eventHelpers';
 import { formatDate } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 import { Breadcrumbs, SkeletonPage } from '../components/ux';
 import { DateRangePicker } from '../components/ux';
 
@@ -181,6 +182,7 @@ function monthLabel(yyyyMm: string): string {
 // ----------------------------------------------------------------
 
 export const EventAnalyticsPage: React.FC = () => {
+  const tz = useTimezone();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<AnalyticsSummary | null>(null);
@@ -427,7 +429,7 @@ export const EventAnalyticsPage: React.FC = () => {
                         {getEventTypeLabel(e.eventType)}
                       </td>
                       <td className="py-2 pr-4 text-theme-text-secondary">
-                        {formatDate(e.startDatetime)}
+                        {formatDate(e.startDatetime, tz)}
                       </td>
                       <td className="py-2 pr-4 text-right text-theme-text-primary">
                         {e.goingCount}
