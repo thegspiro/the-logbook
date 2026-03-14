@@ -305,6 +305,10 @@ class MembershipPipelineService:
             required=data.get("required", True),
             config=data.get("config", {}),
             inactivity_timeout_days=data.get("inactivity_timeout_days"),
+            notify_prospect_on_completion=data.get(
+                "notify_prospect_on_completion", False
+            ),
+            public_visible=data.get("public_visible", True),
         )
         self.db.add(step)
         await self.db.commit()
@@ -968,6 +972,10 @@ class MembershipPipelineService:
             details={"step_id": str(step_id), "notes": notes},
             performed_by=completed_by,
         )
+
+        # Notify the prospect that this step is completed, if configured
+        if step and step.notify_prospect_on_completion and prospect.email:
+            await self._send_step_completion_notification(prospect, step)
 
         # Check if the completed step is the final step and auto-transfer is on
         step = next(
@@ -1739,6 +1747,81 @@ class MembershipPipelineService:
         except Exception as e:
             logger.error(
                 f"Failed to send stage email to {prospect.email}: {e}"
+            )
+            return False
+
+    async def _send_step_completion_notification(
+        self,
+        prospect: ProspectiveMember,
+        step: MembershipPipelineStep,
+    ) -> bool:
+        """Send a notification email when a pipeline step is completed."""
+        try:
+            import html as _html
+
+            from app.services.email_service import EmailService
+            from app.services.email_template_service import DEFAULT_CSS
+
+            org_result = await self.db.execute(
+                select(Organization).where(
+                    Organization.id == prospect.organization_id
+                )
+            )
+            org = org_result.scalar_one_or_none()
+            if not org:
+                return False
+
+            org_name = _html.escape(org.name or "The Logbook")
+            first_name = _html.escape(prospect.first_name or "")
+            step_name = _html.escape(step.name or "")
+            subject = (
+                f"Application Update — {step.name} Complete"
+            )
+
+            html_body = (
+                f"<!DOCTYPE html><html><head>"
+                f"<style>{DEFAULT_CSS}</style></head><body>"
+                f'<div class="container">'
+                f'<div class="header"><h1>{org_name}</h1></div>'
+                f'<div class="content">'
+                f"<p>Hi {first_name},</p>"
+                f"<p>We're writing to let you know that the "
+                f"<strong>{step_name}</strong> step of your "
+                f"membership application has been completed.</p>"
+                f"<p>We'll be in touch with next steps soon.</p>"
+                f"</div>"
+                f'<div class="footer">'
+                f"This email was sent by {org_name}.</div>"
+                f"</div></body></html>"
+            )
+            text_body = (
+                f"Hi {prospect.first_name},\n\n"
+                f"The {step.name} step of your membership "
+                f"application has been completed.\n\n"
+                f"We'll be in touch with next steps soon.\n\n"
+                f"This email was sent by "
+                f"{org.name or 'The Logbook'}."
+            )
+
+            email_svc = EmailService(org)
+            success, _ = await email_svc.send_email(
+                to_emails=[prospect.email],
+                subject=subject,
+                html_body=html_body,
+                text_body=text_body,
+                db=self.db,
+                template_type="pipeline_stage",
+            )
+            if success:
+                logger.info(
+                    "Step-completion notification sent to "
+                    f"{prospect.email} for step '{step.name}'"
+                )
+            return success > 0
+        except Exception as e:
+            logger.error(
+                "Failed to send step-completion notification "
+                f"to {prospect.email}: {e}"
             )
             return False
 
