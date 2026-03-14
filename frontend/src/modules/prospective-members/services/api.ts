@@ -71,20 +71,30 @@ const api = createApiClient();
 function mapStageTypeToBackend(stageType: StageType): { step_type: string; action_type?: string } {
   switch (stageType) {
     case StageTypeConst.FORM_SUBMISSION:
-      return { step_type: 'action', action_type: 'custom' };
+      return { step_type: 'form_submission' };
     case StageTypeConst.DOCUMENT_UPLOAD:
-      return { step_type: 'action', action_type: 'collect_document' };
+      return { step_type: 'document_upload' };
     case StageTypeConst.ELECTION_VOTE:
-      return { step_type: 'action', action_type: 'custom' };
+      return { step_type: 'election_vote' };
     case StageTypeConst.MEETING:
-      return { step_type: 'action', action_type: 'schedule_meeting' };
+      return { step_type: 'meeting' };
     case StageTypeConst.STATUS_PAGE_TOGGLE:
-      return { step_type: 'action', action_type: 'custom' };
+      return { step_type: 'status_page_toggle' };
     case StageTypeConst.AUTOMATED_EMAIL:
-      return { step_type: 'action', action_type: 'send_email' };
+      return { step_type: 'automated_email' };
+    case StageTypeConst.REFERENCE_CHECK:
+      return { step_type: 'reference_check' };
+    case StageTypeConst.CHECKLIST:
+      return { step_type: 'checklist' };
+    case StageTypeConst.INTERVIEW_REQUIREMENT:
+      return { step_type: 'interview_requirement' };
+    case StageTypeConst.MULTI_APPROVAL:
+      return { step_type: 'multi_approval' };
+    case StageTypeConst.MEDICAL_SCREENING:
+      return { step_type: 'medical_screening' };
     case StageTypeConst.MANUAL_APPROVAL:
     default:
-      return { step_type: 'checkbox' };
+      return { step_type: 'manual_approval' };
   }
 }
 
@@ -105,12 +115,26 @@ function mapStepTypeToFrontend(
   actionType?: string | null,
   config?: Record<string, unknown> | null
 ): StageType {
+  // Direct step type mapping (new format)
+  switch (stepType) {
+    case 'form_submission': return StageTypeConst.FORM_SUBMISSION;
+    case 'document_upload': return StageTypeConst.DOCUMENT_UPLOAD;
+    case 'election_vote': return StageTypeConst.ELECTION_VOTE;
+    case 'meeting': return StageTypeConst.MEETING;
+    case 'status_page_toggle': return StageTypeConst.STATUS_PAGE_TOGGLE;
+    case 'automated_email': return StageTypeConst.AUTOMATED_EMAIL;
+    case 'manual_approval': return StageTypeConst.MANUAL_APPROVAL;
+    case 'reference_check': return StageTypeConst.REFERENCE_CHECK;
+    case 'checklist': return StageTypeConst.CHECKLIST;
+    case 'interview_requirement': return StageTypeConst.INTERVIEW_REQUIREMENT;
+    case 'multi_approval': return StageTypeConst.MULTI_APPROVAL;
+    case 'medical_screening': return StageTypeConst.MEDICAL_SCREENING;
+  }
+  // Legacy format: step_type='action' with action_type disambiguation
   if (stepType === 'action') {
     if (actionType === 'collect_document') return StageTypeConst.DOCUMENT_UPLOAD;
     if (actionType === 'schedule_meeting') return StageTypeConst.MEETING;
     if (actionType === 'send_email') return StageTypeConst.AUTOMATED_EMAIL;
-    // Distinguish between form_submission, election_vote, and status_page_toggle
-    // by inspecting the config JSON
     if (config && 'enable_public_status' in config) return StageTypeConst.STATUS_PAGE_TOGGLE;
     if (config && 'voting_method' in config) return StageTypeConst.ELECTION_VOTE;
     return StageTypeConst.FORM_SUBMISSION;
