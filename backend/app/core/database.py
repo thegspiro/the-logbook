@@ -7,9 +7,10 @@ Includes retry logic and connection timeouts for robust startup.
 
 import asyncio
 from collections.abc import AsyncGenerator
+from datetime import datetime, timezone
 
 from loguru import logger
-from sqlalchemy import MetaData
+from sqlalchemy import DateTime, MetaData, event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -30,6 +31,25 @@ class Base(DeclarativeBase):
     """Declarative base with naming conventions for all ORM models."""
 
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
+
+
+@event.listens_for(Base, "load", propagate=True)
+def _on_load_stamp_utc(target, _context):
+    """After loading any ORM model, tag naive datetime attributes as UTC.
+
+    MySQL DATETIME columns do not store timezone info, so aiomysql returns
+    naive datetime objects even when SQLAlchemy ``DateTime(timezone=True)``
+    is used.  Without tzinfo Pydantic serialises the value without a ``Z``
+    or ``+00:00`` suffix, causing JavaScript ``new Date()`` to treat it as
+    browser-local time instead of UTC.
+    """
+    mapper = type(target).__mapper__
+    for col in mapper.columns:
+        if isinstance(col.type, DateTime) and col.type.timezone:
+            attr = col.key
+            val = getattr(target, attr, None)
+            if isinstance(val, datetime) and val.tzinfo is None:
+                object.__setattr__(target, attr, val.replace(tzinfo=timezone.utc))
 
 
 class DatabaseManager:
