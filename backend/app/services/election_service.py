@@ -3070,7 +3070,7 @@ Best regards,
         row = result.one_or_none()
 
         if not row:
-            return 0, 0, 0
+            return 0, 0, 0, []
 
         election, organization = row
 
@@ -3104,7 +3104,7 @@ Best regards,
             recipients = users_result.scalars().all()
 
         if not recipients:
-            return 0, 0, 0
+            return 0, 0, 0, []
 
         # Initialize email service with organization settings
         email_service = EmailService(organization)

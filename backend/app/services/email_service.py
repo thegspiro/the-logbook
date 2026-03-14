@@ -409,12 +409,21 @@ class EmailService:
         if self.organization:
             org_logo = getattr(self.organization, "logo", None) or ""
 
+        # Build custom_message_html: wraps the message in a <p> tag if
+        # present, or yields an empty string so the placeholder disappears.
+        custom_message_html = ""
+        if custom_message:
+            custom_message_html = (
+                f"<p>{_html.escape(custom_message)}</p>"
+            )
+
         context = {
             "recipient_name": recipient_name,
             "election_title": election_title,
             "ballot_url": ballot_url or "",
             "meeting_date": self._format_local_dt(meeting_date) if meeting_date else "",
             "custom_message": custom_message or "",
+            "custom_message_html": custom_message_html,
             "voting_opens": self._format_local_dt(start_date) if start_date else "",
             "voting_closes": self._format_local_dt(end_date) if end_date else "",
             "positions": ", ".join(positions) if positions else "",
@@ -461,7 +470,7 @@ class EmailService:
             )
 
             context["organization_logo_img"] = self._build_logo_img()
-            _raw_html_vars = {"organization_logo_img", "ballot_items_html"}
+            _raw_html_vars = {"organization_logo_img", "ballot_items_html", "custom_message_html"}
 
             def _replace(text: str) -> str:
                 def replacer(match):

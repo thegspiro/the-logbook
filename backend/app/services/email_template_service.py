@@ -1410,9 +1410,7 @@ DEFAULT_BALLOT_NOTIFICATION_HTML = """<div class="container">
         <p><strong>Your Ballot Items:</strong></p>
         {{ballot_items_html}}
 
-        {{#custom_message}}
-        <p>{{custom_message}}</p>
-        {{/custom_message}}
+        {{custom_message_html}}
 
         <p style="text-align: center;">
             <a href="{{ballot_url}}" class="button">Vote Now</a>
@@ -1970,6 +1968,7 @@ class EmailTemplateService:
         "items_returned_html",
         "organization_logo_img",
         "ballot_items_html",
+        "custom_message_html",
     }
 
     def _replace_variables(self, text: str, context: Dict[str, Any]) -> str:
@@ -1987,7 +1986,9 @@ class EmailTemplateService:
 
         def replacer(match):
             var_name = match.group(1).strip()
-            value = str(context.get(var_name, match.group(0)))
+            if var_name not in context:
+                return ""
+            value = str(context[var_name])
             if var_name in self._RAW_HTML_VARIABLES:
                 return value
             return _html.escape(value)

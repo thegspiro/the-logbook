@@ -1579,10 +1579,20 @@ class MembershipPipelineService:
             text_parts = [f"Hi {prospect.first_name},"]
             if config.get("welcome_message"):
                 text_parts.append(config["welcome_message"])
+            if config.get("include_faq_link") and config.get("faq_url"):
+                text_parts.append(
+                    f"View Membership FAQ: {config['faq_url']}"
+                )
             if include_meeting and meeting_details:
                 text_parts.append(
                     f"Next Meeting: {meeting_details}"
                 )
+            for custom in config.get("custom_sections", []):
+                title = custom.get("title", "")
+                body = custom.get("content", "")
+                if title or body:
+                    section = f"{title}\n{body}" if title else body
+                    text_parts.append(section)
             text_parts.append(f"This email was sent by {org.name or 'The Logbook'}.")
             text_body = "\n\n".join(text_parts)
 
