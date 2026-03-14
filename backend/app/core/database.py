@@ -13,6 +13,7 @@ from loguru import logger
 from sqlalchemy import DateTime, MetaData, event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.core.config import settings
 
@@ -49,7 +50,7 @@ def _on_load_stamp_utc(target, _context):
             attr = col.key
             val = getattr(target, attr, None)
             if isinstance(val, datetime) and val.tzinfo is None:
-                object.__setattr__(target, attr, val.replace(tzinfo=timezone.utc))
+                set_committed_value(target, attr, val.replace(tzinfo=timezone.utc))
 
 
 class DatabaseManager:
