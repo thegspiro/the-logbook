@@ -8,14 +8,14 @@ Provides endpoints for:
 - Audit trail for IP exceptions
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.core.utils import handle_service_errors, safe_error_detail
+from app.core.utils import ensure_found, handle_service_errors
 from app.models.ip_security import (
     BlockedAccessAttempt,
     CountryBlockRule,
@@ -474,16 +474,16 @@ async def remove_blocked_country(
 
     Requires security.manage or settings.manage permission.
     """
-    try:
+    async with handle_service_errors("Failed to remove blocked country"):
         result = await db.execute(
             select(CountryBlockRule).where(
                 CountryBlockRule.country_code == country_code.upper()
             )
         )
-        rule = result.scalar_one_or_none()
-
-        if not rule:
-            raise HTTPException(status_code=404, detail="Country block rule not found")
+        rule = ensure_found(
+            result.scalar_one_or_none(),
+            "Country block rule",
+        )
 
         rule.is_blocked = False
         rule.updated_by = str(current_user.id)
@@ -507,7 +507,3 @@ async def remove_blocked_country(
         )
 
         return {"message": f"Country {country_code.upper()} unblocked"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=safe_error_detail(e))
