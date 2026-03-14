@@ -1593,6 +1593,15 @@ async def lifespan(app: FastAPI):
             await _scheduler_task
         except asyncio.CancelledError:
             pass
+    # Release the scheduled-email-loop Redis claim so the next worker
+    # starts immediately instead of waiting for the TTL to expire.
+    if cache_manager.is_connected and cache_manager.redis_client:
+        try:
+            await cache_manager.redis_client.delete(
+                "startup_task:scheduled_email_loop"
+            )
+        except Exception:
+            pass
     await ws_manager.stop_listener()
     await database_manager.disconnect()
     await cache_manager.disconnect()
