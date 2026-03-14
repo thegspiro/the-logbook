@@ -7,7 +7,7 @@ Pydantic schemas for email template API requests and responses.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field
 
 
 class TemplateVariable(BaseModel):
@@ -116,18 +116,6 @@ class ScheduledEmailCreate(BaseModel):
     scheduled_at: datetime = Field(
         ..., description="When to send the email (UTC datetime)"
     )
-
-    @field_validator("scheduled_at")
-    @classmethod
-    def scheduled_at_must_be_future(cls, v: datetime) -> datetime:
-        from datetime import timezone
-
-        now = datetime.now(timezone.utc)
-        # Make naive datetimes UTC-aware for comparison
-        check = v if v.tzinfo else v.replace(tzinfo=timezone.utc)
-        if check < now:
-            raise ValueError("scheduled_at must be in the future")
-        return v
 
 
 class ScheduledEmailUpdate(BaseModel):
