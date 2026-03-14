@@ -839,6 +839,13 @@ export interface BackendProspectListResponse {
   current_step_name: string | null;
   desired_membership_type: string | null;
   created_at: string;
+  updated_at: string | null;
+  stage_entered_at: string | null;
+  days_in_stage: number;
+  days_in_pipeline: number;
+  days_since_activity: number;
+  inactivity_alert_level: string;
+  inactivity_timeout_days: number | null;
 }
 
 /** Backend election package response (ElectionPackageResponse schema). */

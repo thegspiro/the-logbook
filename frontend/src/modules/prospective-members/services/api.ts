@@ -57,6 +57,7 @@ import type {
   ProspectEventLink,
   ReportStageGroup,
   TargetMembershipType,
+  InactivityAlertLevel,
 } from '../types';
 import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS, StepProgressStatus } from '../types';
 import { StageType as StageTypeConst } from '../../../constants/enums';
@@ -354,7 +355,9 @@ export function mapProspectToApplicant(data: BackendProspectResponse): Applicant
       : undefined,
     stage_history: stageHistory,
     total_stages: (data.step_progress || []).length,
-    stage_entered_at: data.created_at,
+    stage_entered_at: (data.step_progress || []).find(
+      (sp: BackendStepProgressResponse) => sp.step_id === data.current_step_id
+    )?.created_at ?? data.created_at,
     target_membership_type: mapDesiredMembershipType(data.desired_membership_type),
     form_submission_id: data.form_submission_id ?? undefined,
     status_token: data.status_token ?? undefined,
@@ -377,14 +380,15 @@ function mapProspectListToApplicantList(data: BackendProspectListResponse): Appl
     phone: data.phone ?? undefined,
     current_stage_id: data.current_step_id ?? '',
     current_stage_name: data.current_step_name ?? undefined,
-    stage_entered_at: data.created_at,
+    stage_entered_at: data.stage_entered_at ?? data.created_at,
     target_membership_type: mapDesiredMembershipType(data.desired_membership_type),
     status: extractStatus(data.status) as ApplicantListItem['status'],
-    days_in_stage: 0,
-    days_in_pipeline: 0,
-    last_activity_at: data.created_at,
-    days_since_activity: 0,
-    inactivity_alert_level: 'normal',
+    days_in_stage: data.days_in_stage,
+    days_in_pipeline: data.days_in_pipeline,
+    last_activity_at: data.updated_at ?? data.created_at,
+    days_since_activity: data.days_since_activity,
+    inactivity_alert_level: (data.inactivity_alert_level ?? 'normal') as InactivityAlertLevel,
+    inactivity_timeout_days: data.inactivity_timeout_days ?? undefined,
     created_at: data.created_at,
   };
 }

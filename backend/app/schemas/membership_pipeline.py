@@ -343,6 +343,13 @@ class ProspectListResponse(BaseModel):
     current_step_name: Optional[str] = None
     desired_membership_type: Optional[str] = None
     created_at: datetime
+    updated_at: Optional[datetime] = None
+    stage_entered_at: Optional[datetime] = None
+    days_in_stage: int = 0
+    days_in_pipeline: int = 0
+    days_since_activity: int = 0
+    inactivity_alert_level: str = "normal"
+    inactivity_timeout_days: Optional[int] = None
 
     model_config = _response_config
 
