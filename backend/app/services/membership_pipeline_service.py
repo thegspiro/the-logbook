@@ -1041,6 +1041,76 @@ class MembershipPipelineService:
         )
 
         await self.db.commit()
+
+        # Send automated email if the new step is an automated_email stage
+        if next_step.step_type == PipelineStepType.AUTOMATED_EMAIL:
+            await self._send_stage_email(prospect, next_step)
+
+        return await self.get_prospect(prospect_id, organization_id)
+
+    async def regress_prospect(
+        self,
+        prospect_id: str,
+        organization_id: str,
+        regressed_by: str,
+        notes: Optional[str] = None,
+    ) -> Optional[ProspectiveMember]:
+        """Move a prospect back to the previous step."""
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect or not prospect.pipeline:
+            return None
+
+        sorted_steps = sorted(
+            prospect.pipeline.steps, key=lambda s: s.sort_order
+        )
+        current_idx = next(
+            (
+                i
+                for i, s in enumerate(sorted_steps)
+                if str(s.id) == str(prospect.current_step_id)
+            ),
+            -1,
+        )
+
+        if current_idx <= 0:
+            return prospect  # Already at the first step
+
+        prev_step = sorted_steps[current_idx - 1]
+        prospect.current_step_id = prev_step.id
+
+        # Reset the previous step's progress to in_progress
+        prev_progress = next(
+            (
+                p
+                for p in prospect.step_progress
+                if str(p.step_id) == str(prev_step.id)
+            ),
+            None,
+        )
+        if prev_progress:
+            prev_progress.status = StepProgressStatus.IN_PROGRESS
+        else:
+            self.db.add(
+                ProspectStepProgress(
+                    id=generate_uuid(),
+                    prospect_id=prospect_id,
+                    step_id=prev_step.id,
+                    status=StepProgressStatus.IN_PROGRESS,
+                )
+            )
+
+        await self._log_activity(
+            prospect_id=prospect_id,
+            action="prospect_regressed",
+            details={
+                "to_step_id": str(prev_step.id),
+                "to_step_name": prev_step.name,
+                "notes": notes,
+            },
+            performed_by=regressed_by,
+        )
+
+        await self.db.commit()
         return await self.get_prospect(prospect_id, organization_id)
 
     async def _advance_current_step(
@@ -1282,7 +1352,8 @@ class MembershipPipelineService:
             f"Prospect {prospect.full_name} transferred to membership as {username}"
         )
         if enrollment_result:
-            result_msg += f". Auto-enrolled in training program: {enrollment_result['program_name']}"
+            prog = enrollment_result['program_name']
+            result_msg += f". Auto-enrolled in training program: {prog}"
 
         # Send welcome email with temporary credentials if requested
         welcome_email_sent = False
@@ -1397,6 +1468,116 @@ class MembershipPipelineService:
             logger.error(f"Auto-enrollment failed for user {user_id}: {e}")
             return None
 
+    async def _send_stage_email(
+        self,
+        prospect: ProspectiveMember,
+        step: MembershipPipelineStep,
+    ) -> bool:
+        """Send the automated email configured on a pipeline stage."""
+        try:
+            import html as _html
+
+            from app.services.email_service import EmailService
+            from app.services.email_template_service import DEFAULT_CSS
+
+            config: Dict[str, Any] = step.config or {}
+            subject = config.get(
+                "email_subject",
+                "Update on Your Membership Application",
+            )
+            org_result = await self.db.execute(
+                select(Organization).where(
+                    Organization.id == prospect.organization_id
+                )
+            )
+            org = org_result.scalar_one_or_none()
+            if not org:
+                logger.error("Cannot send stage email: organization not found")
+                return False
+
+            org_name = _html.escape(org.name or "The Logbook")
+            first_name = _html.escape(prospect.first_name or "")
+
+            # Build HTML sections from config
+            sections: List[str] = []
+
+            if config.get("include_welcome") and config.get("welcome_message"):
+                sections.append(
+                    f"<p>{_html.escape(config['welcome_message'])}</p>"
+                )
+
+            if config.get("include_faq_link") and config.get("faq_url"):
+                faq_url = _html.escape(config["faq_url"])
+                sections.append(
+                    f'<p><a href="{faq_url}" class="button">'
+                    "View Membership FAQ</a></p>"
+                )
+
+            include_meeting = config.get("include_next_meeting")
+            meeting_details = config.get("next_meeting_details")
+            if include_meeting and meeting_details:
+                sections.append(
+                    "<div class=\"details\">"
+                    "<strong>Next Meeting</strong><br>"
+                    f"{_html.escape(meeting_details)}</div>"
+                )
+
+            for custom in config.get("custom_sections", []):
+                title = _html.escape(custom.get("title", ""))
+                body = _html.escape(custom.get("content", ""))
+                if title or body:
+                    heading = f"<strong>{title}</strong><br>" if title else ""
+                    sections.append(
+                        f'<div class="details">{heading}{body}</div>'
+                    )
+
+            body_html = "\n".join(sections) if sections else (
+                "<p>Your membership application has been updated.</p>"
+            )
+
+            html_body = (
+                f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>"
+                f'<div class="container">'
+                f'<div class="header"><h1>{org_name}</h1></div>'
+                f'<div class="content">'
+                f"<p>Hi {first_name},</p>"
+                f"{body_html}"
+                f"</div>"
+                f'<div class="footer">This email was sent by {org_name}.</div>'
+                f"</div></body></html>"
+            )
+
+            text_parts = [f"Hi {prospect.first_name},"]
+            if config.get("welcome_message"):
+                text_parts.append(config["welcome_message"])
+            if include_meeting and meeting_details:
+                text_parts.append(
+                    f"Next Meeting: {meeting_details}"
+                )
+            text_parts.append(f"This email was sent by {org.name or 'The Logbook'}.")
+            text_body = "\n\n".join(text_parts)
+
+            email_svc = EmailService(org)
+            success, _ = await email_svc.send_email(
+                to_emails=[prospect.email],
+                subject=subject,
+                html_body=html_body,
+                text_body=text_body,
+                db=self.db,
+                template_type="pipeline_stage",
+            )
+            if success:
+                logger.info(
+                    f"Stage email sent to {prospect.email} "
+                    f"for step '{step.name}'"
+                )
+            return success > 0
+        except Exception as e:
+            logger.error(
+                f"Failed to send stage email to {prospect.email}: {e}"
+            )
+            return False
+
     async def _send_transfer_welcome_email(
         self,
         prospect: ProspectiveMember,
@@ -1404,7 +1585,7 @@ class MembershipPipelineService:
         temp_password: str,
         organization_id: str,
     ) -> bool:
-        """Send welcome email with temporary credentials to a newly transferred member."""
+        """Send welcome email with credentials to a transferred member."""
         try:
             from app.core.config import settings
             from app.services.email_service import EmailService

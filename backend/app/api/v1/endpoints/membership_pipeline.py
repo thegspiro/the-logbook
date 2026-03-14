@@ -838,6 +838,39 @@ async def advance_prospect(
 
 
 @router.post(
+    "/prospects/{prospect_id}/regress", response_model=ProspectResponse
+)
+async def regress_prospect(
+    prospect_id: UUID,
+    data: AdvanceProspectRequest = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "members.manage", "prospective_members.manage"
+        )
+    ),
+):
+    """
+    Move a prospect back to the previous step in the pipeline.
+
+    **Requires permission: members.manage**
+    """
+    service = MembershipPipelineService(db)
+    prospect = await service.regress_prospect(
+        prospect_id=str(prospect_id),
+        organization_id=current_user.organization_id,
+        regressed_by=current_user.id,
+        notes=data.notes if data else None,
+    )
+    if not prospect:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Prospect not found",
+        )
+    return prospect
+
+
+@router.post(
     "/prospects/{prospect_id}/transfer", response_model=TransferProspectResponse
 )
 async def transfer_prospect(

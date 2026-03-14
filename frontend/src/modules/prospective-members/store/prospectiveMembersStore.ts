@@ -79,6 +79,7 @@ interface ProspectiveMembersState {
   isLoadingInactive: boolean;
   isLoadingWithdrawn: boolean;
   isAdvancing: boolean;
+  isRegressing: boolean;
   isRejecting: boolean;
   isHolding: boolean;
   isResuming: boolean;
@@ -102,6 +103,7 @@ interface ProspectiveMembersState {
   fetchApplicant: (id: string) => Promise<void>;
   setCurrentApplicant: (applicant: Applicant | null) => void;
   advanceApplicant: (id: string, notes?: string) => Promise<void>;
+  regressApplicant: (id: string, notes?: string) => Promise<void>;
   completeStep: (id: string, stepId: string, notes?: string) => Promise<void>;
   rejectApplicant: (id: string, reason?: string) => Promise<void>;
   holdApplicant: (id: string, reason?: string) => Promise<void>;
@@ -184,6 +186,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
     isLoadingInactive: false,
     isLoadingWithdrawn: false,
     isAdvancing: false,
+    isRegressing: false,
     isRejecting: false,
     isHolding: false,
     isResuming: false,
@@ -365,6 +368,30 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         set({
           error: handleStoreError(error, 'Failed to advance applicant'),
           isAdvancing: false,
+        });
+      }
+    },
+
+    regressApplicant: async (id: string, notes?: string) => {
+      set({ isRegressing: true, error: null });
+      try {
+        await applicantService.regressStage(
+          id,
+          notes ? { notes } : undefined,
+        );
+        await get().fetchApplicants();
+        const currentApplicant = get().currentApplicant;
+        if (currentApplicant?.id === id) {
+          await get().fetchApplicant(id);
+        }
+        set({ isRegressing: false });
+      } catch (error) {
+        set({
+          error: handleStoreError(
+            error,
+            'Failed to move applicant back',
+          ),
+          isRegressing: false,
         });
       }
     },
