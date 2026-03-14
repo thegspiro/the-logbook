@@ -259,11 +259,15 @@ export const EventForm: React.FC<EventFormProps> = ({
     });
   };
 
-  // Conflict detection: check if the selected time range overlaps with user's existing events
+  // Conflict detection: check if the selected time range overlaps with user's existing events.
+  // Form values are datetime-local strings in the org's timezone; userEvents have UTC ISO strings.
+  // Convert form values to UTC before comparing.
   const conflicts = useMemo(() => {
     if (!userEvents || !formData.start_datetime || !formData.end_datetime) return [];
-    const startA = new Date(formData.start_datetime).getTime();
-    const endA = new Date(formData.end_datetime).getTime();
+    const startUTC = localToUTC(formData.start_datetime, tz);
+    const endUTC = localToUTC(formData.end_datetime, tz);
+    const startA = new Date(startUTC).getTime();
+    const endA = new Date(endUTC).getTime();
     if (isNaN(startA) || isNaN(endA) || endA <= startA) return [];
     return userEvents.filter((evt) => {
       if (editingEventId && evt.id === editingEventId) return false;
@@ -271,7 +275,7 @@ export const EventForm: React.FC<EventFormProps> = ({
       const endB = new Date(evt.end_datetime).getTime();
       return startA < endB && endA > startB;
     });
-  }, [userEvents, formData.start_datetime, formData.end_datetime, editingEventId]);
+  }, [userEvents, formData.start_datetime, formData.end_datetime, editingEventId, tz]);
 
   useEffect(() => {
     void loadLocations();
@@ -305,9 +309,9 @@ export const EventForm: React.FC<EventFormProps> = ({
     const changes: Partial<EventCreate> = { start_datetime: startDate };
     // Auto-set end date to 2 hours later if not already set
     if (!formData.end_datetime && startDate) {
-      const start = new Date(startDate);
-      const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
-      changes.end_datetime = formatForDateTimeInput(end);
+      const startUtc = localToUTC(startDate, tz);
+      const end = new Date(new Date(startUtc).getTime() + 2 * 60 * 60 * 1000);
+      changes.end_datetime = formatForDateTimeInput(end, tz);
     }
     update(changes);
   };
@@ -317,9 +321,9 @@ export const EventForm: React.FC<EventFormProps> = ({
       setError('Please set a start date first');
       return;
     }
-    const start = new Date(formData.start_datetime);
-    const end = new Date(start.getTime() + hours * 60 * 60 * 1000);
-    update({ end_datetime: formatForDateTimeInput(end) });
+    const startUtc = localToUTC(formData.start_datetime, tz);
+    const end = new Date(new Date(startUtc).getTime() + hours * 60 * 60 * 1000);
+    update({ end_datetime: formatForDateTimeInput(end, tz) });
   };
 
   const toggleRsvpStatus = (status: RSVPStatus, checked: boolean) => {
