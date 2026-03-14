@@ -22,7 +22,7 @@ from app.core.permissions import (
     get_permission_details,
     get_permissions_by_category,
 )
-from app.core.utils import safe_error_detail
+from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
 from app.models.user import User
 from app.schemas.role import (
     PermissionCategory,
@@ -138,7 +138,7 @@ async def create_role(
 
     **Authentication required**
     """
-    try:
+    async with handle_service_errors("Failed to create role"):
         role = await role_service.create_role(
             db=db,
             organization_id=str(current_user.organization_id),
@@ -166,10 +166,6 @@ async def create_role(
         )
 
         return role
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
-        )
 
 
 @router.get("/{role_id}", response_model=RoleResponse)
@@ -184,16 +180,14 @@ async def get_role(
     Requires `roles.view` permission.
     **Authentication required**
     """
-    role = await role_service.get_role(
-        db=db,
-        role_id=str(role_id),
-        organization_id=str(current_user.organization_id),
+    role = ensure_found(
+        await role_service.get_role(
+            db=db,
+            role_id=str(role_id),
+            organization_id=str(current_user.organization_id),
+        ),
+        "Role",
     )
-
-    if not role:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Role not found"
-        )
 
     return role
 
@@ -217,7 +211,7 @@ async def update_role(
 
     **Authentication required**
     """
-    try:
+    async with handle_service_errors("Failed to update role"):
         role = await role_service.update_role(
             db=db,
             role_id=str(role_id),
@@ -245,10 +239,6 @@ async def update_role(
         )
 
         return role
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
-        )
 
 
 @router.delete("/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -268,13 +258,12 @@ async def delete_role(
     **Authentication required**
     """
     # Guard: prevent deletion of system positions at the API layer
-    position = await role_service.get_role(
-        db, str(role_id), str(current_user.organization_id)
+    position = ensure_found(
+        await role_service.get_role(
+            db, str(role_id), str(current_user.organization_id)
+        ),
+        "Role",
     )
-    if not position:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Role not found"
-        )
     if position.is_system:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -377,16 +366,14 @@ async def get_role_users(
     Requires `roles.view` or `users.view` permission.
     **Authentication required**
     """
-    role = await role_service.get_role(
-        db=db,
-        role_id=str(role_id),
-        organization_id=str(current_user.organization_id),
+    role = ensure_found(
+        await role_service.get_role(
+            db=db,
+            role_id=str(role_id),
+            organization_id=str(current_user.organization_id),
+        ),
+        "Role",
     )
-
-    if not role:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Role not found"
-        )
 
     users = await role_service.get_users_with_role(
         db=db,
@@ -443,12 +430,7 @@ async def get_user_permissions(
             User.organization_id == current_user.organization_id,
         )
     )
-    user = result.scalar_one_or_none()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-        )
+    ensure_found(result.scalar_one_or_none(), "User")
 
     permissions = await role_service.get_user_permissions(db=db, user_id=str(user_id))
     roles = await role_service.get_user_roles(db=db, user_id=str(user_id))

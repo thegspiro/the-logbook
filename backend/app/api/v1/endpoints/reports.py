@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission
 from app.core.database import get_db
+from app.core.utils import ensure_found
 from app.models.analytics import SavedReport
 from app.models.user import User
 from app.schemas.reports import (
@@ -161,9 +162,7 @@ async def update_saved_report(
             SavedReport.organization_id == str(current_user.organization_id),
         )
     )
-    report = result.scalar_one_or_none()
-    if not report:
-        raise HTTPException(status_code=404, detail="Saved report not found")
+    report = ensure_found(result.scalar_one_or_none(), "Saved report")
 
     update_data = request.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -203,9 +202,7 @@ async def delete_saved_report(
             SavedReport.organization_id == str(current_user.organization_id),
         )
     )
-    report = result.scalar_one_or_none()
-    if not report:
-        raise HTTPException(status_code=404, detail="Saved report not found")
+    report = ensure_found(result.scalar_one_or_none(), "Saved report")
 
     report.is_active = False
     await db.commit()
@@ -225,9 +222,7 @@ async def run_saved_report(
             SavedReport.organization_id == str(current_user.organization_id),
         )
     )
-    report = result.scalar_one_or_none()
-    if not report:
-        raise HTTPException(status_code=404, detail="Saved report not found")
+    report = ensure_found(result.scalar_one_or_none(), "Saved report")
 
     service = ReportsService(db)
     filters = report.filters or {}

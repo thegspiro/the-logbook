@@ -3,7 +3,7 @@ import { useNavigate, Outlet } from 'react-router-dom';
 import axios from 'axios';
 import { TopNavigation } from './TopNavigation';
 import { SideNavigation } from './SideNavigation';
-import { LogoutConfirmModal } from '../LogoutConfirmModal';
+import { ConfirmDialog } from '../ux/ConfirmDialog';
 import { useAuthStore } from '../../stores/authStore';
 import { useIdleTimer } from '../../hooks/useIdleTimer';
 import { TopProgressBar, CommandPalette, PageTransition } from '../ux';
@@ -136,10 +136,14 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           </div>
           <div className="md:ml-0">{footer}</div>
         </div>
-        <LogoutConfirmModal
+        <ConfirmDialog
           isOpen={showLogoutModal}
           onConfirm={() => { void handleLogoutConfirm(); }}
-          onCancel={handleLogoutCancel}
+          onClose={handleLogoutCancel}
+          title="Confirm Logout"
+          message="Are you sure you want to log out? Any unsaved changes may be lost."
+          confirmLabel="Logout"
+          variant="danger"
         />
       </div>
     );
@@ -167,10 +171,14 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         </PageTransition>
       </div>
       {footer}
-      <LogoutConfirmModal
+      <ConfirmDialog
         isOpen={showLogoutModal}
         onConfirm={() => { void handleLogoutConfirm(); }}
-        onCancel={handleLogoutCancel}
+        onClose={handleLogoutCancel}
+        title="Confirm Logout"
+        message="Are you sure you want to log out? Any unsaved changes may be lost."
+        confirmLabel="Logout"
+        variant="danger"
       />
     </div>
   );

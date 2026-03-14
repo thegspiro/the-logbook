@@ -20,7 +20,7 @@ from app.api.dependencies import require_permission
 from app.core.audit import log_audit_event
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 from app.core.database import get_db
-from app.core.utils import safe_error_detail
+from app.core.utils import ensure_found, handle_service_errors
 from app.models.user import Organization, User, UserStatus
 
 router = APIRouter()
@@ -92,13 +92,7 @@ async def change_member_status(
         .where(User.deleted_at.is_(None))
         .options(selectinload(User.roles))
     )
-    member = result.scalar_one_or_none()
-
-    if not member:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Member not found",
-        )
+    member = ensure_found(result.scalar_one_or_none(), "Member")
 
     previous_status = (
         member.status.value if hasattr(member.status, "value") else str(member.status)
@@ -369,11 +363,7 @@ async def get_property_return_preview(
         .where(User.organization_id == current_user.organization_id)
         .where(User.deleted_at.is_(None))
     )
-    member = result.scalar_one_or_none()
-    if not member:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Member not found"
-        )
+    ensure_found(result.scalar_one_or_none(), "Member")
 
     prs = PropertyReturnService(db)
     report_data, html_content = await prs.generate_report(
@@ -495,13 +485,7 @@ async def archive_member(
         .where(User.organization_id == current_user.organization_id)
         .where(User.deleted_at.is_(None))
     )
-    member = result.scalar_one_or_none()
-
-    if not member:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Member not found",
-        )
+    member = ensure_found(result.scalar_one_or_none(), "Member")
 
     if member.status not in (
         UserStatus.DROPPED_VOLUNTARY,
@@ -565,18 +549,13 @@ async def reactivate_member(
     """
     from app.services.member_archive_service import reactivate_member as do_reactivate
 
-    try:
+    async with handle_service_errors("Failed to reactivate member"):
         result = await do_reactivate(
             db=db,
             user_id=str(user_id),
             organization_id=str(current_user.organization_id),
             reactivated_by=str(current_user.id),
             reason=request.reason,
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=safe_error_detail(e),
         )
 
     return result
@@ -662,11 +641,7 @@ async def change_membership_type(
         .where(User.organization_id == current_user.organization_id)
         .where(User.deleted_at.is_(None))
     )
-    member = result.scalar_one_or_none()
-    if not member:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Member not found"
-        )
+    member = ensure_found(result.scalar_one_or_none(), "Member")
 
     # Validate the tier exists in org settings
     org_result = await db.execute(
@@ -762,9 +737,7 @@ async def get_membership_tier_config(
     org_result = await db.execute(
         select(Organization).where(Organization.id == current_user.organization_id)
     )
-    organization = org_result.scalar_one_or_none()
-    if not organization:
-        raise HTTPException(status_code=404, detail="Organization not found")
+    organization = ensure_found(org_result.scalar_one_or_none(), "Organization")
 
     tier_config = (organization.settings or {}).get("membership_tiers", {})
     return tier_config
@@ -794,9 +767,7 @@ async def update_membership_tier_config(
     org_result = await db.execute(
         select(Organization).where(Organization.id == current_user.organization_id)
     )
-    organization = org_result.scalar_one_or_none()
-    if not organization:
-        raise HTTPException(status_code=404, detail="Organization not found")
+    organization = ensure_found(org_result.scalar_one_or_none(), "Organization")
 
     # Validate config structure
     tiers = config.get("tiers", [])
@@ -880,11 +851,7 @@ async def set_compliance_exemption(
         .where(User.organization_id == current_user.organization_id)
         .where(User.deleted_at.is_(None))
     )
-    member = result.scalar_one_or_none()
-    if not member:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Member not found"
-        )
+    member = ensure_found(result.scalar_one_or_none(), "Member")
 
     previous = bool(member.compliance_exempt)
     if previous == request.exempt:

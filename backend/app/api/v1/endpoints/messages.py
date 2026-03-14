@@ -11,8 +11,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import PaginationParams, get_current_user, require_permission
 from app.core.database import get_db
+from app.core.utils import ensure_found
 from app.models.user import User
 from app.services.messaging_service import MessagingService
 
@@ -138,8 +139,7 @@ def _serialize_message(msg) -> dict:
 @router.get("", response_model=dict)
 async def list_messages(
     include_inactive: bool = Query(False),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("notifications.manage")),
 ):
@@ -148,8 +148,8 @@ async def list_messages(
     messages, total = await service.get_messages(
         organization_id=current_user.organization_id,
         include_inactive=include_inactive,
-        skip=skip,
-        limit=limit,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
     return {
         "messages": [_serialize_message(m) for m in messages],
@@ -197,8 +197,7 @@ async def get_available_roles(
 @router.get("/inbox", response_model=list[InboxMessage])
 async def get_inbox(
     include_read: bool = Query(True),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -208,8 +207,8 @@ async def get_inbox(
         organization_id=current_user.organization_id,
         user_id=current_user.id,
         include_read=include_read,
-        skip=skip,
-        limit=limit,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
 
 
@@ -235,9 +234,10 @@ async def get_message(
 ):
     """Get a specific message (admin view)"""
     service = MessagingService(db)
-    message = await service.get_message_by_id(message_id, current_user.organization_id)
-    if not message:
-        raise HTTPException(status_code=404, detail="Message not found")
+    message = ensure_found(
+        await service.get_message_by_id(message_id, current_user.organization_id),
+        "Message",
+    )
     return _serialize_message(message)
 
 

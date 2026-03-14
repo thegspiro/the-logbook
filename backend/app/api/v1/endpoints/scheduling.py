@@ -12,9 +12,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import PaginationParams, get_current_user, require_permission
 from app.core.database import get_db
-from app.core.utils import safe_error_detail
+from app.core.utils import ensure_found, safe_error_detail
 from app.models.training import BasicApparatus, ShiftAssignment
 from app.models.user import User
 from app.schemas.scheduling import (
@@ -121,8 +121,7 @@ async def _enrich_shifts(
 async def list_shifts(
     start_date: str | None = None,
     end_date: str | None = None,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("scheduling.view")),
 ):
@@ -141,16 +140,16 @@ async def list_shifts(
         current_user.organization_id,
         start_date=start,
         end_date=end,
-        skip=skip,
-        limit=limit,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
 
     enriched = await _enrich_shifts(service, current_user.organization_id, shifts)
     return {
         "shifts": enriched,
         "total": total,
-        "skip": skip,
-        "limit": limit,
+        "skip": pagination.skip,
+        "limit": pagination.limit,
     }
 
 
@@ -220,9 +219,10 @@ async def get_shift(
 ):
     """Get a shift by ID with attendance"""
     service = SchedulingService(db)
-    shift = await service.get_shift_by_id(shift_id, current_user.organization_id)
-    if not shift:
-        raise HTTPException(status_code=404, detail="Shift not found")
+    shift = ensure_found(
+        await service.get_shift_by_id(shift_id, current_user.organization_id),
+        "Shift",
+    )
 
     attendance = await service.get_shift_attendance(
         shift_id, current_user.organization_id
@@ -471,9 +471,10 @@ async def get_call(
 ):
     """Get a specific call by ID"""
     service = SchedulingService(db)
-    call = await service.get_shift_call_by_id(call_id, current_user.organization_id)
-    if not call:
-        raise HTTPException(status_code=404, detail="Call not found")
+    call = ensure_found(
+        await service.get_shift_call_by_id(call_id, current_user.organization_id),
+        "Call",
+    )
     return call
 
 
@@ -564,11 +565,12 @@ async def get_template(
 ):
     """Get a shift template by ID"""
     service = SchedulingService(db)
-    template = await service.get_template_by_id(
-        template_id, current_user.organization_id
+    template = ensure_found(
+        await service.get_template_by_id(
+            template_id, current_user.organization_id
+        ),
+        "Template",
     )
-    if not template:
-        raise HTTPException(status_code=404, detail="Template not found")
     return template
 
 
@@ -659,9 +661,10 @@ async def get_pattern(
 ):
     """Get a shift pattern by ID"""
     service = SchedulingService(db)
-    pattern = await service.get_pattern_by_id(pattern_id, current_user.organization_id)
-    if not pattern:
-        raise HTTPException(status_code=404, detail="Pattern not found")
+    pattern = ensure_found(
+        await service.get_pattern_by_id(pattern_id, current_user.organization_id),
+        "Pattern",
+    )
     return pattern
 
 
@@ -839,8 +842,7 @@ async def confirm_assignment(
 @router.get("/swap-requests", response_model=list[ShiftSwapRequestResponse])
 async def list_swap_requests(
     status_filter: str | None = Query(None, alias="status"),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("scheduling.swap")),
 ):
@@ -857,8 +859,8 @@ async def list_swap_requests(
     requests, total = await service.get_swap_requests(
         current_user.organization_id,
         status=swap_status,
-        skip=skip,
-        limit=limit,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
     return await service.enrich_swap_requests(requests)
 
@@ -896,11 +898,12 @@ async def get_swap_request(
 ):
     """Get a specific swap request"""
     service = SchedulingService(db)
-    swap_request = await service.get_swap_request_by_id(
-        request_id, current_user.organization_id
+    swap_request = ensure_found(
+        await service.get_swap_request_by_id(
+            request_id, current_user.organization_id
+        ),
+        "Swap request",
     )
-    if not swap_request:
-        raise HTTPException(status_code=404, detail="Swap request not found")
     enriched = await service.enrich_swap_requests([swap_request])
     return enriched[0]
 
@@ -963,8 +966,7 @@ async def cancel_swap_request(
 async def list_time_off_requests(
     status_filter: str | None = Query(None, alias="status"),
     user_id: UUID | None = None,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("scheduling.view")),
 ):
@@ -982,8 +984,8 @@ async def list_time_off_requests(
         current_user.organization_id,
         status=time_off_status,
         user_id=user_id,
-        skip=skip,
-        limit=limit,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
     return await service.enrich_time_off_requests(requests)
 
@@ -1021,11 +1023,12 @@ async def get_time_off_request(
 ):
     """Get a specific time-off request"""
     service = SchedulingService(db)
-    time_off = await service.get_time_off_by_id(
-        time_off_id, current_user.organization_id
+    time_off = ensure_found(
+        await service.get_time_off_by_id(
+            time_off_id, current_user.organization_id
+        ),
+        "Time-off request",
     )
-    if not time_off:
-        raise HTTPException(status_code=404, detail="Time-off request not found")
     enriched = await service.enrich_time_off_requests([time_off])
     return enriched[0]
 
@@ -1106,8 +1109,7 @@ async def get_member_availability(
 async def get_my_shifts(
     start_date: str | None = None,
     end_date: str | None = None,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1125,11 +1127,16 @@ async def get_my_shifts(
         current_user.organization_id,
         start_date=start,
         end_date=end,
-        skip=skip,
-        limit=limit,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
     # get_my_shifts returns plain dicts (not ORM objects), so skip _enrich_shifts
-    return {"shifts": shift_dicts, "total": total, "skip": skip, "limit": limit}
+    return {
+        "shifts": shift_dicts,
+        "total": total,
+        "skip": pagination.skip,
+        "limit": pagination.limit,
+    }
 
 
 @router.get("/my-assignments", response_model=list[ShiftAssignmentResponse])
@@ -1509,9 +1516,7 @@ async def update_basic_apparatus(
             BasicApparatus.organization_id == str(current_user.organization_id),
         )
     )
-    existing = result.scalar_one_or_none()
-    if not existing:
-        raise HTTPException(status_code=404, detail="Apparatus not found")
+    existing = ensure_found(result.scalar_one_or_none(), "Apparatus")
     update_data = apparatus.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(existing, key, value)
@@ -1533,8 +1538,6 @@ async def delete_basic_apparatus(
             BasicApparatus.organization_id == str(current_user.organization_id),
         )
     )
-    existing = result.scalar_one_or_none()
-    if not existing:
-        raise HTTPException(status_code=404, detail="Apparatus not found")
+    existing = ensure_found(result.scalar_one_or_none(), "Apparatus")
     await db.delete(existing)
     await db.commit()

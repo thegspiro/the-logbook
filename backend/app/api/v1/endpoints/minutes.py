@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.core.utils import safe_error_detail
+from app.core.utils import ensure_found, handle_service_errors
 from app.models.user import User
 from app.schemas.document import DocumentResponse
 from app.schemas.minute import (
@@ -159,12 +159,10 @@ async def get_minutes(
     **Requires permission: meetings.view**
     """
     service = MinuteService(db)
-    minutes = await service.get_minutes(minutes_id, current_user.organization_id)
-
-    if not minutes:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Meeting minutes not found"
-        )
+    minutes = ensure_found(
+        await service.get_minutes(minutes_id, current_user.organization_id),
+        "Meeting minutes",
+    )
 
     return _build_response(minutes)
 
@@ -218,19 +216,12 @@ async def update_minutes(
     """
     service = MinuteService(db)
 
-    try:
+    async with handle_service_errors("Failed to update minutes"):
         minutes = await service.update_minutes(
             minutes_id, current_user.organization_id, data
         )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
-        )
 
-    if not minutes:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Meeting minutes not found"
-        )
+    minutes = ensure_found(minutes, "Meeting minutes")
 
     logger.info(f"Minutes updated | id={minutes_id} by={current_user.id}")
     await log_audit_event(
@@ -259,12 +250,8 @@ async def delete_minutes(
     """
     service = MinuteService(db)
 
-    try:
+    async with handle_service_errors("Failed to delete minutes"):
         deleted = await service.delete_minutes(minutes_id, current_user.organization_id)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
-        )
 
     if not deleted:
         raise HTTPException(
@@ -301,19 +288,12 @@ async def submit_minutes(
     """
     service = MinuteService(db)
 
-    try:
+    async with handle_service_errors("Failed to submit minutes for approval"):
         minutes = await service.submit_for_approval(
             minutes_id, current_user.organization_id, current_user.id
         )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
-        )
 
-    if not minutes:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Meeting minutes not found"
-        )
+    minutes = ensure_found(minutes, "Meeting minutes")
 
     logger.info(
         f"Minutes submitted for approval | id={minutes_id} by={current_user.id}"
@@ -344,19 +324,12 @@ async def approve_minutes(
     """
     service = MinuteService(db)
 
-    try:
+    async with handle_service_errors("Failed to approve minutes"):
         minutes = await service.approve_minutes(
             minutes_id, current_user.organization_id, current_user.id
         )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
-        )
 
-    if not minutes:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Meeting minutes not found"
-        )
+    minutes = ensure_found(minutes, "Meeting minutes")
 
     logger.info(f"Minutes approved | id={minutes_id} by={current_user.id}")
     await log_audit_event(
@@ -386,19 +359,12 @@ async def reject_minutes(
     """
     service = MinuteService(db)
 
-    try:
+    async with handle_service_errors("Failed to reject minutes"):
         minutes = await service.reject_minutes(
             minutes_id, current_user.organization_id, current_user.id, data.reason
         )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
-        )
 
-    if not minutes:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Meeting minutes not found"
-        )
+    minutes = ensure_found(minutes, "Meeting minutes")
 
     logger.info(
         f"Minutes rejected | id={minutes_id} by={current_user.id} reason={data.reason!r}"
@@ -438,19 +404,12 @@ async def add_motion(
     """Add a motion to meeting minutes"""
     service = MinuteService(db)
 
-    try:
+    async with handle_service_errors("Failed to add motion"):
         motion = await service.add_motion(
             minutes_id, current_user.organization_id, data
         )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
-        )
 
-    if not motion:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Meeting minutes not found"
-        )
+    motion = ensure_found(motion, "Meeting minutes")
 
     return _build_motion_response(motion)
 
@@ -466,19 +425,12 @@ async def update_motion(
     """Update a motion"""
     service = MinuteService(db)
 
-    try:
+    async with handle_service_errors("Failed to update motion"):
         motion = await service.update_motion(
             motion_id, minutes_id, current_user.organization_id, data
         )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
-        )
 
-    if not motion:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Motion not found"
-        )
+    motion = ensure_found(motion, "Motion")
 
     return _build_motion_response(motion)
 
@@ -495,13 +447,9 @@ async def delete_motion(
     """Delete a motion"""
     service = MinuteService(db)
 
-    try:
+    async with handle_service_errors("Failed to delete motion"):
         deleted = await service.delete_motion(
             motion_id, minutes_id, current_user.organization_id
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
     if not deleted:
@@ -529,19 +477,12 @@ async def add_action_item(
     """Add an action item to meeting minutes"""
     service = MinuteService(db)
 
-    try:
+    async with handle_service_errors("Failed to add action item"):
         item = await service.add_action_item(
             minutes_id, current_user.organization_id, data
         )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
-        )
 
-    if not item:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Meeting minutes not found"
-        )
+    item = ensure_found(item, "Meeting minutes")
 
     return _build_action_item_response(item)
 
@@ -557,19 +498,12 @@ async def update_action_item(
     """Update an action item (status can be updated even on approved minutes)"""
     service = MinuteService(db)
 
-    try:
+    async with handle_service_errors("Failed to update action item"):
         item = await service.update_action_item(
             item_id, minutes_id, current_user.organization_id, data
         )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
-        )
 
-    if not item:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Action item not found"
-        )
+    item = ensure_found(item, "Action item")
 
     return _build_action_item_response(item)
 
@@ -586,13 +520,9 @@ async def delete_action_item(
     """Delete an action item"""
     service = MinuteService(db)
 
-    try:
+    async with handle_service_errors("Failed to delete action item"):
         deleted = await service.delete_action_item(
             item_id, minutes_id, current_user.organization_id
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
     if not deleted:
@@ -614,20 +544,15 @@ async def publish_minutes(
 ):
     """Publish approved minutes as a formatted document in the Meeting Minutes folder."""
     minute_service = MinuteService(db)
-    minutes = await minute_service.get_minutes(minutes_id, current_user.organization_id)
-    if not minutes:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Minutes not found"
-        )
+    minutes = ensure_found(
+        await minute_service.get_minutes(minutes_id, current_user.organization_id),
+        "Minutes",
+    )
 
     doc_service = DocumentService(db)
-    try:
+    async with handle_service_errors("Failed to publish minutes"):
         doc = await doc_service.publish_minutes(
             minutes, current_user.organization_id, current_user.id
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
     await log_audit_event(
@@ -707,11 +632,10 @@ async def get_template(
 ):
     """Get a template by ID"""
     service = TemplateService(db)
-    tpl = await service.get_template(template_id, current_user.organization_id)
-    if not tpl:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Template not found"
-        )
+    tpl = ensure_found(
+        await service.get_template(template_id, current_user.organization_id),
+        "Template",
+    )
     return _build_template_response(tpl)
 
 
@@ -748,11 +672,10 @@ async def update_template(
 ):
     """Update a minutes template"""
     service = TemplateService(db)
-    tpl = await service.update_template(template_id, current_user.organization_id, data)
-    if not tpl:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Template not found"
-        )
+    tpl = ensure_found(
+        await service.update_template(template_id, current_user.organization_id, data),
+        "Template",
+    )
     await log_audit_event(
         db=db,
         event_type="template_updated",
@@ -775,7 +698,8 @@ async def delete_template(
     deleted = await service.delete_template(template_id, current_user.organization_id)
     if not deleted:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Template not found"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Template not found",
         )
     await log_audit_event(
         db=db,
@@ -1044,16 +968,14 @@ async def create_minutes_from_meeting(
     **Requires permission: minutes.manage**
     """
     service = MinuteService(db)
-    minutes = await service.create_from_meeting(
-        meeting_id=meeting_id,
-        organization_id=current_user.organization_id,
-        created_by=current_user.id,
+    minutes = ensure_found(
+        await service.create_from_meeting(
+            meeting_id=meeting_id,
+            organization_id=current_user.organization_id,
+            created_by=current_user.id,
+        ),
+        "Meeting",
     )
-    if not minutes:
-        raise HTTPException(
-            status_code=404,
-            detail="Meeting not found",
-        )
 
     await log_audit_event(
         db=db,

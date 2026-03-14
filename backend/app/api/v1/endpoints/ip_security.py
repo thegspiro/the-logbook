@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.core.utils import safe_error_detail
+from app.core.utils import handle_service_errors, safe_error_detail
 from app.models.ip_security import (
     BlockedAccessAttempt,
     CountryBlockRule,
@@ -57,7 +57,7 @@ async def request_ip_exception(
     Any authenticated user can request an IP exception for themselves.
     The request requires IT administrator approval before it takes effect.
     """
-    try:
+    async with handle_service_errors("Failed to request IP exception"):
         exception = await ip_security_service.request_ip_exception(
             db=db,
             user_id=str(current_user.id),
@@ -85,10 +85,6 @@ async def request_ip_exception(
         )
 
         return exception
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=safe_error_detail(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
 # =============================================================================
@@ -108,15 +104,13 @@ async def get_my_exceptions(
     By default returns only active/pending exceptions.
     Set include_expired=true to include expired/rejected/revoked.
     """
-    try:
+    async with handle_service_errors("Failed to get user exceptions"):
         exceptions = await ip_security_service.get_user_exceptions(
             db=db,
             user_id=str(current_user.id),
             include_expired=include_expired,
         )
         return exceptions
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
 # =============================================================================
@@ -138,7 +132,7 @@ async def get_pending_exceptions(
 
     Requires security.manage or settings.manage permission.
     """
-    try:
+    async with handle_service_errors("Failed to get pending exceptions"):
         org_id = str(current_user.organization_id) if current_user.organization_id else None
         exceptions = await ip_security_service.get_pending_requests(
             db=db,
@@ -147,8 +141,6 @@ async def get_pending_exceptions(
             offset=offset,
         )
         return exceptions
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
 # =============================================================================
@@ -171,7 +163,7 @@ async def get_all_exceptions(
 
     Requires security.manage or settings.manage permission.
     """
-    try:
+    async with handle_service_errors("Failed to get exceptions"):
         query = select(IPException).where(
             IPException.organization_id == str(current_user.organization_id)
         )
@@ -192,8 +184,6 @@ async def get_all_exceptions(
         total = count_result.scalar() or 0
 
         return IPExceptionListResponse(items=items, total=total)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
 # =============================================================================
@@ -216,7 +206,7 @@ async def approve_exception(
 
     Requires security.manage or settings.manage permission.
     """
-    try:
+    async with handle_service_errors("Failed to approve exception"):
         exception = await ip_security_service.approve_exception(
             db=db,
             exception_id=exception_id,
@@ -241,10 +231,6 @@ async def approve_exception(
         )
 
         return exception
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=safe_error_detail(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
 # =============================================================================
@@ -267,7 +253,7 @@ async def reject_exception(
 
     Requires security.manage or settings.manage permission.
     """
-    try:
+    async with handle_service_errors("Failed to reject exception"):
         exception = await ip_security_service.reject_exception(
             db=db,
             exception_id=exception_id,
@@ -290,10 +276,6 @@ async def reject_exception(
         )
 
         return exception
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=safe_error_detail(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
 # =============================================================================
@@ -316,7 +298,7 @@ async def revoke_exception(
 
     Requires security.manage or settings.manage permission.
     """
-    try:
+    async with handle_service_errors("Failed to revoke exception"):
         exception = await ip_security_service.revoke_exception(
             db=db,
             exception_id=exception_id,
@@ -339,10 +321,6 @@ async def revoke_exception(
         )
 
         return exception
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=safe_error_detail(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
 # =============================================================================
@@ -366,14 +344,12 @@ async def get_exception_audit_log(
 
     Requires security.manage, settings.manage, or audit.view permission.
     """
-    try:
+    async with handle_service_errors("Failed to get exception audit log"):
         logs = await ip_security_service.get_exception_audit_log(
             db=db,
             exception_id=exception_id,
         )
         return logs
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
 # =============================================================================
@@ -396,7 +372,7 @@ async def get_blocked_attempts(
 
     Requires security.manage, settings.manage, or audit.view permission.
     """
-    try:
+    async with handle_service_errors("Failed to get blocked attempts"):
         query = select(BlockedAccessAttempt)
         count_query = select(func.count(BlockedAccessAttempt.id))
 
@@ -419,8 +395,6 @@ async def get_blocked_attempts(
         total = count_result.scalar() or 0
 
         return BlockedAttemptsListResponse(items=items, total=total)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
 # =============================================================================
@@ -440,11 +414,9 @@ async def get_blocked_countries(
 
     Requires security.manage or settings.manage permission.
     """
-    try:
+    async with handle_service_errors("Failed to get blocked countries"):
         countries = await ip_security_service.get_blocked_countries(db=db)
         return countries
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
 @router.post("/blocked-countries", response_model=CountryBlockRuleResponse)
@@ -461,7 +433,7 @@ async def add_blocked_country(
 
     Requires security.manage or settings.manage permission.
     """
-    try:
+    async with handle_service_errors("Failed to add blocked country"):
         rule = await ip_security_service.add_blocked_country(
             db=db,
             country_code=data.country_code,
@@ -486,8 +458,6 @@ async def add_blocked_country(
         )
 
         return rule
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
 @router.delete("/blocked-countries/{country_code}")

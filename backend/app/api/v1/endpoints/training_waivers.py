@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_db
-from app.core.utils import generate_uuid
+from app.core.utils import ensure_found, generate_uuid
 from app.models.training import TrainingWaiver, TrainingWaiverType
 from app.models.user import User
 
@@ -165,9 +165,7 @@ async def update_training_waiver(
             TrainingWaiver.organization_id == str(current_user.organization_id),
         )
     )
-    waiver = result.scalar_one_or_none()
-    if not waiver:
-        raise HTTPException(status_code=404, detail="Waiver not found")
+    waiver = ensure_found(result.scalar_one_or_none(), "Waiver")
 
     updates = data.model_dump(exclude_unset=True)
     if "waiver_type" in updates:
@@ -199,9 +197,7 @@ async def delete_training_waiver(
             TrainingWaiver.organization_id == str(current_user.organization_id),
         )
     )
-    waiver = result.scalar_one_or_none()
-    if not waiver:
-        raise HTTPException(status_code=404, detail="Waiver not found")
+    waiver = ensure_found(result.scalar_one_or_none(), "Waiver")
 
     waiver.active = False
     waiver.updated_at = datetime.now(timezone.utc)
