@@ -1280,6 +1280,28 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
                 or None
             )
 
+            # Check if email is actually enabled before attempting send
+            from app.core.config import settings as _settings
+
+            org_email_enabled = (
+                org
+                and (org.settings or {})
+                .get("email_service", {})
+                .get("enabled")
+            )
+            if not _settings.EMAIL_ENABLED and not org_email_enabled:
+                logger.warning(
+                    f"Scheduled email {item.id} skipped: email sending "
+                    "is disabled (EMAIL_ENABLED=false and no org override)"
+                )
+                item.status = ScheduledEmailStatus.FAILED
+                item.error_message = (
+                    "Email sending is disabled. Enable EMAIL_ENABLED or "
+                    "configure organization email settings."
+                )
+                failed += 1
+                continue
+
             success_count, _ = await email_svc.send_email(
                 to_emails=item.to_emails,
                 subject=subject,
@@ -1299,7 +1321,7 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
                 sent += 1
             else:
                 item.status = ScheduledEmailStatus.FAILED
-                item.error_message = "Email delivery failed"
+                item.error_message = "Email delivery failed for all recipients"
                 failed += 1
 
         except Exception as e:

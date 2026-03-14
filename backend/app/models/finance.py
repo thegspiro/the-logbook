@@ -262,10 +262,15 @@ class BudgetCategory(Base):
     # Relationships
     organization = relationship("Organization", foreign_keys=[organization_id])
     parent = relationship(
-        "BudgetCategory", remote_side=[id], foreign_keys=[parent_category_id]
+        "BudgetCategory",
+        remote_side=[id],
+        foreign_keys=[parent_category_id],
+        back_populates="children",
     )
     children = relationship(
-        "BudgetCategory", foreign_keys=[parent_category_id]
+        "BudgetCategory",
+        foreign_keys=[parent_category_id],
+        back_populates="parent",
     )
 
     __table_args__ = (

@@ -471,6 +471,15 @@ async def schedule_email(
             detail="scheduled_at must include timezone info (UTC recommended)",
         )
 
+    from datetime import datetime as _dt
+    from datetime import timezone as _tz
+
+    if body.scheduled_at <= _dt.now(_tz.utc):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="scheduled_at must be in the future",
+        )
+
     # Validate template_type
     try:
         ttype = EmailTemplateType(body.template_type)
@@ -540,6 +549,14 @@ async def update_scheduled_email(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="scheduled_at must include timezone info (UTC recommended)",
+            )
+        from datetime import datetime as _dt
+        from datetime import timezone as _tz
+
+        if body.scheduled_at <= _dt.now(_tz.utc):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="scheduled_at must be in the future",
             )
         scheduled.scheduled_at = body.scheduled_at
     if body.status == "cancelled":
