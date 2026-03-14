@@ -1492,6 +1492,61 @@ class MembershipPipelineService:
                 return True
         return False
 
+    async def _fetch_meeting_details(
+        self,
+        organization_id: str,
+        event_type: Optional[str] = None,
+        event_id: Optional[str] = None,
+        html: bool = True,
+    ) -> List[str]:
+        """Fetch upcoming event details for the meeting section of a stage email.
+
+        Returns a list of formatted detail strings (HTML-escaped if *html* is True).
+        If the event cannot be found or has already passed, returns an empty list.
+        """
+        import html as _html
+
+        from app.models.event import Event
+
+        try:
+            query = select(Event).where(
+                Event.organization_id == str(organization_id),
+                Event.start_datetime >= datetime.now(timezone.utc),
+            )
+            if event_id:
+                query = query.where(Event.id == str(event_id))
+            elif event_type:
+                query = query.where(Event.event_type == event_type)
+            query = query.order_by(Event.start_datetime).limit(1)
+
+            result = await self.db.execute(query)
+            event = result.scalar_one_or_none()
+            if not event:
+                return []
+
+            title = event.title or ""
+            start = event.start_datetime
+            loc = event.location or ""
+
+            parts: List[str] = []
+            if title:
+                parts.append(
+                    _html.escape(title) if html else title
+                )
+            if start:
+                fmt = start.strftime("%A, %B %d, %Y at %I:%M %p")
+                parts.append(
+                    _html.escape(fmt) if html else fmt
+                )
+            if loc:
+                parts.append(
+                    _html.escape(loc) if html else loc
+                )
+            return parts
+        except Exception as e:
+            logger.warning(f"Failed to fetch meeting event details: {e}")
+            return []
+
     async def _send_stage_email(
         self,
         prospect: ProspectiveMember,
@@ -1542,14 +1597,55 @@ class MembershipPipelineService:
                     "View Membership FAQ</a></p>"
                 )
 
+            # Next meeting section — try auto-fetching event details first,
+            # then fall back to the manually entered text.
             include_meeting = config.get("include_next_meeting")
-            meeting_details = config.get("next_meeting_details")
-            if include_meeting and meeting_details:
-                sections.append(
-                    "<div class=\"details\">"
-                    "<strong>Next Meeting</strong><br>"
-                    f"{_html.escape(meeting_details)}</div>"
-                )
+            if include_meeting:
+                meeting_parts: List[str] = []
+                event_type_filter = config.get("next_meeting_event_type")
+                event_id = config.get("next_meeting_event_id")
+                if event_type_filter or event_id:
+                    meeting_parts = await self._fetch_meeting_details(
+                        prospect.organization_id,
+                        event_type=event_type_filter,
+                        event_id=event_id,
+                    )
+                extra_details = config.get("next_meeting_details")
+                if extra_details:
+                    meeting_parts.append(_html.escape(extra_details))
+                if meeting_parts:
+                    sections.append(
+                        '<div class="details">'
+                        "<strong>Next Meeting</strong><br>"
+                        + "<br>".join(meeting_parts)
+                        + "</div>"
+                    )
+
+            # Application status tracker link
+            if config.get("include_status_tracker"):
+                if (
+                    prospect.status_token
+                    and prospect.pipeline
+                    and getattr(
+                        prospect.pipeline, "public_status_enabled", False
+                    )
+                ):
+                    from app.core.config import settings as app_settings
+
+                    frontend_url = getattr(
+                        app_settings, "FRONTEND_URL", ""
+                    ) or ""
+                    status_url = (
+                        f"{frontend_url}/application-status"
+                        f"/{prospect.status_token}"
+                    )
+                    safe_url = _html.escape(status_url)
+                    sections.append(
+                        '<p><a href="'
+                        + safe_url
+                        + '" class="button">'
+                        "Track Your Application</a></p>"
+                    )
 
             for custom in config.get("custom_sections", []):
                 title = _html.escape(custom.get("title", ""))
@@ -1583,10 +1679,39 @@ class MembershipPipelineService:
                 text_parts.append(
                     f"View Membership FAQ: {config['faq_url']}"
                 )
-            if include_meeting and meeting_details:
-                text_parts.append(
-                    f"Next Meeting: {meeting_details}"
-                )
+            if include_meeting:
+                text_meeting: List[str] = []
+                if config.get("next_meeting_event_type") or config.get(
+                    "next_meeting_event_id"
+                ):
+                    text_meeting = await self._fetch_meeting_details(
+                        prospect.organization_id,
+                        event_type=config.get("next_meeting_event_type"),
+                        event_id=config.get("next_meeting_event_id"),
+                        html=False,
+                    )
+                if config.get("next_meeting_details"):
+                    text_meeting.append(config["next_meeting_details"])
+                if text_meeting:
+                    text_parts.append(
+                        "Next Meeting:\n" + "\n".join(text_meeting)
+                    )
+            if config.get("include_status_tracker") and prospect.status_token:
+                if prospect.pipeline and getattr(
+                    prospect.pipeline, "public_status_enabled", False
+                ):
+                    from app.core.config import settings as app_settings
+
+                    frontend_url = getattr(
+                        app_settings, "FRONTEND_URL", ""
+                    ) or ""
+                    status_url = (
+                        f"{frontend_url}/application-status"
+                        f"/{prospect.status_token}"
+                    )
+                    text_parts.append(
+                        f"Track your application: {status_url}"
+                    )
             for custom in config.get("custom_sections", []):
                 title = custom.get("title", "")
                 body = custom.get("content", "")
