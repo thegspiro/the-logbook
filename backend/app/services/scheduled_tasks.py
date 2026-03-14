@@ -1192,6 +1192,13 @@ async def run_scheduled_emails(db: AsyncSession) -> Dict[str, Any]:
     for item in pending:
         try:
             org = item.organization
+            if not org:
+                item.status = ScheduledEmailStatus.FAILED
+                item.error_message = (
+                    "Organization no longer exists"
+                )
+                failed += 1
+                continue
             email_svc = EmailService(org)
             template_svc = EmailTemplateService(db)
 
@@ -1237,6 +1244,10 @@ async def run_scheduled_emails(db: AsyncSession) -> Dict[str, Any]:
                 text_body=text_body,
                 cc_emails=cc,
                 bcc_emails=bcc,
+                db=db,
+                template_type=item.template_type.value
+                if item.template_type
+                else "scheduled",
             )
 
             if success_count > 0:

@@ -186,6 +186,9 @@ class EmailService:
         attachment_paths: Optional[List[str]] = None,
         cc_emails: Optional[List[str]] = None,
         bcc_emails: Optional[List[str]] = None,
+        db: Any = None,
+        template_type: Optional[str] = None,
+        sent_by: Optional[str] = None,
     ) -> tuple[int, int]:
         """
         Send an email to one or more recipients
@@ -198,6 +201,9 @@ class EmailService:
             attachment_paths: Optional list of file paths to attach
             cc_emails: Optional list of CC recipient email addresses
             bcc_emails: Optional list of BCC recipient email addresses (not shown in headers)
+            db: Optional async database session (for logging to message_history)
+            template_type: Optional template type string (for message_history)
+            sent_by: Optional user ID who triggered the send (for message_history)
 
         Returns:
             Tuple of (success_count, failure_count)
@@ -281,7 +287,70 @@ class EmailService:
                 logger.error(f"Failed to send email to {to_email}: {e}")
                 failure_count += 1
 
+        # Log to message_history when a db session is available
+        if db:
+            try:
+                await self._log_message_history(
+                    db,
+                    to_emails=to_emails,
+                    subject=subject,
+                    cc_emails=cc_emails,
+                    bcc_emails=bcc_emails,
+                    template_type=template_type,
+                    sent_by=sent_by,
+                    success_count=success_count,
+                    failure_count=failure_count,
+                )
+            except Exception as e:
+                logger.warning(f"Failed to log message history: {e}")
+
         return success_count, failure_count
+
+    async def _log_message_history(
+        self,
+        db: Any,
+        to_emails: List[str],
+        subject: str,
+        cc_emails: Optional[List[str]],
+        bcc_emails: Optional[List[str]],
+        template_type: Optional[str],
+        sent_by: Optional[str],
+        success_count: int,
+        failure_count: int,
+    ) -> None:
+        """Write a MessageHistory record for the send attempt."""
+        from app.core.utils import generate_uuid
+        from app.models.email_template import (
+            MessageHistory,
+            MessageHistoryStatus,
+        )
+
+        org_id = (
+            str(self.organization.id) if self.organization else None
+        )
+        status = (
+            MessageHistoryStatus.SENT
+            if success_count > 0
+            else MessageHistoryStatus.FAILED
+        )
+        history = MessageHistory(
+            id=generate_uuid(),
+            organization_id=org_id,
+            to_email=", ".join(to_emails),
+            cc_emails=cc_emails,
+            bcc_emails=bcc_emails,
+            subject=subject,
+            template_type=template_type,
+            status=status,
+            recipient_count=len(to_emails),
+            sent_by=sent_by,
+        )
+        if failure_count > 0 and success_count == 0:
+            history.error_message = (
+                f"Failed to deliver to all {failure_count} recipient(s)"
+            )
+        db.add(history)
+        await db.flush()
 
     async def send_ballot_notification(
         self,
@@ -407,6 +476,8 @@ class EmailService:
             html_body=html_body,
             text_body=text_body,
             cc_emails=cc_emails,
+            db=db,
+            template_type="ballot_notification",
         )
 
         return success_count > 0
@@ -503,6 +574,8 @@ class EmailService:
             subject=subject,
             html_body=html_body,
             text_body=text_body,
+            db=db,
+            template_type="training_approval_request",
         )
 
     async def send_welcome_email(
@@ -619,6 +692,8 @@ class EmailService:
             html_body=html_body,
             text_body=text_body,
             attachment_paths=attachment_paths,
+            db=db,
+            template_type="welcome",
         )
 
         return success_count > 0
@@ -661,7 +736,7 @@ class EmailService:
             "organization_logo": org_logo,
             "expiry_minutes": str(expiry_minutes),
             # Keep legacy key for existing custom templates that reference it
-            "expiry_hours": str(expiry_minutes),
+            "expiry_hours": str(max(1, expiry_minutes // 60)),
         }
 
         subject = None
@@ -720,6 +795,8 @@ class EmailService:
             subject=subject,
             html_body=html_body,
             text_body=text_body,
+            db=db,
+            template_type="password_reset",
         )
 
         return success_count > 0
@@ -811,6 +888,8 @@ class EmailService:
             subject=subject,
             html_body=html_body,
             text_body=text_body,
+            db=db,
+            template_type="it_password_reset_notification",
         )
 
     async def send_event_reminder(
@@ -911,6 +990,8 @@ class EmailService:
             subject=subject,
             html_body=html_body,
             text_body=text_body,
+            db=db,
+            template_type="event_reminder",
         )
 
         return success_count > 0
@@ -1004,6 +1085,8 @@ class EmailService:
             subject=subject,
             html_body=html_body,
             text_body=text_body,
+            db=db,
+            template_type="inactivity_warning",
         )
 
         return success_count > 0
@@ -1091,6 +1174,8 @@ class EmailService:
             html_body=html_body,
             text_body=text_body,
             bcc_emails=bcc_emails,
+            db=db,
+            template_type="duplicate_application",
         )
 
         return success_count > 0

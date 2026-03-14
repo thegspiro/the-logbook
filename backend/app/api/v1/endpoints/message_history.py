@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission
 from app.core.database import get_db
-from app.core.utils import generate_uuid
 from app.models.email_template import (
     EmailTemplate,
     MessageHistory,
@@ -151,38 +150,39 @@ async def send_test_email(
         subject = f"[TEST] {subject}"
         template_type = ttype_key
 
-    # Send the email
+    # Send the email (also logs to message_history automatically)
     email_svc = EmailService(organization=organization)
     success_count, failure_count = await email_svc.send_email(
         to_emails=[body.to_email],
         subject=subject,
         html_body=html_body,
         text_body=text_body,
-    )
-
-    # Log to message history
-    is_success = success_count > 0
-    history = MessageHistory(
-        id=generate_uuid(),
-        organization_id=current_user.organization_id,
-        to_email=body.to_email,
-        subject=subject,
+        db=db,
         template_type=template_type,
-        status=(
-            MessageHistoryStatus.SENT if is_success else MessageHistoryStatus.FAILED
-        ),
-        error_message=None if is_success else "SMTP delivery failed",
-        recipient_count=1,
         sent_by=current_user.id,
     )
-    db.add(history)
     await db.commit()
-    await db.refresh(history)
 
+    is_success = success_count > 0
     if not is_success:
         logger.warning(f"Test email to {body.to_email} failed")
     else:
         logger.info(f"Test email sent to {body.to_email} by {current_user.id}")
+
+    # Return the latest history record for the response
+    latest = await db.execute(
+        select(MessageHistory)
+        .where(MessageHistory.organization_id == current_user.organization_id)
+        .order_by(MessageHistory.sent_at.desc())
+        .limit(1)
+    )
+    history = latest.scalar_one_or_none()
+    if not history:
+        # Fallback: construct a response without a persisted record
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Email sent but failed to log history",
+        )
 
     return history
 
