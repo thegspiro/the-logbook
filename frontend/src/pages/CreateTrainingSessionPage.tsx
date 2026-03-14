@@ -355,6 +355,29 @@ const CreateTrainingSessionPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* Quick Duration */}
+              {formData.start_datetime && (
+                <div>
+                  <span className="block text-sm font-semibold text-theme-text-primary mb-2">Quick Duration</span>
+                  <div className="flex flex-wrap gap-2">
+                    {[1, 2, 4, 8].map((h) => (
+                      <button
+                        key={h}
+                        type="button"
+                        onClick={() => {
+                          const startUtc = localToUTC(formData.start_datetime, tz);
+                          const end = new Date(new Date(startUtc).getTime() + h * 60 * 60 * 1000);
+                          updateField('end_datetime', formatForDateTimeInput(end, tz));
+                        }}
+                        className="px-4 py-2 text-sm font-medium text-theme-text-secondary border border-theme-surface-border rounded-lg hover:bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring transition-colors"
+                      >
+                        {h} {h === 1 ? 'hour' : 'hours'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Recurring Training */}
               <div className="space-y-4">
                 <div className="flex items-center space-x-3">
