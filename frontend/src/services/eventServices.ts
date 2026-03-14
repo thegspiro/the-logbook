@@ -870,6 +870,7 @@ export interface SizeVariantCreate {
   base_name: string;
   sizes: string[];
   colors?: string[] | undefined;
+  styles?: string[] | undefined;
   category_id?: string | undefined;
   quantity_per_variant?: number | undefined;
   replacement_cost?: number | undefined;
@@ -880,6 +881,7 @@ export interface SizeVariantCreate {
   storage_area_id?: string | undefined;
   station?: string | undefined;
   notes?: string | undefined;
+  create_variant_group?: boolean | undefined;
 }
 
 export interface BulkIssuanceTarget {

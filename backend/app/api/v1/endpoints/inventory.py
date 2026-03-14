@@ -3695,12 +3695,14 @@ async def create_size_variants(
     **Requires permission: inventory.manage**
     """
     service = InventoryService(db)
-    items = await service.create_size_variants(
+    items, variant_group_id = await service.create_size_variants(
         organization_id=current_user.organization_id,
         created_by=current_user.id,
         base_name=data.base_name,
         sizes=data.sizes,
         colors=data.colors,
+        styles=data.styles,
+        create_variant_group=data.create_variant_group,
         category_id=data.category_id,
         quantity_per_variant=data.quantity_per_variant,
         replacement_cost=data.replacement_cost,
@@ -3721,7 +3723,9 @@ async def create_size_variants(
             "base_name": data.base_name,
             "sizes": data.sizes,
             "colors": data.colors,
+            "styles": data.styles,
             "count": len(items),
+            "variant_group_id": variant_group_id,
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -3730,6 +3734,7 @@ async def create_size_variants(
     return SizeVariantCreateResponse(
         created_count=len(items),
         items=[InventoryItemResponse.model_validate(i) for i in items],
+        variant_group_id=variant_group_id,
     )
 
 
