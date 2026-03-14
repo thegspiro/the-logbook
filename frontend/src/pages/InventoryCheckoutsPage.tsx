@@ -346,8 +346,8 @@ export const InventoryCheckoutsPage: React.FC = () => {
             }}
           >
             <div className="flex items-center justify-center min-h-screen px-4">
-              <div className="fixed inset-0 bg-black/60" aria-hidden="true" />
-              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full border border-theme-surface-border">
+              <div className="fixed inset-0 bg-black/60" aria-hidden="true" onClick={() => setCheckInModal({ open: false, checkoutId: '', itemName: '' })}></div>
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full border border-theme-surface-border z-10">
                 <div className="px-4 sm:px-6 pt-5 pb-4">
                   <h3 id="checkin-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">
                     Check In: {checkInModal.itemName}
@@ -417,8 +417,8 @@ export const InventoryCheckoutsPage: React.FC = () => {
             onKeyDown={(e) => { if (e.key === 'Escape') setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' }); }}
           >
             <div className="flex items-center justify-center min-h-screen px-4">
-              <div className="fixed inset-0 bg-black/60" aria-hidden="true" />
-              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-sm w-full border border-theme-surface-border">
+              <div className="fixed inset-0 bg-black/60" aria-hidden="true" onClick={() => setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' })}></div>
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-sm w-full border border-theme-surface-border z-10">
                 <div className="px-4 sm:px-6 pt-5 pb-4">
                   <h3 id="extend-modal-title" className="text-lg font-medium text-theme-text-primary mb-1">Extend Return Date</h3>
                   <p className="text-theme-text-muted text-sm mb-4">{extendModal.itemName}</p>

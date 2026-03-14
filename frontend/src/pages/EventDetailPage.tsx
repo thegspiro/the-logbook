@@ -1296,11 +1296,11 @@ export const EventDetailPage: React.FC = () => {
           onKeyDown={(e) => { if (e.key === 'Escape') { setShowRSVPModal(false); setSubmitError(null); } }}
         >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true" onClick={() => { setShowRSVPModal(false); setSubmitError(null); }}>
               <div className="absolute inset-0 bg-black/75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full relative z-10">
               <form onSubmit={(e) => { void handleRSVP(e); }}>
                 <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <h3 id="rsvp-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">RSVP for {event.title}</h3>
@@ -1447,11 +1447,11 @@ export const EventDetailPage: React.FC = () => {
           onKeyDown={(e) => { if (e.key === 'Escape') { setShowCancelModal(false); setSubmitError(null); setCancelReason(''); } }}
         >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true" onClick={() => { setShowCancelModal(false); setSubmitError(null); setCancelReason(''); }}>
               <div className="absolute inset-0 bg-black/75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full relative z-10">
               <form onSubmit={(e) => { void handleCancelEvent(e); }}>
                 <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <h3 id="cancel-event-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">Cancel Event</h3>
@@ -1541,11 +1541,11 @@ export const EventDetailPage: React.FC = () => {
           onKeyDown={(e) => { if (e.key === 'Escape') { setShowCancelSeriesModal(false); setSubmitError(null); setCancelReason(''); } }}
         >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true" onClick={() => { setShowCancelSeriesModal(false); setSubmitError(null); setCancelReason(''); }}>
               <div className="absolute inset-0 bg-black/75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full relative z-10">
               <form onSubmit={(e) => { void handleCancelSeries(e); }}>
                 <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <h3 id="cancel-series-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">Cancel Recurring Series</h3>
@@ -1818,11 +1818,11 @@ export const EventDetailPage: React.FC = () => {
           onKeyDown={(e) => { if (e.key === 'Escape') { setShowRecordTimesModal(false); setSubmitError(null); } }}
         >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true" onClick={() => { setShowRecordTimesModal(false); setSubmitError(null); }}>
               <div className="absolute inset-0 bg-black/75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full relative z-10">
               <form onSubmit={(e) => { void handleRecordTimes(e); }}>
                 <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <h3 id="record-times-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">Record Official Event Times</h3>
@@ -1922,11 +1922,11 @@ export const EventDetailPage: React.FC = () => {
           onKeyDown={(e) => { if (e.key === 'Escape') { setShowOverrideModal(false); setSubmitError(null); } }}
         >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true" onClick={() => { setShowOverrideModal(false); setSubmitError(null); }}>
               <div className="absolute inset-0 bg-black/75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full relative z-10">
               <form onSubmit={(e) => { void handleOverrideAttendance(e); }}>
                 <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <h3 id="override-modal-title" className="text-lg font-medium text-theme-text-primary mb-1">
@@ -2016,11 +2016,11 @@ export const EventDetailPage: React.FC = () => {
           onKeyDown={(e) => { if (e.key === 'Escape') setShowDeleteConfirm(false); }}
         >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true" onClick={() => setShowDeleteConfirm(false)}>
               <div className="absolute inset-0 bg-black/75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full relative z-10">
               <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                 <div className="sm:flex sm:items-start">
                   <div className="mx-auto shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
@@ -2073,11 +2073,11 @@ export const EventDetailPage: React.FC = () => {
           onKeyDown={(e) => { if (e.key === 'Escape') setShowTemplateModal(false); }}
         >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true" onClick={() => setShowTemplateModal(false)}>
               <div className="absolute inset-0 bg-black/75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full relative z-10">
               <form onSubmit={(e) => {
                 e.preventDefault();
                 const name = templateName.trim();

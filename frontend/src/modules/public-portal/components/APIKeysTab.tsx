@@ -54,13 +54,14 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
       aria-modal="true"
       aria-labelledby="create-api-key-title"
       onKeyDown={(e) => { if (e.key === 'Escape' && !isSubmitting) onClose(); }}
+      onClick={(e) => { if (e.target === e.currentTarget && !isSubmitting) onClose(); }}
     >
       <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full p-6">
         <div className="flex justify-between items-center mb-4">
           <h3 id="create-api-key-title" className="text-lg font-semibold text-theme-text-primary">Create API Key</h3>
           <button
             onClick={onClose}
-            className="text-theme-text-muted hover:text-theme-text-muted"
+            className="text-theme-text-muted hover:text-theme-text-primary"
             disabled={isSubmitting}
             aria-label="Close dialog"
           >
