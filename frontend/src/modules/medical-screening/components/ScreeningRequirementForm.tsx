@@ -22,8 +22,7 @@ interface ScreeningRequirementFormProps {
   onClose: () => void;
 }
 
-const inputClass =
-  'bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden';
+const inputClass = 'form-input';
 const labelClass = 'text-theme-text-secondary mb-2 block text-sm font-medium';
 
 export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> = ({

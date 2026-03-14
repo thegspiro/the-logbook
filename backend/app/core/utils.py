@@ -9,6 +9,10 @@ import re
 import secrets
 import string
 import uuid
+from contextlib import asynccontextmanager
+from typing import Any, Optional, TypeVar
+
+from fastapi import HTTPException, status
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +85,73 @@ def sanitize_error_message(
     if len(msg) > 300:
         return fallback
     return msg
+
+
+T = TypeVar("T")
+
+
+def ensure_found(
+    resource: Optional[T],
+    resource_name: str = "Resource",
+) -> T:
+    """Raise 404 if the resource is None, otherwise return it.
+
+    Replaces the repeated pattern:
+        if not resource:
+            raise HTTPException(status_code=404, detail="X not found")
+
+    Usage:
+        location = ensure_found(
+            await service.get_location(id, org_id),
+            "Location",
+        )
+    """
+    if resource is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"{resource_name} not found",
+        )
+    return resource
+
+
+@asynccontextmanager
+async def handle_service_errors(
+    fallback: str = _GENERIC_ERROR,
+) -> Any:
+    """Async context manager that catches service-layer exceptions
+    and converts them to appropriate HTTPExceptions.
+
+    Replaces the repeated pattern:
+        try:
+            result = await service.do_something(...)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=safe_error_detail(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+    Usage:
+        async with handle_service_errors("Failed to create location"):
+            location = await service.create_location(...)
+    """
+    try:
+        yield
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e, fallback),
+        )
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=safe_error_detail(e, fallback),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e, fallback),
+        )
 
 
 def generate_uuid() -> str:

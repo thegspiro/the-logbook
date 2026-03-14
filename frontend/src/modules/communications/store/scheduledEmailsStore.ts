@@ -10,7 +10,7 @@ import {
   type ScheduledEmail,
   type ScheduledEmailCreate,
 } from '../../../services/api';
-import { getErrorMessage } from '../../../utils/errorHandling';
+import { createFetchAction, handleStoreError } from '../../../utils/storeHelpers';
 
 interface ScheduledEmailsState {
   scheduledEmails: ScheduledEmail[];
@@ -31,18 +31,12 @@ export const useScheduledEmailsStore = create<ScheduledEmailsState>((set) => ({
   isSaving: false,
   error: null,
 
-  fetchScheduledEmails: async (statusFilter?: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      const emails = await scheduledEmailsService.list(statusFilter);
-      set({ scheduledEmails: emails, isLoading: false });
-    } catch (err: unknown) {
-      set({
-        isLoading: false,
-        error: getErrorMessage(err, 'Failed to load scheduled emails'),
-      });
-    }
-  },
+  fetchScheduledEmails: createFetchAction(
+    set,
+    (statusFilter?: string) => scheduledEmailsService.list(statusFilter),
+    'scheduledEmails',
+    'Failed to load scheduled emails',
+  ),
 
   scheduleEmail: async (data: ScheduledEmailCreate) => {
     set({ isSaving: true, error: null });
@@ -53,10 +47,7 @@ export const useScheduledEmailsStore = create<ScheduledEmailsState>((set) => ({
         isSaving: false,
       }));
     } catch (err: unknown) {
-      set({
-        isSaving: false,
-        error: getErrorMessage(err, 'Failed to schedule email'),
-      });
+      set({ isSaving: false, error: handleStoreError(err, 'Failed to schedule email') });
       throw err;
     }
   },
@@ -70,10 +61,7 @@ export const useScheduledEmailsStore = create<ScheduledEmailsState>((set) => ({
         isSaving: false,
       }));
     } catch (err: unknown) {
-      set({
-        isSaving: false,
-        error: getErrorMessage(err, 'Failed to cancel scheduled email'),
-      });
+      set({ isSaving: false, error: handleStoreError(err, 'Failed to cancel scheduled email') });
     }
   },
 
@@ -90,10 +78,7 @@ export const useScheduledEmailsStore = create<ScheduledEmailsState>((set) => ({
         isSaving: false,
       }));
     } catch (err: unknown) {
-      set({
-        isSaving: false,
-        error: getErrorMessage(err, 'Failed to reschedule email'),
-      });
+      set({ isSaving: false, error: handleStoreError(err, 'Failed to reschedule email') });
     }
   },
 

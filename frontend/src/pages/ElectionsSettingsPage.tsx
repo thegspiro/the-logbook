@@ -34,10 +34,9 @@ const QUORUM_TYPE_OPTIONS = [
   { value: 'count', label: 'Minimum Voter Count' },
 ] as const;
 
-const inputClass =
-  'block w-full rounded-md border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:border-red-500 focus:outline-hidden focus:ring-1 focus:ring-red-500';
+const inputClass = 'form-input';
 const selectClass = inputClass;
-const labelClass = 'block text-sm font-medium text-theme-text-secondary mb-1';
+const labelClass = 'form-label';
 
 export const ElectionsSettingsPage: React.FC = () => {
   const navigate = useNavigate();

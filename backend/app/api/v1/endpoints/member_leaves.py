@@ -29,6 +29,7 @@ from app.api.dependencies import (
     require_permission,
 )
 from app.core.database import get_db
+from app.core.utils import ensure_found
 from app.models.user import User
 from app.services.member_leave_service import MemberLeaveService
 
@@ -200,13 +201,14 @@ async def update_leave_of_absence(
     """Update a leave of absence."""
     svc = MemberLeaveService(db)
     updates = data.model_dump(exclude_unset=True)
-    leave = await svc.update_leave(
-        organization_id=str(current_user.organization_id),
-        leave_id=leave_id,
-        **updates,
+    leave = ensure_found(
+        await svc.update_leave(
+            organization_id=str(current_user.organization_id),
+            leave_id=leave_id,
+            **updates,
+        ),
+        "Leave of absence",
     )
-    if not leave:
-        raise HTTPException(status_code=404, detail="Leave of absence not found")
     return _to_response(leave)
 
 
@@ -222,5 +224,4 @@ async def delete_leave_of_absence(
         organization_id=str(current_user.organization_id),
         leave_id=leave_id,
     )
-    if not success:
-        raise HTTPException(status_code=404, detail="Leave of absence not found")
+    ensure_found(success, "Leave of absence")

@@ -46,13 +46,11 @@ import {
 // Shared Tailwind class constants
 // ---------------------------------------------------------------------------
 
-const inputClass =
-  'w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-tertiary focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
+const inputClass = 'form-input';
 
-const labelClass = 'block text-sm font-medium text-theme-text-secondary mb-1';
+const labelClass = 'form-label';
 
-const selectClass =
-  'w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
+const selectClass = 'form-input';
 
 // ---------------------------------------------------------------------------
 // Sub-components

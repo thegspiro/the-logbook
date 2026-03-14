@@ -586,8 +586,8 @@ const AttestationsSection: React.FC = () => {
   if (loading) return <LoadingSpinner />;
   if (error) return <ErrorMessage message={error} />;
 
-  const inputClass = 'w-full bg-theme-input-bg border border-theme-input-border rounded-md px-3 py-2 text-sm text-theme-text-primary';
-  const labelClass = 'block text-sm font-medium text-theme-text-secondary mb-1';
+  const inputClass = 'form-input';
+  const labelClass = 'form-label';
 
   return (
     <div className="space-y-6">

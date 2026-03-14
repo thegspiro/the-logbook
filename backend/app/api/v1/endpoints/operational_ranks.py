@@ -6,11 +6,12 @@ CRUD endpoints for per-organization operational rank management.
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_db
+from app.core.utils import ensure_found, handle_service_errors
 from app.models.user import User
 from app.schemas.operational_rank import (
     RankCreate,
@@ -76,13 +77,11 @@ async def create_rank(
     """
     service = OperationalRankService(db)
 
-    try:
+    async with handle_service_errors("Failed to create rank"):
         rank = await service.create_rank(
             data=data,
             organization_id=current_user.organization_id,
         )
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     return _rank_to_response(rank)
 
@@ -117,13 +116,10 @@ async def get_rank(
     **Authentication required**
     """
     service = OperationalRankService(db)
-    rank = await service.get_rank(rank_id, current_user.organization_id)
-
-    if not rank:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Rank not found",
-        )
+    rank = ensure_found(
+        await service.get_rank(rank_id, current_user.organization_id),
+        "Rank",
+    )
 
     return _rank_to_response(rank)
 
@@ -143,20 +139,14 @@ async def update_rank(
     """
     service = OperationalRankService(db)
 
-    try:
+    async with handle_service_errors("Failed to update rank"):
         rank = await service.update_rank(
             rank_id=rank_id,
             data=data,
             organization_id=current_user.organization_id,
         )
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-    if not rank:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Rank not found",
-        )
+    ensure_found(rank, "Rank")
 
     return _rank_to_response(rank)
 
@@ -175,12 +165,7 @@ async def delete_rank(
     """
     service = OperationalRankService(db)
     deleted = await service.delete_rank(rank_id, current_user.organization_id)
-
-    if not deleted:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Rank not found",
-        )
+    ensure_found(deleted, "Rank")
 
 
 @router.post("/reorder", response_model=list[RankResponse])

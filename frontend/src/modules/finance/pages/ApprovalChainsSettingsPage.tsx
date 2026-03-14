@@ -60,10 +60,9 @@ const formatCurrency = (amount: number | undefined | null): string => {
   }).format(amount);
 };
 
-const inputClass =
-  'w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-secondary focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500';
+const inputClass = 'form-input';
 const selectClass = inputClass;
-const labelClass = 'block text-sm font-medium text-theme-text-secondary mb-1';
+const labelClass = 'form-label';
 
 // =============================================================================
 // Chain Card Component

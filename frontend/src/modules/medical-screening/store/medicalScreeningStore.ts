@@ -4,7 +4,12 @@
 
 import { create } from 'zustand';
 import { medicalScreeningService } from '../services/api';
-import { getErrorMessage } from '../../../utils/errorHandling';
+import {
+  createFetchAction,
+  createCreateAction,
+  createUpdateAction,
+  createDeleteAction,
+} from '../../../utils/storeHelpers';
 import type {
   ScreeningRequirement,
   ScreeningRequirementCreate,
@@ -58,98 +63,83 @@ export const useMedicalScreeningStore = create<MedicalScreeningState>((set) => (
   isLoading: false,
   error: null,
 
-  fetchRequirements: async (params) => {
-    set({ isLoading: true, error: null });
-    try {
-      const requirements = await medicalScreeningService.listRequirements(params);
-      set({ requirements, isLoading: false });
-    } catch (err: unknown) {
-      set({ isLoading: false, error: getErrorMessage(err, 'Failed to load requirements') });
-    }
-  },
+  // Requirements — fetch / CRUD
+  fetchRequirements: createFetchAction(
+    set,
+    (params?: { is_active?: boolean; screening_type?: string }) =>
+      medicalScreeningService.listRequirements(params),
+    'requirements',
+    'Failed to load requirements',
+  ),
 
-  createRequirement: async (data) => {
-    const requirement = await medicalScreeningService.createRequirement(data);
-    set((state) => ({ requirements: [...state.requirements, requirement] }));
-    return requirement;
-  },
+  createRequirement: createCreateAction<
+    MedicalScreeningState,
+    ScreeningRequirementCreate,
+    ScreeningRequirement
+  >(set, (data) => medicalScreeningService.createRequirement(data), 'requirements'),
 
-  updateRequirement: async (id, data) => {
-    const requirement = await medicalScreeningService.updateRequirement(id, data);
-    set((state) => ({
-      requirements: state.requirements.map((r) => (r.id === id ? requirement : r)),
-    }));
-    return requirement;
-  },
+  updateRequirement: createUpdateAction<
+    MedicalScreeningState,
+    ScreeningRequirementUpdate,
+    ScreeningRequirement
+  >(set, (id, data) => medicalScreeningService.updateRequirement(id, data), 'requirements'),
 
-  deleteRequirement: async (id) => {
-    await medicalScreeningService.deleteRequirement(id);
-    set((state) => ({
-      requirements: state.requirements.filter((r) => r.id !== id),
-    }));
-  },
+  deleteRequirement: createDeleteAction<MedicalScreeningState, ScreeningRequirement>(
+    set,
+    (id) => medicalScreeningService.deleteRequirement(id),
+    'requirements',
+  ),
 
-  fetchRecords: async (params) => {
-    set({ isLoading: true, error: null });
-    try {
-      const records = await medicalScreeningService.listRecords(params);
-      set({ records, isLoading: false });
-    } catch (err: unknown) {
-      set({ isLoading: false, error: getErrorMessage(err, 'Failed to load records') });
-    }
-  },
+  // Records — fetch / CRUD
+  fetchRecords: createFetchAction(
+    set,
+    (params?: {
+      user_id?: string;
+      prospect_id?: string;
+      screening_type?: string;
+      status?: string;
+    }) => medicalScreeningService.listRecords(params),
+    'records',
+    'Failed to load records',
+  ),
 
-  createRecord: async (data) => {
-    const record = await medicalScreeningService.createRecord(data);
-    set((state) => ({ records: [...state.records, record] }));
-    return record;
-  },
+  createRecord: createCreateAction<
+    MedicalScreeningState,
+    ScreeningRecordCreate,
+    ScreeningRecord
+  >(set, (data) => medicalScreeningService.createRecord(data), 'records'),
 
-  updateRecord: async (id, data) => {
-    const record = await medicalScreeningService.updateRecord(id, data);
-    set((state) => ({
-      records: state.records.map((r) => (r.id === id ? record : r)),
-    }));
-    return record;
-  },
+  updateRecord: createUpdateAction<
+    MedicalScreeningState,
+    ScreeningRecordUpdate,
+    ScreeningRecord
+  >(set, (id, data) => medicalScreeningService.updateRecord(id, data), 'records'),
 
-  deleteRecord: async (id) => {
-    await medicalScreeningService.deleteRecord(id);
-    set((state) => ({
-      records: state.records.filter((r) => r.id !== id),
-    }));
-  },
+  deleteRecord: createDeleteAction<MedicalScreeningState, ScreeningRecord>(
+    set,
+    (id) => medicalScreeningService.deleteRecord(id),
+    'records',
+  ),
 
-  fetchUserCompliance: async (userId) => {
-    set({ isLoading: true, error: null });
-    try {
-      const compliance = await medicalScreeningService.getUserCompliance(userId);
-      set({ compliance, isLoading: false });
-    } catch (err: unknown) {
-      set({ isLoading: false, error: getErrorMessage(err, 'Failed to load compliance') });
-    }
-  },
+  // Compliance
+  fetchUserCompliance: createFetchAction(
+    set,
+    (userId: string) => medicalScreeningService.getUserCompliance(userId),
+    'compliance',
+    'Failed to load compliance',
+  ),
 
-  fetchProspectCompliance: async (prospectId) => {
-    set({ isLoading: true, error: null });
-    try {
-      const compliance = await medicalScreeningService.getProspectCompliance(prospectId);
-      set({ compliance, isLoading: false });
-    } catch (err: unknown) {
-      set({ isLoading: false, error: getErrorMessage(err, 'Failed to load compliance') });
-    }
-  },
+  fetchProspectCompliance: createFetchAction(
+    set,
+    (prospectId: string) => medicalScreeningService.getProspectCompliance(prospectId),
+    'compliance',
+    'Failed to load compliance',
+  ),
 
-  fetchExpiringScreenings: async (days) => {
-    set({ isLoading: true, error: null });
-    try {
-      const expiringScreenings = await medicalScreeningService.getExpiringScreenings(days);
-      set({ expiringScreenings, isLoading: false });
-    } catch (err: unknown) {
-      set({
-        isLoading: false,
-        error: getErrorMessage(err, 'Failed to load expiring screenings'),
-      });
-    }
-  },
+  fetchExpiringScreenings: createFetchAction(
+    set,
+    (days?: number) => medicalScreeningService.getExpiringScreenings(days),
+    'expiringScreenings',
+    'Failed to load expiring screenings',
+  ),
 }));

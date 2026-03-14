@@ -24,9 +24,8 @@ const tabClass = (active: boolean) =>
       : 'text-theme-text-secondary hover:bg-theme-surface-hover'
   }`;
 
-const inputClass =
-  'w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500/40';
-const labelClass = 'block text-sm font-medium text-theme-text-secondary mb-1';
+const inputClass = 'form-input';
+const labelClass = 'form-label';
 
 type Tab = 'pending' | 'all' | 'blocked-attempts' | 'blocked-countries';
 
