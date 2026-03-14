@@ -26,6 +26,7 @@ import type {
 } from '../../types/training';
 import type { User } from '../../types/user';
 import { useTimezone } from '../../hooks/useTimezone';
+import { formatDateCustom } from '../../utils/dateFormatting';
 
 type ViewMode = 'my-reports' | 'filed-by-me' | 'create' | 'pending-review';
 
@@ -392,9 +393,9 @@ export const ShiftReportsTab: React.FC = () => {
     const isExpanded = expandedId === report.id;
     const isMyReport = report.trainee_id === user?.id;
     const isReviewMode = viewMode === 'pending-review';
-    const dateStr = new Date(report.shift_date + 'T12:00:00').toLocaleDateString('en-US', {
-      weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: tz,
-    });
+    const dateStr = formatDateCustom(report.shift_date + 'T12:00:00', {
+      weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+    }, tz);
 
     const statusStyle = REVIEW_STATUS_STYLES[report.review_status] ?? { bg: 'bg-green-500/10', text: 'text-green-700 dark:text-green-400', label: 'Approved' };
 

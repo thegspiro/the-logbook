@@ -25,6 +25,7 @@ import {
 import { useApparatusStore } from '../store/apparatusStore';
 import { StatusBadge } from '../components/StatusBadge';
 import { ApparatusTypeBadge } from '../components/ApparatusTypeBadge';
+import { formatNumber } from '../../../utils/dateFormatting';
 
 export const ApparatusListPage: React.FC = () => {
   const navigate = useNavigate();
@@ -399,14 +400,14 @@ export const ApparatusListPage: React.FC = () => {
                           <td className="px-3 sm:px-6 py-4 whitespace-nowrap table-col-tertiary">
                             <div className="text-theme-text-secondary text-sm">
                               {apparatus.currentMileage
-                                ? apparatus.currentMileage.toLocaleString()
+                                ? formatNumber(apparatus.currentMileage)
                                 : '-'}
                             </div>
                           </td>
                           <td className="px-3 sm:px-6 py-4 whitespace-nowrap table-col-tertiary">
                             <div className="text-theme-text-secondary text-sm">
                               {apparatus.currentHours
-                                ? apparatus.currentHours.toLocaleString()
+                                ? formatNumber(apparatus.currentHours)
                                 : '-'}
                             </div>
                           </td>

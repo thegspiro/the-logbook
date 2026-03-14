@@ -28,6 +28,8 @@ import {
   X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { formatDate, formatDateCustom } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 import { complianceConfigService } from '../services/trainingServices';
 import type {
   ComplianceConfigData,
@@ -66,6 +68,7 @@ const REPORT_FREQUENCIES = [
 ];
 
 export default function ComplianceRequirementsConfigPage() {
+  const tz = useTimezone();
   const [activeTab, setActiveTab] = useState<ActiveTab>('thresholds');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -1073,7 +1076,7 @@ export default function ComplianceRequirementsConfigPage() {
                   >
                     {Array.from({ length: 12 }, (_: unknown, i: number) => (
                       <option key={i + 1} value={i + 1}>
-                        {new Date(2024, i).toLocaleString('default', { month: 'long' })}
+                        {formatDateCustom(new Date(2024, i), { month: 'long' })}
                       </option>
                     ))}
                   </select>
@@ -1183,7 +1186,7 @@ export default function ComplianceRequirementsConfigPage() {
                         </p>
                         <p className="text-xs text-theme-text-secondary">
                           Generated{' '}
-                          {new Date(report.generatedAt).toLocaleDateString()}
+                          {formatDate(report.generatedAt, tz)}
                           {report.generationDurationMs != null &&
                             ` · ${(report.generationDurationMs / 1000).toFixed(1)}s`}
                           {report.emailedTo && report.emailedTo.length > 0 && (

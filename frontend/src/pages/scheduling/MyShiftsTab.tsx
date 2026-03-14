@@ -15,7 +15,7 @@ import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ShiftRecord } from '../../modules/scheduling/services/api';
 import type { Assignment } from '../../types/scheduling';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatTime, getTodayLocalDate } from '../../utils/dateFormatting';
+import { formatTime, getTodayLocalDate, formatDateCustom } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
 
@@ -240,7 +240,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm sm:text-base font-semibold text-theme-text-primary truncate">
-                        {shiftDate ? shiftDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz }) : 'Unknown Date'}
+                        {shiftDate ? formatDateCustom(shiftDate, { weekday: 'short', month: 'short', day: 'numeric' }, tz) : 'Unknown Date'}
                       </p>
                       <p className="text-xs sm:text-sm text-theme-text-secondary">
                         {shift?.start_time ? `${formatTime(shift.start_time, tz)}${shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}` : ''}
@@ -315,7 +315,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
               <h2 className="text-lg font-bold text-theme-text-primary">Request Shift Swap</h2>
               <p className="text-sm text-theme-text-secondary mt-1">
                 {swapAssignment?.shift?.shift_date
-                  ? `Submit a swap request for your shift on ${new Date(swapAssignment.shift.shift_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz })}`
+                  ? `Submit a swap request for your shift on ${formatDateCustom(swapAssignment.shift.shift_date + 'T12:00:00', { weekday: 'short', month: 'short', day: 'numeric' }, tz)}`
                   : 'Submit a swap request for your shift'}
               </p>
             </div>
@@ -331,7 +331,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                     const d = new Date(s.shift_date + 'T12:00:00');
                     return (
                       <option key={s.id} value={s.id}>
-                        {d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz })}
+                        {formatDateCustom(d, { weekday: 'short', month: 'short', day: 'numeric' }, tz)}
                         {' '}{formatTime(s.start_time, tz)}
                         {s.end_time ? ` - ${formatTime(s.end_time, tz)}` : ''}
                         {s.apparatus_unit_number ? ` (${s.apparatus_unit_number})` : ''}

@@ -11,7 +11,7 @@ import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import type { EventListItem } from '../types/event';
 import { getEventTypeLabel, getEventTypeBadgeColor } from '../utils/eventHelpers';
-import { formatTime } from '../utils/dateFormatting';
+import { formatTime, formatDateCustom } from '../utils/dateFormatting';
 
 interface CalendarViewProps {
   events: EventListItem[];
@@ -213,7 +213,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, timezone }) 
                   ${isSelected ? 'ring-2 ring-inset ring-red-500/50 bg-red-50 dark:bg-red-500/10' : ''}
                   ${!isSelected ? 'hover:bg-theme-surface-hover' : ''}
                 `}
-                aria-label={`${date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}${hasEvents ? `, ${dayEvents.length} event${dayEvents.length !== 1 ? 's' : ''}` : ''}`}
+                aria-label={`${formatDateCustom(date, { month: 'long', day: 'numeric', year: 'numeric' }, timezone)}${hasEvents ? `, ${dayEvents.length} event${dayEvents.length !== 1 ? 's' : ''}` : ''}`}
               >
                 <span
                   className={`
@@ -255,12 +255,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, timezone }) 
       {selectedDate && (
         <div className="bg-theme-surface border border-theme-surface-border rounded-lg p-4">
           <h3 className="text-sm font-semibold text-theme-text-primary mb-3">
-            {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', {
+            {formatDateCustom(selectedDate + 'T12:00:00', {
               weekday: 'long',
               month: 'long',
               day: 'numeric',
               year: 'numeric',
-            })}
+            }, timezone)}
           </h3>
 
           {selectedEvents.length === 0 ? (

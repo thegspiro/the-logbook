@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { HelpLink } from '../../../components/HelpLink';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { toLocalISODate } from '../../../utils/dateFormatting';
 import { useRanks } from '../../../hooks/useRanks';
 import { useReportsStore } from '../store/reportsStore';
 import type { ReportCardDefinition, ReportData, DatePreset } from '../types';
@@ -329,8 +330,8 @@ export const ReportsPage: React.FC = () => {
     const prevEnd = new Date(start.getTime() - 1);
     const prevStart = new Date(prevEnd.getTime() - durationMs);
 
-    const prevStartStr = prevStart.toISOString().slice(0, 10);
-    const prevEndStr = prevEnd.toISOString().slice(0, 10);
+    const prevStartStr = toLocalISODate(prevStart, tz);
+    const prevEndStr = toLocalISODate(prevEnd, tz);
 
     void generateComparisonReport({
       report_type: activeReportType,

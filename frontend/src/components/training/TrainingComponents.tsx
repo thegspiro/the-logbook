@@ -17,7 +17,7 @@ import {
   ShieldCheck,
   Plus,
 } from 'lucide-react';
-import { differenceInDays, parseISO } from 'date-fns';
+import { daysBetween } from '../../utils/dateFormatting';
 import type {
   TrainingStatus,
   TrainingType,
@@ -147,8 +147,7 @@ export const CertificationExpiryBadge: React.FC<CertificationExpiryBadgeProps> =
   expirationDate,
   showDaysRemaining = true,
 }) => {
-  const expDate = parseISO(expirationDate);
-  const daysRemaining = differenceInDays(expDate, new Date());
+  const daysRemaining = daysBetween(expirationDate);
   const { classes, label } = getExpiryStyle(daysRemaining);
 
   return (

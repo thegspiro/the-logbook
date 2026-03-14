@@ -21,6 +21,7 @@ import { MobileCheckoutCard } from '../components/ux/MobileCheckoutCard';
 import { RETURN_CONDITION_OPTIONS } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
+import { formatDateCustom, getTodayLocalDate } from '../utils/dateFormatting';
 
 type TabView = 'active' | 'overdue';
 
@@ -115,12 +116,11 @@ export const InventoryCheckoutsPage: React.FC = () => {
     : currentList;
 
   const formatDate = (dateString: string) =>
-    new Date(dateString).toLocaleDateString('en-US', {
+    formatDateCustom(dateString, {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
-      timeZone: tz,
-    });
+    }, tz);
 
   if (loading) {
     return (
@@ -424,7 +424,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
                   <p className="text-theme-text-muted text-sm mb-4">{extendModal.itemName}</p>
                   {extendModal.currentDue && (
                     <p className="text-theme-text-secondary text-xs mb-3">
-                      Currently due: {new Date(extendModal.currentDue).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: tz })}
+                      Currently due: {formatDateCustom(extendModal.currentDue, { month: 'short', day: 'numeric', year: 'numeric' }, tz)}
                     </p>
                   )}
                   <div>
@@ -433,7 +433,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
                       id="admin-extend-date"
                       type="date"
                       value={extendDate}
-                      min={new Date().toISOString().split('T')[0] ?? ''}
+                      min={getTodayLocalDate(tz)}
                       onChange={(e) => setExtendDate(e.target.value)}
                       className="form-input focus:ring-emerald-500"
                     />
