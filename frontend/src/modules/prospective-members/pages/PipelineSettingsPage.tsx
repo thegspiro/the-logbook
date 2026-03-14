@@ -46,6 +46,7 @@ import toast from 'react-hot-toast';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { pipelineService } from '../services/api';
 import { PipelineBuilder } from '../components/PipelineBuilder';
+import { ReportStageGroupsEditor } from '../components/ReportStageGroupsEditor';
 import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import type {
@@ -1002,6 +1003,14 @@ export const PipelineSettingsPage: React.FC = () => {
                   />
                   Allow prospects to check their application status via a public link
                 </label>
+              </div>
+
+              {/* Report Stage Groups */}
+              <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg p-5">
+                <ReportStageGroupsEditor
+                  pipeline={currentPipeline}
+                  onSaved={handlePipelineUpdated}
+                />
               </div>
             </div>
           )}

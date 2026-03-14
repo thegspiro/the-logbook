@@ -27,6 +27,7 @@ import {
   Award,
   PhoneCall,
   GitCompareArrows,
+  UserPlus,
 } from 'lucide-react';
 import { HelpLink } from '../../../components/HelpLink';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -59,6 +60,8 @@ import {
   getComplianceStatusExportData,
   CallVolumeRenderer,
   getCallVolumeExportData,
+  PipelineOverviewRenderer,
+  getPipelineOverviewExportData,
 } from '../components/renderers';
 import type {
   MemberRosterReport,
@@ -73,6 +76,7 @@ import type {
   InventoryStatusReport,
   ComplianceStatusReport,
   CallVolumeReport,
+  PipelineOverviewReport,
 } from '../types';
 
 // ============================================================================
@@ -92,6 +96,7 @@ const REPORT_TYPE_MAP: Record<string, string> = {
   'inventory-status': 'inventory_status',
   'compliance-status': 'compliance_status',
   'call-volume': 'call_volume',
+  'pipeline-overview': 'pipeline_overview',
 };
 
 // ============================================================================
@@ -111,6 +116,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   Package,
   Award,
   PhoneCall,
+  UserPlus,
 };
 
 // ============================================================================
@@ -217,6 +223,15 @@ const REPORT_CARDS: ReportCardDefinition[] = [
     description: 'Call volume trends, incident type breakdown, and peak activity',
     icon: 'PhoneCall',
     category: 'operations',
+    available: true,
+    usesDateRange: true,
+  },
+  {
+    id: 'pipeline-overview',
+    title: 'Pipeline Overview',
+    description: 'Prospective member pipeline report with customizable stage grouping',
+    icon: 'UserPlus',
+    category: 'member',
     available: true,
     usesDateRange: true,
   },
@@ -358,6 +373,8 @@ export const ReportsPage: React.FC = () => {
         return <ComplianceStatusRenderer data={data as ComplianceStatusReport} />;
       case 'call_volume':
         return <CallVolumeRenderer data={data as CallVolumeReport} />;
+      case 'pipeline_overview':
+        return <PipelineOverviewRenderer data={data as PipelineOverviewReport} />;
       default:
         return (
           <pre className="text-theme-text-secondary max-h-[50vh] overflow-auto text-sm whitespace-pre-wrap">
@@ -385,6 +402,7 @@ export const ReportsPage: React.FC = () => {
       inventory_status: (d) => getInventoryStatusExportData(d as InventoryStatusReport),
       compliance_status: (d) => getComplianceStatusExportData(d as ComplianceStatusReport),
       call_volume: (d) => getCallVolumeExportData(d as CallVolumeReport),
+      pipeline_overview: (d) => getPipelineOverviewExportData(d as PipelineOverviewReport),
     };
 
     const fn = exportMap[reportType];

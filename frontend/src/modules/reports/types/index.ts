@@ -484,6 +484,49 @@ export interface SavedReportUpdate {
 }
 
 // ============================================================================
+// Report Data: Pipeline Overview
+// ============================================================================
+
+export interface PipelineOverviewGroupStage {
+  stage_name: string;
+  count: number;
+}
+
+export interface PipelineOverviewGroupEntry {
+  group_name: string;
+  prospect_count: number;
+  avg_days_in_group: number;
+  completion_rate: number;
+  stages: PipelineOverviewGroupStage[];
+}
+
+export interface PipelineOverviewProspectEntry {
+  name: string;
+  email: string;
+  status: string;
+  current_group: string;
+  current_stage: string;
+  days_in_pipeline: number;
+  applied_at?: string;
+}
+
+export interface PipelineOverviewReport {
+  report_type: 'pipeline_overview';
+  generated_at: string;
+  pipeline_name: string;
+  pipeline_id?: string;
+  total_applicants: number;
+  active_applicants: number;
+  converted_count: number;
+  rejected_count: number;
+  withdrawn_count: number;
+  on_hold_count: number;
+  avg_days_to_convert: number;
+  groups: PipelineOverviewGroupEntry[];
+  prospects: PipelineOverviewProspectEntry[];
+}
+
+// ============================================================================
 // Union type for all report responses
 // ============================================================================
 
@@ -500,4 +543,5 @@ export type ReportData =
   | InventoryStatusReport
   | ComplianceStatusReport
   | CallVolumeReport
+  | PipelineOverviewReport
   | Record<string, unknown>;

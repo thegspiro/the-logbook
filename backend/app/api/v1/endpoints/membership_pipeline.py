@@ -41,6 +41,7 @@ from app.schemas.membership_pipeline import (
     ProspectUpdate,
     PurgeInactiveRequest,
     PurgeInactiveResponse,
+    ReportStageGroupsUpdate,
     StepReorderRequest,
     TransferProspectRequest,
     TransferProspectResponse,
@@ -182,6 +183,59 @@ async def update_pipeline(
             status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found"
         )
     return pipeline
+
+
+@router.patch(
+    "/pipelines/{pipeline_id}/report-settings",
+    response_model=PipelineResponse,
+)
+async def update_pipeline_report_settings(
+    pipeline_id: UUID,
+    data: ReportStageGroupsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
+):
+    """
+    Update report stage groups for a pipeline.
+
+    Allows coordinators to configure which stages are merged
+    together when generating pipeline reports.
+
+    **Requires permission: members.manage or prospective_members.manage**
+    """
+    service = MembershipPipelineService(db)
+    pipeline = await service.get_pipeline(
+        str(pipeline_id), current_user.organization_id
+    )
+    if not pipeline:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found"
+        )
+
+    # Validate that all step_ids belong to this pipeline
+    valid_step_ids = {str(step.id) for step in pipeline.steps}
+    for group in data.report_stage_groups:
+        for step_id in group.step_ids:
+            if step_id not in valid_step_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Step ID {step_id} does not belong to this pipeline",
+                )
+
+    groups_data = [g.model_dump() for g in data.report_stage_groups]
+    updated = await service.update_pipeline(
+        str(pipeline_id),
+        current_user.organization_id,
+        {"report_stage_groups": groups_data},
+    )
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update report settings",
+        )
+    return updated
 
 
 @router.delete("/pipelines/{pipeline_id}", status_code=status.HTTP_204_NO_CONTENT)

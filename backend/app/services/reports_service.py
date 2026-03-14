@@ -80,6 +80,7 @@ class ReportsService:
             "inventory_status": self._generate_inventory_status,
             "compliance_status": self._generate_compliance_status,
             "call_volume": self._generate_call_volume,
+            "pipeline_overview": self._generate_pipeline_overview,
         }
 
         generator = generators.get(report_type)
@@ -1310,6 +1311,14 @@ class ReportsService:
                     "available": True,
                     "usesDateRange": True,
                 },
+                {
+                    "id": "pipeline_overview",
+                    "title": "Pipeline Overview",
+                    "description": "Prospective member pipeline report with customizable stage grouping for leadership.",
+                    "category": "member",
+                    "available": True,
+                    "usesDateRange": True,
+                },
             ]
         }
 
@@ -1574,4 +1583,387 @@ class ReportsService:
                 "hours_by_category": hours_by_category,
             },
             "entries": entries,
+        }
+
+    # ============================================
+    # Pipeline Overview Report
+    # ============================================
+
+    async def _generate_pipeline_overview(
+        self,
+        organization_id: UUID,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Generate a pipeline overview report with configurable stage grouping.
+
+        Filters:
+          - pipeline_id: specific pipeline (uses default if omitted)
+          - stage_groups: ad-hoc override for grouping config
+        """
+        from app.models.membership_pipeline import (
+            MembershipPipeline,
+            MembershipPipelineStep,
+            ProspectiveMember,
+            ProspectStatus,
+            ProspectStepProgress,
+            StepProgressStatus,
+        )
+
+        org_id = str(organization_id)
+        filters = filters or {}
+        pipeline_id = filters.get("pipeline_id")
+
+        # Find the pipeline
+        if pipeline_id:
+            pipeline_query = select(MembershipPipeline).where(
+                MembershipPipeline.id == pipeline_id,
+                MembershipPipeline.organization_id == org_id,
+            )
+        else:
+            # Use the default pipeline
+            pipeline_query = select(MembershipPipeline).where(
+                MembershipPipeline.organization_id == org_id,
+                MembershipPipeline.is_default == True,  # noqa: E712
+                MembershipPipeline.is_active == True,  # noqa: E712
+            )
+        pipeline_result = await self.db.execute(pipeline_query)
+        pipeline = pipeline_result.scalar_one_or_none()
+
+        if not pipeline:
+            # Fallback: any active pipeline
+            fallback_query = select(MembershipPipeline).where(
+                MembershipPipeline.organization_id == org_id,
+                MembershipPipeline.is_active == True,  # noqa: E712
+            )
+            fallback_result = await self.db.execute(fallback_query)
+            pipeline = fallback_result.scalars().first()
+
+        if not pipeline:
+            return {
+                "report_type": "pipeline_overview",
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "pipeline_name": "No pipeline found",
+                "pipeline_id": None,
+                "total_applicants": 0,
+                "active_applicants": 0,
+                "converted_count": 0,
+                "rejected_count": 0,
+                "withdrawn_count": 0,
+                "on_hold_count": 0,
+                "avg_days_to_convert": 0,
+                "groups": [],
+                "prospects": [],
+            }
+
+        # Load pipeline steps
+        steps_query = (
+            select(MembershipPipelineStep)
+            .where(MembershipPipelineStep.pipeline_id == pipeline.id)
+            .order_by(MembershipPipelineStep.sort_order)
+        )
+        steps_result = await self.db.execute(steps_query)
+        steps = list(steps_result.scalars().all())
+        step_map = {step.id: step for step in steps}
+
+        # Determine stage groups: ad-hoc override > saved config > ungrouped
+        stage_groups = filters.get("stage_groups")
+        if not stage_groups:
+            stage_groups = pipeline.report_stage_groups or []
+
+        # Build prospect query with date filters
+        prospect_conditions = [
+            ProspectiveMember.pipeline_id == pipeline.id,
+            ProspectiveMember.organization_id == org_id,
+        ]
+        if start_date:
+            prospect_conditions.append(
+                ProspectiveMember.created_at
+                >= datetime.combine(start_date, datetime.min.time())
+            )
+        if end_date:
+            prospect_conditions.append(
+                ProspectiveMember.created_at
+                <= datetime.combine(end_date, datetime.max.time())
+            )
+
+        prospects_query = select(ProspectiveMember).where(*prospect_conditions)
+        prospects_result = await self.db.execute(prospects_query)
+        prospects = list(prospects_result.scalars().all())
+
+        # Count by status
+        status_counts: Dict[str, int] = {}
+        for s in ProspectStatus:
+            status_counts[s.value] = 0
+        for p in prospects:
+            status_val = p.status.value if hasattr(p.status, "value") else p.status
+            status_counts[status_val] = status_counts.get(status_val, 0) + 1
+
+        total = len(prospects)
+        active = status_counts.get("active", 0)
+        converted = status_counts.get("transferred", 0)
+        rejected = status_counts.get("rejected", 0)
+        withdrawn = status_counts.get("withdrawn", 0)
+        on_hold = status_counts.get("on_hold", 0)
+
+        # Avg days to convert for transferred prospects
+        transferred_prospects = [
+            p
+            for p in prospects
+            if (p.status.value if hasattr(p.status, "value") else p.status)
+            == "transferred"
+            and p.transferred_at
+        ]
+        if transferred_prospects:
+            total_days = sum(
+                (p.transferred_at - p.created_at).days for p in transferred_prospects
+            )
+            avg_days = round(total_days / len(transferred_prospects), 1)
+        else:
+            avg_days = 0
+
+        # Load step progress for all prospects in this pipeline
+        prospect_ids = [p.id for p in prospects]
+        progress_map: Dict[str, Dict[str, Any]] = {}
+        if prospect_ids:
+            progress_query = select(ProspectStepProgress).where(
+                ProspectStepProgress.prospect_id.in_(prospect_ids)
+            )
+            progress_result = await self.db.execute(progress_query)
+            for prog in progress_result.scalars().all():
+                key = f"{prog.prospect_id}:{prog.step_id}"
+                progress_map[key] = {
+                    "status": (
+                        prog.status.value
+                        if hasattr(prog.status, "value")
+                        else prog.status
+                    ),
+                    "completed_at": prog.completed_at,
+                    "created_at": prog.created_at,
+                }
+
+        # Build group data
+        grouped_step_ids: set = set()
+        groups_data = []
+
+        for group in stage_groups:
+            group_name = group.get("name", "Unnamed Group") if isinstance(
+                group, dict
+            ) else group.name
+            group_step_ids = (
+                group.get("step_ids", [])
+                if isinstance(group, dict)
+                else group.step_ids
+            )
+            grouped_step_ids.update(group_step_ids)
+
+            # Count prospects currently in any of the group's steps
+            group_count = 0
+            for p in prospects:
+                status_val = (
+                    p.status.value if hasattr(p.status, "value") else p.status
+                )
+                if status_val == "active" and p.current_step_id in group_step_ids:
+                    group_count += 1
+
+            # Avg days in group: time from first step entry to last step completion
+            days_in_group_list = []
+            for p in prospects:
+                first_entry = None
+                last_completion = None
+                for sid in group_step_ids:
+                    prog = progress_map.get(f"{p.id}:{sid}")
+                    if prog:
+                        if prog["created_at"] and (
+                            first_entry is None or prog["created_at"] < first_entry
+                        ):
+                            first_entry = prog["created_at"]
+                        if prog["completed_at"] and (
+                            last_completion is None
+                            or prog["completed_at"] > last_completion
+                        ):
+                            last_completion = prog["completed_at"]
+                if first_entry and last_completion:
+                    days_in_group_list.append(
+                        (last_completion - first_entry).days
+                    )
+
+            avg_days_in_group = (
+                round(sum(days_in_group_list) / len(days_in_group_list), 1)
+                if days_in_group_list
+                else 0
+            )
+
+            # Completion rate: prospects who completed ALL steps in this group
+            completed_count = 0
+            total_who_reached = 0
+            for p in prospects:
+                reached = False
+                all_completed = True
+                for sid in group_step_ids:
+                    prog = progress_map.get(f"{p.id}:{sid}")
+                    if prog:
+                        reached = True
+                        if prog["status"] != StepProgressStatus.COMPLETED.value:
+                            all_completed = False
+                    else:
+                        all_completed = False
+                if reached:
+                    total_who_reached += 1
+                    if all_completed:
+                        completed_count += 1
+
+            completion_rate = (
+                round(completed_count / total_who_reached * 100, 1)
+                if total_who_reached > 0
+                else 0
+            )
+
+            # Per-stage breakdown within the group
+            stage_breakdown = []
+            for sid in group_step_ids:
+                step = step_map.get(sid)
+                step_name = step.name if step else "Unknown"
+                count = sum(
+                    1
+                    for p in prospects
+                    if (
+                        p.status.value
+                        if hasattr(p.status, "value")
+                        else p.status
+                    )
+                    == "active"
+                    and p.current_step_id == sid
+                )
+                stage_breakdown.append(
+                    {"stage_name": step_name, "count": count}
+                )
+
+            groups_data.append(
+                {
+                    "group_name": group_name,
+                    "prospect_count": group_count,
+                    "avg_days_in_group": avg_days_in_group,
+                    "completion_rate": completion_rate,
+                    "stages": stage_breakdown,
+                }
+            )
+
+        # Add ungrouped steps as individual entries
+        for step in steps:
+            if step.id not in grouped_step_ids:
+                count = sum(
+                    1
+                    for p in prospects
+                    if (
+                        p.status.value
+                        if hasattr(p.status, "value")
+                        else p.status
+                    )
+                    == "active"
+                    and p.current_step_id == step.id
+                )
+                # Avg days for this single step
+                days_list = []
+                for p in prospects:
+                    prog = progress_map.get(f"{p.id}:{step.id}")
+                    if prog and prog["created_at"] and prog["completed_at"]:
+                        days_list.append(
+                            (prog["completed_at"] - prog["created_at"]).days
+                        )
+                avg_step_days = (
+                    round(sum(days_list) / len(days_list), 1)
+                    if days_list
+                    else 0
+                )
+
+                # Completion rate
+                completed = sum(
+                    1
+                    for p in prospects
+                    if progress_map.get(f"{p.id}:{step.id}", {}).get("status")
+                    == StepProgressStatus.COMPLETED.value
+                )
+                reached = sum(
+                    1
+                    for p in prospects
+                    if f"{p.id}:{step.id}" in progress_map
+                )
+                rate = (
+                    round(completed / reached * 100, 1)
+                    if reached > 0
+                    else 0
+                )
+
+                groups_data.append(
+                    {
+                        "group_name": step.name,
+                        "prospect_count": count,
+                        "avg_days_in_group": avg_step_days,
+                        "completion_rate": rate,
+                        "stages": [
+                            {"stage_name": step.name, "count": count}
+                        ],
+                    }
+                )
+
+        # Per-prospect detail rows
+        prospect_rows = []
+        for p in prospects:
+            status_val = (
+                p.status.value if hasattr(p.status, "value") else p.status
+            )
+            current_step = step_map.get(p.current_step_id)
+            current_step_name = current_step.name if current_step else "—"
+
+            # Find which group the prospect's current step belongs to
+            current_group = current_step_name
+            if p.current_step_id:
+                for group in stage_groups:
+                    g_step_ids = (
+                        group.get("step_ids", [])
+                        if isinstance(group, dict)
+                        else group.step_ids
+                    )
+                    g_name = (
+                        group.get("name", "")
+                        if isinstance(group, dict)
+                        else group.name
+                    )
+                    if p.current_step_id in g_step_ids:
+                        current_group = g_name
+                        break
+
+            days_in_pipeline = (
+                datetime.now(timezone.utc) - p.created_at
+            ).days if p.created_at else 0
+
+            prospect_rows.append(
+                {
+                    "name": f"{p.first_name} {p.last_name}",
+                    "email": p.email,
+                    "status": status_val,
+                    "current_group": current_group,
+                    "current_stage": current_step_name,
+                    "days_in_pipeline": days_in_pipeline,
+                    "applied_at": p.created_at.isoformat() if p.created_at else None,
+                }
+            )
+
+        return {
+            "report_type": "pipeline_overview",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "pipeline_name": pipeline.name,
+            "pipeline_id": pipeline.id,
+            "total_applicants": total,
+            "active_applicants": active,
+            "converted_count": converted,
+            "rejected_count": rejected,
+            "withdrawn_count": withdrawn,
+            "on_hold_count": on_hold,
+            "avg_days_to_convert": avg_days,
+            "groups": groups_data,
+            "prospects": prospect_rows,
         }

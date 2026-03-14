@@ -119,6 +119,7 @@ class MembershipPipeline(Base):
     auto_transfer_on_approval = Column(Boolean, default=False)
     inactivity_config = Column(JSON, default=dict)
     public_status_enabled = Column(Boolean, default=False)
+    report_stage_groups = Column(JSON, default=list)
 
     created_by = Column(String(36), ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
