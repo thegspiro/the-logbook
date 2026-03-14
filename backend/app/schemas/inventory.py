@@ -1206,7 +1206,7 @@ class NFPASummaryResponse(BaseModel):
 
 
 class SizeVariantCreate(BaseModel):
-    """Create multiple pool items from a base item with different sizes/colors."""
+    """Create multiple pool items from a base item with different sizes/colors/styles."""
 
     base_name: str = Field(
         ...,
@@ -1224,6 +1224,11 @@ class SizeVariantCreate(BaseModel):
         description="Colors to create variants for (creates size×color matrix). "
         "If empty, only size variants are created.",
     )
+    styles: Optional[List[GarmentStyleLiteral]] = Field(
+        None,
+        description="Garment styles to create variants for (creates size×style "
+        "or size×color×style matrix). If empty, styles are omitted.",
+    )
     category_id: Optional[UUID] = None
     quantity_per_variant: int = Field(
         default=0, ge=0, description="Starting quantity for each variant"
@@ -1236,6 +1241,10 @@ class SizeVariantCreate(BaseModel):
     storage_area_id: Optional[UUID] = None
     station: Optional[str] = Field(None, max_length=100)
     notes: Optional[str] = None
+    create_variant_group: bool = Field(
+        default=True,
+        description="Automatically create a variant group and link all items to it.",
+    )
 
 
 class SizeVariantCreateResponse(BaseModel):
@@ -1243,6 +1252,7 @@ class SizeVariantCreateResponse(BaseModel):
 
     created_count: int
     items: List[InventoryItemResponse]
+    variant_group_id: Optional[UUID] = None
 
 
 # ============================================

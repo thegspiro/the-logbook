@@ -3302,44 +3302,100 @@ class InventoryService:
         base_name: str,
         sizes: List[str],
         colors: Optional[List[str]] = None,
+        styles: Optional[List[str]] = None,
+        create_variant_group: bool = True,
         **kwargs: Any,
-    ) -> List["InventoryItem"]:
-        """Create multiple pool items from a base name × sizes × colors matrix."""
-        items_created = []
-        combos: List[Tuple[str, Optional[str]]] = []
+    ) -> Tuple[List["InventoryItem"], Optional[str]]:
+        """Create pool items from a base name × sizes × colors × styles matrix.
 
-        if colors:
-            for size in sizes:
-                for color in colors:
-                    combos.append((size, color))
-        else:
-            for size in sizes:
-                combos.append((size, None))
+        Returns a tuple of (items_created, variant_group_id_or_None).
+        """
+        from app.models.inventory import GarmentStyle, StandardSize
 
-        for size, color in combos:
+        # Build the combination matrix: (size, color|None, style|None)
+        combos: List[Tuple[str, Optional[str], Optional[str]]] = []
+
+        style_list = styles or [None]  # type: ignore[list-item]
+        color_list = colors or [None]  # type: ignore[list-item]
+
+        for size in sizes:
+            for color in color_list:
+                for style in style_list:
+                    combos.append((size, color, style))
+
+        # Optionally create a variant group to link all items
+        variant_group_id: Optional[str] = None
+        if create_variant_group:
+            group = ItemVariantGroup(
+                organization_id=str(organization_id),
+                name=base_name,
+                category_id=(
+                    str(kwargs["category_id"])
+                    if kwargs.get("category_id")
+                    else None
+                ),
+                base_price=kwargs.get("purchase_price"),
+                base_replacement_cost=kwargs.get("replacement_cost"),
+                unit_of_measure=kwargs.get("unit_of_measure"),
+                created_by=str(created_by),
+                active=True,
+            )
+            self.db.add(group)
+            await self.db.flush()
+            variant_group_id = group.id
+
+        items_created: List[InventoryItem] = []
+
+        for size, color, style in combos:
             name_parts = [base_name, size]
             if color:
                 name_parts.append(color)
+            if style:
+                # Human-readable style label for the name
+                style_label = style.replace("_", " ").title()
+                name_parts.append(style_label)
             item_name = " — ".join(name_parts)
+
+            # Map size string to StandardSize enum if it matches
+            std_size = None
+            size_lower = size.lower()
+            for member in StandardSize:
+                if member.value == size_lower:
+                    std_size = member
+                    break
+
+            # Map style string to GarmentStyle enum if it matches
+            garment_style = None
+            if style:
+                for member in GarmentStyle:
+                    if member.value == style:
+                        garment_style = member
+                        break
 
             item = InventoryItem(
                 organization_id=str(organization_id),
                 name=item_name,
                 size=size,
+                standard_size=std_size,
                 color=color,
+                style=garment_style,
                 tracking_type=TrackingType.POOL,
                 quantity=kwargs.get("quantity_per_variant", 0),
                 quantity_issued=0,
                 condition=ItemCondition.GOOD,
                 status=ItemStatus.AVAILABLE,
                 category_id=(
-                    str(kwargs["category_id"]) if kwargs.get("category_id") else None
+                    str(kwargs["category_id"])
+                    if kwargs.get("category_id")
+                    else None
                 ),
                 replacement_cost=kwargs.get("replacement_cost"),
                 purchase_price=kwargs.get("purchase_price"),
                 unit_of_measure=kwargs.get("unit_of_measure"),
                 location_id=(
-                    str(kwargs["location_id"]) if kwargs.get("location_id") else None
+                    str(kwargs["location_id"])
+                    if kwargs.get("location_id")
+                    else None
                 ),
                 storage_area_id=(
                     str(kwargs["storage_area_id"])
@@ -3348,6 +3404,7 @@ class InventoryService:
                 ),
                 station=kwargs.get("station"),
                 notes=kwargs.get("notes"),
+                variant_group_id=variant_group_id,
                 created_by=str(created_by),
                 active=True,
             )
@@ -3358,7 +3415,7 @@ class InventoryService:
         for item in items_created:
             await self.db.refresh(item)
 
-        return items_created
+        return items_created, variant_group_id
 
     # ------------------------------------------------------------------
     # Cost Recovery
