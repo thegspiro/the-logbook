@@ -2647,14 +2647,15 @@ async def send_event_reminders(
 
     await log_audit_event(
         db=db,
-        user_id=str(current_user.id),
-        action="event.send_reminders",
-        resource_type="event",
-        resource_id=str(event_id),
-        details={
+        event_type="event.send_reminders",
+        event_category="events",
+        severity="info",
+        event_data={
+            "event_id": str(event_id),
             "reminder_type": body.reminder_type,
             "sent_count": len(user_ids),
         },
+        user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),
     )
 
