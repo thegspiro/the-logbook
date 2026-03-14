@@ -148,6 +148,7 @@ export interface MeetingStageConfig {
   linked_event_type?: string | undefined;
   linked_event_category?: string | undefined;
   linked_event_id?: string | undefined;
+  auto_advance?: boolean | undefined;
 }
 
 export interface StatusPageToggleConfig {
@@ -181,6 +182,7 @@ export interface ReferenceCheckConfig {
   reference_types: string[];
   collect_method: 'form' | 'manual';
   require_all_before_advance: boolean;
+  auto_advance?: boolean | undefined;
 }
 
 export interface ChecklistItemConfig {
@@ -192,12 +194,14 @@ export interface ChecklistItemConfig {
 export interface ChecklistConfig {
   items: ChecklistItemConfig[];
   require_all: boolean;
+  auto_advance?: boolean | undefined;
 }
 
 export interface InterviewRequirementConfig {
   required_count: number;
   required_recommendation?: InterviewRecommendation | undefined;
   interviewer_roles?: string[] | undefined;
+  auto_advance?: boolean | undefined;
 }
 
 export interface MultiApprovalConfig {
@@ -209,6 +213,7 @@ export interface MultiApprovalConfig {
 export interface MedicalScreeningStageConfig {
   required_screenings: string[];
   require_all_passed: boolean;
+  auto_advance?: boolean | undefined;
 }
 
 export type StageConfig =

@@ -1732,6 +1732,68 @@ class MembershipPipelineService:
         )
         self.db.add(log)
 
+    async def _try_auto_advance_step(
+        self,
+        prospect_id: str,
+        organization_id: str,
+        step_id: str,
+        completed_by: str,
+        trigger: str,
+        action_result: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """
+        Attempt to auto-advance a prospect past the given step.
+
+        Checks whether the step has ``auto_advance`` enabled in its config
+        and whether the prospect is currently on that step.  If both
+        conditions are met, calls ``complete_step`` which will validate
+        step-specific requirements before advancing.
+
+        Returns True if auto-advance succeeded, False otherwise.
+        """
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect or not prospect.pipeline:
+            return False
+
+        step = next(
+            (
+                s
+                for s in prospect.pipeline.steps
+                if str(s.id) == str(step_id)
+            ),
+            None,
+        )
+        if (
+            not step
+            or not (step.config or {}).get("auto_advance")
+            or str(prospect.current_step_id) != str(step_id)
+        ):
+            return False
+
+        try:
+            result = {"auto_advanced": True, "trigger": trigger}
+            if action_result:
+                result.update(action_result)
+            await self.complete_step(
+                prospect_id=prospect_id,
+                organization_id=organization_id,
+                step_id=step_id,
+                completed_by=completed_by,
+                notes=f"Auto-advanced on {trigger}",
+                action_result=result,
+            )
+            logger.info(
+                f"Auto-advanced prospect {prospect_id} "
+                f"past step '{step.name}' on {trigger}"
+            )
+            return True
+        except Exception as e:
+            logger.error(
+                f"Failed to auto-advance prospect "
+                f"{prospect_id} on {trigger}: {e}"
+            )
+            return False
+
     # =========================================================================
     # Template Seeding
     # =========================================================================
@@ -2445,43 +2507,15 @@ class MembershipPipelineService:
         await self.db.commit()
 
         # Auto-advance if the step has auto_advance enabled
-        if step_id and prospect.pipeline:
-            step = next(
-                (
-                    s
-                    for s in prospect.pipeline.steps
-                    if str(s.id) == str(step_id)
-                ),
-                None,
+        if step_id:
+            await self._try_auto_advance_step(
+                prospect_id=prospect_id,
+                organization_id=organization_id,
+                step_id=step_id,
+                completed_by=uploaded_by or "system",
+                trigger="document upload",
+                action_result={"document_id": doc.id},
             )
-            if (
-                step
-                and (step.config or {}).get("auto_advance")
-                and str(prospect.current_step_id) == str(step_id)
-            ):
-                try:
-                    await self.complete_step(
-                        prospect_id=prospect_id,
-                        organization_id=organization_id,
-                        step_id=step_id,
-                        completed_by=uploaded_by or "system",
-                        notes="Auto-advanced on document upload",
-                        action_result={
-                            "document_id": doc.id,
-                            "auto_advanced": True,
-                        },
-                    )
-                    logger.info(
-                        f"Auto-advanced prospect {prospect_id} "
-                        f"past step '{step.name}' on "
-                        f"document upload"
-                    )
-                except Exception as e:
-                    logger.error(
-                        f"Failed to auto-advance prospect "
-                        f"{prospect_id} on document upload: "
-                        f"{e}"
-                    )
 
         return doc
 
@@ -3058,6 +3092,20 @@ class MembershipPipelineService:
         )
 
         await self.db.commit()
+
+        # Auto-advance if the step has auto_advance enabled
+        effective_step_id = step_id or (
+            str(prospect.current_step_id) if prospect.current_step_id else None
+        )
+        if effective_step_id and organization_id:
+            await self._try_auto_advance_step(
+                prospect_id=prospect_id,
+                organization_id=organization_id,
+                step_id=effective_step_id,
+                completed_by=interviewer_id,
+                trigger="interview submission",
+                action_result={"interview_id": interview.id},
+            )
 
         # Re-fetch to get relationships loaded
         return await self.get_interview(interview.id, organization_id)  # type: ignore[return-value]

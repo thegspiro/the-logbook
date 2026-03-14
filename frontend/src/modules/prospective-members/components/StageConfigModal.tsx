@@ -1215,6 +1215,18 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
                   />
                 </div>
+                <label className="text-theme-text-secondary flex items-center gap-2 text-sm mt-4">
+                  <input
+                    type="checkbox"
+                    checked={meetingConfig.auto_advance ?? false}
+                    onChange={(e) => setConfig({ ...meetingConfig, auto_advance: e.target.checked })}
+                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                  />
+                  Auto-advance when attendance is recorded
+                </label>
+                <p className="text-theme-text-muted text-xs ml-6">
+                  Automatically complete this step and advance the prospect when their attendance is recorded at the linked event.
+                </p>
               </div>
             )}
 
@@ -1749,6 +1761,18 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                   />
                   Require all references verified before advancing
                 </label>
+                <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={referenceCheckConfig.auto_advance ?? false}
+                    onChange={(e) => setConfig({ ...referenceCheckConfig, auto_advance: e.target.checked })}
+                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                  />
+                  Auto-advance when all references are verified
+                </label>
+                <p className="text-theme-text-muted text-xs ml-6">
+                  Automatically complete this step and advance the prospect when the required number of references are verified.
+                </p>
               </div>
             )}
 
@@ -1831,6 +1855,18 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                   />
                   Require all items completed before advancing
                 </label>
+                <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={checklistConfig.auto_advance ?? false}
+                    onChange={(e) => setConfig({ ...checklistConfig, auto_advance: e.target.checked })}
+                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                  />
+                  Auto-advance when checklist is completed
+                </label>
+                <p className="text-theme-text-muted text-xs ml-6">
+                  Automatically complete this step and advance the prospect when all required checklist items are checked off.
+                </p>
               </div>
             )}
 
@@ -1882,6 +1918,18 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                 <p className="text-theme-text-muted text-xs">
                   Interviews are managed in the applicant detail view. This stage gates advancement until the required
                   number of interviews are recorded.
+                </p>
+                <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={interviewReqConfig.auto_advance ?? false}
+                    onChange={(e) => setConfig({ ...interviewReqConfig, auto_advance: e.target.checked })}
+                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                  />
+                  Auto-advance when interview requirement is met
+                </label>
+                <p className="text-theme-text-muted text-xs ml-6">
+                  Automatically complete this step and advance the prospect when the required number of interviews are recorded.
                 </p>
               </div>
             )}
@@ -2043,6 +2091,18 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                 <p className="text-theme-text-muted text-xs">
                   Medical screening records are managed in the Medical Screening module. This stage checks that the
                   prospect has current, passing records for each required screening type.
+                </p>
+                <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={medicalScreeningConfig.auto_advance ?? false}
+                    onChange={(e) => setConfig({ ...medicalScreeningConfig, auto_advance: e.target.checked })}
+                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                  />
+                  Auto-advance when all screenings pass
+                </label>
+                <p className="text-theme-text-muted text-xs ml-6">
+                  Automatically complete this step and advance the prospect when all required medical screenings are passed.
                 </p>
               </div>
             )}
