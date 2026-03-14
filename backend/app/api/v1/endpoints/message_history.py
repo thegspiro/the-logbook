@@ -6,6 +6,8 @@ Provides:
 - POST /message-history/test-email — send a test email to verify configuration
 """
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from loguru import logger
 from sqlalchemy import func, select
@@ -35,6 +37,12 @@ async def list_message_history(
     limit: int = Query(50, ge=1, le=200),
     status_filter: str | None = Query(None),
     search: str | None = Query(None),
+    sent_after: datetime | None = Query(
+        None, description="Filter: only records sent at or after this UTC datetime"
+    ),
+    sent_before: datetime | None = Query(
+        None, description="Filter: only records sent at or before this UTC datetime"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("settings.manage", "organization.update_settings")
@@ -43,7 +51,8 @@ async def list_message_history(
     """
     List all emails sent by the application for the current organization.
 
-    Supports pagination, status filtering, and search by subject or recipient.
+    Supports pagination, status filtering, date-range filtering, and search
+    by subject or recipient.
     """
     q = select(MessageHistory).where(
         MessageHistory.organization_id == current_user.organization_id
@@ -65,6 +74,11 @@ async def list_message_history(
             (MessageHistory.subject.ilike(pattern))
             | (MessageHistory.to_email.ilike(pattern))
         )
+
+    if sent_after:
+        q = q.where(MessageHistory.sent_at >= sent_after)
+    if sent_before:
+        q = q.where(MessageHistory.sent_at <= sent_before)
 
     # Total count
     count_q = select(func.count()).select_from(q.subquery())

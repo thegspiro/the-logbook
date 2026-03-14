@@ -16,6 +16,7 @@ import {
   Loader2,
   Mail,
   Filter,
+  Calendar,
 } from 'lucide-react';
 import { messageHistoryService } from '../../../services/api';
 import type { MessageHistoryRecord, EmailTemplate } from '../types';
@@ -34,6 +35,8 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
   const [isLoading, setIsLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [sentAfter, setSentAfter] = useState('');
+  const [sentBefore, setSentBefore] = useState('');
 
   // Test email state
   const [showTestForm, setShowTestForm] = useState(false);
@@ -49,6 +52,10 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
         limit: PAGE_SIZE,
         status_filter: statusFilter || undefined,
         search: search || undefined,
+        sent_after: sentAfter ? new Date(sentAfter).toISOString() : undefined,
+        sent_before: sentBefore
+          ? new Date(sentBefore + 'T23:59:59').toISOString()
+          : undefined,
       });
       setItems(result.items);
       setTotal(result.total);
@@ -57,7 +64,7 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
     } finally {
       setIsLoading(false);
     }
-  }, [page, statusFilter, search]);
+  }, [page, statusFilter, search, sentAfter, sentBefore]);
 
   useEffect(() => {
     void fetchHistory();
@@ -66,7 +73,7 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
   // Reset page when filters change
   useEffect(() => {
     setPage(0);
-  }, [search, statusFilter]);
+  }, [search, statusFilter, sentAfter, sentBefore]);
 
   const handleSendTest = async () => {
     if (!testEmail.trim()) {
@@ -224,6 +231,24 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
             <option value="sent">Sent</option>
             <option value="failed">Failed</option>
           </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <Calendar className="h-4 w-4 text-theme-text-muted" />
+          <input
+            type="date"
+            value={sentAfter}
+            onChange={(e) => setSentAfter(e.target.value)}
+            className={selectClass}
+            title="Sent after"
+          />
+          <span className="text-xs text-theme-text-muted">to</span>
+          <input
+            type="date"
+            value={sentBefore}
+            onChange={(e) => setSentBefore(e.target.value)}
+            className={selectClass}
+            title="Sent before"
+          />
         </div>
       </div>
 

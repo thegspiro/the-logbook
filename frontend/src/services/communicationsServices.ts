@@ -277,6 +277,8 @@ export const messageHistoryService = {
     limit?: number | undefined;
     status_filter?: string | undefined;
     search?: string | undefined;
+    sent_after?: string | undefined;
+    sent_before?: string | undefined;
   }): Promise<MessageHistoryListResponse> {
     const response = await api.get<MessageHistoryListResponse>(
       '/message-history',

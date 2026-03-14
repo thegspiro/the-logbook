@@ -1529,6 +1529,49 @@ async def lifespan(app: FastAPI):
 
     asyncio.create_task(backfill_pipeline_form_integrations())
 
+    # Start in-process scheduled email processor (avoids need for external cron)
+    _scheduler_task: asyncio.Task | None = None  # type: ignore[type-arg]
+
+    async def _scheduled_email_loop():
+        """Background loop that processes due scheduled emails every 5 minutes."""
+        interval = 300  # 5 minutes
+        await asyncio.sleep(10)  # Let the server finish starting
+        if not await _try_claim_background_task("scheduled_email_loop", ttl=interval + 60):
+            logger.debug(
+                f"Scheduled email loop skipped (worker PID {_worker_pid}) "
+                "- another worker is handling it"
+            )
+            return
+        logger.info(f"Scheduled email processor started (worker PID {_worker_pid})")
+        while True:
+            try:
+                from app.core.database import async_session_factory
+                from app.services.scheduled_tasks import run_scheduled_emails
+
+                async with async_session_factory() as db:
+                    result = await run_scheduled_emails(db)
+                    processed = result.get("total_processed", 0)
+                    if processed > 0:
+                        logger.info(
+                            f"Scheduled email loop: processed {processed} "
+                            f"(sent={result.get('sent', 0)}, failed={result.get('failed', 0)})"
+                        )
+            except Exception as e:
+                logger.error(f"Scheduled email loop error: {e}")
+            # Renew the Redis claim so other workers don't start a duplicate loop
+            if cache_manager.is_connected and cache_manager.redis_client:
+                try:
+                    await cache_manager.redis_client.set(
+                        "startup_task:scheduled_email_loop",
+                        str(_worker_pid),
+                        ex=interval + 60,
+                    )
+                except Exception:
+                    pass
+            await asyncio.sleep(interval)
+
+    _scheduler_task = asyncio.create_task(_scheduled_email_loop())
+
     # Mark server as ready
     startup_status.set_ready()
     logger.info(f"Server started on port {settings.PORT} (worker PID {_worker_pid})")
@@ -1539,6 +1582,12 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info(f"Shutting down gracefully (worker PID {_worker_pid})...")
+    if _scheduler_task and not _scheduler_task.done():
+        _scheduler_task.cancel()
+        try:
+            await _scheduler_task
+        except asyncio.CancelledError:
+            pass
     await ws_manager.stop_listener()
     await database_manager.disconnect()
     await cache_manager.disconnect()
