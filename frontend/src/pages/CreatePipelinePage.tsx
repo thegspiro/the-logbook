@@ -1075,7 +1075,7 @@ const CreatePipelinePage: React.FC = () => {
                       ? 'bg-red-600 text-white'
                       : isComplete
                       ? 'text-red-400 hover:bg-theme-surface-hover'
-                      : 'text-theme-text-muted hover:text-theme-text-muted'
+                      : 'text-theme-text-muted hover:text-theme-text-secondary'
                   }`}
                 >
                   {isComplete ? (
