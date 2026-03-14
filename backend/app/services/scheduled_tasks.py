@@ -48,6 +48,9 @@ Recommended crontab (add to host or container cron):
 
 # Daily at 6:30 AM — compliance auto-report generation (monthly on configured day, yearly on Jan 1)
 30 6 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=compliance_auto_reports
+
+# Daily at 3:00 AM — message history cleanup (delete records older than 90 days)
+0 3 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=message_history_cleanup
 -----------------------------------------------------
 """
 
@@ -152,6 +155,12 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "06:30",
         "cron": "30 6 * * *",
+    },
+    "message_history_cleanup": {
+        "description": "Delete message history records older than 90 days to prevent unbounded table growth",
+        "frequency": "daily",
+        "recommended_time": "03:00",
+        "cron": "0 3 * * *",
     },
 }
 
@@ -1162,7 +1171,41 @@ async def run_audit_log_archival(db: AsyncSession) -> Dict[str, Any]:
 
 
 async def run_scheduled_emails(db: AsyncSession) -> Dict[str, Any]:
-    """Process pending scheduled emails that are due to be sent."""
+    """Process pending scheduled emails that are due to be sent.
+
+    Uses a Redis lock to prevent concurrent execution when overlapping
+    cron triggers fire (e.g. two workers processing the same batch).
+    """
+    from app.core.cache import cache_manager
+
+    # Acquire a Redis lock to prevent concurrent execution
+    lock_key = "lock:run_scheduled_emails"
+    lock_ttl = 300  # 5 minutes max
+    if cache_manager.is_connected and cache_manager.redis_client:
+        acquired = await cache_manager.redis_client.set(
+            lock_key, "1", nx=True, ex=lock_ttl
+        )
+        if not acquired:
+            logger.info("Scheduled emails: skipped (another instance is running)")
+            return {"sent": 0, "failed": 0, "total_processed": 0, "skipped": True}
+    else:
+        logger.warning(
+            "Scheduled emails: Redis unavailable, running without lock"
+        )
+
+    try:
+        return await _run_scheduled_emails_inner(db)
+    finally:
+        # Release the lock
+        if cache_manager.is_connected and cache_manager.redis_client:
+            try:
+                await cache_manager.redis_client.delete(lock_key)
+            except Exception:
+                pass
+
+
+async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
+    """Inner implementation for run_scheduled_emails (after lock acquired)."""
     from datetime import datetime as _dt
     from datetime import timezone as _tz
 
@@ -1192,6 +1235,13 @@ async def run_scheduled_emails(db: AsyncSession) -> Dict[str, Any]:
     for item in pending:
         try:
             org = item.organization
+            if not org:
+                item.status = ScheduledEmailStatus.FAILED
+                item.error_message = (
+                    "Organization no longer exists"
+                )
+                failed += 1
+                continue
             email_svc = EmailService(org)
             template_svc = EmailTemplateService(db)
 
@@ -1237,6 +1287,10 @@ async def run_scheduled_emails(db: AsyncSession) -> Dict[str, Any]:
                 text_body=text_body,
                 cc_emails=cc,
                 bcc_emails=bcc,
+                db=db,
+                template_type=item.template_type.value
+                if item.template_type
+                else "scheduled",
             )
 
             if success_count > 0:
@@ -1259,6 +1313,71 @@ async def run_scheduled_emails(db: AsyncSession) -> Dict[str, Any]:
 
     logger.info(f"Scheduled emails processed: {sent} sent, {failed} failed")
     return {"sent": sent, "failed": failed, "total_processed": len(pending)}
+
+
+async def run_message_history_cleanup(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Delete message history records older than 90 days.
+
+    Prevents unbounded growth of the message_history table. Runs daily at 03:00.
+    Deletes in batches to avoid long-running transactions.
+    """
+    from datetime import timedelta, timezone
+
+    from sqlalchemy import delete, func
+
+    from app.models.email_template import MessageHistory
+
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=90)
+
+    # Count before deleting (for reporting)
+    count_result = await db.execute(
+        select(func.count())
+        .select_from(MessageHistory)
+        .where(MessageHistory.sent_at < cutoff)
+    )
+    total_expired = count_result.scalar() or 0
+
+    if total_expired == 0:
+        logger.info("Message history cleanup: no expired records to delete")
+        return {
+            "task": "message_history_cleanup",
+            "deleted": 0,
+            "cutoff_date": cutoff.isoformat(),
+        }
+
+    # Delete in batches of 1000 to avoid locking the table for too long
+    deleted = 0
+    batch_size = 1000
+    while True:
+        # Find IDs to delete in this batch
+        batch_ids_result = await db.execute(
+            select(MessageHistory.id)
+            .where(MessageHistory.sent_at < cutoff)
+            .limit(batch_size)
+        )
+        batch_ids = [row[0] for row in batch_ids_result.all()]
+        if not batch_ids:
+            break
+
+        await db.execute(
+            delete(MessageHistory).where(MessageHistory.id.in_(batch_ids))
+        )
+        await db.commit()
+        deleted += len(batch_ids)
+
+        if len(batch_ids) < batch_size:
+            break
+
+    logger.info(
+        f"Message history cleanup: deleted {deleted} records older than {cutoff.date()}"
+    )
+    return {
+        "task": "message_history_cleanup",
+        "deleted": deleted,
+        "cutoff_date": cutoff.isoformat(),
+    }
 
 
 async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
@@ -1696,4 +1815,5 @@ TASK_RUNNERS = {
     "inventory_overdue_alerts": run_inventory_overdue_alerts,
     "nfpa_retirement_alerts": run_nfpa_retirement_alerts,
     "compliance_auto_reports": run_compliance_auto_reports,
+    "message_history_cleanup": run_message_history_cleanup,
 }

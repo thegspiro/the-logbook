@@ -6,6 +6,8 @@ Provides:
 - POST /message-history/test-email — send a test email to verify configuration
 """
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from loguru import logger
 from sqlalchemy import func, select
@@ -13,7 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission
 from app.core.database import get_db
-from app.core.utils import generate_uuid
 from app.models.email_template import (
     EmailTemplate,
     MessageHistory,
@@ -36,6 +37,12 @@ async def list_message_history(
     limit: int = Query(50, ge=1, le=200),
     status_filter: str | None = Query(None),
     search: str | None = Query(None),
+    sent_after: datetime | None = Query(
+        None, description="Filter: only records sent at or after this UTC datetime"
+    ),
+    sent_before: datetime | None = Query(
+        None, description="Filter: only records sent at or before this UTC datetime"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("settings.manage", "organization.update_settings")
@@ -44,7 +51,8 @@ async def list_message_history(
     """
     List all emails sent by the application for the current organization.
 
-    Supports pagination, status filtering, and search by subject or recipient.
+    Supports pagination, status filtering, date-range filtering, and search
+    by subject or recipient.
     """
     q = select(MessageHistory).where(
         MessageHistory.organization_id == current_user.organization_id
@@ -66,6 +74,11 @@ async def list_message_history(
             (MessageHistory.subject.ilike(pattern))
             | (MessageHistory.to_email.ilike(pattern))
         )
+
+    if sent_after:
+        q = q.where(MessageHistory.sent_at >= sent_after)
+    if sent_before:
+        q = q.where(MessageHistory.sent_at <= sent_before)
 
     # Total count
     count_q = select(func.count()).select_from(q.subquery())
@@ -151,38 +164,39 @@ async def send_test_email(
         subject = f"[TEST] {subject}"
         template_type = ttype_key
 
-    # Send the email
+    # Send the email (also logs to message_history automatically)
     email_svc = EmailService(organization=organization)
     success_count, failure_count = await email_svc.send_email(
         to_emails=[body.to_email],
         subject=subject,
         html_body=html_body,
         text_body=text_body,
-    )
-
-    # Log to message history
-    is_success = success_count > 0
-    history = MessageHistory(
-        id=generate_uuid(),
-        organization_id=current_user.organization_id,
-        to_email=body.to_email,
-        subject=subject,
+        db=db,
         template_type=template_type,
-        status=(
-            MessageHistoryStatus.SENT if is_success else MessageHistoryStatus.FAILED
-        ),
-        error_message=None if is_success else "SMTP delivery failed",
-        recipient_count=1,
         sent_by=current_user.id,
     )
-    db.add(history)
     await db.commit()
-    await db.refresh(history)
 
+    is_success = success_count > 0
     if not is_success:
         logger.warning(f"Test email to {body.to_email} failed")
     else:
         logger.info(f"Test email sent to {body.to_email} by {current_user.id}")
+
+    # Return the latest history record for the response
+    latest = await db.execute(
+        select(MessageHistory)
+        .where(MessageHistory.organization_id == current_user.organization_id)
+        .order_by(MessageHistory.sent_at.desc())
+        .limit(1)
+    )
+    history = latest.scalar_one_or_none()
+    if not history:
+        # Fallback: construct a response without a persisted record
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Email sent but failed to log history",
+        )
 
     return history
 

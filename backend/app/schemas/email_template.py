@@ -7,7 +7,7 @@ Pydantic schemas for email template API requests and responses.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 
 class TemplateVariable(BaseModel):
@@ -109,9 +109,9 @@ class ScheduledEmailCreate(BaseModel):
     template_id: Optional[str] = Field(
         None, description="Specific template ID (optional)"
     )
-    to_emails: List[str] = Field(..., min_length=1)
-    cc_emails: Optional[List[str]] = None
-    bcc_emails: Optional[List[str]] = None
+    to_emails: List[EmailStr] = Field(..., min_length=1)
+    cc_emails: Optional[List[EmailStr]] = None
+    bcc_emails: Optional[List[EmailStr]] = None
     context: Dict[str, Any] = Field(default_factory=dict)
     scheduled_at: datetime = Field(
         ..., description="When to send the email (UTC datetime)"
