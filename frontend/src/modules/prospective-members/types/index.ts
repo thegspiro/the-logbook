@@ -229,6 +229,15 @@ export type StageConfig =
 // Pipeline Stage
 // =============================================================================
 
+// =============================================================================
+// Report Stage Groups
+// =============================================================================
+
+export interface ReportStageGroup {
+  name: string;
+  step_ids: string[];
+}
+
 export interface PipelineStage {
   id: string;
   pipeline_id: string;
@@ -283,6 +292,7 @@ export interface Pipeline {
   is_default: boolean;
   inactivity_config: InactivityConfig;
   public_status_enabled: boolean;
+  report_stage_groups?: ReportStageGroup[] | undefined;
   stages: PipelineStage[];
   applicant_count?: number | undefined;
   created_at: string;
@@ -722,6 +732,7 @@ export interface BackendPipelineResponse {
   auto_transfer_on_approval: boolean;
   inactivity_config: Record<string, unknown> | null;
   public_status_enabled: boolean;
+  report_stage_groups: ReportStageGroup[] | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

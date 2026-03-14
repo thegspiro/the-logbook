@@ -9,3 +9,4 @@ export { ApplicantCard } from './ApplicantCard';
 export { ApplicantDetailDrawer } from './ApplicantDetailDrawer';
 export { ConversionModal } from './ConversionModal';
 export { StageConfigModal } from './StageConfigModal';
+export { ReportStageGroupsEditor } from './ReportStageGroupsEditor';

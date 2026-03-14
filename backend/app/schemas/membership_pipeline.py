@@ -10,6 +10,27 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+# --- Report Stage Groups ---
+
+
+class ReportStageGroup(BaseModel):
+    """A named group of pipeline steps for report consolidation"""
+
+    name: str = Field(..., min_length=1, max_length=255)
+    step_ids: List[str] = Field(
+        ..., description="List of step IDs to merge in this group"
+    )
+
+
+class ReportStageGroupsUpdate(BaseModel):
+    """Schema for updating report stage groups on a pipeline"""
+
+    report_stage_groups: List[ReportStageGroup] = Field(
+        default_factory=list,
+        description="Stage groups for consolidated reporting",
+    )
+
+
 # --- Pipeline Schemas ---
 
 
@@ -127,6 +148,7 @@ class PipelineResponse(PipelineBase):
     updated_at: datetime
     steps: List[PipelineStepResponse] = []
     prospect_count: Optional[int] = None
+    report_stage_groups: Optional[List[ReportStageGroup]] = None
 
     model_config = ConfigDict(from_attributes=True)
 

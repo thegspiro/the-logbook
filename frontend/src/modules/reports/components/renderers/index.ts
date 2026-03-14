@@ -14,3 +14,4 @@ export { ApparatusStatusRenderer, getApparatusStatusExportData } from './Apparat
 export { InventoryStatusRenderer, getInventoryStatusExportData } from './InventoryStatusRenderer';
 export { ComplianceStatusRenderer, getComplianceStatusExportData } from './ComplianceStatusRenderer';
 export { CallVolumeRenderer, getCallVolumeExportData } from './CallVolumeRenderer';
+export { PipelineOverviewRenderer, getPipelineOverviewExportData } from './PipelineOverviewRenderer';

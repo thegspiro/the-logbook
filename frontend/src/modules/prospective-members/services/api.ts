@@ -55,6 +55,7 @@ import type {
   InterviewCreate,
   InterviewUpdate,
   ProspectEventLink,
+  ReportStageGroup,
   TargetMembershipType,
 } from '../types';
 import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS, StepProgressStatus } from '../types';
@@ -192,6 +193,7 @@ function mapPipelineResponse(data: BackendPipelineResponse): Pipeline {
     is_default: data.is_default ?? false,
     inactivity_config: inactivityConfig,
     public_status_enabled: data.public_status_enabled ?? false,
+    report_stage_groups: data.report_stage_groups ?? undefined,
     stages: (data.steps || []).map(mapStepToStage),
     applicant_count: data.prospect_count ?? 0,
     created_at: data.created_at,
@@ -539,6 +541,17 @@ export const pipelineService = {
     const response = await api.put<BackendPipelineResponse>(`/prospective-members/pipelines/${pipelineId}`, {
       inactivity_config: config,
     });
+    return mapPipelineResponse(response.data);
+  },
+
+  async updateReportSettings(
+    pipelineId: string,
+    reportStageGroups: ReportStageGroup[],
+  ): Promise<Pipeline> {
+    const response = await api.patch<BackendPipelineResponse>(
+      `/prospective-members/pipelines/${pipelineId}/report-settings`,
+      { report_stage_groups: reportStageGroups },
+    );
     return mapPipelineResponse(response.data);
   },
 };
