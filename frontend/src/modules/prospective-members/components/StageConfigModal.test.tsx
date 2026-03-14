@@ -116,6 +116,8 @@ describe('StageConfigModal', () => {
     vi.clearAllMocks();
     mockGetForms.mockResolvedValue(mockForms);
     mockGetEvents.mockResolvedValue(mockUpcomingEvents);
+    // jsdom does not implement scrollIntoView
+    Element.prototype.scrollIntoView = vi.fn();
   });
 
   it('renders the modal when open', () => {
@@ -388,6 +390,9 @@ describe('StageConfigModal', () => {
     await user.clear(subjectInput);
     await user.type(subjectInput, 'Welcome to Our Department!');
 
+    // Welcome message is required when include_welcome is checked (default)
+    await user.type(screen.getByLabelText('Welcome message content'), 'Hello!');
+
     await user.click(screen.getByText('Add Stage'));
 
     expect(defaultProps.onSave).toHaveBeenCalledWith(
@@ -548,6 +553,9 @@ describe('StageConfigModal', () => {
     await user.type(screen.getByLabelText(/stage name/i), 'Welcome Email');
     await user.click(screen.getByText('Automated Email'));
 
+    // Fill in welcome message (required when include_welcome is checked)
+    await user.type(screen.getByLabelText('Welcome message content'), 'Welcome!');
+
     // Add a custom section
     await user.click(screen.getByText('Add custom section'));
     await user.type(screen.getByLabelText('Custom section 1 title'), 'Important');
@@ -564,6 +572,188 @@ describe('StageConfigModal', () => {
       content: 'Details here',
       enabled: true,
     });
+  });
+
+  // =========================================================================
+  // Section Order Tests
+  // =========================================================================
+
+  it('includes section_order in saved config for automated email stages', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<StageConfigModal {...defaultProps} onSave={onSave} />);
+
+    await user.click(screen.getByText('Automated Email'));
+    await user.type(screen.getByLabelText(/stage name/i), 'Welcome Email');
+    await user.type(screen.getByLabelText('Welcome message content'), 'Hello!');
+
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+    const savedData = onSave.mock.calls[0]?.[0];
+    expect(savedData?.config?.section_order).toEqual(
+      expect.arrayContaining(['welcome', 'faq_link', 'next_meeting', 'status_tracker'])
+    );
+    expect(savedData?.config?.section_order).toHaveLength(4);
+  });
+
+  it('adds custom section IDs to section_order when custom sections are added', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<StageConfigModal {...defaultProps} onSave={onSave} />);
+
+    await user.click(screen.getByText('Automated Email'));
+    await user.type(screen.getByLabelText(/stage name/i), 'Welcome Email');
+    await user.type(screen.getByLabelText('Welcome message content'), 'Hello!');
+
+    // Add two custom sections
+    await user.click(screen.getByText('Add custom section'));
+    await user.click(screen.getByText('Add custom section'));
+
+    await user.click(screen.getByText('Add Stage'));
+
+    const savedData = onSave.mock.calls[0]?.[0];
+    // 4 built-in + 2 custom
+    expect(savedData?.config?.section_order).toHaveLength(6);
+    // First 4 are the built-in ones
+    expect(savedData?.config?.section_order?.slice(0, 4)).toEqual([
+      'welcome', 'faq_link', 'next_meeting', 'status_tracker',
+    ]);
+  });
+
+  it('removes custom section ID from section_order when section is deleted', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<StageConfigModal {...defaultProps} onSave={onSave} />);
+
+    await user.click(screen.getByText('Automated Email'));
+    await user.type(screen.getByLabelText(/stage name/i), 'Welcome Email');
+    await user.type(screen.getByLabelText('Welcome message content'), 'Hello!');
+
+    // Add a custom section then remove it
+    await user.click(screen.getByText('Add custom section'));
+    await user.click(screen.getByLabelText('Remove custom section 1'));
+
+    await user.click(screen.getByText('Add Stage'));
+
+    const savedData = onSave.mock.calls[0]?.[0];
+    // Should be back to just 4 built-in
+    expect(savedData?.config?.section_order).toHaveLength(4);
+  });
+
+  it('handles editing a stage saved without section_order (backward compat)', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    const editingStage = {
+      id: 'stage-old',
+      pipeline_id: 'pipeline-1',
+      name: 'Legacy Email',
+      description: '',
+      stage_type: 'automated_email' as const,
+      config: {
+        email_subject: 'Welcome!',
+        include_welcome: true,
+        welcome_message: 'Hello',
+        include_faq_link: false,
+        include_next_meeting: false,
+        include_status_tracker: false,
+        custom_sections: [
+          { id: 'cs-1', title: 'Info', content: 'Some info', enabled: true },
+        ],
+        // NOTE: no section_order — simulates a stage saved before the feature
+      },
+      sort_order: 0,
+      is_required: true,
+      notify_prospect_on_completion: false,
+      public_visible: true,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+
+    render(<StageConfigModal {...defaultProps} onSave={onSave} editingStage={editingStage} />);
+
+    // Sections should still render correctly
+    expect(screen.getByLabelText('Custom section 1 title')).toHaveValue('Info');
+
+    await user.click(screen.getByText('Update Stage'));
+
+    const savedData = onSave.mock.calls[0]?.[0];
+    // section_order should be auto-populated with default + custom IDs
+    expect(savedData?.config?.section_order).toEqual(
+      expect.arrayContaining(['welcome', 'faq_link', 'next_meeting', 'status_tracker', 'cs-1'])
+    );
+    expect(savedData?.config?.section_order).toHaveLength(5);
+  });
+
+  // =========================================================================
+  // Email Preview Tests
+  // =========================================================================
+
+  it('toggles email preview on and off', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Automated Email'));
+
+    // Preview should not be visible by default
+    expect(screen.queryByTestId('email-preview')).not.toBeInTheDocument();
+
+    // Click "Show Preview"
+    await user.click(screen.getByText('Show Preview'));
+    expect(screen.getByTestId('email-preview')).toBeInTheDocument();
+
+    // Click "Hide Preview"
+    await user.click(screen.getByText('Hide Preview'));
+    expect(screen.queryByTestId('email-preview')).not.toBeInTheDocument();
+  });
+
+  it('shows enabled sections in email preview', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Automated Email'));
+    await user.click(screen.getByText('Show Preview'));
+
+    const preview = screen.getByTestId('email-preview');
+    // Welcome is enabled by default
+    expect(preview).toHaveTextContent('Hi Prospect');
+    // Organization header
+    expect(preview).toHaveTextContent('Organization Name');
+  });
+
+  it('shows custom sections in email preview', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Automated Email'));
+
+    // Add a custom section with content
+    await user.click(screen.getByText('Add custom section'));
+    await user.type(screen.getByLabelText('Custom section 1 title'), 'Parking');
+    await user.type(screen.getByLabelText('Custom section 1 content'), 'Lot B');
+
+    await user.click(screen.getByText('Show Preview'));
+
+    const preview = screen.getByTestId('email-preview');
+    expect(preview).toHaveTextContent('Parking');
+    expect(preview).toHaveTextContent('Lot B');
+  });
+
+  it('hides disabled sections in email preview', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Automated Email'));
+
+    // Welcome is on by default, turn it off
+    const welcomeCheckbox = screen.getByRole('checkbox', { name: 'Welcome Message' });
+    await user.click(welcomeCheckbox);
+
+    await user.click(screen.getByText('Show Preview'));
+
+    const preview = screen.getByTestId('email-preview');
+    // FAQ is also off by default, so we should see the fallback
+    expect(preview).toHaveTextContent('Your membership application has been updated');
   });
 
   // =========================================================================

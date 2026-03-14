@@ -43,6 +43,7 @@ import {
   Users,
   Stethoscope,
   GripVertical,
+  Eye,
 } from 'lucide-react';
 import { StageType as StageTypeConst } from '../../../constants/enums';
 import type {
@@ -377,6 +378,101 @@ const DEFAULT_CONFIGS: Record<StageType, () => StageConfig> = {
   }),
 };
 
+// ── Email Preview Component ────────────────────────────────────
+interface EmailPreviewProps {
+  config: AutomatedEmailStageConfig;
+  sectionOrder: string[];
+}
+
+const EmailPreview: React.FC<EmailPreviewProps> = ({ config, sectionOrder }) => {
+  const enabledSections = sectionOrder.filter((sid) => {
+    if (sid === EMAIL_BUILTIN_SECTION_IDS.WELCOME) return config.include_welcome;
+    if (sid === EMAIL_BUILTIN_SECTION_IDS.FAQ_LINK) return config.include_faq_link;
+    if (sid === EMAIL_BUILTIN_SECTION_IDS.NEXT_MEETING) return config.include_next_meeting;
+    if (sid === EMAIL_BUILTIN_SECTION_IDS.STATUS_TRACKER) return config.include_status_tracker;
+    const custom = (config.custom_sections ?? []).find((s) => s.id === sid);
+    return custom?.enabled && (custom.title || custom.content);
+  });
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-gray-200 bg-white text-left text-sm shadow-sm" style={{ maxWidth: 480 }}>
+      {/* Header */}
+      <div className="bg-red-600 px-5 py-4 text-center">
+        <span className="text-lg font-bold text-white">Organization Name</span>
+      </div>
+      {/* Content */}
+      <div className="space-y-4 bg-gray-50 p-5 text-gray-700" style={{ lineHeight: 1.6 }}>
+        <p className="m-0">Hi Prospect,</p>
+        {enabledSections.length === 0 && (
+          <p className="m-0 italic text-gray-400">Your membership application has been updated.</p>
+        )}
+        {enabledSections.map((sid) => {
+          if (sid === EMAIL_BUILTIN_SECTION_IDS.WELCOME) {
+            return (
+              <p key={sid} className="m-0">
+                {config.welcome_message || <span className="italic text-gray-400">Welcome message...</span>}
+              </p>
+            );
+          }
+          if (sid === EMAIL_BUILTIN_SECTION_IDS.FAQ_LINK) {
+            return (
+              <span
+                key={sid}
+                className="my-3 inline-block rounded-md bg-blue-600 px-5 py-2.5 text-sm text-white no-underline"
+              >
+                View Membership FAQ
+              </span>
+            );
+          }
+          if (sid === EMAIL_BUILTIN_SECTION_IDS.NEXT_MEETING) {
+            return (
+              <div key={sid} className="rounded-md border border-gray-200 bg-white p-4">
+                <strong>Next Meeting</strong>
+                <br />
+                {config.next_meeting_event_type ? (
+                  <span className="text-gray-500">Event details will be fetched automatically</span>
+                ) : config.next_meeting_details ? (
+                  <span>{config.next_meeting_details}</span>
+                ) : (
+                  <span className="italic text-gray-400">Meeting details...</span>
+                )}
+              </div>
+            );
+          }
+          if (sid === EMAIL_BUILTIN_SECTION_IDS.STATUS_TRACKER) {
+            return (
+              <span
+                key={sid}
+                className="my-3 inline-block rounded-md bg-blue-600 px-5 py-2.5 text-sm text-white no-underline"
+              >
+                Track Your Application
+              </span>
+            );
+          }
+          // Custom section
+          const custom = (config.custom_sections ?? []).find((s) => s.id === sid);
+          if (!custom) return null;
+          return (
+            <div key={sid} className="rounded-md border border-gray-200 bg-white p-4">
+              {custom.title && (
+                <>
+                  <strong>{custom.title}</strong>
+                  <br />
+                </>
+              )}
+              {custom.content || <span className="italic text-gray-400">Section content...</span>}
+            </div>
+          );
+        })}
+      </div>
+      {/* Footer */}
+      <div className="px-5 py-3 text-center text-xs text-gray-400">
+        This email was sent by Organization Name.
+      </div>
+    </div>
+  );
+};
+
 // ── Sortable email section wrapper ─────────────────────────────
 interface SortableEmailSectionProps {
   id: string;
@@ -433,6 +529,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   const [isRequired, setIsRequired] = useState(true);
   const [notifyProspect, setNotifyProspect] = useState(false);
   const [publicVisible, setPublicVisible] = useState(true);
+  const [showEmailPreview, setShowEmailPreview] = useState(false);
   const [hasTimeoutOverride, setHasTimeoutOverride] = useState(false);
   const [timeoutOverrideDays, setTimeoutOverrideDays] = useState<number>(180);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -831,11 +928,17 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   const handleSave = () => {
     if (!validate()) return;
 
+    // Ensure section_order is always persisted for email stages
+    const finalConfig =
+      stageType === StageTypeConst.AUTOMATED_EMAIL
+        ? { ...(config as AutomatedEmailStageConfig), section_order: effectiveSectionOrder }
+        : config;
+
     const stageData: PipelineStageCreate = {
       name: name.trim(),
       description: description.trim() || undefined,
       stage_type: stageType,
-      config,
+      config: finalConfig,
       sort_order: editingStage ? editingStage.sort_order : existingStageCount,
       is_required: isRequired,
       inactivity_timeout_days: hasTimeoutOverride ? timeoutOverrideDays : null,
@@ -1819,6 +1922,24 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                 >
                   <Plus className="h-3 w-3" aria-hidden="true" /> Add custom section
                 </button>
+
+                {/* Email Preview */}
+                <div className="border-theme-surface-border mt-2 border-t pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowEmailPreview((v) => !v)}
+                    className="text-theme-text-secondary flex items-center gap-1.5 text-sm font-medium"
+                    aria-expanded={showEmailPreview}
+                  >
+                    <Eye className="h-4 w-4" aria-hidden="true" />
+                    {showEmailPreview ? 'Hide Preview' : 'Show Preview'}
+                  </button>
+                  {showEmailPreview && (
+                    <div className="mt-3 flex justify-center" data-testid="email-preview">
+                      <EmailPreview config={emailConfig} sectionOrder={effectiveSectionOrder} />
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
