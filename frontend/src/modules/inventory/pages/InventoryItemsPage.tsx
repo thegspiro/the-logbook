@@ -425,7 +425,7 @@ const InventoryItemsPage: React.FC = () => {
                 size={item.size} color={item.color} location={loc || undefined}
                 manufacturer={[item.manufacturer, item.model_number].filter(Boolean).join(' ') || undefined}
                 quantity={item.tracking_type === 'pool' ? item.quantity : undefined}
-                cost={item.purchase_price != null ? `$${item.purchase_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : undefined}
+                cost={item.purchase_price != null ? `$${formatNumber(item.purchase_price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : undefined}
                 selected={selIds.has(item.id)} onSelect={() => toggle(item.id)}
                 onTap={() => navigate(`/inventory/items/${item.id}`)}
                 showActions={canManage} onEdit={() => openEdit(item)}
