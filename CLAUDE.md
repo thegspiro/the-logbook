@@ -1,9 +1,45 @@
 # CLAUDE.md — Project Context for Claude Code
 
-## IMPORTANT: Fix All Errors
+## IMPORTANT: Fix All Errors — Non-Negotiable
 
-**Always fix errors you encounter, even if they are pre-existing or unrelated to your current task.** Do not leave broken code, warnings, failing tests, linting violations, or type errors for later. If you discover an issue while working on something else, fix it immediately in the same PR. We never leave known errors behind.
+**Always fix every error you encounter — compilation errors, type errors, lint
+violations, warnings, and failing tests — regardless of whether they are
+pre-existing or outside the scope of your current task.**
 
+### There Are No Acceptable Pre-Existing Errors
+
+The phrase "pre-existing error" is not a valid reason to skip a fix. If an
+error existed before your current task began, it still must be resolved in the
+same commit. Do not acknowledge an error while moving on past it. Do not
+describe an error as context and then continue without fixing it. If you
+discover it, you own it.
+
+### What "Fix" Means
+
+Fixing an error means resolving its root cause. The following are **not** fixes:
+
+- Adding `// @ts-ignore`, `// eslint-disable`, or `# noqa` to silence a
+  violation (see the flake8 rule in §10 for the narrow `# noqa: F401` exception)
+- Casting to `any` or `unknown` to suppress a type error
+- Wrapping a broken call in a try/catch to hide a runtime failure
+- Deleting a test that is failing
+
+### Hard Stop Before Continuing
+
+If fixing a discovered error would exceed the scope of the current task (e.g.,
+hundreds of strict-mode violations across unrelated files), **stop and report
+the full list of errors before proceeding.** Do not continue past an error
+state silently. A complete inventory with no action taken is acceptable.
+Silently continuing past a known error is never acceptable.
+
+### Completion Gate
+
+A task is not complete if any of the following are true after your changes:
+
+- `tsc --noEmit` reports errors in any file (not just files you touched)
+- `flake8` reports violations in any modified Python file
+- `npm run lint` exits non-zero
+- Any existing test is newly failing
 ## Pre-Commit Verification Checklist
 
 Before committing any changes, mentally verify these items (the most frequent sources of bugs):
