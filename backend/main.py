@@ -1533,13 +1533,14 @@ async def lifespan(app: FastAPI):
     _scheduler_task: asyncio.Task | None = None  # type: ignore[type-arg]
 
     async def _scheduled_email_loop():
-        """Background loop that processes due scheduled emails every 5 minutes."""
-        interval = 300  # 5 minutes
+        """Background loop that processes due scheduled emails every 60 seconds."""
+        interval = 60  # Check every minute for responsive delivery
+        claim_ttl = interval + 60  # Redis claim TTL
         await asyncio.sleep(10)  # Let the server finish starting
         # Retry claiming periodically — a previous worker may have died
         # leaving a stale Redis key that hasn't expired yet.
         while not await _try_claim_background_task(
-            "scheduled_email_loop", ttl=interval + 60
+            "scheduled_email_loop", ttl=claim_ttl
         ):
             logger.debug(
                 f"Scheduled email loop waiting for claim (worker PID {_worker_pid}) "
@@ -1568,7 +1569,7 @@ async def lifespan(app: FastAPI):
                     await cache_manager.redis_client.set(
                         "startup_task:scheduled_email_loop",
                         str(_worker_pid),
-                        ex=interval + 60,
+                        ex=claim_ttl,
                     )
                 except Exception:
                     pass
