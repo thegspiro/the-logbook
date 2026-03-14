@@ -5,6 +5,7 @@ Endpoints for managing prospective member pipelines, prospects,
 step progression, and transfer to full membership.
 """
 
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -644,8 +645,38 @@ async def list_prospects(
         offset=offset,
     )
 
+    now = datetime.now(timezone.utc)
     items = []
     for p in prospects:
+        # Find when the prospect entered their current step
+        stage_entered_at = None
+        if p.current_step_id and p.step_progress:
+            for sp in p.step_progress:
+                if sp.step_id == p.current_step_id:
+                    stage_entered_at = sp.created_at
+                    break
+        if stage_entered_at is None:
+            stage_entered_at = p.created_at
+
+        # Compute days metrics
+        days_in_stage = (now - stage_entered_at).days if stage_entered_at else 0
+        days_in_pipeline = (now - p.created_at).days if p.created_at else 0
+        last_activity = p.updated_at or p.created_at
+        days_since_activity = (now - last_activity).days if last_activity else 0
+
+        # Determine inactivity alert level based on step timeout
+        timeout_days = (
+            p.current_step.inactivity_timeout_days
+            if p.current_step and p.current_step.inactivity_timeout_days
+            else None
+        )
+        inactivity_alert_level = "normal"
+        if timeout_days and days_in_stage > 0:
+            if days_in_stage >= timeout_days:
+                inactivity_alert_level = "critical"
+            elif days_in_stage >= timeout_days * 0.75:
+                inactivity_alert_level = "warning"
+
         items.append(
             ProspectListResponse(
                 id=p.id,
@@ -659,6 +690,13 @@ async def list_prospects(
                 current_step_id=p.current_step_id,
                 current_step_name=p.current_step.name if p.current_step else None,
                 created_at=p.created_at,
+                updated_at=last_activity,
+                stage_entered_at=stage_entered_at,
+                days_in_stage=days_in_stage,
+                days_in_pipeline=days_in_pipeline,
+                days_since_activity=days_since_activity,
+                inactivity_alert_level=inactivity_alert_level,
+                inactivity_timeout_days=timeout_days,
             )
         )
     return PaginatedProspectListResponse(

@@ -511,6 +511,7 @@ class MembershipPipelineService:
             .options(
                 selectinload(ProspectiveMember.current_step),
                 selectinload(ProspectiveMember.pipeline),
+                selectinload(ProspectiveMember.step_progress),
             )
         )
 
