@@ -21,6 +21,8 @@ import {
 import { messageHistoryService } from '../../../services/api';
 import type { MessageHistoryRecord, EmailTemplate } from '../types';
 import toast from 'react-hot-toast';
+import { localToUTC, formatShortDateTime } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
 
 interface MessageHistoryListProps {
   templates: EmailTemplate[];
@@ -29,6 +31,7 @@ interface MessageHistoryListProps {
 const PAGE_SIZE = 20;
 
 const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) => {
+  const tz = useTimezone();
   const [items, setItems] = useState<MessageHistoryRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
@@ -52,9 +55,9 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
         limit: PAGE_SIZE,
         status_filter: statusFilter || undefined,
         search: search || undefined,
-        sent_after: sentAfter ? new Date(sentAfter).toISOString() : undefined,
+        sent_after: sentAfter ? localToUTC(sentAfter + 'T00:00', tz) : undefined,
         sent_before: sentBefore
-          ? new Date(sentBefore + 'T23:59:59').toISOString()
+          ? localToUTC(sentBefore + 'T23:59', tz)
           : undefined,
       });
       setItems(result.items);
@@ -64,7 +67,7 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
     } finally {
       setIsLoading(false);
     }
-  }, [page, statusFilter, search, sentAfter, sentBefore]);
+  }, [page, statusFilter, search, sentAfter, sentBefore, tz]);
 
   useEffect(() => {
     void fetchHistory();
@@ -103,17 +106,6 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
   };
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
-
-  const formatDate = (dateStr: string) => {
-    try {
-      return new Intl.DateTimeFormat(undefined, {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      }).format(new Date(dateStr));
-    } catch {
-      return dateStr;
-    }
-  };
 
   const templateLabel = (type: string | undefined) => {
     if (!type) return '';
@@ -323,7 +315,7 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
                     )}
                   </td>
                   <td className="px-4 py-3 text-theme-text-muted whitespace-nowrap">
-                    {formatDate(item.sent_at)}
+                    {formatShortDateTime(item.sent_at, tz)}
                   </td>
                 </tr>
               ))}

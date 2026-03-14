@@ -5,6 +5,7 @@
 import React from 'react';
 import { ShieldOff } from 'lucide-react';
 import { formatDateTime } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
 import type { BlockedAccessAttempt } from '../types';
 
 interface BlockedAttemptsTableProps {
@@ -12,6 +13,7 @@ interface BlockedAttemptsTableProps {
 }
 
 export const BlockedAttemptsTable: React.FC<BlockedAttemptsTableProps> = ({ attempts }) => {
+  const tz = useTimezone();
   if (attempts.length === 0) {
     return (
       <div className="text-center py-12 text-theme-text-muted">
@@ -50,7 +52,7 @@ export const BlockedAttemptsTable: React.FC<BlockedAttemptsTableProps> = ({ atte
               </td>
               <td className="py-3 px-4 text-theme-text-muted">{a.requestMethod ?? '—'}</td>
               <td className="py-3 px-4 text-theme-text-muted">
-                {a.blockedAt ? formatDateTime(a.blockedAt) : '—'}
+                {a.blockedAt ? formatDateTime(a.blockedAt, tz) : '—'}
               </td>
             </tr>
           ))}

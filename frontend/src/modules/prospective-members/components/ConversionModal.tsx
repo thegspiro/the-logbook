@@ -27,7 +27,7 @@ import type { Applicant, TargetMembershipType, EmergencyContact } from '../types
 import { applicantService } from '../services/api';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { formatDate } from '../../../utils/dateFormatting';
+import { formatDate, getTodayLocalDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 
 interface ConversionModalProps {
@@ -76,14 +76,14 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
       setRank('');
       setStation('');
       setMiddleName('');
-      setHireDate(new Date().toISOString().split('T')[0] ?? '');
+      setHireDate(getTodayLocalDate(tz));
       setSendWelcomeEmail(true);
       setNotes('');
       setEmergencyContact({ name: '', relationship: '', phone: '' });
       setIsConverting(false);
       setConversionResult(null);
     }
-  }, [applicant, isOpen]);
+  }, [applicant, isOpen, tz]);
 
   if (!isOpen || !applicant) return null;
 

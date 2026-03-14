@@ -208,9 +208,9 @@ export default function InspectionsSection({ facilityId }: Props) {
                     <span className="text-xs px-2 py-0.5 rounded-full bg-theme-surface-hover text-theme-text-muted shrink-0">{enumLabel(insp.inspectionType)}</span>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-theme-text-muted">
-                    <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDate(insp.inspectionDate)}</span>
+                    <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDate(insp.inspectionDate, tz)}</span>
                     {insp.inspectorName && <span>{insp.inspectorName}</span>}
-                    {insp.nextInspectionDate && <span>Next: {formatDate(insp.nextInspectionDate)}</span>}
+                    {insp.nextInspectionDate && <span>Next: {formatDate(insp.nextInspectionDate, tz)}</span>}
                     {insp.correctiveActions && !insp.correctiveActionCompleted && (
                       <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
                         <AlertTriangle className="w-3 h-3" /> Corrective action needed

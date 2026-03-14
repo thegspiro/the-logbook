@@ -24,10 +24,12 @@ import toast from 'react-hot-toast';
 import { useFacilitiesStore } from '../store/facilitiesStore';
 import type { Facility } from '../types';
 import CreateFacilityModal from '../components/CreateFacilityModal';
+import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate } from '../../../utils/dateFormatting';
 
 export default function FacilitiesDashboard() {
   const navigate = useNavigate();
+  const tz = useTimezone();
   const {
     facilities,
     facilityTypes,
@@ -156,7 +158,7 @@ export default function FacilitiesDashboard() {
                               <span>{facilityName}</span>
                               {record.dueDate && (
                                 <span className="text-red-500 font-medium">
-                                  Due: {formatDate(record.dueDate)}
+                                  Due: {formatDate(record.dueDate, tz)}
                                 </span>
                               )}
                             </div>
@@ -207,7 +209,7 @@ export default function FacilitiesDashboard() {
                               <span>{facilityName}</span>
                               {insp.nextInspectionDate && (
                                 <span className="font-medium">
-                                  {formatDate(insp.nextInspectionDate)}
+                                  {formatDate(insp.nextInspectionDate, tz)}
                                 </span>
                               )}
                             </div>
@@ -243,7 +245,7 @@ export default function FacilitiesDashboard() {
                         <p className="text-xs text-theme-text-muted">{facilityName}</p>
                       </div>
                       <span className="text-xs text-theme-text-muted shrink-0">
-                        {record.completedDate ? formatDate(record.completedDate) : ''}
+                        {record.completedDate ? formatDate(record.completedDate, tz) : ''}
                       </span>
                     </div>
                   );

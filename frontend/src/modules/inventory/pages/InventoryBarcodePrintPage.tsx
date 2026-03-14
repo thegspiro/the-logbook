@@ -17,6 +17,8 @@ import JsBarcode from 'jsbarcode';
 import { ArrowLeft, Printer, Loader2, AlertCircle, Settings2, Download, AlertTriangle } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import type { InventoryItem } from '../types';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { getTodayLocalDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import toast from 'react-hot-toast';
 
@@ -209,6 +211,7 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, onRendered })
 // ── Main page component ─────────────────────────────────────────
 
 const InventoryBarcodePrintPage: React.FC = () => {
+  const tz = useTimezone();
   const [searchParams] = useSearchParams();
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -315,7 +318,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `barcode-labels-${new Date().toISOString().split('T')[0] ?? 'export'}.pdf`;
+      a.download = `barcode-labels-${getTodayLocalDate(tz)}.pdf`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 60000);
       toast.success('PDF downloaded');

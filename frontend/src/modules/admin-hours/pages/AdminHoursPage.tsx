@@ -11,7 +11,7 @@ import { useAdminHoursStore } from '../store/adminHoursStore';
 import type { AdminHoursEntryCreate } from '../types';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { formatDate, formatTime } from '../../../utils/dateFormatting';
+import { formatDate, formatTime, formatForDateTimeInput, localToUTC } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 
 const PAGE_SIZE = 20;
@@ -145,23 +145,23 @@ const AdminHoursPage: React.FC = () => {
   // Duration preview for manual entry form
   const manualDurationMinutes = useMemo(() => {
     if (!manualData.clock_in_at || !manualData.clock_out_at) return null;
-    const start = new Date(manualData.clock_in_at).getTime();
-    const end = new Date(manualData.clock_out_at).getTime();
+    const start = new Date(localToUTC(manualData.clock_in_at, tz)).getTime();
+    const end = new Date(localToUTC(manualData.clock_out_at, tz)).getTime();
     if (isNaN(start) || isNaN(end) || end <= start) return null;
     return Math.floor((end - start) / 60000);
-  }, [manualData.clock_in_at, manualData.clock_out_at]);
+  }, [manualData.clock_in_at, manualData.clock_out_at, tz]);
 
   const manualFormValid = useMemo(() => {
     if (!manualData.category_id || !manualData.clock_in_at || !manualData.clock_out_at) return false;
-    const start = new Date(manualData.clock_in_at).getTime();
-    const end = new Date(manualData.clock_out_at).getTime();
+    const start = new Date(localToUTC(manualData.clock_in_at, tz)).getTime();
+    const end = new Date(localToUTC(manualData.clock_out_at, tz)).getTime();
     return !isNaN(start) && !isNaN(end) && end > start;
-  }, [manualData]);
+  }, [manualData, tz]);
 
-  // Max datetime for future date prevention
+  // Max datetime for future date prevention (in org timezone)
   const maxDatetime = useMemo(() => {
-    return new Date().toISOString().slice(0, 16);
-  }, []);
+    return formatForDateTimeInput(new Date(), tz);
+  }, [tz]);
 
   // Stale session warning
   const isSessionNearLimit = useMemo(() => {
@@ -328,7 +328,7 @@ const AdminHoursPage: React.FC = () => {
             {manualDurationMinutes !== null && (
               <div className="text-sm text-theme-text-secondary">
                 Duration: <span className="font-medium text-theme-text-primary">{formatDuration(manualDurationMinutes)}</span>
-                {manualData.clock_out_at && new Date(manualData.clock_out_at) <= new Date(manualData.clock_in_at) && (
+                {manualData.clock_out_at && manualData.clock_out_at <= manualData.clock_in_at && (
                   <span className="ml-2 text-red-400">End time must be after start time</span>
                 )}
               </div>

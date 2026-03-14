@@ -9,6 +9,7 @@ import { facilitiesService } from '../../../services/api';
 import type { FacilitySystemCreate } from '../../../services/facilitiesServices';
 import type { FacilitySystem } from '../types';
 import { enumLabel, SYSTEM_TYPES } from '../types';
+import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, isPastDate } from '../../../utils/dateFormatting';
 
 const CONDITION_OPTIONS = ['excellent', 'good', 'fair', 'poor', 'critical'] as const;
@@ -26,6 +27,7 @@ interface Props {
 }
 
 export default function SystemsSection({ facilityId }: Props) {
+  const tz = useTimezone();
   const [systems, setSystems] = useState<FacilitySystem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -243,7 +245,7 @@ export default function SystemsSection({ facilityId }: Props) {
                       {sys.manufacturer && <span>{sys.manufacturer}</span>}
                       {sys.warrantyExpiration && (
                         <span className={isPastDate(sys.warrantyExpiration) ? 'text-red-500' : ''}>
-                          Warranty: {formatDate(sys.warrantyExpiration)}
+                          Warranty: {formatDate(sys.warrantyExpiration, tz)}
                         </span>
                       )}
                       {sys.testFrequencyDays != null && (
