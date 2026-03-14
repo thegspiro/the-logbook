@@ -801,8 +801,7 @@ class MembershipPipelineService:
                 matching = [
                     i
                     for i in interviews
-                    if i.recommendation
-                    and i.recommendation.value == required_rec
+                    if i.recommendation and i.recommendation.value == required_rec
                 ]
                 if not matching:
                     raise ValueError(
@@ -850,9 +849,7 @@ class MembershipPipelineService:
                     else []
                 )
                 approved_roles = {a.get("role") for a in approvals}
-                missing = [
-                    r for r in required_approvers if r not in approved_roles
-                ]
+                missing = [r for r in required_approvers if r not in approved_roles]
                 if missing:
                     raise ValueError(
                         f"Approval still needed from: {', '.join(missing)}."
@@ -894,9 +891,7 @@ class MembershipPipelineService:
                     select(ScreeningRecord).where(
                         and_(
                             ScreeningRecord.prospect_id == prospect.id,
-                            ScreeningRecord.screening_type.in_(
-                                required_screenings
-                            ),
+                            ScreeningRecord.screening_type.in_(required_screenings),
                             ScreeningRecord.status.in_(
                                 [
                                     ScreeningStatus.PASSED,
@@ -908,13 +903,10 @@ class MembershipPipelineService:
                 )
                 records = result.scalars().all()
                 passed_types = {r.screening_type.value for r in records}
-                missing = [
-                    s for s in required_screenings if s not in passed_types
-                ]
+                missing = [s for s in required_screenings if s not in passed_types]
                 if missing:
                     raise ValueError(
-                        f"Medical screenings not yet passed: "
-                        f"{', '.join(missing)}."
+                        f"Medical screenings not yet passed: " f"{', '.join(missing)}."
                     )
 
     async def complete_step(
@@ -1070,9 +1062,7 @@ class MembershipPipelineService:
         if not prospect or not prospect.pipeline:
             return None
 
-        sorted_steps = sorted(
-            prospect.pipeline.steps, key=lambda s: s.sort_order
-        )
+        sorted_steps = sorted(prospect.pipeline.steps, key=lambda s: s.sort_order)
         current_idx = next(
             (
                 i
@@ -1090,11 +1080,7 @@ class MembershipPipelineService:
 
         # Reset the previous step's progress to in_progress
         prev_progress = next(
-            (
-                p
-                for p in prospect.step_progress
-                if str(p.step_id) == str(prev_step.id)
-            ),
+            (p for p in prospect.step_progress if str(p.step_id) == str(prev_step.id)),
             None,
         )
         if prev_progress:
@@ -1368,7 +1354,7 @@ class MembershipPipelineService:
             f"Prospect {prospect.full_name} transferred to membership as {username}"
         )
         if enrollment_result:
-            prog = enrollment_result['program_name']
+            prog = enrollment_result["program_name"]
             result_msg += f". Auto-enrolled in training program: {prog}"
 
         # Send welcome email with temporary credentials if requested
@@ -1538,18 +1524,12 @@ class MembershipPipelineService:
 
             parts: List[str] = []
             if title:
-                parts.append(
-                    _html.escape(title) if html else title
-                )
+                parts.append(_html.escape(title) if html else title)
             if start:
                 fmt = start.strftime("%A, %B %d, %Y at %I:%M %p")
-                parts.append(
-                    _html.escape(fmt) if html else fmt
-                )
+                parts.append(_html.escape(fmt) if html else fmt)
             if loc:
-                parts.append(
-                    _html.escape(loc) if html else loc
-                )
+                parts.append(_html.escape(loc) if html else loc)
             return parts
         except Exception as e:
             logger.warning(f"Failed to fetch meeting event details: {e}")
@@ -1569,9 +1549,7 @@ class MembershipPipelineService:
 
             config: Dict[str, Any] = step.config or {}
             org_result = await self.db.execute(
-                select(Organization).where(
-                    Organization.id == prospect.organization_id
-                )
+                select(Organization).where(Organization.id == prospect.organization_id)
             )
             org = org_result.scalar_one_or_none()
             if not org:
@@ -1590,25 +1568,27 @@ class MembershipPipelineService:
                 "{{organization_name}}", org.name or "The Logbook"
             )
 
-            # Build HTML sections from config
+            # Build HTML sections from config, respecting section_order
             sections: List[str] = []
 
-            if config.get("include_welcome") and config.get("welcome_message"):
-                sections.append(
-                    f"<p>{_html.escape(config['welcome_message'])}</p>"
-                )
+            # Helpers to build individual section HTML
+            def _build_welcome() -> str | None:
+                if config.get("include_welcome") and config.get("welcome_message"):
+                    return f"<p>{_html.escape(config['welcome_message'])}</p>"
+                return None
 
-            if config.get("include_faq_link") and config.get("faq_url"):
-                faq_url = _html.escape(config["faq_url"])
-                sections.append(
-                    f'<p><a href="{faq_url}" class="button">'
-                    "View Membership FAQ</a></p>"
-                )
+            def _build_faq_link() -> str | None:
+                if config.get("include_faq_link") and config.get("faq_url"):
+                    faq_url = _html.escape(config["faq_url"])
+                    return (
+                        f'<p><a href="{faq_url}" class="button">'
+                        "View Membership FAQ</a></p>"
+                    )
+                return None
 
-            # Next meeting section — try auto-fetching event details first,
-            # then fall back to the manually entered text.
-            include_meeting = config.get("include_next_meeting")
-            if include_meeting:
+            async def _build_next_meeting() -> str | None:
+                if not config.get("include_next_meeting"):
+                    return None
                 meeting_parts: List[str] = []
                 event_type_filter = config.get("next_meeting_event_type")
                 event_id = config.get("next_meeting_event_id")
@@ -1622,50 +1602,89 @@ class MembershipPipelineService:
                 if extra_details:
                     meeting_parts.append(_html.escape(extra_details))
                 if meeting_parts:
-                    sections.append(
+                    return (
                         '<div class="details">'
                         "<strong>Next Meeting</strong><br>"
                         + "<br>".join(meeting_parts)
                         + "</div>"
                     )
+                return None
 
-            # Application status tracker link
-            if config.get("include_status_tracker"):
+            def _build_status_tracker() -> str | None:
+                if not config.get("include_status_tracker"):
+                    return None
                 if (
                     prospect.status_token
                     and prospect.pipeline
-                    and getattr(
-                        prospect.pipeline, "public_status_enabled", False
-                    )
+                    and getattr(prospect.pipeline, "public_status_enabled", False)
                 ):
                     from app.core.config import settings as app_settings
 
-                    frontend_url = getattr(
-                        app_settings, "FRONTEND_URL", ""
-                    ) or ""
+                    frontend_url = getattr(app_settings, "FRONTEND_URL", "") or ""
                     status_url = (
-                        f"{frontend_url}/application-status"
-                        f"/{prospect.status_token}"
+                        f"{frontend_url}/application-status" f"/{prospect.status_token}"
                     )
                     safe_url = _html.escape(status_url)
-                    sections.append(
-                        '<p><a href="'
-                        + safe_url
-                        + '" class="button">'
+                    return (
+                        '<p><a href="' + safe_url + '" class="button">'
                         "Track Your Application</a></p>"
                     )
+                return None
 
-            for custom in config.get("custom_sections", []):
+            def _build_custom_section_html(
+                custom: Dict[str, Any],
+            ) -> str | None:
                 title = _html.escape(custom.get("title", ""))
                 body = _html.escape(custom.get("content", ""))
                 if title or body:
                     heading = f"<strong>{title}</strong><br>" if title else ""
-                    sections.append(
-                        f'<div class="details">{heading}{body}</div>'
-                    )
+                    return f'<div class="details">{heading}{body}</div>'
+                return None
 
-            body_html = "\n".join(sections) if sections else (
-                "<p>Your membership application has been updated.</p>"
+            def _build_custom_section_text(
+                custom: Dict[str, Any],
+            ) -> str | None:
+                title = custom.get("title", "")
+                body = custom.get("content", "")
+                if title or body:
+                    return f"{title}\n{body}" if title else body
+                return None
+
+            # Default section order for backward compatibility
+            default_order = [
+                "welcome",
+                "faq_link",
+                "next_meeting",
+                "status_tracker",
+            ]
+            custom_by_id: Dict[str, Dict[str, Any]] = {
+                s["id"]: s for s in config.get("custom_sections", []) if s.get("id")
+            }
+            section_order = config.get("section_order")
+            if not section_order:
+                section_order = default_order + list(custom_by_id.keys())
+
+            for sid in section_order:
+                html_part: str | None = None
+                if sid == "welcome":
+                    html_part = _build_welcome()
+                elif sid == "faq_link":
+                    html_part = _build_faq_link()
+                elif sid == "next_meeting":
+                    html_part = await _build_next_meeting()
+                elif sid == "status_tracker":
+                    html_part = _build_status_tracker()
+                else:
+                    custom = custom_by_id.get(sid)
+                    if custom:
+                        html_part = _build_custom_section_html(custom)
+                if html_part:
+                    sections.append(html_part)
+
+            body_html = (
+                "\n".join(sections)
+                if sections
+                else ("<p>Your membership application has been updated.</p>")
             )
 
             html_body = (
@@ -1680,52 +1699,58 @@ class MembershipPipelineService:
                 f"</div></body></html>"
             )
 
+            # Build plain-text version in the same section_order
             text_parts = [f"Hi {prospect.first_name},"]
-            if config.get("welcome_message"):
-                text_parts.append(config["welcome_message"])
-            if config.get("include_faq_link") and config.get("faq_url"):
-                text_parts.append(
-                    f"View Membership FAQ: {config['faq_url']}"
-                )
-            if include_meeting:
-                text_meeting: List[str] = []
-                if config.get("next_meeting_event_type") or config.get(
-                    "next_meeting_event_id"
-                ):
-                    text_meeting = await self._fetch_meeting_details(
-                        prospect.organization_id,
-                        event_type=config.get("next_meeting_event_type"),
-                        event_id=config.get("next_meeting_event_id"),
-                        html=False,
-                    )
-                if config.get("next_meeting_details"):
-                    text_meeting.append(config["next_meeting_details"])
-                if text_meeting:
-                    text_parts.append(
-                        "Next Meeting:\n" + "\n".join(text_meeting)
-                    )
-            if config.get("include_status_tracker") and prospect.status_token:
-                if prospect.pipeline and getattr(
-                    prospect.pipeline, "public_status_enabled", False
-                ):
-                    from app.core.config import settings as app_settings
+            for sid in section_order:
+                if sid == "welcome":
+                    if config.get("include_welcome") and config.get("welcome_message"):
+                        text_parts.append(config["welcome_message"])
+                elif sid == "faq_link":
+                    if config.get("include_faq_link") and config.get("faq_url"):
+                        text_parts.append(f"View Membership FAQ: {config['faq_url']}")
+                elif sid == "next_meeting":
+                    if config.get("include_next_meeting"):
+                        text_meeting: List[str] = []
+                        if config.get("next_meeting_event_type") or config.get(
+                            "next_meeting_event_id"
+                        ):
+                            text_meeting = await self._fetch_meeting_details(
+                                prospect.organization_id,
+                                event_type=config.get("next_meeting_event_type"),
+                                event_id=config.get("next_meeting_event_id"),
+                                html=False,
+                            )
+                        if config.get("next_meeting_details"):
+                            text_meeting.append(config["next_meeting_details"])
+                        if text_meeting:
+                            text_parts.append(
+                                "Next Meeting:\n" + "\n".join(text_meeting)
+                            )
+                elif sid == "status_tracker":
+                    if config.get("include_status_tracker") and prospect.status_token:
+                        if prospect.pipeline and getattr(
+                            prospect.pipeline,
+                            "public_status_enabled",
+                            False,
+                        ):
+                            from app.core.config import (
+                                settings as app_settings,
+                            )
 
-                    frontend_url = getattr(
-                        app_settings, "FRONTEND_URL", ""
-                    ) or ""
-                    status_url = (
-                        f"{frontend_url}/application-status"
-                        f"/{prospect.status_token}"
-                    )
-                    text_parts.append(
-                        f"Track your application: {status_url}"
-                    )
-            for custom in config.get("custom_sections", []):
-                title = custom.get("title", "")
-                body = custom.get("content", "")
-                if title or body:
-                    section = f"{title}\n{body}" if title else body
-                    text_parts.append(section)
+                            frontend_url = (
+                                getattr(app_settings, "FRONTEND_URL", "") or ""
+                            )
+                            status_url = (
+                                f"{frontend_url}/application-status"
+                                f"/{prospect.status_token}"
+                            )
+                            text_parts.append(f"Track your application: {status_url}")
+                else:
+                    custom = custom_by_id.get(sid)
+                    if custom:
+                        text = _build_custom_section_text(custom)
+                        if text:
+                            text_parts.append(text)
             text_parts.append(f"This email was sent by {org.name or 'The Logbook'}.")
             text_body = "\n\n".join(text_parts)
 
@@ -1740,14 +1765,11 @@ class MembershipPipelineService:
             )
             if success:
                 logger.info(
-                    f"Stage email sent to {prospect.email} "
-                    f"for step '{step.name}'"
+                    f"Stage email sent to {prospect.email} " f"for step '{step.name}'"
                 )
             return success > 0
         except Exception as e:
-            logger.error(
-                f"Failed to send stage email to {prospect.email}: {e}"
-            )
+            logger.error(f"Failed to send stage email to {prospect.email}: {e}")
             return False
 
     async def _send_step_completion_notification(
@@ -1763,9 +1785,7 @@ class MembershipPipelineService:
             from app.services.email_template_service import DEFAULT_CSS
 
             org_result = await self.db.execute(
-                select(Organization).where(
-                    Organization.id == prospect.organization_id
-                )
+                select(Organization).where(Organization.id == prospect.organization_id)
             )
             org = org_result.scalar_one_or_none()
             if not org:
@@ -1774,9 +1794,7 @@ class MembershipPipelineService:
             org_name = _html.escape(org.name or "The Logbook")
             first_name = _html.escape(prospect.first_name or "")
             step_name = _html.escape(step.name or "")
-            subject = (
-                f"Application Update — {step.name} Complete"
-            )
+            subject = f"Application Update — {step.name} Complete"
 
             html_body = (
                 f"<!DOCTYPE html><html><head>"
@@ -1998,11 +2016,7 @@ class MembershipPipelineService:
             return False
 
         step = next(
-            (
-                s
-                for s in prospect.pipeline.steps
-                if str(s.id) == str(step_id)
-            ),
+            (s for s in prospect.pipeline.steps if str(s.id) == str(step_id)),
             None,
         )
         if (
@@ -2031,8 +2045,7 @@ class MembershipPipelineService:
             return True
         except Exception as e:
             logger.error(
-                f"Failed to auto-advance prospect "
-                f"{prospect_id} on {trigger}: {e}"
+                f"Failed to auto-advance prospect " f"{prospect_id} on {trigger}: {e}"
             )
             return False
 
@@ -3481,9 +3494,7 @@ class MembershipPipelineService:
                 )
                 linker = linker_result.scalar_one_or_none()
                 if linker:
-                    linker_name = (
-                        f"{linker.first_name} {linker.last_name}".strip()
-                    )
+                    linker_name = f"{linker.first_name} {linker.last_name}".strip()
 
             enriched.append(
                 {
@@ -3492,13 +3503,9 @@ class MembershipPipelineService:
                     "event_id": link.event_id,
                     "event_title": event.title if event else None,
                     "event_type": (
-                        event.event_type.value
-                        if event and event.event_type
-                        else None
+                        event.event_type.value if event and event.event_type else None
                     ),
-                    "custom_category": (
-                        event.custom_category if event else None
-                    ),
+                    "custom_category": (event.custom_category if event else None),
                     "event_start": event.start_datetime if event else None,
                     "event_end": event.end_datetime if event else None,
                     "event_location": event.location if event else None,
@@ -3571,14 +3578,10 @@ class MembershipPipelineService:
         await self.db.commit()
 
         # Return enriched response
-        linker_result = await self.db.execute(
-            select(User).where(User.id == linked_by)
-        )
+        linker_result = await self.db.execute(select(User).where(User.id == linked_by))
         linker = linker_result.scalar_one_or_none()
         linker_name = (
-            f"{linker.first_name} {linker.last_name}".strip()
-            if linker
-            else None
+            f"{linker.first_name} {linker.last_name}".strip() if linker else None
         )
 
         return {
@@ -3586,9 +3589,7 @@ class MembershipPipelineService:
             "prospect_id": link.prospect_id,
             "event_id": link.event_id,
             "event_title": event.title,
-            "event_type": (
-                event.event_type.value if event.event_type else None
-            ),
+            "event_type": (event.event_type.value if event.event_type else None),
             "custom_category": event.custom_category,
             "event_start": event.start_datetime,
             "event_end": event.end_datetime,

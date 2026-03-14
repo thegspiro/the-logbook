@@ -163,6 +163,21 @@ export interface AutomatedEmailSection {
   enabled: boolean;
 }
 
+/** Well-known built-in email section IDs used in section_order. */
+export const EMAIL_BUILTIN_SECTION_IDS = {
+  WELCOME: 'welcome',
+  FAQ_LINK: 'faq_link',
+  NEXT_MEETING: 'next_meeting',
+  STATUS_TRACKER: 'status_tracker',
+} as const;
+
+export const DEFAULT_EMAIL_SECTION_ORDER: string[] = [
+  EMAIL_BUILTIN_SECTION_IDS.WELCOME,
+  EMAIL_BUILTIN_SECTION_IDS.FAQ_LINK,
+  EMAIL_BUILTIN_SECTION_IDS.NEXT_MEETING,
+  EMAIL_BUILTIN_SECTION_IDS.STATUS_TRACKER,
+];
+
 export interface AutomatedEmailStageConfig {
   email_subject: string;
   include_welcome: boolean;
@@ -175,6 +190,8 @@ export interface AutomatedEmailStageConfig {
   next_meeting_event_id?: string | undefined;
   include_status_tracker: boolean;
   custom_sections?: AutomatedEmailSection[] | undefined;
+  /** Ordered list of section IDs (built-in IDs + custom section UUIDs). */
+  section_order?: string[] | undefined;
 }
 
 export interface ReferenceCheckConfig {

@@ -4,7 +4,24 @@
  * Modal for configuring a pipeline stage's type and requirements.
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import {
   X,
   FileText,
@@ -25,6 +42,7 @@ import {
   MessageSquare,
   Users,
   Stethoscope,
+  GripVertical,
 } from 'lucide-react';
 import { StageType as StageTypeConst } from '../../../constants/enums';
 import type {
@@ -49,7 +67,7 @@ import type {
   MedicalScreeningStageConfig,
   StageConfig,
 } from '../types';
-import { DEFAULT_ELECTION_PACKAGE_FIELDS } from '../types';
+import { DEFAULT_ELECTION_PACKAGE_FIELDS, EMAIL_BUILTIN_SECTION_IDS, DEFAULT_EMAIL_SECTION_ORDER } from '../types';
 import { formsService } from '@/services/formsServices';
 import type { FormDef } from '@/services/inventoryService';
 import { pipelineService } from '../services/api';
@@ -214,6 +232,7 @@ const STAGE_PRESETS: StagePreset[] = [
       next_meeting_details: '',
       include_status_tracker: false,
       custom_sections: [],
+      section_order: [...DEFAULT_EMAIL_SECTION_ORDER],
     }),
   },
   {
@@ -332,6 +351,7 @@ const DEFAULT_CONFIGS: Record<StageType, () => StageConfig> = {
     next_meeting_details: '',
     include_status_tracker: false,
     custom_sections: [],
+    section_order: [...DEFAULT_EMAIL_SECTION_ORDER],
   }),
   reference_check: () => ({
     required_count: 3,
@@ -355,6 +375,47 @@ const DEFAULT_CONFIGS: Record<StageType, () => StageConfig> = {
     required_screenings: ['physical_exam'],
     require_all_passed: true,
   }),
+};
+
+// ── Sortable email section wrapper ─────────────────────────────
+interface SortableEmailSectionProps {
+  id: string;
+  children: React.ReactNode;
+}
+
+const SortableEmailSection: React.FC<SortableEmailSectionProps> = ({ id, children }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="group/section relative">
+      <button
+        type="button"
+        className="text-theme-text-muted absolute top-4 -left-1 shrink-0 cursor-grab opacity-0 transition-opacity group-hover/section:opacity-100 active:cursor-grabbing touch-none"
+        aria-label="Drag to reorder section"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <div className="pl-5">
+        {children}
+      </div>
+    </div>
+  );
 };
 
 export const StageConfigModal: React.FC<StageConfigModalProps> = ({
@@ -407,6 +468,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
       return {
         ...email,
         custom_sections: [...(email.custom_sections ?? []), newSection],
+        section_order: [...(email.section_order ?? DEFAULT_EMAIL_SECTION_ORDER), newSection.id],
       };
     });
     // Scroll the new section into view after the next render
@@ -419,9 +481,15 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   const handleRemoveCustomSection = useCallback((removeIdx: number) => {
     setConfig((prev) => {
       const email = prev as AutomatedEmailStageConfig;
+      const sections = email.custom_sections ?? [];
+      const removedSection = sections[removeIdx];
+      const removedId = removedSection?.id;
       return {
         ...email,
-        custom_sections: (email.custom_sections ?? []).filter((_, i) => i !== removeIdx),
+        custom_sections: sections.filter((_, i) => i !== removeIdx),
+        section_order: removedId
+          ? (email.section_order ?? DEFAULT_EMAIL_SECTION_ORDER).filter((id) => id !== removedId)
+          : email.section_order,
       };
     });
   }, []);
@@ -440,6 +508,49 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
       });
     },
     [],
+  );
+
+  // ── Drag-and-drop for email section reordering ──
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  /** Compute the effective section order, filling in any missing IDs for backward compat. */
+  const sectionOrderStored = (config as AutomatedEmailStageConfig).section_order;
+  const customSectionIds = (config as AutomatedEmailStageConfig).custom_sections;
+  const effectiveSectionOrder = useMemo(() => {
+    const stored = sectionOrderStored ?? [];
+    const customIds = (customSectionIds ?? []).map((s) => s.id);
+    const allIds = [...DEFAULT_EMAIL_SECTION_ORDER, ...customIds];
+    // Start with stored order, then append any IDs not yet present
+    const order = [...stored];
+    const orderSet = new Set(stored);
+    for (const id of allIds) {
+      if (!orderSet.has(id)) {
+        order.push(id);
+        orderSet.add(id);
+      }
+    }
+    // Remove IDs that no longer exist (deleted custom sections)
+    const validIds = new Set(allIds);
+    return order.filter((id) => validIds.has(id));
+  }, [sectionOrderStored, customSectionIds]);
+
+  const handleEmailSectionDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+      const oldIndex = effectiveSectionOrder.indexOf(String(active.id));
+      const newIndex = effectiveSectionOrder.indexOf(String(over.id));
+      if (oldIndex === -1 || newIndex === -1) return;
+      const reordered = arrayMove(effectiveSectionOrder, oldIndex, newIndex);
+      setConfig((prev) => ({
+        ...(prev as AutomatedEmailStageConfig),
+        section_order: reordered,
+      }));
+    },
+    [effectiveSectionOrder],
   );
 
   // Fetch published forms when the modal opens
@@ -1481,194 +1592,233 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                 </div>
 
                 <p className="text-theme-text-muted text-xs">
-                  Configure the sections to include in the email. The prospect's name will be used as the greeting
-                  automatically.
+                  Configure the sections to include in the email. Drag sections to reorder them. The prospect's name
+                  will be used as the greeting automatically.
                 </p>
 
-                {/* Welcome Section */}
-                <div className="border-theme-surface-border space-y-3 rounded-lg border p-4">
-                  <label className="text-theme-text-secondary flex items-center gap-2 text-sm font-medium">
-                    <input
-                      type="checkbox"
-                      checked={emailConfig.include_welcome}
-                      onChange={(e) => setConfig({ ...emailConfig, include_welcome: e.target.checked })}
-                      className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                    />
-                    Welcome Message
-                  </label>
-                  {emailConfig.include_welcome && (
-                    <>
-                      <textarea
-                        value={emailConfig.welcome_message ?? ''}
-                        onChange={(e) => setConfig({ ...emailConfig, welcome_message: e.target.value })}
-                        placeholder="Thank you for your interest in joining our department! We look forward to getting to know you through this process."
-                        rows={3}
-                        aria-label="Welcome message content"
-                        className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-4 py-2.5 text-sm focus:ring-2 focus:outline-hidden"
-                      />
-                      {errors.welcome_message && (
-                        <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.welcome_message}</p>
-                      )}
-                    </>
-                  )}
-                </div>
+                <DndContext
+                  sensors={dndSensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleEmailSectionDragEnd}
+                >
+                  <SortableContext items={effectiveSectionOrder} strategy={verticalListSortingStrategy}>
+                    {effectiveSectionOrder.map((sectionId) => {
+                      // ── Built-in: Welcome ──
+                      if (sectionId === EMAIL_BUILTIN_SECTION_IDS.WELCOME) {
+                        return (
+                          <SortableEmailSection key={sectionId} id={sectionId}>
+                            <div className="border-theme-surface-border space-y-3 rounded-lg border p-4">
+                              <label className="text-theme-text-secondary flex items-center gap-2 text-sm font-medium">
+                                <input
+                                  type="checkbox"
+                                  checked={emailConfig.include_welcome}
+                                  onChange={(e) => setConfig({ ...emailConfig, include_welcome: e.target.checked })}
+                                  className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                                />
+                                Welcome Message
+                              </label>
+                              {emailConfig.include_welcome && (
+                                <>
+                                  <textarea
+                                    value={emailConfig.welcome_message ?? ''}
+                                    onChange={(e) => setConfig({ ...emailConfig, welcome_message: e.target.value })}
+                                    placeholder="Thank you for your interest in joining our department! We look forward to getting to know you through this process."
+                                    rows={3}
+                                    aria-label="Welcome message content"
+                                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-4 py-2.5 text-sm focus:ring-2 focus:outline-hidden"
+                                  />
+                                  {errors.welcome_message && (
+                                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.welcome_message}</p>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </SortableEmailSection>
+                        );
+                      }
 
-                {/* FAQ Link Section */}
-                <div className="border-theme-surface-border space-y-3 rounded-lg border p-4">
-                  <label className="text-theme-text-secondary flex items-center gap-2 text-sm font-medium">
-                    <input
-                      type="checkbox"
-                      checked={emailConfig.include_faq_link}
-                      onChange={(e) => setConfig({ ...emailConfig, include_faq_link: e.target.checked })}
-                      className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                    />
-                    Membership FAQ Link
-                  </label>
-                  {emailConfig.include_faq_link && (
-                    <input
-                      type="url"
-                      value={emailConfig.faq_url ?? ''}
-                      onChange={(e) => setConfig({ ...emailConfig, faq_url: e.target.value })}
-                      placeholder="https://your-department.com/membership-faq"
-                      aria-label="FAQ URL"
-                      className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 text-sm focus:ring-2 focus:outline-hidden"
-                    />
-                  )}
-                </div>
+                      // ── Built-in: FAQ Link ──
+                      if (sectionId === EMAIL_BUILTIN_SECTION_IDS.FAQ_LINK) {
+                        return (
+                          <SortableEmailSection key={sectionId} id={sectionId}>
+                            <div className="border-theme-surface-border space-y-3 rounded-lg border p-4">
+                              <label className="text-theme-text-secondary flex items-center gap-2 text-sm font-medium">
+                                <input
+                                  type="checkbox"
+                                  checked={emailConfig.include_faq_link}
+                                  onChange={(e) => setConfig({ ...emailConfig, include_faq_link: e.target.checked })}
+                                  className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                                />
+                                Membership FAQ Link
+                              </label>
+                              {emailConfig.include_faq_link && (
+                                <input
+                                  type="url"
+                                  value={emailConfig.faq_url ?? ''}
+                                  onChange={(e) => setConfig({ ...emailConfig, faq_url: e.target.value })}
+                                  placeholder="https://your-department.com/membership-faq"
+                                  aria-label="FAQ URL"
+                                  className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 text-sm focus:ring-2 focus:outline-hidden"
+                                />
+                              )}
+                            </div>
+                          </SortableEmailSection>
+                        );
+                      }
 
-                {/* Next Meeting Section */}
-                <div className="border-theme-surface-border space-y-3 rounded-lg border p-4">
-                  <label className="text-theme-text-secondary flex items-center gap-2 text-sm font-medium">
-                    <input
-                      type="checkbox"
-                      checked={emailConfig.include_next_meeting}
-                      onChange={(e) => setConfig({ ...emailConfig, include_next_meeting: e.target.checked })}
-                      className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                    />
-                    Next Meeting Details
-                  </label>
-                  {emailConfig.include_next_meeting && (
-                    <div className="space-y-3">
-                      <div>
-                        <label
-                          htmlFor="email-meeting-event-type"
-                          className="text-theme-text-muted mb-1.5 block text-xs"
-                        >
-                          Pull from upcoming event
-                        </label>
-                        <select
-                          id="email-meeting-event-type"
-                          value={emailConfig.next_meeting_event_type ?? ''}
-                          onChange={(e) => {
-                            const eventType = e.target.value || undefined;
-                            const nextEvent = eventType ? getNextEventForType(eventType) : undefined;
-                            setConfig({
-                              ...emailConfig,
-                              next_meeting_event_type: eventType,
-                              next_meeting_event_id: nextEvent?.id,
-                            });
-                          }}
-                          className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2 text-sm focus:ring-2 focus:outline-hidden"
-                        >
-                          <option value="">None — enter details manually</option>
-                          {EVENT_TYPE_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              Next {opt.label}
-                            </option>
-                          ))}
-                        </select>
-                        {renderEventPreview(emailConfig.next_meeting_event_type)}
-                      </div>
-                      <div>
-                        <label htmlFor="email-meeting-details" className="text-theme-text-muted mb-1.5 block text-xs">
-                          {emailConfig.next_meeting_event_type ? 'Additional details (optional)' : 'Meeting details'}
-                        </label>
-                        <textarea
-                          id="email-meeting-details"
-                          value={emailConfig.next_meeting_details ?? ''}
-                          onChange={(e) => setConfig({ ...emailConfig, next_meeting_details: e.target.value })}
-                          placeholder={
-                            emailConfig.next_meeting_event_type
-                              ? 'Any extra info to include alongside the event details...'
-                              : 'Our next informational meeting is on the first Monday of the month at 7 PM at Station 1. All prospective members are encouraged to attend.'
-                          }
-                          rows={2}
-                          aria-label="Next meeting details"
-                          className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-4 py-2.5 text-sm focus:ring-2 focus:outline-hidden"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
+                      // ── Built-in: Next Meeting ──
+                      if (sectionId === EMAIL_BUILTIN_SECTION_IDS.NEXT_MEETING) {
+                        return (
+                          <SortableEmailSection key={sectionId} id={sectionId}>
+                            <div className="border-theme-surface-border space-y-3 rounded-lg border p-4">
+                              <label className="text-theme-text-secondary flex items-center gap-2 text-sm font-medium">
+                                <input
+                                  type="checkbox"
+                                  checked={emailConfig.include_next_meeting}
+                                  onChange={(e) => setConfig({ ...emailConfig, include_next_meeting: e.target.checked })}
+                                  className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                                />
+                                Next Meeting Details
+                              </label>
+                              {emailConfig.include_next_meeting && (
+                                <div className="space-y-3">
+                                  <div>
+                                    <label
+                                      htmlFor="email-meeting-event-type"
+                                      className="text-theme-text-muted mb-1.5 block text-xs"
+                                    >
+                                      Pull from upcoming event
+                                    </label>
+                                    <select
+                                      id="email-meeting-event-type"
+                                      value={emailConfig.next_meeting_event_type ?? ''}
+                                      onChange={(e) => {
+                                        const eventType = e.target.value || undefined;
+                                        const nextEvent = eventType ? getNextEventForType(eventType) : undefined;
+                                        setConfig({
+                                          ...emailConfig,
+                                          next_meeting_event_type: eventType,
+                                          next_meeting_event_id: nextEvent?.id,
+                                        });
+                                      }}
+                                      className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                                    >
+                                      <option value="">None — enter details manually</option>
+                                      {EVENT_TYPE_OPTIONS.map((opt) => (
+                                        <option key={opt.value} value={opt.value}>
+                                          Next {opt.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    {renderEventPreview(emailConfig.next_meeting_event_type)}
+                                  </div>
+                                  <div>
+                                    <label htmlFor="email-meeting-details" className="text-theme-text-muted mb-1.5 block text-xs">
+                                      {emailConfig.next_meeting_event_type ? 'Additional details (optional)' : 'Meeting details'}
+                                    </label>
+                                    <textarea
+                                      id="email-meeting-details"
+                                      value={emailConfig.next_meeting_details ?? ''}
+                                      onChange={(e) => setConfig({ ...emailConfig, next_meeting_details: e.target.value })}
+                                      placeholder={
+                                        emailConfig.next_meeting_event_type
+                                          ? 'Any extra info to include alongside the event details...'
+                                          : 'Our next informational meeting is on the first Monday of the month at 7 PM at Station 1. All prospective members are encouraged to attend.'
+                                      }
+                                      rows={2}
+                                      aria-label="Next meeting details"
+                                      className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-4 py-2.5 text-sm focus:ring-2 focus:outline-hidden"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </SortableEmailSection>
+                        );
+                      }
 
-                {/* Application Tracker Section */}
-                <div className="border-theme-surface-border space-y-2 rounded-lg border p-4">
-                  <label className="text-theme-text-secondary flex items-center gap-2 text-sm font-medium">
-                    <input
-                      type="checkbox"
-                      checked={emailConfig.include_status_tracker}
-                      onChange={(e) => setConfig({ ...emailConfig, include_status_tracker: e.target.checked })}
-                      className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                    />
-                    Application Tracker Link
-                  </label>
-                  <p className="text-theme-text-muted ml-6 text-xs">
-                    Includes a link to the prospect's public status page so they can track their application progress.
-                    Requires the public status page to be enabled.
-                  </p>
-                </div>
+                      // ── Built-in: Status Tracker ──
+                      if (sectionId === EMAIL_BUILTIN_SECTION_IDS.STATUS_TRACKER) {
+                        return (
+                          <SortableEmailSection key={sectionId} id={sectionId}>
+                            <div className="border-theme-surface-border space-y-2 rounded-lg border p-4">
+                              <label className="text-theme-text-secondary flex items-center gap-2 text-sm font-medium">
+                                <input
+                                  type="checkbox"
+                                  checked={emailConfig.include_status_tracker}
+                                  onChange={(e) => setConfig({ ...emailConfig, include_status_tracker: e.target.checked })}
+                                  className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                                />
+                                Application Tracker Link
+                              </label>
+                              <p className="text-theme-text-muted ml-6 text-xs">
+                                Includes a link to the prospect's public status page so they can track their application progress.
+                                Requires the public status page to be enabled.
+                              </p>
+                            </div>
+                          </SortableEmailSection>
+                        );
+                      }
 
-                {/* Custom Sections */}
-                <div className="pt-2">
-                  <h4 className="text-theme-text-secondary mb-3 text-sm font-medium">Custom Sections</h4>
-                  {(emailConfig.custom_sections ?? []).map((section, idx) => (
-                    <div key={section.id} className="border-theme-surface-border mb-3 space-y-3 rounded-lg border p-4">
-                      <div className="flex items-center justify-between">
-                        <label className="text-theme-text-secondary flex items-center gap-2 text-sm font-medium">
-                          <input
-                            type="checkbox"
-                            checked={section.enabled}
-                            onChange={(e) => handleUpdateCustomSection(idx, 'enabled', e.target.checked)}
-                            className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                          />
-                          Custom Section
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveCustomSection(idx)}
-                          className="text-theme-text-muted transition-colors hover:text-red-700 dark:hover:text-red-400"
-                          aria-label={`Remove custom section ${idx + 1}`}
-                        >
-                          <Trash2 className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                      </div>
-                      <input
-                        type="text"
-                        value={section.title}
-                        onChange={(e) => handleUpdateCustomSection(idx, 'title', e.target.value)}
-                        placeholder="Section title"
-                        aria-label={`Custom section ${idx + 1} title`}
-                        className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2 text-sm focus:ring-2 focus:outline-hidden"
-                      />
-                      <textarea
-                        value={section.content}
-                        onChange={(e) => handleUpdateCustomSection(idx, 'content', e.target.value)}
-                        placeholder="Section content..."
-                        rows={2}
-                        aria-label={`Custom section ${idx + 1} content`}
-                        className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-4 py-2.5 text-sm focus:ring-2 focus:outline-hidden"
-                      />
-                    </div>
-                  ))}
-                  <div ref={customSectionsEndRef} />
-                  <button
-                    type="button"
-                    onClick={handleAddCustomSection}
-                    className="flex items-center gap-1 text-sm text-red-700 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                  >
-                    <Plus className="h-3 w-3" aria-hidden="true" /> Add custom section
-                  </button>
-                </div>
+                      // ── Custom Section ──
+                      const customSections = emailConfig.custom_sections ?? [];
+                      const customIdx = customSections.findIndex((s) => s.id === sectionId);
+                      const section = customSections[customIdx];
+                      if (!section) return null;
+
+                      return (
+                        <SortableEmailSection key={sectionId} id={sectionId}>
+                          <div className="border-theme-surface-border space-y-3 rounded-lg border p-4">
+                            <div className="flex items-center justify-between">
+                              <label className="text-theme-text-secondary flex items-center gap-2 text-sm font-medium">
+                                <input
+                                  type="checkbox"
+                                  checked={section.enabled}
+                                  onChange={(e) => handleUpdateCustomSection(customIdx, 'enabled', e.target.checked)}
+                                  className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                                />
+                                Custom Section
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveCustomSection(customIdx)}
+                                className="text-theme-text-muted transition-colors hover:text-red-700 dark:hover:text-red-400"
+                                aria-label={`Remove custom section ${customIdx + 1}`}
+                              >
+                                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                              </button>
+                            </div>
+                            <input
+                              type="text"
+                              value={section.title}
+                              onChange={(e) => handleUpdateCustomSection(customIdx, 'title', e.target.value)}
+                              placeholder="Section title"
+                              aria-label={`Custom section ${customIdx + 1} title`}
+                              className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                            />
+                            <textarea
+                              value={section.content}
+                              onChange={(e) => handleUpdateCustomSection(customIdx, 'content', e.target.value)}
+                              placeholder="Section content..."
+                              rows={2}
+                              aria-label={`Custom section ${customIdx + 1} content`}
+                              className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-4 py-2.5 text-sm focus:ring-2 focus:outline-hidden"
+                            />
+                          </div>
+                        </SortableEmailSection>
+                      );
+                    })}
+                  </SortableContext>
+                </DndContext>
+
+                <div ref={customSectionsEndRef} />
+                <button
+                  type="button"
+                  onClick={handleAddCustomSection}
+                  className="flex items-center gap-1 text-sm text-red-700 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                >
+                  <Plus className="h-3 w-3" aria-hidden="true" /> Add custom section
+                </button>
               </div>
             )}
 
