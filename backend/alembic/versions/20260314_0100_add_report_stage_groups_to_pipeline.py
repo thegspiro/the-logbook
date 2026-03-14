@@ -11,7 +11,7 @@ from alembic import op
 
 # revision identifiers
 revision = "9a4b5c6d7e8f"
-down_revision = None  # Will be set by Alembic chain
+down_revision = "8f3a2c4d5e6b"
 branch_labels = None
 depends_on = None
 
@@ -19,7 +19,7 @@ depends_on = None
 def upgrade() -> None:
     op.add_column(
         "membership_pipelines",
-        sa.Column("report_stage_groups", sa.JSON(), nullable=True, server_default="[]"),
+        sa.Column("report_stage_groups", sa.JSON(), nullable=True),
     )
 
 

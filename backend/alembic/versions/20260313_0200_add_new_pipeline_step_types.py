@@ -10,7 +10,7 @@ from alembic import op
 
 # revision identifiers
 revision = "8f3a2c4d5e6b"
-down_revision = None  # Will be set by Alembic chain
+down_revision = "20260312_0200"
 branch_labels = None
 depends_on = None
 
@@ -42,7 +42,8 @@ def upgrade() -> None:
     enum_values = ", ".join(f"'{v}'" for v in ALL_VALUES)
     op.execute(
         f"ALTER TABLE membership_pipeline_steps "
-        f"MODIFY COLUMN step_type ENUM({enum_values}) NOT NULL DEFAULT 'checkbox'"
+        f"MODIFY COLUMN step_type ENUM({enum_values}) "
+        f"NOT NULL DEFAULT 'checkbox'"
     )
 
 
