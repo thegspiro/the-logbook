@@ -107,9 +107,9 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
     }
   };
 
-  const labelClass = 'block text-sm font-medium text-theme-text-secondary mb-1';
+  const labelClass = 'form-label';
   const inputClass =
-    'w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-500 dark:placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring font-mono text-sm';
+    'form-input font-mono';
 
   return (
     <div className="space-y-4">

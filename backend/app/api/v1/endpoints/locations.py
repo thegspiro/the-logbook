@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_db
-from app.core.utils import safe_error_detail
+from app.core.utils import ensure_found, handle_service_errors
 from app.models.user import User
 from app.schemas.event import QRCheckInData
 from app.schemas.location import (
@@ -26,6 +26,61 @@ from app.schemas.location import (
 from app.services.location_service import LocationService
 
 router = APIRouter()
+
+
+def _location_to_list_item(loc) -> LocationListItem:
+    """Convert a Location model to a LocationListItem response."""
+    return LocationListItem(
+        id=UUID(loc.id),
+        organization_id=UUID(loc.organization_id),
+        name=loc.name,
+        description=loc.description,
+        address=loc.address,
+        city=loc.city,
+        state=loc.state,
+        zip=loc.zip,
+        building=loc.building,
+        floor=loc.floor,
+        room_number=loc.room_number,
+        capacity=loc.capacity,
+        is_active=loc.is_active,
+        facility_id=UUID(loc.facility_id) if loc.facility_id else None,
+        facility_room_id=(
+            UUID(loc.facility_room_id) if loc.facility_room_id else None
+        ),
+        display_code=loc.display_code,
+        created_at=loc.created_at,
+        updated_at=loc.updated_at,
+    )
+
+
+def _location_to_response(location) -> LocationResponse:
+    """Convert a Location model to a LocationResponse."""
+    return LocationResponse(
+        id=UUID(location.id),
+        organization_id=UUID(location.organization_id),
+        name=location.name,
+        description=location.description,
+        address=location.address,
+        city=location.city,
+        state=location.state,
+        zip=location.zip,
+        latitude=location.latitude,
+        longitude=location.longitude,
+        building=location.building,
+        floor=location.floor,
+        room_number=location.room_number,
+        capacity=location.capacity,
+        is_active=location.is_active,
+        facility_id=UUID(location.facility_id) if location.facility_id else None,
+        facility_room_id=(
+            UUID(location.facility_room_id) if location.facility_room_id else None
+        ),
+        display_code=location.display_code,
+        created_by=UUID(location.created_by) if location.created_by else None,
+        created_at=location.created_at,
+        updated_at=location.updated_at,
+    )
 
 
 # ============================================
@@ -59,31 +114,7 @@ async def list_locations(
         limit=limit,
     )
 
-    return [
-        LocationListItem(
-            id=UUID(loc.id),
-            organization_id=UUID(loc.organization_id),
-            name=loc.name,
-            description=loc.description,
-            address=loc.address,
-            city=loc.city,
-            state=loc.state,
-            zip=loc.zip,
-            building=loc.building,
-            floor=loc.floor,
-            room_number=loc.room_number,
-            capacity=loc.capacity,
-            is_active=loc.is_active,
-            facility_id=UUID(loc.facility_id) if loc.facility_id else None,
-            facility_room_id=(
-                UUID(loc.facility_room_id) if loc.facility_room_id else None
-            ),
-            display_code=loc.display_code,
-            created_at=loc.created_at,
-            updated_at=loc.updated_at,
-        )
-        for loc in locations
-    ]
+    return [_location_to_list_item(loc) for loc in locations]
 
 
 @router.post("", response_model=LocationResponse, status_code=status.HTTP_201_CREATED)
@@ -102,42 +133,14 @@ async def create_location(
     """
     service = LocationService(db)
 
-    try:
+    async with handle_service_errors("Failed to create location"):
         location = await service.create_location(
             location_data=location_data,
             organization_id=current_user.organization_id,
             created_by=current_user.id,
         )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
-        )
 
-    return LocationResponse(
-        id=UUID(location.id),
-        organization_id=UUID(location.organization_id),
-        name=location.name,
-        description=location.description,
-        address=location.address,
-        city=location.city,
-        state=location.state,
-        zip=location.zip,
-        latitude=location.latitude,
-        longitude=location.longitude,
-        building=location.building,
-        floor=location.floor,
-        room_number=location.room_number,
-        capacity=location.capacity,
-        is_active=location.is_active,
-        facility_id=UUID(location.facility_id) if location.facility_id else None,
-        facility_room_id=(
-            UUID(location.facility_room_id) if location.facility_room_id else None
-        ),
-        display_code=location.display_code,
-        created_by=UUID(location.created_by) if location.created_by else None,
-        created_at=location.created_at,
-        updated_at=location.updated_at,
-    )
+    return _location_to_response(location)
 
 
 @router.get("/{location_id}", response_model=LocationResponse)
@@ -152,41 +155,15 @@ async def get_location(
     **Authentication required**
     """
     service = LocationService(db)
-    location = await service.get_location(
-        location_id=location_id,
-        organization_id=current_user.organization_id,
-    )
-
-    if not location:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Location not found"
-        )
-
-    return LocationResponse(
-        id=UUID(location.id),
-        organization_id=UUID(location.organization_id),
-        name=location.name,
-        description=location.description,
-        address=location.address,
-        city=location.city,
-        state=location.state,
-        zip=location.zip,
-        latitude=location.latitude,
-        longitude=location.longitude,
-        building=location.building,
-        floor=location.floor,
-        room_number=location.room_number,
-        capacity=location.capacity,
-        is_active=location.is_active,
-        facility_id=UUID(location.facility_id) if location.facility_id else None,
-        facility_room_id=(
-            UUID(location.facility_room_id) if location.facility_room_id else None
+    location = ensure_found(
+        await service.get_location(
+            location_id=location_id,
+            organization_id=current_user.organization_id,
         ),
-        display_code=location.display_code,
-        created_by=UUID(location.created_by) if location.created_by else None,
-        created_at=location.created_at,
-        updated_at=location.updated_at,
+        "Location",
     )
+
+    return _location_to_response(location)
 
 
 @router.patch("/{location_id}", response_model=LocationResponse)
@@ -206,47 +183,16 @@ async def update_location(
     """
     service = LocationService(db)
 
-    try:
+    async with handle_service_errors("Failed to update location"):
         location = await service.update_location(
             location_id=location_id,
             location_data=location_data,
             organization_id=current_user.organization_id,
         )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
-        )
 
-    if not location:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Location not found"
-        )
+    ensure_found(location, "Location")
 
-    return LocationResponse(
-        id=UUID(location.id),
-        organization_id=UUID(location.organization_id),
-        name=location.name,
-        description=location.description,
-        address=location.address,
-        city=location.city,
-        state=location.state,
-        zip=location.zip,
-        latitude=location.latitude,
-        longitude=location.longitude,
-        building=location.building,
-        floor=location.floor,
-        room_number=location.room_number,
-        capacity=location.capacity,
-        is_active=location.is_active,
-        facility_id=UUID(location.facility_id) if location.facility_id else None,
-        facility_room_id=(
-            UUID(location.facility_room_id) if location.facility_room_id else None
-        ),
-        display_code=location.display_code,
-        created_by=UUID(location.created_by) if location.created_by else None,
-        created_at=location.created_at,
-        updated_at=location.updated_at,
-    )
+    return _location_to_response(location)
 
 
 @router.delete("/{location_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -268,14 +214,10 @@ async def delete_location(
     """
     service = LocationService(db)
 
-    try:
+    async with handle_service_errors("Failed to delete location"):
         deleted = await service.delete_location(
             location_id=location_id,
             organization_id=current_user.organization_id,
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
     if not deleted:
@@ -306,15 +248,13 @@ async def get_location_display_info(
     service = LocationService(db)
 
     # Get location
-    location = await service.get_location(
-        location_id=location_id,
-        organization_id=current_user.organization_id,
+    location = ensure_found(
+        await service.get_location(
+            location_id=location_id,
+            organization_id=current_user.organization_id,
+        ),
+        "Location",
     )
-
-    if not location:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Location not found"
-        )
 
     # Get events currently in check-in window
     events = await service.get_current_events_in_check_in_window(

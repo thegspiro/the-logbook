@@ -192,8 +192,8 @@ const WEBHOOK_TYPES = new Set(['slack', 'discord', 'microsoft-teams']);
 // Integration types that need specific config forms
 const CONFIG_TYPES = new Set(['nws-weather', 'nfirs-export', 'nemsis-export', 'generic-webhook', 'epcr-import']);
 
-const inputClass = 'w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500';
-const labelClass = 'block text-sm font-medium text-theme-text-secondary mb-1';
+const inputClass = 'form-input';
+const labelClass = 'form-label';
 
 const IntegrationsPage: React.FC = () => {
   const { checkPermission } = useAuthStore();

@@ -6,7 +6,7 @@
 
 import { create } from 'zustand';
 import { emailTemplatesService } from '../../../services/api';
-import { handleStoreError } from '../../../utils/storeHelpers';
+import { createFetchAction, handleStoreError } from '../../../utils/storeHelpers';
 import type {
   EmailTemplate,
   EmailTemplateUpdate,
@@ -48,16 +48,12 @@ export const useEmailTemplatesStore = create<EmailTemplatesState>((set) => ({
   isPreviewing: false,
   error: null,
 
-  fetchTemplates: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const templates = await emailTemplatesService.getTemplates();
-      set({ templates, isLoading: false });
-    } catch (err: unknown) {
-      const message = handleStoreError(err, 'Failed to load email templates');
-      set({ error: message, isLoading: false });
-    }
-  },
+  fetchTemplates: createFetchAction(
+    set,
+    () => emailTemplatesService.getTemplates(),
+    'templates',
+    'Failed to load email templates',
+  ),
 
   selectTemplate: (template) => {
     set({ selectedTemplate: template, preview: null });
@@ -73,8 +69,7 @@ export const useEmailTemplatesStore = create<EmailTemplatesState>((set) => ({
         isSaving: false,
       }));
     } catch (err: unknown) {
-      const message = handleStoreError(err, 'Failed to update template');
-      set({ error: message, isSaving: false });
+      set({ error: handleStoreError(err, 'Failed to update template'), isSaving: false });
       throw err;
     }
   },
@@ -85,8 +80,7 @@ export const useEmailTemplatesStore = create<EmailTemplatesState>((set) => ({
       const preview = await emailTemplatesService.previewTemplate(templateId, context, overrides, memberId);
       set({ preview, isPreviewing: false });
     } catch (err: unknown) {
-      const message = handleStoreError(err, 'Failed to preview template');
-      set({ error: message, isPreviewing: false });
+      set({ error: handleStoreError(err, 'Failed to preview template'), isPreviewing: false });
     }
   },
 

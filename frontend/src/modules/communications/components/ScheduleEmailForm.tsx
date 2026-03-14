@@ -17,9 +17,8 @@ interface ScheduleEmailFormProps {
   onClose: () => void;
 }
 
-const inputClass =
-  'w-full rounded-md border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:border-theme-focus-ring focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring';
-const labelClass = 'block text-sm font-medium text-theme-text-secondary mb-1';
+const inputClass = 'form-input';
+const labelClass = 'form-label';
 
 const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({
   templates,

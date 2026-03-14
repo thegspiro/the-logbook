@@ -89,10 +89,9 @@ const VICTORY_CONDITION_OPTIONS: { value: VictoryCondition; label: string }[] = 
   { value: 'threshold', label: 'Threshold' },
 ];
 
-const inputClass =
-  'block w-full rounded-md border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:border-theme-focus-ring focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring';
+const inputClass = 'form-input';
 const selectClass = inputClass;
-const labelClass = 'block text-sm font-medium text-theme-text-secondary mb-1';
+const labelClass = 'form-label';
 
 const generateId = () =>
   `item_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;

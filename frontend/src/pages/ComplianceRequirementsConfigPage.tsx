@@ -40,11 +40,9 @@ import type {
 } from '../types/training';
 
 // Shared form input classes
-const inputClass =
-  'w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
-const selectClass =
-  'w-full rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
-const labelClass = 'block text-sm font-medium text-theme-text-secondary mb-1';
+const inputClass = 'form-input';
+const selectClass = 'form-input';
+const labelClass = 'form-label';
 const checkboxClass = 'h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500';
 
 type ActiveTab = 'thresholds' | 'profiles' | 'reports' | 'schedule';

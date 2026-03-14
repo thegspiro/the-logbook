@@ -3,7 +3,7 @@
  */
 
 import { create } from 'zustand';
-import { handleStoreError } from '../../../utils/storeHelpers';
+import { createFetchAction, handleStoreError } from '../../../utils/storeHelpers';
 import { ipSecurityService } from '../services/api';
 import type {
   BlockedAccessAttempt,
@@ -69,36 +69,43 @@ export const useIPSecurityStore = create<IPSecurityState>((set) => ({
 
   setActiveTab: (tab) => set({ activeTab: tab }),
 
-  fetchMyExceptions: async (includeExpired = false) => {
-    set({ isLoading: true, error: null });
-    try {
-      const myExceptions = await ipSecurityService.getMyExceptions(includeExpired);
-      set({ myExceptions, isLoading: false });
-    } catch (err: unknown) {
-      const message = handleStoreError(err, 'Failed to load your IP exceptions');
-      set({ error: message, isLoading: false });
-    }
-  },
+  // Simple fetches — use createFetchAction
+  fetchMyExceptions: createFetchAction(
+    set,
+    (includeExpired?: boolean) => ipSecurityService.getMyExceptions(includeExpired ?? false),
+    'myExceptions',
+    'Failed to load your IP exceptions',
+  ),
 
-  fetchPendingExceptions: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const pendingExceptions = await ipSecurityService.getPendingExceptions();
-      set({ pendingExceptions, isLoading: false });
-    } catch (err: unknown) {
-      const message = handleStoreError(err, 'Failed to load pending exceptions');
-      set({ error: message, isLoading: false });
-    }
-  },
+  fetchPendingExceptions: createFetchAction(
+    set,
+    () => ipSecurityService.getPendingExceptions(),
+    'pendingExceptions',
+    'Failed to load pending exceptions',
+  ),
 
+  fetchBlockedCountries: createFetchAction(
+    set,
+    () => ipSecurityService.getBlockedCountries(),
+    'blockedCountries',
+    'Failed to load blocked countries',
+  ),
+
+  fetchAuditLog: createFetchAction(
+    set,
+    (exceptionId: string) => ipSecurityService.getExceptionAuditLog(exceptionId),
+    'auditLog',
+    'Failed to load audit log',
+  ),
+
+  // Multi-key fetches — keep inline (set multiple state keys from one response)
   fetchAllExceptions: async (status?: string, limit = 50, offset = 0) => {
     set({ isLoading: true, error: null });
     try {
       const res = await ipSecurityService.getAllExceptions(status, limit, offset);
       set({ allExceptions: res.items, allExceptionsTotal: res.total, isLoading: false });
     } catch (err: unknown) {
-      const message = handleStoreError(err, 'Failed to load exceptions');
-      set({ error: message, isLoading: false });
+      set({ error: handleStoreError(err, 'Failed to load exceptions'), isLoading: false });
     }
   },
 
@@ -108,33 +115,11 @@ export const useIPSecurityStore = create<IPSecurityState>((set) => ({
       const res = await ipSecurityService.getBlockedAttempts(limit, offset, countryCode);
       set({ blockedAttempts: res.items, blockedAttemptsTotal: res.total, isLoading: false });
     } catch (err: unknown) {
-      const message = handleStoreError(err, 'Failed to load blocked attempts');
-      set({ error: message, isLoading: false });
+      set({ error: handleStoreError(err, 'Failed to load blocked attempts'), isLoading: false });
     }
   },
 
-  fetchBlockedCountries: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const blockedCountries = await ipSecurityService.getBlockedCountries();
-      set({ blockedCountries, isLoading: false });
-    } catch (err: unknown) {
-      const message = handleStoreError(err, 'Failed to load blocked countries');
-      set({ error: message, isLoading: false });
-    }
-  },
-
-  fetchAuditLog: async (exceptionId: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      const auditLog = await ipSecurityService.getExceptionAuditLog(exceptionId);
-      set({ auditLog, isLoading: false });
-    } catch (err: unknown) {
-      const message = handleStoreError(err, 'Failed to load audit log');
-      set({ error: message, isLoading: false });
-    }
-  },
-
+  // Mutations — custom logic, keep inline
   requestException: async (data: IPExceptionRequestCreate) => {
     set({ isSaving: true, error: null });
     try {
@@ -145,8 +130,7 @@ export const useIPSecurityStore = create<IPSecurityState>((set) => ({
       }));
       return exception;
     } catch (err: unknown) {
-      const message = handleStoreError(err, 'Failed to submit IP exception request');
-      set({ error: message, isSaving: false });
+      set({ error: handleStoreError(err, 'Failed to submit IP exception request'), isSaving: false });
       throw err;
     }
   },
@@ -161,8 +145,7 @@ export const useIPSecurityStore = create<IPSecurityState>((set) => ({
         isSaving: false,
       }));
     } catch (err: unknown) {
-      const message = handleStoreError(err, 'Failed to approve exception');
-      set({ error: message, isSaving: false });
+      set({ error: handleStoreError(err, 'Failed to approve exception'), isSaving: false });
       throw err;
     }
   },
@@ -177,8 +160,7 @@ export const useIPSecurityStore = create<IPSecurityState>((set) => ({
         isSaving: false,
       }));
     } catch (err: unknown) {
-      const message = handleStoreError(err, 'Failed to reject exception');
-      set({ error: message, isSaving: false });
+      set({ error: handleStoreError(err, 'Failed to reject exception'), isSaving: false });
       throw err;
     }
   },
@@ -192,8 +174,7 @@ export const useIPSecurityStore = create<IPSecurityState>((set) => ({
         isSaving: false,
       }));
     } catch (err: unknown) {
-      const message = handleStoreError(err, 'Failed to revoke exception');
-      set({ error: message, isSaving: false });
+      set({ error: handleStoreError(err, 'Failed to revoke exception'), isSaving: false });
       throw err;
     }
   },
@@ -207,8 +188,7 @@ export const useIPSecurityStore = create<IPSecurityState>((set) => ({
         isSaving: false,
       }));
     } catch (err: unknown) {
-      const message = handleStoreError(err, 'Failed to add blocked country');
-      set({ error: message, isSaving: false });
+      set({ error: handleStoreError(err, 'Failed to add blocked country'), isSaving: false });
       throw err;
     }
   },
@@ -224,8 +204,7 @@ export const useIPSecurityStore = create<IPSecurityState>((set) => ({
         isSaving: false,
       }));
     } catch (err: unknown) {
-      const message = handleStoreError(err, 'Failed to remove blocked country');
-      set({ error: message, isSaving: false });
+      set({ error: handleStoreError(err, 'Failed to remove blocked country'), isSaving: false });
       throw err;
     }
   },
