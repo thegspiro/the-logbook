@@ -57,11 +57,6 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({
       `${scheduledDate}T${scheduledTime}:00`,
     ).toISOString();
 
-    if (new Date(scheduledAt) <= new Date()) {
-      toast.error('Scheduled time must be in the future');
-      return;
-    }
-
     const data: ScheduledEmailCreate = {
       template_type: templateType,
       to_emails: recipients,
