@@ -11,7 +11,8 @@ from uuid import UUID
 from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from app.schemas.base import stamp_naive_datetimes_utc
+
+from app.schemas.base import UTCResponseBase
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -230,7 +231,7 @@ class EventCancel(BaseModel):
     )
 
 
-class EventResponse(EventBase):
+class EventResponse(EventBase, UTCResponseBase):
     """Schema for event response"""
 
     id: UUID
@@ -268,12 +269,8 @@ class EventResponse(EventBase):
 
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "EventResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
-
-class EventListItem(BaseModel):
+class EventListItem(UTCResponseBase):
     """Schema for event list items"""
 
     id: UUID
@@ -297,10 +294,6 @@ class EventListItem(BaseModel):
 
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "EventListItem":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # RSVP Schemas
 
@@ -319,7 +312,7 @@ class RSVPCreate(RSVPBase):
     """Schema for creating/updating an RSVP"""
 
 
-class RSVPResponse(RSVPBase):
+class RSVPResponse(RSVPBase, UTCResponseBase):
     """Schema for RSVP response"""
 
     id: UUID
@@ -349,10 +342,6 @@ class RSVPResponse(RSVPBase):
     overridden_at: Optional[datetime] = None
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "RSVPResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class CheckInRequest(BaseModel):
@@ -451,7 +440,7 @@ class EventStats(BaseModel):
     capacity_percentage: Optional[float] = None  # If max_attendees is set
 
 
-class CheckInActivity(BaseModel):
+class CheckInActivity(UTCResponseBase):
     """Recent check-in activity for monitoring"""
 
     user_id: UUID
@@ -462,7 +451,7 @@ class CheckInActivity(BaseModel):
     guest_count: int
 
 
-class CheckInMonitoringStats(BaseModel):
+class CheckInMonitoringStats(UTCResponseBase):
     """Real-time check-in monitoring statistics"""
 
     event_id: UUID
@@ -544,7 +533,7 @@ class EventTemplateUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class EventTemplateResponse(BaseModel):
+class EventTemplateResponse(UTCResponseBase):
     """Schema for event template response"""
 
     model_config = _response_config
@@ -575,17 +564,13 @@ class EventTemplateResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "EventTemplateResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # ============================================================
 # Recurring Events
 # ============================================================
 
 
-class RSVPHistoryResponse(BaseModel):
+class RSVPHistoryResponse(UTCResponseBase):
     """Schema for RSVP history response"""
 
     id: UUID
@@ -602,10 +587,6 @@ class RSVPHistoryResponse(BaseModel):
     changer_name: Optional[str] = None
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "RSVPHistoryResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================================
@@ -766,7 +747,7 @@ class MonthlyEventCount(BaseModel):
     count: int
 
 
-class TopEventByAttendance(BaseModel):
+class TopEventByAttendance(UTCResponseBase):
     """An event ranked by check-in attendance."""
 
     event_id: str

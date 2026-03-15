@@ -10,10 +10,11 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.schemas.base import UTCResponseBase
 
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
-from app.schemas.base import stamp_naive_datetimes_utc
 
 
 class OrganizationTypeEnum(str, Enum):
@@ -734,10 +735,6 @@ class OrganizationResponse(OrganizationBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "OrganizationResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 class OrganizationSettingsResponse(BaseModel):
     """Schema for organization settings response"""
@@ -948,7 +945,7 @@ class SetupChecklistResponse(BaseModel):
     enabled_modules: List[str] = Field(default_factory=list)
 
 
-class OrganizationSetupResponse(BaseModel):
+class OrganizationSetupResponse(UTCResponseBase):
     """Response schema for organization setup"""
 
     id: UUID
@@ -960,7 +957,3 @@ class OrganizationSetupResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "OrganizationSetupResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]

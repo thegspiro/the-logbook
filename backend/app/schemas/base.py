@@ -1,31 +1,38 @@
 """
-Shared schema utilities.
+Shared base classes for Pydantic response schemas.
 
-Provides ``stamp_utc`` — a reusable Pydantic ``model_validator`` body that
-replaces naive ``datetime`` fields with UTC-aware equivalents so JSON
-serialisation always includes ``+00:00``.
+MySQL DATETIME columns do not store timezone information, so SQLAlchemy
+returns naive ``datetime`` objects.  Pydantic serialises these without a
+``Z`` or offset (e.g. ``"2024-01-15T14:00:00"``), and browsers'
+``new Date()`` interprets such strings as **local** time — not UTC.
+This causes the frontend to display raw UTC values instead of converting
+them to the user's timezone.
+
+``UTCResponseBase`` fixes this globally: a ``model_validator`` stamps
+every naive ``datetime`` field with ``tzinfo=UTC`` so the JSON response
+carries an explicit timezone marker (``"2024-01-15T14:00:00Z"``).  All
+API *response* schemas should inherit from ``UTCResponseBase`` instead
+of plain ``BaseModel``.
 """
 
 from datetime import datetime, timezone
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
-def stamp_naive_datetimes_utc(instance: BaseModel) -> BaseModel:
-    """Ensure every naive ``datetime`` field on *instance* carries UTC tzinfo.
+class UTCResponseBase(BaseModel):
+    """BaseModel subclass that ensures naive datetimes carry UTC tzinfo.
 
-    MySQL ``DATETIME`` columns lack timezone metadata, so SQLAlchemy returns
-    naive objects.  Without explicit ``tzinfo``, Pydantic serialises them
-    without an offset (e.g. ``"2024-01-15T14:00:00"``).  The browser's
-    ``new Date()`` then treats the value as **local** time, shifting the
-    displayed time by the user's UTC offset.
-
-    Calling this function inside a ``@model_validator(mode="after")``
-    produces ``"2024-01-15T14:00:00+00:00"`` in every JSON response,
-    which ``new Date()`` correctly interprets as UTC.
+    Inherit from this class (instead of ``BaseModel``) for every Pydantic
+    schema that is used as a FastAPI **response** model.
     """
-    for name in instance.model_fields:
-        val = getattr(instance, name)
-        if isinstance(val, datetime) and val.tzinfo is None:
-            object.__setattr__(instance, name, val.replace(tzinfo=timezone.utc))
-    return instance
+
+    @model_validator(mode="after")
+    def _stamp_naive_datetimes_utc(self) -> "UTCResponseBase":
+        for name in self.model_fields:
+            val = getattr(self, name)
+            if isinstance(val, datetime) and val.tzinfo is None:
+                object.__setattr__(
+                    self, name, val.replace(tzinfo=timezone.utc)
+                )
+        return self

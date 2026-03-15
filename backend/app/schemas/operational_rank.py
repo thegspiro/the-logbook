@@ -8,8 +8,9 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
-from app.schemas.base import stamp_naive_datetimes_utc
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.base import UTCResponseBase
 
 
 class RankCreate(BaseModel):
@@ -46,7 +47,7 @@ class RankUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class RankResponse(BaseModel):
+class RankResponse(UTCResponseBase):
     """Full rank response."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -60,10 +61,6 @@ class RankResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "RankResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class RankListResponse(BaseModel):

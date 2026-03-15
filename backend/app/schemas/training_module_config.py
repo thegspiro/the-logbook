@@ -5,11 +5,12 @@ Schemas for Training Module Configuration (Member Visibility Settings)
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, model_validator
-from app.schemas.base import stamp_naive_datetimes_utc
+from pydantic import BaseModel
+
+from app.schemas.base import UTCResponseBase
 
 
-class TrainingModuleConfigResponse(BaseModel):
+class TrainingModuleConfigResponse(UTCResponseBase):
     """Response schema for training module configuration."""
 
     id: str
@@ -45,10 +46,6 @@ class TrainingModuleConfigResponse(BaseModel):
     updated_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "TrainingModuleConfigResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class TrainingModuleConfigUpdate(BaseModel):

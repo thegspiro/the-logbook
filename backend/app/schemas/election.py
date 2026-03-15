@@ -8,8 +8,9 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from app.schemas.base import stamp_naive_datetimes_utc
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.schemas.base import UTCResponseBase
 
 VALID_VOTING_METHODS = {"simple_majority", "ranked_choice", "approval", "supermajority"}
 VALID_VICTORY_CONDITIONS = {"most_votes", "majority", "supermajority", "threshold"}
@@ -307,12 +308,8 @@ class ElectionResponse(ElectionBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ElectionResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
-
-class ElectionListResponse(BaseModel):
+class ElectionListResponse(UTCResponseBase):
     """Schema for election list item"""
 
     id: UUID
@@ -325,10 +322,6 @@ class ElectionListResponse(BaseModel):
     total_votes: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ElectionListResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # Candidate Schemas
@@ -387,10 +380,6 @@ class CandidateResponse(CandidateBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "CandidateResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 class CandidateAcceptance(BaseModel):
     """Schema for accepting/declining a nomination"""
@@ -412,7 +401,7 @@ class VoteCreate(BaseModel):
     )
 
 
-class VoteResponse(BaseModel):
+class VoteResponse(UTCResponseBase):
     """Schema for vote response (limited info for privacy)"""
 
     id: UUID
@@ -428,10 +417,6 @@ class VoteResponse(BaseModel):
     receipt_hash: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "VoteResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # Election Results and Statistics

@@ -8,8 +8,9 @@ from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
-from app.schemas.base import stamp_naive_datetimes_utc
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.base import UTCResponseBase
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -102,10 +103,6 @@ class PipelineStepResponse(PipelineStepBase):
 
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "PipelineStepResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 class PipelineBase(BaseModel):
     """Base schema for a membership pipeline"""
@@ -159,12 +156,8 @@ class PipelineResponse(PipelineBase):
 
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "PipelineResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
-
-class PipelineListResponse(BaseModel):
+class PipelineListResponse(UTCResponseBase):
     """Schema for pipeline list item"""
 
     id: UUID
@@ -179,10 +172,6 @@ class PipelineListResponse(BaseModel):
     created_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "PipelineListResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class StepReorderRequest(BaseModel):
@@ -297,7 +286,7 @@ class ProspectUpdate(BaseModel):
     )
 
 
-class StepProgressResponse(BaseModel):
+class StepProgressResponse(UTCResponseBase):
     """Schema for step progress record"""
 
     id: UUID
@@ -313,10 +302,6 @@ class StepProgressResponse(BaseModel):
     updated_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "StepProgressResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class ProspectResponse(ProspectBase):
@@ -344,12 +329,8 @@ class ProspectResponse(ProspectBase):
         from_attributes=True, populate_by_name=True, serialize_by_alias=True
     )
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ProspectResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
-
-class ProspectListResponse(BaseModel):
+class ProspectListResponse(UTCResponseBase):
     """Schema for prospect list item"""
 
     id: UUID
@@ -373,10 +354,6 @@ class ProspectListResponse(BaseModel):
     inactivity_timeout_days: Optional[int] = None
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ProspectListResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class PaginatedProspectListResponse(BaseModel):
@@ -455,7 +432,7 @@ class TransferProspectResponse(BaseModel):
 # --- Activity Log Schema ---
 
 
-class ActivityLogResponse(BaseModel):
+class ActivityLogResponse(UTCResponseBase):
     """Schema for activity log entry"""
 
     id: UUID
@@ -467,10 +444,6 @@ class ActivityLogResponse(BaseModel):
     created_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ActivityLogResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # --- Kanban Board Schema ---
@@ -495,7 +468,7 @@ class PipelineKanbanResponse(BaseModel):
 # --- Document Schemas ---
 
 
-class ProspectDocumentResponse(BaseModel):
+class ProspectDocumentResponse(UTCResponseBase):
     """Schema for a prospect document.
 
     Note: ``file_path`` is intentionally excluded from the response to
@@ -513,10 +486,6 @@ class ProspectDocumentResponse(BaseModel):
     created_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ProspectDocumentResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # --- Election Package Schemas ---
@@ -541,7 +510,7 @@ class ElectionPackageUpdate(BaseModel):
     applicant_snapshot: Optional[Dict[str, Any]] = None
 
 
-class ElectionPackageResponse(BaseModel):
+class ElectionPackageResponse(UTCResponseBase):
     """Schema for an election package"""
 
     id: UUID
@@ -557,10 +526,6 @@ class ElectionPackageResponse(BaseModel):
     updated_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ElectionPackageResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # --- Public Status Check Schema ---
@@ -602,7 +567,7 @@ class ProspectEventLinkCreate(BaseModel):
     event_id: UUID
 
 
-class ProspectEventLinkResponse(BaseModel):
+class ProspectEventLinkResponse(UTCResponseBase):
     """Schema for a prospect-event link"""
 
     id: UUID
@@ -621,10 +586,6 @@ class ProspectEventLinkResponse(BaseModel):
     created_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ProspectEventLinkResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # --- Interview Schemas ---
@@ -661,7 +622,7 @@ class InterviewUpdate(BaseModel):
     interview_date: Optional[datetime] = None
 
 
-class InterviewResponse(BaseModel):
+class InterviewResponse(UTCResponseBase):
     """Schema for interview response"""
 
     id: UUID
@@ -679,7 +640,3 @@ class InterviewResponse(BaseModel):
     updated_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "InterviewResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]

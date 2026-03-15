@@ -8,8 +8,9 @@ from datetime import date, datetime
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
-from app.schemas.base import stamp_naive_datetimes_utc
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+from app.schemas.base import UTCResponseBase
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -129,7 +130,7 @@ class UserUpdate(BaseModel):
     emergency_contacts: Optional[List[EmergencyContact]] = None
 
 
-class UserResponse(UserBase):
+class UserResponse(UserBase, UTCResponseBase):
     """
     Schema for user response (without sensitive data like password)
 
@@ -178,10 +179,6 @@ class UserResponse(UserBase):
         return v if v is not None else []
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "UserResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class UserListResponse(BaseModel):
@@ -297,7 +294,7 @@ class AdminPasswordReset(BaseModel):
     )
 
 
-class MemberAuditLogEntry(BaseModel):
+class MemberAuditLogEntry(UTCResponseBase):
     """Schema for member audit history entries"""
 
     id: int
@@ -310,10 +307,6 @@ class MemberAuditLogEntry(BaseModel):
     event_data: Optional[dict] = None
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "MemberAuditLogEntry":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class DeletionImpactResponse(BaseModel):

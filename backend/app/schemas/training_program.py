@@ -8,8 +8,9 @@ from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
-from app.schemas.base import stamp_naive_datetimes_utc
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.base import UTCResponseBase
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -85,7 +86,7 @@ class TrainingRequirementEnhancedUpdate(BaseModel):
     active: Optional[bool] = None
 
 
-class TrainingRequirementEnhancedResponse(TrainingRequirementEnhancedBase):
+class TrainingRequirementEnhancedResponse(TrainingRequirementEnhancedBase, UTCResponseBase):
     """Schema for enhanced training requirement response"""
 
     id: UUID
@@ -96,10 +97,6 @@ class TrainingRequirementEnhancedResponse(TrainingRequirementEnhancedBase):
     created_by: Optional[UUID] = None
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "TrainingRequirementEnhancedResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # Training Program Schemas
@@ -136,7 +133,7 @@ class TrainingProgramUpdate(BaseModel):
     active: Optional[bool] = None
 
 
-class TrainingProgramResponse(TrainingProgramBase):
+class TrainingProgramResponse(TrainingProgramBase, UTCResponseBase):
     """Schema for training program response"""
 
     id: UUID
@@ -147,10 +144,6 @@ class TrainingProgramResponse(TrainingProgramBase):
     created_by: Optional[UUID] = None
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "TrainingProgramResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # Program Phase Schemas
@@ -182,7 +175,7 @@ class ProgramPhaseUpdate(BaseModel):
     time_limit_days: Optional[int] = Field(None, ge=0)
 
 
-class ProgramPhaseResponse(ProgramPhaseBase):
+class ProgramPhaseResponse(ProgramPhaseBase, UTCResponseBase):
     """Schema for program phase response"""
 
     id: UUID
@@ -191,10 +184,6 @@ class ProgramPhaseResponse(ProgramPhaseBase):
     updated_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ProgramPhaseResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # Program Requirement Schemas
@@ -224,7 +213,7 @@ class ProgramRequirementUpdate(BaseModel):
     sort_order: Optional[int] = Field(None, ge=0)
 
 
-class ProgramRequirementResponse(ProgramRequirementBase):
+class ProgramRequirementResponse(ProgramRequirementBase, UTCResponseBase):
     """Schema for program requirement response"""
 
     id: UUID
@@ -234,10 +223,6 @@ class ProgramRequirementResponse(ProgramRequirementBase):
     created_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ProgramRequirementResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # Program Milestone Schemas
@@ -268,7 +253,7 @@ class ProgramMilestoneUpdate(BaseModel):
     notification_message: Optional[str] = None
 
 
-class ProgramMilestoneResponse(ProgramMilestoneBase):
+class ProgramMilestoneResponse(ProgramMilestoneBase, UTCResponseBase):
     """Schema for program milestone response"""
 
     id: UUID
@@ -277,10 +262,6 @@ class ProgramMilestoneResponse(ProgramMilestoneBase):
     created_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ProgramMilestoneResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # Program Enrollment Schemas
@@ -309,7 +290,7 @@ class ProgramEnrollmentUpdate(BaseModel):
     notes: Optional[str] = None
 
 
-class ProgramEnrollmentResponse(ProgramEnrollmentBase):
+class ProgramEnrollmentResponse(ProgramEnrollmentBase, UTCResponseBase):
     """Schema for program enrollment response"""
 
     id: UUID
@@ -325,10 +306,6 @@ class ProgramEnrollmentResponse(ProgramEnrollmentBase):
     updated_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ProgramEnrollmentResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # Requirement Progress Schemas
@@ -356,7 +333,7 @@ class RequirementProgressUpdate(BaseModel):
     verified_by: Optional[UUID] = None
 
 
-class RequirementProgressResponse(RequirementProgressBase):
+class RequirementProgressResponse(RequirementProgressBase, UTCResponseBase):
     """Schema for requirement progress response"""
 
     id: UUID
@@ -373,10 +350,6 @@ class RequirementProgressResponse(RequirementProgressBase):
     updated_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "RequirementProgressResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # Skill Evaluation Schemas
@@ -408,7 +381,7 @@ class SkillEvaluationUpdate(BaseModel):
     required_for_programs: Optional[List[UUID]] = None
 
 
-class SkillEvaluationResponse(SkillEvaluationBase):
+class SkillEvaluationResponse(SkillEvaluationBase, UTCResponseBase):
     """Schema for skill evaluation response"""
 
     id: UUID
@@ -418,10 +391,6 @@ class SkillEvaluationResponse(SkillEvaluationBase):
     created_by: Optional[UUID] = None
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "SkillEvaluationResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # Skill Checkoff Schemas
@@ -450,7 +419,7 @@ class SkillCheckoffUpdate(BaseModel):
     notes: Optional[str] = None
 
 
-class SkillCheckoffResponse(SkillCheckoffBase):
+class SkillCheckoffResponse(SkillCheckoffBase, UTCResponseBase):
     """Schema for skill checkoff response"""
 
     id: UUID
@@ -463,10 +432,6 @@ class SkillCheckoffResponse(SkillCheckoffBase):
     updated_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "SkillCheckoffResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # Comprehensive Program Details

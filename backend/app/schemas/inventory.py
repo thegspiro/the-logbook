@@ -9,8 +9,9 @@ from decimal import Decimal
 from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
-from app.schemas.base import stamp_naive_datetimes_utc
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.base import UTCResponseBase
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -182,10 +183,6 @@ class InventoryCategoryResponse(InventoryCategoryBase):
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "InventoryCategoryResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # ============================================
 # Item Schemas
@@ -306,10 +303,6 @@ class InventoryItemResponse(InventoryItemBase):
 
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "InventoryItemResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 class InventoryItemDetailResponse(InventoryItemResponse):
     """Extended item response with relationships"""
@@ -361,10 +354,6 @@ class ItemAssignmentResponse(ItemAssignmentBase):
 
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ItemAssignmentResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 class UnassignItemRequest(BaseModel):
     """Schema for unassigning an item"""
@@ -400,7 +389,7 @@ ChargeStatusLiteral = Literal["none", "pending", "charged", "waived"]
 AllowancePeriodLiteral = Literal["annual", "career", "one_time"]
 
 
-class ItemIssuanceResponse(BaseModel):
+class ItemIssuanceResponse(UTCResponseBase):
     """Schema for issuance record response"""
 
     id: UUID
@@ -423,10 +412,6 @@ class ItemIssuanceResponse(BaseModel):
     updated_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ItemIssuanceResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -482,10 +467,6 @@ class CheckOutRecordResponse(CheckOutRecordBase):
 
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "CheckOutRecordResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # ============================================
 # Maintenance Schemas
@@ -520,10 +501,6 @@ class NFPAInspectionDetailResponse(NFPAInspectionDetailCreate):
     updated_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "NFPAInspectionDetailResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class MaintenanceRecordBase(BaseModel):
@@ -592,10 +569,6 @@ class MaintenanceRecordResponse(MaintenanceRecordBase):
 
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "MaintenanceRecordResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # ============================================
 # Summary & Reporting Schemas
@@ -642,7 +615,7 @@ class LocationInventorySummary(BaseModel):
     total_value: float
 
 
-class UserInventoryItem(BaseModel):
+class UserInventoryItem(UTCResponseBase):
     """Schema for user's assigned item"""
 
     assignment_id: UUID
@@ -656,7 +629,7 @@ class UserInventoryItem(BaseModel):
     quantity: int = 1
 
 
-class UserCheckoutItem(BaseModel):
+class UserCheckoutItem(UTCResponseBase):
     """Schema for user's checked out item"""
 
     checkout_id: UUID
@@ -667,7 +640,7 @@ class UserCheckoutItem(BaseModel):
     is_overdue: bool
 
 
-class UserIssuedItem(BaseModel):
+class UserIssuedItem(UTCResponseBase):
     """Schema for a pool item issued to a user"""
 
     issuance_id: UUID
@@ -753,7 +726,7 @@ class DepartureClearanceCreate(BaseModel):
     notes: Optional[str] = None
 
 
-class ClearanceLineItemResponse(BaseModel):
+class ClearanceLineItemResponse(UTCResponseBase):
     """Schema for a single clearance line item"""
 
     id: UUID
@@ -775,12 +748,8 @@ class ClearanceLineItemResponse(BaseModel):
 
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ClearanceLineItemResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
-
-class DepartureClearanceResponse(BaseModel):
+class DepartureClearanceResponse(UTCResponseBase):
     """Schema for departure clearance response"""
 
     id: UUID
@@ -805,12 +774,8 @@ class DepartureClearanceResponse(BaseModel):
 
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "DepartureClearanceResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
-
-class DepartureClearanceSummaryResponse(BaseModel):
+class DepartureClearanceSummaryResponse(UTCResponseBase):
     """Lightweight clearance summary (no line items)"""
 
     id: UUID
@@ -996,7 +961,7 @@ class EquipmentRequestReview(BaseModel):
     review_notes: Optional[str] = None
 
 
-class EquipmentRequestResponse(BaseModel):
+class EquipmentRequestResponse(UTCResponseBase):
     """Schema for equipment request response"""
 
     id: UUID
@@ -1019,10 +984,6 @@ class EquipmentRequestResponse(BaseModel):
     updated_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "EquipmentRequestResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -1057,7 +1018,7 @@ class StorageAreaUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class StorageAreaResponse(BaseModel):
+class StorageAreaResponse(UTCResponseBase):
     """Schema for storage area response"""
 
     id: UUID
@@ -1082,10 +1043,6 @@ class StorageAreaResponse(BaseModel):
 
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "StorageAreaResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # ============================================
 # Write-Off Schemas
@@ -1107,7 +1064,7 @@ class WriteOffReview(BaseModel):
     review_notes: Optional[str] = None
 
 
-class WriteOffRequestResponse(BaseModel):
+class WriteOffRequestResponse(UTCResponseBase):
     """Write-off request response"""
 
     id: str
@@ -1129,10 +1086,6 @@ class WriteOffRequestResponse(BaseModel):
     created_at: Optional[datetime] = None
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "WriteOffRequestResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -1178,7 +1131,7 @@ class NFPAComplianceUpdate(BaseModel):
     contamination_level: Optional[ContaminationLevelLiteral] = None
 
 
-class NFPAComplianceResponse(BaseModel):
+class NFPAComplianceResponse(UTCResponseBase):
     """Schema for NFPA compliance record response"""
 
     id: UUID
@@ -1203,10 +1156,6 @@ class NFPAComplianceResponse(BaseModel):
 
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "NFPAComplianceResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 class NFPAExposureRecordCreate(BaseModel):
     """Schema for logging an NFPA exposure event"""
@@ -1222,7 +1171,7 @@ class NFPAExposureRecordCreate(BaseModel):
     user_id: Optional[UUID] = None
 
 
-class NFPAExposureRecordResponse(BaseModel):
+class NFPAExposureRecordResponse(UTCResponseBase):
     """Schema for NFPA exposure record response"""
 
     id: UUID
@@ -1241,10 +1190,6 @@ class NFPAExposureRecordResponse(BaseModel):
     updated_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "NFPAExposureRecordResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class NFPASummaryResponse(BaseModel):
@@ -1378,7 +1323,7 @@ class IssuanceAllowanceUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class IssuanceAllowanceResponse(BaseModel):
+class IssuanceAllowanceResponse(UTCResponseBase):
     """Issuance allowance response."""
 
     id: UUID
@@ -1396,10 +1341,6 @@ class IssuanceAllowanceResponse(BaseModel):
     role_name: Optional[str] = None
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "IssuanceAllowanceResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class AllowanceCheckResponse(BaseModel):
@@ -1429,7 +1370,7 @@ class IssuanceChargeRequest(BaseModel):
     )
 
 
-class IssuanceChargeListItem(BaseModel):
+class IssuanceChargeListItem(UTCResponseBase):
     """Summary of an issuance with charge info for the admin charge management view."""
 
     issuance_id: UUID
@@ -1447,10 +1388,6 @@ class IssuanceChargeListItem(BaseModel):
     charge_amount: Optional[Decimal] = None
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "IssuanceChargeListItem":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class ChargeManagementResponse(BaseModel):
@@ -1495,7 +1432,7 @@ class ReturnRequestReview(BaseModel):
     )
 
 
-class ReturnRequestResponse(BaseModel):
+class ReturnRequestResponse(UTCResponseBase):
     """Response for a return request."""
 
     id: UUID
@@ -1520,10 +1457,6 @@ class ReturnRequestResponse(BaseModel):
     updated_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ReturnRequestResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -1568,7 +1501,7 @@ class ReorderRequestUpdate(BaseModel):
     notes: Optional[str] = None
 
 
-class ReorderRequestResponse(BaseModel):
+class ReorderRequestResponse(UTCResponseBase):
     """Schema for reorder request response"""
 
     id: UUID
@@ -1599,10 +1532,6 @@ class ReorderRequestResponse(BaseModel):
 
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ReorderRequestResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # ============================================
 # Variant Group Schemas
@@ -1632,7 +1561,7 @@ class ItemVariantGroupUpdate(BaseModel):
     active: Optional[bool] = None
 
 
-class ItemVariantGroupResponse(BaseModel):
+class ItemVariantGroupResponse(UTCResponseBase):
     """Schema for variant group response"""
 
     id: UUID
@@ -1648,10 +1577,6 @@ class ItemVariantGroupResponse(BaseModel):
     updated_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ItemVariantGroupResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class ItemVariantGroupDetailResponse(ItemVariantGroupResponse):
@@ -1714,7 +1639,7 @@ class EquipmentKitItemResponse(BaseModel):
     model_config = _response_config
 
 
-class EquipmentKitResponse(BaseModel):
+class EquipmentKitResponse(UTCResponseBase):
     """Schema for equipment kit response"""
 
     id: UUID
@@ -1729,10 +1654,6 @@ class EquipmentKitResponse(BaseModel):
     created_by: Optional[UUID] = None
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "EquipmentKitResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class EquipmentKitDetailResponse(EquipmentKitResponse):
@@ -1767,7 +1688,7 @@ class MemberSizePreferencesUpdate(MemberSizePreferencesCreate):
     """Schema for updating member size preferences (same fields, all optional)"""
 
 
-class MemberSizePreferencesResponse(BaseModel):
+class MemberSizePreferencesResponse(UTCResponseBase):
     """Schema for member size preferences response"""
 
     id: UUID
@@ -1787,7 +1708,3 @@ class MemberSizePreferencesResponse(BaseModel):
     updated_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "MemberSizePreferencesResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]

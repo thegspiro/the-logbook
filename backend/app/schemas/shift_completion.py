@@ -7,8 +7,9 @@ Pydantic models for shift officer reports on trainee experiences.
 from datetime import date, datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, model_validator
-from app.schemas.base import stamp_naive_datetimes_utc
+from pydantic import BaseModel, Field
+
+from app.schemas.base import UTCResponseBase
 
 
 class SkillObservation(BaseModel):
@@ -67,7 +68,7 @@ class ReportReview(BaseModel):
     redact_fields: Optional[List[str]] = None  # field names to clear before approving
 
 
-class ShiftCompletionReportResponse(BaseModel):
+class ShiftCompletionReportResponse(UTCResponseBase):
     id: str
     organization_id: str
     shift_id: Optional[str] = None
@@ -104,7 +105,3 @@ class ShiftCompletionReportResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ShiftCompletionReportResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]

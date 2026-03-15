@@ -9,9 +9,10 @@ from decimal import Decimal
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
-from app.schemas.base import stamp_naive_datetimes_utc
+
+from app.schemas.base import UTCResponseBase
 
 # Shared config for response schemas
 _response_config = ConfigDict(
@@ -265,10 +266,6 @@ class FacilityTypeResponse(FacilityTypeBase):
     updated_at: datetime
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "FacilityTypeResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 class FacilityTypeListItem(BaseModel):
     id: str
@@ -311,10 +308,6 @@ class FacilityStatusResponse(FacilityStatusBase):
     created_at: datetime
     updated_at: datetime
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "FacilityStatusResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class FacilityStatusListItem(BaseModel):
@@ -430,10 +423,6 @@ class FacilityResponse(FacilityBase):
 
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "FacilityResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 class FacilityListItem(BaseModel):
     id: str
@@ -480,10 +469,6 @@ class FacilityPhotoResponse(FacilityPhotoCreate):
     uploaded_at: datetime
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "FacilityPhotoResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # =============================================================================
 # Facility Document Schemas
@@ -514,10 +499,6 @@ class FacilityDocumentResponse(FacilityDocumentCreate):
     uploaded_by: Optional[str] = None
     uploaded_at: datetime
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "FacilityDocumentResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # =============================================================================
@@ -554,10 +535,6 @@ class FacilityMaintenanceTypeResponse(FacilityMaintenanceTypeBase):
     created_at: datetime
     updated_at: datetime
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "FacilityMaintenanceTypeResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # =============================================================================
@@ -651,10 +628,6 @@ class FacilityMaintenanceResponse(FacilityMaintenanceBase):
 
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "FacilityMaintenanceResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # =============================================================================
 # Facility System Schemas
@@ -734,10 +707,6 @@ class FacilitySystemResponse(FacilitySystemBase):
     updated_at: datetime
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "FacilitySystemResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # =============================================================================
 # Facility Inspection Schemas
@@ -807,10 +776,6 @@ class FacilityInspectionResponse(FacilityInspectionBase):
     updated_at: datetime
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "FacilityInspectionResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # =============================================================================
 # Facility Utility Account Schemas
@@ -857,10 +822,6 @@ class FacilityUtilityAccountResponse(FacilityUtilityAccountBase):
     updated_at: datetime
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "FacilityUtilityAccountResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # =============================================================================
 # Facility Utility Reading Schemas
@@ -888,7 +849,7 @@ class FacilityUtilityReadingUpdate(BaseModel):
     notes: Optional[str] = None
 
 
-class FacilityUtilityReadingResponse(BaseModel):
+class FacilityUtilityReadingResponse(UTCResponseBase):
     id: str
     organization_id: str
     utility_account_id: str
@@ -902,10 +863,6 @@ class FacilityUtilityReadingResponse(BaseModel):
     created_by: Optional[str] = None
     created_at: datetime
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "FacilityUtilityReadingResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # =============================================================================
@@ -950,10 +907,6 @@ class FacilityAccessKeyResponse(FacilityAccessKeyBase):
     created_at: datetime
     updated_at: datetime
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "FacilityAccessKeyResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # =============================================================================
@@ -1004,10 +957,6 @@ class FacilityRoomResponse(FacilityRoomBase):
     updated_at: datetime
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "FacilityRoomResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # =============================================================================
 # Facility Emergency Contact Schemas
@@ -1053,10 +1002,6 @@ class FacilityEmergencyContactResponse(FacilityEmergencyContactBase):
     updated_at: datetime
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "FacilityEmergencyContactResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # =============================================================================
 # Facility Shutoff Location Schemas
@@ -1081,7 +1026,7 @@ class FacilityShutoffLocationUpdate(BaseModel):
     photo_path: Optional[str] = Field(None, max_length=500)
 
 
-class FacilityShutoffLocationResponse(BaseModel):
+class FacilityShutoffLocationResponse(UTCResponseBase):
     id: str
     organization_id: str
     facility_id: str
@@ -1094,10 +1039,6 @@ class FacilityShutoffLocationResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "FacilityShutoffLocationResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # =============================================================================
@@ -1159,10 +1100,6 @@ class FacilityCapitalProjectResponse(FacilityCapitalProjectBase):
     updated_at: datetime
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "FacilityCapitalProjectResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # =============================================================================
 # Facility Insurance Policy Schemas
@@ -1217,10 +1154,6 @@ class FacilityInsurancePolicyResponse(FacilityInsurancePolicyBase):
     updated_at: datetime
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "FacilityInsurancePolicyResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # =============================================================================
 # Facility Occupant Schemas
@@ -1263,10 +1196,6 @@ class FacilityOccupantResponse(FacilityOccupantBase):
     updated_at: datetime
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "FacilityOccupantResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # =============================================================================
 # Facility Compliance Checklist Schemas
@@ -1306,10 +1235,6 @@ class FacilityComplianceChecklistResponse(FacilityComplianceChecklistBase):
     updated_at: datetime
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "FacilityComplianceChecklistResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # =============================================================================
 # Facility Compliance Item Schemas
@@ -1340,7 +1265,7 @@ class FacilityComplianceItemUpdate(BaseModel):
     notes: Optional[str] = None
 
 
-class FacilityComplianceItemResponse(BaseModel):
+class FacilityComplianceItemResponse(UTCResponseBase):
     id: str
     organization_id: str
     checklist_id: str
@@ -1355,7 +1280,3 @@ class FacilityComplianceItemResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "FacilityComplianceItemResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]

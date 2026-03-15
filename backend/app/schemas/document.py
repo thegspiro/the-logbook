@@ -9,8 +9,9 @@ see schemas/documents.py.
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
-from app.schemas.base import stamp_naive_datetimes_utc
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.base import UTCResponseBase
 
 
 class FolderCreate(BaseModel):
@@ -35,7 +36,7 @@ class FolderUpdate(BaseModel):
     color: Optional[str] = Field(None, max_length=50)
 
 
-class FolderResponse(BaseModel):
+class FolderResponse(UTCResponseBase):
     """Folder response schema"""
 
     id: str
@@ -53,10 +54,6 @@ class FolderResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "FolderResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class DocumentCreate(BaseModel):
@@ -82,7 +79,7 @@ class DocumentUpdate(BaseModel):
     tags: Optional[List[str]] = None
 
 
-class DocumentResponse(BaseModel):
+class DocumentResponse(UTCResponseBase):
     """Document response schema for the minutes publishing flow"""
 
     id: str
@@ -105,12 +102,8 @@ class DocumentResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "DocumentResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
-
-class DocumentListItem(BaseModel):
+class DocumentListItem(UTCResponseBase):
     """Compact document listing"""
 
     id: str
@@ -127,7 +120,3 @@ class DocumentListItem(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "DocumentListItem":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]

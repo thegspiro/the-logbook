@@ -9,9 +9,9 @@ from datetime import date, datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
-from app.schemas.base import stamp_naive_datetimes_utc
+from app.schemas.base import UTCResponseBase
 
 # ==================== Self-Report Config Schemas ====================
 
@@ -24,7 +24,7 @@ class FieldConfig(BaseModel):
     label: str = ""
 
 
-class SelfReportConfigResponse(BaseModel):
+class SelfReportConfigResponse(UTCResponseBase):
     """Response schema for self-report configuration"""
 
     id: UUID
@@ -48,10 +48,6 @@ class SelfReportConfigResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "SelfReportConfigResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class SelfReportConfigUpdate(BaseModel):
@@ -123,7 +119,7 @@ class TrainingSubmissionUpdate(BaseModel):
     attachments: Optional[list[str]] = None
 
 
-class TrainingSubmissionResponse(BaseModel):
+class TrainingSubmissionResponse(UTCResponseBase):
     """Response schema for a training submission"""
 
     id: UUID
@@ -160,10 +156,6 @@ class TrainingSubmissionResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "TrainingSubmissionResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class SubmissionReviewRequest(BaseModel):
