@@ -21,9 +21,12 @@ from app.schemas.equipment_check import (
     CheckTemplateItemCreate,
     CheckTemplateItemResponse,
     CheckTemplateItemUpdate,
+    ComplianceReportResponse,
     EquipmentCheckTemplateCreate,
     EquipmentCheckTemplateResponse,
     EquipmentCheckTemplateUpdate,
+    FailureLogResponse,
+    ItemTrendResponse,
     ReorderRequest,
     ShiftCheckSummary,
     ShiftEquipmentCheckCreate,
@@ -455,4 +458,216 @@ async def get_my_checklist_history(
         end_date=end_date,
         limit=limit,
         offset=offset,
+    )
+
+
+# =====================================================================
+# Reports
+# =====================================================================
+
+
+@router.get(
+    "/reports/compliance",
+    response_model=ComplianceReportResponse,
+)
+async def get_compliance_report(
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("equipment_check.view")
+    ),
+):
+    """Aggregated compliance stats by apparatus + date range."""
+    service = EquipmentCheckService(db)
+    return await service.get_compliance_report(
+        current_user.organization_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+
+@router.get(
+    "/reports/failures",
+    response_model=FailureLogResponse,
+)
+async def get_failure_log(
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    apparatus_id: str | None = Query(None),
+    item_name: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("equipment_check.view")
+    ),
+):
+    """Paginated failure log with filters."""
+    service = EquipmentCheckService(db)
+    return await service.get_failure_log(
+        current_user.organization_id,
+        date_from=date_from,
+        date_to=date_to,
+        apparatus_id=apparatus_id,
+        item_name=item_name,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
+    "/reports/item-trends",
+    response_model=ItemTrendResponse,
+)
+async def get_item_trends(
+    template_item_id: str = Query(...),
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    interval: str = Query("weekly"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("equipment_check.view")
+    ),
+):
+    """Per-item pass/fail trend over time."""
+    service = EquipmentCheckService(db)
+    return await service.get_item_trends(
+        current_user.organization_id,
+        template_item_id=template_item_id,
+        date_from=date_from,
+        date_to=date_to,
+        interval=interval,
+    )
+
+
+@router.get("/reports/export/csv")
+async def export_csv(
+    report_type: str = Query(...),
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    apparatus_id: str | None = Query(None),
+    template_item_id: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("equipment_check.view")
+    ),
+):
+    """Export report data as CSV."""
+    import csv
+    import io
+
+    from starlette.responses import StreamingResponse
+
+    service = EquipmentCheckService(db)
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    if report_type == "compliance":
+        data = await service.get_compliance_report(
+            current_user.organization_id,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        writer.writerow(
+            [
+                "Apparatus",
+                "Checks Completed",
+                "Pass",
+                "Fail",
+                "Last Check Date",
+                "Last Checked By",
+                "Has Deficiency",
+            ]
+        )
+        for a in data.get("apparatus", []):
+            writer.writerow(
+                [
+                    a.get("apparatus_name", ""),
+                    a.get("checks_completed", 0),
+                    a.get("pass_count", 0),
+                    a.get("fail_count", 0),
+                    a.get("last_check_date", ""),
+                    a.get("last_checked_by", ""),
+                    a.get("has_deficiency", False),
+                ]
+            )
+
+    elif report_type == "failures":
+        data = await service.get_failure_log(
+            current_user.organization_id,
+            date_from=date_from,
+            date_to=date_to,
+            apparatus_id=apparatus_id,
+            limit=10000,
+        )
+        writer.writerow(
+            [
+                "Date",
+                "Apparatus",
+                "Compartment",
+                "Item",
+                "Check Type",
+                "Status",
+                "Notes",
+                "Checked By",
+            ]
+        )
+        for f in data.get("items", []):
+            writer.writerow(
+                [
+                    f.get("checked_at", ""),
+                    f.get("apparatus_name", ""),
+                    f.get("compartment_name", ""),
+                    f.get("item_name", ""),
+                    f.get("check_type", ""),
+                    f.get("status", ""),
+                    f.get("notes", ""),
+                    f.get("checked_by_name", ""),
+                ]
+            )
+
+    elif (
+        report_type == "item-trends"
+        and template_item_id
+    ):
+        data = await service.get_item_trends(
+            current_user.organization_id,
+            template_item_id=template_item_id,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        writer.writerow(
+            [
+                "Period",
+                "Pass",
+                "Fail",
+                "Not Checked",
+            ]
+        )
+        for t in data.get("trends", []):
+            writer.writerow(
+                [
+                    t.get("period", ""),
+                    t.get("pass_count", 0),
+                    t.get("fail_count", 0),
+                    t.get("not_checked_count", 0),
+                ]
+            )
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid report_type",
+        )
+
+    output.seek(0)
+    filename = f"equipment_check_{report_type}.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename={filename}"
+            )
+        },
     )

@@ -365,3 +365,120 @@ class ReorderRequest(BaseModel):
     """Schema for reordering compartments or items."""
 
     ordered_ids: List[str]
+
+
+# ============================================
+# Report Schemas
+# ============================================
+
+
+class ApparatusComplianceRecord(BaseModel):
+    """Per-apparatus compliance summary for the report dashboard."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+    apparatus_id: str
+    apparatus_name: str
+    last_check_date: Optional[datetime] = None
+    last_checked_by: Optional[str] = None
+    last_status: Optional[str] = None
+    checks_completed: int = 0
+    checks_expected: int = 0
+    pass_count: int = 0
+    fail_count: int = 0
+    has_deficiency: bool = False
+    deficiency_since: Optional[datetime] = None
+
+
+class MemberComplianceReportRecord(BaseModel):
+    """Per-member check completion stats."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+    user_id: str
+    user_name: str
+    checks_completed: int = 0
+    pass_count: int = 0
+    fail_count: int = 0
+
+
+class ComplianceReportResponse(BaseModel):
+    """Aggregated compliance dashboard data."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+    total_checks: int = 0
+    pass_rate: float = 0.0
+    overdue_count: int = 0
+    avg_items_per_check: float = 0.0
+    apparatus: List[ApparatusComplianceRecord] = []
+    members: List[MemberComplianceReportRecord] = []
+
+
+class FailureLogRecord(BaseModel):
+    """A single failed-item entry for the failure log."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+    id: str
+    check_id: str
+    checked_at: Optional[datetime] = None
+    apparatus_id: Optional[str] = None
+    apparatus_name: Optional[str] = None
+    compartment_name: str
+    item_name: str
+    check_type: Optional[str] = None
+    status: str
+    notes: Optional[str] = None
+    checked_by_name: Optional[str] = None
+
+
+class FailureLogResponse(BaseModel):
+    """Paginated list of failure records."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+    items: List[FailureLogRecord] = []
+    total: int = 0
+
+
+class ItemTrendEntry(BaseModel):
+    """A single data point in item trend history."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+    period: str
+    pass_count: int = 0
+    fail_count: int = 0
+    not_checked_count: int = 0
+
+
+class ItemTrendResponse(BaseModel):
+    """Trend data for a specific template item over time."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+    item_name: str
+    trends: List[ItemTrendEntry] = []
+    history: List[CheckItemHistory] = []

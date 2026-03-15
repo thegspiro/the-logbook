@@ -57,6 +57,9 @@ import type {
   CheckTemplateCompartment,
   CheckTemplateItem,
   CheckItemHistory,
+  ComplianceReport,
+  FailureLogResponse,
+  ItemTrendResponse,
 } from '../types/equipmentCheck';
 
 declare module 'axios' {
@@ -626,5 +629,50 @@ export const schedulingService = {
   async getMyChecklistHistory(params?: { start_date?: string; end_date?: string; limit?: number; offset?: number }): Promise<ShiftEquipmentCheckRecord[]> {
     const response = await api.get<ShiftEquipmentCheckRecord[]>('/equipment-checks/my-checklists/history', { params });
     return response.data;
+  },
+
+  // =====================================================================
+  // Reports
+  // =====================================================================
+
+  async getEquipmentComplianceReport(params?: {
+    date_from?: string;
+    date_to?: string;
+  }): Promise<ComplianceReport> {
+    const response = await api.get<ComplianceReport>('/equipment-checks/reports/compliance', { params });
+    return response.data;
+  },
+  async getFailureLog(params?: {
+    date_from?: string | undefined;
+    date_to?: string | undefined;
+    apparatus_id?: string | undefined;
+    item_name?: string | undefined;
+    limit?: number | undefined;
+    offset?: number | undefined;
+  }): Promise<FailureLogResponse> {
+    const response = await api.get<FailureLogResponse>('/equipment-checks/reports/failures', { params });
+    return response.data;
+  },
+  async getItemTrends(params: {
+    template_item_id: string;
+    date_from?: string;
+    date_to?: string;
+    interval?: string;
+  }): Promise<ItemTrendResponse> {
+    const response = await api.get<ItemTrendResponse>('/equipment-checks/reports/item-trends', { params });
+    return response.data;
+  },
+  getReportExportUrl(params: {
+    report_type: string;
+    date_from?: string;
+    date_to?: string;
+    apparatus_id?: string;
+    template_item_id?: string;
+  }): string {
+    const searchParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) searchParams.set(key, value);
+    });
+    return `/api/v1/equipment-checks/reports/export/csv?${searchParams.toString()}`;
   },
 };

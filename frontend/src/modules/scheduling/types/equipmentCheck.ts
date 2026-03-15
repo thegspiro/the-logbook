@@ -292,3 +292,68 @@ export interface CheckItemHistory {
   checkedByName?: string;
   checkedAt?: string;
 }
+
+// ─── Report Types ────────────────────────────────────────────────────────────
+
+export interface ApparatusComplianceRecord {
+  apparatusId: string;
+  apparatusName: string;
+  lastCheckDate?: string;
+  lastCheckedBy?: string;
+  lastStatus?: string;
+  checksCompleted: number;
+  checksExpected: number;
+  passCount: number;
+  failCount: number;
+  hasDeficiency: boolean;
+  deficiencySince?: string;
+}
+
+export interface MemberComplianceReportRecord {
+  userId: string;
+  userName: string;
+  checksCompleted: number;
+  passCount: number;
+  failCount: number;
+}
+
+export interface ComplianceReport {
+  totalChecks: number;
+  passRate: number;
+  overdueCount: number;
+  avgItemsPerCheck: number;
+  apparatus: ApparatusComplianceRecord[];
+  members: MemberComplianceReportRecord[];
+}
+
+export interface FailureLogRecord {
+  id: string;
+  checkId: string;
+  checkedAt?: string;
+  apparatusId?: string;
+  apparatusName?: string;
+  compartmentName: string;
+  itemName: string;
+  checkType?: string;
+  status: string;
+  notes?: string;
+  checkedByName?: string;
+}
+
+export interface FailureLogResponse {
+  items: FailureLogRecord[];
+  total: number;
+}
+
+export interface ItemTrendEntry {
+  period: string;
+  passCount: number;
+  failCount: number;
+  notCheckedCount: number;
+}
+
+export interface ItemTrendResponse {
+  itemName: string;
+  trends: ItemTrendEntry[];
+  history: CheckItemHistory[];
+}

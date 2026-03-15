@@ -1260,3 +1260,489 @@ class EquipmentCheckService:
                 "Equipment check failure notification "
                 f"failed: {e}"
             )
+
+    # ============================================
+    # Report Queries
+    # ============================================
+
+    async def get_compliance_report(
+        self,
+        organization_id: str,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> Dict[str, Any]:
+        """Aggregated compliance stats by apparatus + date range."""
+        from datetime import timedelta
+
+        if not date_from:
+            date_from = date.today() - timedelta(days=30)
+        if not date_to:
+            date_to = date.today()
+
+        date_to_end = datetime.combine(
+            date_to, datetime.max.time()
+        ).replace(tzinfo=timezone.utc)
+        date_from_start = datetime.combine(
+            date_from, datetime.min.time()
+        ).replace(tzinfo=timezone.utc)
+
+        # All checks in the date range
+        checks_q = await self.db.execute(
+            select(ShiftEquipmentCheck).where(
+                ShiftEquipmentCheck.organization_id
+                == organization_id,
+                ShiftEquipmentCheck.checked_at
+                >= date_from_start,
+                ShiftEquipmentCheck.checked_at
+                <= date_to_end,
+            )
+        )
+        checks = checks_q.scalars().all()
+
+        # Build apparatus map
+        apparatus_ids = {
+            c.apparatus_id
+            for c in checks
+            if c.apparatus_id
+        }
+        apparatus_map: Dict[str, Any] = {}
+        if apparatus_ids:
+            app_q = await self.db.execute(
+                select(Apparatus).where(
+                    Apparatus.id.in_(list(apparatus_ids))
+                )
+            )
+            for a in app_q.scalars().all():
+                apparatus_map[str(a.id)] = a
+
+        # Also get all org apparatus for deficiency status
+        all_app_q = await self.db.execute(
+            select(Apparatus).where(
+                Apparatus.organization_id == organization_id,
+            )
+        )
+        all_apparatus = all_app_q.scalars().all()
+
+        # Per-apparatus stats
+        app_stats: Dict[str, Dict[str, Any]] = {}
+        for a in all_apparatus:
+            aid = str(a.id)
+            app_stats[aid] = {
+                "apparatus_id": aid,
+                "apparatus_name": a.unit_number,
+                "last_check_date": None,
+                "last_checked_by": None,
+                "last_status": None,
+                "checks_completed": 0,
+                "checks_expected": 0,
+                "pass_count": 0,
+                "fail_count": 0,
+                "has_deficiency": bool(a.has_deficiency),
+                "deficiency_since": a.deficiency_since,
+            }
+
+        total_items_sum = 0
+        user_ids: set[str] = set()
+        for c in checks:
+            aid = str(c.apparatus_id) if c.apparatus_id else None
+            if aid and aid in app_stats:
+                stats = app_stats[aid]
+                stats["checks_completed"] += 1
+                if c.overall_status == "pass":
+                    stats["pass_count"] += 1
+                elif c.overall_status == "fail":
+                    stats["fail_count"] += 1
+                if (
+                    stats["last_check_date"] is None
+                    or (
+                        c.checked_at
+                        and c.checked_at
+                        > stats["last_check_date"]
+                    )
+                ):
+                    stats["last_check_date"] = c.checked_at
+                    stats["last_checked_by"] = c.checked_by
+                    stats["last_status"] = c.overall_status
+            total_items_sum += c.total_items or 0
+            if c.checked_by:
+                user_ids.add(str(c.checked_by))
+
+        # Resolve user names for last_checked_by
+        user_name_map = await self._get_user_name_map(
+            list(user_ids)
+        )
+        for stats in app_stats.values():
+            uid = stats.get("last_checked_by")
+            if uid and uid in user_name_map:
+                stats["last_checked_by"] = user_name_map[uid]
+
+        # Per-member stats
+        member_stats: Dict[str, Dict[str, Any]] = {}
+        for c in checks:
+            uid = str(c.checked_by) if c.checked_by else None
+            if not uid:
+                continue
+            if uid not in member_stats:
+                member_stats[uid] = {
+                    "user_id": uid,
+                    "user_name": user_name_map.get(
+                        uid, "Unknown"
+                    ),
+                    "checks_completed": 0,
+                    "pass_count": 0,
+                    "fail_count": 0,
+                }
+            member_stats[uid]["checks_completed"] += 1
+            if c.overall_status == "pass":
+                member_stats[uid]["pass_count"] += 1
+            elif c.overall_status == "fail":
+                member_stats[uid]["fail_count"] += 1
+
+        total_checks = len(checks)
+        pass_count = sum(
+            1
+            for c in checks
+            if c.overall_status == "pass"
+        )
+        pass_rate = (
+            round(pass_count / total_checks * 100, 1)
+            if total_checks > 0
+            else 0.0
+        )
+        avg_items = (
+            round(total_items_sum / total_checks, 1)
+            if total_checks > 0
+            else 0.0
+        )
+
+        return {
+            "total_checks": total_checks,
+            "pass_rate": pass_rate,
+            "overdue_count": 0,
+            "avg_items_per_check": avg_items,
+            "apparatus": list(app_stats.values()),
+            "members": list(member_stats.values()),
+        }
+
+    async def get_failure_log(
+        self,
+        organization_id: str,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+        apparatus_id: Optional[str] = None,
+        item_name: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        """Paginated failure log with filters."""
+        from datetime import timedelta
+
+        if not date_from:
+            date_from = date.today() - timedelta(days=30)
+        if not date_to:
+            date_to = date.today()
+
+        date_to_end = datetime.combine(
+            date_to, datetime.max.time()
+        ).replace(tzinfo=timezone.utc)
+        date_from_start = datetime.combine(
+            date_from, datetime.min.time()
+        ).replace(tzinfo=timezone.utc)
+
+        base_q = (
+            select(ShiftEquipmentCheckItem)
+            .join(
+                ShiftEquipmentCheck,
+                ShiftEquipmentCheck.id
+                == ShiftEquipmentCheckItem.check_id,
+            )
+            .where(
+                ShiftEquipmentCheck.organization_id
+                == organization_id,
+                ShiftEquipmentCheckItem.status == "fail",
+                ShiftEquipmentCheck.checked_at
+                >= date_from_start,
+                ShiftEquipmentCheck.checked_at
+                <= date_to_end,
+            )
+        )
+        if apparatus_id:
+            base_q = base_q.where(
+                ShiftEquipmentCheck.apparatus_id
+                == apparatus_id
+            )
+        if item_name:
+            base_q = base_q.where(
+                ShiftEquipmentCheckItem.item_name.ilike(
+                    f"%{item_name}%"
+                )
+            )
+
+        # Count
+        from sqlalchemy import func as sa_func
+
+        count_q = select(
+            sa_func.count(ShiftEquipmentCheckItem.id)
+        ).select_from(base_q.subquery())
+        total_result = await self.db.execute(count_q)
+        total = total_result.scalar() or 0
+
+        # Fetch page
+        items_q = (
+            base_q.order_by(
+                ShiftEquipmentCheck.checked_at.desc()
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+        items_result = await self.db.execute(items_q)
+        failed_items = items_result.scalars().all()
+
+        # Resolve check + apparatus data
+        check_ids = {
+            str(fi.check_id) for fi in failed_items
+        }
+        checks_map: Dict[str, ShiftEquipmentCheck] = {}
+        if check_ids:
+            cq = await self.db.execute(
+                select(ShiftEquipmentCheck).where(
+                    ShiftEquipmentCheck.id.in_(
+                        list(check_ids)
+                    )
+                )
+            )
+            for c in cq.scalars().all():
+                checks_map[str(c.id)] = c
+
+        user_ids_set: set[str] = set()
+        apparatus_ids_set: set[str] = set()
+        for c in checks_map.values():
+            if c.checked_by:
+                user_ids_set.add(str(c.checked_by))
+            if c.apparatus_id:
+                apparatus_ids_set.add(str(c.apparatus_id))
+
+        user_map = await self._get_user_name_map(
+            list(user_ids_set)
+        )
+        app_name_map: Dict[str, str] = {}
+        if apparatus_ids_set:
+            aq = await self.db.execute(
+                select(
+                    Apparatus.id, Apparatus.unit_number
+                ).where(
+                    Apparatus.id.in_(
+                        list(apparatus_ids_set)
+                    )
+                )
+            )
+            for row in aq.all():
+                app_name_map[str(row[0])] = row[1]
+
+        records = []
+        for fi in failed_items:
+            check = checks_map.get(str(fi.check_id))
+            records.append(
+                {
+                    "id": str(fi.id),
+                    "check_id": str(fi.check_id),
+                    "checked_at": (
+                        check.checked_at if check else None
+                    ),
+                    "apparatus_id": (
+                        str(check.apparatus_id)
+                        if check and check.apparatus_id
+                        else None
+                    ),
+                    "apparatus_name": (
+                        app_name_map.get(
+                            str(check.apparatus_id), ""
+                        )
+                        if check and check.apparatus_id
+                        else None
+                    ),
+                    "compartment_name": fi.compartment_name,
+                    "item_name": fi.item_name,
+                    "check_type": fi.check_type,
+                    "status": fi.status,
+                    "notes": fi.notes,
+                    "checked_by_name": (
+                        user_map.get(
+                            str(check.checked_by), "Unknown"
+                        )
+                        if check and check.checked_by
+                        else None
+                    ),
+                }
+            )
+
+        return {"items": records, "total": total}
+
+    async def get_item_trends(
+        self,
+        organization_id: str,
+        template_item_id: str,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+        interval: str = "weekly",
+    ) -> Dict[str, Any]:
+        """Per-item pass/fail trend over time."""
+        from datetime import timedelta
+
+        if not date_from:
+            date_from = date.today() - timedelta(days=90)
+        if not date_to:
+            date_to = date.today()
+
+        date_to_end = datetime.combine(
+            date_to, datetime.max.time()
+        ).replace(tzinfo=timezone.utc)
+        date_from_start = datetime.combine(
+            date_from, datetime.min.time()
+        ).replace(tzinfo=timezone.utc)
+
+        # Get all check items for this template item
+        q = await self.db.execute(
+            select(ShiftEquipmentCheckItem)
+            .join(
+                ShiftEquipmentCheck,
+                ShiftEquipmentCheck.id
+                == ShiftEquipmentCheckItem.check_id,
+            )
+            .where(
+                ShiftEquipmentCheck.organization_id
+                == organization_id,
+                ShiftEquipmentCheckItem.template_item_id
+                == template_item_id,
+                ShiftEquipmentCheck.checked_at
+                >= date_from_start,
+                ShiftEquipmentCheck.checked_at
+                <= date_to_end,
+            )
+            .order_by(ShiftEquipmentCheck.checked_at.asc())
+        )
+        items = q.scalars().all()
+
+        # Get check data for dates
+        check_ids = {str(i.check_id) for i in items}
+        checks_map: Dict[str, ShiftEquipmentCheck] = {}
+        if check_ids:
+            cq = await self.db.execute(
+                select(ShiftEquipmentCheck).where(
+                    ShiftEquipmentCheck.id.in_(
+                        list(check_ids)
+                    )
+                )
+            )
+            for c in cq.scalars().all():
+                checks_map[str(c.id)] = c
+
+        user_ids_set: set[str] = set()
+        for c in checks_map.values():
+            if c.checked_by:
+                user_ids_set.add(str(c.checked_by))
+        user_map = await self._get_user_name_map(
+            list(user_ids_set)
+        )
+
+        # Build trend buckets
+        from collections import defaultdict
+
+        if interval == "daily":
+            fmt = "%Y-%m-%d"
+        elif interval == "monthly":
+            fmt = "%Y-%m"
+        else:
+            fmt = "%Y-W%W"
+
+        buckets: Dict[
+            str, Dict[str, int]
+        ] = defaultdict(
+            lambda: {
+                "pass_count": 0,
+                "fail_count": 0,
+                "not_checked_count": 0,
+            }
+        )
+
+        for item in items:
+            check = checks_map.get(str(item.check_id))
+            if not check or not check.checked_at:
+                continue
+            period_key = check.checked_at.strftime(fmt)
+            if item.status == "pass":
+                buckets[period_key]["pass_count"] += 1
+            elif item.status == "fail":
+                buckets[period_key]["fail_count"] += 1
+            else:
+                buckets[period_key][
+                    "not_checked_count"
+                ] += 1
+
+        trends = [
+            {
+                "period": k,
+                "pass_count": v["pass_count"],
+                "fail_count": v["fail_count"],
+                "not_checked_count": v[
+                    "not_checked_count"
+                ],
+            }
+            for k, v in sorted(buckets.items())
+        ]
+
+        # Build history records
+        history = []
+        for item in items:
+            check = checks_map.get(str(item.check_id))
+            shift_date_val = None
+            if check and check.shift_id:
+                sq = await self.db.execute(
+                    select(Shift.shift_date).where(
+                        Shift.id == check.shift_id
+                    )
+                )
+                sd = sq.scalar_one_or_none()
+                if sd:
+                    shift_date_val = sd
+            history.append(
+                {
+                    "check_id": str(item.check_id),
+                    "shift_id": (
+                        str(check.shift_id)
+                        if check
+                        else ""
+                    ),
+                    "shift_date": shift_date_val,
+                    "status": item.status,
+                    "quantity_found": item.quantity_found,
+                    "level_reading": item.level_reading,
+                    "serial_number": item.serial_number,
+                    "lot_number": item.lot_number,
+                    "is_expired": item.is_expired,
+                    "notes": item.notes,
+                    "checked_by_name": (
+                        user_map.get(
+                            str(check.checked_by),
+                            "Unknown",
+                        )
+                        if check and check.checked_by
+                        else None
+                    ),
+                    "checked_at": (
+                        check.checked_at
+                        if check
+                        else None
+                    ),
+                }
+            )
+
+        item_name = "Unknown"
+        if items:
+            item_name = items[0].item_name or "Unknown"
+
+        return {
+            "item_name": item_name,
+            "trends": trends,
+            "history": history,
+        }
