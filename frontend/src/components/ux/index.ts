@@ -38,5 +38,8 @@ export { MobileItemCard } from './MobileItemCard';
 export { MobileCheckoutCard } from './MobileCheckoutCard';
 export { FloatingActionButton } from './FloatingActionButton';
 
+// Form Controls
+export { default as DateTimeQuarterHour } from './DateTimeQuarterHour';
+
 // Information
 export { WhatsNew } from './WhatsNew';

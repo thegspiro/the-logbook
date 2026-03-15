@@ -22,6 +22,7 @@ import { formatDateTime, formatForDateTimeInput, localToUTC } from '../utils/dat
 import { userService, locationsService, trainingSessionService, trainingService } from '../services/api';
 import { schedulingService } from '../modules/scheduling/services/api';
 import { useRanks } from '../hooks/useRanks';
+import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 
 const RECURRENCE_PATTERNS: { value: RecurrencePattern; label: string }[] = [
   { value: 'daily', label: 'Daily' },
@@ -333,24 +334,22 @@ const CreateTrainingSessionPage: React.FC = () => {
                   <label className="block text-sm font-semibold text-theme-text-primary mb-2">
                     Start Date & Time <span className="text-red-700">*</span>
                   </label>
-                  <input
-                    type="datetime-local"
-                    step="900"
+                  <DateTimeQuarterHour
                     value={formatForDateTimeInput(formData.start_datetime, tz)}
-                    onChange={(e) => updateField('start_datetime', e.target.value)}
+                    onChange={(v) => updateField('start_datetime', v)}
                     className="form-input py-3"
+                    required
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-theme-text-primary mb-2">
                     End Date & Time <span className="text-red-700">*</span>
                   </label>
-                  <input
-                    type="datetime-local"
-                    step="900"
+                  <DateTimeQuarterHour
                     value={formatForDateTimeInput(formData.end_datetime, tz)}
-                    onChange={(e) => updateField('end_datetime', e.target.value)}
+                    onChange={(v) => updateField('end_datetime', v)}
                     className="form-input py-3"
+                    required
                   />
                 </div>
               </div>
@@ -630,11 +629,9 @@ const CreateTrainingSessionPage: React.FC = () => {
                     <label className="block text-sm font-semibold text-theme-text-primary mb-2">
                       RSVP Deadline
                     </label>
-                    <input
-                      type="datetime-local"
-                      step="900"
+                    <DateTimeQuarterHour
                       value={formatForDateTimeInput(formData.rsvp_deadline, tz)}
-                      onChange={(e) => updateField('rsvp_deadline', e.target.value)}
+                      onChange={(v) => updateField('rsvp_deadline', v)}
                       className="form-input py-3"
                     />
                   </div>
