@@ -105,7 +105,7 @@ const BudgetInfoCard: React.FC<BudgetInfoProps> = ({
             </span>
           )}
         </div>
-        <div className="h-3 w-full overflow-hidden rounded-full bg-gray-200">
+        <div className="h-3 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
           <div className="flex h-full">
             <div
               className="h-full bg-blue-500 transition-all"
@@ -127,7 +127,7 @@ const BudgetInfoCard: React.FC<BudgetInfoProps> = ({
             Encumbered
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2 w-2 rounded-full bg-gray-200" />
+            <span className="inline-block h-2 w-2 rounded-full bg-gray-200 dark:bg-gray-600" />
             Available
           </span>
         </div>

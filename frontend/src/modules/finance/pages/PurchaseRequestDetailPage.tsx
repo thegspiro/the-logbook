@@ -129,12 +129,12 @@ const ApprovalTimeline: React.FC<ApprovalTimelineProps> = ({ steps }) => {
         const isLast = idx === sorted.length - 1;
         const iconColor =
           step.status === 'approved' || step.status === 'auto_approved'
-            ? 'bg-green-100 text-green-600'
+            ? 'bg-green-100 text-green-600 dark:bg-green-500/20 dark:text-green-400'
             : step.status === 'denied'
-              ? 'bg-red-100 text-red-600'
+              ? 'bg-red-100 text-red-600 dark:bg-red-500/20 dark:text-red-400'
               : step.status === 'pending'
-                ? 'bg-yellow-100 text-yellow-600'
-                : 'bg-gray-100 text-gray-600';
+                ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-500/20 dark:text-yellow-400'
+                : 'bg-gray-100 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400';
 
         return (
           <div key={step.id} className="relative flex gap-4 pb-6">

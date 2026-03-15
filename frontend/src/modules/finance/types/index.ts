@@ -139,54 +139,54 @@ export type ApprovalEntityType =
 // =============================================================================
 
 export const PURCHASE_REQUEST_STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-800',
-  submitted: 'bg-blue-100 text-blue-800',
-  pending_approval: 'bg-yellow-100 text-yellow-800',
-  approved: 'bg-green-100 text-green-800',
-  denied: 'bg-red-100 text-red-800',
-  ordered: 'bg-indigo-100 text-indigo-800',
-  received: 'bg-teal-100 text-teal-800',
-  paid: 'bg-emerald-100 text-emerald-800',
-  cancelled: 'bg-gray-200 text-gray-600',
+  draft: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
+  submitted: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
+  pending_approval: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
+  approved: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+  denied: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+  ordered: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-400',
+  received: 'bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-400',
+  paid: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400',
+  cancelled: 'bg-gray-200 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
 };
 
 export const EXPENSE_REPORT_STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-800',
-  submitted: 'bg-blue-100 text-blue-800',
-  pending_approval: 'bg-yellow-100 text-yellow-800',
-  approved: 'bg-green-100 text-green-800',
-  denied: 'bg-red-100 text-red-800',
-  paid: 'bg-emerald-100 text-emerald-800',
-  cancelled: 'bg-gray-200 text-gray-600',
+  draft: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
+  submitted: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
+  pending_approval: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
+  approved: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+  denied: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+  paid: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400',
+  cancelled: 'bg-gray-200 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
 };
 
 export const CHECK_REQUEST_STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-800',
-  submitted: 'bg-blue-100 text-blue-800',
-  pending_approval: 'bg-yellow-100 text-yellow-800',
-  approved: 'bg-green-100 text-green-800',
-  denied: 'bg-red-100 text-red-800',
-  issued: 'bg-emerald-100 text-emerald-800',
-  voided: 'bg-orange-100 text-orange-800',
-  cancelled: 'bg-gray-200 text-gray-600',
+  draft: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
+  submitted: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
+  pending_approval: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
+  approved: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+  denied: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+  issued: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400',
+  voided: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
+  cancelled: 'bg-gray-200 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
 };
 
 export const DUES_STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  paid: 'bg-green-100 text-green-800',
-  partial: 'bg-blue-100 text-blue-800',
-  overdue: 'bg-red-100 text-red-800',
-  waived: 'bg-gray-100 text-gray-800',
-  exempt: 'bg-purple-100 text-purple-800',
+  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
+  paid: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+  partial: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
+  overdue: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+  waived: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
+  exempt: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400',
 };
 
 export const APPROVAL_STEP_STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  approved: 'bg-green-100 text-green-800',
-  denied: 'bg-red-100 text-red-800',
-  skipped: 'bg-gray-100 text-gray-800',
-  auto_approved: 'bg-teal-100 text-teal-800',
-  sent: 'bg-blue-100 text-blue-800',
+  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
+  approved: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+  denied: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+  skipped: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
+  auto_approved: 'bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-400',
+  sent: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
 };
 
 // =============================================================================

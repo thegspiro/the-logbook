@@ -102,12 +102,12 @@ const ChainCard: React.FC<ChainCardProps> = ({ chain, onDelete }) => {
                 </>
               )}
               {chain.isDefault && (
-                <span className="rounded bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">
+                <span className="rounded bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">
                   Default
                 </span>
               )}
               {!chain.isActive && (
-                <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600">
+                <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-500/20 dark:text-gray-400">
                   Inactive
                 </span>
               )}
