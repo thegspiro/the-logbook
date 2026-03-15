@@ -463,7 +463,7 @@ export const MinutesDetailPage: React.FC = () => {
                 )}
                 <button
                   onClick={() => { void handleOpenLinkEvent(); }}
-                  className="text-xs text-blue-600 hover:text-blue-800"
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                 >
                   {linkedEvent ? 'Change' : 'Link to Event'}
                 </button>
@@ -475,7 +475,7 @@ export const MinutesDetailPage: React.FC = () => {
               <span className="text-xs px-2 py-0.5 rounded-sm bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">Business Meeting</span>
               <Link
                 to={`/events/${linkedEvent.id}`}
-                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
               >
                 {linkedEvent.title}
               </Link>
@@ -693,7 +693,7 @@ export const MinutesDetailPage: React.FC = () => {
                         <>
                           <button
                             onClick={() => { setEditingSection(section.key); setSectionValue(section.content || ''); }}
-                            className="text-sm text-blue-600 hover:text-blue-800"
+                            className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                             aria-label={`Edit ${section.title}`}
                           >
                             Edit

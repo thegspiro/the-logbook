@@ -879,8 +879,18 @@
 }
 
 .high-contrast *:focus-visible {
-outline: 3px solid #ffff00 !important;
-outline-offset: 2px;
+  outline: 3px solid #ffff00 !important;
+  outline-offset: 2px;
+}
+
+/* High-contrast: override placeholder opacity so text meets AA 4.5:1 */
+.high-contrast ::placeholder {
+  opacity: 1 !important;
+}
+
+/* High-contrast: prevent opacity modifiers from dropping text below AA */
+.high-contrast .opacity-50 {
+  opacity: 0.8;
 }
 
 /* Smooth scroll behavior — respect reduced motion preference */

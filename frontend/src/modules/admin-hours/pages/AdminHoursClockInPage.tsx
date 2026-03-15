@@ -346,11 +346,11 @@ const AdminHoursClockInPage: React.FC = () => {
         </p>
 
         <div className="mt-8 text-center">
-          <Link to="/admin-hours" className="text-blue-600 hover:text-blue-800 font-medium">
+          <Link to="/admin-hours" className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium">
             View My Hours
           </Link>
           <span className="text-theme-text-muted mx-3">|</span>
-          <Link to="/dashboard" className="text-blue-600 hover:text-blue-800 font-medium">
+          <Link to="/dashboard" className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium">
             Dashboard
           </Link>
         </div>

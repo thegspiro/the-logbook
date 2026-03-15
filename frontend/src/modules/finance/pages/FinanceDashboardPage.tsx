@@ -127,7 +127,7 @@ const QuickLinkCard: React.FC<QuickLinkProps> = ({
     to={to}
     className="group flex items-center gap-3 rounded-lg border border-theme-surface-border bg-theme-surface p-4 transition-all hover:shadow-md hover:border-red-200"
   >
-    <div className="rounded-lg bg-red-50 p-2 text-red-600 group-hover:bg-red-100">
+    <div className="rounded-lg bg-red-50 dark:bg-red-500/10 p-2 text-red-600 dark:text-red-400 group-hover:bg-red-100 dark:group-hover:bg-red-500/20">
       {icon}
     </div>
     <div className="min-w-0 flex-1">

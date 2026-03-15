@@ -480,7 +480,7 @@ export const ElectionDetailPage: React.FC = () => {
             <div className="flex items-center gap-2 mb-2">
               <h2 className="text-2xl font-bold text-theme-text-primary">{election.title}</h2>
               {election.is_runoff && (
-                <span className="px-2 py-1 text-xs font-semibold bg-purple-100 text-purple-800 rounded-sm">
+                <span className="px-2 py-1 text-xs font-semibold bg-purple-100 dark:bg-purple-500/20 text-purple-800 dark:text-purple-400 rounded-sm">
                   Runoff Round {election.runoff_round}
                 </span>
               )}
@@ -576,7 +576,7 @@ export const ElectionDetailPage: React.FC = () => {
             <div>
               <div className="text-sm text-theme-text-muted">Linked Meeting</div>
               <div className="mt-1 text-sm font-medium text-theme-text-primary">
-                <Link to={`/meetings/${election.meeting_id}`} className="text-blue-600 hover:text-blue-800">
+                <Link to={`/meetings/${election.meeting_id}`} className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
                   View Meeting &rarr;
                 </Link>
               </div>
@@ -894,7 +894,7 @@ export const ElectionDetailPage: React.FC = () => {
                               <code className="text-xs text-red-300 bg-red-500/10 px-2 py-0.5 rounded-sm">{id}</code>
                               <button
                                 onClick={() => setVoidVoteId(id)}
-                                className="text-xs text-red-600 underline hover:text-red-800"
+                                className="text-xs text-red-600 dark:text-red-400 underline hover:text-red-800 dark:hover:text-red-300"
                               >
                                 Void this vote
                               </button>
@@ -1093,7 +1093,7 @@ export const ElectionDetailPage: React.FC = () => {
                     <button
                       onClick={() => { void handleLoadForensics(); }}
                       disabled={loadingForensics}
-                      className="text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                      className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 disabled:opacity-50"
                     >
                       {loadingForensics ? 'Refreshing...' : 'Refresh Forensics Report'}
                     </button>

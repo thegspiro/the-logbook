@@ -121,7 +121,7 @@ const ChainCard: React.FC<ChainCardProps> = ({ chain, onDelete }) => {
           <button
             type="button"
             onClick={() => onDelete(chain.id)}
-            className="rounded p-1 text-red-500 hover:bg-red-50 hover:text-red-700"
+            className="rounded p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-700 dark:hover:text-red-400"
             title="Delete chain"
           >
             <Trash2 className="h-4 w-4" />

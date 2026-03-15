@@ -198,7 +198,7 @@ const ErrorMonitoringPage: React.FC = () => {
                           {error.context.eventId && (
                             <Link
                               to={`/events/${error.context.eventId as string}`}
-                              className="text-blue-600 hover:text-blue-800"
+                              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                             >
                               Event
                             </Link>
