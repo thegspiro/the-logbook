@@ -9,8 +9,9 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
+from app.schemas.base import stamp_naive_datetimes_utc
 
 # Shared config for response schemas that need camelCase serialization
 _response_config = ConfigDict(
@@ -154,6 +155,10 @@ class ApparatusTypeResponse(ApparatusTypeBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ApparatusTypeResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class ApparatusTypeListItem(BaseModel):
     """Schema for apparatus type list items"""
@@ -226,6 +231,10 @@ class ApparatusStatusResponse(ApparatusStatusBase):
     updated_at: datetime
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ApparatusStatusResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class ApparatusStatusListItem(BaseModel):
@@ -511,6 +520,10 @@ class ApparatusResponse(ApparatusBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ApparatusResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class ApparatusListItem(BaseModel):
     """Schema for apparatus list items"""
@@ -651,6 +664,10 @@ class ApparatusCustomFieldResponse(ApparatusCustomFieldBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ApparatusCustomFieldResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # =============================================================================
 # Apparatus Maintenance Type Schemas
@@ -715,6 +732,10 @@ class ApparatusMaintenanceTypeResponse(ApparatusMaintenanceTypeBase):
     updated_at: datetime
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ApparatusMaintenanceTypeResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # =============================================================================
@@ -857,6 +878,10 @@ class ApparatusMaintenanceResponse(ApparatusMaintenanceBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ApparatusMaintenanceResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # =============================================================================
 # Apparatus Fuel Log Schemas
@@ -915,6 +940,10 @@ class ApparatusFuelLogResponse(ApparatusFuelLogBase):
     created_at: datetime
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ApparatusFuelLogResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # =============================================================================
@@ -989,6 +1018,10 @@ class ApparatusOperatorResponse(ApparatusOperatorBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ApparatusOperatorResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # =============================================================================
 # Apparatus Equipment Schemas
@@ -1053,6 +1086,10 @@ class ApparatusEquipmentResponse(ApparatusEquipmentBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ApparatusEquipmentResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # =============================================================================
 # Apparatus Photo Schemas
@@ -1105,6 +1142,10 @@ class ApparatusPhotoResponse(ApparatusPhotoBase):
     uploaded_at: datetime
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ApparatusPhotoResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # =============================================================================
@@ -1160,6 +1201,10 @@ class ApparatusDocumentResponse(ApparatusDocumentBase):
     uploaded_at: datetime
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ApparatusDocumentResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # =============================================================================
@@ -1307,6 +1352,10 @@ class ApparatusNFPAComplianceResponse(ApparatusNFPAComplianceBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ApparatusNFPAComplianceResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # =============================================================================
 # Report Config Schemas
@@ -1428,6 +1477,10 @@ class ApparatusReportConfigResponse(ApparatusReportConfigBase):
     updated_at: datetime
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ApparatusReportConfigResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # =============================================================================
@@ -1570,6 +1623,10 @@ class ApparatusServiceProviderResponse(ApparatusServiceProviderBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ApparatusServiceProviderResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # =============================================================================
 # Component Schemas
@@ -1643,6 +1700,10 @@ class ApparatusComponentResponse(ApparatusComponentBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ApparatusComponentResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # =============================================================================
 # Component Note Schemas
@@ -1711,6 +1772,10 @@ class ApparatusComponentNoteResponse(ApparatusComponentNoteBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ApparatusComponentNoteResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # =============================================================================
 # Service Report Schema (compiled report for service techs)
@@ -1728,3 +1793,7 @@ class ApparatusServiceReport(BaseModel):
     generated_at: datetime
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ApparatusServiceReport":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]

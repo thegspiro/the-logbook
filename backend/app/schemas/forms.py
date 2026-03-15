@@ -9,7 +9,8 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from app.schemas.base import stamp_naive_datetimes_utc
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -87,6 +88,10 @@ class FormFieldResponse(FormFieldBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "FormFieldResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # ============================================
 # Form Integration Schemas
@@ -123,6 +128,10 @@ class FormIntegrationResponse(BaseModel):
     updated_at: datetime
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "FormIntegrationResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -190,6 +199,10 @@ class FormResponse(FormBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "FormResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class FormDetailResponse(FormResponse):
     """Extended form response with fields and integrations"""
@@ -247,6 +260,10 @@ class FormSubmissionResponse(BaseModel):
     created_at: datetime
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "FormSubmissionResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class FormSubmissionDetailResponse(FormSubmissionResponse):

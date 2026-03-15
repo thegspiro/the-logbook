@@ -8,7 +8,8 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from app.schemas.base import stamp_naive_datetimes_utc
 
 # ==============================================================================
 # Configuration Schemas
@@ -61,6 +62,10 @@ class PublicPortalConfigResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "PublicPortalConfigResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # ==============================================================================
 # API Key Schemas
@@ -98,6 +103,10 @@ class PublicPortalAPIKeyResponse(BaseModel):
     is_expired: bool
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "PublicPortalAPIKeyResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class PublicPortalAPIKeyCreatedResponse(BaseModel):
@@ -148,6 +157,10 @@ class PublicPortalAccessLogResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "PublicPortalAccessLogResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class PublicPortalAccessLogFilter(BaseModel):
     """Schema for filtering access logs"""
@@ -194,6 +207,10 @@ class PublicPortalDataWhitelistResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "PublicPortalDataWhitelistResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class PublicPortalDataWhitelistBulkUpdate(BaseModel):

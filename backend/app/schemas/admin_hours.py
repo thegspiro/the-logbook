@@ -7,8 +7,9 @@ Request and response schemas for admin hours endpoints.
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
+from app.schemas.base import stamp_naive_datetimes_utc
 
 # Shared camelCase response config
 _RESPONSE_CONFIG = ConfigDict(
@@ -64,6 +65,10 @@ class AdminHoursCategoryResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "AdminHoursCategoryResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # =============================================================================
 # Entry Schemas
@@ -82,6 +87,10 @@ class AdminHoursClockInResponse(BaseModel):
     status: str
     message: str
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "AdminHoursClockInResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class AdminHoursClockOutResponse(BaseModel):
     """Response after clocking out"""
@@ -96,6 +105,10 @@ class AdminHoursClockOutResponse(BaseModel):
     duration_minutes: int
     status: str
     message: str
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "AdminHoursClockOutResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class AdminHoursEntryCreate(BaseModel):
@@ -134,6 +147,10 @@ class AdminHoursEntryResponse(BaseModel):
     user_name: Optional[str] = None
     approver_name: Optional[str] = None
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "AdminHoursEntryResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class AdminHoursActiveSession(BaseModel):
     """Response for the user's currently active session"""
@@ -147,6 +164,10 @@ class AdminHoursActiveSession(BaseModel):
     clock_in_at: datetime
     elapsed_minutes: int
     max_session_minutes: Optional[int] = None
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "AdminHoursActiveSession":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class AdminHoursEntryEdit(BaseModel):
@@ -179,6 +200,10 @@ class AdminHoursSummary(BaseModel):
     by_category: list[dict]
     period_start: Optional[datetime] = None
     period_end: Optional[datetime] = None
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "AdminHoursSummary":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class AdminHoursPaginatedEntries(BaseModel):
@@ -229,6 +254,10 @@ class AdminHoursActiveSessionAdmin(BaseModel):
     elapsed_minutes: int
     max_session_minutes: Optional[int] = None
     description: Optional[str] = None
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "AdminHoursActiveSessionAdmin":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class AdminHoursQRData(BaseModel):

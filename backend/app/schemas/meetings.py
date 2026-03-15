@@ -8,7 +8,8 @@ from datetime import date, datetime, time
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from app.schemas.base import stamp_naive_datetimes_utc
 
 # ============================================
 # Meeting Attendee Schemas
@@ -35,6 +36,10 @@ class MeetingAttendeeResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "MeetingAttendeeResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -80,6 +85,10 @@ class ActionItemResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ActionItemResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -146,6 +155,10 @@ class MeetingResponse(BaseModel):
     action_item_count: Optional[int] = 0
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "MeetingResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class MeetingDetailResponse(MeetingResponse):

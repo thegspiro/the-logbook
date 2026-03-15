@@ -11,6 +11,7 @@ from uuid import UUID
 from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from app.schemas.base import stamp_naive_datetimes_utc
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -267,6 +268,10 @@ class EventResponse(EventBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "EventResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class EventListItem(BaseModel):
     """Schema for event list items"""
@@ -291,6 +296,10 @@ class EventListItem(BaseModel):
     user_rsvp_status: Optional[str] = None
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "EventListItem":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # RSVP Schemas
@@ -340,6 +349,10 @@ class RSVPResponse(RSVPBase):
     overridden_at: Optional[datetime] = None
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "RSVPResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class CheckInRequest(BaseModel):
@@ -562,6 +575,10 @@ class EventTemplateResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "EventTemplateResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # ============================================================
 # Recurring Events
@@ -585,6 +602,10 @@ class RSVPHistoryResponse(BaseModel):
     changer_name: Optional[str] = None
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "RSVPHistoryResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================================

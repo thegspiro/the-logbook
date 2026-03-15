@@ -8,7 +8,8 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from app.schemas.base import stamp_naive_datetimes_utc
 
 VALID_VOTING_METHODS = {"simple_majority", "ranked_choice", "approval", "supermajority"}
 VALID_VICTORY_CONDITIONS = {"most_votes", "majority", "supermajority", "threshold"}
@@ -34,7 +35,10 @@ class BallotItem(BaseModel):
     )
     eligible_voter_types: List[str] = Field(
         default=["all"],
-        description="Member class or role slug: 'all', 'regular', 'life', 'probationary', 'operational', 'administrative', or specific role slugs",
+        description=(
+            "Member class or role slug: 'all', 'regular', 'life', "
+            "'probationary', 'operational', 'administrative', or specific role slugs"
+        ),
     )
     vote_type: str = Field(
         default="approval", description="approval, candidate_selection"
@@ -50,7 +54,10 @@ class BallotItem(BaseModel):
     # Per-item victory condition overrides (optional — defaults to election-level)
     victory_condition: Optional[str] = Field(
         default=None,
-        description="Override election-level victory condition for this item: most_votes, majority, supermajority, threshold",
+        description=(
+            "Override election-level victory condition for this item: "
+            "most_votes, majority, supermajority, threshold"
+        ),
     )
     victory_percentage: Optional[int] = Field(
         default=None,
@@ -300,6 +307,10 @@ class ElectionResponse(ElectionBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ElectionResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class ElectionListResponse(BaseModel):
     """Schema for election list item"""
@@ -314,6 +325,10 @@ class ElectionListResponse(BaseModel):
     total_votes: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ElectionListResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # Candidate Schemas
@@ -372,6 +387,10 @@ class CandidateResponse(CandidateBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "CandidateResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class CandidateAcceptance(BaseModel):
     """Schema for accepting/declining a nomination"""
@@ -409,6 +428,10 @@ class VoteResponse(BaseModel):
     receipt_hash: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "VoteResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # Election Results and Statistics

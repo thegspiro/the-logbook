@@ -9,7 +9,9 @@ from datetime import date, datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from app.schemas.base import stamp_naive_datetimes_utc
 
 # ==================== Self-Report Config Schemas ====================
 
@@ -46,6 +48,10 @@ class SelfReportConfigResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "SelfReportConfigResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class SelfReportConfigUpdate(BaseModel):
@@ -154,6 +160,10 @@ class TrainingSubmissionResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "TrainingSubmissionResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class SubmissionReviewRequest(BaseModel):

@@ -10,8 +10,9 @@ Request and response schemas for IP security endpoints:
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
+from app.schemas.base import stamp_naive_datetimes_utc
 
 # Shared config for response schemas
 _response_config = ConfigDict(
@@ -89,6 +90,10 @@ class IPExceptionResponse(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "IPExceptionResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # =============================================================================
 # Blocked Access Attempt Schemas
@@ -111,6 +116,10 @@ class BlockedAccessAttemptResponse(BaseModel):
     request_method: Optional[str] = None
     user_agent: Optional[str] = None
     blocked_at: Optional[datetime] = None
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "BlockedAccessAttemptResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # =============================================================================
@@ -144,6 +153,10 @@ class CountryBlockRuleResponse(BaseModel):
     blocked_attempts_count: Optional[int] = None
     last_blocked_at: Optional[datetime] = None
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "CountryBlockRuleResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # =============================================================================
 # Audit Log Schemas
@@ -162,6 +175,10 @@ class IPExceptionAuditLogResponse(BaseModel):
     performed_at: Optional[datetime] = None
     details: Optional[str] = None
     ip_address: Optional[str] = None
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "IPExceptionAuditLogResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # =============================================================================

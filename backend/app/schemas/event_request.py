@@ -9,7 +9,8 @@ assignment, scheduling with room booking, and postponement.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
+from app.schemas.base import stamp_naive_datetimes_utc
 
 
 class EventRequestCreate(BaseModel):
@@ -158,6 +159,10 @@ class EmailTemplateResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "EmailTemplateResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class SendTemplateEmail(BaseModel):
     """Schema for manually sending a template email to the requester."""
@@ -182,6 +187,10 @@ class EventRequestActivityResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "EventRequestActivityResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class EventRequestResponse(BaseModel):
@@ -227,6 +236,10 @@ class EventRequestResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "EventRequestResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class EventRequestListItem(BaseModel):
     """Lightweight list item for event requests."""
@@ -248,6 +261,10 @@ class EventRequestListItem(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "EventRequestListItem":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class EventRequestPublicStatus(BaseModel):

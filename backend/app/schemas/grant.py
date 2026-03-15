@@ -10,8 +10,9 @@ from decimal import Decimal
 from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
+from app.schemas.base import stamp_naive_datetimes_utc
 
 _response_config = ConfigDict(
     from_attributes=True, alias_generator=to_camel, populate_by_name=True
@@ -259,6 +260,10 @@ class GrantOpportunityResponse(GrantOpportunityBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "GrantOpportunityResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # ============================================
 # Grant Application Schemas
@@ -355,6 +360,10 @@ class GrantApplicationResponse(GrantApplicationBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "GrantApplicationResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class GrantApplicationListResponse(BaseModel):
     """Schema for grant application list item"""
@@ -373,6 +382,10 @@ class GrantApplicationListResponse(BaseModel):
     created_at: datetime
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "GrantApplicationListResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -425,6 +438,10 @@ class GrantBudgetItemResponse(GrantBudgetItemBase):
     updated_at: datetime
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "GrantBudgetItemResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -483,6 +500,10 @@ class GrantExpenditureResponse(GrantExpenditureBase):
     updated_at: datetime
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "GrantExpenditureResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -547,6 +568,10 @@ class GrantComplianceTaskResponse(GrantComplianceTaskBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "GrantComplianceTaskResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # ============================================
 # Grant Note Schemas
@@ -580,6 +605,10 @@ class GrantNoteResponse(BaseModel):
     created_at: datetime
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "GrantNoteResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -644,6 +673,10 @@ class CampaignResponse(CampaignBase):
     updated_at: datetime
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "CampaignResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -716,6 +749,10 @@ class DonorResponse(DonorBase):
     updated_at: datetime
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "DonorResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -791,6 +828,10 @@ class DonationResponse(DonationBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "DonationResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # ============================================
 # Pledge Schemas
@@ -849,6 +890,10 @@ class PledgeResponse(PledgeBase):
     updated_at: datetime
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "PledgeResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -921,6 +966,10 @@ class FundraisingEventResponse(FundraisingEventBase):
     updated_at: datetime
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "FundraisingEventResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================

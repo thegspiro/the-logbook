@@ -10,6 +10,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.schemas.base import stamp_naive_datetimes_utc
+
 
 class TrainingSessionCreate(BaseModel):
     """Schema for creating a training session (creates Event + TrainingSession)"""
@@ -193,6 +195,10 @@ class TrainingSessionResponse(BaseModel):
     class Config:
         from_attributes = True
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "TrainingSessionResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class AttendeeApprovalData(BaseModel):
     """Schema for individual attendee approval data"""
@@ -250,3 +256,7 @@ class TrainingApprovalResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "TrainingApprovalResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
