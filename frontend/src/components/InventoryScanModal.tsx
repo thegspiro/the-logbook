@@ -561,7 +561,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                     {showDropdown && searchResults.length > 0 && (
                       <div
                         ref={dropdownRef}
-                        className="absolute z-20 left-0 right-0 top-full mt-1 bg-theme-surface border border-theme-border rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                        className="absolute z-20 left-0 right-0 top-full mt-1 bg-theme-surface-modal border border-theme-surface-border rounded-lg shadow-lg max-h-60 overflow-y-auto"
                       >
                         {searchResults.map((result, i) => {
                           const isAlreadyAdded = scannedItems.some((si) => si.itemId === result.item.id);

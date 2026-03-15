@@ -543,7 +543,7 @@ export const ElectionsPage: React.FC = () => {
                           if (filtered.length === 0) return null;
                           return (
                             <ul
-                              className="absolute z-20 mt-1 w-full max-h-48 overflow-auto bg-theme-surface border border-theme-input-border rounded-md shadow-lg"
+                              className="absolute z-20 mt-1 w-full max-h-48 overflow-auto bg-theme-surface-modal border border-theme-input-border rounded-md shadow-lg"
                               role="listbox"
                               aria-label="Available positions"
                             >

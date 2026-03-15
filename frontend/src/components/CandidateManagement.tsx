@@ -284,7 +284,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                   placeholder="Search members by name or membership number..."
                 />
                 {filteredMembers.length > 0 && (
-                  <div className="absolute z-10 mt-1 w-full bg-theme-surface border border-theme-input-border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                  <div className="absolute z-10 mt-1 w-full bg-theme-surface-modal border border-theme-input-border rounded-md shadow-lg max-h-48 overflow-y-auto">
                     {filteredMembers.map((member) => (
                       <button
                         key={member.id}

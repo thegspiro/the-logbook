@@ -792,7 +792,7 @@ export const EventDetailPage: React.FC = () => {
                         <ChevronDown className="ml-1 h-4 w-4" />
                       </button>
                       {showReminderMenu && (
-                        <div className="absolute right-0 mt-2 w-56 rounded-lg bg-theme-surface border border-theme-surface-border shadow-lg z-20">
+                        <div className="absolute right-0 mt-2 w-56 rounded-lg bg-theme-surface-modal border border-theme-surface-border shadow-lg z-20">
                           <div className="py-1">
                             <button
                               onClick={() => void handleSendReminders('non_respondents')}
@@ -824,7 +824,7 @@ export const EventDetailPage: React.FC = () => {
                       <span className="ml-1">More</span>
                     </button>
                     {showActionsMenu && (
-                      <div className="absolute right-0 mt-2 w-56 rounded-lg bg-theme-surface border border-theme-surface-border shadow-lg z-20">
+                      <div className="absolute right-0 mt-2 w-56 rounded-lg bg-theme-surface-modal border border-theme-surface-border shadow-lg z-20">
                         <div className="py-1">
                           <button
                             onClick={() => { setShowActionsMenu(false); void handleDuplicateEvent(); }}
