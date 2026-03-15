@@ -87,7 +87,7 @@ const ComplianceMatrixTab: React.FC = () => {
         <table className="min-w-full text-sm">
           <thead>
             <tr className="border-b border-theme-surface-border">
-              <th className="sticky left-0 z-10 bg-theme-surface px-4 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
+              <th className="sticky left-0 z-10 bg-theme-surface-modal px-4 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                 Member
               </th>
               {requirements.map(req => (
@@ -107,7 +107,7 @@ const ComplianceMatrixTab: React.FC = () => {
           <tbody>
             {members.map((member: ComplianceMatrixMember) => (
               <tr key={member.user_id} className="border-b border-theme-surface-border hover:bg-theme-surface-hover">
-                <td className="sticky left-0 z-10 bg-theme-surface px-4 py-2.5 whitespace-nowrap text-theme-text-primary font-medium">
+                <td className="sticky left-0 z-10 bg-theme-surface-modal px-4 py-2.5 whitespace-nowrap text-theme-text-primary font-medium">
                   {member.member_name}
                 </td>
                 {member.requirements.map(req => (

@@ -616,7 +616,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-theme-surface border-t border-theme-surface-border px-6 py-4 flex items-center justify-end gap-3">
+        <div className="sticky bottom-0 bg-theme-surface-modal border-t border-theme-surface-border px-6 py-4 flex items-center justify-end gap-3">
           <button
             type="button"
             onClick={onClose}
