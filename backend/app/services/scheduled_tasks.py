@@ -300,7 +300,7 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     Checks both meeting_action_items and minutes_action_items tables.
     Sends notifications at 3 days before, 1 day before, and on overdue.
     """
-    from datetime import date, timedelta
+    from datetime import date, timedelta, timezone as _tz_reminders
 
     from app.models.meeting import ActionItemStatus, MeetingActionItem
     from app.models.minute import ActionItem as MinutesActionItem
@@ -357,7 +357,9 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
             ),
             MinutesActionItem.due_date.isnot(None),
             MinutesActionItem.due_date
-            <= datetime.combine(three_days, datetime.min.time()),
+            <= datetime.combine(
+                three_days, datetime.min.time(), tzinfo=_tz_reminders.utc
+            ),
         )
     )
     for item in minutes_items.scalars().all():
@@ -1749,7 +1751,9 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
     from app.models.compliance_config import ComplianceConfig
     from app.services.compliance_config_service import ComplianceReportService
 
-    today = datetime.now()
+    from datetime import timezone as _tz_compliance
+
+    today = datetime.now(_tz_compliance.utc)
     results = []
     total_generated = 0
 

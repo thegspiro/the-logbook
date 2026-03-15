@@ -774,7 +774,9 @@ class MinuteService:
 
         meeting_date_dt = (
             datetime.combine(
-                meeting.meeting_date, meeting.start_time or datetime.min.time()
+                meeting.meeting_date,
+                meeting.start_time or datetime.min.time(),
+                tzinfo=timezone.utc,
             )
             if meeting.meeting_date
             else datetime.now(timezone.utc)

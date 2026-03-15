@@ -867,7 +867,9 @@ class ExternalTrainingSyncService:
         if isinstance(date_value, datetime):
             return date_value
         if isinstance(date_value, date):
-            return datetime.combine(date_value, datetime.min.time())
+            return datetime.combine(
+                date_value, datetime.min.time(), tzinfo=timezone.utc
+            )
         if isinstance(date_value, str):
             # Try common formats
             for fmt in [
