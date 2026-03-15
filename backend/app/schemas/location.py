@@ -8,7 +8,8 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from app.schemas.base import stamp_naive_datetimes_utc
 
 
 class LocationBase(BaseModel):
@@ -82,6 +83,10 @@ class LocationResponse(LocationBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "LocationResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class LocationListItem(BaseModel):
     """Schema for location list items"""
@@ -106,6 +111,10 @@ class LocationListItem(BaseModel):
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "LocationListItem":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class LocationWithCurrentEvents(LocationResponse):

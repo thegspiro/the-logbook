@@ -9,7 +9,8 @@ see schemas/documents.py.
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from app.schemas.base import stamp_naive_datetimes_utc
 
 
 class FolderCreate(BaseModel):
@@ -52,6 +53,10 @@ class FolderResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "FolderResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class DocumentCreate(BaseModel):
@@ -100,6 +105,10 @@ class DocumentResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "DocumentResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class DocumentListItem(BaseModel):
     """Compact document listing"""
@@ -118,3 +127,7 @@ class DocumentListItem(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "DocumentListItem":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]

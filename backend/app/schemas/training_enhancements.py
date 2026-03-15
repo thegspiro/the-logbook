@@ -10,7 +10,8 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from app.schemas.base import stamp_naive_datetimes_utc
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -80,6 +81,10 @@ class RecertificationPathwayResponse(RecertificationPathwayBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "RecertificationPathwayResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class RenewalTaskStatus(str, Enum):
     """Status of a renewal task"""
@@ -117,6 +122,10 @@ class RenewalTaskResponse(BaseModel):
     required_hours: Optional[float] = None
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "RenewalTaskResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -171,6 +180,10 @@ class CompetencyMatrixResponse(CompetencyMatrixBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "CompetencyMatrixResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class MemberCompetencyResponse(BaseModel):
     """Schema for member competency response"""
@@ -195,6 +208,10 @@ class MemberCompetencyResponse(BaseModel):
     skill_name: Optional[str] = None
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "MemberCompetencyResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class MemberCompetencyUpdate(BaseModel):
@@ -270,6 +287,10 @@ class InstructorQualificationResponse(InstructorQualificationBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "InstructorQualificationResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # ============================================
 # Training Effectiveness Schemas
@@ -329,6 +350,10 @@ class TrainingEffectivenessResponse(TrainingEffectivenessBase):
     updated_at: datetime
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "TrainingEffectivenessResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class TrainingEffectivenessSummary(BaseModel):
@@ -418,6 +443,10 @@ class MultiAgencyTrainingResponse(MultiAgencyTrainingBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "MultiAgencyTrainingResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # ============================================
 # xAPI / SCORM Schemas
@@ -462,6 +491,10 @@ class XAPIStatementResponse(BaseModel):
     created_at: datetime
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "XAPIStatementResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class XAPIBatchResponse(BaseModel):

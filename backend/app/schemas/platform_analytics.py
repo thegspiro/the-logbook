@@ -7,8 +7,9 @@ Pydantic response models for the platform-wide analytics endpoint.
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 from pydantic.alias_generators import to_camel
+from app.schemas.base import stamp_naive_datetimes_utc
 
 
 class DailyCount(BaseModel):
@@ -64,3 +65,7 @@ class PlatformAnalyticsResponse(BaseModel):
     documents_last_30_days: int = 0
 
     generated_at: datetime
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "PlatformAnalyticsResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]

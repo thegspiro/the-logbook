@@ -8,7 +8,8 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from app.schemas.base import stamp_naive_datetimes_utc
 
 # ============================================
 # Criterion & Section Schemas (template structure)
@@ -96,6 +97,10 @@ class SkillTemplateResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "SkillTemplateResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class SkillTemplateListResponse(BaseModel):
     """Schema for skill template list items (summary view)"""
@@ -114,6 +119,10 @@ class SkillTemplateListResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "SkillTemplateListResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -200,6 +209,10 @@ class SkillTestResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "SkillTestResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class SkillTestListResponse(BaseModel):
     """Schema for skill test list items (summary view)"""
@@ -220,6 +233,10 @@ class SkillTestListResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "SkillTestListResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================

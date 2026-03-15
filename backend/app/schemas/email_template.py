@@ -7,7 +7,9 @@ Pydantic schemas for email template API requests and responses.
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+
+from app.schemas.base import stamp_naive_datetimes_utc
 
 
 class TemplateVariable(BaseModel):
@@ -27,6 +29,10 @@ class EmailAttachmentResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "EmailAttachmentResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class EmailTemplateResponse(BaseModel):
@@ -53,6 +59,10 @@ class EmailTemplateResponse(BaseModel):
     updated_by: Optional[str] = None
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "EmailTemplateResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class EmailTemplateUpdate(BaseModel):
@@ -177,6 +187,10 @@ class MessageHistoryResponse(BaseModel):
     sent_by: Optional[str] = None
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "MessageHistoryResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class MessageHistoryListResponse(BaseModel):

@@ -7,7 +7,8 @@ Request and response schemas for the medical screening endpoints.
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from app.schemas.base import stamp_naive_datetimes_utc
 
 
 # --- Screening Requirement Schemas ---
@@ -62,6 +63,10 @@ class ScreeningRequirementResponse(ScreeningRequirementBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ScreeningRequirementResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # --- Screening Record Schemas ---
@@ -125,6 +130,10 @@ class ScreeningRecordResponse(ScreeningRecordBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ScreeningRecordResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # --- Compliance Schemas ---

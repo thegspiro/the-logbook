@@ -7,7 +7,8 @@ Request and response schemas for meeting minutes, templates, and related endpoin
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from app.schemas.base import stamp_naive_datetimes_utc
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -125,6 +126,10 @@ class TemplateResponse(BaseModel):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "TemplateResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class TemplateListItem(BaseModel):
     """Compact template listing"""
@@ -137,6 +142,10 @@ class TemplateListItem(BaseModel):
     created_at: datetime
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "TemplateListItem":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -196,6 +205,10 @@ class MotionResponse(MotionBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "MotionResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # ============================================
 # Action Item Schemas
@@ -248,6 +261,10 @@ class ActionItemResponse(ActionItemBase):
     updated_at: datetime
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ActionItemResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -382,6 +399,10 @@ class MinutesResponse(BaseModel):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "MinutesResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class MinutesListItem(BaseModel):
     """Compact response for listing minutes"""
@@ -400,6 +421,10 @@ class MinutesListItem(BaseModel):
     created_at: datetime
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "MinutesListItem":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class MinutesSubmit(BaseModel):
@@ -430,3 +455,7 @@ class MinutesSearchResult(BaseModel):
     match_field: str = Field(..., description="Which field matched")
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "MinutesSearchResult":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]

@@ -8,7 +8,8 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from app.schemas.base import stamp_naive_datetimes_utc
 
 # ============================================
 # Document Folder Schemas
@@ -66,6 +67,10 @@ class DocumentFolderResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "DocumentFolderResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # ============================================
 # Document Schemas
@@ -112,6 +117,10 @@ class DocumentResponse(BaseModel):
     folder_name: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "DocumentResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class DocumentsListResponse(BaseModel):

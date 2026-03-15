@@ -4,34 +4,16 @@ Scheduling Pydantic Schemas
 Request and response schemas for scheduling/shift management endpoints.
 """
 
-from datetime import date, datetime, timezone as tz
+from datetime import date, datetime
 from enum import Enum as PyEnum
 from typing import Any, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.schemas.base import stamp_naive_datetimes_utc
+
 _response_config = ConfigDict(from_attributes=True)
-
-
-def _stamp_naive_datetimes_utc(instance: BaseModel) -> BaseModel:
-    """Ensure all naive datetime fields carry UTC tzinfo.
-
-    MySQL does not persist timezone information in DATETIME columns, so
-    SQLAlchemy returns naive ``datetime`` objects.  Without explicit
-    ``tzinfo``, Pydantic serialises them as ``"2024-01-15T14:00:00"``
-    (no ``Z`` / offset).  Browsers' ``new Date()`` then interprets
-    these as **local** time, causing the frontend to display UTC values
-    as-is instead of converting them to the user's timezone.
-
-    Applying ``tzinfo=UTC`` produces ``"2024-01-15T14:00:00+00:00"``
-    in the JSON response, which ``new Date()`` correctly reads as UTC.
-    """
-    for name in instance.model_fields:
-        val = getattr(instance, name)
-        if isinstance(val, datetime) and val.tzinfo is None:
-            object.__setattr__(instance, name, val.replace(tzinfo=tz.utc))
-    return instance
 
 # ============================================
 # Shift Schemas
@@ -115,7 +97,7 @@ class ShiftResponse(BaseModel):
 
     @model_validator(mode="after")
     def ensure_utc(self) -> "ShiftResponse":
-        return _stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -155,7 +137,7 @@ class ShiftAttendanceResponse(BaseModel):
 
     @model_validator(mode="after")
     def ensure_utc(self) -> "ShiftAttendanceResponse":
-        return _stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -248,7 +230,7 @@ class ShiftCallResponse(BaseModel):
 
     @model_validator(mode="after")
     def ensure_utc(self) -> "ShiftCallResponse":
-        return _stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -381,7 +363,7 @@ class ShiftTemplateResponse(BaseModel):
 
     @model_validator(mode="after")
     def ensure_utc(self) -> "ShiftTemplateResponse":
-        return _stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -446,7 +428,7 @@ class ShiftPatternResponse(BaseModel):
 
     @model_validator(mode="after")
     def ensure_utc(self) -> "ShiftPatternResponse":
-        return _stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class GenerateShiftsRequest(BaseModel):
@@ -519,7 +501,7 @@ class ShiftAssignmentResponse(BaseModel):
 
     @model_validator(mode="after")
     def ensure_utc(self) -> "ShiftAssignmentResponse":
-        return _stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -570,7 +552,7 @@ class ShiftSwapRequestResponse(BaseModel):
 
     @model_validator(mode="after")
     def ensure_utc(self) -> "ShiftSwapRequestResponse":
-        return _stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -628,7 +610,7 @@ class ShiftTimeOffResponse(BaseModel):
 
     @model_validator(mode="after")
     def ensure_utc(self) -> "ShiftTimeOffResponse":
-        return _stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -747,7 +729,7 @@ class BasicApparatusResponse(BaseModel):
 
     @model_validator(mode="after")
     def ensure_utc(self) -> "BasicApparatusResponse":
-        return _stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================

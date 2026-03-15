@@ -9,8 +9,9 @@ approval chains, and export operations.
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
+from app.schemas.base import stamp_naive_datetimes_utc
 
 _RESPONSE_CONFIG = ConfigDict(
     from_attributes=True,
@@ -56,6 +57,10 @@ class FiscalYearResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "FiscalYearResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # ============================================
 # Budget Category Schemas
@@ -99,6 +104,10 @@ class BudgetCategoryResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "BudgetCategoryResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # ============================================
 # Budget Schemas
@@ -140,6 +149,10 @@ class BudgetResponse(BaseModel):
     created_by: str
     created_at: datetime
     updated_at: datetime
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "BudgetResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class BudgetSummaryResponse(BaseModel):
@@ -209,6 +222,10 @@ class ApprovalChainStepResponse(BaseModel):
     required: bool
     created_at: datetime
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ApprovalChainStepResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class ApprovalChainCreate(BaseModel):
     """Create an approval chain"""
@@ -256,6 +273,10 @@ class ApprovalChainResponse(BaseModel):
     updated_at: datetime
     steps: list[ApprovalChainStepResponse] = []
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ApprovalChainResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class ApprovalStepRecordResponse(BaseModel):
     """Approval step record response"""
@@ -275,6 +296,10 @@ class ApprovalStepRecordResponse(BaseModel):
     step_name: Optional[str] = None
     step_order: Optional[int] = None
     created_at: datetime
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ApprovalStepRecordResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class ApprovalActionRequest(BaseModel):
@@ -297,6 +322,10 @@ class PendingApprovalResponse(BaseModel):
     step_name: str
     step_order: int
     submitted_at: datetime
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "PendingApprovalResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -367,6 +396,10 @@ class PurchaseRequestResponse(BaseModel):
     updated_at: datetime
     approval_steps: list[ApprovalStepRecordResponse] = []
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "PurchaseRequestResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class DenialRequest(BaseModel):
     """Request to deny a purchase request, expense, or check request"""
@@ -419,6 +452,10 @@ class ExpenseLineItemResponse(BaseModel):
     merchant: Optional[str] = None
     created_at: datetime
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ExpenseLineItemResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class ExpenseReportCreate(BaseModel):
     """Create an expense report"""
@@ -462,6 +499,10 @@ class ExpenseReportResponse(BaseModel):
     updated_at: datetime
     line_items: list[ExpenseLineItemResponse] = []
     approval_steps: list[ApprovalStepRecordResponse] = []
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ExpenseReportResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -523,6 +564,10 @@ class CheckRequestResponse(BaseModel):
     updated_at: datetime
     approval_steps: list[ApprovalStepRecordResponse] = []
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "CheckRequestResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # ============================================
 # Dues Schemas
@@ -579,6 +624,10 @@ class DuesScheduleResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "DuesScheduleResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class MemberDuesResponse(BaseModel):
     """Member dues response"""
@@ -603,6 +652,10 @@ class MemberDuesResponse(BaseModel):
     notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "MemberDuesResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class MemberDuesPayment(BaseModel):
@@ -672,6 +725,10 @@ class ExportMappingResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ExportMappingResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class ExportRequest(BaseModel):
     """Request to generate an export"""
@@ -695,6 +752,10 @@ class ExportLogResponse(BaseModel):
     file_format: str
     exported_by: str
     exported_at: datetime
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ExportLogResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================

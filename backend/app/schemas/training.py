@@ -9,7 +9,8 @@ from enum import Enum
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from app.schemas.base import stamp_naive_datetimes_utc
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -90,6 +91,10 @@ class TrainingCategoryResponse(TrainingCategoryBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "TrainingCategoryResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # Training Course Schemas
 
@@ -145,6 +150,10 @@ class TrainingCourseResponse(TrainingCourseBase):
     # Note: category_ids is inherited from TrainingCourseBase
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "TrainingCourseResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # Training Record Schemas
@@ -217,6 +226,10 @@ class TrainingRecordResponse(TrainingRecordBase):
     created_by: Optional[UUID] = None
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "TrainingRecordResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # Training Requirement Schemas
@@ -293,6 +306,10 @@ class TrainingRequirementResponse(TrainingRequirementBase):
     created_by: Optional[UUID] = None
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "TrainingRequirementResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # Training Statistics and Reports
@@ -492,6 +509,10 @@ class ExternalTrainingProviderResponse(ExternalTrainingProviderBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ExternalTrainingProviderResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # External Category Mapping Schemas
 
@@ -531,6 +552,10 @@ class ExternalCategoryMappingResponse(ExternalCategoryMappingBase):
     internal_category_name: Optional[str] = None
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ExternalCategoryMappingResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # External User Mapping Schemas
@@ -574,6 +599,10 @@ class ExternalUserMappingResponse(ExternalUserMappingBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ExternalUserMappingResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # Sync Log Schemas
 
@@ -600,6 +629,10 @@ class ExternalTrainingSyncLogResponse(BaseModel):
     initiated_by: Optional[UUID] = None
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ExternalTrainingSyncLogResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # External Training Import Schemas
@@ -631,6 +664,10 @@ class ExternalTrainingImportResponse(BaseModel):
     updated_at: datetime
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ExternalTrainingImportResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # Sync Request/Response Schemas

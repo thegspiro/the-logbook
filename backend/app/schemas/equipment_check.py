@@ -8,8 +8,9 @@ and shift equipment check submissions.
 from datetime import date, datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
+from app.schemas.base import stamp_naive_datetimes_utc
 
 
 # ============================================
@@ -74,6 +75,10 @@ class CheckTemplateItemResponse(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "CheckTemplateItemResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # ============================================
 # Check Template Compartment Schemas
@@ -120,6 +125,10 @@ class CheckTemplateCompartmentResponse(BaseModel):
     items: List[CheckTemplateItemResponse] = []
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "CheckTemplateCompartmentResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -177,6 +186,10 @@ class EquipmentCheckTemplateResponse(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     created_by: Optional[str] = None
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "EquipmentCheckTemplateResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class EquipmentCheckTemplateSummary(BaseModel):
@@ -251,6 +264,10 @@ class ShiftEquipmentCheckItemResponse(BaseModel):
     notes: Optional[str] = None
     created_at: Optional[datetime] = None
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ShiftEquipmentCheckItemResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class ShiftEquipmentCheckResponse(BaseModel):
     """Response schema for a completed equipment check."""
@@ -279,6 +296,10 @@ class ShiftEquipmentCheckResponse(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ShiftEquipmentCheckResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class ShiftCheckSummary(BaseModel):
     """Summary of check status for a shift — used in shift detail view."""
@@ -300,6 +321,10 @@ class ShiftCheckSummary(BaseModel):
     completed_items: int = 0
     failed_items: int = 0
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ShiftCheckSummary":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class CheckItemHistory(BaseModel):
     """History entry for a single item across multiple shifts."""
@@ -318,6 +343,10 @@ class CheckItemHistory(BaseModel):
     notes: Optional[str] = None
     checked_by_name: Optional[str] = None
     checked_at: Optional[datetime] = None
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "CheckItemHistory":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================

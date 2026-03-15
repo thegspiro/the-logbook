@@ -8,7 +8,8 @@ from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from app.schemas.base import stamp_naive_datetimes_utc
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -96,6 +97,10 @@ class TrainingRequirementEnhancedResponse(TrainingRequirementEnhancedBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "TrainingRequirementEnhancedResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # Training Program Schemas
 
@@ -143,6 +148,10 @@ class TrainingProgramResponse(TrainingProgramBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "TrainingProgramResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # Program Phase Schemas
 
@@ -183,6 +192,10 @@ class ProgramPhaseResponse(ProgramPhaseBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ProgramPhaseResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # Program Requirement Schemas
 
@@ -222,6 +235,10 @@ class ProgramRequirementResponse(ProgramRequirementBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ProgramRequirementResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # Program Milestone Schemas
 
@@ -260,6 +277,10 @@ class ProgramMilestoneResponse(ProgramMilestoneBase):
     created_at: datetime
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ProgramMilestoneResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # Program Enrollment Schemas
@@ -305,6 +326,10 @@ class ProgramEnrollmentResponse(ProgramEnrollmentBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "ProgramEnrollmentResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # Requirement Progress Schemas
 
@@ -349,6 +374,10 @@ class RequirementProgressResponse(RequirementProgressBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "RequirementProgressResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # Skill Evaluation Schemas
 
@@ -390,6 +419,10 @@ class SkillEvaluationResponse(SkillEvaluationBase):
 
     model_config = _response_config
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "SkillEvaluationResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 # Skill Checkoff Schemas
 
@@ -430,6 +463,10 @@ class SkillCheckoffResponse(SkillCheckoffBase):
     updated_at: datetime
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "SkillCheckoffResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # Comprehensive Program Details

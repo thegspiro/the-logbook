@@ -8,7 +8,8 @@ from datetime import datetime
 from typing import Any, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from app.schemas.base import stamp_naive_datetimes_utc
 
 # ============================================
 # Notification Rule Schemas
@@ -57,6 +58,10 @@ class NotificationRuleResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "NotificationRuleResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
+
 
 class NotificationRulesListResponse(BaseModel):
     """Schema for notification rules list"""
@@ -94,6 +99,10 @@ class NotificationLogResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def ensure_utc(self) -> "NotificationLogResponse":
+        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class NotificationLogsListResponse(BaseModel):
