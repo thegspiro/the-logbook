@@ -163,7 +163,7 @@ const ApprovalTimeline: React.FC<ApprovalTimelineProps> = ({ steps }) => {
                   {step.stepName ?? `Step ${String((step.stepOrder ?? 0) + 1)}`}
                 </span>
                 <span
-                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${APPROVAL_STEP_STATUS_COLORS[step.status] ?? 'bg-gray-100 text-gray-800'}`}
+                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${APPROVAL_STEP_STATUS_COLORS[step.status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
                 >
                   {APPROVAL_STEP_LABELS[step.status] ?? step.status}
                 </span>
@@ -318,7 +318,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
 
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <p>{error}</p>
         </div>
@@ -333,7 +333,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
                 {pr.title}
               </h1>
               <span
-                className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${PURCHASE_REQUEST_STATUS_COLORS[pr.status] ?? 'bg-gray-100 text-gray-800'}`}
+                className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${PURCHASE_REQUEST_STATUS_COLORS[pr.status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
               >
                 {STATUS_LABELS[pr.status] ?? pr.status}
               </span>

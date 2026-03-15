@@ -119,7 +119,7 @@ const AdminHoursClockInPage: React.FC = () => {
       <div className="max-w-2xl mx-auto p-6 min-h-screen bg-theme-surface-secondary">
         <div className="bg-theme-surface rounded-lg shadow-md p-8">
           <div className="text-center mb-6">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 dark:bg-red-500/20 rounded-full mb-4">
               <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -141,7 +141,7 @@ const AdminHoursClockInPage: React.FC = () => {
       <div className="max-w-2xl mx-auto p-6 min-h-screen bg-theme-surface-secondary">
         <div className="bg-theme-surface rounded-lg shadow-md p-8">
           <div className="text-center">
-            <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-100 rounded-full mb-6">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-100 dark:bg-blue-500/20 rounded-full mb-6">
               <svg className="w-12 h-12 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
@@ -152,19 +152,19 @@ const AdminHoursClockInPage: React.FC = () => {
               You&apos;re currently logged in to {activeSession.categoryName}
             </p>
 
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-left mb-8">
+            <div className="bg-blue-50 border border-blue-200 dark:bg-blue-500/10 dark:border-blue-500/30 rounded-lg p-6 text-left mb-8">
               <div className="flex items-center gap-3 mb-3">
                 <div
                   className="w-4 h-4 rounded-full"
                   style={{ backgroundColor: activeSession.categoryColor ?? '#6B7280' }}
                 />
-                <h3 className="text-xl font-semibold text-blue-900">{activeSession.categoryName}</h3>
+                <h3 className="text-xl font-semibold text-blue-900 dark:text-blue-300">{activeSession.categoryName}</h3>
               </div>
-              <p className="text-blue-800">
+              <p className="text-blue-800 dark:text-blue-300">
                 <span className="font-medium">Clocked In At:</span>{' '}
                 {formatTime(activeSession.clockInAt, tz)}
               </p>
-              <p className="text-blue-800">
+              <p className="text-blue-800 dark:text-blue-300">
                 <span className="font-medium">Elapsed:</span>{' '}
                 {formatDuration(activeSession.elapsedMinutes)}
               </p>
@@ -203,7 +203,7 @@ const AdminHoursClockInPage: React.FC = () => {
       <div className="max-w-2xl mx-auto p-6 min-h-screen bg-theme-surface-secondary">
         <div className="bg-theme-surface rounded-lg shadow-md p-8">
           <div className="text-center">
-            <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-6">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 dark:bg-green-500/20 rounded-full mb-6">
               <svg className="w-12 h-12 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
               </svg>
@@ -212,9 +212,9 @@ const AdminHoursClockInPage: React.FC = () => {
             <h2 className="text-3xl font-bold text-theme-text-primary mb-2">Clocked Out!</h2>
             <p className="text-xl text-theme-text-secondary mb-8">{clockOutData.message}</p>
 
-            <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-left mb-8">
-              <h3 className="text-xl font-semibold text-green-900 mb-3">{clockOutData.categoryName}</h3>
-              <div className="space-y-1 text-green-800">
+            <div className="bg-green-50 border border-green-200 dark:bg-green-500/10 dark:border-green-500/30 rounded-lg p-6 text-left mb-8">
+              <h3 className="text-xl font-semibold text-green-900 dark:text-green-300 mb-3">{clockOutData.categoryName}</h3>
+              <div className="space-y-1 text-green-800 dark:text-green-300">
                 <p>
                   <span className="font-medium">Duration:</span>{' '}
                   {formatDuration(clockOutData.durationMinutes)}
@@ -252,7 +252,7 @@ const AdminHoursClockInPage: React.FC = () => {
       <div className="max-w-2xl mx-auto p-6 min-h-screen bg-theme-surface-secondary">
         <div className="bg-theme-surface rounded-lg shadow-md p-8">
           <div className="text-center">
-            <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-6">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 dark:bg-green-500/20 rounded-full mb-6">
               <svg className="w-12 h-12 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
               </svg>
@@ -263,19 +263,19 @@ const AdminHoursClockInPage: React.FC = () => {
               You&apos;re now logging hours for {qrData?.categoryName}
             </p>
 
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-left mb-8">
+            <div className="bg-blue-50 border border-blue-200 dark:bg-blue-500/10 dark:border-blue-500/30 rounded-lg p-6 text-left mb-8">
               <div className="flex items-center gap-3 mb-3">
                 <div
                   className="w-4 h-4 rounded-full"
                   style={{ backgroundColor: qrData?.categoryColor ?? '#6B7280' }}
                 />
-                <h3 className="text-xl font-semibold text-blue-900">{qrData?.categoryName}</h3>
+                <h3 className="text-xl font-semibold text-blue-900 dark:text-blue-300">{qrData?.categoryName}</h3>
               </div>
-              <p className="text-blue-800">
+              <p className="text-blue-800 dark:text-blue-300">
                 <span className="font-medium">Started At:</span>{' '}
                 {formatTime(new Date(), tz)}
               </p>
-              <p className="text-sm text-blue-700 mt-2">
+              <p className="text-sm text-blue-700 dark:text-blue-400 mt-2">
                 Scan the same QR code when you&apos;re done to clock out
               </p>
             </div>
@@ -305,7 +305,7 @@ const AdminHoursClockInPage: React.FC = () => {
     <div className="max-w-2xl mx-auto p-6 min-h-screen bg-theme-surface-secondary">
       <div className="bg-theme-surface rounded-lg shadow-md p-8">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 dark:bg-blue-500/20 rounded-full mb-4">
             <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
