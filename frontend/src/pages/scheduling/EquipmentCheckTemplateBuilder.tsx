@@ -6,7 +6,7 @@
  * types, expiration tracking, and drag-handle placeholders for reordering.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -22,6 +22,22 @@ import {
   Loader2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import type { DragEndEvent, DraggableAttributes } from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { schedulingService } from '@/modules/scheduling';
 import type {
@@ -577,6 +593,83 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   };
 
   // ---------------------------------------------------------------------------
+  // Drag & Drop
+  // ---------------------------------------------------------------------------
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const compartmentIds = useMemo(
+    () => compartments.map((c, i) => c.id ?? `comp-${i}`),
+    [compartments],
+  );
+
+  const handleCompartmentDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = compartmentIds.indexOf(String(active.id));
+    const newIndex = compartmentIds.indexOf(String(over.id));
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    setCompartments((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(oldIndex, 1);
+      if (!moved) return prev;
+      next.splice(newIndex, 0, moved);
+      return next;
+    });
+
+    // Persist reorder if template is saved
+    if (isEditing && templateId) {
+      const reorderedIds = [...compartmentIds];
+      const [movedId] = reorderedIds.splice(oldIndex, 1);
+      if (movedId) reorderedIds.splice(newIndex, 0, movedId);
+      const savedIds = reorderedIds.filter(
+        (id) => !id.startsWith('comp-'),
+      );
+      if (savedIds.length > 0) {
+        void schedulingService
+          .reorderCompartments(templateId, savedIds)
+          .catch(() => {
+            toast.error('Failed to save compartment order');
+          });
+      }
+    }
+  };
+
+  const handleItemDragEnd = (compIdx: number, event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const comp = compartments[compIdx];
+    if (!comp) return;
+
+    const itemIds = comp.items.map(
+      (item, i) => item.id ?? `item-${compIdx}-${i}`,
+    );
+    const oldIndex = itemIds.indexOf(String(active.id));
+    const newIndex = itemIds.indexOf(String(over.id));
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    setCompartments((prev) => {
+      const next = [...prev];
+      const c = next[compIdx];
+      if (!c) return prev;
+      const items = [...c.items];
+      const [moved] = items.splice(oldIndex, 1);
+      if (!moved) return prev;
+      items.splice(newIndex, 0, moved);
+      next[compIdx] = { ...c, items };
+      return next;
+    });
+
+    // No item reorder API endpoint exists yet — sort_order is saved on template save
+  };
+
+  // ---------------------------------------------------------------------------
   // Render: Loading
   // ---------------------------------------------------------------------------
 
@@ -596,12 +689,21 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     compIdx: number,
     itemIdx: number,
     item: ItemFormState,
+    dragHandleProps?: Record<string, unknown>,
   ) => (
     <div
       key={item.id ?? `item-${compIdx}-${itemIdx}`}
       className="rounded-md border border-theme-surface-border bg-theme-surface p-3 space-y-3"
     >
       <div className="flex items-start gap-3">
+        {/* Drag handle */}
+        <button
+          type="button"
+          className="mt-6 p-1 text-theme-text-muted cursor-grab active:cursor-grabbing touch-none"
+          {...(dragHandleProps ?? {})}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
         {/* Name + Description */}
         <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
@@ -816,18 +918,71 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Render: Compartment Card
   // ---------------------------------------------------------------------------
 
-  const renderCompartment = (comp: CompartmentFormState, idx: number) => {
+  // ---------------------------------------------------------------------------
+  // Render: Sortable Item Wrapper
+  // ---------------------------------------------------------------------------
+
+  const SortableItemRow: React.FC<{
+    id: string;
+    compIdx: number;
+    itemIdx: number;
+    item: ItemFormState;
+  }> = ({ id, compIdx, itemIdx, item }) => {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+      zIndex: isDragging ? 10 : undefined,
+    };
+
+    return (
+      <div ref={setNodeRef} style={style} {...attributes}>
+        {renderItem(compIdx, itemIdx, item, listeners ?? undefined)}
+      </div>
+    );
+  };
+
+  // ---------------------------------------------------------------------------
+  // Render: Compartment
+  // ---------------------------------------------------------------------------
+
+  const renderCompartment = (
+    comp: CompartmentFormState,
+    idx: number,
+    dragHandleProps?: Record<string, unknown>,
+    sortableRef?: React.Ref<HTMLDivElement>,
+    sortableStyle?: React.CSSProperties,
+    sortableAttributes?: DraggableAttributes,
+  ) => {
     const key = comp.id ?? `comp-${idx}`;
     const isExpanded = expandedCompartments.has(key);
 
     return (
       <div
         key={key}
+        ref={sortableRef}
+        style={sortableStyle}
+        {...(sortableAttributes ?? {})}
         className="rounded-lg border border-theme-surface-border bg-theme-surface overflow-hidden"
       >
         {/* Compartment header */}
         <div className="flex items-center gap-2 px-4 py-3 bg-theme-surface">
-          <GripVertical className="h-5 w-5 text-theme-text-muted cursor-grab flex-shrink-0" />
+          <button
+            type="button"
+            className="p-0.5 text-theme-text-muted cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
+            {...(dragHandleProps ?? {})}
+          >
+            <GripVertical className="h-5 w-5" />
+          </button>
 
           <button
             type="button"
@@ -942,11 +1097,67 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 </p>
               )}
 
-              {comp.items.map((item, itemIdx) => renderItem(idx, itemIdx, item))}
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={(e: DragEndEvent) => handleItemDragEnd(idx, e)}
+              >
+                <SortableContext
+                  items={comp.items.map(
+                    (item, i) => item.id ?? `item-${idx}-${i}`,
+                  )}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {comp.items.map((item, itemIdx) => (
+                    <SortableItemRow
+                      key={item.id ?? `item-${idx}-${itemIdx}`}
+                      id={item.id ?? `item-${idx}-${itemIdx}`}
+                      compIdx={idx}
+                      itemIdx={itemIdx}
+                      item={item}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
             </div>
           </div>
         )}
       </div>
+    );
+  };
+
+  // ---------------------------------------------------------------------------
+  // Render: Sortable Compartment Wrapper
+  // ---------------------------------------------------------------------------
+
+  const SortableCompartmentRow: React.FC<{
+    id: string;
+    comp: CompartmentFormState;
+    idx: number;
+  }> = ({ id, comp, idx }) => {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id });
+
+    const style: React.CSSProperties = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+      zIndex: isDragging ? 10 : undefined,
+    };
+
+    return renderCompartment(
+      comp,
+      idx,
+      listeners ?? undefined,
+      setNodeRef,
+      style,
+      attributes,
     );
   };
 
@@ -1142,7 +1353,25 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           </div>
         )}
 
-        {compartments.map((comp, idx) => renderCompartment(comp, idx))}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleCompartmentDragEnd}
+        >
+          <SortableContext
+            items={compartmentIds}
+            strategy={verticalListSortingStrategy}
+          >
+            {compartments.map((comp, idx) => (
+              <SortableCompartmentRow
+                key={comp.id ?? `comp-${idx}`}
+                id={comp.id ?? `comp-${idx}`}
+                comp={comp}
+                idx={idx}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
       </div>
     </div>
   );
