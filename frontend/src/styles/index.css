@@ -409,7 +409,7 @@
 
   /* Drawer panel — full-width on mobile, capped at 32rem on sm+ */
   @apply fixed top-0 right-0 h-full w-full flex flex-col shadow-2xl z-50;
-  @apply bg-theme-surface border-l border-theme-surface-border;
+  @apply bg-theme-surface-modal border-l border-theme-surface-border;
   animation: slideInRight 0.25s ease-out;
   max-width: 100%;
   @media (min-width: 640px) {
