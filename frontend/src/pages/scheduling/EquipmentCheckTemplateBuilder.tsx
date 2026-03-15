@@ -20,6 +20,7 @@ import {
   Clock,
   AlertTriangle,
   Loader2,
+  Truck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -90,6 +91,193 @@ const CHECK_TYPES = [
   { value: 'date_lot', label: 'Date / Lot' },
   { value: 'reading', label: 'Reading' },
 ] as const;
+
+// Pre-built vehicle check compartment templates by apparatus type
+interface VehiclePreset {
+  label: string;
+  compartments: { name: string; items: { name: string; checkType: CheckType }[] }[];
+}
+
+const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
+  engine: {
+    label: 'Engine / Pumper',
+    compartments: [
+      {
+        name: 'Cab & Exterior',
+        items: [
+          { name: 'Lights & emergency warning system', checkType: 'functional' },
+          { name: 'Siren', checkType: 'functional' },
+          { name: 'Horn', checkType: 'functional' },
+          { name: 'Mirrors', checkType: 'functional' },
+          { name: 'Windshield wipers / washer', checkType: 'functional' },
+          { name: 'Tire condition & pressure', checkType: 'pass_fail' },
+          { name: 'Body damage / fluid leaks', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Engine Compartment',
+        items: [
+          { name: 'Oil level', checkType: 'level' },
+          { name: 'Coolant level', checkType: 'level' },
+          { name: 'Power steering fluid', checkType: 'level' },
+          { name: 'Belts & hoses condition', checkType: 'pass_fail' },
+          { name: 'Battery condition & connections', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Pump Panel',
+        items: [
+          { name: 'Pump engages properly', checkType: 'functional' },
+          { name: 'Gauges operational', checkType: 'functional' },
+          { name: 'Primer works', checkType: 'functional' },
+          { name: 'Pump panel lights', checkType: 'functional' },
+          { name: 'Drain valves closed', checkType: 'pass_fail' },
+          { name: 'Tank water level', checkType: 'level' },
+        ],
+      },
+      {
+        name: 'Brakes & Drivetrain',
+        items: [
+          { name: 'Service brakes', checkType: 'functional' },
+          { name: 'Parking brake', checkType: 'functional' },
+          { name: 'Transmission (all gears)', checkType: 'functional' },
+          { name: 'Steering responsiveness', checkType: 'functional' },
+        ],
+      },
+      {
+        name: 'Safety & Cab Interior',
+        items: [
+          { name: 'Seat belts', checkType: 'functional' },
+          { name: 'SCBA mounted & secured', checkType: 'present' },
+          { name: 'Radio(s) operational', checkType: 'functional' },
+          { name: 'MDT / computer operational', checkType: 'functional' },
+          { name: 'Cab clean & organized', checkType: 'pass_fail' },
+        ],
+      },
+    ],
+  },
+  ladder: {
+    label: 'Ladder / Tower',
+    compartments: [
+      {
+        name: 'Cab & Exterior',
+        items: [
+          { name: 'Lights & emergency warning system', checkType: 'functional' },
+          { name: 'Siren', checkType: 'functional' },
+          { name: 'Horn', checkType: 'functional' },
+          { name: 'Mirrors', checkType: 'functional' },
+          { name: 'Tire condition & pressure', checkType: 'pass_fail' },
+          { name: 'Body damage / fluid leaks', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Engine Compartment',
+        items: [
+          { name: 'Oil level', checkType: 'level' },
+          { name: 'Coolant level', checkType: 'level' },
+          { name: 'Belts & hoses condition', checkType: 'pass_fail' },
+          { name: 'Battery condition', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Aerial Device',
+        items: [
+          { name: 'Aerial extends & retracts', checkType: 'functional' },
+          { name: 'Aerial rotation', checkType: 'functional' },
+          { name: 'Outriggers / stabilizers deploy', checkType: 'functional' },
+          { name: 'Aerial hydraulic fluid level', checkType: 'level' },
+          { name: 'Aerial lights / spotlight', checkType: 'functional' },
+          { name: 'Rungs & rail condition', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Brakes & Drivetrain',
+        items: [
+          { name: 'Service brakes', checkType: 'functional' },
+          { name: 'Parking brake', checkType: 'functional' },
+          { name: 'Transmission', checkType: 'functional' },
+          { name: 'Steering responsiveness', checkType: 'functional' },
+        ],
+      },
+    ],
+  },
+  ambulance: {
+    label: 'Ambulance / Rescue',
+    compartments: [
+      {
+        name: 'Cab & Exterior',
+        items: [
+          { name: 'Lights & emergency warning system', checkType: 'functional' },
+          { name: 'Siren', checkType: 'functional' },
+          { name: 'Horn', checkType: 'functional' },
+          { name: 'Tire condition & pressure', checkType: 'pass_fail' },
+          { name: 'Body damage / fluid leaks', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Engine Compartment',
+        items: [
+          { name: 'Oil level', checkType: 'level' },
+          { name: 'Coolant level', checkType: 'level' },
+          { name: 'Battery condition', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Patient Compartment',
+        items: [
+          { name: 'Stretcher locks & operation', checkType: 'functional' },
+          { name: 'O2 system / regulators', checkType: 'functional' },
+          { name: 'Suction unit', checkType: 'functional' },
+          { name: 'Climate control (heat/AC)', checkType: 'functional' },
+          { name: 'Patient compartment lights', checkType: 'functional' },
+          { name: 'Sharps container level', checkType: 'pass_fail' },
+          { name: 'Compartment clean & sanitized', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Brakes & Drivetrain',
+        items: [
+          { name: 'Service brakes', checkType: 'functional' },
+          { name: 'Parking brake', checkType: 'functional' },
+          { name: 'Transmission', checkType: 'functional' },
+          { name: 'Steering responsiveness', checkType: 'functional' },
+        ],
+      },
+    ],
+  },
+  generic: {
+    label: 'Generic Vehicle',
+    compartments: [
+      {
+        name: 'Cab & Exterior',
+        items: [
+          { name: 'Lights & emergency warning system', checkType: 'functional' },
+          { name: 'Siren / horn', checkType: 'functional' },
+          { name: 'Mirrors', checkType: 'functional' },
+          { name: 'Tire condition & pressure', checkType: 'pass_fail' },
+          { name: 'Body damage / fluid leaks', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Engine Compartment',
+        items: [
+          { name: 'Oil level', checkType: 'level' },
+          { name: 'Coolant level', checkType: 'level' },
+          { name: 'Battery condition', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Brakes & Drivetrain',
+        items: [
+          { name: 'Service brakes', checkType: 'functional' },
+          { name: 'Parking brake', checkType: 'functional' },
+          { name: 'Transmission', checkType: 'functional' },
+          { name: 'Steering responsiveness', checkType: 'functional' },
+        ],
+      },
+    ],
+  },
+};
 
 const inputClass = 'form-input';
 
@@ -590,6 +778,48 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Vehicle Preset Loader
+  // ---------------------------------------------------------------------------
+
+  const [showPresetPicker, setShowPresetPicker] = useState(false);
+
+  const loadVehiclePreset = (presetKey: string) => {
+    const preset = VEHICLE_PRESETS[presetKey];
+    if (!preset) return;
+
+    const newCompartments: CompartmentFormState[] = preset.compartments.map(
+      (comp) => ({
+        name: comp.name,
+        description: '',
+        imageUrl: '',
+        parentCompartmentId: '',
+        items: comp.items.map((item) => ({
+          ...emptyItem(),
+          name: item.name,
+          checkType: item.checkType,
+        })),
+      }),
+    );
+
+    if (compartments.length > 0) {
+      if (
+        !window.confirm(
+          'Loading a preset will replace all existing compartments. Continue?',
+        )
+      )
+        return;
+    }
+
+    setCompartments(newCompartments);
+    setShowPresetPicker(false);
+    // Expand all new compartments
+    const expanded = new Set<string>();
+    newCompartments.forEach((_, i) => expanded.add(`comp-${i}`));
+    setExpandedCompartments(expanded);
+    toast.success(`Loaded ${preset.label} vehicle check preset`);
   };
 
   // ---------------------------------------------------------------------------
@@ -1334,21 +1564,64 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-theme-text-primary">Compartments</h2>
-          <button
-            type="button"
-            onClick={() => void addCompartment()}
-            className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            Add Compartment
-          </button>
+          <div className="flex items-center gap-2">
+            {(form.templateType === 'vehicle' || form.templateType === 'combined') && (
+              <button
+                type="button"
+                onClick={() => setShowPresetPicker(!showPresetPicker)}
+                className="flex items-center gap-1.5 rounded-md border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-sm font-medium text-orange-700 dark:text-orange-400 hover:bg-orange-500/20 transition-colors"
+              >
+                <Truck className="h-4 w-4" />
+                Load Vehicle Preset
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => void addCompartment()}
+              className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Add Compartment
+            </button>
+          </div>
         </div>
+
+        {/* Vehicle Preset Picker */}
+        {showPresetPicker && (
+          <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 p-4">
+            <p className="text-sm font-medium text-theme-text-primary mb-3">
+              Choose a pre-built vehicle check template:
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {Object.entries(VEHICLE_PRESETS).map(([key, preset]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => loadVehiclePreset(key)}
+                  className="rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary hover:border-orange-500/40 hover:bg-orange-500/10 transition-colors text-left"
+                >
+                  <span className="font-medium">{preset.label}</span>
+                  <span className="block text-xs text-theme-text-muted mt-0.5">
+                    {preset.compartments.length} sections,{' '}
+                    {preset.compartments.reduce(
+                      (sum, c) => sum + c.items.length,
+                      0,
+                    )}{' '}
+                    items
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {compartments.length === 0 && (
           <div className="rounded-lg border border-dashed border-theme-surface-border bg-theme-surface p-8 text-center">
             <p className="text-sm text-theme-text-muted">
-              No compartments yet. Add compartments to organize equipment check items by location on
-              the apparatus.
+              No compartments yet.
+              {form.templateType === 'vehicle' || form.templateType === 'combined'
+                ? ' Use "Load Vehicle Preset" above or add compartments manually.'
+                : ' Add compartments to organize equipment check items by location on the apparatus.'}
             </p>
           </div>
         )}
