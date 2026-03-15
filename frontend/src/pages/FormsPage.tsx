@@ -996,7 +996,7 @@ const FormsPage: React.FC = () => {
         {/* Form Detail / Editor View */}
         {editingForm && (
           <div
-            className="fixed inset-0 z-50 bg-theme-surface overflow-y-auto"
+            className="fixed inset-0 z-50 bg-theme-surface-modal overflow-y-auto"
             role="dialog"
             aria-modal="true"
             aria-labelledby="form-editor-title"

@@ -529,7 +529,7 @@ export const ProspectiveMembersPage: React.FC = () => {
             )}
           </button>
           {showFilters && (
-            <div className="absolute top-full mt-2 left-0 w-48 bg-theme-surface-hover border border-theme-surface-border rounded-lg shadow-xl z-10 py-1">
+            <div className="absolute top-full mt-2 left-0 w-48 bg-theme-surface-modal border border-theme-surface-border rounded-lg shadow-xl z-10 py-1">
               {(['active', 'on_hold', 'withdrawn', 'converted', 'rejected'] as ApplicantStatus[]).map(
                 (status) => (
                   <button

@@ -290,7 +290,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                     </button>
 
                     {openDropdown === item.label && (
-                      <div className={`absolute top-full mt-1 bg-theme-surface border border-theme-surface-border rounded-lg shadow-xl py-1 z-50 animate-scale-in ${
+                      <div className={`absolute top-full mt-1 bg-theme-surface-modal border border-theme-surface-border rounded-lg shadow-xl py-1 z-50 animate-scale-in ${
                         item.label === 'Admin' ? 'right-0 w-56' : 'left-0 w-48'
                       }`}>
                         {cleanedSubItems.map((subItem, idx) => {

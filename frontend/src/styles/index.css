@@ -998,7 +998,7 @@ option {
 
 /* Skip to main content link for accessibility */
 .skip-to-main {
-  @apply absolute -top-96 left-0 z-50 bg-theme-surface text-theme-text-primary px-4 py-2 rounded-br-lg focus:top-0;
+  @apply absolute -top-96 left-0 z-50 bg-theme-surface-modal text-theme-text-primary px-4 py-2 rounded-br-lg focus:top-0;
 }
 
 /* #32 Smooth backdrop overlay for modals and drawers */

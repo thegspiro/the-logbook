@@ -588,7 +588,7 @@ export const EventsPage: React.FC = () => {
                 <span className="hidden sm:inline">Quick Create</span>
               </button>
               {showQuickCreate && (
-                <div className="absolute right-0 mt-2 w-64 rounded-lg border border-theme-surface-border bg-theme-surface shadow-lg z-50">
+                <div className="absolute right-0 mt-2 w-64 rounded-lg border border-theme-surface-border bg-theme-surface-modal shadow-lg z-50">
                   <div className="p-2">
                     <p className="px-3 py-1.5 text-xs font-semibold text-theme-text-secondary uppercase tracking-wider">
                       Create from Template
@@ -726,7 +726,7 @@ export const EventsPage: React.FC = () => {
           </button>
 
           {showPresetMenu && (
-            <div className="absolute right-0 top-full mt-1 w-72 bg-theme-surface border border-theme-surface-border rounded-lg shadow-lg z-40">
+            <div className="absolute right-0 top-full mt-1 w-72 bg-theme-surface-modal border border-theme-surface-border rounded-lg shadow-lg z-40">
               <div className="p-2 border-b border-theme-surface-border">
                 {!showSavePresetInput ? (
                   <button
@@ -1028,7 +1028,7 @@ export const EventsPage: React.FC = () => {
 
       {/* Floating Bulk Action Bar */}
       {selectedEvents.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-6 py-3 bg-theme-surface border border-theme-surface-border rounded-xl shadow-lg">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-6 py-3 bg-theme-surface-modal border border-theme-surface-border rounded-xl shadow-lg">
           <span className="text-sm font-medium text-theme-text-primary">
             {selectedEvents.size} selected
           </span>
