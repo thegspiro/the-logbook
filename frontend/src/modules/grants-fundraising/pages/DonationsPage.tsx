@@ -91,7 +91,7 @@ const DonationsPage: React.FC = () => {
       {/* Summary Card */}
       <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-4">
         <div className="flex items-center gap-3">
-          <div className="rounded-lg bg-green-100 p-2">
+          <div className="rounded-lg bg-green-100 dark:bg-green-500/20 p-2">
             <DollarSign className="h-5 w-5 text-green-600" />
           </div>
           <div>

@@ -91,7 +91,7 @@ const PublicPortalAdmin: React.FC = () => {
           <div className="py-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
+                <div className="p-2 bg-blue-100 dark:bg-blue-500/20 rounded-lg">
                   <Globe className="w-6 h-6 text-blue-600" />
                 </div>
                 <div>

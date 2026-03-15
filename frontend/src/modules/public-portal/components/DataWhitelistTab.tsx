@@ -281,8 +281,8 @@ export const DataWhitelistTab: React.FC = () => {
                 <span className="text-sm text-theme-text-muted ml-2">enabled</span>
               </p>
             </div>
-            <div className={`p-3 rounded-lg ${sensitiveEnabled > 0 ? 'bg-yellow-100' : 'bg-theme-surface-secondary'}`}>
-              <svg className={`w-6 h-6 ${sensitiveEnabled > 0 ? 'text-yellow-600' : 'text-theme-text-secondary'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className={`p-3 rounded-lg ${sensitiveEnabled > 0 ? 'bg-yellow-100 dark:bg-yellow-500/20' : 'bg-theme-surface-secondary'}`}>
+              <svg className={`w-6 h-6 ${sensitiveEnabled > 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-theme-text-secondary'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>

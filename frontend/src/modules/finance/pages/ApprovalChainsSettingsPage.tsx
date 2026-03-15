@@ -146,7 +146,7 @@ const ChainCard: React.FC<ChainCardProps> = ({ chain, onDelete }) => {
             <div className="space-y-2">
               {sortedSteps.map((step, index) => (
                 <div key={step.id} className="flex items-center gap-2">
-                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-100 text-xs font-bold text-red-700">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-500/20 text-xs font-bold text-red-700 dark:text-red-400">
                     {step.stepOrder}
                   </div>
                   <div className="flex-1 rounded border border-theme-surface-border p-2">
@@ -157,8 +157,8 @@ const ChainCard: React.FC<ChainCardProps> = ({ chain, onDelete }) => {
                       <span
                         className={`rounded px-1.5 py-0.5 text-xs font-medium ${
                           step.stepType === ApprovalStepType.NOTIFICATION
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'bg-green-100 text-green-700'
+                            ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400'
+                            : 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400'
                         }`}
                       >
                         {STEP_TYPE_LABELS[step.stepType] ?? step.stepType}

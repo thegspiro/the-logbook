@@ -93,7 +93,7 @@ const BudgetGauge: React.FC<BudgetGaugeProps> = ({
           {formatCurrencyWhole(amount)}
         </span>
       </div>
-      <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+      <div className="h-2.5 w-full overflow-hidden rounded-full bg-theme-surface-secondary">
         <div
           className={`h-full rounded-full transition-all ${colorClass}`}
           style={{ width: `${String(pct)}%` }}
@@ -245,27 +245,27 @@ const FinanceDashboardPage: React.FC = () => {
           label="Total Budgeted"
           value={formatCurrencyWhole(totalBudgeted)}
           icon={<DollarSign className="h-5 w-5 text-green-600" />}
-          iconBgClass="bg-green-100"
+          iconBgClass="bg-green-100 dark:bg-green-500/20"
           linkTo="/finance/budgets"
         />
         <KpiCard
           label="Total Spent"
           value={formatCurrencyWhole(totalSpent)}
           icon={<CreditCard className="h-5 w-5 text-blue-600" />}
-          iconBgClass="bg-blue-100"
+          iconBgClass="bg-blue-100 dark:bg-blue-500/20"
           linkTo="/finance/budgets"
         />
         <KpiCard
           label="Pending Approvals"
           value={String(dashboard?.pendingApprovalsCount ?? 0)}
           icon={<Clock className="h-5 w-5 text-yellow-600" />}
-          iconBgClass="bg-yellow-100"
+          iconBgClass="bg-yellow-100 dark:bg-yellow-500/20"
         />
         <KpiCard
           label="Dues Collection"
           value={`${String(Math.round(dashboard?.duesCollectionRate ?? 0))}%`}
           icon={<Users className="h-5 w-5 text-purple-600" />}
-          iconBgClass="bg-purple-100"
+          iconBgClass="bg-purple-100 dark:bg-purple-500/20"
           linkTo="/finance/dues"
         />
       </div>

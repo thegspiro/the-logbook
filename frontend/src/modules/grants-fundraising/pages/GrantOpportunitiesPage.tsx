@@ -347,7 +347,7 @@ export const GrantOpportunitiesPage: React.FC = () => {
                       {opp.deadlineDate ? formatDate(opp.deadlineDate, tz) : 'Rolling deadline'}
                     </span>
                     {urgency.isUrgent && (
-                      <span className="inline-flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700">
+                      <span className="inline-flex items-center gap-1 rounded bg-red-100 dark:bg-red-500/20 px-1.5 py-0.5 text-xs font-medium text-red-700 dark:text-red-400">
                         <AlertTriangle className="h-3 w-3" />
                         {urgency.label}
                       </span>
