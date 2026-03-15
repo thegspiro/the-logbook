@@ -29,6 +29,7 @@ import { ApparatusTypeDefaultsCard } from "./ApparatusTypeDefaultsCard";
 import { ResourceTypeDefaultsCard } from "./ResourceTypeDefaultsCard";
 import { DepartmentDefaultsCard } from "./DepartmentDefaultsCard";
 import { PositionNamesCard } from "./PositionNamesCard";
+import { EquipmentCheckTemplateList } from "./EquipmentCheckTemplateList";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -339,18 +340,12 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                     />
                   </div>
 
-                  <div className="pt-2">
-                    <a
-                      href="/scheduling/equipment-check-templates/new"
-                      className="text-sm text-violet-600 hover:text-violet-700 font-medium"
-                    >
-                      Manage Equipment Check Templates →
-                    </a>
-                  </div>
                 </>
               )}
             </div>
           </div>
+
+          <EquipmentCheckTemplateList />
         </div>
       )}
 
