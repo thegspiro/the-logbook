@@ -8,8 +8,9 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
-from app.schemas.base import stamp_naive_datetimes_utc
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.base import UTCResponseBase
 
 # ==============================================================================
 # Configuration Schemas
@@ -47,7 +48,7 @@ class PublicPortalConfigUpdate(BaseModel):
     settings: Optional[Dict[str, Any]] = None
 
 
-class PublicPortalConfigResponse(BaseModel):
+class PublicPortalConfigResponse(UTCResponseBase):
     """Schema for public portal configuration response"""
 
     id: UUID
@@ -61,10 +62,6 @@ class PublicPortalConfigResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "PublicPortalConfigResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ==============================================================================
@@ -87,7 +84,7 @@ class PublicPortalAPIKeyCreate(BaseModel):
     expires_at: Optional[datetime] = Field(None, description="Optional expiration date")
 
 
-class PublicPortalAPIKeyResponse(BaseModel):
+class PublicPortalAPIKeyResponse(UTCResponseBase):
     """Schema for API key response (without the actual key)"""
 
     id: UUID
@@ -104,12 +101,8 @@ class PublicPortalAPIKeyResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "PublicPortalAPIKeyResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
-
-class PublicPortalAPIKeyCreatedResponse(BaseModel):
+class PublicPortalAPIKeyCreatedResponse(UTCResponseBase):
     """Schema for newly created API key (includes the actual key once)"""
 
     id: UUID
@@ -138,7 +131,7 @@ class PublicPortalAPIKeyUpdate(BaseModel):
 # ==============================================================================
 
 
-class PublicPortalAccessLogResponse(BaseModel):
+class PublicPortalAccessLogResponse(UTCResponseBase):
     """Schema for access log entry response"""
 
     id: UUID
@@ -156,10 +149,6 @@ class PublicPortalAccessLogResponse(BaseModel):
     flag_reason: Optional[str]
 
     model_config = ConfigDict(from_attributes=True)
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "PublicPortalAccessLogResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class PublicPortalAccessLogFilter(BaseModel):
@@ -195,7 +184,7 @@ class PublicPortalDataWhitelistUpdate(BaseModel):
     is_enabled: bool
 
 
-class PublicPortalDataWhitelistResponse(BaseModel):
+class PublicPortalDataWhitelistResponse(UTCResponseBase):
     """Schema for data whitelist entry response"""
 
     id: UUID
@@ -207,10 +196,6 @@ class PublicPortalDataWhitelistResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "PublicPortalDataWhitelistResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class PublicPortalDataWhitelistBulkUpdate(BaseModel):
@@ -270,7 +255,7 @@ class PublicOrganizationStats(BaseModel):
     founded_year: Optional[int]
 
 
-class PublicEvent(BaseModel):
+class PublicEvent(UTCResponseBase):
     """Public event information"""
 
     id: UUID

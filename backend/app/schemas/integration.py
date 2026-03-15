@@ -8,9 +8,10 @@ Includes per-integration-type config schemas with strict validation.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
-from app.schemas.base import stamp_naive_datetimes_utc
+
+from app.schemas.base import UTCResponseBase
 
 # ============================================
 # Shared response config (camelCase)
@@ -174,7 +175,7 @@ SECRET_CONFIG_KEYS = frozenset(
 # ============================================
 
 
-class IntegrationResponse(BaseModel):
+class IntegrationResponse(UTCResponseBase):
     model_config = _response_config
 
     id: str
@@ -190,10 +191,6 @@ class IntegrationResponse(BaseModel):
     last_sync_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "IntegrationResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================

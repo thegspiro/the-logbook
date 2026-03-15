@@ -10,9 +10,10 @@ Request and response schemas for IP security endpoints:
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
-from app.schemas.base import stamp_naive_datetimes_utc
+
+from app.schemas.base import UTCResponseBase
 
 # Shared config for response schemas
 _response_config = ConfigDict(
@@ -54,7 +55,7 @@ class IPExceptionRevoke(BaseModel):
     revoke_reason: str = Field(..., min_length=1)
 
 
-class IPExceptionResponse(BaseModel):
+class IPExceptionResponse(UTCResponseBase):
     """Response schema for an IP exception."""
 
     model_config = _response_config
@@ -90,17 +91,13 @@ class IPExceptionResponse(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "IPExceptionResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # =============================================================================
 # Blocked Access Attempt Schemas
 # =============================================================================
 
 
-class BlockedAccessAttemptResponse(BaseModel):
+class BlockedAccessAttemptResponse(UTCResponseBase):
     """Response schema for a blocked access attempt."""
 
     model_config = _response_config
@@ -117,10 +114,6 @@ class BlockedAccessAttemptResponse(BaseModel):
     user_agent: Optional[str] = None
     blocked_at: Optional[datetime] = None
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "BlockedAccessAttemptResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # =============================================================================
 # Country Block Rule Schemas
@@ -136,7 +129,7 @@ class CountryBlockRuleCreate(BaseModel):
     risk_level: str = Field("high", pattern=r"^(low|medium|high|critical)$")
 
 
-class CountryBlockRuleResponse(BaseModel):
+class CountryBlockRuleResponse(UTCResponseBase):
     """Response schema for a country block rule."""
 
     model_config = _response_config
@@ -153,17 +146,13 @@ class CountryBlockRuleResponse(BaseModel):
     blocked_attempts_count: Optional[int] = None
     last_blocked_at: Optional[datetime] = None
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "CountryBlockRuleResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # =============================================================================
 # Audit Log Schemas
 # =============================================================================
 
 
-class IPExceptionAuditLogResponse(BaseModel):
+class IPExceptionAuditLogResponse(UTCResponseBase):
     """Response schema for an IP exception audit log entry."""
 
     model_config = _response_config
@@ -175,10 +164,6 @@ class IPExceptionAuditLogResponse(BaseModel):
     performed_at: Optional[datetime] = None
     details: Optional[str] = None
     ip_address: Optional[str] = None
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "IPExceptionAuditLogResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # =============================================================================

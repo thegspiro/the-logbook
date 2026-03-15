@@ -7,8 +7,9 @@ Request and response schemas for the medical screening endpoints.
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
-from app.schemas.base import stamp_naive_datetimes_utc
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.base import UTCResponseBase
 
 
 # --- Screening Requirement Schemas ---
@@ -54,7 +55,7 @@ class ScreeningRequirementUpdate(BaseModel):
     grace_period_days: Optional[int] = Field(None, ge=0)
 
 
-class ScreeningRequirementResponse(ScreeningRequirementBase):
+class ScreeningRequirementResponse(ScreeningRequirementBase, UTCResponseBase):
     """Response schema for a screening requirement."""
 
     id: str
@@ -63,10 +64,6 @@ class ScreeningRequirementResponse(ScreeningRequirementBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ScreeningRequirementResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # --- Screening Record Schemas ---
@@ -112,7 +109,7 @@ class ScreeningRecordUpdate(BaseModel):
     notes: Optional[str] = None
 
 
-class ScreeningRecordResponse(ScreeningRecordBase):
+class ScreeningRecordResponse(ScreeningRecordBase, UTCResponseBase):
     """Response schema for a screening record."""
 
     id: str
@@ -130,10 +127,6 @@ class ScreeningRecordResponse(ScreeningRecordBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ScreeningRecordResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # --- Compliance Schemas ---

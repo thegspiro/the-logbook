@@ -10,8 +10,9 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
-from app.schemas.base import stamp_naive_datetimes_utc
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.base import UTCResponseBase
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -81,10 +82,6 @@ class RecertificationPathwayResponse(RecertificationPathwayBase):
 
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "RecertificationPathwayResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 class RenewalTaskStatus(str, Enum):
     """Status of a renewal task"""
@@ -96,7 +93,7 @@ class RenewalTaskStatus(str, Enum):
     LAPSED = "lapsed"
 
 
-class RenewalTaskResponse(BaseModel):
+class RenewalTaskResponse(UTCResponseBase):
     """Schema for renewal task response"""
 
     id: UUID
@@ -122,10 +119,6 @@ class RenewalTaskResponse(BaseModel):
     required_hours: Optional[float] = None
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "RenewalTaskResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -180,12 +173,8 @@ class CompetencyMatrixResponse(CompetencyMatrixBase):
 
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "CompetencyMatrixResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
-
-class MemberCompetencyResponse(BaseModel):
+class MemberCompetencyResponse(UTCResponseBase):
     """Schema for member competency response"""
 
     id: UUID
@@ -208,10 +197,6 @@ class MemberCompetencyResponse(BaseModel):
     skill_name: Optional[str] = None
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "MemberCompetencyResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class MemberCompetencyUpdate(BaseModel):
@@ -287,10 +272,6 @@ class InstructorQualificationResponse(InstructorQualificationBase):
 
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "InstructorQualificationResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # ============================================
 # Training Effectiveness Schemas
@@ -350,10 +331,6 @@ class TrainingEffectivenessResponse(TrainingEffectivenessBase):
     updated_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "TrainingEffectivenessResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class TrainingEffectivenessSummary(BaseModel):
@@ -443,10 +420,6 @@ class MultiAgencyTrainingResponse(MultiAgencyTrainingBase):
 
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "MultiAgencyTrainingResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # ============================================
 # xAPI / SCORM Schemas
@@ -467,7 +440,7 @@ class XAPIBatchCreate(BaseModel):
     source_provider_id: Optional[UUID] = None
 
 
-class XAPIStatementResponse(BaseModel):
+class XAPIStatementResponse(UTCResponseBase):
     """Schema for xAPI statement response"""
 
     id: UUID
@@ -492,10 +465,6 @@ class XAPIStatementResponse(BaseModel):
 
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "XAPIStatementResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 class XAPIBatchResponse(BaseModel):
     """Response after batch xAPI ingestion"""
@@ -511,7 +480,7 @@ class XAPIBatchResponse(BaseModel):
 # ============================================
 
 
-class DocumentUploadResponse(BaseModel):
+class DocumentUploadResponse(UTCResponseBase):
     """Response after uploading a document"""
 
     file_id: str
@@ -522,7 +491,7 @@ class DocumentUploadResponse(BaseModel):
     created_at: datetime
 
 
-class TrainingRecordAttachment(BaseModel):
+class TrainingRecordAttachment(UTCResponseBase):
     """Schema for a training record attachment"""
 
     file_id: str
@@ -554,7 +523,7 @@ class ReportExportRequest(BaseModel):
     filters: Optional[Dict[str, Any]] = None
 
 
-class ReportExportResponse(BaseModel):
+class ReportExportResponse(UTCResponseBase):
     """Response after generating a report export"""
 
     report_id: str

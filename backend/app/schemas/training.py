@@ -9,8 +9,9 @@ from enum import Enum
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
-from app.schemas.base import stamp_naive_datetimes_utc
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.base import UTCResponseBase
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -79,7 +80,7 @@ class TrainingCategoryUpdate(BaseModel):
     active: Optional[bool] = None
 
 
-class TrainingCategoryResponse(TrainingCategoryBase):
+class TrainingCategoryResponse(TrainingCategoryBase, UTCResponseBase):
     """Schema for training category response"""
 
     id: UUID
@@ -90,10 +91,6 @@ class TrainingCategoryResponse(TrainingCategoryBase):
     created_by: Optional[UUID] = None
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "TrainingCategoryResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # Training Course Schemas
@@ -138,7 +135,7 @@ class TrainingCourseUpdate(BaseModel):
     active: Optional[bool] = None
 
 
-class TrainingCourseResponse(TrainingCourseBase):
+class TrainingCourseResponse(TrainingCourseBase, UTCResponseBase):
     """Schema for training course response"""
 
     id: UUID
@@ -150,10 +147,6 @@ class TrainingCourseResponse(TrainingCourseBase):
     # Note: category_ids is inherited from TrainingCourseBase
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "TrainingCourseResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # Training Record Schemas
@@ -214,7 +207,7 @@ class TrainingRecordUpdate(BaseModel):
     attachments: Optional[List[str]] = None
 
 
-class TrainingRecordResponse(TrainingRecordBase):
+class TrainingRecordResponse(TrainingRecordBase, UTCResponseBase):
     """Schema for training record response"""
 
     id: UUID
@@ -226,10 +219,6 @@ class TrainingRecordResponse(TrainingRecordBase):
     created_by: Optional[UUID] = None
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "TrainingRecordResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # Training Requirement Schemas
@@ -295,7 +284,7 @@ class TrainingRequirementUpdate(BaseModel):
     active: Optional[bool] = None
 
 
-class TrainingRequirementResponse(TrainingRequirementBase):
+class TrainingRequirementResponse(TrainingRequirementBase, UTCResponseBase):
     """Schema for training requirement response"""
 
     id: UUID
@@ -306,10 +295,6 @@ class TrainingRequirementResponse(TrainingRequirementBase):
     created_by: Optional[UUID] = None
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "TrainingRequirementResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # Training Statistics and Reports
@@ -491,7 +476,7 @@ class ExternalTrainingProviderUpdate(BaseModel):
     active: Optional[bool] = None
 
 
-class ExternalTrainingProviderResponse(ExternalTrainingProviderBase):
+class ExternalTrainingProviderResponse(ExternalTrainingProviderBase, UTCResponseBase):
     """Schema for external training provider response"""
 
     id: UUID
@@ -508,10 +493,6 @@ class ExternalTrainingProviderResponse(ExternalTrainingProviderBase):
     # Note: api_key, api_secret, client_secret are never returned for security
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ExternalTrainingProviderResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # External Category Mapping Schemas
@@ -537,7 +518,7 @@ class ExternalCategoryMappingUpdate(BaseModel):
     is_mapped: Optional[bool] = None
 
 
-class ExternalCategoryMappingResponse(ExternalCategoryMappingBase):
+class ExternalCategoryMappingResponse(ExternalCategoryMappingBase, UTCResponseBase):
     """Schema for external category mapping response"""
 
     id: UUID
@@ -552,10 +533,6 @@ class ExternalCategoryMappingResponse(ExternalCategoryMappingBase):
     internal_category_name: Optional[str] = None
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ExternalCategoryMappingResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # External User Mapping Schemas
@@ -582,7 +559,7 @@ class ExternalUserMappingUpdate(BaseModel):
     is_mapped: Optional[bool] = None
 
 
-class ExternalUserMappingResponse(ExternalUserMappingBase):
+class ExternalUserMappingResponse(ExternalUserMappingBase, UTCResponseBase):
     """Schema for external user mapping response"""
 
     id: UUID
@@ -599,15 +576,11 @@ class ExternalUserMappingResponse(ExternalUserMappingBase):
 
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ExternalUserMappingResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # Sync Log Schemas
 
 
-class ExternalTrainingSyncLogResponse(BaseModel):
+class ExternalTrainingSyncLogResponse(UTCResponseBase):
     """Schema for external training sync log response"""
 
     id: UUID
@@ -630,15 +603,11 @@ class ExternalTrainingSyncLogResponse(BaseModel):
 
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ExternalTrainingSyncLogResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # External Training Import Schemas
 
 
-class ExternalTrainingImportResponse(BaseModel):
+class ExternalTrainingImportResponse(UTCResponseBase):
     """Schema for external training import response"""
 
     id: UUID
@@ -664,10 +633,6 @@ class ExternalTrainingImportResponse(BaseModel):
     updated_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ExternalTrainingImportResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # Sync Request/Response Schemas

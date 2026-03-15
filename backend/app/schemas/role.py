@@ -8,8 +8,9 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from app.schemas.base import stamp_naive_datetimes_utc
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.schemas.base import UTCResponseBase
 
 
 class RoleBase(BaseModel):
@@ -43,7 +44,7 @@ class RoleUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class RoleResponse(BaseModel):
+class RoleResponse(UTCResponseBase):
     """Schema for role response"""
 
     id: UUID
@@ -64,10 +65,6 @@ class RoleResponse(BaseModel):
         return v if v is not None else []
 
     model_config = ConfigDict(from_attributes=True)
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "RoleResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class PermissionDetail(BaseModel):

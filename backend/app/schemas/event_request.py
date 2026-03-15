@@ -9,8 +9,9 @@ assignment, scheduling with room booking, and postponement.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, EmailStr, Field, model_validator
-from app.schemas.base import stamp_naive_datetimes_utc
+from pydantic import BaseModel, EmailStr, Field
+
+from app.schemas.base import UTCResponseBase
 
 
 class EventRequestCreate(BaseModel):
@@ -143,7 +144,7 @@ class EmailTemplateUpdate(BaseModel):
     is_active: Optional[int] = None
 
 
-class EmailTemplateResponse(BaseModel):
+class EmailTemplateResponse(UTCResponseBase):
     """Response schema for an email template."""
 
     id: str
@@ -159,10 +160,6 @@ class EmailTemplateResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "EmailTemplateResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 class SendTemplateEmail(BaseModel):
     """Schema for manually sending a template email to the requester."""
@@ -173,7 +170,7 @@ class SendTemplateEmail(BaseModel):
     )
 
 
-class EventRequestActivityResponse(BaseModel):
+class EventRequestActivityResponse(UTCResponseBase):
     """Response schema for a single activity log entry."""
 
     id: str
@@ -188,12 +185,8 @@ class EventRequestActivityResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "EventRequestActivityResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
-
-class EventRequestResponse(BaseModel):
+class EventRequestResponse(UTCResponseBase):
     """Full response schema for an event request."""
 
     id: str
@@ -236,12 +229,8 @@ class EventRequestResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "EventRequestResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
-
-class EventRequestListItem(BaseModel):
+class EventRequestListItem(UTCResponseBase):
     """Lightweight list item for event requests."""
 
     id: str
@@ -261,10 +250,6 @@ class EventRequestListItem(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "EventRequestListItem":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class EventRequestPublicStatus(BaseModel):

@@ -7,9 +7,9 @@ Pydantic schemas for email template API requests and responses.
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
-from app.schemas.base import stamp_naive_datetimes_utc
+from app.schemas.base import UTCResponseBase
 
 
 class TemplateVariable(BaseModel):
@@ -19,7 +19,7 @@ class TemplateVariable(BaseModel):
     description: str
 
 
-class EmailAttachmentResponse(BaseModel):
+class EmailAttachmentResponse(UTCResponseBase):
     """Response schema for an email attachment"""
 
     id: str
@@ -30,12 +30,8 @@ class EmailAttachmentResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "EmailAttachmentResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
-
-class EmailTemplateResponse(BaseModel):
+class EmailTemplateResponse(UTCResponseBase):
     """Response schema for an email template"""
 
     id: str
@@ -59,10 +55,6 @@ class EmailTemplateResponse(BaseModel):
     updated_by: Optional[str] = None
 
     model_config = {"from_attributes": True}
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "EmailTemplateResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class EmailTemplateUpdate(BaseModel):
@@ -135,7 +127,7 @@ class ScheduledEmailUpdate(BaseModel):
     status: Optional[str] = Field(None, description="Set to 'cancelled' to cancel")
 
 
-class ScheduledEmailResponse(BaseModel):
+class ScheduledEmailResponse(UTCResponseBase):
     """Response schema for a scheduled email"""
 
     id: str
@@ -170,7 +162,7 @@ class ScheduledEmailResponse(BaseModel):
 # --- Message History schemas ---
 
 
-class MessageHistoryResponse(BaseModel):
+class MessageHistoryResponse(UTCResponseBase):
     """Response schema for a sent message log entry"""
 
     id: str
@@ -187,10 +179,6 @@ class MessageHistoryResponse(BaseModel):
     sent_by: Optional[str] = None
 
     model_config = {"from_attributes": True}
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "MessageHistoryResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class MessageHistoryListResponse(BaseModel):

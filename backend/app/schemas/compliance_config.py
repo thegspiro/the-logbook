@@ -7,9 +7,10 @@ Pydantic request/response schemas for compliance config endpoints.
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
-from app.schemas.base import stamp_naive_datetimes_utc
+
+from app.schemas.base import UTCResponseBase
 
 
 # =============================================================================
@@ -75,10 +76,6 @@ class ComplianceProfileResponse(ComplianceProfileBase):
     created_at: datetime
     updated_at: datetime
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ComplianceProfileResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # =============================================================================
 # Compliance Config Schemas
@@ -141,10 +138,6 @@ class ComplianceConfigResponse(ComplianceConfigBase):
     updated_at: datetime
     updated_by: Optional[str] = None
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ComplianceConfigResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # =============================================================================
 # Report Schemas
@@ -165,7 +158,7 @@ class ComplianceReportGenerate(BaseModel):
     additional_recipients: Optional[List[str]] = None
 
 
-class ComplianceReportSummary(BaseModel):
+class ComplianceReportSummary(UTCResponseBase):
     """Summary response for a stored report."""
 
     model_config = ConfigDict(
@@ -188,10 +181,6 @@ class ComplianceReportSummary(BaseModel):
     generated_at: datetime
     generation_duration_ms: Optional[int] = None
     error_message: Optional[str] = None
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ComplianceReportSummary":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class ComplianceReportDetail(ComplianceReportSummary):

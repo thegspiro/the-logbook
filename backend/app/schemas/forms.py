@@ -9,8 +9,9 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
-from app.schemas.base import stamp_naive_datetimes_utc
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.base import UTCResponseBase
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -88,10 +89,6 @@ class FormFieldResponse(FormFieldBase):
 
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "FormFieldResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # ============================================
 # Form Integration Schemas
@@ -114,7 +111,7 @@ class FormIntegrationUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class FormIntegrationResponse(BaseModel):
+class FormIntegrationResponse(UTCResponseBase):
     """Schema for form integration response"""
 
     id: UUID
@@ -128,10 +125,6 @@ class FormIntegrationResponse(BaseModel):
     updated_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "FormIntegrationResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -199,10 +192,6 @@ class FormResponse(FormBase):
 
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "FormResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 class FormDetailResponse(FormResponse):
     """Extended form response with fields and integrations"""
@@ -243,7 +232,7 @@ class PublicFormSubmissionCreate(BaseModel):
     hp_website: Optional[str] = Field(None, alias="website")
 
 
-class FormSubmissionResponse(BaseModel):
+class FormSubmissionResponse(UTCResponseBase):
     """Schema for submission response"""
 
     id: UUID
@@ -260,10 +249,6 @@ class FormSubmissionResponse(BaseModel):
     created_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "FormSubmissionResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class FormSubmissionDetailResponse(FormSubmissionResponse):
@@ -325,7 +310,7 @@ class PublicFormResponse(BaseModel):
     model_config = _response_config
 
 
-class PublicFormSubmissionResponse(BaseModel):
+class PublicFormSubmissionResponse(UTCResponseBase):
     """Response after submitting a public form"""
 
     id: UUID

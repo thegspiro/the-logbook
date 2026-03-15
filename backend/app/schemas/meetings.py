@@ -8,8 +8,9 @@ from datetime import date, datetime, time
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
-from app.schemas.base import stamp_naive_datetimes_utc
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.base import UTCResponseBase
 
 # ============================================
 # Meeting Attendee Schemas
@@ -24,7 +25,7 @@ class MeetingAttendeeCreate(BaseModel):
     excused: bool = False
 
 
-class MeetingAttendeeResponse(BaseModel):
+class MeetingAttendeeResponse(UTCResponseBase):
     """Schema for meeting attendee response"""
 
     id: UUID
@@ -36,10 +37,6 @@ class MeetingAttendeeResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "MeetingAttendeeResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -67,7 +64,7 @@ class ActionItemUpdate(BaseModel):
     completion_notes: Optional[str] = None
 
 
-class ActionItemResponse(BaseModel):
+class ActionItemResponse(UTCResponseBase):
     """Schema for action item response"""
 
     id: UUID
@@ -85,10 +82,6 @@ class ActionItemResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ActionItemResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -129,7 +122,7 @@ class MeetingUpdate(BaseModel):
     motions: Optional[str] = None
 
 
-class MeetingResponse(BaseModel):
+class MeetingResponse(UTCResponseBase):
     """Schema for meeting response"""
 
     id: UUID
@@ -155,10 +148,6 @@ class MeetingResponse(BaseModel):
     action_item_count: Optional[int] = 0
 
     model_config = ConfigDict(from_attributes=True)
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "MeetingResponse":
-        return stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class MeetingDetailResponse(MeetingResponse):
