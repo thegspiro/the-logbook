@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 import { useTimezone } from "../hooks/useTimezone";
-import { formatTime, formatDateCustom } from "../utils/dateFormatting";
+import { formatTime, formatDateCustom, localToUTC } from "../utils/dateFormatting";
 import { schedulingService, useSchedulingStore } from "../modules/scheduling";
 import type {
   ShiftRecord,
@@ -388,14 +388,16 @@ const SchedulingPage: React.FC = () => {
       }
       const startTime = shiftForm.customStartTime || template.start_time_of_day;
       const endTime = shiftForm.customEndTime || template.end_time_of_day;
-      const startDateTime = `${shiftForm.startDate}T${startTime}:00`;
 
       // Use the form's end date (auto-computed or user-overridden)
       const endDate =
         shiftForm.endDate ||
         computeEndDate(shiftForm.startDate, template) ||
         shiftForm.startDate;
-      const endDateTime = `${endDate}T${endTime}:00`;
+
+      // Convert local times to UTC so the backend stores correct values
+      const startDateTime = localToUTC(`${shiftForm.startDate}T${startTime}`, tz);
+      const endDateTime = localToUTC(`${endDate}T${endTime}`, tz);
 
       const templatePositions = resolveTemplatePositions(template.positions);
 
