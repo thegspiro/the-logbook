@@ -10,6 +10,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.base import UTCResponseBase
+
 
 class LocationBase(BaseModel):
     """Base location schema"""
@@ -83,7 +85,7 @@ class LocationResponse(LocationBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-class LocationListItem(BaseModel):
+class LocationListItem(UTCResponseBase):
     """Schema for location list items"""
 
     id: UUID

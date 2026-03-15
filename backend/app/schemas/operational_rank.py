@@ -10,6 +10,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.base import UTCResponseBase
+
 
 class RankCreate(BaseModel):
     """Schema for creating a new operational rank."""
@@ -45,7 +47,7 @@ class RankUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class RankResponse(BaseModel):
+class RankResponse(UTCResponseBase):
     """Full rank response."""
 
     model_config = ConfigDict(from_attributes=True)

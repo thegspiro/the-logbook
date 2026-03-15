@@ -10,6 +10,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+from app.schemas.base import UTCResponseBase
+
 _response_config = ConfigDict(from_attributes=True)
 
 
@@ -128,7 +130,7 @@ class UserUpdate(BaseModel):
     emergency_contacts: Optional[List[EmergencyContact]] = None
 
 
-class UserResponse(UserBase):
+class UserResponse(UserBase, UTCResponseBase):
     """
     Schema for user response (without sensitive data like password)
 
@@ -292,7 +294,7 @@ class AdminPasswordReset(BaseModel):
     )
 
 
-class MemberAuditLogEntry(BaseModel):
+class MemberAuditLogEntry(UTCResponseBase):
     """Schema for member audit history entries"""
 
     id: int

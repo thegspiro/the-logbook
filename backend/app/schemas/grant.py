@@ -13,6 +13,8 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
+from app.schemas.base import UTCResponseBase
+
 _response_config = ConfigDict(
     from_attributes=True, alias_generator=to_camel, populate_by_name=True
 )
@@ -356,7 +358,7 @@ class GrantApplicationResponse(GrantApplicationBase):
     model_config = _response_config
 
 
-class GrantApplicationListResponse(BaseModel):
+class GrantApplicationListResponse(UTCResponseBase):
     """Schema for grant application list item"""
 
     id: UUID
@@ -566,7 +568,7 @@ class GrantNoteCreate(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
-class GrantNoteResponse(BaseModel):
+class GrantNoteResponse(UTCResponseBase):
     """Schema for grant note response"""
 
     id: UUID

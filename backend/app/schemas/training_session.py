@@ -10,6 +10,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.schemas.base import UTCResponseBase
+
 
 class TrainingSessionCreate(BaseModel):
     """Schema for creating a training session (creates Event + TrainingSession)"""
@@ -152,7 +154,7 @@ class RecurringTrainingSessionCreate(TrainingSessionCreate):
         return self
 
 
-class TrainingSessionResponse(BaseModel):
+class TrainingSessionResponse(UTCResponseBase):
     """Schema for training session response"""
 
     id: UUID
@@ -194,7 +196,7 @@ class TrainingSessionResponse(BaseModel):
         from_attributes = True
 
 
-class AttendeeApprovalData(BaseModel):
+class AttendeeApprovalData(UTCResponseBase):
     """Schema for individual attendee approval data"""
 
     user_id: UUID
@@ -223,7 +225,7 @@ class TrainingApprovalRequest(BaseModel):
     approval_notes: Optional[str] = None
 
 
-class TrainingApprovalResponse(BaseModel):
+class TrainingApprovalResponse(UTCResponseBase):
     """Schema for training approval response"""
 
     id: UUID

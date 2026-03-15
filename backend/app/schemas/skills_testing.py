@@ -10,6 +10,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.base import UTCResponseBase
+
 # ============================================
 # Criterion & Section Schemas (template structure)
 # ============================================
@@ -74,7 +76,7 @@ class SkillTemplateUpdate(BaseModel):
     visibility: Optional[str] = None
 
 
-class SkillTemplateResponse(BaseModel):
+class SkillTemplateResponse(UTCResponseBase):
     """Schema for full skill template response"""
 
     id: UUID
@@ -97,7 +99,7 @@ class SkillTemplateResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class SkillTemplateListResponse(BaseModel):
+class SkillTemplateListResponse(UTCResponseBase):
     """Schema for skill template list items (summary view)"""
 
     id: UUID
@@ -169,7 +171,7 @@ class SkillTestUpdate(BaseModel):
     result: Optional[str] = None
 
 
-class SkillTestResponse(BaseModel):
+class SkillTestResponse(UTCResponseBase):
     """Schema for full skill test response"""
 
     id: UUID
@@ -201,7 +203,7 @@ class SkillTestResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class SkillTestListResponse(BaseModel):
+class SkillTestListResponse(UTCResponseBase):
     """Schema for skill test list items (summary view)"""
 
     id: UUID

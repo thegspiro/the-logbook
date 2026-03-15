@@ -10,6 +10,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.base import UTCResponseBase
+
 # ============================================
 # Document Folder Schemas
 # ============================================
@@ -43,7 +45,7 @@ class DocumentFolderUpdate(BaseModel):
     allowed_roles: Optional[List[str]] = None
 
 
-class DocumentFolderResponse(BaseModel):
+class DocumentFolderResponse(UTCResponseBase):
     """Schema for folder response"""
 
     id: UUID
@@ -91,7 +93,7 @@ class DocumentUpdate(BaseModel):
     status: Optional[str] = None
 
 
-class DocumentResponse(BaseModel):
+class DocumentResponse(UTCResponseBase):
     """Schema for document response"""
 
     id: UUID

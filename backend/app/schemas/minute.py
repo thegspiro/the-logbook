@@ -9,6 +9,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.base import UTCResponseBase
+
 _response_config = ConfigDict(from_attributes=True)
 
 # ============================================
@@ -107,7 +109,7 @@ class TemplateUpdate(BaseModel):
     footer_config: Optional[FooterConfig] = None
 
 
-class TemplateResponse(BaseModel):
+class TemplateResponse(UTCResponseBase):
     """Template response schema"""
 
     id: str
@@ -126,7 +128,7 @@ class TemplateResponse(BaseModel):
     model_config = _response_config
 
 
-class TemplateListItem(BaseModel):
+class TemplateListItem(UTCResponseBase):
     """Compact template listing"""
 
     id: str
@@ -345,7 +347,7 @@ class MinutesUpdate(BaseModel):
     notes: Optional[str] = None
 
 
-class MinutesResponse(BaseModel):
+class MinutesResponse(UTCResponseBase):
     """Meeting minutes response schema"""
 
     id: str
@@ -383,7 +385,7 @@ class MinutesResponse(BaseModel):
     model_config = _response_config
 
 
-class MinutesListItem(BaseModel):
+class MinutesListItem(UTCResponseBase):
     """Compact response for listing minutes"""
 
     id: str
@@ -418,7 +420,7 @@ class MinutesReject(BaseModel):
     )
 
 
-class MinutesSearchResult(BaseModel):
+class MinutesSearchResult(UTCResponseBase):
     """Full-text search result"""
 
     id: str

@@ -9,6 +9,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+from app.schemas.base import UTCResponseBase
+
 
 class SkillObservation(BaseModel):
     skill_name: str
@@ -66,7 +68,7 @@ class ReportReview(BaseModel):
     redact_fields: Optional[List[str]] = None  # field names to clear before approving
 
 
-class ShiftCompletionReportResponse(BaseModel):
+class ShiftCompletionReportResponse(UTCResponseBase):
     id: str
     organization_id: str
     shift_id: Optional[str] = None

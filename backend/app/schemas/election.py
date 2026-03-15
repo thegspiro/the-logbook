@@ -10,6 +10,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.schemas.base import UTCResponseBase
+
 VALID_VOTING_METHODS = {"simple_majority", "ranked_choice", "approval", "supermajority"}
 VALID_VICTORY_CONDITIONS = {"most_votes", "majority", "supermajority", "threshold"}
 VALID_RUNOFF_TYPES = {"top_two", "eliminate_lowest"}
@@ -301,7 +303,7 @@ class ElectionResponse(ElectionBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-class ElectionListResponse(BaseModel):
+class ElectionListResponse(UTCResponseBase):
     """Schema for election list item"""
 
     id: UUID
@@ -393,7 +395,7 @@ class VoteCreate(BaseModel):
     )
 
 
-class VoteResponse(BaseModel):
+class VoteResponse(UTCResponseBase):
     """Schema for vote response (limited info for privacy)"""
 
     id: UUID

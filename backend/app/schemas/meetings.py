@@ -10,6 +10,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.base import UTCResponseBase
+
 # ============================================
 # Meeting Attendee Schemas
 # ============================================
@@ -23,7 +25,7 @@ class MeetingAttendeeCreate(BaseModel):
     excused: bool = False
 
 
-class MeetingAttendeeResponse(BaseModel):
+class MeetingAttendeeResponse(UTCResponseBase):
     """Schema for meeting attendee response"""
 
     id: UUID
@@ -62,7 +64,7 @@ class ActionItemUpdate(BaseModel):
     completion_notes: Optional[str] = None
 
 
-class ActionItemResponse(BaseModel):
+class ActionItemResponse(UTCResponseBase):
     """Schema for action item response"""
 
     id: UUID
@@ -120,7 +122,7 @@ class MeetingUpdate(BaseModel):
     motions: Optional[str] = None
 
 
-class MeetingResponse(BaseModel):
+class MeetingResponse(UTCResponseBase):
     """Schema for meeting response"""
 
     id: UUID

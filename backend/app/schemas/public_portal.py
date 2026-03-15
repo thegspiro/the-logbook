@@ -10,6 +10,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.base import UTCResponseBase
+
 # ==============================================================================
 # Configuration Schemas
 # ==============================================================================
@@ -46,7 +48,7 @@ class PublicPortalConfigUpdate(BaseModel):
     settings: Optional[Dict[str, Any]] = None
 
 
-class PublicPortalConfigResponse(BaseModel):
+class PublicPortalConfigResponse(UTCResponseBase):
     """Schema for public portal configuration response"""
 
     id: UUID
@@ -82,7 +84,7 @@ class PublicPortalAPIKeyCreate(BaseModel):
     expires_at: Optional[datetime] = Field(None, description="Optional expiration date")
 
 
-class PublicPortalAPIKeyResponse(BaseModel):
+class PublicPortalAPIKeyResponse(UTCResponseBase):
     """Schema for API key response (without the actual key)"""
 
     id: UUID
@@ -100,7 +102,7 @@ class PublicPortalAPIKeyResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class PublicPortalAPIKeyCreatedResponse(BaseModel):
+class PublicPortalAPIKeyCreatedResponse(UTCResponseBase):
     """Schema for newly created API key (includes the actual key once)"""
 
     id: UUID
@@ -129,7 +131,7 @@ class PublicPortalAPIKeyUpdate(BaseModel):
 # ==============================================================================
 
 
-class PublicPortalAccessLogResponse(BaseModel):
+class PublicPortalAccessLogResponse(UTCResponseBase):
     """Schema for access log entry response"""
 
     id: UUID
@@ -182,7 +184,7 @@ class PublicPortalDataWhitelistUpdate(BaseModel):
     is_enabled: bool
 
 
-class PublicPortalDataWhitelistResponse(BaseModel):
+class PublicPortalDataWhitelistResponse(UTCResponseBase):
     """Schema for data whitelist entry response"""
 
     id: UUID
@@ -253,7 +255,7 @@ class PublicOrganizationStats(BaseModel):
     founded_year: Optional[int]
 
 
-class PublicEvent(BaseModel):
+class PublicEvent(UTCResponseBase):
     """Public event information"""
 
     id: UUID

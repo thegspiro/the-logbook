@@ -11,6 +11,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.base import UTCResponseBase
+
 _response_config = ConfigDict(from_attributes=True)
 
 # ============================================
@@ -387,7 +389,7 @@ ChargeStatusLiteral = Literal["none", "pending", "charged", "waived"]
 AllowancePeriodLiteral = Literal["annual", "career", "one_time"]
 
 
-class ItemIssuanceResponse(BaseModel):
+class ItemIssuanceResponse(UTCResponseBase):
     """Schema for issuance record response"""
 
     id: UUID
@@ -613,7 +615,7 @@ class LocationInventorySummary(BaseModel):
     total_value: float
 
 
-class UserInventoryItem(BaseModel):
+class UserInventoryItem(UTCResponseBase):
     """Schema for user's assigned item"""
 
     assignment_id: UUID
@@ -627,7 +629,7 @@ class UserInventoryItem(BaseModel):
     quantity: int = 1
 
 
-class UserCheckoutItem(BaseModel):
+class UserCheckoutItem(UTCResponseBase):
     """Schema for user's checked out item"""
 
     checkout_id: UUID
@@ -638,7 +640,7 @@ class UserCheckoutItem(BaseModel):
     is_overdue: bool
 
 
-class UserIssuedItem(BaseModel):
+class UserIssuedItem(UTCResponseBase):
     """Schema for a pool item issued to a user"""
 
     issuance_id: UUID
@@ -724,7 +726,7 @@ class DepartureClearanceCreate(BaseModel):
     notes: Optional[str] = None
 
 
-class ClearanceLineItemResponse(BaseModel):
+class ClearanceLineItemResponse(UTCResponseBase):
     """Schema for a single clearance line item"""
 
     id: UUID
@@ -747,7 +749,7 @@ class ClearanceLineItemResponse(BaseModel):
     model_config = _response_config
 
 
-class DepartureClearanceResponse(BaseModel):
+class DepartureClearanceResponse(UTCResponseBase):
     """Schema for departure clearance response"""
 
     id: UUID
@@ -773,7 +775,7 @@ class DepartureClearanceResponse(BaseModel):
     model_config = _response_config
 
 
-class DepartureClearanceSummaryResponse(BaseModel):
+class DepartureClearanceSummaryResponse(UTCResponseBase):
     """Lightweight clearance summary (no line items)"""
 
     id: UUID
@@ -959,7 +961,7 @@ class EquipmentRequestReview(BaseModel):
     review_notes: Optional[str] = None
 
 
-class EquipmentRequestResponse(BaseModel):
+class EquipmentRequestResponse(UTCResponseBase):
     """Schema for equipment request response"""
 
     id: UUID
@@ -1016,7 +1018,7 @@ class StorageAreaUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class StorageAreaResponse(BaseModel):
+class StorageAreaResponse(UTCResponseBase):
     """Schema for storage area response"""
 
     id: UUID
@@ -1062,7 +1064,7 @@ class WriteOffReview(BaseModel):
     review_notes: Optional[str] = None
 
 
-class WriteOffRequestResponse(BaseModel):
+class WriteOffRequestResponse(UTCResponseBase):
     """Write-off request response"""
 
     id: str
@@ -1129,7 +1131,7 @@ class NFPAComplianceUpdate(BaseModel):
     contamination_level: Optional[ContaminationLevelLiteral] = None
 
 
-class NFPAComplianceResponse(BaseModel):
+class NFPAComplianceResponse(UTCResponseBase):
     """Schema for NFPA compliance record response"""
 
     id: UUID
@@ -1169,7 +1171,7 @@ class NFPAExposureRecordCreate(BaseModel):
     user_id: Optional[UUID] = None
 
 
-class NFPAExposureRecordResponse(BaseModel):
+class NFPAExposureRecordResponse(UTCResponseBase):
     """Schema for NFPA exposure record response"""
 
     id: UUID
@@ -1321,7 +1323,7 @@ class IssuanceAllowanceUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class IssuanceAllowanceResponse(BaseModel):
+class IssuanceAllowanceResponse(UTCResponseBase):
     """Issuance allowance response."""
 
     id: UUID
@@ -1368,7 +1370,7 @@ class IssuanceChargeRequest(BaseModel):
     )
 
 
-class IssuanceChargeListItem(BaseModel):
+class IssuanceChargeListItem(UTCResponseBase):
     """Summary of an issuance with charge info for the admin charge management view."""
 
     issuance_id: UUID
@@ -1430,7 +1432,7 @@ class ReturnRequestReview(BaseModel):
     )
 
 
-class ReturnRequestResponse(BaseModel):
+class ReturnRequestResponse(UTCResponseBase):
     """Response for a return request."""
 
     id: UUID
@@ -1499,7 +1501,7 @@ class ReorderRequestUpdate(BaseModel):
     notes: Optional[str] = None
 
 
-class ReorderRequestResponse(BaseModel):
+class ReorderRequestResponse(UTCResponseBase):
     """Schema for reorder request response"""
 
     id: UUID
@@ -1559,7 +1561,7 @@ class ItemVariantGroupUpdate(BaseModel):
     active: Optional[bool] = None
 
 
-class ItemVariantGroupResponse(BaseModel):
+class ItemVariantGroupResponse(UTCResponseBase):
     """Schema for variant group response"""
 
     id: UUID
@@ -1637,7 +1639,7 @@ class EquipmentKitItemResponse(BaseModel):
     model_config = _response_config
 
 
-class EquipmentKitResponse(BaseModel):
+class EquipmentKitResponse(UTCResponseBase):
     """Schema for equipment kit response"""
 
     id: UUID
@@ -1686,7 +1688,7 @@ class MemberSizePreferencesUpdate(MemberSizePreferencesCreate):
     """Schema for updating member size preferences (same fields, all optional)"""
 
 
-class MemberSizePreferencesResponse(BaseModel):
+class MemberSizePreferencesResponse(UTCResponseBase):
     """Schema for member size preferences response"""
 
     id: UUID

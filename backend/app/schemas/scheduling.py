@@ -4,34 +4,16 @@ Scheduling Pydantic Schemas
 Request and response schemas for scheduling/shift management endpoints.
 """
 
-from datetime import date, datetime, timezone as tz
+from datetime import date, datetime
 from enum import Enum as PyEnum
 from typing import Any, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.schemas.base import UTCResponseBase
+
 _response_config = ConfigDict(from_attributes=True)
-
-
-def _stamp_naive_datetimes_utc(instance: BaseModel) -> BaseModel:
-    """Ensure all naive datetime fields carry UTC tzinfo.
-
-    MySQL does not persist timezone information in DATETIME columns, so
-    SQLAlchemy returns naive ``datetime`` objects.  Without explicit
-    ``tzinfo``, Pydantic serialises them as ``"2024-01-15T14:00:00"``
-    (no ``Z`` / offset).  Browsers' ``new Date()`` then interprets
-    these as **local** time, causing the frontend to display UTC values
-    as-is instead of converting them to the user's timezone.
-
-    Applying ``tzinfo=UTC`` produces ``"2024-01-15T14:00:00+00:00"``
-    in the JSON response, which ``new Date()`` correctly reads as UTC.
-    """
-    for name in instance.model_fields:
-        val = getattr(instance, name)
-        if isinstance(val, datetime) and val.tzinfo is None:
-            object.__setattr__(instance, name, val.replace(tzinfo=tz.utc))
-    return instance
 
 # ============================================
 # Shift Schemas
@@ -86,7 +68,7 @@ class ShiftUpdate(BaseModel):
         return self
 
 
-class ShiftResponse(BaseModel):
+class ShiftResponse(UTCResponseBase):
     """Schema for shift response"""
 
     id: UUID
@@ -113,10 +95,6 @@ class ShiftResponse(BaseModel):
 
     model_config = _response_config
 
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ShiftResponse":
-        return _stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
-
 
 # ============================================
 # Shift Attendance Schemas
@@ -139,7 +117,7 @@ class ShiftAttendanceUpdate(BaseModel):
     duration_minutes: Optional[int] = None
 
 
-class ShiftAttendanceResponse(BaseModel):
+class ShiftAttendanceResponse(UTCResponseBase):
     """Schema for shift attendance response"""
 
     id: UUID
@@ -152,10 +130,6 @@ class ShiftAttendanceResponse(BaseModel):
     created_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ShiftAttendanceResponse":
-        return _stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -227,7 +201,7 @@ class ShiftCallUpdate(BaseModel):
     notes: Optional[str] = None
 
 
-class ShiftCallResponse(BaseModel):
+class ShiftCallResponse(UTCResponseBase):
     """Schema for shift call response"""
 
     id: UUID
@@ -245,10 +219,6 @@ class ShiftCallResponse(BaseModel):
     created_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ShiftCallResponse":
-        return _stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -355,7 +325,7 @@ class ShiftTemplateUpdate(BaseModel):
     is_default: Optional[bool] = None
 
 
-class ShiftTemplateResponse(BaseModel):
+class ShiftTemplateResponse(UTCResponseBase):
     """Schema for shift template response"""
 
     id: UUID
@@ -378,10 +348,6 @@ class ShiftTemplateResponse(BaseModel):
     created_by: Optional[UUID] = None
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ShiftTemplateResponse":
-        return _stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -421,7 +387,7 @@ class ShiftPatternUpdate(BaseModel):
     assigned_members: Optional[Any] = None
 
 
-class ShiftPatternResponse(BaseModel):
+class ShiftPatternResponse(UTCResponseBase):
     """Schema for shift pattern response"""
 
     id: UUID
@@ -443,10 +409,6 @@ class ShiftPatternResponse(BaseModel):
     created_by: Optional[UUID] = None
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ShiftPatternResponse":
-        return _stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 class GenerateShiftsRequest(BaseModel):
@@ -498,7 +460,7 @@ class EmbeddedShiftInfo(BaseModel):
     color: Optional[str] = None
 
 
-class ShiftAssignmentResponse(BaseModel):
+class ShiftAssignmentResponse(UTCResponseBase):
     """Schema for shift assignment response"""
 
     id: UUID
@@ -516,10 +478,6 @@ class ShiftAssignmentResponse(BaseModel):
     updated_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ShiftAssignmentResponse":
-        return _stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -543,7 +501,7 @@ class ShiftSwapReview(BaseModel):
     reviewer_notes: Optional[str] = None
 
 
-class ShiftSwapRequestResponse(BaseModel):
+class ShiftSwapRequestResponse(UTCResponseBase):
     """Schema for shift swap request response"""
 
     id: UUID
@@ -567,10 +525,6 @@ class ShiftSwapRequestResponse(BaseModel):
     updated_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ShiftSwapRequestResponse":
-        return _stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -607,7 +561,7 @@ class ShiftTimeOffReview(BaseModel):
     reviewer_notes: Optional[str] = None
 
 
-class ShiftTimeOffResponse(BaseModel):
+class ShiftTimeOffResponse(UTCResponseBase):
     """Schema for time off request response"""
 
     id: UUID
@@ -625,10 +579,6 @@ class ShiftTimeOffResponse(BaseModel):
     updated_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "ShiftTimeOffResponse":
-        return _stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================
@@ -729,7 +679,7 @@ class BasicApparatusUpdate(BaseModel):
     positions: Optional[List[str]] = None
 
 
-class BasicApparatusResponse(BaseModel):
+class BasicApparatusResponse(UTCResponseBase):
     """Schema for basic apparatus response"""
 
     id: UUID
@@ -744,10 +694,6 @@ class BasicApparatusResponse(BaseModel):
     updated_at: datetime
 
     model_config = _response_config
-
-    @model_validator(mode="after")
-    def ensure_utc(self) -> "BasicApparatusResponse":
-        return _stamp_naive_datetimes_utc(self)  # type: ignore[return-value]
 
 
 # ============================================

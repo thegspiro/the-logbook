@@ -10,6 +10,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.base import UTCResponseBase
+
 _response_config = ConfigDict(from_attributes=True)
 
 # --- Report Stage Groups ---
@@ -155,7 +157,7 @@ class PipelineResponse(PipelineBase):
     model_config = _response_config
 
 
-class PipelineListResponse(BaseModel):
+class PipelineListResponse(UTCResponseBase):
     """Schema for pipeline list item"""
 
     id: UUID
@@ -284,7 +286,7 @@ class ProspectUpdate(BaseModel):
     )
 
 
-class StepProgressResponse(BaseModel):
+class StepProgressResponse(UTCResponseBase):
     """Schema for step progress record"""
 
     id: UUID
@@ -328,7 +330,7 @@ class ProspectResponse(ProspectBase):
     )
 
 
-class ProspectListResponse(BaseModel):
+class ProspectListResponse(UTCResponseBase):
     """Schema for prospect list item"""
 
     id: UUID
@@ -430,7 +432,7 @@ class TransferProspectResponse(BaseModel):
 # --- Activity Log Schema ---
 
 
-class ActivityLogResponse(BaseModel):
+class ActivityLogResponse(UTCResponseBase):
     """Schema for activity log entry"""
 
     id: UUID
@@ -466,7 +468,7 @@ class PipelineKanbanResponse(BaseModel):
 # --- Document Schemas ---
 
 
-class ProspectDocumentResponse(BaseModel):
+class ProspectDocumentResponse(UTCResponseBase):
     """Schema for a prospect document.
 
     Note: ``file_path`` is intentionally excluded from the response to
@@ -508,7 +510,7 @@ class ElectionPackageUpdate(BaseModel):
     applicant_snapshot: Optional[Dict[str, Any]] = None
 
 
-class ElectionPackageResponse(BaseModel):
+class ElectionPackageResponse(UTCResponseBase):
     """Schema for an election package"""
 
     id: UUID
@@ -565,7 +567,7 @@ class ProspectEventLinkCreate(BaseModel):
     event_id: UUID
 
 
-class ProspectEventLinkResponse(BaseModel):
+class ProspectEventLinkResponse(UTCResponseBase):
     """Schema for a prospect-event link"""
 
     id: UUID
@@ -620,7 +622,7 @@ class InterviewUpdate(BaseModel):
     interview_date: Optional[datetime] = None
 
 
-class InterviewResponse(BaseModel):
+class InterviewResponse(UTCResponseBase):
     """Schema for interview response"""
 
     id: UUID

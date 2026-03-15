@@ -12,6 +12,8 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
+from app.schemas.base import UTCResponseBase
+
 _RESPONSE_CONFIG = ConfigDict(
     from_attributes=True,
     alias_generator=to_camel,
@@ -40,7 +42,7 @@ class FiscalYearUpdate(BaseModel):
     end_date: Optional[datetime] = None
 
 
-class FiscalYearResponse(BaseModel):
+class FiscalYearResponse(UTCResponseBase):
     """Fiscal year response"""
 
     model_config = _RESPONSE_CONFIG
@@ -83,7 +85,7 @@ class BudgetCategoryUpdate(BaseModel):
     qb_account_name: Optional[str] = None
 
 
-class BudgetCategoryResponse(BaseModel):
+class BudgetCategoryResponse(UTCResponseBase):
     """Budget category response"""
 
     model_config = _RESPONSE_CONFIG
@@ -123,7 +125,7 @@ class BudgetUpdate(BaseModel):
     station_id: Optional[str] = None
 
 
-class BudgetResponse(BaseModel):
+class BudgetResponse(UTCResponseBase):
     """Budget response"""
 
     model_config = _RESPONSE_CONFIG
@@ -190,7 +192,7 @@ class ApprovalChainStepUpdate(BaseModel):
     required: Optional[bool] = None
 
 
-class ApprovalChainStepResponse(BaseModel):
+class ApprovalChainStepResponse(UTCResponseBase):
     """Approval chain step response"""
 
     model_config = _RESPONSE_CONFIG
@@ -236,7 +238,7 @@ class ApprovalChainUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class ApprovalChainResponse(BaseModel):
+class ApprovalChainResponse(UTCResponseBase):
     """Approval chain response"""
 
     model_config = _RESPONSE_CONFIG
@@ -257,7 +259,7 @@ class ApprovalChainResponse(BaseModel):
     steps: list[ApprovalChainStepResponse] = []
 
 
-class ApprovalStepRecordResponse(BaseModel):
+class ApprovalStepRecordResponse(UTCResponseBase):
     """Approval step record response"""
 
     model_config = _RESPONSE_CONFIG
@@ -283,7 +285,7 @@ class ApprovalActionRequest(BaseModel):
     notes: Optional[str] = None
 
 
-class PendingApprovalResponse(BaseModel):
+class PendingApprovalResponse(UTCResponseBase):
     """Pending approval for the current user"""
 
     model_config = _RESPONSE_CONFIG
@@ -335,7 +337,7 @@ class PurchaseRequestUpdate(BaseModel):
     facility_id: Optional[str] = None
 
 
-class PurchaseRequestResponse(BaseModel):
+class PurchaseRequestResponse(UTCResponseBase):
     """Purchase request response"""
 
     model_config = _RESPONSE_CONFIG
@@ -403,7 +405,7 @@ class ExpenseLineItemUpdate(BaseModel):
     merchant: Optional[str] = None
 
 
-class ExpenseLineItemResponse(BaseModel):
+class ExpenseLineItemResponse(UTCResponseBase):
     """Expense line item response"""
 
     model_config = _RESPONSE_CONFIG
@@ -438,7 +440,7 @@ class ExpenseReportUpdate(BaseModel):
     notes: Optional[str] = None
 
 
-class ExpenseReportResponse(BaseModel):
+class ExpenseReportResponse(UTCResponseBase):
     """Expense report response"""
 
     model_config = _RESPONSE_CONFIG
@@ -496,7 +498,7 @@ class CheckRequestUpdate(BaseModel):
     check_date: Optional[datetime] = None
 
 
-class CheckRequestResponse(BaseModel):
+class CheckRequestResponse(UTCResponseBase):
     """Check request response"""
 
     model_config = _RESPONSE_CONFIG
@@ -558,7 +560,7 @@ class DuesScheduleUpdate(BaseModel):
     notes: Optional[str] = None
 
 
-class DuesScheduleResponse(BaseModel):
+class DuesScheduleResponse(UTCResponseBase):
     """Dues schedule response"""
 
     model_config = _RESPONSE_CONFIG
@@ -580,7 +582,7 @@ class DuesScheduleResponse(BaseModel):
     updated_at: datetime
 
 
-class MemberDuesResponse(BaseModel):
+class MemberDuesResponse(UTCResponseBase):
     """Member dues response"""
 
     model_config = _RESPONSE_CONFIG
@@ -658,7 +660,7 @@ class ExportMappingUpdate(BaseModel):
     mapping_type: Optional[str] = None
 
 
-class ExportMappingResponse(BaseModel):
+class ExportMappingResponse(UTCResponseBase):
     """Export mapping response"""
 
     model_config = _RESPONSE_CONFIG
@@ -681,7 +683,7 @@ class ExportRequest(BaseModel):
     file_format: str = "csv"
 
 
-class ExportLogResponse(BaseModel):
+class ExportLogResponse(UTCResponseBase):
     """Export log response"""
 
     model_config = _RESPONSE_CONFIG

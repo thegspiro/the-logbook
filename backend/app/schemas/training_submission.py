@@ -11,6 +11,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.schemas.base import UTCResponseBase
+
 # ==================== Self-Report Config Schemas ====================
 
 
@@ -22,7 +24,7 @@ class FieldConfig(BaseModel):
     label: str = ""
 
 
-class SelfReportConfigResponse(BaseModel):
+class SelfReportConfigResponse(UTCResponseBase):
     """Response schema for self-report configuration"""
 
     id: UUID
@@ -117,7 +119,7 @@ class TrainingSubmissionUpdate(BaseModel):
     attachments: Optional[list[str]] = None
 
 
-class TrainingSubmissionResponse(BaseModel):
+class TrainingSubmissionResponse(UTCResponseBase):
     """Response schema for a training submission"""
 
     id: UUID

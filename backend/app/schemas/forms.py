@@ -11,6 +11,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.base import UTCResponseBase
+
 _response_config = ConfigDict(from_attributes=True)
 
 # ============================================
@@ -109,7 +111,7 @@ class FormIntegrationUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class FormIntegrationResponse(BaseModel):
+class FormIntegrationResponse(UTCResponseBase):
     """Schema for form integration response"""
 
     id: UUID
@@ -230,7 +232,7 @@ class PublicFormSubmissionCreate(BaseModel):
     hp_website: Optional[str] = Field(None, alias="website")
 
 
-class FormSubmissionResponse(BaseModel):
+class FormSubmissionResponse(UTCResponseBase):
     """Schema for submission response"""
 
     id: UUID
@@ -308,7 +310,7 @@ class PublicFormResponse(BaseModel):
     model_config = _response_config
 
 
-class PublicFormSubmissionResponse(BaseModel):
+class PublicFormSubmissionResponse(UTCResponseBase):
     """Response after submitting a public form"""
 
     id: UUID

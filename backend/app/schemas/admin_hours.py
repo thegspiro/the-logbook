@@ -10,6 +10,8 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
+from app.schemas.base import UTCResponseBase
+
 # Shared camelCase response config
 _RESPONSE_CONFIG = ConfigDict(
     from_attributes=True, alias_generator=to_camel, populate_by_name=True
@@ -46,7 +48,7 @@ class AdminHoursCategoryUpdate(BaseModel):
     sort_order: Optional[int] = Field(None, ge=0)
 
 
-class AdminHoursCategoryResponse(BaseModel):
+class AdminHoursCategoryResponse(UTCResponseBase):
     """Response schema for admin hours category"""
 
     model_config = _RESPONSE_CONFIG
@@ -70,7 +72,7 @@ class AdminHoursCategoryResponse(BaseModel):
 # =============================================================================
 
 
-class AdminHoursClockInResponse(BaseModel):
+class AdminHoursClockInResponse(UTCResponseBase):
     """Response after clocking in via QR code"""
 
     model_config = _RESPONSE_CONFIG
@@ -83,7 +85,7 @@ class AdminHoursClockInResponse(BaseModel):
     message: str
 
 
-class AdminHoursClockOutResponse(BaseModel):
+class AdminHoursClockOutResponse(UTCResponseBase):
     """Response after clocking out"""
 
     model_config = _RESPONSE_CONFIG
@@ -107,7 +109,7 @@ class AdminHoursEntryCreate(BaseModel):
     description: Optional[str] = None
 
 
-class AdminHoursEntryResponse(BaseModel):
+class AdminHoursEntryResponse(UTCResponseBase):
     """Full response schema for an admin hours entry"""
 
     model_config = _RESPONSE_CONFIG
@@ -135,7 +137,7 @@ class AdminHoursEntryResponse(BaseModel):
     approver_name: Optional[str] = None
 
 
-class AdminHoursActiveSession(BaseModel):
+class AdminHoursActiveSession(UTCResponseBase):
     """Response for the user's currently active session"""
 
     model_config = _RESPONSE_CONFIG
@@ -165,7 +167,7 @@ class AdminHoursApprovalAction(BaseModel):
     rejection_reason: Optional[str] = None
 
 
-class AdminHoursSummary(BaseModel):
+class AdminHoursSummary(UTCResponseBase):
     """Summary of hours for reporting"""
 
     model_config = _RESPONSE_CONFIG
@@ -214,7 +216,7 @@ class AdminHoursClosedStaleResponse(BaseModel):
     closed_count: int
 
 
-class AdminHoursActiveSessionAdmin(BaseModel):
+class AdminHoursActiveSessionAdmin(UTCResponseBase):
     """Active session details for admin view (includes user info)"""
 
     model_config = _RESPONSE_CONFIG

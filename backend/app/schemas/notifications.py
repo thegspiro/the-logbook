@@ -10,6 +10,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.base import UTCResponseBase
+
 # ============================================
 # Notification Rule Schemas
 # ============================================
@@ -39,7 +41,7 @@ class NotificationRuleUpdate(BaseModel):
     config: Optional[Any] = None
 
 
-class NotificationRuleResponse(BaseModel):
+class NotificationRuleResponse(UTCResponseBase):
     """Schema for notification rule response"""
 
     id: UUID
@@ -70,7 +72,7 @@ class NotificationRulesListResponse(BaseModel):
 # ============================================
 
 
-class NotificationLogResponse(BaseModel):
+class NotificationLogResponse(UTCResponseBase):
     """Schema for notification log response"""
 
     id: UUID

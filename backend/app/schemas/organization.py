@@ -12,6 +12,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.schemas.base import UTCResponseBase
+
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 
 
@@ -943,7 +945,7 @@ class SetupChecklistResponse(BaseModel):
     enabled_modules: List[str] = Field(default_factory=list)
 
 
-class OrganizationSetupResponse(BaseModel):
+class OrganizationSetupResponse(UTCResponseBase):
     """Response schema for organization setup"""
 
     id: UUID

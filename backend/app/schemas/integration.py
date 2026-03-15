@@ -11,6 +11,8 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
+from app.schemas.base import UTCResponseBase
+
 # ============================================
 # Shared response config (camelCase)
 # ============================================
@@ -173,7 +175,7 @@ SECRET_CONFIG_KEYS = frozenset(
 # ============================================
 
 
-class IntegrationResponse(BaseModel):
+class IntegrationResponse(UTCResponseBase):
     model_config = _response_config
 
     id: str

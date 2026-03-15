@@ -11,6 +11,8 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
+from app.schemas.base import UTCResponseBase
+
 
 # ============================================
 # Check Template Item Schemas
@@ -49,7 +51,7 @@ class CheckTemplateItemUpdate(BaseModel):
     expiration_warning_days: Optional[int] = None
 
 
-class CheckTemplateItemResponse(BaseModel):
+class CheckTemplateItemResponse(UTCResponseBase):
     """Response schema for a check template item."""
 
     model_config = ConfigDict(
@@ -101,7 +103,7 @@ class CheckTemplateCompartmentUpdate(BaseModel):
     parent_compartment_id: Optional[str] = None
 
 
-class CheckTemplateCompartmentResponse(BaseModel):
+class CheckTemplateCompartmentResponse(UTCResponseBase):
     """Response schema for a compartment with nested items."""
 
     model_config = ConfigDict(
@@ -154,7 +156,7 @@ class EquipmentCheckTemplateUpdate(BaseModel):
     sort_order: Optional[int] = None
 
 
-class EquipmentCheckTemplateResponse(BaseModel):
+class EquipmentCheckTemplateResponse(UTCResponseBase):
     """Response schema for an equipment check template with compartments."""
 
     model_config = ConfigDict(
@@ -229,7 +231,7 @@ class ShiftEquipmentCheckCreate(BaseModel):
     signature_data: Optional[str] = None
 
 
-class ShiftEquipmentCheckItemResponse(BaseModel):
+class ShiftEquipmentCheckItemResponse(UTCResponseBase):
     """Response schema for a single check item result."""
 
     model_config = ConfigDict(
@@ -252,7 +254,7 @@ class ShiftEquipmentCheckItemResponse(BaseModel):
     created_at: Optional[datetime] = None
 
 
-class ShiftEquipmentCheckResponse(BaseModel):
+class ShiftEquipmentCheckResponse(UTCResponseBase):
     """Response schema for a completed equipment check."""
 
     model_config = ConfigDict(
@@ -280,7 +282,7 @@ class ShiftEquipmentCheckResponse(BaseModel):
     updated_at: Optional[datetime] = None
 
 
-class ShiftCheckSummary(BaseModel):
+class ShiftCheckSummary(UTCResponseBase):
     """Summary of check status for a shift — used in shift detail view."""
 
     model_config = ConfigDict(
@@ -301,7 +303,7 @@ class ShiftCheckSummary(BaseModel):
     failed_items: int = 0
 
 
-class CheckItemHistory(BaseModel):
+class CheckItemHistory(UTCResponseBase):
     """History entry for a single item across multiple shifts."""
 
     model_config = ConfigDict(

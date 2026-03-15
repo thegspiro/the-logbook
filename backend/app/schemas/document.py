@@ -11,6 +11,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.base import UTCResponseBase
+
 
 class FolderCreate(BaseModel):
     """Schema for creating a document folder"""
@@ -34,7 +36,7 @@ class FolderUpdate(BaseModel):
     color: Optional[str] = Field(None, max_length=50)
 
 
-class FolderResponse(BaseModel):
+class FolderResponse(UTCResponseBase):
     """Folder response schema"""
 
     id: str
@@ -77,7 +79,7 @@ class DocumentUpdate(BaseModel):
     tags: Optional[List[str]] = None
 
 
-class DocumentResponse(BaseModel):
+class DocumentResponse(UTCResponseBase):
     """Document response schema for the minutes publishing flow"""
 
     id: str
@@ -101,7 +103,7 @@ class DocumentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class DocumentListItem(BaseModel):
+class DocumentListItem(UTCResponseBase):
     """Compact document listing"""
 
     id: str

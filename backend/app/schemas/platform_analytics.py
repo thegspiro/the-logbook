@@ -10,6 +10,8 @@ from typing import Dict, List, Optional
 from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
 
+from app.schemas.base import UTCResponseBase
+
 
 class DailyCount(BaseModel):
     """A single day's count for trend data."""
@@ -31,7 +33,7 @@ class ModuleUsage(BaseModel):
     last_activity: Optional[str] = None  # ISO datetime or None
 
 
-class PlatformAnalyticsResponse(BaseModel):
+class PlatformAnalyticsResponse(UTCResponseBase):
     """Aggregated platform-wide analytics for IT admins."""
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)

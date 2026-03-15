@@ -11,6 +11,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
+from app.schemas.base import UTCResponseBase
+
 
 class EventRequestCreate(BaseModel):
     """Schema for creating a new event request (public submission)."""
@@ -142,7 +144,7 @@ class EmailTemplateUpdate(BaseModel):
     is_active: Optional[int] = None
 
 
-class EmailTemplateResponse(BaseModel):
+class EmailTemplateResponse(UTCResponseBase):
     """Response schema for an email template."""
 
     id: str
@@ -168,7 +170,7 @@ class SendTemplateEmail(BaseModel):
     )
 
 
-class EventRequestActivityResponse(BaseModel):
+class EventRequestActivityResponse(UTCResponseBase):
     """Response schema for a single activity log entry."""
 
     id: str
@@ -184,7 +186,7 @@ class EventRequestActivityResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class EventRequestResponse(BaseModel):
+class EventRequestResponse(UTCResponseBase):
     """Full response schema for an event request."""
 
     id: str
@@ -228,7 +230,7 @@ class EventRequestResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class EventRequestListItem(BaseModel):
+class EventRequestListItem(UTCResponseBase):
     """Lightweight list item for event requests."""
 
     id: str

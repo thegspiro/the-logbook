@@ -10,6 +10,8 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
+from app.schemas.base import UTCResponseBase
+
 
 # =============================================================================
 # Compliance Profile Schemas
@@ -156,7 +158,7 @@ class ComplianceReportGenerate(BaseModel):
     additional_recipients: Optional[List[str]] = None
 
 
-class ComplianceReportSummary(BaseModel):
+class ComplianceReportSummary(UTCResponseBase):
     """Summary response for a stored report."""
 
     model_config = ConfigDict(

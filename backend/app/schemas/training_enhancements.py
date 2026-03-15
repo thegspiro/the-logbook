@@ -12,6 +12,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.base import UTCResponseBase
+
 _response_config = ConfigDict(from_attributes=True)
 
 # ============================================
@@ -91,7 +93,7 @@ class RenewalTaskStatus(str, Enum):
     LAPSED = "lapsed"
 
 
-class RenewalTaskResponse(BaseModel):
+class RenewalTaskResponse(UTCResponseBase):
     """Schema for renewal task response"""
 
     id: UUID
@@ -172,7 +174,7 @@ class CompetencyMatrixResponse(CompetencyMatrixBase):
     model_config = _response_config
 
 
-class MemberCompetencyResponse(BaseModel):
+class MemberCompetencyResponse(UTCResponseBase):
     """Schema for member competency response"""
 
     id: UUID
@@ -438,7 +440,7 @@ class XAPIBatchCreate(BaseModel):
     source_provider_id: Optional[UUID] = None
 
 
-class XAPIStatementResponse(BaseModel):
+class XAPIStatementResponse(UTCResponseBase):
     """Schema for xAPI statement response"""
 
     id: UUID
@@ -478,7 +480,7 @@ class XAPIBatchResponse(BaseModel):
 # ============================================
 
 
-class DocumentUploadResponse(BaseModel):
+class DocumentUploadResponse(UTCResponseBase):
     """Response after uploading a document"""
 
     file_id: str
@@ -489,7 +491,7 @@ class DocumentUploadResponse(BaseModel):
     created_at: datetime
 
 
-class TrainingRecordAttachment(BaseModel):
+class TrainingRecordAttachment(UTCResponseBase):
     """Schema for a training record attachment"""
 
     file_id: str
@@ -521,7 +523,7 @@ class ReportExportRequest(BaseModel):
     filters: Optional[Dict[str, Any]] = None
 
 
-class ReportExportResponse(BaseModel):
+class ReportExportResponse(UTCResponseBase):
     """Response after generating a report export"""
 
     report_id: str

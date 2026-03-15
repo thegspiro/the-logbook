@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from app.schemas.base import UTCResponseBase
+
 
 class TemplateVariable(BaseModel):
     """Describes an available template variable"""
@@ -17,7 +19,7 @@ class TemplateVariable(BaseModel):
     description: str
 
 
-class EmailAttachmentResponse(BaseModel):
+class EmailAttachmentResponse(UTCResponseBase):
     """Response schema for an email attachment"""
 
     id: str
@@ -29,7 +31,7 @@ class EmailAttachmentResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class EmailTemplateResponse(BaseModel):
+class EmailTemplateResponse(UTCResponseBase):
     """Response schema for an email template"""
 
     id: str
@@ -125,7 +127,7 @@ class ScheduledEmailUpdate(BaseModel):
     status: Optional[str] = Field(None, description="Set to 'cancelled' to cancel")
 
 
-class ScheduledEmailResponse(BaseModel):
+class ScheduledEmailResponse(UTCResponseBase):
     """Response schema for a scheduled email"""
 
     id: str
@@ -160,7 +162,7 @@ class ScheduledEmailResponse(BaseModel):
 # --- Message History schemas ---
 
 
-class MessageHistoryResponse(BaseModel):
+class MessageHistoryResponse(UTCResponseBase):
     """Response schema for a sent message log entry"""
 
     id: str

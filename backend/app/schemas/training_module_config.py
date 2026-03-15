@@ -7,8 +7,10 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from app.schemas.base import UTCResponseBase
 
-class TrainingModuleConfigResponse(BaseModel):
+
+class TrainingModuleConfigResponse(UTCResponseBase):
     """Response schema for training module configuration."""
 
     id: str

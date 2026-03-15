@@ -10,6 +10,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.schemas.base import UTCResponseBase
+
 
 class RoleBase(BaseModel):
     """Base role schema"""
@@ -42,7 +44,7 @@ class RoleUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class RoleResponse(BaseModel):
+class RoleResponse(UTCResponseBase):
     """Schema for role response"""
 
     id: UUID

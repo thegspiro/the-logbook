@@ -13,6 +13,8 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
+from app.schemas.base import UTCResponseBase
+
 # Shared config for response schemas
 _response_config = ConfigDict(
     from_attributes=True, alias_generator=to_camel, populate_by_name=True
@@ -53,7 +55,7 @@ class IPExceptionRevoke(BaseModel):
     revoke_reason: str = Field(..., min_length=1)
 
 
-class IPExceptionResponse(BaseModel):
+class IPExceptionResponse(UTCResponseBase):
     """Response schema for an IP exception."""
 
     model_config = _response_config
@@ -95,7 +97,7 @@ class IPExceptionResponse(BaseModel):
 # =============================================================================
 
 
-class BlockedAccessAttemptResponse(BaseModel):
+class BlockedAccessAttemptResponse(UTCResponseBase):
     """Response schema for a blocked access attempt."""
 
     model_config = _response_config
@@ -127,7 +129,7 @@ class CountryBlockRuleCreate(BaseModel):
     risk_level: str = Field("high", pattern=r"^(low|medium|high|critical)$")
 
 
-class CountryBlockRuleResponse(BaseModel):
+class CountryBlockRuleResponse(UTCResponseBase):
     """Response schema for a country block rule."""
 
     model_config = _response_config
@@ -150,7 +152,7 @@ class CountryBlockRuleResponse(BaseModel):
 # =============================================================================
 
 
-class IPExceptionAuditLogResponse(BaseModel):
+class IPExceptionAuditLogResponse(UTCResponseBase):
     """Response schema for an IP exception audit log entry."""
 
     model_config = _response_config

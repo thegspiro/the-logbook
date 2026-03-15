@@ -11,6 +11,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.base import UTCResponseBase
+
 _response_config = ConfigDict(from_attributes=True)
 
 
@@ -78,7 +80,7 @@ class TrainingCategoryUpdate(BaseModel):
     active: Optional[bool] = None
 
 
-class TrainingCategoryResponse(TrainingCategoryBase):
+class TrainingCategoryResponse(TrainingCategoryBase, UTCResponseBase):
     """Schema for training category response"""
 
     id: UUID
@@ -133,7 +135,7 @@ class TrainingCourseUpdate(BaseModel):
     active: Optional[bool] = None
 
 
-class TrainingCourseResponse(TrainingCourseBase):
+class TrainingCourseResponse(TrainingCourseBase, UTCResponseBase):
     """Schema for training course response"""
 
     id: UUID
@@ -205,7 +207,7 @@ class TrainingRecordUpdate(BaseModel):
     attachments: Optional[List[str]] = None
 
 
-class TrainingRecordResponse(TrainingRecordBase):
+class TrainingRecordResponse(TrainingRecordBase, UTCResponseBase):
     """Schema for training record response"""
 
     id: UUID
@@ -282,7 +284,7 @@ class TrainingRequirementUpdate(BaseModel):
     active: Optional[bool] = None
 
 
-class TrainingRequirementResponse(TrainingRequirementBase):
+class TrainingRequirementResponse(TrainingRequirementBase, UTCResponseBase):
     """Schema for training requirement response"""
 
     id: UUID
@@ -474,7 +476,7 @@ class ExternalTrainingProviderUpdate(BaseModel):
     active: Optional[bool] = None
 
 
-class ExternalTrainingProviderResponse(ExternalTrainingProviderBase):
+class ExternalTrainingProviderResponse(ExternalTrainingProviderBase, UTCResponseBase):
     """Schema for external training provider response"""
 
     id: UUID
@@ -516,7 +518,7 @@ class ExternalCategoryMappingUpdate(BaseModel):
     is_mapped: Optional[bool] = None
 
 
-class ExternalCategoryMappingResponse(ExternalCategoryMappingBase):
+class ExternalCategoryMappingResponse(ExternalCategoryMappingBase, UTCResponseBase):
     """Schema for external category mapping response"""
 
     id: UUID
@@ -557,7 +559,7 @@ class ExternalUserMappingUpdate(BaseModel):
     is_mapped: Optional[bool] = None
 
 
-class ExternalUserMappingResponse(ExternalUserMappingBase):
+class ExternalUserMappingResponse(ExternalUserMappingBase, UTCResponseBase):
     """Schema for external user mapping response"""
 
     id: UUID
@@ -578,7 +580,7 @@ class ExternalUserMappingResponse(ExternalUserMappingBase):
 # Sync Log Schemas
 
 
-class ExternalTrainingSyncLogResponse(BaseModel):
+class ExternalTrainingSyncLogResponse(UTCResponseBase):
     """Schema for external training sync log response"""
 
     id: UUID
@@ -605,7 +607,7 @@ class ExternalTrainingSyncLogResponse(BaseModel):
 # External Training Import Schemas
 
 
-class ExternalTrainingImportResponse(BaseModel):
+class ExternalTrainingImportResponse(UTCResponseBase):
     """Schema for external training import response"""
 
     id: UUID
