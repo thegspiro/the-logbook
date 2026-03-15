@@ -4,14 +4,15 @@
  * Configure which scheduling events trigger in-app notifications
  * for department members. Supports preset notification rules.
  *
- * Includes shift decline/drop notification settings stored in
- * the organization's scheduling settings.
+ * Includes shift decline/drop notification settings and equipment
+ * check failure alert settings, both stored in the organization's
+ * settings JSON.
  *
  * Extracted from the SchedulingPage monolith for maintainability.
  */
 
 import React, { useState, useEffect } from "react";
-import { Bell, Loader2, Mail } from "lucide-react";
+import { Bell, Loader2, Mail, AlertTriangle } from "lucide-react";
 import toast from "react-hot-toast";
 import { notificationsService, organizationService } from "../../../services/api";
 import type { NotificationRuleRecord } from "../../../services/api";
@@ -65,9 +66,25 @@ interface DeclineSettings {
   cc_emails: string[];
 }
 
+interface EquipmentCheckAlertSettings {
+  notify_on_failure: boolean;
+  notify_roles: string[];
+  notify_shift_officer: boolean;
+  send_email: boolean;
+  cc_emails: string[];
+}
+
 const DEFAULT_DECLINE_SETTINGS: DeclineSettings = {
   notify_on_decline: true,
   notify_roles: ["chief", "deputy_chief", "captain"],
+  notify_shift_officer: true,
+  send_email: false,
+  cc_emails: [],
+};
+
+const DEFAULT_EQUIPMENT_ALERT_SETTINGS: EquipmentCheckAlertSettings = {
+  notify_on_failure: true,
+  notify_roles: ["chief", "captain"],
   notify_shift_officer: true,
   send_email: false,
   cc_emails: [],
@@ -93,6 +110,14 @@ export const SchedulingNotificationsPanel: React.FC = () => {
   const [savingDecline, setSavingDecline] = useState(false);
   const [ccInput, setCcInput] = useState("");
 
+  // Equipment check failure alert settings (stored in org settings)
+  const [equipAlertSettings, setEquipAlertSettings] = useState<EquipmentCheckAlertSettings>(
+    DEFAULT_EQUIPMENT_ALERT_SETTINGS,
+  );
+  const [loadingEquipAlerts, setLoadingEquipAlerts] = useState(true);
+  const [savingEquipAlerts, setSavingEquipAlerts] = useState(false);
+  const [equipCcInput, setEquipCcInput] = useState("");
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -109,19 +134,27 @@ export const SchedulingNotificationsPanel: React.FC = () => {
     void load();
   }, []);
 
-  // Load org scheduling settings
+  // Load org settings (decline + equipment alerts)
   useEffect(() => {
     const load = async () => {
       try {
         const settings = await organizationService.getSettings();
-        const sched = (settings as Record<string, unknown>).scheduling as Partial<DeclineSettings> | undefined;
+        const settingsObj = settings as Record<string, unknown>;
+        const sched = settingsObj.scheduling as Partial<DeclineSettings> | undefined;
         if (sched) {
           setDeclineSettings({ ...DEFAULT_DECLINE_SETTINGS, ...sched });
+        }
+        const equipAlerts = settingsObj.equipment_check_alerts as
+          | Partial<EquipmentCheckAlertSettings>
+          | undefined;
+        if (equipAlerts) {
+          setEquipAlertSettings({ ...DEFAULT_EQUIPMENT_ALERT_SETTINGS, ...equipAlerts });
         }
       } catch {
         // Settings may not exist yet — use defaults
       } finally {
         setLoadingDecline(false);
+        setLoadingEquipAlerts(false);
       }
     };
     void load();
@@ -140,6 +173,19 @@ export const SchedulingNotificationsPanel: React.FC = () => {
     }
   };
 
+  const saveEquipAlertSettings = async (updated: EquipmentCheckAlertSettings) => {
+    setSavingEquipAlerts(true);
+    try {
+      await organizationService.updateSettings({ equipment_check_alerts: updated });
+      setEquipAlertSettings(updated);
+      toast.success("Equipment check alert settings saved");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Failed to save settings"));
+    } finally {
+      setSavingEquipAlerts(false);
+    }
+  };
+
   const toggleRole = (role: string) => {
     const updated = { ...declineSettings };
     if (updated.notify_roles.includes(role)) {
@@ -148,6 +194,16 @@ export const SchedulingNotificationsPanel: React.FC = () => {
       updated.notify_roles = [...updated.notify_roles, role];
     }
     void saveDeclineSettings(updated);
+  };
+
+  const toggleEquipRole = (role: string) => {
+    const updated = { ...equipAlertSettings };
+    if (updated.notify_roles.includes(role)) {
+      updated.notify_roles = updated.notify_roles.filter(r => r !== role);
+    } else {
+      updated.notify_roles = [...updated.notify_roles, role];
+    }
+    void saveEquipAlertSettings(updated);
   };
 
   const addCcEmail = () => {
@@ -161,6 +217,22 @@ export const SchedulingNotificationsPanel: React.FC = () => {
   const removeCcEmail = (email: string) => {
     const updated = { ...declineSettings, cc_emails: declineSettings.cc_emails.filter(e => e !== email) };
     void saveDeclineSettings(updated);
+  };
+
+  const addEquipCcEmail = () => {
+    const email = equipCcInput.trim();
+    if (!email || equipAlertSettings.cc_emails.includes(email)) return;
+    const updated = { ...equipAlertSettings, cc_emails: [...equipAlertSettings.cc_emails, email] };
+    setEquipCcInput("");
+    void saveEquipAlertSettings(updated);
+  };
+
+  const removeEquipCcEmail = (email: string) => {
+    const updated = {
+      ...equipAlertSettings,
+      cc_emails: equipAlertSettings.cc_emails.filter(e => e !== email),
+    };
+    void saveEquipAlertSettings(updated);
   };
 
   const isRuleEnabled = (presetName: string) => {
@@ -386,6 +458,154 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                             {email}
                             <button
                               onClick={() => removeCcEmail(email)}
+                              className="text-theme-text-muted hover:text-red-500"
+                            >
+                              &times;
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Equipment Check Failure Alerts */}
+      <div className="mt-5 pt-5 border-t border-theme-surface-border">
+        <div className="flex items-center gap-2 mb-1">
+          <AlertTriangle className="w-4 h-4 text-red-500" />
+          <h4 className="text-sm font-semibold text-theme-text-primary">
+            Equipment Check Alerts
+          </h4>
+          {savingEquipAlerts && <Loader2 className="w-3 h-3 animate-spin text-theme-text-muted" />}
+        </div>
+        <p className="text-xs text-theme-text-muted mb-3">
+          Alert specific roles when an equipment check fails. Failed checks also
+          flag the apparatus with a deficiency indicator.
+        </p>
+
+        {loadingEquipAlerts ? (
+          <div className="flex items-center gap-2 text-sm text-theme-text-muted py-2">
+            <Loader2 className="w-4 h-4 animate-spin" /> Loading settings...
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {/* Master toggle */}
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={equipAlertSettings.notify_on_failure}
+                onChange={(e) => {
+                  void saveEquipAlertSettings({
+                    ...equipAlertSettings,
+                    notify_on_failure: e.target.checked,
+                  });
+                }}
+                className="w-4 h-4 rounded border-theme-surface-border text-red-600 focus:ring-red-500"
+              />
+              <span className="text-sm text-theme-text-primary">
+                Notify on equipment check failure
+              </span>
+            </label>
+
+            {equipAlertSettings.notify_on_failure && (
+              <>
+                {/* Notify shift officer */}
+                <label className="flex items-center gap-3 cursor-pointer ml-4">
+                  <input
+                    type="checkbox"
+                    checked={equipAlertSettings.notify_shift_officer}
+                    onChange={(e) => {
+                      void saveEquipAlertSettings({
+                        ...equipAlertSettings,
+                        notify_shift_officer: e.target.checked,
+                      });
+                    }}
+                    className="w-4 h-4 rounded border-theme-surface-border text-red-600 focus:ring-red-500"
+                  />
+                  <span className="text-sm text-theme-text-secondary">
+                    Notify the shift officer
+                  </span>
+                </label>
+
+                {/* Notify roles */}
+                <div className="ml-4">
+                  <p className="text-xs font-medium text-theme-text-secondary mb-1.5">
+                    Notify these roles:
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {AVAILABLE_ROLES.map(role => (
+                      <button
+                        key={role.value}
+                        onClick={() => toggleEquipRole(role.value)}
+                        className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${
+                          equipAlertSettings.notify_roles.includes(role.value)
+                            ? "bg-red-500/10 border-red-500/30 text-red-700 dark:text-red-400"
+                            : "bg-theme-surface-hover border-theme-surface-border text-theme-text-muted hover:text-theme-text-secondary"
+                        }`}
+                      >
+                        {role.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Send email toggle */}
+                <label className="flex items-center gap-3 cursor-pointer ml-4">
+                  <input
+                    type="checkbox"
+                    checked={equipAlertSettings.send_email}
+                    onChange={(e) => {
+                      void saveEquipAlertSettings({
+                        ...equipAlertSettings,
+                        send_email: e.target.checked,
+                      });
+                    }}
+                    className="w-4 h-4 rounded border-theme-surface-border text-red-600 focus:ring-red-500"
+                  />
+                  <span className="text-sm text-theme-text-secondary">
+                    Also send email notification
+                  </span>
+                </label>
+
+                {/* CC emails */}
+                {equipAlertSettings.send_email && (
+                  <div className="ml-4">
+                    <p className="text-xs font-medium text-theme-text-secondary mb-1.5">
+                      CC additional email addresses:
+                    </p>
+                    <div className="flex items-center gap-2 mb-2">
+                      <input
+                        type="email"
+                        value={equipCcInput}
+                        onChange={(e) => setEquipCcInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { e.preventDefault(); addEquipCcEmail(); }
+                        }}
+                        placeholder="email@example.com"
+                        className="flex-1 px-2 py-1 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-red-500"
+                      />
+                      <button
+                        onClick={addEquipCcEmail}
+                        className="px-3 py-1 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700"
+                      >
+                        Add
+                      </button>
+                    </div>
+                    {equipAlertSettings.cc_emails.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {equipAlertSettings.cc_emails.map(email => (
+                          <span
+                            key={email}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-theme-surface-hover rounded-full text-theme-text-secondary"
+                          >
+                            {email}
+                            <button
+                              onClick={() => removeEquipCcEmail(email)}
                               className="text-theme-text-muted hover:text-red-500"
                             >
                               &times;

@@ -25,7 +25,7 @@ from app.models.training import (
     ShiftEquipmentCheck,
     ShiftEquipmentCheckItem,
 )
-from app.models.user import User
+from app.models.user import Organization, User
 
 
 class EquipmentCheckService:
@@ -629,6 +629,17 @@ class EquipmentCheckService:
                     apparatus.has_deficiency = False
                     apparatus.deficiency_since = None
 
+        # Send failure notifications
+        if overall_status == "fail":
+            await self._send_check_failure_notification(
+                organization_id=organization_id,
+                shift=shift,
+                checked_by=checked_by,
+                template_id=template_id,
+                failed_count=failed,
+                total_count=total,
+            )
+
         await self.db.commit()
         return await self.get_check(check.id, organization_id)
 
@@ -1052,3 +1063,200 @@ class EquipmentCheckService:
             str(u.id): f"{u.first_name} {u.last_name}".strip()
             for u in users
         }
+
+    # ============================================
+    # Failure Notifications
+    # ============================================
+
+    async def _send_check_failure_notification(
+        self,
+        organization_id: str,
+        shift: Any,
+        checked_by: str,
+        template_id: Optional[str],
+        failed_count: int,
+        total_count: int,
+    ) -> None:
+        """Send in-app (and optionally email) notifications when an
+        equipment check fails.
+
+        Reads ``org.settings["equipment_check_alerts"]`` to decide
+        who to notify and whether to send email.  Failures are logged
+        but never propagated.
+        """
+        from loguru import logger
+
+        try:
+            org_result = await self.db.execute(
+                select(Organization).where(
+                    Organization.id == str(organization_id)
+                )
+            )
+            org = org_result.scalar_one_or_none()
+            if not org:
+                return
+
+            cfg = (org.settings or {}).get(
+                "equipment_check_alerts", {}
+            )
+            if not cfg.get("notify_on_failure", True):
+                return
+
+            # Resolve names
+            checker_name = "Unknown"
+            checker_result = await self.db.execute(
+                select(User).where(User.id == str(checked_by))
+            )
+            checker = checker_result.scalar_one_or_none()
+            if checker:
+                first = checker.first_name or ""
+                last = checker.last_name or ""
+                checker_name = f"{first} {last}".strip() or "Unknown"
+
+            template_name = "Unknown Template"
+            if template_id:
+                tmpl_result = await self.db.execute(
+                    select(EquipmentCheckTemplate.name).where(
+                        EquipmentCheckTemplate.id == template_id
+                    )
+                )
+                tmpl_row = tmpl_result.scalar_one_or_none()
+                if tmpl_row:
+                    template_name = tmpl_row
+
+            apparatus_name = ""
+            if shift.apparatus_id:
+                app_result = await self.db.execute(
+                    select(Apparatus.unit_number).where(
+                        Apparatus.id == shift.apparatus_id
+                    )
+                )
+                app_row = app_result.scalar_one_or_none()
+                if app_row:
+                    apparatus_name = app_row
+
+            # Collect recipients
+            recipient_ids: set[str] = set()
+
+            # Shift officer
+            if cfg.get("notify_shift_officer", True):
+                if shift.shift_officer_id:
+                    recipient_ids.add(
+                        str(shift.shift_officer_id)
+                    )
+
+            # Users with matching roles
+            notify_roles = cfg.get("notify_roles", [])
+            if notify_roles:
+                from app.models.user import Role, user_positions
+
+                role_result = await self.db.execute(
+                    select(user_positions.c.user_id)
+                    .join(
+                        Role,
+                        Role.id == user_positions.c.position_id,
+                    )
+                    .where(
+                        Role.organization_id == str(
+                            organization_id
+                        ),
+                        Role.slug.in_(notify_roles),
+                    )
+                )
+                for row in role_result.all():
+                    recipient_ids.add(str(row[0]))
+
+            # Don't notify the person who did the check
+            recipient_ids.discard(str(checked_by))
+            if not recipient_ids:
+                return
+
+            from app.models.notification import NotificationLog
+
+            shift_date_str = (
+                shift.shift_date.isoformat()
+                if shift.shift_date
+                else "unknown date"
+            )
+            apparatus_label = (
+                f" on {apparatus_name}" if apparatus_name else ""
+            )
+            message = (
+                f"Equipment check \"{template_name}\""
+                f"{apparatus_label} failed with "
+                f"{failed_count} of {total_count} items. "
+                f"Checked by {checker_name} "
+                f"on {shift_date_str}."
+            )
+
+            for rid in recipient_ids:
+                notif = NotificationLog(
+                    id=generate_uuid(),
+                    organization_id=str(organization_id),
+                    recipient_id=rid,
+                    channel="in_app",
+                    category="equipment_check",
+                    subject="Equipment Check Failed",
+                    message=message,
+                    action_url=(
+                        f"/scheduling/shifts/{shift.id}"
+                    ),
+                )
+                self.db.add(notif)
+            await self.db.flush()
+
+            # Optional email
+            if cfg.get("send_email", False):
+                try:
+                    from app.services.email_service import (
+                        EmailService,
+                    )
+
+                    recip_result = await self.db.execute(
+                        select(User.email).where(
+                            User.id.in_(list(recipient_ids)),
+                            User.email.isnot(None),
+                        )
+                    )
+                    to_emails = [
+                        r[0]
+                        for r in recip_result.all()
+                        if r[0]
+                    ]
+                    cc_emails = cfg.get("cc_emails", [])
+                    if to_emails:
+                        email_svc = EmailService(
+                            organization=org
+                        )
+                        subject = (
+                            "Equipment Check Failed"
+                            f" \u2014 {template_name}"
+                            f"{apparatus_label}"
+                        )
+                        html_body = (
+                            f"<p>{message}</p>"
+                            "<p>Please log in to review "
+                            "the failed items and take "
+                            "corrective action.</p>"
+                        )
+                        await email_svc.send_email(
+                            to_emails=to_emails,
+                            subject=subject,
+                            html_body=html_body,
+                            cc_emails=cc_emails or None,
+                            db=self.db,
+                            template_type=(
+                                "equipment_check_failure"
+                            ),
+                        )
+                except Exception as email_err:
+                    logger.warning(
+                        "Equipment check failure email "
+                        f"failed: {email_err}"
+                    )
+
+        except Exception as e:
+            logger.warning(
+                "Equipment check failure notification "
+                f"failed: {e}"
+            )
