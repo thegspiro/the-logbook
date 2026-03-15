@@ -2137,6 +2137,10 @@ class Shift(Base):
     # Display
     color = Column(String(7))  # Hex color from shift template, e.g. "#4f46e5"
 
+    # Staffing (from template)
+    positions = Column(JSON)  # ["officer", "firefighter", "firefighter", ...]
+    min_staffing = Column(Integer)
+
     # Notes
     notes = Column(Text)
     activities = Column(JSON)  # Training, station duties, etc.

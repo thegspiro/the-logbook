@@ -404,6 +404,8 @@ const SchedulingPage: React.FC = () => {
         ...(shiftForm.apparatus_id ? { apparatus_id: shiftForm.apparatus_id } : {}),
         ...(shiftForm.shift_officer_id ? { shift_officer_id: shiftForm.shift_officer_id } : {}),
         ...(template.color ? { color: template.color } : {}),
+        ...(template.positions?.length ? { positions: template.positions } : {}),
+        ...(template.min_staffing ? { min_staffing: template.min_staffing } : {}),
       });
 
       // Refresh shifts and summary

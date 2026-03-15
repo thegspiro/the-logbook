@@ -78,6 +78,7 @@ export interface ShiftRecord {
   apparatus_id?: string;
   apparatus_name?: string;
   apparatus_unit_number?: string;
+  positions?: string[] | null;
   apparatus_positions?: string[] | null;
   min_staffing?: number | null;
   station_id?: string;

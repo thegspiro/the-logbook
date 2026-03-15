@@ -28,6 +28,8 @@ class ShiftCreate(BaseModel):
     station_id: Optional[str] = None
     shift_officer_id: Optional[str] = None
     color: Optional[str] = None
+    positions: Optional[List[str]] = None
+    min_staffing: Optional[int] = None
     notes: Optional[str] = None
     activities: Optional[Any] = None
 
@@ -48,6 +50,8 @@ class ShiftUpdate(BaseModel):
     station_id: Optional[str] = None
     shift_officer_id: Optional[str] = None
     color: Optional[str] = None
+    positions: Optional[List[str]] = None
+    min_staffing: Optional[int] = None
     notes: Optional[str] = None
     activities: Optional[Any] = None
 
@@ -73,6 +77,7 @@ class ShiftResponse(BaseModel):
     apparatus_id: Optional[str] = None
     apparatus_name: Optional[str] = None
     apparatus_unit_number: Optional[str] = None
+    positions: Optional[List[str]] = None
     apparatus_positions: Optional[List[str]] = None
     min_staffing: Optional[int] = None
     station_id: Optional[str] = None
