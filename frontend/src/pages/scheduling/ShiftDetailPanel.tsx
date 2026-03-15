@@ -60,13 +60,22 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const [showEquipmentChecks, setShowEquipmentChecks] = useState(false);
   const [equipmentCheckSummaries, setEquipmentCheckSummaries] = useState<ShiftCheckSummary[]>([]);
 
-  /** Extract HH:MM from an ISO datetime or time string. */
+  /** Extract HH:MM from an ISO datetime or time string, converted to local timezone. */
   const toTimeValue = (v?: string): string => {
     if (!v) return '';
-    // If it contains 'T', it's an ISO datetime — extract the time portion
+    // If it contains 'T', it's an ISO datetime — convert to local timezone
     if (v.includes('T')) {
-      const timePart = v.split('T')[1] ?? '';
-      return timePart ? timePart.slice(0, 5) : '';
+      const date = new Date(v);
+      if (isNaN(date.getTime())) return '';
+      const parts = new Intl.DateTimeFormat('en-GB', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+        ...(tz ? { timeZone: tz } : {}),
+      }).formatToParts(date);
+      const hour = parts.find(p => p.type === 'hour')?.value ?? '00';
+      const minute = parts.find(p => p.type === 'minute')?.value ?? '00';
+      return `${hour}:${minute}`;
     }
     // Already HH:MM or HH:MM:SS
     return v.slice(0, 5);

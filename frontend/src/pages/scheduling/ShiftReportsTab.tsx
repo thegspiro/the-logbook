@@ -26,7 +26,7 @@ import type {
 } from '../../types/training';
 import type { User } from '../../types/user';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatDateCustom } from '../../utils/dateFormatting';
+import { formatDateCustom, getTodayLocalDate } from '../../utils/dateFormatting';
 
 type ViewMode = 'my-reports' | 'filed-by-me' | 'create' | 'pending-review';
 
@@ -74,7 +74,7 @@ export const ShiftReportsTab: React.FC = () => {
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState<Partial<ShiftCompletionReportCreate>>({
-    shift_date: new Date().toISOString().split('T')[0] ?? '',
+    shift_date: getTodayLocalDate(tz),
     hours_on_shift: 0,
     calls_responded: 0,
     call_types: [],
@@ -238,7 +238,7 @@ export const ShiftReportsTab: React.FC = () => {
       await shiftCompletionService.createReport(payload);
       toast.success('Shift report submitted');
       setForm({
-        shift_date: new Date().toISOString().split('T')[0] || '',
+        shift_date: getTodayLocalDate(tz),
         hours_on_shift: 0,
         calls_responded: 0,
         call_types: [],

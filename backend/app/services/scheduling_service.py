@@ -95,17 +95,20 @@ class SchedulingService:
     ) -> Dict[str, Any]:
         """Add apparatus details, min_staffing, and shift officer name to a shift dict."""
         aid = shift_dict.get("apparatus_id")
+        shift_positions = shift_dict.get("positions") or []
         if aid and aid in apparatus_map:
             a = apparatus_map[aid]
             shift_dict["apparatus_name"] = a.name
             shift_dict["apparatus_unit_number"] = a.unit_number
-            shift_dict["apparatus_positions"] = a.positions or []
-            shift_dict["min_staffing"] = a.min_staffing
+            shift_dict["apparatus_positions"] = a.positions or shift_positions
+            if shift_dict.get("min_staffing") is None:
+                shift_dict["min_staffing"] = a.min_staffing
         else:
             shift_dict["apparatus_name"] = None
             shift_dict["apparatus_unit_number"] = None
-            shift_dict["apparatus_positions"] = []
-            shift_dict["min_staffing"] = None
+            shift_dict["apparatus_positions"] = shift_positions
+            if shift_dict.get("min_staffing") is None:
+                shift_dict["min_staffing"] = None
 
         # Resolve shift officer name
         officer_id = shift_dict.get("shift_officer_id")
@@ -1069,6 +1072,8 @@ class SchedulingService:
                     end_time=shift_end,
                     apparatus_id=getattr(template, "apparatus_id", None),
                     color=shift_color,
+                    positions=getattr(template, "positions", None),
+                    min_staffing=getattr(template, "min_staffing", None),
                     created_by=created_by,
                 )
                 self.db.add(shift)
@@ -1976,12 +1981,13 @@ class SchedulingService:
             # Resolve apparatus details
             apparatus_name = None
             apparatus_unit_number = None
-            apparatus_positions = []
+            shift_positions = shift.positions or []
+            apparatus_positions = shift_positions
             if shift.apparatus_id and shift.apparatus_id in apparatus_map:
                 app = apparatus_map[shift.apparatus_id]
                 apparatus_name = app.name
                 apparatus_unit_number = app.unit_number
-                apparatus_positions = app.positions or []
+                apparatus_positions = app.positions or shift_positions
 
             shift_dict = {
                 "id": shift.id,
