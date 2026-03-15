@@ -579,7 +579,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
                       ...prev,
                       apparatus_id: val,
                       apparatus_type: selected?.apparatus_type ?? '',
-                      positions: selected?.positions ?? prev.positions,
+                      positions: selected?.positions?.map(p => typeof p === 'string' ? p : p.position) ?? prev.positions,
                       min_staffing: selected?.min_staffing ? String(selected.min_staffing) : prev.min_staffing,
                     }));
                   }
@@ -1428,7 +1428,9 @@ export const ShiftTemplatesPage: React.FC = () => {
       eventType = (meta.event_type as EventType) || '';
       resources = meta.resources || [];
     } else if (Array.isArray(t.positions)) {
-      positions = t.positions as string[];
+      positions = (t.positions as Array<string | { position: string }>).map(
+        p => typeof p === 'string' ? p : p.position,
+      );
     }
 
     return {

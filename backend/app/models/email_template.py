@@ -40,6 +40,7 @@ class EmailTemplateType(str, enum.Enum):
     IT_PASSWORD_NOTIFICATION = "it_password_notification"
     DUPLICATE_APPLICATION = "duplicate_application"
     SERIES_END_REMINDER = "series_end_reminder"
+    SHIFT_DECLINE = "shift_decline"
     CUSTOM = "custom"
 
 

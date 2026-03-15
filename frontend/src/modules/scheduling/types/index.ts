@@ -19,7 +19,7 @@ export interface ShiftCreate {
   station_id?: string | undefined;
   shift_officer_id?: string | undefined;
   color?: string | undefined;
-  positions?: string[] | undefined;
+  positions?: Array<string | { position: string; required?: boolean }> | undefined;
   min_staffing?: number | undefined;
   notes?: string | undefined;
   activities?: unknown;

@@ -72,15 +72,15 @@ export const TemplatesOverviewCard: React.FC<TemplatesOverviewCardProps> = ({
                   {t.duration_hours}h / min {t.min_staffing}
                 </p>
                 {(() => {
-                  const flat = resolveTemplatePositions(t.positions);
-                  return flat.length > 0 ? (
+                  const slots = resolveTemplatePositions(t.positions);
+                  return slots.length > 0 ? (
                   <div className="flex flex-wrap gap-1 mt-1">
-                    {flat.map((pos, i) => (
+                    {slots.map((slot, i) => (
                       <span
                         key={i}
-                        className="px-1.5 py-0.5 text-[10px] bg-violet-500/10 text-violet-700 dark:text-violet-300 rounded-sm capitalize"
+                        className={`px-1.5 py-0.5 text-[10px] rounded-sm capitalize ${slot.required ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300' : 'bg-theme-surface-hover text-theme-text-muted'}`}
                       >
-                        {pos}
+                        {slot.position}{!slot.required && ' (opt)'}
                       </span>
                     ))}
                   </div>

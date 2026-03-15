@@ -19,7 +19,7 @@ import { schedulingService } from '../modules/scheduling/services/api';
 
 interface BasicApparatus {
   id: string;
-  organization_id: string;
+  organization_id?: string;
   unit_number: string;
   name: string;
   apparatus_type: string;
@@ -28,8 +28,8 @@ interface BasicApparatus {
   min_staffing?: number;
   positions?: string[];
   is_active: boolean;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 const APPARATUS_TYPES = [
@@ -90,7 +90,11 @@ export default function ApparatusBasicPage() {
     setIsLoading(true);
     try {
       const data = await schedulingService.getBasicApparatus();
-      setApparatusList(data as BasicApparatus[]);
+      // Map PositionSlot[] to flat string[] for the local form model
+      setApparatusList(data.map(a => ({
+        ...a,
+        positions: a.positions?.map(p => typeof p === 'string' ? p : p.position) ?? [],
+      })));
     } catch {
       toast.error('Failed to load apparatus');
     } finally {

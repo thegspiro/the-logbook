@@ -15,6 +15,24 @@ from app.schemas.base import UTCResponseBase
 
 _response_config = ConfigDict(from_attributes=True)
 
+
+# ============================================
+# Position Slot
+# ============================================
+
+
+class PositionSlot(BaseModel):
+    """A single position seat on a shift or apparatus.
+
+    Each slot represents one seat to fill.  Two EMTs = two separate
+    ``PositionSlot`` objects.  ``required=True`` means the slot must be
+    filled for the shift to be considered adequately staffed.
+    """
+
+    position: str
+    required: bool = True
+
+
 # ============================================
 # Shift Schemas
 # ============================================
@@ -30,7 +48,7 @@ class ShiftCreate(BaseModel):
     station_id: Optional[str] = None
     shift_officer_id: Optional[str] = None
     color: Optional[str] = None
-    positions: Optional[List[str]] = None
+    positions: Optional[List[Any]] = None
     min_staffing: Optional[int] = None
     notes: Optional[str] = None
     activities: Optional[Any] = None
@@ -52,7 +70,7 @@ class ShiftUpdate(BaseModel):
     station_id: Optional[str] = None
     shift_officer_id: Optional[str] = None
     color: Optional[str] = None
-    positions: Optional[List[str]] = None
+    positions: Optional[List[Any]] = None
     min_staffing: Optional[int] = None
     notes: Optional[str] = None
     activities: Optional[Any] = None
@@ -79,8 +97,8 @@ class ShiftResponse(UTCResponseBase):
     apparatus_id: Optional[str] = None
     apparatus_name: Optional[str] = None
     apparatus_unit_number: Optional[str] = None
-    positions: Optional[List[str]] = None
-    apparatus_positions: Optional[List[str]] = None
+    positions: Optional[List[Any]] = None
+    apparatus_positions: Optional[List[Any]] = None
     min_staffing: Optional[int] = None
     station_id: Optional[str] = None
     shift_officer_id: Optional[UUID] = None
@@ -666,7 +684,7 @@ class BasicApparatusCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     apparatus_type: str = Field(default="engine", max_length=50)
     min_staffing: Optional[int] = Field(default=1, ge=1, le=50)
-    positions: Optional[List[str]] = None
+    positions: Optional[List[Any]] = None
 
 
 class BasicApparatusUpdate(BaseModel):
@@ -676,7 +694,7 @@ class BasicApparatusUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     apparatus_type: Optional[str] = Field(None, max_length=50)
     min_staffing: Optional[int] = Field(None, ge=1, le=50)
-    positions: Optional[List[str]] = None
+    positions: Optional[List[Any]] = None
 
 
 class BasicApparatusResponse(UTCResponseBase):
@@ -688,7 +706,7 @@ class BasicApparatusResponse(UTCResponseBase):
     name: str
     apparatus_type: str
     min_staffing: Optional[int] = None
-    positions: Optional[List[str]] = None
+    positions: Optional[List[Any]] = None
     is_active: bool = True
     created_at: datetime
     updated_at: datetime

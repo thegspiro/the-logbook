@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import PaginationParams, get_current_user, require_permission
 from app.core.database import get_db
 from app.core.utils import ensure_found, safe_error_detail
-from app.models.training import BasicApparatus, ShiftAssignment
+from app.models.training import AssignmentStatus, BasicApparatus, ShiftAssignment
 from app.models.user import User
 from app.schemas.scheduling import (
     ApparatusOptionsResponse,
@@ -89,15 +89,19 @@ async def _enrich_shifts(
     officer_ids = list({s.shift_officer_id for s in shifts if s.shift_officer_id})
     user_name_map = await service._get_user_name_map(officer_ids)
 
-    # Compute attendee_count per shift (count of non-declined assignments)
+    # Compute attendee_count per shift (only active assignments)
     shift_ids = [s.id for s in shifts]
     attendee_counts: dict[str, int] = {}
+    _active_statuses = [
+        AssignmentStatus.ASSIGNED.value,
+        AssignmentStatus.CONFIRMED.value,
+    ]
     if shift_ids:
         count_result = await service.db.execute(
             select(ShiftAssignment.shift_id, func.count(ShiftAssignment.id))
             .where(ShiftAssignment.shift_id.in_(shift_ids))
             .where(ShiftAssignment.organization_id == str(organization_id))
-            .where(ShiftAssignment.assignment_status != "declined")
+            .where(ShiftAssignment.assignment_status.in_(_active_statuses))
             .group_by(ShiftAssignment.shift_id)
         )
         for row in count_result.all():
