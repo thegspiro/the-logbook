@@ -114,4 +114,22 @@ GET    /api/v1/scheduling/apparatus          # List basic apparatus
 
 ---
 
+## Recent Improvements (2026-03-15)
+
+### Template Positions & Timezone Fixes
+
+- **Template positions carry to crew roster**: Shift templates with defined `positions` and `min_staffing` now persist these values to created shifts via new `positions` (JSON) and `min_staffing` (Integer) columns on the `shifts` table. Both direct creation and pattern-based generation pass template staffing requirements through. ShiftDetailPanel falls back to shift-level positions when apparatus has none defined
+- **Shift timezone display fix**: `ShiftReportsTab` was using UTC date (`toISOString()`) instead of local timezone; now uses `getTodayLocalDate(tz)`. `ShiftDetailPanel` edit form was extracting time from the UTC ISO string instead of converting to local timezone via `Intl.DateTimeFormat`
+- **`toTimeValue` local timezone fix**: The function was extracting `HH:MM` by string-splitting the ISO datetime on `'T'`, returning the UTC time portion. For a shift starting at 2:30 PM Eastern (18:30 UTC), the edit form showed 18:30 instead of 14:30. Now uses `Intl.DateTimeFormat` with the user's timezone
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Shifts created before migration | `positions` and `min_staffing` are `NULL`; UI falls back to apparatus-level positions |
+| `toTimeValue` with invalid datetime | Returns empty string instead of crashing |
+| Template edits after shift creation | Existing shifts retain original positions; only newly created shifts get updated values |
+
+---
+
 **See also:** [Events Module](Module-Events) | [Apparatus Module](Module-Apparatus)

@@ -847,6 +847,11 @@ Thank you for working with Riverside Fire-Rescue!
 | Non-respondent reminder sent to someone who already RSVP'd | This should not happen — reminders exclude all members who have responded (going, not going, or maybe). If it occurs, refresh the RSVP data and retry. *(fixed 2026-03-13)* |
 | Conflict detection false positive | Conflict detection checks time + location overlap. Events at different locations at the same time are not flagged. The warning is advisory — you can proceed with creation. |
 | Recurrence exception not restoring | Deleting a recurrence exception should restore the occurrence. If the occurrence doesn't reappear, check the series management view for the full series timeline. *(added 2026-03-13)* |
+| Check-in modal shows error or blank | The eligible-members endpoint was missing prior to 2026-03-15. Pull latest and restart. The modal now also has correct z-index stacking. |
+| Recurring event creation crashes | Fixed 2026-03-15 — certain recurrence patterns generating dates beyond the series end date caused a crash. Pull latest. |
+| Series end reminder not received | Reminders are sent 7 days before the last occurrence. If the series has already ended, no reminder is sent. Verify the series has a defined end date. |
+| Event times show wrong in edit form | Fixed 2026-03-15 — the time extraction function was returning UTC instead of local time. Shift/event edit forms now use `Intl.DateTimeFormat` with the user's timezone. |
+| Conflict detection false negative near midnight | Fixed 2026-03-15 — conflict detection now uses timezone-aware date arithmetic. Events spanning midnight in the org's timezone are correctly identified. |
 
 ---
 

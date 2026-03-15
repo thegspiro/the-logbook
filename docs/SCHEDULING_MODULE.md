@@ -563,4 +563,38 @@ import { schedulingService } from '@/modules/scheduling/services/api';
 
 ---
 
-*Last Updated: February 28, 2026*
+## Template Positions & Timezone Fixes (2026-03-15)
+
+### Template Positions Carry to Crew Roster
+
+Shift templates with defined `positions` and `min_staffing` values now persist these to created shifts via two new columns on the `shifts` table:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `positions` | JSON, nullable | Position definitions inherited from the template at shift creation time |
+| `min_staffing` | Integer, nullable | Minimum staffing level inherited from the template |
+
+Both direct shift creation and pattern-based bulk generation pass template staffing requirements through. In the `ShiftDetailPanel`, when an apparatus has no positions defined, the component falls back to shift-level positions, ensuring crew roster always displays the correct position structure.
+
+**Alembic migration**: `20260314_0200_add_positions_to_shifts.py`
+
+### Shift Timezone Display Fix
+
+Two timezone display bugs were fixed:
+
+1. **ShiftReportsTab**: Was using `toISOString()` (UTC) for today's date comparison instead of `getTodayLocalDate(tz)`. Reports now correctly filter based on the user's local date.
+
+2. **ShiftDetailPanel `toTimeValue()`**: The function extracted `HH:MM` by string-splitting the ISO datetime on `'T'`, which returned the UTC time portion. For a shift starting at 2:30 PM Eastern (18:30 UTC), the edit form showed `18:30` instead of `14:30`. Now uses `Intl.DateTimeFormat` with the user's timezone to extract local `HH:MM`, and `localToUTC()` when saving edits back to the API.
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Shifts created before this migration | `positions` and `min_staffing` are `NULL`; UI falls back to apparatus-level positions |
+| `toTimeValue` with missing/invalid datetime | Returns empty string instead of crashing |
+| Template edits after shift creation | Existing shifts retain original positions — only newly created shifts get updated values |
+| Timezone-unaware shift times | The `load` event listener (added 2026-03-14) stamps naive datetimes with UTC tzinfo, so all shift times are timezone-aware in API responses |
+
+---
+
+*Last Updated: March 15, 2026*

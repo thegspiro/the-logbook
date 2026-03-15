@@ -388,4 +388,15 @@ Tab-based interface with the following views:
 
 ---
 
-**Total: ~102 direct routes + 25 admin hub tabs across 18 modules**
+## Prospective Members — Reports
+
+| URL | Page | Permission |
+|-----|------|------------|
+| `/prospective-members` | Prospective Members Pipeline | `prospective_members.manage` |
+| `/prospective-members/settings` | Pipeline Settings | `prospective_members.manage` |
+
+> The **Pipeline Settings** page includes a **Report Stage Groups Editor** for configuring how pipeline stages are grouped in the pipeline overview report (e.g., combining Application + Interview into "Early Stages").
+
+---
+
+**Total: ~104 direct routes + 25 admin hub tabs across 18 modules**

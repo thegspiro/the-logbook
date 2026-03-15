@@ -534,6 +534,10 @@ The **Member Lifecycle Management** page (found under Members Admin) consolidate
 | Automated email not sent | Check that SMTP is configured in Settings > Email. Verify the prospect has a valid email address. Check the scheduled email logs for errors. |
 | "Move Back" button not visible | The prospect must be on a stage beyond the first. The "Move Back" action is only available for active prospects not at the first stage. |
 | Email showing UTC times | Ensure the organization's timezone is configured in Settings > Organization. Scheduled emails display times in the organization's timezone. *(fixed 2026-03-14)* |
+| Days-in-stage always shows 0 | Fixed 2026-03-15 — days-in-stage is now computed server-side from the prospect's `updated_at` timestamp. Pull latest and restart. |
+| Pipeline email sections in wrong order | As of 2026-03-15, use drag-and-drop to reorder email sections in the pipeline email configuration. The order persists in the `section_order` array. |
+| Pipeline email preview not available | Added 2026-03-15 — preview rendered email content before sending from the pipeline email configuration panel. |
+| Pipeline overview report not showing | Added 2026-03-15 — enable the pipeline overview report in Reports. Configure stage grouping in Pipeline Settings > Report Stage Groups. |
 | SMTP connection error on email send | Verify SMTP settings: Gmail/Office 365 use STARTTLS on port 587 (`EMAIL_USE_SSL=false`); self-hosted servers may use SSL on port 465 (`EMAIL_USE_SSL=true`). *(fixed 2026-03-13)* |
 | Member still showing as active after being dropped | The status change may not have been saved. Verify from the member's profile. |
 | Property return report not generating | The member must have inventory items assigned. If none are assigned, no report is generated. |

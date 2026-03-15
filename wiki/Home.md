@@ -120,6 +120,18 @@ docker-compose up -d
 
 ## 📊 Latest Updates
 
+### March 2026 (Mar 15) — Recurring Training Sessions, Scheduling Timezone Fixes, Inventory Auto-Variants, UTC Root Cause Fix & Pipeline Reports
+
+- **Recurring training sessions**: Training sessions can now recur using the same infrastructure as events (daily, weekly, monthly, etc.). Selecting a course auto-populates form fields. New quarter-hour time picker and quick duration buttons
+- **Scheduling timezone fixes**: Template positions (`positions` JSON, `min_staffing` Integer) now carry to created shifts. Fixed ShiftReportsTab/ShiftDetailPanel timezone display using `Intl.DateTimeFormat` instead of UTC string splitting
+- **Inventory size/style auto-generation**: New "Generate Sizes & Styles" toggle creates `size × color × style` item variants with auto-grouping under `ItemVariantGroup`
+- **UTC datetime root cause fix**: SQLAlchemy `load` event listener stamps all naive `DateTime(timezone=True)` columns with UTC tzinfo after ORM hydration, fixing frontend time shifts. New ESLint rules ban raw `.toLocaleString()` calls — 34 files updated
+- **Pipeline overview report**: New report renderer with configurable stage grouping, drag-and-drop email section reordering, email preview panel, and server-side days-in-stage calculation
+- **Prospective members pipeline**: Auto-advance extended to all applicable stage types. 4 automated email trigger fixes. Email diagnostics show why members didn't receive ballot emails
+- **Events enhancements**: Series end email reminders, recurring event creation crash fix, check-in modal eligible-members endpoint, EventForm timezone-aware conflict detection
+- **Non-dismissable modal fix**: Fixed backdrop-click and z-index issues on modals across EventDetailPage (7 modals), inventory, scheduling, and prospective members
+- **Code quality**: Backend error handling utilities (`ensure_found`, `handle_service_errors`), shared `PaginationParams`, `formatCurrency` consolidation, naive/aware datetime fix in prospective members
+
 ### March 2026 (Mar 7) — Security Audit, Inventory Variant Groups/Kits/Reorder, Facilities Rewrite, Test Infrastructure & Visual Polish
 
 - **Comprehensive security audit**: 25-issue audit with critical/high/medium/low remediation — DB SSL enforcement, Redis TLS, JWT algorithm restriction, file upload magic byte validation, Jinja2 sandboxing, CORS exact-match, parameterized LIKE queries, rate limiter thread safety, health endpoint minimization

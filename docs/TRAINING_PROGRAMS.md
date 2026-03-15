@@ -1522,6 +1522,25 @@ The following features, previously listed as planned, are now available:
 - **Multi-Agency Training** — Coordinate joint sessions across departments with shared records
 - **xAPI Integration** — Learning Record Store connectivity for standardized training activity tracking
 
+### Recently Implemented (March 15, 2026)
+
+- **Recurring Training Sessions** — Training sessions can now recur using the same infrastructure as events (daily, weekly, biweekly, monthly, monthly_weekday, annually, annually_weekday, custom patterns). Backend creates recurring events via `EventService` and links a `TrainingSession` to each occurrence. Selecting an existing course auto-populates training type, credit hours, instructor, expiration months, and max participants
+- **Quarter-Hour Time Picker (`DateTimeQuarterHour`)** — New UX component replacing browser `datetime-local` inputs (which ignore `step="900"`). Splits date/time into a native date picker and a select dropdown restricted to `:00`, `:15`, `:30`, `:45`. Located at `components/ux/DateTimeQuarterHour.tsx`
+- **Quick Duration Buttons** — 1-hour, 2-hour, 4-hour, and 8-hour buttons on the session creation form. Appear once a start date is set and auto-populate end date/time
+- **Course Auto-Populate** — Selecting an existing course fills training type, credit hours, instructor, expiration months, and max participants with a details preview card
+- **Training Pipeline Save Fix** — Added missing `program_requirements` relationship on `TrainingProgram` model. Fixed route ordering for `/requirements/registries` and `/requirements/import/{name}` (were being matched as UUID parameters)
+- **UUID Comparison Fix** — Fixed 12 instances where UUID objects from Pydantic schemas were compared against `String(36)` database columns without `str()` conversion in `training_program_service.py`
+
+#### Recurring Training Session Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Deleting parent event | Does not cascade-delete the linked training session |
+| Quarter-hour picker with imported data | Arbitrary minute values are rounded to the nearest quarter-hour |
+| Course auto-populate | Fills all fields but does not lock them — user can override |
+| Quick duration buttons | Disabled until a start date is selected |
+| Recurrence past series end | Events beyond the series end date are not created |
+
 ### Remaining Planned Features
 - **Skill Videos**: Embed training videos for skill requirements
 - **Digital Signatures**: Sign off on checklist items digitally
@@ -1538,4 +1557,4 @@ For questions or issues with the Training Programs module:
 
 ---
 
-*Last Updated: March 7, 2026*
+*Last Updated: March 15, 2026*

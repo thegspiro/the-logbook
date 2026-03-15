@@ -38,6 +38,7 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 - **Location Filter Dashboard** — *(2026-03-07)* Cascading Facility → Room → Storage Area filter on inventory dashboard
 - **Item Detail Page** — *(2026-03-06)* Dedicated detail page (`/inventory/items/:id`) with two-column layout: barcode sidebar + tabbed content (overview, history, maintenance, NFPA)
 - **Cost Data** — *(2026-03-06)* Purchase cost, replacement cost, and cost recovery tracking in item views and admin dashboard
+- **Size/Style Auto-Generation** — *(2026-03-14)* When creating a new uniform or PPE item, toggle "Generate Sizes & Styles" to select multiple standard sizes and garment styles. Backend creates one pool item per `size × color × style` combination, sets `standard_size` and `style` enum fields, and groups under a new `ItemVariantGroup`. Frontend includes chip-based multi-select for sizes and styles, comma-separated colors input, and live item count preview
 
 ---
 

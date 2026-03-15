@@ -207,6 +207,56 @@ Members can record their preferred sizes for different garment categories, makin
 
 ---
 
+## Auto-Generate Size & Style Variants (2026-03-14)
+
+When creating a new uniform or PPE item that comes in multiple sizes and styles, you can auto-generate all variants at once instead of creating each one individually.
+
+### How to Use
+
+**Required Permission:** `inventory.manage`
+
+1. Navigate to **Inventory Admin > Items** and click **Add Item**
+2. Fill in the base item details (name, category, description)
+3. Toggle **Generate Sizes & Styles** to enable variant generation
+
+> **Screenshot needed:**
+> _[Screenshot of the ItemFormModal showing the "Generate Sizes & Styles" toggle enabled, with chip-based multi-select fields for Sizes (showing XS, S, M, L, XL, 2XL chips) and Styles (showing Regular, Long, Short chips), a colors text input with "Black, Navy" entered, and a live preview badge showing "12 items will be created"]_
+
+4. Select **sizes** from the chip-based multi-select (e.g., S, M, L, XL, 2XL)
+5. Select **styles** from the chip-based multi-select (e.g., Regular, Long, Short)
+6. Enter **colors** as a comma-separated list (e.g., "Black, Navy, Red")
+7. Review the live preview showing the total count: `sizes × colors × styles`
+8. Click **Create** — the system generates all combinations as individual pool items grouped under a new `ItemVariantGroup`
+
+### Example
+
+For a turnout coat with:
+- 4 sizes: S, M, L, XL
+- 2 styles: Regular, Long
+- 2 colors: Black, Tan
+
+The system creates `4 × 2 × 2 = 16` pool items:
+- Turnout Coat - S / Regular / Black
+- Turnout Coat - S / Regular / Tan
+- Turnout Coat - S / Long / Black
+- ... (16 total)
+
+All 16 items are linked under a single variant group and share the base description and category.
+
+> **Screenshot needed:**
+> _[Screenshot of the inventory items list showing a variant group expanded to display individual size/style/color variants with their stock levels]_
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Empty styles list | Defaults to `['regular']` — at least one variant per size/color |
+| Empty colors list | Defaults to `['default']` — at least one variant per size/style |
+| Duplicate variant group name | System prevents creation; choose a unique base item name |
+| Changing variants after creation | Edit individual items normally; the variant group remains intact |
+
+---
+
 ## Reorder Requests
 
 When stock falls below an item's reorder point, the system generates alerts and supports a formal reorder request workflow.
@@ -922,6 +972,8 @@ Items that fail validation are skipped with error details. Successfully validate
 | Item detail page shows "Item not found" | Verify the item ID in the URL. The item may have been retired or deleted. Check that you are in the correct organization context. |
 | Barcode not printing on labels | Ensure the item has a barcode, serial number, or asset tag assigned. SVG barcodes require a modern browser (Chrome/Edge recommended). Wait for the "Ready to print" indicator before printing. |
 | Location filter shows no results | Verify that storage areas are linked to facility rooms. The cascading filter requires Facility → Room → Storage Area hierarchy to be configured. |
+| Size/style variant generation creates too many items | The count is `sizes × colors × styles`. Remove unnecessary sizes or styles before generating. Preview shows the exact count before creation. |
+| Variant group not created after generation | Verify that `create_variant_group` is enabled (toggled on by default). Check that at least one size and one style are selected. |
 
 ---
 

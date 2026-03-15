@@ -652,6 +652,16 @@ See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#prospective-members-module-issues)
 
 ## Recent Changes (March 2026)
 
+### March 15, 2026
+- **Pipeline overview report with configurable stage grouping**: New `PipelineOverviewRenderer` report shows prospect counts per pipeline stage. Configurable stage groups (via `ReportStageGroupsEditor`) allow combining multiple stages into labeled groups (e.g., "Early Stages" = Application + Interview). New `report_stage_groups` column on pipeline steps with Alembic migration
+- **Drag-and-drop section reordering for pipeline emails**: Email section order in pipeline email configuration can now be rearranged via drag-and-drop. Reordering updates `section_order` array. O(1) lookup optimization for section rendering with narrower `React.memo` dependencies
+- **Email preview panel**: Preview rendered email content before sending. Shows subject, sections, and styling as they will appear to the recipient
+- **Days-in-stage server-side calculation**: Days-in-stage was previously hardcoded to 0. Now computed server-side as the difference between current time and the prospect's `updated_at` timestamp. Resets when a prospect moves to a new stage
+- **Auto-advance for all applicable stage types**: The `auto_advance` boolean option is now available on all applicable pipeline stage types, not just form submission and document upload
+- **Automated email trigger reliability**: Fixed 4 separate issues preventing automated emails from sending when prospects advance to email stages: step_type mapping mismatch, auto-advance not triggering email, email config not loading, and missing email content validation
+- **Pipeline step hover state fix**: Inactive step buttons had identical base and hover colors, providing no visual feedback. Fixed
+- **Ballot email diagnostics**: Admin election page now shows reasons why present members didn't receive a ballot email (no email address, ineligible, already voted)
+
 ### March 14, 2026
 - **Auto-advance for form submission and document upload stages**: New `auto_advance` config option in `FormStageConfig` and `DocumentStageConfig`. Checkbox in StageConfigModal. When enabled, prospects automatically advance when the form is submitted or documents are uploaded
 - **Stage regression (move back)**: New `POST /regress` endpoint and "Move Back" action in the Applicant Detail Drawer. Moves prospect to previous stage, resets progress to `IN_PROGRESS`, logs as `prospect_regressed`
@@ -687,6 +697,6 @@ See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#prospective-members-module-issues)
 
 ---
 
-**Document Version**: 1.4
-**Last Updated**: 2026-03-14
+**Document Version**: 1.5
+**Last Updated**: 2026-03-15
 **Maintainer**: Development Team

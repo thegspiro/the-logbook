@@ -207,11 +207,28 @@ Navigate to **Reports** in the Administration section to generate department rep
 
 ### Generating a Report
 
-1. Select a **report category**: All, Member, Training, Event, or Compliance.
+1. Select a **report category**: All, Member, Training, Event, Compliance, or **Pipeline** *(added 2026-03-15)*.
 2. Choose a **date range** using presets (This Year, Last Year, Last 90 Days) or a custom range.
 3. Click **Generate**.
 4. View the report on screen.
 5. Click **Export CSV** to download for spreadsheets or external analysis.
+
+### Pipeline Overview Report (2026-03-15)
+
+The **Pipeline Overview** report shows prospect counts per pipeline stage with configurable stage grouping. This report helps leadership see how many applicants are at each point in the membership process.
+
+**Configuring Stage Groups:**
+
+1. Navigate to **Prospective Members > Settings** (`/prospective-members/settings`)
+2. Scroll to the **Report Stage Groups** section
+3. Click **Add Group** to create a grouping (e.g., "Early Stages")
+4. Select which pipeline stages belong to this group (e.g., Application + Interview)
+5. Save
+
+> **Screenshot needed:**
+> _[Screenshot of the ReportStageGroupsEditor showing two configured groups: "Early Stages" containing "Application" and "Interview" stages, and "Final Steps" containing "Background Check" and "Vote" stages. Each group shows the stage count and has edit/delete buttons]_
+
+Stage groups with zero prospects are still shown in the report for completeness. Ungrouped stages appear individually.
 
 > **Screenshot placeholder:**
 > _[Screenshot of the Reports page showing the category filter buttons at the top, date range presets and a custom date picker, a list of available reports, and a generated report preview with an Export CSV button]_
@@ -749,6 +766,10 @@ Profiles allow different compliance standards for different groups:
 | Compliance report generation fails | Check the error message in the report list. Common causes: no compliance config defined (use **Initialize** first), or SMTP not configured for email delivery. |
 | Scheduled emails not sending | Verify SMTP is configured in Settings > Email. Check that the background email scheduler is running (polls every 60 seconds). For Gmail, use STARTTLS on port 587 with an app password. *(fixed 2026-03-13)* |
 | Compliance config "already exists" error | Use the update endpoint (PUT) instead of initialize (POST) after first-time setup. The initialization endpoint is for first-time configuration only. |
+| Date/time displays show UTC instead of local time | Fixed 2026-03-14 — a SQLAlchemy `load` event listener now stamps all naive datetimes with UTC tzinfo. ESLint rules enforce use of `dateFormatting.ts` utilities. Pull latest and restart. |
+| Pipeline overview report missing | Added 2026-03-15 — new `PipelineOverviewRenderer` in Reports module. Configure stage grouping in Pipeline Settings > Report Stage Groups. |
+| Pipeline report stage groups | Configure in Pipeline Settings. Groups combine multiple stages into labeled groups (e.g., "Early Stages" = Application + Interview) for the pipeline overview report. |
+| Modal cannot be closed by clicking backdrop | Fixed 2026-03-14 — all modals across the app now have correct backdrop click-to-dismiss and z-index stacking. Pull latest frontend code. |
 
 ---
 
