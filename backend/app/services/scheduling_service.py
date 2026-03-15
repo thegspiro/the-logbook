@@ -34,7 +34,9 @@ from app.models.training import (
     TimeOffStatus,
     TrainingRequirement,
 )
-from app.models.user import Position, User, user_positions
+from zoneinfo import ZoneInfo
+
+from app.models.user import Organization, Position, User, user_positions
 from app.services.member_leave_service import MemberLeaveService
 
 
@@ -947,6 +949,16 @@ class SchedulingService:
             except (ValueError, AttributeError):
                 return [], "Invalid time format in template. Expected HH:MM."
 
+            # Fetch the organization timezone so template local times
+            # are stored as proper UTC datetimes.
+            org_result = await self.db.execute(
+                select(Organization).where(
+                    Organization.id == str(organization_id)
+                )
+            )
+            org = org_result.scalar_one_or_none()
+            org_tz = ZoneInfo(org.timezone) if org and org.timezone else ZoneInfo("America/New_York")
+
             config = pattern.schedule_config or {}
 
             # -----------------------------------------------------------
@@ -1069,7 +1081,13 @@ class SchedulingService:
                 filtered_dates: list[date] = []
                 for d in shift_dates:
                     sh, sm, _eh, _em, _c = _resolve_times(shift_type_map.get(d, "on"))
-                    if (d, sh, sm) not in existing_shifts:
+                    # Convert local template time to UTC for comparison
+                    # with existing DB records (stored as UTC).
+                    local_dt = datetime(
+                        d.year, d.month, d.day, sh, sm, tzinfo=org_tz
+                    )
+                    utc_dt = local_dt.astimezone(timezone.utc)
+                    if (d, utc_dt.hour, utc_dt.minute) not in existing_shifts:
                         filtered_dates.append(d)
                 shift_dates = filtered_dates
 
@@ -1079,20 +1097,27 @@ class SchedulingService:
                 s_hour, s_minute, e_hour, e_minute, shift_color = _resolve_times(
                     shift_type_map.get(shift_date_val, "on")
                 )
-                shift_start = datetime(
+                # Build datetimes in the org's local timezone, then
+                # convert to UTC for storage so the frontend's
+                # timezone-aware formatting produces the correct local time.
+                shift_start_local = datetime(
                     shift_date_val.year,
                     shift_date_val.month,
                     shift_date_val.day,
                     s_hour,
                     s_minute,
+                    tzinfo=org_tz,
                 )
-                shift_end = datetime(
+                shift_start = shift_start_local.astimezone(timezone.utc)
+                shift_end_local = datetime(
                     shift_date_val.year,
                     shift_date_val.month,
                     shift_date_val.day,
                     e_hour,
                     e_minute,
+                    tzinfo=org_tz,
                 )
+                shift_end = shift_end_local.astimezone(timezone.utc)
                 # If end time is before start time, the shift ends the next day
                 if shift_end <= shift_start:
                     shift_end += timedelta(days=1)
