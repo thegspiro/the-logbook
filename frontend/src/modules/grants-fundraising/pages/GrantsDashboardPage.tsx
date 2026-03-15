@@ -84,9 +84,9 @@ const getDeadlineBadgeColor = (deadlineDate: string | null): string => {
   if (!deadlineDate) return 'bg-theme-surface-secondary text-theme-text-secondary';
   const days = daysUntil(deadlineDate);
   if (isNaN(days)) return 'bg-theme-surface-secondary text-theme-text-secondary';
-  if (days < 14) return 'bg-red-100 text-red-700';
-  if (days < 30) return 'bg-yellow-100 text-yellow-700';
-  return 'bg-green-100 text-green-700';
+  if (days < 14) return 'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400';
+  if (days < 30) return 'bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400';
+  return 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400';
 };
 
 // =============================================================================
@@ -628,28 +628,28 @@ const GrantsDashboardPage: React.FC = () => {
           label="Total Grant Funding"
           value={formatCurrencyWhole(dashboard?.totalGrantFunding ?? 0)}
           icon={<DollarSign className="h-5 w-5 text-green-600" />}
-          iconBgClass="bg-green-100"
+          iconBgClass="bg-green-100 dark:bg-green-500/20"
           linkTo="/grants/applications"
         />
         <KpiCard
           label="Active Grants"
           value={String(dashboard?.activeGrants ?? 0)}
           icon={<FileText className="h-5 w-5 text-blue-600" />}
-          iconBgClass="bg-blue-100"
+          iconBgClass="bg-blue-100 dark:bg-blue-500/20"
           linkTo="/grants/applications?status=active"
         />
         <KpiCard
           label="Pending Applications"
           value={String(dashboard?.pendingApplications ?? 0)}
           icon={<Clock className="h-5 w-5 text-yellow-600" />}
-          iconBgClass="bg-yellow-100"
+          iconBgClass="bg-yellow-100 dark:bg-yellow-500/20"
           linkTo="/grants/applications?status=submitted"
         />
         <KpiCard
           label="Total Raised YTD"
           value={formatCurrencyWhole(dashboard?.totalRaisedYtd ?? 0)}
           icon={<TrendingUp className="h-5 w-5 text-emerald-600" />}
-          iconBgClass="bg-emerald-100"
+          iconBgClass="bg-emerald-100 dark:bg-emerald-500/20"
           linkTo="/grants/campaigns"
         />
       </div>
@@ -660,28 +660,28 @@ const GrantsDashboardPage: React.FC = () => {
           label="Active Campaigns"
           value={String(dashboard?.activeCampaignsCount ?? 0)}
           icon={<Megaphone className="h-5 w-5 text-purple-600" />}
-          iconBgClass="bg-purple-100"
+          iconBgClass="bg-purple-100 dark:bg-purple-500/20"
           linkTo="/grants/campaigns?status=active"
         />
         <KpiCard
           label="Total Donors"
           value={String(dashboard?.totalDonors ?? 0)}
           icon={<Users className="h-5 w-5 text-indigo-600" />}
-          iconBgClass="bg-indigo-100"
+          iconBgClass="bg-indigo-100 dark:bg-indigo-500/20"
           linkTo="/grants/donors"
         />
         <KpiCard
           label="Outstanding Pledges"
           value={formatCurrencyWhole(dashboard?.outstandingPledges ?? 0)}
           icon={<HandCoins className="h-5 w-5 text-orange-600" />}
-          iconBgClass="bg-orange-100"
+          iconBgClass="bg-orange-100 dark:bg-orange-500/20"
           linkTo="/grants/pledges"
         />
         <KpiCard
           label="Total Raised (12mo)"
           value={formatCurrencyWhole(dashboard?.totalRaised12mo ?? 0)}
           icon={<BarChart3 className="h-5 w-5 text-teal-600" />}
-          iconBgClass="bg-teal-100"
+          iconBgClass="bg-teal-100 dark:bg-teal-500/20"
         />
       </div>
 

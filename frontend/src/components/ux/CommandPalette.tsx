@@ -223,7 +223,7 @@ export const CommandPalette: React.FC = () => {
                         data-selected={isSelected}
                         className={`w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors ${
                           isSelected
-                            ? 'bg-red-600/10 text-red-700 dark:text-red-400'
+                            ? 'bg-theme-accent-red-muted text-theme-accent-red'
                             : 'text-theme-text-primary hover:bg-theme-surface-hover'
                         }`}
                         role="option"

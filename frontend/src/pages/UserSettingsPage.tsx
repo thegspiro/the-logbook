@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { User, Lock, Bell, Eye, EyeOff, CheckCircle, Sun, Moon, Monitor, Palette, AlertTriangle, Heart, Plus, Trash2 } from 'lucide-react';
+import { User, Lock, Bell, Eye, EyeOff, CheckCircle, Sun, Moon, Monitor, Contrast, Palette, AlertTriangle, Heart, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { authService, userService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
@@ -271,6 +271,12 @@ export const UserSettingsPage: React.FC = () => {
       label: 'System',
       description: 'Follows your device settings',
       icon: Monitor,
+    },
+    {
+      value: 'high-contrast' as const,
+      label: 'High Contrast',
+      description: 'Maximum visibility for accessibility',
+      icon: Contrast,
     },
   ];
 
@@ -856,7 +862,7 @@ export const UserSettingsPage: React.FC = () => {
               <label className="block text-sm font-medium text-theme-text-secondary mb-3">
                 Theme
               </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {themeOptions.map((option) => {
                   const Icon = option.icon;
                   const isSelected = theme === option.value;
@@ -866,19 +872,19 @@ export const UserSettingsPage: React.FC = () => {
                       onClick={() => setTheme(option.value)}
                       className={`relative flex flex-col items-center p-4 rounded-lg border-2 transition-all focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
                         isSelected
-                          ? 'border-red-500 bg-red-50 dark:bg-red-500/10'
+                          ? 'border-theme-accent-red bg-theme-accent-red-muted'
                           : 'border-theme-surface-border bg-theme-surface-secondary hover:border-theme-surface-border'
                       }`}
                       aria-pressed={isSelected}
                     >
                       <Icon className={`w-8 h-8 mb-2 ${
                         isSelected
-                          ? 'text-red-600 dark:text-red-400'
+                          ? 'text-theme-accent-red'
                           : 'text-theme-text-muted'
                       }`} aria-hidden="true" />
                       <span className={`text-sm font-medium ${
                         isSelected
-                          ? 'text-red-700 dark:text-red-300'
+                          ? 'text-theme-accent-red'
                           : 'text-theme-text-secondary'
                       }`}>
                         {option.label}
@@ -888,7 +894,7 @@ export const UserSettingsPage: React.FC = () => {
                       </span>
                       {isSelected && (
                         <div className="absolute top-2 right-2">
-                          <CheckCircle className="w-5 h-5 text-red-500" aria-label="Selected" />
+                          <CheckCircle className="w-5 h-5 text-theme-accent-red" aria-label="Selected" />
                         </div>
                       )}
                     </button>

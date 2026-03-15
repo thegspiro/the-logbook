@@ -61,11 +61,11 @@ export const Tooltip: React.FC<TooltipProps> = ({
         <div
           id={tooltipId.current}
           role="tooltip"
-          className={`absolute z-50 px-2.5 py-1.5 text-xs font-medium text-white bg-slate-900 dark:bg-slate-700 rounded-md shadow-lg whitespace-nowrap pointer-events-none animate-scale-in ${positionClasses[position]}`}
+          className={`absolute z-50 px-2.5 py-1.5 text-xs font-medium text-white bg-gray-900 dark:bg-gray-700 rounded-md shadow-lg whitespace-nowrap pointer-events-none animate-scale-in ${positionClasses[position]}`}
         >
           {content}
           <span
-            className={`absolute w-2 h-2 bg-slate-900 dark:bg-slate-700 rotate-45 ${
+            className={`absolute w-2 h-2 bg-gray-900 dark:bg-gray-700 rotate-45 ${
               position === 'top' ? 'top-full left-1/2 -translate-x-1/2 -mt-1' :
               position === 'bottom' ? 'bottom-full left-1/2 -translate-x-1/2 -mb-1' :
               position === 'left' ? 'left-full top-1/2 -translate-y-1/2 -ml-1' :
