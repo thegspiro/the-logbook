@@ -112,6 +112,13 @@ export interface SchedulingSummary {
   total_hours_this_month: number;
 }
 
+/** Event template metadata stored in the positions field for event-category templates. */
+export interface EventTemplatePositions {
+  event_type?: string;
+  resources?: Array<{ positions: string[]; quantity: number }>;
+  flat_positions?: string[];
+}
+
 export interface ShiftTemplateRecord {
   id: string;
   name: string;
@@ -119,12 +126,36 @@ export interface ShiftTemplateRecord {
   end_time_of_day: string;
   duration_hours: number;
   color?: string;
-  positions?: string[];
+  positions?: string[] | EventTemplatePositions;
   min_staffing: number;
   category?: string;
   apparatus_type?: string;
   is_default: boolean;
   is_active: boolean;
+}
+
+/**
+ * Extract a flat string[] of position names from a template's positions field,
+ * which may be a plain string array (standard/specialty) or an event metadata
+ * object containing flat_positions / resources (event category).
+ */
+export function resolveTemplatePositions(
+  positions: ShiftTemplateRecord['positions'],
+): string[] {
+  if (!positions) return [];
+  // Standard / specialty templates store a plain string[]
+  if (Array.isArray(positions)) return positions;
+  // Event templates — prefer the pre-computed flat list
+  if (Array.isArray(positions.flat_positions) && positions.flat_positions.length > 0) {
+    return positions.flat_positions;
+  }
+  // Legacy event templates — compute from resources
+  if (Array.isArray(positions.resources)) {
+    return positions.resources.flatMap((r) =>
+      Array.from({ length: r.quantity ?? 1 }, () => r.positions ?? []).flat(),
+    );
+  }
+  return [];
 }
 
 export interface BasicApparatusRecord {

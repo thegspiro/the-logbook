@@ -7,6 +7,7 @@
 
 import React from "react";
 import { AlertCircle } from "lucide-react";
+import { resolveTemplatePositions } from "../services/api";
 import type { ShiftTemplateRecord } from "../services/api";
 
 interface TemplatesOverviewCardProps {
@@ -70,9 +71,11 @@ export const TemplatesOverviewCard: React.FC<TemplatesOverviewCardProps> = ({
                   {t.start_time_of_day} - {t.end_time_of_day} /{" "}
                   {t.duration_hours}h / min {t.min_staffing}
                 </p>
-                {t.positions && t.positions.length > 0 && (
+                {(() => {
+                  const flat = resolveTemplatePositions(t.positions);
+                  return flat.length > 0 ? (
                   <div className="flex flex-wrap gap-1 mt-1">
-                    {t.positions.map((pos, i) => (
+                    {flat.map((pos, i) => (
                       <span
                         key={i}
                         className="px-1.5 py-0.5 text-[10px] bg-violet-500/10 text-violet-700 dark:text-violet-300 rounded-sm capitalize"
@@ -81,7 +84,8 @@ export const TemplatesOverviewCard: React.FC<TemplatesOverviewCardProps> = ({
                       </span>
                     ))}
                   </div>
-                )}
+                  ) : null;
+                })()}
               </div>
               {t.is_default && (
                 <span className="text-[10px] px-1.5 py-0.5 bg-green-500/10 text-green-700 dark:text-green-400 rounded-sm shrink-0">

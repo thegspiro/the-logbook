@@ -33,6 +33,7 @@ import type {
   ShiftRecord,
   ShiftTemplateRecord,
 } from "../modules/scheduling";
+import { resolveTemplatePositions } from "../modules/scheduling/services/api";
 import { lazyWithRetry } from "../utils/lazyWithRetry";
 
 // Lazy-loaded tab components
@@ -396,6 +397,8 @@ const SchedulingPage: React.FC = () => {
         shiftForm.startDate;
       const endDateTime = `${endDate}T${endTime}:00`;
 
+      const templatePositions = resolveTemplatePositions(template.positions);
+
       await schedulingService.createShift({
         shift_date: shiftForm.startDate,
         start_time: startDateTime,
@@ -404,7 +407,7 @@ const SchedulingPage: React.FC = () => {
         ...(shiftForm.apparatus_id ? { apparatus_id: shiftForm.apparatus_id } : {}),
         ...(shiftForm.shift_officer_id ? { shift_officer_id: shiftForm.shift_officer_id } : {}),
         ...(template.color ? { color: template.color } : {}),
-        ...(template.positions?.length ? { positions: template.positions } : {}),
+        ...(templatePositions.length > 0 ? { positions: templatePositions } : {}),
         ...(template.min_staffing ? { min_staffing: template.min_staffing } : {}),
       });
 
@@ -1221,8 +1224,8 @@ const SchedulingPage: React.FC = () => {
                             (t) => t.id === shiftForm.shiftTemplate,
                           ) || defaultTemplate;
                         if (!tmpl) return null;
-                        const hasPositions =
-                          tmpl.positions && tmpl.positions.length > 0;
+                        const flatPositions = resolveTemplatePositions(tmpl.positions);
+                        const hasPositions = flatPositions.length > 0;
                         const catLabel =
                           tmpl.category === "specialty"
                             ? "Specialty"
@@ -1272,7 +1275,7 @@ const SchedulingPage: React.FC = () => {
                                   Required positions:
                                 </p>
                                 <div className="flex flex-wrap gap-1">
-                                  {tmpl.positions?.map((pos, i) => (
+                                  {flatPositions.map((pos, i) => (
                                     <span
                                       key={i}
                                       className="px-2 py-0.5 text-[10px] bg-violet-500/10 text-violet-700 dark:text-violet-300 rounded-sm capitalize font-medium"
