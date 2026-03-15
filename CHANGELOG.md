@@ -7,6 +7,113 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Training Module — Recurring Sessions & Quarter-Hour Time Picker (2026-03-15)
+
+- **Recurring training sessions**: Training sessions can now recur using the same recurrence infrastructure as events (daily, weekly, biweekly, monthly, monthly_weekday, annually, annually_weekday, custom patterns). Backend creates recurring events via `EventService` and links a `TrainingSession` to each occurrence. Selecting an existing course auto-populates training type, credit hours, instructor, expiration months, and max participants with a preview card
+- **Quarter-hour time picker (`DateTimeQuarterHour`)**: Replaces browser `datetime-local` inputs (which ignore `step="900"`) with a custom component splitting date/time into a native date picker and a select dropdown restricted to `:00`, `:15`, `:30`, `:45`. New reusable UX component in `components/ux/DateTimeQuarterHour.tsx`
+- **Quick duration buttons**: 1-hour, 2-hour, 4-hour, and 8-hour buttons after the date/time fields, matching the pattern in `EventForm` and `ElectionsPage`. Buttons appear once a start date is set and auto-populate end date/time
+- **Course auto-populate**: Selecting an existing course in the session form auto-fills training type, credit hours, instructor, expiration months, and max participants with a details preview card
+- **Location selector stale closure fix**: `updateField()` was using `{ ...formData }` which captured a stale closure reference. Switched to functional `setState: prev => ({ ...prev })` to prevent second call from overwriting first
+- **Training pipeline save fix**: Added missing `program_requirements` relationship to `TrainingProgram` model and `program` back_populates to `ProgramRequirement`. Moved `/requirements/registries` and `/requirements/import/{registry_name}` routes before `/requirements/{requirement_id}` to fix route ordering (FastAPI was matching "registries" as a UUID)
+- **UUID comparison fix**: Fixed 12 instances where UUID objects from Pydantic schemas were compared directly against `String(36)` database columns without `str()` conversion in `training_program_service.py`. With aiomysql, UUID objects aren't auto-coerced, causing queries to silently return no results
+
+**Edge Cases:**
+- Recurring training sessions create one event per occurrence with a linked training session record — deleting the parent event does not cascade-delete the training session
+- Quarter-hour picker enforces `:00`/`:15`/`:30`/`:45` only; arbitrary minute values from imported data are rounded to the nearest quarter
+- Course auto-populate fills all fields but does not lock them — users can override any auto-filled value
+- Quick duration buttons are disabled until a start date is selected
+- The stale closure bug only manifested when two `updateField()` calls fired in the same render cycle (e.g., setting `location_id` then clearing `location`)
+
+### Scheduling Module — Template Positions & Timezone Fixes (2026-03-15)
+
+- **Template positions carry to crew roster**: Shift templates with defined `positions` and `min_staffing` now persist these values to created shifts. Both direct creation and pattern-based generation pass template staffing requirements through. The ShiftDetailPanel falls back to shift-level positions when apparatus has none defined
+- **Shift timezone display fix**: `ShiftReportsTab` was using UTC (`toISOString()`) instead of local timezone; now uses `getTodayLocalDate(tz)`. `ShiftDetailPanel` edit form was extracting time from the UTC ISO string instead of converting to local timezone via `Intl.DateTimeFormat`
+- **`toTimeValue` local timezone fix**: The `toTimeValue` function was extracting `HH:MM` by string-splitting the ISO datetime on `'T'`, returning the UTC time portion. For a shift starting at 2:30 PM Eastern (18:30 UTC), the edit form would show 18:30 instead of 14:30. Now uses `Intl.DateTimeFormat` with the user's timezone for local `HH:MM`, and `localToUTC()` when saving edits
+- **Alembic migration**: New migration adds `positions` (JSON) and `min_staffing` (Integer) columns to the `shifts` table
+
+**Data Model Changes:**
+
+| Table | New Columns | Description |
+|-------|-------------|-------------|
+| `shifts` | `positions` (JSON, nullable) | Position definitions inherited from template |
+| `shifts` | `min_staffing` (Integer, nullable) | Minimum staffing level inherited from template |
+
+**Edge Cases:**
+- Shifts created before this migration have `NULL` for both columns — the UI falls back to apparatus-level positions
+- `toTimeValue` with a missing or invalid datetime returns an empty string instead of crashing
+- Template positions are copied at shift creation time; subsequent template edits do not retroactively update existing shifts
+
+### Inventory — Size/Style Auto-Generation on Item Creation (2026-03-14)
+
+- **Auto-generate size/style variants**: When creating a new uniform or PPE item, users can toggle "Generate Sizes & Styles" to select multiple standard sizes and garment styles. The backend creates one pool item per `size × color × style` combination, sets the `standard_size` and `style` enum fields on each generated item, and automatically groups them under a new `ItemVariantGroup`
+- **Frontend chip-based multi-select**: New UI with chip-based multi-select for sizes (`STANDARD_SIZES`) and styles (`GARMENT_STYLES`), comma-separated colors input, live preview of item count, and automatic call to `createSizeVariants` endpoint
+- **Backend schema extension**: `SizeVariantCreate` schema now includes `styles` list and `create_variant_group` flag. `SizeVariantCreateResponse` includes `variant_group_id`
+
+**Edge Cases:**
+- Empty styles list defaults to `['regular']` to always generate at least one variant per size/color
+- Empty colors list defaults to `['default']` to always generate at least one variant per size/style
+- Duplicate variant groups are prevented by checking for existing groups with the same base item name
+- The live preview count updates immediately as sizes, styles, and colors change: `count = sizes.length × colors.length × styles.length`
+
+### UTC Datetime Display — Root Cause Fix (2026-03-14)
+
+- **Root cause fix for UTC datetime display bug**: MySQL `DATETIME` columns don't store timezone info, so aiomysql returns naive Python datetime objects. Pydantic serialized them without a `'Z'` or `'+00:00'` suffix. JavaScript's `new Date()` treats strings without timezone indicators as local time, making the frontend's UTC-to-local conversion a no-op — times appeared shifted by the user's UTC offset
+- **SQLAlchemy `load` event listener**: Added a listener on `Base` that stamps all naive `DateTime(timezone=True)` columns with UTC tzinfo immediately after ORM hydration. Uses `set_committed_value()` instead of `object.__setattr__()` to properly integrate with SQLAlchemy's attribute tracking without marking the object dirty
+- **ESLint timezone enforcement**: New custom ESLint rules ban `.toLocaleString()`, `.toLocaleDateString()`, `.toLocaleTimeString()`, `import { ... } from 'date-fns'`, and `new Date().toISOString().slice(0,10)`. Enforces use of `dateFormatting.ts` utilities with explicit timezone parameter
+- **34 files updated**: All remaining `toLocaleString`/`toLocaleDateString`/`toLocaleTimeString` calls replaced with `formatDate()`/`formatDateTime()`/`formatTime()`/`formatNumber()`/`formatCurrency()` utilities across admin hours, grants-fundraising, inventory, facilities, scheduling, compliance, reports, and platform analytics
+
+**Edge Cases:**
+- The `load` event listener only stamps columns declared with `DateTime(timezone=True)` — plain `DateTime` columns are left unchanged
+- `set_committed_value()` does not trigger a flush or mark the instance as dirty, preventing unnecessary database writes
+- `formatNumber()` replaces numeric `.toLocaleString()` calls (used for formatting quantities and currency) — this is a different use case from date formatting
+
+### Prospective Members Pipeline — Pipeline Reports, Email UX & Days-in-Stage (2026-03-14)
+
+- **Pipeline overview report with configurable stage grouping**: New report renderer (`PipelineOverviewRenderer`) shows prospect counts per pipeline stage. Configurable stage groups (via `ReportStageGroupsEditor`) allow combining multiple stages into labeled groups (e.g., "Early Stages" = Application + Interview). New `report_stage_groups` column on pipeline steps with migration
+- **Drag-and-drop section reordering for pipeline emails**: Email section order in pipeline email configuration can now be rearranged via drag-and-drop. Reordering updates `section_order` array. O(1) lookup optimization for section rendering with narrower `React.memo` dependencies
+- **Email preview panel**: Preview rendered email content before sending. Shows subject, sections, and styling as they will appear to the recipient
+- **Days-in-stage server-side calculation**: Days-in-stage for prospects was previously hardcoded to 0. Now computed server-side by calculating the difference between the current time and the prospect's `updated_at` timestamp
+- **Pipeline step hover state fix**: Inactive step buttons had identical base and hover colors (`text-theme-text-muted` for both), providing no visual feedback. Fixed to show a visible hover state
+- **Auto-advance for all applicable stage types**: Auto-advance option (`auto_advance` boolean) extended to all applicable pipeline stage types, not just form submission and document upload
+- **Automated email trigger reliability**: Fixed 4 separate issues preventing automated emails from sending when prospects advance to email stages: step_type mapping mismatch, auto-advance not triggering email, email config not loading, and missing email content validation
+
+**Edge Cases:**
+- Stage groups with zero prospects are still displayed in the report (with count 0) for completeness
+- Drag-and-drop reordering preserves section content — only the display order changes
+- Days-in-stage calculation uses `updated_at` (not `created_at`) so that moving a prospect to a new stage resets the counter
+- Auto-advance to an email stage both advances the prospect AND sends the configured email in a single operation
+- If automated email sending fails, the prospect is still advanced — email failure does not block stage progression
+
+### Events Module — Series End Reminders & Check-In Fix (2026-03-14)
+
+- **Series end email reminders**: When a recurring event series is nearing its end date, organizers receive an email reminder to extend or close the series
+- **Recurring event creation crash fix**: Fixed crash when creating recurring events with certain recurrence patterns that generated dates beyond the series end date
+- **Check-in modal fix**: Added missing `GET /api/v1/events/{id}/eligible-members` endpoint that the check-in modal was calling. Fixed modal overlay z-index so the check-in modal is always above the backdrop
+- **EventForm timezone bug fix**: Fixed date arithmetic and conflict detection in `EventForm` to use timezone-aware calculations instead of raw UTC comparisons
+
+**Edge Cases:**
+- Series end reminders are sent 7 days before the last occurrence — if the series has already ended, no reminder is sent
+- The eligible-members endpoint returns only members who haven't already checked in to the event
+- Conflict detection now correctly identifies overlaps when events span midnight in the organization's timezone
+
+### Non-Dismissable Modal Overlay Fix (2026-03-14)
+
+- **Fix non-dismissable modal overlays across the app**: All modals with backdrop-click and relative z-index issues fixed. Affected modals: EventDetailPage (7 modals — RSVP, Cancel Event, Cancel Series, Record Times, Override Attendance, Delete Confirm, Save Template), and modals in inventory, scheduling, and prospective members modules. Added `onClick` handler on backdrop and `relative z-10` on content panel
+
+**Edge Cases:**
+- Nested modals (e.g., confirmation dialog inside a form modal) maintain correct stacking order via incremental `z-index`
+- Clicking the backdrop of a form modal with unsaved changes triggers the standard discard confirmation before closing
+
+### Code Quality & Deduplication (2026-03-14)
+
+- **Backend error handling utilities**: New `ensure_found()` and `handle_service_errors()` helpers in `core/utils.py` replacing repetitive try/except/raise patterns across endpoint files. IP security endpoints fully refactored to use new utilities
+- **Shared `PaginationParams`**: Extracted common pagination query parameters into a reusable dependency
+- **Shared schema configs**: Extracted repeated Pydantic `model_config` patterns into shared `CAMEL_CASE_CONFIG`
+- **`formatCurrency` consolidation**: Unified currency formatting across frontend modules into `utils/currencyFormatting.ts`
+- **Frontend deduplication**: `LogoutConfirmModal` extracted into shared component; redundant utility functions consolidated
+- **Ballot email diagnostics**: Admin election page now shows reasons why present members didn't receive a ballot email (e.g., no email address, ineligible, already voted)
+- **Naive/aware datetime fix**: Fixed `can't subtract offset-naive and offset-aware datetimes` crash in prospective members list by adding `_ensure_utc()` helper to normalize naive timestamps before arithmetic
+
 ### Prospective Members Pipeline — Auto-Advance & Stage Regression (2026-03-14)
 
 - **Auto-advance for form submission and document upload stages**: Pipeline stages of type `form_submission` or `document_upload` can now be configured to auto-advance the prospect when the form is submitted or documents are uploaded. New `auto_advance` boolean field in `FormStageConfig` and `DocumentStageConfig` interfaces, toggled via checkbox in StageConfigModal

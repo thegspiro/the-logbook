@@ -201,6 +201,25 @@ DELETE /api/v1/event-requests/email-templates/{id}         # Delete template
 
 ---
 
+## Recent Changes (2026-03-15)
+
+### Series End Reminders & Check-In Fix
+
+- **Series end email reminders**: When a recurring event series is nearing its end date, organizers receive an email reminder to extend or close the series. Sent 7 days before the last occurrence
+- **Recurring event creation crash fix**: Fixed crash when creating recurring events with certain recurrence patterns that generated dates beyond the series end date
+- **Check-in modal fix**: Added missing `GET /api/v1/events/{id}/eligible-members` endpoint. Fixed modal overlay z-index so the check-in modal is above the backdrop
+- **EventForm timezone bug fix**: Date arithmetic and conflict detection now use timezone-aware calculations instead of raw UTC comparisons
+
+### Edge Cases (2026-03-15)
+
+| Scenario | Behavior |
+|----------|----------|
+| Series already ended | No reminder is sent |
+| Eligible members endpoint | Returns only members who haven't already checked in |
+| Conflict detection across midnight | Correctly identifies overlaps when events span midnight in the org's timezone |
+
+---
+
 ## Recent Changes (2026-03-12)
 
 - **Monthly-by-weekday recurrence**: Events can recur on patterns like "2nd Tuesday of every month" or "last Friday of every month". New `recurrence_week` and `recurrence_day_of_week` database columns

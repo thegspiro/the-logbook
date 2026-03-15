@@ -669,6 +669,58 @@ Members and officers can attach supporting documents (certificates, transcripts,
 
 ---
 
+## Recurring Training Sessions (2026-03-15)
+
+Training sessions can now recur on a schedule, just like events. This eliminates the need to manually create individual sessions for ongoing training activities like weekly drills, monthly CPR refreshers, or quarterly hazmat reviews.
+
+### Creating a Recurring Training Session
+
+1. Navigate to **Training > Admin > Create Session**
+2. Fill in the session details (title, training type, instructor, location)
+3. Select a **course** from the dropdown — the form auto-fills training type, credit hours, instructor, expiration months, and max participants from the course template
+
+> **Screenshot needed:**
+> _[Screenshot of the Create Training Session form showing the course auto-populate feature with the details preview card below the course dropdown]_
+
+4. Set the **start date/time** using the new quarter-hour time picker (restricted to `:00`, `:15`, `:30`, `:45`)
+
+> **Screenshot needed:**
+> _[Screenshot of the DateTimeQuarterHour component showing the date picker and the quarter-hour dropdown side by side]_
+
+5. Use one of the **quick duration buttons** (1 hr, 2 hr, 4 hr, 8 hr) to auto-set the end time, or set it manually
+
+> **Screenshot needed:**
+> _[Screenshot of the quick duration buttons row (1 hr | 2 hr | 4 hr | 8 hr) appearing below the start date field]_
+
+6. Enable **Recurrence** and choose a pattern:
+   - **Daily** — every N days
+   - **Weekly** — specific days of the week
+   - **Biweekly** — every two weeks
+   - **Monthly** — same day of month
+   - **Monthly by Weekday** — e.g., "2nd Tuesday of every month"
+   - **Annually** — same date each year
+   - **Custom** — user-defined interval
+
+> **Screenshot needed:**
+> _[Screenshot of the recurrence pattern selector showing radio buttons for each pattern type with the "Monthly by Weekday" option selected, displaying "2nd Tuesday of every month"]_
+
+7. Set the series **end date** and click **Create**
+
+The system creates one event per occurrence and links a `TrainingSession` record to each one. Each session inherits the training type, credit hours, and other fields from the parent configuration.
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Deleting the parent event | Does not cascade-delete the linked training session record |
+| Quarter-hour picker with imported data | Arbitrary minute values from external sources are rounded to the nearest quarter-hour |
+| Course auto-populate | Fills all fields but does not lock them — you can override any auto-filled value |
+| Quick duration buttons | Disabled until a start date is selected |
+| Recurrence beyond series end date | Events past the end date are not created |
+| Existing course changes | Sessions created from a course snapshot values at creation time — later course edits do not retroactively update existing sessions |
+
+---
+
 ## Skills Testing
 
 The Training module includes a **Skills Testing** sub-module for conducting structured psychomotor evaluations — the digital equivalent of NREMT skill sheets.

@@ -508,6 +508,38 @@ FF Schmidt was on a 2-week Leave of Absence (April 1-14), so his requirement was
 
 ---
 
+## Template Positions & Timezone Fixes (2026-03-15)
+
+### Template Positions Carry to Crew Roster
+
+Shift templates now pass their position definitions and minimum staffing requirements through to created shifts. Previously, only the template's time and apparatus information were inherited — position assignments had to be set up manually on each shift.
+
+When a shift is created from a template (either directly or via pattern-based generation), the template's `positions` and `min_staffing` values are copied to the new shift. In the `ShiftDetailPanel`, if the linked apparatus has no positions defined, the system falls back to the shift-level positions from the template.
+
+> **Screenshot needed:**
+> _[Screenshot of the ShiftDetailPanel crew roster showing position assignments inherited from a template, with position labels (Officer, Driver, Firefighter) and the min staffing indicator]_
+
+### Timezone Display Fix
+
+Two timezone display issues were corrected:
+
+1. **Shift reports date filter**: The reports tab was comparing against UTC dates instead of the user's local date. For example, at 11 PM Eastern on March 14, the tab would show March 15 reports because UTC had already crossed midnight.
+
+2. **Shift time editing**: When editing a shift, the start/end times displayed in the form were showing UTC values instead of local times. A shift starting at 2:30 PM Eastern appeared as 18:30 in the edit form.
+
+> **Screenshot needed:**
+> _[Screenshot of the ShiftDetailPanel edit form showing correctly localized start and end times (e.g., "14:30" for a 2:30 PM Eastern shift)]_
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Shifts created before this update | Position fields are empty; UI falls back to apparatus-level positions |
+| Template edits after shift creation | Existing shifts keep original positions; only new shifts get updated values |
+| Missing timezone data | Falls back to browser's local timezone |
+
+---
+
 ## Troubleshooting
 
 | Issue | Solution |

@@ -29,6 +29,10 @@ The Training module tracks courses, certifications, training requirements, progr
 - **Multi-Agency Training** — *(2026-03-05)* Joint training session coordination across departments with shared records and mutual aid tracking
 - **xAPI (Tin Can) Integration** — *(2026-03-05)* Learning Record Store integration for standardized training activity tracking. Async statement delivery via Celery
 - **Compliance Officer Dashboard** — *(2026-03-05)* ISO readiness tracking, compliance attestations, annual compliance reports, compliance forecasting, and record completeness checks
+- **Recurring Training Sessions** — *(2026-03-15)* Training sessions can recur using the same infrastructure as events (daily, weekly, biweekly, monthly, monthly_weekday, annually, annually_weekday, custom). Backend creates recurring events via `EventService` and links a `TrainingSession` to each occurrence. Selecting a course auto-populates training type, credit hours, instructor, expiration months, and max participants
+- **Quarter-Hour Time Picker** — *(2026-03-15)* New `DateTimeQuarterHour` UX component replacing browser `datetime-local` inputs (which ignore `step="900"`). Splits date/time into a native date picker and a select dropdown restricted to `:00`, `:15`, `:30`, `:45`
+- **Quick Duration Buttons** — *(2026-03-15)* 1-hour, 2-hour, 4-hour, and 8-hour buttons on the training session form, matching the pattern in EventForm. Appear once a start date is set and auto-populate end date/time
+- **Course Auto-Populate** — *(2026-03-15)* Selecting an existing course in the session creation form auto-fills training type, credit hours, instructor, expiration months, and max participants with a details preview card
 
 ---
 
