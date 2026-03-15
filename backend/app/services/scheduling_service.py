@@ -1853,11 +1853,21 @@ class SchedulingService:
             understaffed_shifts = 0
 
             for shift in day_shifts:
-                assignments = assignments_by_shift.get(shift.id, [])
-                assigned_count = len(assignments)
+                all_assignments = assignments_by_shift.get(shift.id, [])
+                # Only count active assignments (assigned/confirmed)
+                active = [
+                    a
+                    for a in all_assignments
+                    if a.assignment_status
+                    in (
+                        AssignmentStatus.ASSIGNED,
+                        AssignmentStatus.CONFIRMED,
+                    )
+                ]
+                assigned_count = len(active)
                 confirmed_count = sum(
                     1
-                    for a in assignments
+                    for a in active
                     if a.assignment_status == AssignmentStatus.CONFIRMED
                 )
                 total_assigned += assigned_count
