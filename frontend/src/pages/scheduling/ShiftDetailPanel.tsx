@@ -27,7 +27,7 @@ import type { Assignment, ShiftCall } from '../../types/scheduling';
 import type { ShiftCheckSummary } from '../../modules/scheduling/types/equipmentCheck';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatTime, getTodayLocalDate, formatDateCustom } from '../../utils/dateFormatting';
+import { formatTime, getTodayLocalDate, formatDateCustom, localToUTC } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, UserStatus, AssignmentStatus } from '../../constants/enums';
 
@@ -60,7 +60,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const [showEquipmentChecks, setShowEquipmentChecks] = useState(false);
   const [equipmentCheckSummaries, setEquipmentCheckSummaries] = useState<ShiftCheckSummary[]>([]);
 
-  /** Extract HH:MM from an ISO datetime or time string, converted to local timezone. */
+  /** Extract HH:MM from an ISO datetime or time string in the user's local timezone. */
   const toTimeValue = (v?: string): string => {
     if (!v) return '';
     // If it contains 'T', it's an ISO datetime — convert to local timezone
@@ -348,10 +348,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
         color: editForm.color || null,
       };
       if (editForm.start_time) {
-        payload.start_time = `${editForm.shift_date}T${editForm.start_time}:00`;
+        payload.start_time = localToUTC(`${editForm.shift_date}T${editForm.start_time}`, tz);
       }
       if (editForm.end_time) {
-        payload.end_time = `${editForm.shift_date}T${editForm.end_time}:00`;
+        payload.end_time = localToUTC(`${editForm.shift_date}T${editForm.end_time}`, tz);
       }
       const updated = await schedulingService.updateShift(shift.id, payload);
       setShift(updated);

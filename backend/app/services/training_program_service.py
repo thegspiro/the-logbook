@@ -496,7 +496,7 @@ class TrainingProgramService:
         # Verify requirement exists
         req_result = await self.db.execute(
             select(TrainingRequirement)
-            .where(TrainingRequirement.id == program_requirement_data.requirement_id)
+            .where(TrainingRequirement.id == str(program_requirement_data.requirement_id))
             .where(TrainingRequirement.organization_id == str(organization_id))
         )
         requirement = req_result.scalar_one_or_none()
@@ -644,7 +644,7 @@ class TrainingProgramService:
 
         # Verify user exists
         user_result = await self.db.execute(
-            select(User).where(User.id == enrollment_data.user_id)
+            select(User).where(User.id == str(enrollment_data.user_id))
         )
         user = user_result.scalar_one_or_none()
         if not user:
@@ -732,8 +732,8 @@ class TrainingProgramService:
             )
             .join(TrainingProgram)
             .where(
-                ProgramEnrollment.user_id == user_id,
-                TrainingProgram.organization_id == organization_id,
+                ProgramEnrollment.user_id == str(user_id),
+                TrainingProgram.organization_id == str(organization_id),
             )
         )
 
@@ -764,8 +764,8 @@ class TrainingProgramService:
             )
             .join(TrainingProgram)
             .where(
-                ProgramEnrollment.id == enrollment_id,
-                TrainingProgram.organization_id == organization_id,
+                ProgramEnrollment.id == str(enrollment_id),
+                TrainingProgram.organization_id == str(organization_id),
             )
         )
         return result.scalar_one_or_none()
@@ -796,8 +796,8 @@ class TrainingProgramService:
             .join(ProgramEnrollment)
             .join(TrainingProgram)
             .where(
-                RequirementProgress.id == progress_id,
-                TrainingProgram.organization_id == organization_id,
+                RequirementProgress.id == str(progress_id),
+                TrainingProgram.organization_id == str(organization_id),
             )
         )
         progress = result.scalar_one_or_none()
@@ -953,7 +953,7 @@ class TrainingProgramService:
             select(RequirementProgress)
             .join(ProgramRequirement)
             .where(
-                RequirementProgress.enrollment_id == enrollment_id,
+                RequirementProgress.enrollment_id == str(enrollment_id),
                 ProgramRequirement.is_required == True,  # noqa: E712
             )
         )
@@ -1234,7 +1234,7 @@ class TrainingProgramService:
                 .where(
                     ProgramEnrollment.user_id.in_(user_id_strs),
                     TrainingProgram.id.in_([str(p) for p in prereq_uuids]),
-                    TrainingProgram.organization_id == organization_id,
+                    TrainingProgram.organization_id == str(organization_id),
                     ProgramEnrollment.status == EnrollmentStatus.COMPLETED,
                 )
             )
@@ -1259,7 +1259,7 @@ class TrainingProgramService:
                 .where(
                     ProgramEnrollment.user_id.in_(user_id_strs),
                     ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
-                    TrainingProgram.organization_id == organization_id,
+                    TrainingProgram.organization_id == str(organization_id),
                 )
             )
             users_with_active = {str(row[0]) for row in active_enrollments_result.all()}
@@ -1333,7 +1333,7 @@ class TrainingProgramService:
             if skip_existing and req_data.get("registry_code"):
                 existing = await self.db.execute(
                     select(TrainingRequirement).where(
-                        TrainingRequirement.organization_id == organization_id,
+                        TrainingRequirement.organization_id == str(organization_id),
                         TrainingRequirement.registry_name == registry_name,
                         TrainingRequirement.registry_code
                         == req_data.get("registry_code"),
