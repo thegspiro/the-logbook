@@ -4,8 +4,9 @@
 
 Enhance the existing equipment check system with serialized/dated item tracking,
 a phone-first hybrid check form, failure notifications with apparatus deficiency
-flags, inline template management in settings, and a 3-tab reports page with
-PDF/CSV export.
+flags, inline template management in settings, a 3-tab reports page with
+PDF/CSV export, full drag-and-drop template reordering, and vehicle/mechanical
+pre-trip check support.
 
 ---
 
@@ -45,7 +46,62 @@ all real-world check scenarios:
 
 **Alembic migration**: Add nullable columns + update check_type enum.
 
-### 1b. Inline Serial Update During Checks
+### 1b. Template Type: Equipment, Vehicle, or Combined
+
+Templates should support different use cases. A department may want a single
+combined checklist per apparatus, or separate equipment and vehicle checks
+assigned to different positions.
+
+**Backend model changes** (`backend/app/models/apparatus.py`):
+- Add to `EquipmentCheckTemplate`:
+  - `template_type: Column(String(20), default='equipment', nullable=False)`
+    Values: `equipment`, `vehicle`, `combined`
+
+**What each type means:**
+
+| Type | Purpose | Typical Assignee | Example |
+|---|---|---|---|
+| `equipment` | Inventory/supply check of compartment contents | All crew or specific positions | SCBA, tools, medical supplies |
+| `vehicle` | Mechanical/operational pre-trip inspection | Driver position | Lights, tires, fluids, brakes, pump, aerial |
+| `combined` | Single template covering both equipment and vehicle | All crew (driver does vehicle compartments) | Everything in one checklist |
+
+**Vehicle check compartments** — common pre-built sections that admins can
+select from when creating a vehicle-type template:
+
+- **Exterior Walkaround**: body damage, tires (tread/pressure), mirrors, lights
+  (headlights, tail, turn, emergency), reflective striping
+- **Cab Interior**: seatbelts, horn, wipers, defroster, gauges, radio, MDT/laptop
+- **Engine Compartment**: oil level, coolant level, belt condition, leaks
+- **Brakes & Drivetrain**: brake pedal feel, parking brake, air brake system
+  (PSI build-up, governor cut-in/out), transmission fluid
+- **Warning Systems**: siren (wail, yelp, air horn), emergency lights (all modes),
+  PA system, backup alarm
+- **Pump Panel** (engine/quint): pump engagement, primer, gauges, intake/discharge
+  valves, tank-to-pump, tank water level
+- **Aerial** (ladder/tower): hydraulic fluid, outrigger pads, turntable rotation,
+  ladder extension/retraction, bucket controls
+- **Generator/Lighting** (rescue): generator start, scene lights, power outlets
+- **Patient Compartment** (ambulance): suction, O2 system, power outlets, stretcher
+  lock, climate control, sharps container
+
+These are offered as **pre-built compartment templates** when creating a new
+vehicle or combined template. The admin can select which ones apply and customize
+items within each.
+
+**Frontend changes:**
+- Template builder: add template_type selector at the top (equipment / vehicle /
+  combined) with descriptions
+- When vehicle or combined is selected, show a "Add Pre-built Compartment" button
+  that opens a picker of common vehicle compartments
+- On the shift detail panel and check form, show distinct icons:
+  equipment (clipboard), vehicle (truck), combined (clipboard+truck)
+
+**Backend schema changes:**
+- Add `template_type` to Create/Update/Response schemas
+- Add `PrebuiltCompartment` config (can be a static dict in the service, not a
+  DB table — these are just starter templates)
+
+### 1c. Inline Serial Update During Checks
 
 Allow members to update serial/lot/expiration during a check when items are swapped:
 
@@ -209,12 +265,52 @@ template management experience:
 - **Create button**: "Create Template" → navigates to builder
 - **Filter/search**: by apparatus type, timing, active status
 
-### 4b. Template Builder Enhancements
+### 4b. Template Builder — Drag-and-Drop Reordering
+
+The backend already supports `reorder_compartments` and `reorder_items` endpoints.
+The builder UI has grip handles imported but no DnD wired up. Implement full
+drag-and-drop using `@dnd-kit/core` + `@dnd-kit/sortable`:
+
+**Within a compartment:**
+- Drag items up/down to reorder. On drop, call `reorderItems(compartmentId, orderedIds)`.
+- Large grip handle on the left of each item row (touch-friendly, min 44px target).
+
+**Across compartments:**
+- Drag an item from one compartment to another. On drop:
+  1. Call `deleteCheckItem(itemId)` from the source compartment
+  2. Call `addCheckItem(targetCompartmentId, itemData)` to recreate in the target
+  3. Call `reorderItems()` on both compartments to update sort_order
+- Visual indicator: when dragging over a different compartment, highlight the
+  drop zone with a dashed border.
+
+**Compartment reordering:**
+- Drag compartments up/down to reorder their position in the template.
+- On drop, call `reorderCompartments(templateId, orderedIds)`.
+
+**Compartment nesting:**
+- Drag a compartment onto another compartment to make it a sub-compartment.
+  The backend already supports `parent_compartment_id`.
+- On drop onto a compartment: call `updateCompartment(id, { parent_compartment_id })`.
+- Nested compartments render indented with a tree-line visual.
+- Drag a nested compartment to the top level to un-nest it
+  (`parent_compartment_id: null`).
+
+**Touch considerations (phone-first):**
+- Use `@dnd-kit`'s touch sensor with a 200ms delay to distinguish scroll from drag.
+- Drag handle is explicit (grip icon) — not the whole row — to prevent accidental
+  drags while scrolling.
+- On phones, the template builder uses a single-column layout with collapsible
+  compartments. Drag-and-drop works the same way but within the narrower viewport.
+
+### 4c. Template Builder — New Item Fields
 
 Update `EquipmentCheckTemplateBuilder.tsx` to support new fields:
-- Serial number field on items
-- Lot number field on items
-- Expected quantity field on items
+- Template type selector (equipment / vehicle / combined) with descriptions
+- Pre-built compartment picker for vehicle/combined templates
+- Serial number field on items (for `date_lot` type)
+- Lot number field on items (for `date_lot` type)
+- Expected quantity field on items (for `quantity` type)
+- Min level + unit fields on items (for `level` type)
 - Photo reference (optional image of the item for identification)
 
 ---
@@ -296,15 +392,29 @@ PDF templates needed:
 | Order | Phase | Scope | Depends On |
 |-------|-------|-------|------------|
 | 1 | 4a | Settings inline template list | Nothing (UI only, uses existing API) |
-| 2 | 1a | Serial/lot/qty model + migration | Nothing |
-| 3 | 4b | Template builder serial/lot fields | Phase 1a |
-| 4 | 1c | Photo attachments model + endpoint | Nothing |
-| 5 | 2a-2d | Phone-first check form | Phases 1a, 1c |
-| 6 | 1b | Inline serial update during checks | Phases 1a, 2 |
-| 7 | 1d | Apparatus deficiency flag | Phase 2 |
-| 8 | 3 | Failure notifications | Phase 1d |
-| 9 | 5d | Report backend endpoints | Phase 1d |
-| 10 | 5a-5c | Reports frontend | Phase 5d |
-| 11 | 6 | PDF/CSV export | Phase 5d |
+| 2 | 1a | Expanded check types + serial/lot/qty model + migration | Nothing |
+| 3 | 1b | Template type (equipment/vehicle/combined) + pre-built compartments | Nothing |
+| 4 | 4b | Template builder drag-and-drop (within, across, nesting) | Nothing |
+| 5 | 4c | Template builder new item fields + vehicle template picker | Phases 1a, 1b |
+| 6 | 1d | Photo attachments model + endpoint | Nothing |
+| 7 | 2a-2d | Phone-first hybrid check form (all 7 check types) | Phases 1a, 1b, 1d |
+| 8 | 1c | Inline serial update during checks | Phases 1a, 7 |
+| 9 | 1e | Apparatus deficiency flag + auto-clear | Phase 7 |
+| 10 | 3 | Failure notifications + apparatus flagging | Phase 1e |
+| 11 | 5d | Report backend endpoints | Phase 1e |
+| 12 | 5a-5c | Reports frontend (3 tabs) | Phase 5d |
+| 13 | 6 | PDF/CSV export | Phase 5d |
 
-Estimated: ~11 distinct implementation steps, each independently committable.
+Estimated: ~13 distinct implementation steps, each independently committable.
+
+---
+
+## Dependency: New npm Package
+
+Drag-and-drop requires `@dnd-kit/core` + `@dnd-kit/sortable` + `@dnd-kit/utilities`.
+These are lightweight, accessible, and touch-friendly — the standard choice for
+React DnD. Install in the frontend workspace:
+
+```bash
+cd frontend && npm install @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities
+```
