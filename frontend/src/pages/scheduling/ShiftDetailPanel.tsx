@@ -394,29 +394,45 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose, editingPositionId, editingNotesId, confirmingDecline, confirmingRemove]);
 
-  const isUserAssigned = assignments.some(a => a.user_id === user?.id);
   const shiftDate = new Date(shift.shift_date + 'T12:00:00');
   const isPast = shift.shift_date < getTodayLocalDate(tz);
+
+  // Only active (assigned/confirmed) assignments fill crew board slots and
+  // count toward staffing.  Declined, cancelled, and no-show members should
+  // leave the slot open so it can be filled by someone else.
+  const activeStatuses = new Set<string>([AssignmentStatus.ASSIGNED, AssignmentStatus.CONFIRMED]);
+  const activeAssignments = useMemo(
+    () => assignments.filter(a => activeStatuses.has(a.status || 'assigned')),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [assignments],
+  );
+  const inactiveAssignments = useMemo(
+    () => assignments.filter(a => !activeStatuses.has(a.status || 'assigned')),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [assignments],
+  );
+
+  const isUserAssigned = activeAssignments.some(a => a.user_id === user?.id);
 
   // Build crew board data: for each apparatus position, find the assignment(s) filling it
   const crewBoard = useMemo(() => {
     if (!hasApparatusPositions) return null;
     return apparatusPositions.map(position => {
-      const filled = assignments.find(a => a.position.toLowerCase() === position.toLowerCase());
+      const filled = activeAssignments.find(a => a.position.toLowerCase() === position.toLowerCase());
       return { position, assignment: filled || null };
     });
-  }, [hasApparatusPositions, apparatusPositions, assignments]);
+  }, [hasApparatusPositions, apparatusPositions, activeAssignments]);
 
-  // Assignments not matching any apparatus position (extra crew)
+  // Active assignments not matching any apparatus position (extra crew)
   const extraAssignments = useMemo(() => {
-    if (!hasApparatusPositions) return assignments;
+    if (!hasApparatusPositions) return activeAssignments;
     const boardFilledIds = new Set<string>();
     for (const pos of apparatusPositions) {
-      const match = assignments.find(a => a.position.toLowerCase() === pos.toLowerCase() && !boardFilledIds.has(a.id));
+      const match = activeAssignments.find(a => a.position.toLowerCase() === pos.toLowerCase() && !boardFilledIds.has(a.id));
       if (match) boardFilledIds.add(match.id);
     }
-    return assignments.filter(a => !boardFilledIds.has(a.id));
-  }, [hasApparatusPositions, apparatusPositions, assignments]);
+    return activeAssignments.filter(a => !boardFilledIds.has(a.id));
+  }, [hasApparatusPositions, apparatusPositions, activeAssignments]);
 
   const openPositions = crewBoard?.filter(s => !s.assignment).map(s => s.position) || [];
 
@@ -926,7 +942,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" />
                 </div>
-              ) : assignments.length === 0 ? (
+              ) : activeAssignments.length === 0 ? (
                 <div className="text-center py-6 border border-dashed border-theme-surface-border rounded-lg">
                   <Users className="w-8 h-8 text-theme-text-muted mx-auto mb-2" />
                   <p className="text-sm text-theme-text-muted">No crew assigned yet</p>
@@ -936,7 +952,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {assignments.map(renderAssignmentRow)}
+                  {activeAssignments.map(renderAssignmentRow)}
                 </div>
               )}
             </div>
@@ -1029,6 +1045,25 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
             <div className="p-3 bg-green-500/5 border border-green-500/20 rounded-lg flex items-center gap-2">
               <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
               <p className="text-sm text-green-700 dark:text-green-400">You are assigned to this shift</p>
+            </div>
+          )}
+
+          {/* Declined / Removed Members (admin visibility) */}
+          {canManage && inactiveAssignments.length > 0 && (
+            <div className="opacity-60">
+              <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wide mb-2">
+                Declined / Removed ({inactiveAssignments.length})
+              </h3>
+              <div className="space-y-1.5">
+                {inactiveAssignments.map(a => (
+                  <div key={a.id} className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border border-theme-surface-border bg-theme-surface-hover/20 text-sm">
+                    <span className="text-theme-text-muted line-through">{a.user_name || 'Unknown'}</span>
+                    <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded-full capitalize ${ASSIGNMENT_STATUS_COLORS[a.status || 'declined'] || ASSIGNMENT_STATUS_COLORS.declined}`}>
+                      {a.status || 'declined'}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
