@@ -2268,7 +2268,9 @@ class FormsService:
             .where(FormSubmission.organization_id == org_id_str)
             .where(
                 FormSubmission.submitted_at
-                >= datetime.combine(first_of_month, datetime.min.time())
+                >= datetime.combine(
+                    first_of_month, datetime.min.time(), tzinfo=timezone.utc
+                )
             )
         )
         submissions_this_month = month_subs_result.scalar()

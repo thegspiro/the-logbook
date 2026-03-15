@@ -304,7 +304,9 @@ class NotificationsService:
             .where(NotificationLog.channel == NotificationChannel.EMAIL)
             .where(
                 NotificationLog.sent_at
-                >= datetime.combine(first_of_month, datetime.min.time())
+                >= datetime.combine(
+                    first_of_month, datetime.min.time(), tzinfo=timezone.utc
+                )
             )
         )
         emails_this_month = email_result.scalar() or 0
@@ -315,7 +317,9 @@ class NotificationsService:
             .where(NotificationLog.organization_id == str(organization_id))
             .where(
                 NotificationLog.sent_at
-                >= datetime.combine(first_of_month, datetime.min.time())
+                >= datetime.combine(
+                    first_of_month, datetime.min.time(), tzinfo=timezone.utc
+                )
             )
         )
         notifications_this_month = total_notif_result.scalar() or 0

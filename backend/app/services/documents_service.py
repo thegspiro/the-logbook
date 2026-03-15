@@ -10,7 +10,7 @@ and HTTPException-style error handling rather than tuple returns).
 """
 
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 from uuid import UUID
 
@@ -778,7 +778,9 @@ class DocumentsService:
             .where(Document.organization_id == str(organization_id))
             .where(
                 Document.created_at
-                >= datetime.combine(first_of_month, datetime.min.time())
+                >= datetime.combine(
+                    first_of_month, datetime.min.time(), tzinfo=timezone.utc
+                )
             )
         )
         documents_this_month = month_result.scalar() or 0

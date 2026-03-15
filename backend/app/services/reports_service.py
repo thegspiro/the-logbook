@@ -383,11 +383,16 @@ class ReportsService:
         if start_date:
             events_query = events_query.where(
                 Event.start_datetime
-                >= datetime.combine(start_date, datetime.min.time())
+                >= datetime.combine(
+                    start_date, datetime.min.time(), tzinfo=timezone.utc
+                )
             )
         if end_date:
             events_query = events_query.where(
-                Event.start_datetime <= datetime.combine(end_date, datetime.max.time())
+                Event.start_datetime
+                <= datetime.combine(
+                    end_date, datetime.max.time(), tzinfo=timezone.utc
+                )
             )
 
         events_query = events_query.order_by(Event.start_datetime.desc())
@@ -1402,9 +1407,13 @@ class ReportsService:
             select(func.count(Event.id)).where(
                 Event.organization_id == org_id,
                 Event.start_datetime
-                >= datetime.combine(period_start, datetime.min.time()),
+                >= datetime.combine(
+                    period_start, datetime.min.time(), tzinfo=timezone.utc
+                ),
                 Event.start_datetime
-                <= datetime.combine(period_end, datetime.max.time()),
+                <= datetime.combine(
+                    period_end, datetime.max.time(), tzinfo=timezone.utc
+                ),
                 Event.is_cancelled == False,  # noqa: E712
             )
         )
@@ -1681,12 +1690,16 @@ class ReportsService:
         if start_date:
             prospect_conditions.append(
                 ProspectiveMember.created_at
-                >= datetime.combine(start_date, datetime.min.time())
+                >= datetime.combine(
+                    start_date, datetime.min.time(), tzinfo=timezone.utc
+                )
             )
         if end_date:
             prospect_conditions.append(
                 ProspectiveMember.created_at
-                <= datetime.combine(end_date, datetime.max.time())
+                <= datetime.combine(
+                    end_date, datetime.max.time(), tzinfo=timezone.utc
+                )
             )
 
         prospects_query = select(ProspectiveMember).where(*prospect_conditions)
