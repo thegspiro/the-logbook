@@ -675,4 +675,17 @@ export const schedulingService = {
     });
     return `/api/v1/equipment-checks/reports/export/csv?${searchParams.toString()}`;
   },
+  getReportPdfExportUrl(params: {
+    report_type: string;
+    date_from?: string;
+    date_to?: string;
+    apparatus_id?: string;
+    check_id?: string;
+  }): string {
+    const searchParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) searchParams.set(key, value);
+    });
+    return `/api/v1/equipment-checks/reports/export/pdf?${searchParams.toString()}`;
+  },
 };

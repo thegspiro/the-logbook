@@ -8,6 +8,7 @@ equipment check submissions.
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
@@ -665,6 +666,129 @@ async def export_csv(
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename={filename}"
+            )
+        },
+    )
+
+
+@router.get("/reports/export/pdf")
+async def export_pdf(
+    report_type: str = Query(...),
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    apparatus_id: str | None = Query(None),
+    check_id: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("equipment_check.view")
+    ),
+):
+    """Export report data as PDF."""
+    from starlette.responses import Response
+
+    from app.services.equipment_check_pdf import (
+        generate_check_detail_pdf,
+        generate_compliance_pdf,
+        generate_failure_log_pdf,
+    )
+
+    service = EquipmentCheckService(db)
+    date_from_str = date_from.isoformat() if date_from else None
+    date_to_str = date_to.isoformat() if date_to else None
+
+    if report_type == "compliance":
+        data = await service.get_compliance_report(
+            current_user.organization_id,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        pdf_bytes = generate_compliance_pdf(
+            data,
+            date_from=date_from_str,
+            date_to=date_to_str,
+        )
+        filename = "equipment_check_compliance.pdf"
+
+    elif report_type == "failures":
+        data = await service.get_failure_log(
+            current_user.organization_id,
+            date_from=date_from,
+            date_to=date_to,
+            apparatus_id=apparatus_id,
+            limit=10000,
+        )
+        pdf_bytes = generate_failure_log_pdf(
+            data,
+            date_from=date_from_str,
+            date_to=date_to_str,
+        )
+        filename = "equipment_check_failures.pdf"
+
+    elif report_type == "check-detail" and check_id:
+        check = await service.get_check(
+            check_id, current_user.organization_id
+        )
+        if not check:
+            raise HTTPException(
+                status_code=404,
+                detail="Check not found",
+            )
+        # Convert ORM to dict for the PDF generator
+        check_dict = {
+            "overall_status": check.overall_status,
+            "checked_by_name": None,
+            "checked_at": (
+                check.checked_at.isoformat()
+                if check.checked_at
+                else ""
+            ),
+            "check_timing": check.check_timing,
+            "total_items": check.total_items,
+            "completed_items": check.completed_items,
+            "failed_items": check.failed_items,
+            "notes": check.notes,
+            "items": [
+                {
+                    "item_name": i.item_name,
+                    "compartment_name": i.compartment_name,
+                    "check_type": i.check_type,
+                    "status": i.status,
+                    "notes": i.notes,
+                }
+                for i in (check.items or [])
+            ],
+        }
+        # Resolve checker name
+        if check.checked_by:
+            from app.models.user import User as UserModel
+
+            u_result = await db.execute(
+                select(UserModel).where(
+                    UserModel.id == str(check.checked_by)
+                )
+            )
+            u = u_result.scalar_one_or_none()
+            if u:
+                first = u.first_name or ""
+                last = u.last_name or ""
+                check_dict["checked_by_name"] = (
+                    f"{first} {last}".strip() or "Unknown"
+                )
+        pdf_bytes = generate_check_detail_pdf(check_dict)
+        filename = f"equipment_check_{check_id[:8]}.pdf"
+
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid report_type",
+        )
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
         headers={
             "Content-Disposition": (
                 f"attachment; filename={filename}"

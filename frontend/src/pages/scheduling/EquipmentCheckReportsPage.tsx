@@ -2,7 +2,7 @@
  * Equipment Check Reports Page
  *
  * Three-tab reports page: Compliance Dashboard, Failure/Deficiency Log,
- * and Item Trend History. Includes CSV export support.
+ * and Item Trend History. Includes CSV and PDF export support.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   TrendingUp,
   Download,
+  FileText,
   Loader2,
   Search,
   ArrowLeft,
@@ -160,8 +161,17 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
     void load();
   }, [startDate, endDate]);
 
-  const handleExport = () => {
+  const handleExportCsv = () => {
     const url = schedulingService.getReportExportUrl({
+      report_type: 'compliance',
+      date_from: startDate,
+      date_to: endDate,
+    });
+    window.open(url, '_blank');
+  };
+
+  const handleExportPdf = () => {
+    const url = schedulingService.getReportPdfExportUrl({
       report_type: 'compliance',
       date_from: startDate,
       date_to: endDate,
@@ -194,12 +204,18 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
       </div>
 
       {/* Export */}
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
         <button
-          onClick={handleExport}
+          onClick={handleExportCsv}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-theme-surface border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover text-theme-text-secondary"
         >
-          <Download className="w-3.5 h-3.5" /> Export CSV
+          <Download className="w-3.5 h-3.5" /> CSV
+        </button>
+        <button
+          onClick={handleExportPdf}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-theme-surface border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover text-theme-text-secondary"
+        >
+          <FileText className="w-3.5 h-3.5" /> PDF
         </button>
       </div>
 
@@ -343,8 +359,17 @@ const FailuresTab: React.FC<{ startDate: string; endDate: string; tz: string }> 
     setPage(1);
   }, [startDate, endDate, searchTerm]);
 
-  const handleExport = () => {
+  const handleExportCsv = () => {
     const url = schedulingService.getReportExportUrl({
+      report_type: 'failures',
+      date_from: startDate,
+      date_to: endDate,
+    });
+    window.open(url, '_blank');
+  };
+
+  const handleExportPdf = () => {
+    const url = schedulingService.getReportPdfExportUrl({
       report_type: 'failures',
       date_from: startDate,
       date_to: endDate,
@@ -367,10 +392,16 @@ const FailuresTab: React.FC<{ startDate: string; endDate: string; tz: string }> 
           />
         </div>
         <button
-          onClick={handleExport}
+          onClick={handleExportCsv}
           className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-theme-surface border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover text-theme-text-secondary"
         >
-          <Download className="w-3.5 h-3.5" /> Export CSV
+          <Download className="w-3.5 h-3.5" /> CSV
+        </button>
+        <button
+          onClick={handleExportPdf}
+          className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-theme-surface border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover text-theme-text-secondary"
+        >
+          <FileText className="w-3.5 h-3.5" /> PDF
         </button>
       </div>
 
