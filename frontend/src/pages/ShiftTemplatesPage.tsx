@@ -456,13 +456,13 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
       if (formData.color) payload.color = formData.color;
       if (formData.apparatus_type) payload.apparatus_type = formData.apparatus_type;
       if (formData.apparatus_id) payload.apparatus_id = formData.apparatus_id;
-      // Store event metadata in description as JSON-serializable format
+      // Store event metadata alongside flat positions for backend compatibility
       if (formData.category === 'event') {
         const eventMeta = {
           event_type: formData.event_type || 'other',
           resources: formData.resources,
+          flat_positions: effectivePositions.length > 0 ? effectivePositions : [],
         };
-        // Store in positions field as structured data for backend compatibility
         payload.positions = eventMeta;
       }
       await onSubmit(payload);

@@ -55,6 +55,36 @@ class SchedulingService:
         self.db = db
 
     # ============================================
+    # Position Helpers
+    # ============================================
+
+    @staticmethod
+    def _resolve_template_positions(positions: Any) -> Optional[List[str]]:
+        """Extract a flat list of position strings from a template's positions
+        field, which may be a plain list (standard/specialty templates) or an
+        event metadata dict containing flat_positions / resources."""
+        if positions is None:
+            return None
+        if isinstance(positions, list):
+            return positions if positions else None
+        if isinstance(positions, dict):
+            # New format: event metadata with pre-computed flat_positions
+            flat = positions.get("flat_positions")
+            if isinstance(flat, list) and flat:
+                return flat
+            # Legacy format: compute from resources
+            resources = positions.get("resources")
+            if isinstance(resources, list):
+                result: List[str] = []
+                for r in resources:
+                    qty = r.get("quantity", 1) if isinstance(r, dict) else 1
+                    pos = r.get("positions", []) if isinstance(r, dict) else []
+                    for _ in range(qty):
+                        result.extend(pos)
+                return result if result else None
+        return None
+
+    # ============================================
     # Enrichment Helpers
     # ============================================
 
@@ -95,7 +125,9 @@ class SchedulingService:
     ) -> Dict[str, Any]:
         """Add apparatus details, min_staffing, and shift officer name to a shift dict."""
         aid = shift_dict.get("apparatus_id")
-        shift_positions = shift_dict.get("positions") or []
+        shift_positions = self._resolve_template_positions(
+            shift_dict.get("positions")
+        ) or []
         if aid and aid in apparatus_map:
             a = apparatus_map[aid]
             shift_dict["apparatus_name"] = a.name
@@ -1072,7 +1104,9 @@ class SchedulingService:
                     end_time=shift_end,
                     apparatus_id=getattr(template, "apparatus_id", None),
                     color=shift_color,
-                    positions=getattr(template, "positions", None),
+                    positions=self._resolve_template_positions(
+                        getattr(template, "positions", None)
+                    ),
                     min_staffing=getattr(template, "min_staffing", None),
                     created_by=created_by,
                 )
@@ -1981,7 +2015,9 @@ class SchedulingService:
             # Resolve apparatus details
             apparatus_name = None
             apparatus_unit_number = None
-            shift_positions = shift.positions or []
+            shift_positions = self._resolve_template_positions(
+                shift.positions
+            ) or []
             apparatus_positions = shift_positions
             if shift.apparatus_id and shift.apparatus_id in apparatus_map:
                 app = apparatus_map[shift.apparatus_id]
