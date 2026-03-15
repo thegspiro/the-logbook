@@ -87,7 +87,7 @@ const ConfigurationTab: React.FC = () => {
                   <span className="text-sm font-mono text-theme-text-secondary">{origin}</span>
                   <button
                     onClick={() => handleRemoveOrigin(origin)}
-                    className="text-red-600 hover:text-red-800"
+                    className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
                   >
                     <X className="w-4 h-4" />
                   </button>

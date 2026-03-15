@@ -186,7 +186,7 @@ export const LoginPage: React.FC = () => {
 
         <form className="mt-8 space-y-6" onSubmit={(e) => { void handleSubmit(e); }} aria-label="Sign in form">
           {(location.state as { reason?: string })?.reason === 'timeout' && (
-            <div className="rounded-md bg-yellow-50 border border-yellow-200 p-4" role="alert" aria-live="polite">
+            <div className="rounded-md bg-yellow-50 border border-yellow-200 dark:bg-yellow-500/10 dark:border-yellow-500/30 p-4" role="alert" aria-live="polite">
               <div className="flex">
                 <div className="shrink-0">
                   <svg className="h-5 w-5 text-yellow-700 dark:text-yellow-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -194,7 +194,7 @@ export const LoginPage: React.FC = () => {
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <p className="text-sm font-medium text-yellow-800">
+                  <p className="text-sm font-medium text-yellow-800 dark:text-yellow-400">
                     Your session has expired due to inactivity. Please sign in again.
                   </p>
                 </div>
@@ -203,7 +203,7 @@ export const LoginPage: React.FC = () => {
           )}
 
           {error?.trim() && (
-            <div className="rounded-md bg-red-50 p-4" role="alert" aria-live="assertive">
+            <div className="rounded-md bg-red-50 dark:bg-red-500/10 p-4" role="alert" aria-live="assertive">
               <div className="flex">
                 <div className="shrink-0">
                   <svg className="h-5 w-5 text-red-700 dark:text-red-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -211,7 +211,7 @@ export const LoginPage: React.FC = () => {
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <p className="text-sm font-medium text-red-800">
+                  <p className="text-sm font-medium text-red-800 dark:text-red-400">
                     {error}
                   </p>
                 </div>
@@ -279,8 +279,8 @@ export const LoginPage: React.FC = () => {
           </div>
 
           {lockoutRemaining > 0 && (
-            <div className="rounded-md bg-yellow-50 border border-yellow-200 p-4" role="alert" aria-live="polite">
-              <p className="text-sm font-medium text-yellow-800">
+            <div className="rounded-md bg-yellow-50 border border-yellow-200 dark:bg-yellow-500/10 dark:border-yellow-500/30 p-4" role="alert" aria-live="polite">
+              <p className="text-sm font-medium text-yellow-800 dark:text-yellow-400">
                 Too many failed attempts. Please wait {lockoutRemaining} second{lockoutRemaining !== 1 ? 's' : ''} before trying again.
               </p>
             </div>

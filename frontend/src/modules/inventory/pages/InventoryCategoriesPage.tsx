@@ -335,7 +335,7 @@ const ToggleSwitch: React.FC<ToggleSwitchProps> = ({ id, label, checked, onChang
       <input id={id} type="checkbox" checked={checked}
         onChange={(e) => onChange(e.target.checked)} className="sr-only peer" />
       <div className="w-9 h-5 rounded-full bg-theme-surface-border peer-checked:bg-blue-500 transition-colors" />
-      <div className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform peer-checked:translate-x-4" />
+      <div className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white dark:bg-gray-200 shadow transition-transform peer-checked:translate-x-4" />
     </div>
   </label>
 );

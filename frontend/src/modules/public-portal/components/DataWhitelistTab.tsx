@@ -223,7 +223,7 @@ export const DataWhitelistTab: React.FC = () => {
             </svg>
           </div>
           <div className="ml-3">
-            <p className="text-sm text-yellow-700">
+            <p className="text-sm text-yellow-700 dark:text-yellow-400">
               <strong>Privacy Notice:</strong> Only enable fields that are intended for public consumption.
               Fields marked as PII contain personally identifiable information and should be carefully reviewed
               before enabling.
@@ -245,7 +245,7 @@ export const DataWhitelistTab: React.FC = () => {
               <p className="text-sm text-theme-text-secondary">Total Fields</p>
               <p className="text-2xl font-semibold text-theme-text-primary">{totalFields}</p>
             </div>
-            <div className="p-3 bg-blue-100 rounded-lg">
+            <div className="p-3 bg-blue-100 dark:bg-blue-500/20 rounded-lg">
               <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
               </svg>
@@ -264,7 +264,7 @@ export const DataWhitelistTab: React.FC = () => {
                 </span>
               </p>
             </div>
-            <div className="p-3 bg-green-100 rounded-lg">
+            <div className="p-3 bg-green-100 dark:bg-green-500/20 rounded-lg">
               <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>

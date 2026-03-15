@@ -297,7 +297,7 @@ export const UsageStatsTab: React.FC = () => {
 
       {/* Alerts */}
       {((stats.error_rate_percentage ?? 0) > 5 || (stats.flagged_suspicious_24h ?? 0) > 10 || (stats.rate_limit_hits_24h ?? 0) > 50) && (
-        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+        <div className="bg-yellow-50 dark:bg-yellow-500/10 border-l-4 border-yellow-400 p-4">
           <div className="flex">
             <div className="shrink-0">
               <svg className="h-5 w-5 text-yellow-700 dark:text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
@@ -305,8 +305,8 @@ export const UsageStatsTab: React.FC = () => {
               </svg>
             </div>
             <div className="ml-3">
-              <h3 className="text-sm font-medium text-yellow-800">Attention Required</h3>
-              <div className="mt-2 text-sm text-yellow-700">
+              <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-400">Attention Required</h3>
+              <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-400">
                 <ul className="list-disc list-inside space-y-1">
                   {(stats.error_rate_percentage ?? 0) > 5 && (
                     <li>High error rate detected ({(stats.error_rate_percentage ?? 0).toFixed(2)}%)</li>

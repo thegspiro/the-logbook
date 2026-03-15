@@ -1051,22 +1051,22 @@ export const EventDetailPage: React.FC = () => {
 
                     {event.custom_fields.issues_certification && (
                       <div className="col-span-2">
-                        <div className="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <div className="flex items-center p-3 bg-green-50 border border-green-200 dark:bg-green-500/10 dark:border-green-500/30 rounded-lg">
                           <svg className="h-5 w-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          <span className="text-sm font-medium text-green-800">This training issues a certification upon completion</span>
+                          <span className="text-sm font-medium text-green-800 dark:text-green-400">This training issues a certification upon completion</span>
                         </div>
                       </div>
                     )}
 
                     {event.custom_fields.auto_create_records && (
                       <div className="col-span-2">
-                        <div className="flex items-center p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-center p-3 bg-blue-50 border border-blue-200 dark:bg-blue-500/10 dark:border-blue-500/30 rounded-lg">
                           <svg className="h-5 w-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                           </svg>
-                          <span className="text-sm font-medium text-blue-800">Training records are automatically created when members check in</span>
+                          <span className="text-sm font-medium text-blue-800 dark:text-blue-400">Training records are automatically created when members check in</span>
                         </div>
                       </div>
                     )}
@@ -1456,8 +1456,8 @@ export const EventDetailPage: React.FC = () => {
                 <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <h3 id="cancel-event-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">Cancel Event</h3>
 
-                  <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                    <p className="text-sm text-yellow-800">
+                  <div className="mb-4 bg-yellow-50 border border-yellow-200 dark:bg-yellow-500/10 dark:border-yellow-500/30 rounded-lg p-3">
+                    <p className="text-sm text-yellow-800 dark:text-yellow-400">
                       This action cannot be undone. The event will be marked as cancelled.
                     </p>
                   </div>
@@ -2023,7 +2023,7 @@ export const EventDetailPage: React.FC = () => {
             <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full relative z-10">
               <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                 <div className="sm:flex sm:items-start">
-                  <div className="mx-auto shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                  <div className="mx-auto shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-500/20 sm:mx-0 sm:h-10 sm:w-10">
                     <svg className="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
                     </svg>

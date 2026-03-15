@@ -8,7 +8,7 @@ import React from 'react';
 
 export const PrivacyNotice: React.FC = () => {
   return (
-    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6" role="note">
+    <div className="bg-blue-50 border border-blue-200 dark:bg-blue-500/10 dark:border-blue-500/30 rounded-lg p-4 mb-6" role="note">
       <div className="flex items-start">
         <div className="shrink-0">
           <svg
@@ -25,7 +25,7 @@ export const PrivacyNotice: React.FC = () => {
           </svg>
         </div>
         <div className="ml-3">
-          <h3 className="text-sm font-medium text-blue-800">
+          <h3 className="text-sm font-medium text-blue-800 dark:text-blue-400">
             Contact Information Privacy Notice
           </h3>
           <div className="mt-2 text-sm text-blue-700">

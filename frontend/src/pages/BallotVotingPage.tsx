@@ -211,7 +211,7 @@ export const BallotVotingPage: React.FC = () => {
     return (
       <div className="min-h-screen bg-theme-surface-secondary flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-theme-surface rounded-lg shadow-lg p-8 text-center">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 bg-green-100 dark:bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
@@ -308,7 +308,7 @@ export const BallotVotingPage: React.FC = () => {
                   {isApprovalType ? (
                     <>
                       {/* Approve */}
-                      <label className="flex items-center gap-3 p-3 rounded-lg border border-theme-surface-border cursor-pointer hover:bg-green-50 hover:border-green-300 transition-colors">
+                      <label className="flex items-center gap-3 p-3 rounded-lg border border-theme-surface-border cursor-pointer hover:bg-green-50 dark:hover:bg-green-500/10 hover:border-green-300 transition-colors">
                         <input
                           type="radio"
                           name={`item-${item.id}`}
@@ -320,7 +320,7 @@ export const BallotVotingPage: React.FC = () => {
                       </label>
 
                       {/* Deny */}
-                      <label className="flex items-center gap-3 p-3 rounded-lg border border-theme-surface-border cursor-pointer hover:bg-red-50 hover:border-red-300 transition-colors">
+                      <label className="flex items-center gap-3 p-3 rounded-lg border border-theme-surface-border cursor-pointer hover:bg-red-50 dark:hover:bg-red-500/10 hover:border-red-300 transition-colors">
                         <input
                           type="radio"
                           name={`item-${item.id}`}
@@ -337,7 +337,7 @@ export const BallotVotingPage: React.FC = () => {
                       {itemCandidates.map((candidate) => (
                         <label
                           key={candidate.id}
-                          className="flex items-center gap-3 p-3 rounded-lg border border-theme-surface-border cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                          className="flex items-center gap-3 p-3 rounded-lg border border-theme-surface-border cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-500/10 hover:border-blue-300 transition-colors"
                         >
                           <input
                             type="radio"
@@ -362,8 +362,8 @@ export const BallotVotingPage: React.FC = () => {
                     <div
                       className={`p-3 rounded-lg border transition-colors ${
                         itemChoice?.choice === 'write_in'
-                          ? 'border-purple-300 bg-purple-50'
-                          : 'border-theme-surface-border hover:bg-purple-50 hover:border-purple-300'
+                          ? 'border-purple-300 bg-purple-50 dark:border-purple-500/30 dark:bg-purple-500/10'
+                          : 'border-theme-surface-border hover:bg-purple-50 dark:hover:bg-purple-500/10 hover:border-purple-300'
                       }`}
                     >
                       <label className="flex items-center gap-3 cursor-pointer">
@@ -455,7 +455,7 @@ export const BallotVotingPage: React.FC = () => {
                     <div
                       key={item.id}
                       className={`flex items-start gap-3 p-3 rounded-lg ${
-                        isAbstain ? 'bg-theme-surface-secondary' : 'bg-blue-50'
+                        isAbstain ? 'bg-theme-surface-secondary' : 'bg-blue-50 dark:bg-blue-500/10'
                       }`}
                     >
                       <span className="shrink-0 w-6 h-6 bg-theme-surface-secondary text-theme-text-secondary rounded-full flex items-center justify-center text-xs font-bold">

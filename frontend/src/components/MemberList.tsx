@@ -115,7 +115,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
                       {member.email ? (
                         <a
                           href={`mailto:${member.email}`}
-                          className="text-blue-600 hover:text-blue-800"
+                          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                         >
                           {member.email}
                         </a>
@@ -129,7 +129,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
                       {member.phone ? (
                         <a
                           href={`tel:${member.phone}`}
-                          className="text-blue-600 hover:text-blue-800"
+                          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                         >
                           {member.phone}
                         </a>
@@ -143,7 +143,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
                       {member.mobile ? (
                         <a
                           href={`tel:${member.mobile}`}
-                          className="text-blue-600 hover:text-blue-800"
+                          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                         >
                           {member.mobile}
                         </a>

@@ -85,7 +85,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
         </div>
         <Link
           to={`/events/${eventId}`}
-          className="text-blue-600 hover:text-blue-800"
+          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
         >
           ← Back to Event
         </Link>
@@ -99,7 +99,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
         <p className="text-theme-text-secondary">No monitoring data available</p>
         <Link
           to={`/events/${eventId}`}
-          className="text-blue-600 hover:text-blue-800 mt-4 inline-block"
+          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 mt-4 inline-block"
         >
           ← Back to Event
         </Link>
@@ -113,7 +113,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
       <div className="mb-6">
         <Link
           to={`/events/${eventId}`}
-          className="text-blue-600 hover:text-blue-800 mb-4 inline-block"
+          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 mb-4 inline-block"
         >
           ← Back to Event
         </Link>

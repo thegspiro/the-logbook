@@ -610,7 +610,7 @@ export const ElectionsPage: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => removePosition(position)}
-                            className="ml-2 text-blue-600 hover:text-blue-800"
+                            className="ml-2 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                             aria-label={`Remove position ${position}`}
                           >
                             <span aria-hidden="true">×</span>

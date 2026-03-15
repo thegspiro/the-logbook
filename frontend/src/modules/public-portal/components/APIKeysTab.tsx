@@ -452,7 +452,7 @@ export const APIKeysTab: React.FC = () => {
                     {key.is_active && (
                       <button
                         onClick={() => setRevokeTarget({ id: key.id, name: key.name })}
-                        className="text-red-600 hover:text-red-900"
+                        className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
                       >
                         Revoke
                       </button>

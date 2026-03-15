@@ -281,7 +281,7 @@ export const AccessLogsTab: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button
                           onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}
-                          className="text-blue-600 hover:text-blue-900"
+                          className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300"
                         >
                           {expandedLog === log.id ? 'Hide' : 'Details'}
                         </button>
