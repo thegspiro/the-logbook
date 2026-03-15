@@ -24,7 +24,7 @@ interface ApparatusTypeDefaultsCardProps {
     name: string;
     unit_number: string;
     apparatus_type: string;
-    positions?: string[];
+    positions?: string[] | undefined;
   }>;
 }
 

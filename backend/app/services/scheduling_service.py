@@ -61,30 +61,71 @@ class SchedulingService:
     # ============================================
 
     @staticmethod
-    def _resolve_template_positions(positions: Any) -> Optional[List[str]]:
-        """Extract a flat list of position strings from a template's positions
-        field, which may be a plain list (standard/specialty templates) or an
-        event metadata dict containing flat_positions / resources."""
-        if positions is None:
-            return None
+    def normalize_positions(
+        positions: Any,
+    ) -> List[Dict[str, Any]]:
+        """Convert any legacy position format to structured PositionSlot dicts.
+
+        Supported inputs:
+        - ``None`` → ``[]``
+        - ``["officer", "emt"]`` → ``[{"position": "officer", "required": True}, ...]``
+        - ``[{"position": "officer", "required": True}, ...]`` → pass-through
+        - Event metadata dicts (flat_positions / resources) → expanded
+        """
+        if not positions:
+            return []
+        # Already structured list
         if isinstance(positions, list):
-            return positions if positions else None
+            out: List[Dict[str, Any]] = []
+            for p in positions:
+                if isinstance(p, str):
+                    out.append({"position": p, "required": True})
+                elif isinstance(p, dict) and "position" in p:
+                    out.append(
+                        {
+                            "position": p["position"],
+                            "required": p.get("required", True),
+                        }
+                    )
+                # Skip unrecognised entries silently
+            return out
+        # Event metadata dict
         if isinstance(positions, dict):
-            # New format: event metadata with pre-computed flat_positions
             flat = positions.get("flat_positions")
             if isinstance(flat, list) and flat:
-                return flat
-            # Legacy format: compute from resources
+                return [
+                    {"position": p, "required": True} for p in flat
+                ]
             resources = positions.get("resources")
             if isinstance(resources, list):
-                result: List[str] = []
+                result: List[Dict[str, Any]] = []
                 for r in resources:
-                    qty = r.get("quantity", 1) if isinstance(r, dict) else 1
-                    pos = r.get("positions", []) if isinstance(r, dict) else []
+                    qty = (
+                        r.get("quantity", 1) if isinstance(r, dict) else 1
+                    )
+                    pos_list = (
+                        r.get("positions", [])
+                        if isinstance(r, dict)
+                        else []
+                    )
                     for _ in range(qty):
-                        result.extend(pos)
-                return result if result else None
-        return None
+                        for name in pos_list:
+                            result.append(
+                                {"position": name, "required": True}
+                            )
+                return result
+        return []
+
+    @staticmethod
+    def _resolve_template_positions(positions: Any) -> Optional[List[str]]:
+        """Extract a flat list of position strings (legacy helper).
+
+        Delegates to ``normalize_positions`` and strips structure.
+        """
+        slots = SchedulingService.normalize_positions(positions)
+        if not slots:
+            return None
+        return [s["position"] for s in slots]
 
     # ============================================
     # Enrichment Helpers
@@ -127,27 +168,34 @@ class SchedulingService:
     ) -> Dict[str, Any]:
         """Add apparatus details, min_staffing, and shift officer name to a shift dict."""
         aid = shift_dict.get("apparatus_id")
-        shift_positions = self._resolve_template_positions(
+        # Normalize positions to structured format
+        shift_slots = self.normalize_positions(
             shift_dict.get("positions")
-        ) or []
+        )
+        shift_dict["positions"] = shift_slots or None
         if aid and aid in apparatus_map:
             a = apparatus_map[aid]
             shift_dict["apparatus_name"] = a.name
             shift_dict["apparatus_unit_number"] = a.unit_number
-            shift_dict["apparatus_positions"] = a.positions or shift_positions
+            app_slots = self.normalize_positions(a.positions)
+            shift_dict["apparatus_positions"] = (
+                app_slots or shift_slots or None
+            )
             if shift_dict.get("min_staffing") is None:
                 shift_dict["min_staffing"] = a.min_staffing
         else:
             shift_dict["apparatus_name"] = None
             shift_dict["apparatus_unit_number"] = None
-            shift_dict["apparatus_positions"] = shift_positions
+            shift_dict["apparatus_positions"] = shift_slots or None
             if shift_dict.get("min_staffing") is None:
                 shift_dict["min_staffing"] = None
 
         # Resolve shift officer name
         officer_id = shift_dict.get("shift_officer_id")
         if officer_id and user_name_map:
-            shift_dict["shift_officer_name"] = user_name_map.get(str(officer_id))
+            shift_dict["shift_officer_name"] = user_name_map.get(
+                str(officer_id)
+            )
         elif "shift_officer_name" not in shift_dict:
             shift_dict["shift_officer_name"] = None
 
@@ -1348,12 +1396,30 @@ class SchedulingService:
             if not assignment:
                 return None, "Shift assignment not found"
 
+            old_status = assignment.assignment_status
+            position = assignment.position
+
             for key, value in update_data.items():
                 if key not in self.PROTECTED_FIELDS:
                     setattr(assignment, key, value)
 
             await self.db.commit()
             await self.db.refresh(assignment)
+
+            # Fire decline notification if status changed to declined
+            new_status = assignment.assignment_status
+            if (
+                old_status != AssignmentStatus.DECLINED
+                and new_status == AssignmentStatus.DECLINED
+            ):
+                await self._notify_shift_decline(
+                    shift_id=assignment.shift_id,
+                    user_id=assignment.user_id,
+                    position=str(position or ""),
+                    organization_id=organization_id,
+                    action="declined",
+                )
+
             return assignment, None
         except Exception as e:
             await self.db.rollback()
@@ -1373,8 +1439,23 @@ class SchedulingService:
             if not assignment:
                 return False, "Shift assignment not found"
 
+            # Capture info before deletion for notification
+            shift_id = assignment.shift_id
+            user_id = assignment.user_id
+            position = str(assignment.position or "")
+
             await self.db.delete(assignment)
             await self.db.commit()
+
+            # Fire removal notification
+            await self._notify_shift_decline(
+                shift_id=shift_id,
+                user_id=user_id,
+                position=position,
+                organization_id=organization_id,
+                action="removed",
+            )
+
             return True, None
         except Exception as e:
             await self.db.rollback()
@@ -1408,6 +1489,163 @@ class SchedulingService:
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
+
+    # ============================================
+    # Shift Decline / Drop Notifications
+    # ============================================
+
+    async def _notify_shift_decline(
+        self,
+        shift_id: str,
+        user_id: str,
+        position: str,
+        organization_id: UUID,
+        action: str = "declined",
+    ) -> None:
+        """Send in-app (and optionally email) notifications when a
+        member declines or is removed from a shift.
+
+        Reads ``org.settings["scheduling"]`` to decide who to notify
+        and whether to send email.  Failures are logged but never
+        propagated — the caller should not fail because of a
+        notification error.
+        """
+        from loguru import logger
+
+        try:
+            # Load org + settings
+            org_result = await self.db.execute(
+                select(Organization).where(
+                    Organization.id == str(organization_id)
+                )
+            )
+            org = org_result.scalar_one_or_none()
+            if not org:
+                return
+
+            sched_cfg = (org.settings or {}).get("scheduling", {})
+            if not sched_cfg.get("notify_on_decline", True):
+                return
+
+            # Load shift
+            shift_result = await self.db.execute(
+                select(Shift).where(Shift.id == str(shift_id))
+            )
+            shift = shift_result.scalar_one_or_none()
+            if not shift:
+                return
+
+            # Load user who declined
+            user_result = await self.db.execute(
+                select(User).where(User.id == str(user_id))
+            )
+            declined_user = user_result.scalar_one_or_none()
+            user_name = "Unknown"
+            if declined_user:
+                first = declined_user.first_name or ""
+                last = declined_user.last_name or ""
+                user_name = f"{first} {last}".strip() or "Unknown"
+
+            # Collect recipient user IDs
+            recipient_ids: set[str] = set()
+
+            # Shift officer
+            if sched_cfg.get("notify_shift_officer", True):
+                if shift.shift_officer_id:
+                    recipient_ids.add(str(shift.shift_officer_id))
+
+            # Users with matching roles
+            notify_roles = sched_cfg.get("notify_roles", [])
+            if notify_roles:
+                from app.models.user import Role, user_positions
+
+                role_result = await self.db.execute(
+                    select(user_positions.c.user_id)
+                    .join(
+                        Role,
+                        Role.id == user_positions.c.position_id,
+                    )
+                    .where(
+                        Role.organization_id == str(organization_id),
+                        Role.slug.in_(notify_roles),
+                    )
+                )
+                for row in role_result.all():
+                    recipient_ids.add(str(row[0]))
+
+            # Don't notify the user who declined
+            recipient_ids.discard(str(user_id))
+            if not recipient_ids:
+                return
+
+            from app.core.utils import generate_uuid
+            from app.models.notification import NotificationLog
+
+            shift_date_str = (
+                shift.shift_date.isoformat()
+                if shift.shift_date
+                else "unknown date"
+            )
+            message = (
+                f"{user_name} {action} the {position} position "
+                f"on the {shift_date_str} shift. "
+                f"This position is now open."
+            )
+
+            for rid in recipient_ids:
+                notif = NotificationLog(
+                    id=generate_uuid(),
+                    organization_id=str(organization_id),
+                    user_id=rid,
+                    channel="in_app",
+                    notification_type="shift_decline",
+                    subject="Shift Coverage Needed",
+                    body=message,
+                )
+                self.db.add(notif)
+            await self.db.flush()
+
+            # Optional email
+            if sched_cfg.get("send_email", False):
+                try:
+                    from app.services.email_service import EmailService
+
+                    recipient_result = await self.db.execute(
+                        select(User.email).where(
+                            User.id.in_(list(recipient_ids)),
+                            User.email.isnot(None),
+                        )
+                    )
+                    to_emails = [
+                        r[0] for r in recipient_result.all() if r[0]
+                    ]
+                    cc_emails = sched_cfg.get("cc_emails", [])
+                    if to_emails:
+                        email_svc = EmailService(organization=org)
+                        subject = (
+                            f"Shift Coverage Needed \u2014 "
+                            f"{position} on {shift_date_str}"
+                        )
+                        html_body = (
+                            f"<p>{message}</p>"
+                            f"<p>Please log in to the scheduling "
+                            f"module to assign a replacement.</p>"
+                        )
+                        await email_svc.send_email(
+                            to_emails=to_emails,
+                            subject=subject,
+                            html_body=html_body,
+                            cc_emails=cc_emails or None,
+                            db=self.db,
+                            template_type="shift_decline",
+                        )
+                except Exception as email_err:
+                    logger.warning(
+                        f"Shift decline email failed: {email_err}"
+                    )
+
+        except Exception as e:
+            logger.warning(f"Shift decline notification failed: {e}")
 
     # ============================================
     # Shift Swap Request Management
@@ -1873,13 +2111,43 @@ class SchedulingService:
                 total_assigned += assigned_count
                 total_confirmed += confirmed_count
 
-                # Use apparatus min_staffing if available, else default to 1
-                min_staff = (
-                    apparatus_min_staffing.get(shift.apparatus_id, 1)
-                    if shift.apparatus_id
-                    else 1
-                )
-                if assigned_count < min_staff:
+                # Check staffing: use required positions when available,
+                # otherwise fall back to min_staffing headcount.
+                slots = self.normalize_positions(shift.positions)
+                required_slots = [
+                    s for s in slots if s.get("required", True)
+                ]
+                if required_slots:
+                    # Count how many required positions are filled
+                    active_pos = [
+                        a.position.value
+                        if hasattr(a.position, "value")
+                        else str(a.position)
+                        for a in active
+                    ]
+                    unfilled = 0
+                    pos_pool = list(active_pos)
+                    for slot in required_slots:
+                        slot_name = slot["position"].lower()
+                        matched = False
+                        for idx, ap in enumerate(pos_pool):
+                            if ap.lower() == slot_name:
+                                pos_pool.pop(idx)
+                                matched = True
+                                break
+                        if not matched:
+                            unfilled += 1
+                    is_understaffed = unfilled > 0
+                else:
+                    min_staff = (
+                        apparatus_min_staffing.get(
+                            shift.apparatus_id, 1
+                        )
+                        if shift.apparatus_id
+                        else 1
+                    )
+                    is_understaffed = assigned_count < min_staff
+                if is_understaffed:
                     understaffed_shifts += 1
 
             report.append(

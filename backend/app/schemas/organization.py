@@ -282,6 +282,35 @@ class FileStorageSettings(BaseModel):
         )
 
 
+class SchedulingNotificationSettings(BaseModel):
+    """Configuration for shift scheduling notifications.
+
+    Controls who gets notified when a member declines or is removed
+    from a shift, and whether email notifications are sent.
+    """
+
+    notify_on_decline: bool = Field(
+        default=True,
+        description="Send notifications when a member declines/drops a shift",
+    )
+    notify_roles: List[str] = Field(
+        default_factory=lambda: ["chief", "deputy_chief", "captain"],
+        description="Role slugs whose holders receive shift decline notifications",
+    )
+    notify_shift_officer: bool = Field(
+        default=True,
+        description="Also notify the shift officer (if assigned)",
+    )
+    send_email: bool = Field(
+        default=False,
+        description="Send email in addition to in-app notifications",
+    )
+    cc_emails: List[str] = Field(
+        default_factory=list,
+        description="Additional email addresses to CC on decline emails",
+    )
+
+
 class MemberDropNotificationSettings(BaseModel):
     """
     Configuration for notifications sent when a member is dropped.
@@ -628,6 +657,10 @@ class OrganizationSettings(BaseModel):
         default_factory=ITTeamSettings,
         description="IT team members and backup access configuration",
     )
+    scheduling: SchedulingNotificationSettings = Field(
+        default_factory=SchedulingNotificationSettings,
+        description="Scheduling module notification settings",
+    )
     member_drop_notifications: MemberDropNotificationSettings = Field(
         default_factory=MemberDropNotificationSettings,
         description="Configuration for drop/separation notifications (CC, personal email, template)",
@@ -680,6 +713,7 @@ class OrganizationSettingsUpdate(BaseModel):
     auth: Optional[AuthSettings] = None
     modules: Optional[ModuleSettingsUpdate] = None
     it_team: Optional[ITTeamSettings] = None
+    scheduling: Optional[SchedulingNotificationSettings] = None
     member_drop_notifications: Optional[MemberDropNotificationSettings] = None
     membership_tiers: Optional[MembershipTierSettings] = None
     membership_id: Optional[MembershipIdSettings] = None

@@ -216,7 +216,10 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                               className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500"
                             >
                               {(shift.apparatus_positions && shift.apparatus_positions.length > 0
-                                ? shift.apparatus_positions.map(p => [p, POSITION_LABELS[p] || p.charAt(0).toUpperCase() + p.slice(1)] as const)
+                                ? shift.apparatus_positions.map(p => {
+                                    const name = typeof p === 'string' ? p : p.position;
+                                    return [name, POSITION_LABELS[name] || name.charAt(0).toUpperCase() + name.slice(1)] as const;
+                                  })
                                 : Object.entries(POSITION_LABELS)
                               ).map(([val, label]) => (
                                 <option key={val} value={val}>{label}</option>

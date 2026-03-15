@@ -34,7 +34,7 @@ interface ShiftSettingsPanelProps {
     name: string;
     unit_number: string;
     apparatus_type: string;
-    positions?: string[];
+    positions?: Array<string | { position: string; required?: boolean }> | undefined;
   }>;
   onNavigateToTemplates: () => void;
 }
@@ -58,6 +58,15 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
     }
   });
   const [saved, setSaved] = useState(false);
+
+  // Normalize apparatus positions to flat strings for child components
+  const normalizedApparatusList = useMemo(() =>
+    apparatusList.map(a => ({
+      ...a,
+      positions: a.positions?.map(p => typeof p === 'string' ? p : p.position),
+    })),
+    [apparatusList],
+  );
 
   // All position options (built-in + custom)
   const allPositionOptions = useMemo(() => {
@@ -101,7 +110,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
         settings={settings}
         onSettingsChange={setSettings}
         allPositionOptions={allPositionOptions}
-        apparatusList={apparatusList}
+        apparatusList={normalizedApparatusList}
       />
 
       {/* Event Resource Type Defaults */}
@@ -116,14 +125,14 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
         <h3 className="text-base font-semibold text-theme-text-primary mb-3">
           Apparatus Inventory
         </h3>
-        {apparatusList.length === 0 ? (
+        {normalizedApparatusList.length === 0 ? (
           <p className="text-sm text-theme-text-muted">
             No apparatus configured. Shifts can be created without apparatus
             assignment.
           </p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {apparatusList.map((a) => (
+            {normalizedApparatusList.map((a) => (
               <div
                 key={a.id}
                 className="flex items-center gap-3 p-3 bg-theme-surface-hover/50 rounded-lg"

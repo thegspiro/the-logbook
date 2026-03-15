@@ -69,6 +69,12 @@ declare module 'axios' {
 // Types
 // ============================================
 
+/** A single position slot on a shift/apparatus/template. */
+export interface PositionSlot {
+  position: string;
+  required: boolean;
+}
+
 export interface ShiftRecord {
   id: string;
   organization_id: string;
@@ -78,8 +84,8 @@ export interface ShiftRecord {
   apparatus_id?: string;
   apparatus_name?: string;
   apparatus_unit_number?: string;
-  positions?: string[] | null;
-  apparatus_positions?: string[] | null;
+  positions?: PositionSlot[] | null;
+  apparatus_positions?: PositionSlot[] | null;
   min_staffing?: number | null;
   station_id?: string;
   shift_officer_id?: string;
@@ -139,21 +145,42 @@ export interface ShiftTemplateRecord {
  * which may be a plain string array (standard/specialty) or an event metadata
  * object containing flat_positions / resources (event category).
  */
+/**
+ * Normalize any position format to PositionSlot[].
+ * Handles: string[], PositionSlot[], null/undefined.
+ */
+export function normalizePositions(
+  positions: unknown[] | null | undefined,
+): PositionSlot[] {
+  if (!positions || !Array.isArray(positions)) return [];
+  return positions.map((p) => {
+    if (typeof p === 'string') {
+      return { position: p, required: true };
+    }
+    if (typeof p === 'object' && p !== null && 'position' in p) {
+      const slot = p as { position: string; required?: boolean };
+      return { position: slot.position, required: slot.required !== false };
+    }
+    return { position: String(p), required: true };
+  });
+}
+
 export function resolveTemplatePositions(
   positions: ShiftTemplateRecord['positions'],
-): string[] {
+): PositionSlot[] {
   if (!positions) return [];
-  // Standard / specialty templates store a plain string[]
-  if (Array.isArray(positions)) return positions;
+  // Standard / specialty templates store a plain array
+  if (Array.isArray(positions)) return normalizePositions(positions);
   // Event templates — prefer the pre-computed flat list
   if (Array.isArray(positions.flat_positions) && positions.flat_positions.length > 0) {
-    return positions.flat_positions;
+    return normalizePositions(positions.flat_positions);
   }
   // Legacy event templates — compute from resources
   if (Array.isArray(positions.resources)) {
-    return positions.resources.flatMap((r) =>
+    const flat = positions.resources.flatMap((r) =>
       Array.from({ length: r.quantity ?? 1 }, () => r.positions ?? []).flat(),
     );
+    return normalizePositions(flat);
   }
   return [];
 }
@@ -164,7 +191,7 @@ export interface BasicApparatusRecord {
   name: string;
   apparatus_type: string;
   min_staffing?: number;
-  positions?: string[];
+  positions?: PositionSlot[];
   is_active: boolean;
 }
 
@@ -174,7 +201,7 @@ export interface ApparatusOption {
   unit_number?: string;
   apparatus_type: string;
   source: 'apparatus' | 'basic' | 'default';
-  positions?: string[];
+  positions?: PositionSlot[];
   min_staffing?: number;
 }
 

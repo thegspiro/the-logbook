@@ -132,7 +132,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   // Determine available position options based on apparatus
   const positionOptions: [string, string][] = useMemo(() =>
     hasApparatusPositions
-      ? apparatusPositions.map(p => [p, POSITION_LABELS[p] || p.charAt(0).toUpperCase() + p.slice(1)])
+      ? apparatusPositions.map(p => {
+          const name = typeof p === 'string' ? p : p.position;
+          return [name, POSITION_LABELS[name] || name.charAt(0).toUpperCase() + name.slice(1)] as [string, string];
+        })
       : Object.entries(POSITION_LABELS),
     [hasApparatusPositions, apparatusPositions]
   );
@@ -417,9 +420,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   // Build crew board data: for each apparatus position, find the assignment(s) filling it
   const crewBoard = useMemo(() => {
     if (!hasApparatusPositions) return null;
-    return apparatusPositions.map(position => {
-      const filled = activeAssignments.find(a => a.position.toLowerCase() === position.toLowerCase());
-      return { position, assignment: filled || null };
+    const usedIds = new Set<string>();
+    return apparatusPositions.map(slot => {
+      const posName = typeof slot === 'string' ? slot : slot.position;
+      const isRequired = typeof slot === 'string' ? true : slot.required;
+      const filled = activeAssignments.find(a => a.position.toLowerCase() === posName.toLowerCase() && !usedIds.has(a.id));
+      if (filled) usedIds.add(filled.id);
+      return { position: posName, required: isRequired, assignment: filled || null };
     });
   }, [hasApparatusPositions, apparatusPositions, activeAssignments]);
 
@@ -427,8 +434,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const extraAssignments = useMemo(() => {
     if (!hasApparatusPositions) return activeAssignments;
     const boardFilledIds = new Set<string>();
-    for (const pos of apparatusPositions) {
-      const match = activeAssignments.find(a => a.position.toLowerCase() === pos.toLowerCase() && !boardFilledIds.has(a.id));
+    for (const slot of apparatusPositions) {
+      const posName = typeof slot === 'string' ? slot : slot.position;
+      const match = activeAssignments.find(a => a.position.toLowerCase() === posName.toLowerCase() && !boardFilledIds.has(a.id));
       if (match) boardFilledIds.add(match.id);
     }
     return activeAssignments.filter(a => !boardFilledIds.has(a.id));
@@ -785,7 +793,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                 )}
               </div>
               <div className="space-y-2">
-                {crewBoard?.map(({ position, assignment }, i) => (
+                {crewBoard?.map(({ position, required, assignment }, i) => (
                   <div key={i} className={`flex items-center justify-between gap-2 p-2.5 sm:p-3 rounded-lg border ${
                     assignment
                       ? (assignment.user_id === user?.id ? 'border-violet-500/30 bg-violet-500/5' : 'border-theme-surface-border bg-theme-surface-hover/30')
@@ -837,8 +845,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                           <div>
                             <p className="text-sm text-theme-text-muted capitalize">
                               {POSITION_LABELS[position] || position}
+                              {!required && <span className="text-[10px] text-theme-text-muted ml-1">(optional)</span>}
                             </p>
-                            <p className="text-xs text-theme-text-muted">Open position</p>
+                            <p className="text-xs text-theme-text-muted">{required ? 'Open position' : 'Optional position'}</p>
                           </div>
                         </>
                       )}

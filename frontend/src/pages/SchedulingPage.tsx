@@ -33,7 +33,7 @@ import type {
   ShiftRecord,
   ShiftTemplateRecord,
 } from "../modules/scheduling";
-import { resolveTemplatePositions } from "../modules/scheduling/services/api";
+import { resolveTemplatePositions, normalizePositions } from "../modules/scheduling/services/api";
 import { lazyWithRetry } from "../utils/lazyWithRetry";
 
 // Lazy-loaded tab components
@@ -150,10 +150,23 @@ const getShiftTemplateColor = (shift: ShiftRecord): string | undefined => {
 const getShiftStyle = (shift: ShiftRecord): React.CSSProperties | undefined =>
   shift.color ? hexColorStyle(shift.color) : undefined;
 
-const isUnderstaffed = (shift: ShiftRecord): boolean =>
-  shift.min_staffing != null &&
-  shift.min_staffing > 0 &&
-  shift.attendee_count < shift.min_staffing;
+const isUnderstaffed = (shift: ShiftRecord): boolean => {
+  // Check required positions first — if a shift has structured positions,
+  // count only required slots to determine understaffing
+  const positions = normalizePositions(
+    (shift.apparatus_positions ?? shift.positions) as unknown[] | null,
+  );
+  const requiredCount = positions.filter(p => p.required).length;
+  if (requiredCount > 0) {
+    return shift.attendee_count < requiredCount;
+  }
+  // Fall back to min_staffing headcount
+  return (
+    shift.min_staffing != null &&
+    shift.min_staffing > 0 &&
+    shift.attendee_count < shift.min_staffing
+  );
+};
 
 const TAB_CONFIG: {
   id: TabId;
@@ -1277,12 +1290,12 @@ const SchedulingPage: React.FC = () => {
                                   Required positions:
                                 </p>
                                 <div className="flex flex-wrap gap-1">
-                                  {flatPositions.map((pos, i) => (
+                                  {flatPositions.map((slot, i) => (
                                     <span
                                       key={i}
-                                      className="px-2 py-0.5 text-[10px] bg-violet-500/10 text-violet-700 dark:text-violet-300 rounded-sm capitalize font-medium"
+                                      className={`px-2 py-0.5 text-[10px] rounded-sm capitalize font-medium ${slot.required ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300' : 'bg-theme-surface-hover text-theme-text-muted'}`}
                                     >
-                                      {pos}
+                                      {slot.position}{!slot.required && ' (opt)'}
                                     </span>
                                   ))}
                                 </div>
@@ -1392,14 +1405,17 @@ const SchedulingPage: React.FC = () => {
                                   Positions on {selected.unit_number}:
                                 </p>
                                 <div className="flex flex-wrap gap-1.5">
-                                  {selected.positions.map((pos, i) => (
-                                    <span
-                                      key={i}
-                                      className="px-2 py-0.5 text-xs bg-violet-500/10 text-violet-700 dark:text-violet-300 rounded-sm capitalize"
-                                    >
-                                      {pos}
-                                    </span>
-                                  ))}
+                                  {selected.positions.map((pos, i) => {
+                                    const name = typeof pos === 'string' ? pos : pos.position;
+                                    return (
+                                      <span
+                                        key={i}
+                                        className="px-2 py-0.5 text-xs bg-violet-500/10 text-violet-700 dark:text-violet-300 rounded-sm capitalize"
+                                      >
+                                        {name}
+                                      </span>
+                                    );
+                                  })}
                                 </div>
                                 <p className="text-xs text-theme-text-muted mt-1.5">
                                   Members will be able to sign up for these
