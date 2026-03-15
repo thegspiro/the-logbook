@@ -29,6 +29,11 @@ import type {
   EquipmentCheckTemplateCreate,
   CheckTemplateCompartmentCreate,
   CheckTemplateItemCreate,
+  CheckType,
+  TemplateType,
+} from '@/modules/scheduling/types/equipmentCheck';
+import {
+  TEMPLATE_TYPE_LABELS,
 } from '@/modules/scheduling/types/equipmentCheck';
 
 // ============================================================================
@@ -62,7 +67,11 @@ const APPARATUS_TYPES = [
 
 const CHECK_TYPES = [
   { value: 'pass_fail', label: 'Pass / Fail' },
+  { value: 'present', label: 'Present' },
+  { value: 'functional', label: 'Functional' },
   { value: 'quantity', label: 'Quantity' },
+  { value: 'level', label: 'Level' },
+  { value: 'date_lot', label: 'Date / Lot' },
   { value: 'reading', label: 'Reading' },
 ] as const;
 
@@ -83,9 +92,14 @@ interface ItemFormState {
   id?: string;
   name: string;
   description: string;
-  checkType: 'pass_fail' | 'quantity' | 'reading';
+  checkType: CheckType;
   isRequired: boolean;
   requiredQuantity: string;
+  expectedQuantity: string;
+  minLevel: string;
+  levelUnit: string;
+  serialNumber: string;
+  lotNumber: string;
   hasExpiration: boolean;
   expirationDate: string;
   expirationWarningDays: string;
@@ -99,6 +113,11 @@ function emptyItem(): ItemFormState {
     checkType: 'pass_fail',
     isRequired: true,
     requiredQuantity: '',
+    expectedQuantity: '',
+    minLevel: '',
+    levelUnit: '',
+    serialNumber: '',
+    lotNumber: '',
     hasExpiration: false,
     expirationDate: '',
     expirationWarningDays: '30',
@@ -137,6 +156,7 @@ interface TemplateFormState {
   name: string;
   description: string;
   checkTiming: 'start_of_shift' | 'end_of_shift';
+  templateType: TemplateType;
   assignedPositions: string[];
   apparatusType: string;
   apparatusId: string;
@@ -148,6 +168,7 @@ function defaultTemplateForm(): TemplateFormState {
     name: '',
     description: '',
     checkTiming: 'start_of_shift',
+    templateType: 'equipment',
     assignedPositions: [],
     apparatusType: '',
     apparatusId: '',
@@ -183,6 +204,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         name: data.name,
         description: data.description ?? '',
         checkTiming: data.checkTiming,
+        templateType: data.templateType ?? 'equipment',
         assignedPositions: data.assignedPositions ?? [],
         apparatusType: data.apparatusType ?? '',
         apparatusId: data.apparatusId ?? '',
@@ -205,6 +227,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             checkType: item.checkType,
             isRequired: item.isRequired,
             requiredQuantity: item.requiredQuantity != null ? String(item.requiredQuantity) : '',
+            expectedQuantity: item.expectedQuantity != null ? String(item.expectedQuantity) : '',
+            minLevel: item.minLevel != null ? String(item.minLevel) : '',
+            levelUnit: item.levelUnit ?? '',
+            serialNumber: item.serialNumber ?? '',
+            lotNumber: item.lotNumber ?? '',
             hasExpiration: item.hasExpiration,
             expirationDate: item.expirationDate ?? '',
             expirationWarningDays: String(item.expirationWarningDays ?? 30),
@@ -344,6 +371,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           checkType: created.checkType,
           isRequired: created.isRequired,
           requiredQuantity: created.requiredQuantity != null ? String(created.requiredQuantity) : '',
+          expectedQuantity: created.expectedQuantity != null ? String(created.expectedQuantity) : '',
+          minLevel: created.minLevel != null ? String(created.minLevel) : '',
+          levelUnit: created.levelUnit ?? '',
+          serialNumber: created.serialNumber ?? '',
+          lotNumber: created.lotNumber ?? '',
           hasExpiration: created.hasExpiration,
           expirationDate: created.expirationDate ?? '',
           expirationWarningDays: String(created.expirationWarningDays ?? 30),
@@ -427,6 +459,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             check_type: item.checkType,
             is_required: item.isRequired,
             required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
+            expected_quantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
+            min_level: item.minLevel ? Number(item.minLevel) : undefined,
+            level_unit: item.levelUnit.trim() || undefined,
+            serial_number: item.serialNumber.trim() || undefined,
+            lot_number: item.lotNumber.trim() || undefined,
             image_url: item.imageUrl.trim() || undefined,
             has_expiration: item.hasExpiration,
             expiration_date: item.expirationDate.trim() || undefined,
@@ -441,6 +478,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           name: form.name.trim(),
           description: form.description.trim() || undefined,
           check_timing: form.checkTiming,
+          template_type: form.templateType,
           assigned_positions: form.assignedPositions.length > 0 ? form.assignedPositions : undefined,
           apparatus_type: form.apparatusType || undefined,
           apparatus_id: form.apparatusId || undefined,
@@ -471,6 +509,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   check_type: item.checkType,
                   is_required: item.isRequired,
                   required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
+                  expected_quantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
+                  min_level: item.minLevel ? Number(item.minLevel) : undefined,
+                  level_unit: item.levelUnit.trim() || undefined,
+                  serial_number: item.serialNumber.trim() || undefined,
+                  lot_number: item.lotNumber.trim() || undefined,
                   image_url: item.imageUrl.trim() || undefined,
                   has_expiration: item.hasExpiration,
                   expiration_date: item.expirationDate.trim() || undefined,
@@ -489,6 +532,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           name: form.name.trim(),
           description: form.description.trim() || undefined,
           check_timing: form.checkTiming,
+          template_type: form.templateType,
           assigned_positions: form.assignedPositions.length > 0 ? form.assignedPositions : undefined,
           apparatus_type: form.apparatusType || undefined,
           apparatus_id: form.apparatusId || undefined,
@@ -506,6 +550,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               check_type: item.checkType,
               is_required: item.isRequired,
               required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
+              expected_quantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
+              min_level: item.minLevel ? Number(item.minLevel) : undefined,
+              level_unit: item.levelUnit.trim() || undefined,
+              serial_number: item.serialNumber.trim() || undefined,
+              lot_number: item.lotNumber.trim() || undefined,
               image_url: item.imageUrl.trim() || undefined,
               has_expiration: item.hasExpiration,
               expiration_date: item.expirationDate.trim() || undefined,
@@ -624,17 +673,84 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
         {/* Required Quantity (conditional) */}
         {item.checkType === 'quantity' && (
-          <div>
-            <label className={labelClass}>Required Qty</label>
-            <input
-              type="number"
-              className={inputClass}
-              min="0"
-              placeholder="0"
-              value={item.requiredQuantity}
-              onChange={(e) => updateItemField(compIdx, itemIdx, { requiredQuantity: e.target.value })}
-            />
-          </div>
+          <>
+            <div>
+              <label className={labelClass}>Required Qty</label>
+              <input
+                type="number"
+                className={inputClass}
+                min="0"
+                placeholder="0"
+                value={item.requiredQuantity}
+                onChange={(e) => updateItemField(compIdx, itemIdx, { requiredQuantity: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Expected Qty</label>
+              <input
+                type="number"
+                className={inputClass}
+                min="0"
+                placeholder="0"
+                value={item.expectedQuantity}
+                onChange={(e) => updateItemField(compIdx, itemIdx, { expectedQuantity: e.target.value })}
+              />
+            </div>
+          </>
+        )}
+
+        {/* Level fields (conditional) */}
+        {item.checkType === 'level' && (
+          <>
+            <div>
+              <label className={labelClass}>Min Level</label>
+              <input
+                type="number"
+                className={inputClass}
+                min="0"
+                step="0.1"
+                placeholder="0"
+                value={item.minLevel}
+                onChange={(e) => updateItemField(compIdx, itemIdx, { minLevel: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Unit</label>
+              <input
+                type="text"
+                className={inputClass}
+                placeholder="psi, %, gallons..."
+                value={item.levelUnit}
+                onChange={(e) => updateItemField(compIdx, itemIdx, { levelUnit: e.target.value })}
+              />
+            </div>
+          </>
+        )}
+
+        {/* Serial / Lot Number (conditional) */}
+        {(item.checkType === 'date_lot' || item.checkType === 'quantity') && (
+          <>
+            <div>
+              <label className={labelClass}>Serial #</label>
+              <input
+                type="text"
+                className={inputClass}
+                placeholder="Serial number"
+                value={item.serialNumber}
+                onChange={(e) => updateItemField(compIdx, itemIdx, { serialNumber: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Lot #</label>
+              <input
+                type="text"
+                className={inputClass}
+                placeholder="Lot number"
+                value={item.lotNumber}
+                onChange={(e) => updateItemField(compIdx, itemIdx, { lotNumber: e.target.value })}
+              />
+            </div>
+          </>
         )}
 
         {/* Image URL */}
@@ -915,6 +1031,24 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           >
             <option value="start_of_shift">Start of Shift</option>
             <option value="end_of_shift">End of Shift</option>
+          </select>
+        </div>
+
+        {/* Template Type */}
+        <div>
+          <label className={labelClass}>Template Type</label>
+          <select
+            className={selectClass}
+            value={form.templateType}
+            onChange={(e) =>
+              updateForm({ templateType: e.target.value as TemplateType })
+            }
+          >
+            {(Object.entries(TEMPLATE_TYPE_LABELS) as [TemplateType, string][]).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
           </select>
         </div>
 

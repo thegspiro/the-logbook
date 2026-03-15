@@ -174,14 +174,20 @@ class EquipmentCheckService:
         apparatus = result.scalars().first()
         apparatus_name = apparatus.name if apparatus else ""
 
+        clone_name = (
+            f"{apparatus_name} - {source.name}"
+            if apparatus_name
+            else source.name
+        )
         new_template = EquipmentCheckTemplate(
             id=generate_uuid(),
             organization_id=organization_id,
             apparatus_id=target_apparatus_id,
             apparatus_type=source.apparatus_type,
-            name=f"{apparatus_name} - {source.name}" if apparatus_name else source.name,
+            name=clone_name,
             description=source.description,
             check_timing=source.check_timing,
+            template_type=source.template_type,
             assigned_positions=source.assigned_positions,
             is_active=source.is_active,
             sort_order=source.sort_order,
@@ -566,14 +572,40 @@ class EquipmentCheckService:
             check_item = ShiftEquipmentCheckItem(
                 id=generate_uuid(),
                 check_id=check.id,
-                template_item_id=item_data.get("template_item_id"),
-                compartment_name=item_data.get("compartment_name", ""),
-                item_name=item_data.get("item_name", ""),
-                status=item_data.get("status", "not_checked"),
-                quantity_found=item_data.get("quantity_found"),
-                required_quantity=item_data.get("required_quantity"),
-                is_expired=item_data.get("is_expired", False),
-                expiration_date=item_data.get("expiration_date"),
+                template_item_id=item_data.get(
+                    "template_item_id"
+                ),
+                compartment_name=item_data.get(
+                    "compartment_name", ""
+                ),
+                item_name=item_data.get(
+                    "item_name", ""
+                ),
+                check_type=item_data.get("check_type"),
+                status=item_data.get(
+                    "status", "not_checked"
+                ),
+                quantity_found=item_data.get(
+                    "quantity_found"
+                ),
+                required_quantity=item_data.get(
+                    "required_quantity"
+                ),
+                level_reading=item_data.get(
+                    "level_reading"
+                ),
+                level_unit=item_data.get("level_unit"),
+                serial_number=item_data.get(
+                    "serial_number"
+                ),
+                lot_number=item_data.get("lot_number"),
+                photo_urls=item_data.get("photo_urls"),
+                is_expired=item_data.get(
+                    "is_expired", False
+                ),
+                expiration_date=item_data.get(
+                    "expiration_date"
+                ),
                 notes=item_data.get("notes"),
             )
             self.db.add(check_item)
@@ -750,10 +782,19 @@ class EquipmentCheckService:
             history.append(
                 {
                     "check_id": item.check_id,
-                    "shift_id": check.shift_id if check else None,
-                    "shift_date": shift.shift_date if shift else None,
+                    "shift_id": (
+                        check.shift_id if check else None
+                    ),
+                    "shift_date": (
+                        shift.shift_date
+                        if shift
+                        else None
+                    ),
                     "status": item.status,
                     "quantity_found": item.quantity_found,
+                    "level_reading": item.level_reading,
+                    "serial_number": item.serial_number,
+                    "lot_number": item.lot_number,
                     "is_expired": item.is_expired,
                     "notes": item.notes,
                     "checked_by_name": user_map.get(
@@ -761,7 +802,11 @@ class EquipmentCheckService:
                     )
                     if check and check.checked_by
                     else None,
-                    "checked_at": check.checked_at if check else None,
+                    "checked_at": (
+                        check.checked_at
+                        if check
+                        else None
+                    ),
                 }
             )
 
@@ -909,10 +954,17 @@ class EquipmentCheckService:
                 check_type=item.check_type,
                 is_required=item.is_required,
                 required_quantity=item.required_quantity,
+                expected_quantity=item.expected_quantity,
+                min_level=item.min_level,
+                level_unit=item.level_unit,
+                serial_number=item.serial_number,
+                lot_number=item.lot_number,
                 image_url=item.image_url,
                 has_expiration=item.has_expiration,
                 expiration_date=item.expiration_date,
-                expiration_warning_days=item.expiration_warning_days,
+                expiration_warning_days=(
+                    item.expiration_warning_days
+                ),
             )
             self.db.add(new_item)
 

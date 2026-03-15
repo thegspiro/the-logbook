@@ -24,6 +24,7 @@ import {
 import toast from "react-hot-toast";
 import { schedulingService } from "../services/api";
 import type { EquipmentCheckTemplate } from "../types/equipmentCheck";
+import { TEMPLATE_TYPE_LABELS, type TemplateType } from "../types/equipmentCheck";
 import { getErrorMessage } from "../../../utils/errorHandling";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -39,6 +40,15 @@ const TIMING_LABELS: Record<string, { label: string; color: string }> = {
     color:
       "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20",
   },
+};
+
+const TEMPLATE_TYPE_COLORS: Record<string, string> = {
+  equipment:
+    "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
+  vehicle:
+    "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20",
+  combined:
+    "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20",
 };
 
 function countItems(template: EquipmentCheckTemplate): number {
@@ -237,6 +247,13 @@ export const EquipmentCheckTemplateList: React.FC = () => {
                         className={`px-1.5 py-0.5 text-[10px] font-medium rounded border ${timing.color}`}
                       >
                         {timing.label}
+                      </span>
+                    )}
+                    {template.templateType && template.templateType !== "equipment" && (
+                      <span
+                        className={`px-1.5 py-0.5 text-[10px] font-medium rounded border ${TEMPLATE_TYPE_COLORS[template.templateType] ?? ""}`}
+                      >
+                        {TEMPLATE_TYPE_LABELS[template.templateType as TemplateType] ?? template.templateType}
                       </span>
                     )}
                   </div>
