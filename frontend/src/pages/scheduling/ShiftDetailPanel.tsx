@@ -553,9 +553,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
 
       {/* Panel — uses drawer-panel CSS class for mobile-responsive width */}
-      <div className="drawer-panel overflow-y-auto overscroll-contain bg-theme-surface!">
+      <div className="drawer-panel overflow-y-auto overscroll-contain">
         {/* Header */}
-        <div className="sticky top-0 bg-theme-surface border-b border-theme-surface-border p-4 sm:p-6 z-10">
+        <div className="sticky top-0 bg-theme-surface-modal border-b border-theme-surface-border p-4 sm:p-6 z-10">
           <div className="flex items-center justify-between">
             <div className="min-w-0 pr-2">
               <h2 className="text-lg sm:text-xl font-bold text-theme-text-primary">Shift Details</h2>

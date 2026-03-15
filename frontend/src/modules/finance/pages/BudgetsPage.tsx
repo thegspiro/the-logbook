@@ -51,7 +51,7 @@ const BudgetProgress: React.FC<BudgetProgressProps> = ({
           </span>
         )}
       </div>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+      <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
         <div className="flex h-full">
           <div
             className="h-full bg-blue-500 transition-all"
@@ -213,7 +213,7 @@ const BudgetsPage: React.FC = () => {
 
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <p>{error}</p>
         </div>
@@ -234,7 +234,7 @@ const BudgetsPage: React.FC = () => {
             Encumbered
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-gray-200" />
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-gray-200 dark:bg-gray-600" />
             Available
           </span>
         </div>

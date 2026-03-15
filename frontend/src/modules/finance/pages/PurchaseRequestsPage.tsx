@@ -50,10 +50,10 @@ for (const tab of STATUS_TABS) {
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
-  low: 'bg-gray-100 text-gray-700',
-  medium: 'bg-blue-100 text-blue-700',
-  high: 'bg-orange-100 text-orange-700',
-  urgent: 'bg-red-100 text-red-700',
+  low: 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400',
+  medium: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
+  high: 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
+  urgent: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
 };
 
 // =============================================================================
@@ -129,7 +129,7 @@ const PurchaseRequestsPage: React.FC = () => {
 
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <p>{error}</p>
         </div>
@@ -248,14 +248,14 @@ const PurchaseRequestsPage: React.FC = () => {
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
                       <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[pr.priority] ?? 'bg-gray-100 text-gray-700'}`}
+                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[pr.priority] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400'}`}
                       >
                         {pr.priority}
                       </span>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
                       <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PURCHASE_REQUEST_STATUS_COLORS[pr.status] ?? 'bg-gray-100 text-gray-800'}`}
+                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PURCHASE_REQUEST_STATUS_COLORS[pr.status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
                       >
                         {STATUS_LABEL_MAP[pr.status] ?? pr.status}
                       </span>

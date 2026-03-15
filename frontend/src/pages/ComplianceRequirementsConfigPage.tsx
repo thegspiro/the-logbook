@@ -45,7 +45,7 @@ import type {
 const inputClass = 'form-input';
 const selectClass = 'form-input';
 const labelClass = 'form-label';
-const checkboxClass = 'h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500';
+const checkboxClass = 'h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800';
 
 type ActiveTab = 'thresholds' | 'profiles' | 'reports' | 'schedule';
 

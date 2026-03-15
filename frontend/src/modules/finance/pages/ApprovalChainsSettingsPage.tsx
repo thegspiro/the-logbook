@@ -102,12 +102,12 @@ const ChainCard: React.FC<ChainCardProps> = ({ chain, onDelete }) => {
                 </>
               )}
               {chain.isDefault && (
-                <span className="rounded bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">
+                <span className="rounded bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">
                   Default
                 </span>
               )}
               {!chain.isActive && (
-                <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600">
+                <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-500/20 dark:text-gray-400">
                   Inactive
                 </span>
               )}
@@ -326,7 +326,7 @@ const ApprovalChainsSettingsPage: React.FC = () => {
 
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <p>{error}</p>
         </div>
