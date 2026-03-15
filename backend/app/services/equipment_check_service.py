@@ -610,6 +610,25 @@ class EquipmentCheckService:
             )
             self.db.add(check_item)
 
+        # Update apparatus deficiency flag
+        if shift.apparatus_id:
+            apparatus_result = await self.db.execute(
+                select(Apparatus).where(
+                    Apparatus.id == shift.apparatus_id
+                )
+            )
+            apparatus = apparatus_result.scalars().first()
+            if apparatus:
+                if overall_status == "fail":
+                    if not apparatus.has_deficiency:
+                        apparatus.has_deficiency = True
+                        apparatus.deficiency_since = (
+                            datetime.now(timezone.utc)
+                        )
+                elif overall_status == "pass":
+                    apparatus.has_deficiency = False
+                    apparatus.deficiency_since = None
+
         await self.db.commit()
         return await self.get_check(check.id, organization_id)
 

@@ -7,7 +7,7 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Edit, Archive } from 'lucide-react';
+import { ArrowLeft, Edit, Archive, AlertTriangle } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
 import type { Apparatus, ApparatusStatus } from '../types';
 
@@ -44,6 +44,12 @@ export const ApparatusDetailHeader: React.FC<ApparatusDetailHeaderProps> = ({
               <div className="flex items-center gap-3">
                 <h1 className="text-theme-text-primary text-xl font-bold">{currentApparatus.unitNumber}</h1>
                 {status && <StatusBadge status={status} />}
+                {currentApparatus.hasDeficiency && (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/20">
+                    <AlertTriangle className="w-3 h-3" />
+                    Deficiency
+                  </span>
+                )}
                 {isArchived && (
                   <span className="px-2 py-1 bg-theme-surface-hover text-theme-text-muted text-xs rounded-sm border border-theme-surface-border">
                     ARCHIVED

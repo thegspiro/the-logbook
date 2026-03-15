@@ -529,6 +529,12 @@ class Apparatus(Base):
     nfpa_tracking_enabled = Column(Boolean, default=False, nullable=False)
 
     # ===========================================
+    # Equipment Check Deficiency Tracking
+    # ===========================================
+    has_deficiency = Column(Boolean, default=False, nullable=False)
+    deficiency_since = Column(DateTime(timezone=True), nullable=True)
+
+    # ===========================================
     # Custom Fields (JSON storage for user-defined fields)
     # ===========================================
     custom_field_values = Column(JSON, default=dict)

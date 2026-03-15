@@ -290,6 +290,10 @@ export interface Apparatus {
   // NFPA
   nfpaTrackingEnabled: boolean;
 
+  // Equipment Check Deficiency Tracking
+  hasDeficiency: boolean;
+  deficiencySince: string | null;
+
   // Custom Fields
   customFieldValues: Record<string, unknown>;
 
@@ -321,6 +325,8 @@ export interface ApparatusListItem {
   currentHours: number | null;
   minStaffing: number;
   isArchived: boolean;
+  hasDeficiency: boolean;
+  deficiencySince: string | null;
   apparatusType?: ApparatusType;
   statusRecord?: ApparatusStatus;
 }

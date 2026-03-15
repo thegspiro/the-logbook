@@ -390,7 +390,18 @@ export const ApparatusListPage: React.FC = () => {
                             </div>
                           </td>
                           <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
-                            {status && <StatusBadge status={status} />}
+                            <div className="flex items-center gap-2">
+                              {status && <StatusBadge status={status} />}
+                              {apparatus.hasDeficiency && (
+                                <span
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/20"
+                                  title="Equipment deficiency reported"
+                                >
+                                  <AlertTriangle className="w-3 h-3" />
+                                  Deficiency
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-3 sm:px-6 py-4 whitespace-nowrap table-col-secondary">
                             <div className="text-theme-text-secondary text-sm">
