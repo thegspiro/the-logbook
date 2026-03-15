@@ -311,7 +311,7 @@ const EmailTemplatesPage: React.FC = () => {
         {activeTab === 'templates' && <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Template list sidebar */}
           <div className="lg:col-span-3">
-            <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 lg:sticky lg:top-6">
+            <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl p-4 lg:sticky lg:top-6">
               <TemplateList
                 templates={templates}
                 selectedId={selectedTemplate?.id ?? null}

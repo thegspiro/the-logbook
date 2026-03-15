@@ -204,7 +204,7 @@ export default function FacilityDetailPage() {
       <div className="flex gap-6">
         {/* Sidebar Navigation */}
         <nav className="w-56 shrink-0" aria-label="Facility sections">
-          <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-2 sticky top-6">
+          <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl p-2 sticky top-6">
             {SECTIONS.map((section) => {
               const Icon = section.icon;
               const isActive = activeSection === section.id;

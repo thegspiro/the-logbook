@@ -1105,7 +1105,7 @@ export const ActiveSkillTestPage: React.FC = () => {
     return (
       <div className="min-h-screen flex flex-col">
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-theme-surface/95 backdrop-blur-xs border-b border-theme-surface-border px-4 py-3">
+        <div className="sticky top-0 z-10 bg-theme-surface-modal border-b border-theme-surface-border px-4 py-3">
           <div className="flex items-center justify-between">
             <button
               onClick={() => navigate(currentTest.is_practice ? '/training/skills-testing' : '/training/admin?page=skills-testing&tab=tests')}
@@ -1223,7 +1223,7 @@ export const ActiveSkillTestPage: React.FC = () => {
         </div>
 
         {/* Bottom bar */}
-        <div className="sticky bottom-0 bg-theme-surface/95 backdrop-blur-xs border-t border-theme-surface-border px-4 py-3 safe-area-inset-bottom">
+        <div className="sticky bottom-0 bg-theme-surface-modal border-t border-theme-surface-border px-4 py-3 safe-area-inset-bottom">
           {currentTest.is_practice ? (
             <div className="space-y-2">
               <button
@@ -1270,7 +1270,7 @@ export const ActiveSkillTestPage: React.FC = () => {
     return (
       <div className="min-h-screen flex flex-col">
         {/* Review Header */}
-        <div className="sticky top-0 z-10 bg-theme-surface/95 backdrop-blur-xs border-b border-theme-surface-border px-4 py-3">
+        <div className="sticky top-0 z-10 bg-theme-surface-modal border-b border-theme-surface-border px-4 py-3">
           <div className="flex items-center justify-between">
             <button
               onClick={() => setReviewing(false)}
@@ -1334,7 +1334,7 @@ export const ActiveSkillTestPage: React.FC = () => {
         </div>
 
         {/* Action Bar */}
-        <div className="sticky bottom-0 bg-theme-surface/95 backdrop-blur-xs border-t border-theme-surface-border px-4 py-3 safe-area-inset-bottom">
+        <div className="sticky bottom-0 bg-theme-surface-modal border-t border-theme-surface-border px-4 py-3 safe-area-inset-bottom">
           {currentTest.is_practice ? (
             <div className="space-y-2">
               <button
@@ -1380,7 +1380,7 @@ export const ActiveSkillTestPage: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Top Bar */}
-      <div className="sticky top-0 z-10 bg-theme-surface/95 backdrop-blur-xs border-b border-theme-surface-border px-4 py-3">
+      <div className="sticky top-0 z-10 bg-theme-surface-modal border-b border-theme-surface-border px-4 py-3">
         <div className="flex items-center justify-between mb-2">
           <button
             onClick={() => navigate('/training/admin?page=skills-testing&tab=tests')}
@@ -1448,7 +1448,7 @@ export const ActiveSkillTestPage: React.FC = () => {
       </div>
 
       {/* Bottom Navigation Bar */}
-      <div className="sticky bottom-0 bg-theme-surface/95 backdrop-blur-xs border-t border-theme-surface-border px-4 py-3 safe-area-inset-bottom">
+      <div className="sticky bottom-0 bg-theme-surface-modal border-t border-theme-surface-border px-4 py-3 safe-area-inset-bottom">
         <div className="flex gap-3">
           <button
             onClick={() => setActiveSectionIndex(activeSectionIndex - 1)}
