@@ -205,6 +205,8 @@ export interface CheckItemResultSubmit {
   level_unit?: string | undefined;
   serial_number?: string | undefined;
   lot_number?: string | undefined;
+  serial_found?: string | undefined;
+  lot_found?: string | undefined;
   photo_urls?: string[] | undefined;
   is_expired?: boolean | undefined;
   expiration_date?: string | undefined;
@@ -237,6 +239,9 @@ export interface ShiftEquipmentCheckItemRecord {
   levelUnit?: string;
   serialNumber?: string;
   lotNumber?: string;
+  serialFound?: string;
+  lotFound?: string;
+  updatedSerial?: boolean;
   photoUrls?: string[];
   isExpired: boolean;
   expirationDate?: string;

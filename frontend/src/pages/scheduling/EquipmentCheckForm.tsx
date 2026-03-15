@@ -9,7 +9,7 @@
  * 5. Return to overview and submit when all items are checked
  */
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import {
   CheckCircle,
   XCircle,
@@ -58,7 +58,10 @@ interface ItemResult {
   levelReading?: number | undefined;
   serialNumber?: string | undefined;
   lotNumber?: string | undefined;
+  serialFound?: string | undefined;
+  lotFound?: string | undefined;
   photoUrls?: string[] | undefined;
+  photoFiles?: File[] | undefined;
   notes?: string | undefined;
 }
 
@@ -141,8 +144,13 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     null,
   );
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
+  const [expandedPhotos, setExpandedPhotos] = useState<Set<string>>(new Set());
+  const [expandedSerialUpdate, setExpandedSerialUpdate] = useState<Set<string>>(
+    new Set(),
+  );
   const [submitting, setSubmitting] = useState(false);
   const [overallNotes, setOverallNotes] = useState('');
+  const photoInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const compartments = template.compartments;
 
@@ -197,6 +205,64 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     });
   }, []);
 
+  const togglePhotos = useCallback((itemId: string) => {
+    setExpandedPhotos((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  }, []);
+
+  const toggleSerialUpdate = useCallback((itemId: string) => {
+    setExpandedSerialUpdate((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  }, []);
+
+  const handlePhotoSelect = useCallback(
+    (itemId: string, fileList: FileList | null) => {
+      if (!fileList || fileList.length === 0) return;
+      const newFiles = Array.from(fileList).slice(0, 3);
+      const currentFiles = results[itemId]?.photoFiles ?? [];
+      const combined = [...currentFiles, ...newFiles].slice(0, 3);
+
+      // Create preview URLs for display
+      const previewUrls = combined.map((f) => URL.createObjectURL(f));
+
+      updateResult(itemId, {
+        photoFiles: combined,
+        photoUrls: previewUrls,
+      });
+    },
+    [results, updateResult],
+  );
+
+  const removePhoto = useCallback(
+    (itemId: string, index: number) => {
+      const currentFiles = results[itemId]?.photoFiles ?? [];
+      const currentUrls = results[itemId]?.photoUrls ?? [];
+
+      // Revoke the object URL to prevent memory leaks
+      const urlToRevoke = currentUrls[index];
+      if (urlToRevoke?.startsWith('blob:')) {
+        URL.revokeObjectURL(urlToRevoke);
+      }
+
+      const newFiles = currentFiles.filter((_, i) => i !== index);
+      const newUrls = currentUrls.filter((_, i) => i !== index);
+
+      updateResult(itemId, {
+        photoFiles: newFiles.length > 0 ? newFiles : undefined,
+        photoUrls: newUrls.length > 0 ? newUrls : undefined,
+      });
+    },
+    [results, updateResult],
+  );
+
   // --------------------------------------------------------------------------
   // Submit
   // --------------------------------------------------------------------------
@@ -204,10 +270,25 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
+      // Collect items with photo files for post-submit upload
+      const itemsWithPhotos: { itemId: string; files: File[] }[] = [];
+
       const items: CheckItemResultSubmit[] = [];
       for (const compartment of compartments) {
         for (const item of compartment.items) {
           const result = results[item.id];
+
+          // Detect serial/lot updates for date_lot items
+          const serialFound = result?.serialFound || undefined;
+          const lotFound = result?.lotFound || undefined;
+
+          if (result?.photoFiles && result.photoFiles.length > 0) {
+            itemsWithPhotos.push({
+              itemId: item.id,
+              files: result.photoFiles,
+            });
+          }
+
           items.push({
             template_item_id: item.id,
             compartment_name: compartment.name,
@@ -221,10 +302,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             level_unit: item.levelUnit || undefined,
             serial_number: result?.serialNumber || undefined,
             lot_number: result?.lotNumber || undefined,
-            photo_urls:
-              result?.photoUrls && result.photoUrls.length > 0
-                ? result.photoUrls
-                : undefined,
+            serial_found: serialFound,
+            lot_found: lotFound,
             is_expired:
               item.hasExpiration && item.expirationDate
                 ? new Date(item.expirationDate) < new Date()
@@ -242,7 +321,31 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         notes: overallNotes || undefined,
       };
 
-      await schedulingService.submitEquipmentCheck(shiftId, payload);
+      const checkResult =
+        await schedulingService.submitEquipmentCheck(shiftId, payload);
+
+      // Upload photos to check items after submission
+      if (itemsWithPhotos.length > 0 && checkResult.items) {
+        for (const { itemId, files } of itemsWithPhotos) {
+          // Find the created check item by template_item_id
+          const checkItem = checkResult.items.find(
+            (ci) => ci.templateItemId === itemId,
+          );
+          if (checkItem) {
+            try {
+              await schedulingService.uploadCheckItemPhotos(
+                checkResult.id,
+                checkItem.id,
+                files,
+              );
+            } catch {
+              // Photo upload failure shouldn't block the check
+              toast.error(`Failed to upload photos for ${checkItem.itemName}`);
+            }
+          }
+        }
+      }
+
       toast.success('Equipment check submitted successfully');
       onComplete?.();
     } catch {
@@ -466,9 +569,27 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         );
       }
 
-      case 'date_lot':
+      case 'date_lot': {
+        const showSerialUpdate = expandedSerialUpdate.has(item.id);
         return (
           <div className="space-y-2">
+            {/* Current serial/lot display */}
+            {(item.serialNumber || item.lotNumber) && (
+              <div className="flex items-center gap-3 text-xs text-theme-text-muted bg-theme-surface-secondary rounded-lg px-3 py-2">
+                {item.serialNumber && (
+                  <span>
+                    S/N: <span className="font-mono">{item.serialNumber}</span>
+                  </span>
+                )}
+                {item.lotNumber && (
+                  <span>
+                    Lot: <span className="font-mono">{item.lotNumber}</span>
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Verify serial/lot inputs */}
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-xs text-theme-text-secondary mb-1 block">
@@ -499,9 +620,65 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 />
               </div>
             </div>
+
+            {/* Update serial/lot toggle — for when item has been swapped */}
+            <button
+              type="button"
+              onClick={() => toggleSerialUpdate(item.id)}
+              className="text-xs text-blue-600 hover:text-blue-700 font-medium transition-colors min-h-[32px]"
+            >
+              {showSerialUpdate
+                ? 'Cancel update'
+                : 'Item swapped? Update serial/lot on template'}
+            </button>
+
+            {showSerialUpdate && (
+              <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 space-y-2">
+                <p className="text-xs text-blue-700 dark:text-blue-400">
+                  Enter the new serial/lot numbers. The template will be
+                  automatically updated.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-theme-text-secondary mb-1 block">
+                      New Serial #
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full rounded-lg border border-blue-500/30 px-3 py-2.5 text-sm text-theme-text-primary bg-theme-surface focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[48px]"
+                      placeholder="New serial number"
+                      value={result?.serialFound ?? ''}
+                      onChange={(e) =>
+                        updateResult(item.id, {
+                          serialFound: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-theme-text-secondary mb-1 block">
+                      New Lot #
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full rounded-lg border border-blue-500/30 px-3 py-2.5 text-sm text-theme-text-primary bg-theme-surface focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[48px]"
+                      placeholder="New lot number"
+                      value={result?.lotFound ?? ''}
+                      onChange={(e) =>
+                        updateResult(item.id, {
+                          lotFound: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
             {passFailButtons}
           </div>
         );
+      }
 
       case 'reading':
         return (
@@ -601,12 +778,20 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           </button>
           <button
             type="button"
-            className="flex items-center gap-1 text-xs text-theme-text-muted hover:text-theme-text-secondary transition-colors min-h-[36px]"
-            title="Photo documentation (coming soon)"
-            disabled
+            onClick={() => togglePhotos(item.id)}
+            className={`flex items-center gap-1 text-xs transition-colors min-h-[36px] ${
+              (result?.photoFiles?.length ?? 0) > 0
+                ? 'text-blue-600 font-medium'
+                : 'text-theme-text-muted hover:text-theme-text-secondary'
+            }`}
           >
             <Camera className="h-3 w-3" />
             Photo
+            {(result?.photoFiles?.length ?? 0) > 0 && (
+              <span className="text-[10px]">
+                ({result?.photoFiles?.length})
+              </span>
+            )}
           </button>
         </div>
         {showNotesField && (
@@ -617,6 +802,57 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             value={result?.notes ?? ''}
             onChange={(e) => updateResult(item.id, { notes: e.target.value })}
           />
+        )}
+        {expandedPhotos.has(item.id) && (
+          <div className="space-y-2">
+            {/* Photo thumbnails */}
+            {result?.photoUrls && result.photoUrls.length > 0 && (
+              <div className="flex gap-2 flex-wrap">
+                {result.photoUrls.map((url, idx) => (
+                  <div key={idx} className="relative group">
+                    <img
+                      src={url}
+                      alt={`Photo ${idx + 1}`}
+                      className="w-16 h-16 rounded-lg object-cover border border-theme-surface-border"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(item.id, idx)}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                      aria-label={`Remove photo ${idx + 1}`}
+                    >
+                      &times;
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Add photo button */}
+            {(result?.photoFiles?.length ?? 0) < 3 && (
+              <>
+                <input
+                  ref={(el) => {
+                    photoInputRefs.current[item.id] = el;
+                  }}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => handlePhotoSelect(item.id, e.target.files)}
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    photoInputRefs.current[item.id]?.click()
+                  }
+                  className="flex items-center gap-1.5 rounded-lg border border-dashed border-theme-surface-border px-3 py-2 text-xs text-theme-text-muted hover:border-blue-500 hover:text-blue-600 transition-colors min-h-[40px]"
+                >
+                  <Camera className="h-3.5 w-3.5" />
+                  Add photo (max 3)
+                </button>
+              </>
+            )}
+          </div>
         )}
       </div>
     );

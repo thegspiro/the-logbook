@@ -613,6 +613,16 @@ export const schedulingService = {
     const response = await api.get<ShiftEquipmentCheckRecord>(`/equipment-checks/checks/${checkId}`);
     return response.data;
   },
+  async uploadCheckItemPhotos(checkId: string, itemId: string, files: File[]): Promise<{ photoUrls: string[]; count: number }> {
+    const formData = new FormData();
+    files.forEach((file) => formData.append('files', file));
+    const response = await api.post<{ photo_urls: string[]; count: number }>(
+      `/equipment-checks/checks/${checkId}/items/${itemId}/photos`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return { photoUrls: response.data.photo_urls ?? [], count: response.data.count };
+  },
   async getItemCheckHistory(itemId: string, limit?: number): Promise<CheckItemHistory[]> {
     const response = await api.get<CheckItemHistory[]>(
       `/equipment-checks/items/${itemId}/history`,

@@ -5,15 +5,18 @@ Manages equipment check templates (compartments + items) and shift
 equipment check submissions.
 """
 
+import base64
 from datetime import date
+from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
+from app.models.training import ShiftEquipmentCheck
 from app.models.user import User
 from app.schemas.equipment_check import (
     CheckTemplateCompartmentCreate,
@@ -460,6 +463,137 @@ async def get_my_checklist_history(
         limit=limit,
         offset=offset,
     )
+
+
+# =====================================================================
+# Photo Upload
+# =====================================================================
+
+
+MAX_PHOTOS_PER_ITEM = 3
+MAX_PHOTO_SIZE = 5 * 1024 * 1024  # 5MB
+ALLOWED_IMAGE_MIMES = {"image/jpeg", "image/png", "image/webp"}
+
+
+@router.post(
+    "/checks/{check_id}/items/{item_id}/photos",
+    status_code=201,
+)
+async def upload_check_item_photos(
+    check_id: str,
+    item_id: str,
+    files: List[UploadFile] = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """
+    Upload photo(s) for an equipment check item.
+
+    Accepts up to 3 images per item. Photos are optimized (resized,
+    EXIF-stripped, converted to WebP) and stored as base64 data URIs.
+    """
+    from app.models.training import ShiftEquipmentCheckItem
+    from app.utils.image_processing import optimize_image
+
+    if len(files) > MAX_PHOTOS_PER_ITEM:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Maximum {MAX_PHOTOS_PER_ITEM} photos per item",
+        )
+
+    # Verify the check item exists and belongs to user's org
+    result = await db.execute(
+        select(ShiftEquipmentCheckItem)
+        .join(
+            ShiftEquipmentCheck,
+            ShiftEquipmentCheck.id == ShiftEquipmentCheckItem.check_id,
+        )
+        .where(
+            ShiftEquipmentCheckItem.id == item_id,
+            ShiftEquipmentCheckItem.check_id == check_id,
+            ShiftEquipmentCheck.organization_id
+            == current_user.organization_id,
+        )
+    )
+    check_item = result.scalars().first()
+    if not check_item:
+        raise HTTPException(
+            status_code=404, detail="Check item not found"
+        )
+
+    existing_urls: list = check_item.photo_urls or []
+    if len(existing_urls) + len(files) > MAX_PHOTOS_PER_ITEM:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Item already has {len(existing_urls)} photo(s); "
+                f"maximum is {MAX_PHOTOS_PER_ITEM}"
+            ),
+        )
+
+    new_urls: list[str] = []
+    for upload in files:
+        contents = await upload.read()
+        if len(contents) > MAX_PHOTO_SIZE:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File {upload.filename} exceeds 5MB limit",
+            )
+
+        # MIME validation via magic bytes
+        try:
+            import magic
+
+            detected_mime = magic.from_buffer(contents, mime=True)
+        except ImportError:
+            if contents[:8] == b"\x89PNG\r\n\x1a\n":
+                detected_mime = "image/png"
+            elif contents[:2] == b"\xff\xd8":
+                detected_mime = "image/jpeg"
+            elif (
+                contents[:4] == b"RIFF"
+                and contents[8:12] == b"WEBP"
+            ):
+                detected_mime = "image/webp"
+            else:
+                detected_mime = "unknown"
+
+        if detected_mime not in ALLOWED_IMAGE_MIMES:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Invalid file type for {upload.filename}. "
+                    "Allowed: JPEG, PNG, WebP"
+                ),
+            )
+
+        # Optimize: resize, strip EXIF, convert to WebP
+        optimized = optimize_image(
+            contents,
+            max_size=(1920, 1080),
+            quality=80,
+            output_format="WEBP",
+        )
+        data_uri = (
+            f"data:image/webp;base64,"
+            f"{base64.b64encode(optimized).decode()}"
+        )
+        new_urls.append(data_uri)
+
+    import copy
+
+    updated_urls = copy.deepcopy(existing_urls) + new_urls
+    check_item.photo_urls = updated_urls
+
+    from sqlalchemy.orm.attributes import flag_modified
+
+    flag_modified(check_item, "photo_urls")
+    await db.commit()
+
+    return {
+        "photo_urls": updated_urls,
+        "count": len(updated_urls),
+    }
 
 
 # =====================================================================

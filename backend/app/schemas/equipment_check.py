@@ -240,6 +240,8 @@ class CheckItemResultSubmit(BaseModel):
     level_unit: Optional[str] = Field(None, max_length=50)
     serial_number: Optional[str] = Field(None, max_length=100)
     lot_number: Optional[str] = Field(None, max_length=100)
+    serial_found: Optional[str] = Field(None, max_length=100)
+    lot_found: Optional[str] = Field(None, max_length=100)
     photo_urls: Optional[List[str]] = None
     is_expired: bool = False
     expiration_date: Optional[date] = None
@@ -278,6 +280,9 @@ class ShiftEquipmentCheckItemResponse(UTCResponseBase):
     level_unit: Optional[str] = None
     serial_number: Optional[str] = None
     lot_number: Optional[str] = None
+    serial_found: Optional[str] = None
+    lot_found: Optional[str] = None
+    updated_serial: bool = False
     photo_urls: Optional[List[str]] = None
     is_expired: bool
     expiration_date: Optional[date] = None

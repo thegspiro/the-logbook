@@ -545,7 +545,10 @@ class EquipmentCheckService:
 
         # Recount after auto-fail
         failed = sum(1 for i in items_data if i.get("status") == "fail")
-        overall_status = "pass" if failed == 0 and completed == total else "fail"
+        if failed == 0 and completed == total:
+            overall_status = "pass"
+        else:
+            overall_status = "fail"
         if completed < total:
             overall_status = "incomplete"
 
@@ -568,13 +571,50 @@ class EquipmentCheckService:
         self.db.add(check)
         await self.db.flush()
 
+        # Collect template item IDs for serial update lookups
+        template_item_ids = [
+            i.get("template_item_id") for i in items_data
+            if i.get("template_item_id")
+        ]
+        template_items_map: Dict[str, CheckTemplateItem] = {}
+        if template_item_ids:
+            tmpl_result = await self.db.execute(
+                select(CheckTemplateItem).where(
+                    CheckTemplateItem.id.in_(template_item_ids)
+                )
+            )
+            for ti in tmpl_result.scalars().all():
+                template_items_map[str(ti.id)] = ti
+
         for item_data in items_data:
+            # Detect serial/lot changes for date_lot items
+            tmpl_item_id = item_data.get("template_item_id")
+            serial_found = item_data.get("serial_found")
+            lot_found = item_data.get("lot_found")
+            updated_serial = False
+
+            if tmpl_item_id and (serial_found or lot_found):
+                tmpl_item = template_items_map.get(tmpl_item_id)
+                if tmpl_item:
+                    serial_changed = (
+                        serial_found
+                        and serial_found != (tmpl_item.serial_number or "")
+                    )
+                    lot_changed = (
+                        lot_found
+                        and lot_found != (tmpl_item.lot_number or "")
+                    )
+                    if serial_changed or lot_changed:
+                        updated_serial = True
+                        if serial_found:
+                            tmpl_item.serial_number = serial_found
+                        if lot_found:
+                            tmpl_item.lot_number = lot_found
+
             check_item = ShiftEquipmentCheckItem(
                 id=generate_uuid(),
                 check_id=check.id,
-                template_item_id=item_data.get(
-                    "template_item_id"
-                ),
+                template_item_id=tmpl_item_id,
                 compartment_name=item_data.get(
                     "compartment_name", ""
                 ),
@@ -599,6 +639,9 @@ class EquipmentCheckService:
                     "serial_number"
                 ),
                 lot_number=item_data.get("lot_number"),
+                serial_found=serial_found,
+                lot_found=lot_found,
+                updated_serial=updated_serial,
                 photo_urls=item_data.get("photo_urls"),
                 is_expired=item_data.get(
                     "is_expired", False
@@ -885,7 +928,7 @@ class EquipmentCheckService:
         organization_id: str,
         user_position: Optional[str],
     ) -> List[EquipmentCheckTemplate]:
-        """Resolve applicable templates for a shift apparatus + user position."""
+        """Resolve applicable templates for a shift apparatus."""
         templates = []
 
         if shift.apparatus_id:
