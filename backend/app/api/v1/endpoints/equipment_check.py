@@ -12,12 +12,17 @@ from typing import List
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
-from app.models.training import ShiftEquipmentCheck
+from app.models.training import (
+    ShiftEquipmentCheck,
+    ShiftEquipmentCheckItem,
+)
 from app.models.user import User
+from app.utils.image_processing import optimize_image
 from app.schemas.equipment_check import (
     CheckTemplateCompartmentCreate,
     CheckTemplateCompartmentResponse,
@@ -492,9 +497,6 @@ async def upload_check_item_photos(
     Accepts up to 3 images per item. Photos are optimized (resized,
     EXIF-stripped, converted to WebP) and stored as base64 data URIs.
     """
-    from app.models.training import ShiftEquipmentCheckItem
-    from app.utils.image_processing import optimize_image
-
     if len(files) > MAX_PHOTOS_PER_ITEM:
         raise HTTPException(
             status_code=400,
@@ -506,7 +508,8 @@ async def upload_check_item_photos(
         select(ShiftEquipmentCheckItem)
         .join(
             ShiftEquipmentCheck,
-            ShiftEquipmentCheck.id == ShiftEquipmentCheckItem.check_id,
+            ShiftEquipmentCheck.id
+            == ShiftEquipmentCheckItem.check_id,
         )
         .where(
             ShiftEquipmentCheckItem.id == item_id,
@@ -531,38 +534,47 @@ async def upload_check_item_photos(
             ),
         )
 
+    # Detect magic library availability once
+    try:
+        import magic
+        has_magic = True
+    except ImportError:
+        has_magic = False
+
     new_urls: list[str] = []
     for upload in files:
         contents = await upload.read()
         if len(contents) > MAX_PHOTO_SIZE:
             raise HTTPException(
                 status_code=400,
-                detail=f"File {upload.filename} exceeds 5MB limit",
+                detail=(
+                    f"File {upload.filename} exceeds 5MB"
+                ),
             )
 
         # MIME validation via magic bytes
-        try:
-            import magic
-
-            detected_mime = magic.from_buffer(contents, mime=True)
-        except ImportError:
-            if contents[:8] == b"\x89PNG\r\n\x1a\n":
-                detected_mime = "image/png"
-            elif contents[:2] == b"\xff\xd8":
-                detected_mime = "image/jpeg"
-            elif (
-                contents[:4] == b"RIFF"
-                and contents[8:12] == b"WEBP"
-            ):
-                detected_mime = "image/webp"
-            else:
-                detected_mime = "unknown"
+        if has_magic:
+            detected_mime = magic.from_buffer(
+                contents, mime=True
+            )
+        elif contents[:8] == b"\x89PNG\r\n\x1a\n":
+            detected_mime = "image/png"
+        elif contents[:2] == b"\xff\xd8":
+            detected_mime = "image/jpeg"
+        elif (
+            contents[:4] == b"RIFF"
+            and contents[8:12] == b"WEBP"
+        ):
+            detected_mime = "image/webp"
+        else:
+            detected_mime = "unknown"
 
         if detected_mime not in ALLOWED_IMAGE_MIMES:
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    f"Invalid file type for {upload.filename}. "
+                    f"Invalid file type for "
+                    f"{upload.filename}. "
                     "Allowed: JPEG, PNG, WebP"
                 ),
             )
@@ -580,13 +592,9 @@ async def upload_check_item_photos(
         )
         new_urls.append(data_uri)
 
-    import copy
-
-    updated_urls = copy.deepcopy(existing_urls) + new_urls
+    # Shallow copy suffices — strings are immutable
+    updated_urls = list(existing_urls) + new_urls
     check_item.photo_urls = updated_urls
-
-    from sqlalchemy.orm.attributes import flag_modified
-
     flag_modified(check_item, "photo_urls")
     await db.commit()
 
