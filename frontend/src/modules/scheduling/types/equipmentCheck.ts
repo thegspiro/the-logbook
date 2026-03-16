@@ -6,6 +6,44 @@
  */
 
 // ============================================================================
+// Check Type & Template Type Enums
+// ============================================================================
+
+export const CheckType = {
+  PASS_FAIL: "pass_fail",
+  PRESENT: "present",
+  FUNCTIONAL: "functional",
+  QUANTITY: "quantity",
+  LEVEL: "level",
+  DATE_LOT: "date_lot",
+  READING: "reading",
+} as const;
+export type CheckType = (typeof CheckType)[keyof typeof CheckType];
+
+export const TemplateType = {
+  EQUIPMENT: "equipment",
+  VEHICLE: "vehicle",
+  COMBINED: "combined",
+} as const;
+export type TemplateType = (typeof TemplateType)[keyof typeof TemplateType];
+
+export const CHECK_TYPE_LABELS: Record<CheckType, string> = {
+  pass_fail: "Pass / Fail",
+  present: "Present",
+  functional: "Functional",
+  quantity: "Quantity",
+  level: "Level",
+  date_lot: "Date / Lot",
+  reading: "Reading",
+};
+
+export const TEMPLATE_TYPE_LABELS: Record<TemplateType, string> = {
+  equipment: "Equipment Check",
+  vehicle: "Vehicle Check",
+  combined: "Combined",
+};
+
+// ============================================================================
 // Check Template Item
 // ============================================================================
 
@@ -15,9 +53,14 @@ export interface CheckTemplateItem {
   name: string;
   description?: string;
   sortOrder: number;
-  checkType: 'pass_fail' | 'quantity' | 'reading';
+  checkType: CheckType;
   isRequired: boolean;
   requiredQuantity?: number;
+  expectedQuantity?: number;
+  minLevel?: number;
+  levelUnit?: string;
+  serialNumber?: string;
+  lotNumber?: string;
   imageUrl?: string;
   equipmentId?: string;
   hasExpiration: boolean;
@@ -34,6 +77,11 @@ export interface CheckTemplateItemCreate {
   check_type?: string | undefined;
   is_required?: boolean | undefined;
   required_quantity?: number | undefined;
+  expected_quantity?: number | undefined;
+  min_level?: number | undefined;
+  level_unit?: string | undefined;
+  serial_number?: string | undefined;
+  lot_number?: string | undefined;
   image_url?: string | undefined;
   equipment_id?: string | undefined;
   has_expiration?: boolean | undefined;
@@ -48,6 +96,11 @@ export interface CheckTemplateItemUpdate {
   check_type?: string | undefined;
   is_required?: boolean | undefined;
   required_quantity?: number | undefined;
+  expected_quantity?: number | undefined;
+  min_level?: number | undefined;
+  level_unit?: string | undefined;
+  serial_number?: string | undefined;
+  lot_number?: string | undefined;
   image_url?: string | undefined;
   equipment_id?: string | undefined;
   has_expiration?: boolean | undefined;
@@ -100,7 +153,8 @@ export interface EquipmentCheckTemplate {
   apparatusType?: string;
   name: string;
   description?: string;
-  checkTiming: 'start_of_shift' | 'end_of_shift';
+  checkTiming: "start_of_shift" | "end_of_shift";
+  templateType: TemplateType;
   assignedPositions?: string[];
   isActive: boolean;
   sortOrder: number;
@@ -116,6 +170,7 @@ export interface EquipmentCheckTemplateCreate {
   apparatus_id?: string | undefined;
   apparatus_type?: string | undefined;
   check_timing: string;
+  template_type?: string | undefined;
   assigned_positions?: string[] | undefined;
   is_active?: boolean | undefined;
   sort_order?: number | undefined;
@@ -128,6 +183,7 @@ export interface EquipmentCheckTemplateUpdate {
   apparatus_id?: string | undefined;
   apparatus_type?: string | undefined;
   check_timing?: string | undefined;
+  template_type?: string | undefined;
   assigned_positions?: string[] | undefined;
   is_active?: boolean | undefined;
   sort_order?: number | undefined;
@@ -141,9 +197,17 @@ export interface CheckItemResultSubmit {
   template_item_id: string;
   compartment_name: string;
   item_name: string;
-  status: 'pass' | 'fail' | 'not_checked';
+  check_type?: string | undefined;
+  status: "pass" | "fail" | "not_checked";
   quantity_found?: number | undefined;
   required_quantity?: number | undefined;
+  level_reading?: number | undefined;
+  level_unit?: string | undefined;
+  serial_number?: string | undefined;
+  lot_number?: string | undefined;
+  serial_found?: string | undefined;
+  lot_found?: string | undefined;
+  photo_urls?: string[] | undefined;
   is_expired?: boolean | undefined;
   expiration_date?: string | undefined;
   notes?: string | undefined;
@@ -167,9 +231,18 @@ export interface ShiftEquipmentCheckItemRecord {
   templateItemId?: string;
   compartmentName: string;
   itemName: string;
-  status: 'pass' | 'fail' | 'not_checked';
+  checkType?: string;
+  status: "pass" | "fail" | "not_checked";
   quantityFound?: number;
   requiredQuantity?: number;
+  levelReading?: number;
+  levelUnit?: string;
+  serialNumber?: string;
+  lotNumber?: string;
+  serialFound?: string;
+  lotFound?: string;
+  updatedSerial?: boolean;
+  photoUrls?: string[];
   isExpired: boolean;
   expirationDate?: string;
   notes?: string;
@@ -186,7 +259,7 @@ export interface ShiftEquipmentCheckRecord {
   checkedByName?: string;
   checkedAt?: string;
   checkTiming: string;
-  overallStatus: 'pass' | 'fail' | 'incomplete';
+  overallStatus: "pass" | "fail" | "incomplete";
   totalItems: number;
   completedItems: number;
   failedItems: number;
@@ -216,8 +289,76 @@ export interface CheckItemHistory {
   shiftDate?: string;
   status: string;
   quantityFound?: number;
+  levelReading?: number;
+  serialNumber?: string;
+  lotNumber?: string;
   isExpired: boolean;
   notes?: string;
   checkedByName?: string;
   checkedAt?: string;
+}
+
+// ─── Report Types ────────────────────────────────────────────────────────────
+
+export interface ApparatusComplianceRecord {
+  apparatusId: string;
+  apparatusName: string;
+  lastCheckDate?: string;
+  lastCheckedBy?: string;
+  lastStatus?: string;
+  checksCompleted: number;
+  checksExpected: number;
+  passCount: number;
+  failCount: number;
+  hasDeficiency: boolean;
+  deficiencySince?: string;
+}
+
+export interface MemberComplianceReportRecord {
+  userId: string;
+  userName: string;
+  checksCompleted: number;
+  passCount: number;
+  failCount: number;
+}
+
+export interface ComplianceReport {
+  totalChecks: number;
+  passRate: number;
+  overdueCount: number;
+  avgItemsPerCheck: number;
+  apparatus: ApparatusComplianceRecord[];
+  members: MemberComplianceReportRecord[];
+}
+
+export interface FailureLogRecord {
+  id: string;
+  checkId: string;
+  checkedAt?: string;
+  apparatusId?: string;
+  apparatusName?: string;
+  compartmentName: string;
+  itemName: string;
+  checkType?: string;
+  status: string;
+  notes?: string;
+  checkedByName?: string;
+}
+
+export interface FailureLogResponse {
+  items: FailureLogRecord[];
+  total: number;
+}
+
+export interface ItemTrendEntry {
+  period: string;
+  passCount: number;
+  failCount: number;
+  notCheckedCount: number;
+}
+
+export interface ItemTrendResponse {
+  itemName: string;
+  trends: ItemTrendEntry[];
+  history: CheckItemHistory[];
 }

@@ -57,6 +57,9 @@ import type {
   CheckTemplateCompartment,
   CheckTemplateItem,
   CheckItemHistory,
+  ComplianceReport,
+  FailureLogResponse,
+  ItemTrendResponse,
 } from '../types/equipmentCheck';
 
 declare module 'axios' {
@@ -610,6 +613,16 @@ export const schedulingService = {
     const response = await api.get<ShiftEquipmentCheckRecord>(`/equipment-checks/checks/${checkId}`);
     return response.data;
   },
+  async uploadCheckItemPhotos(checkId: string, itemId: string, files: File[]): Promise<{ photoUrls: string[]; count: number }> {
+    const formData = new FormData();
+    files.forEach((file) => formData.append('files', file));
+    const response = await api.post<{ photo_urls: string[]; count: number }>(
+      `/equipment-checks/checks/${checkId}/items/${itemId}/photos`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return { photoUrls: response.data.photo_urls ?? [], count: response.data.count };
+  },
   async getItemCheckHistory(itemId: string, limit?: number): Promise<CheckItemHistory[]> {
     const response = await api.get<CheckItemHistory[]>(
       `/equipment-checks/items/${itemId}/history`,
@@ -626,5 +639,63 @@ export const schedulingService = {
   async getMyChecklistHistory(params?: { start_date?: string; end_date?: string; limit?: number; offset?: number }): Promise<ShiftEquipmentCheckRecord[]> {
     const response = await api.get<ShiftEquipmentCheckRecord[]>('/equipment-checks/my-checklists/history', { params });
     return response.data;
+  },
+
+  // =====================================================================
+  // Reports
+  // =====================================================================
+
+  async getEquipmentComplianceReport(params?: {
+    date_from?: string;
+    date_to?: string;
+  }): Promise<ComplianceReport> {
+    const response = await api.get<ComplianceReport>('/equipment-checks/reports/compliance', { params });
+    return response.data;
+  },
+  async getFailureLog(params?: {
+    date_from?: string | undefined;
+    date_to?: string | undefined;
+    apparatus_id?: string | undefined;
+    item_name?: string | undefined;
+    limit?: number | undefined;
+    offset?: number | undefined;
+  }): Promise<FailureLogResponse> {
+    const response = await api.get<FailureLogResponse>('/equipment-checks/reports/failures', { params });
+    return response.data;
+  },
+  async getItemTrends(params: {
+    template_item_id: string;
+    date_from?: string;
+    date_to?: string;
+    interval?: string;
+  }): Promise<ItemTrendResponse> {
+    const response = await api.get<ItemTrendResponse>('/equipment-checks/reports/item-trends', { params });
+    return response.data;
+  },
+  getReportExportUrl(params: {
+    report_type: string;
+    date_from?: string;
+    date_to?: string;
+    apparatus_id?: string;
+    template_item_id?: string;
+  }): string {
+    const searchParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) searchParams.set(key, value);
+    });
+    return `/api/v1/equipment-checks/reports/export/csv?${searchParams.toString()}`;
+  },
+  getReportPdfExportUrl(params: {
+    report_type: string;
+    date_from?: string;
+    date_to?: string;
+    apparatus_id?: string;
+    check_id?: string;
+  }): string {
+    const searchParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) searchParams.set(key, value);
+    });
+    return `/api/v1/equipment-checks/reports/export/pdf?${searchParams.toString()}`;
   },
 };

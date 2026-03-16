@@ -15,6 +15,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     Enum,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -526,6 +527,12 @@ class Apparatus(Base):
     # NFPA Compliance
     # ===========================================
     nfpa_tracking_enabled = Column(Boolean, default=False, nullable=False)
+
+    # ===========================================
+    # Equipment Check Deficiency Tracking
+    # ===========================================
+    has_deficiency = Column(Boolean, default=False, nullable=False)
+    deficiency_since = Column(DateTime(timezone=True), nullable=True)
 
     # ===========================================
     # Custom Fields (JSON storage for user-defined fields)
@@ -1924,6 +1931,9 @@ class EquipmentCheckTemplate(Base):
     name = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
     check_timing = Column(String(30), nullable=False)  # start_of_shift, end_of_shift
+    template_type = Column(
+        String(30), nullable=False, default="equipment"
+    )  # equipment, vehicle, combined
     assigned_positions = Column(JSON, nullable=True)  # e.g. ["officer","driver"]
     is_active = Column(Boolean, default=True, nullable=False)
     sort_order = Column(Integer, default=0, nullable=False)
@@ -2041,9 +2051,14 @@ class CheckTemplateItem(Base):
     sort_order = Column(Integer, default=0, nullable=False)
     check_type = Column(
         String(30), nullable=False, default="pass_fail"
-    )  # pass_fail, quantity, reading
+    )  # pass_fail, present, functional, quantity, level, date_lot, reading
     is_required = Column(Boolean, default=False, nullable=False)
     required_quantity = Column(Integer, nullable=True)
+    expected_quantity = Column(Integer, nullable=True)
+    min_level = Column(Float, nullable=True)
+    level_unit = Column(String(50), nullable=True)  # psi, %, gallons, etc.
+    serial_number = Column(String(100), nullable=True)
+    lot_number = Column(String(100), nullable=True)
     image_url = Column(String(500), nullable=True)
     has_expiration = Column(Boolean, default=False, nullable=False)
     expiration_date = Column(Date, nullable=True)

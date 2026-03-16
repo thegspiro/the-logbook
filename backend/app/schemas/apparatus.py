@@ -487,6 +487,10 @@ class ApparatusResponse(ApparatusBase):
     hours_updated_at: Optional[datetime] = None
     value_updated_at: Optional[datetime] = None
 
+    # Deficiency tracking
+    has_deficiency: bool = False
+    deficiency_since: Optional[datetime] = None
+
     # Archive info
     is_archived: bool
     archived_at: Optional[datetime] = None
@@ -530,6 +534,8 @@ class ApparatusListItem(BaseModel):
     current_hours: Optional[Decimal] = None
     min_staffing: int = 1
     is_archived: bool
+    has_deficiency: bool = False
+    deficiency_since: Optional[datetime] = None
 
     # Nested type and status info
     apparatus_type: Optional[ApparatusTypeListItem] = None

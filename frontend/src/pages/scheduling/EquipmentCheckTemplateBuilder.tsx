@@ -6,7 +6,7 @@
  * types, expiration tracking, and drag-handle placeholders for reordering.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -20,8 +20,25 @@ import {
   Clock,
   AlertTriangle,
   Loader2,
+  Truck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import type { DragEndEvent, DraggableAttributes } from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { schedulingService } from '@/modules/scheduling';
 import type {
@@ -29,6 +46,11 @@ import type {
   EquipmentCheckTemplateCreate,
   CheckTemplateCompartmentCreate,
   CheckTemplateItemCreate,
+  CheckType,
+  TemplateType,
+} from '@/modules/scheduling/types/equipmentCheck';
+import {
+  TEMPLATE_TYPE_LABELS,
 } from '@/modules/scheduling/types/equipmentCheck';
 
 // ============================================================================
@@ -62,9 +84,200 @@ const APPARATUS_TYPES = [
 
 const CHECK_TYPES = [
   { value: 'pass_fail', label: 'Pass / Fail' },
+  { value: 'present', label: 'Present' },
+  { value: 'functional', label: 'Functional' },
   { value: 'quantity', label: 'Quantity' },
+  { value: 'level', label: 'Level' },
+  { value: 'date_lot', label: 'Date / Lot' },
   { value: 'reading', label: 'Reading' },
 ] as const;
+
+// Pre-built vehicle check compartment templates by apparatus type
+interface VehiclePreset {
+  label: string;
+  compartments: { name: string; items: { name: string; checkType: CheckType }[] }[];
+}
+
+const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
+  engine: {
+    label: 'Engine / Pumper',
+    compartments: [
+      {
+        name: 'Cab & Exterior',
+        items: [
+          { name: 'Lights & emergency warning system', checkType: 'functional' },
+          { name: 'Siren', checkType: 'functional' },
+          { name: 'Horn', checkType: 'functional' },
+          { name: 'Mirrors', checkType: 'functional' },
+          { name: 'Windshield wipers / washer', checkType: 'functional' },
+          { name: 'Tire condition & pressure', checkType: 'pass_fail' },
+          { name: 'Body damage / fluid leaks', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Engine Compartment',
+        items: [
+          { name: 'Oil level', checkType: 'level' },
+          { name: 'Coolant level', checkType: 'level' },
+          { name: 'Power steering fluid', checkType: 'level' },
+          { name: 'Belts & hoses condition', checkType: 'pass_fail' },
+          { name: 'Battery condition & connections', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Pump Panel',
+        items: [
+          { name: 'Pump engages properly', checkType: 'functional' },
+          { name: 'Gauges operational', checkType: 'functional' },
+          { name: 'Primer works', checkType: 'functional' },
+          { name: 'Pump panel lights', checkType: 'functional' },
+          { name: 'Drain valves closed', checkType: 'pass_fail' },
+          { name: 'Tank water level', checkType: 'level' },
+        ],
+      },
+      {
+        name: 'Brakes & Drivetrain',
+        items: [
+          { name: 'Service brakes', checkType: 'functional' },
+          { name: 'Parking brake', checkType: 'functional' },
+          { name: 'Transmission (all gears)', checkType: 'functional' },
+          { name: 'Steering responsiveness', checkType: 'functional' },
+        ],
+      },
+      {
+        name: 'Safety & Cab Interior',
+        items: [
+          { name: 'Seat belts', checkType: 'functional' },
+          { name: 'SCBA mounted & secured', checkType: 'present' },
+          { name: 'Radio(s) operational', checkType: 'functional' },
+          { name: 'MDT / computer operational', checkType: 'functional' },
+          { name: 'Cab clean & organized', checkType: 'pass_fail' },
+        ],
+      },
+    ],
+  },
+  ladder: {
+    label: 'Ladder / Tower',
+    compartments: [
+      {
+        name: 'Cab & Exterior',
+        items: [
+          { name: 'Lights & emergency warning system', checkType: 'functional' },
+          { name: 'Siren', checkType: 'functional' },
+          { name: 'Horn', checkType: 'functional' },
+          { name: 'Mirrors', checkType: 'functional' },
+          { name: 'Tire condition & pressure', checkType: 'pass_fail' },
+          { name: 'Body damage / fluid leaks', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Engine Compartment',
+        items: [
+          { name: 'Oil level', checkType: 'level' },
+          { name: 'Coolant level', checkType: 'level' },
+          { name: 'Belts & hoses condition', checkType: 'pass_fail' },
+          { name: 'Battery condition', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Aerial Device',
+        items: [
+          { name: 'Aerial extends & retracts', checkType: 'functional' },
+          { name: 'Aerial rotation', checkType: 'functional' },
+          { name: 'Outriggers / stabilizers deploy', checkType: 'functional' },
+          { name: 'Aerial hydraulic fluid level', checkType: 'level' },
+          { name: 'Aerial lights / spotlight', checkType: 'functional' },
+          { name: 'Rungs & rail condition', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Brakes & Drivetrain',
+        items: [
+          { name: 'Service brakes', checkType: 'functional' },
+          { name: 'Parking brake', checkType: 'functional' },
+          { name: 'Transmission', checkType: 'functional' },
+          { name: 'Steering responsiveness', checkType: 'functional' },
+        ],
+      },
+    ],
+  },
+  ambulance: {
+    label: 'Ambulance / Rescue',
+    compartments: [
+      {
+        name: 'Cab & Exterior',
+        items: [
+          { name: 'Lights & emergency warning system', checkType: 'functional' },
+          { name: 'Siren', checkType: 'functional' },
+          { name: 'Horn', checkType: 'functional' },
+          { name: 'Tire condition & pressure', checkType: 'pass_fail' },
+          { name: 'Body damage / fluid leaks', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Engine Compartment',
+        items: [
+          { name: 'Oil level', checkType: 'level' },
+          { name: 'Coolant level', checkType: 'level' },
+          { name: 'Battery condition', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Patient Compartment',
+        items: [
+          { name: 'Stretcher locks & operation', checkType: 'functional' },
+          { name: 'O2 system / regulators', checkType: 'functional' },
+          { name: 'Suction unit', checkType: 'functional' },
+          { name: 'Climate control (heat/AC)', checkType: 'functional' },
+          { name: 'Patient compartment lights', checkType: 'functional' },
+          { name: 'Sharps container level', checkType: 'pass_fail' },
+          { name: 'Compartment clean & sanitized', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Brakes & Drivetrain',
+        items: [
+          { name: 'Service brakes', checkType: 'functional' },
+          { name: 'Parking brake', checkType: 'functional' },
+          { name: 'Transmission', checkType: 'functional' },
+          { name: 'Steering responsiveness', checkType: 'functional' },
+        ],
+      },
+    ],
+  },
+  generic: {
+    label: 'Generic Vehicle',
+    compartments: [
+      {
+        name: 'Cab & Exterior',
+        items: [
+          { name: 'Lights & emergency warning system', checkType: 'functional' },
+          { name: 'Siren / horn', checkType: 'functional' },
+          { name: 'Mirrors', checkType: 'functional' },
+          { name: 'Tire condition & pressure', checkType: 'pass_fail' },
+          { name: 'Body damage / fluid leaks', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Engine Compartment',
+        items: [
+          { name: 'Oil level', checkType: 'level' },
+          { name: 'Coolant level', checkType: 'level' },
+          { name: 'Battery condition', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Brakes & Drivetrain',
+        items: [
+          { name: 'Service brakes', checkType: 'functional' },
+          { name: 'Parking brake', checkType: 'functional' },
+          { name: 'Transmission', checkType: 'functional' },
+          { name: 'Steering responsiveness', checkType: 'functional' },
+        ],
+      },
+    ],
+  },
+};
 
 const inputClass = 'form-input';
 
@@ -83,9 +296,14 @@ interface ItemFormState {
   id?: string;
   name: string;
   description: string;
-  checkType: 'pass_fail' | 'quantity' | 'reading';
+  checkType: CheckType;
   isRequired: boolean;
   requiredQuantity: string;
+  expectedQuantity: string;
+  minLevel: string;
+  levelUnit: string;
+  serialNumber: string;
+  lotNumber: string;
   hasExpiration: boolean;
   expirationDate: string;
   expirationWarningDays: string;
@@ -99,6 +317,11 @@ function emptyItem(): ItemFormState {
     checkType: 'pass_fail',
     isRequired: true,
     requiredQuantity: '',
+    expectedQuantity: '',
+    minLevel: '',
+    levelUnit: '',
+    serialNumber: '',
+    lotNumber: '',
     hasExpiration: false,
     expirationDate: '',
     expirationWarningDays: '30',
@@ -137,6 +360,7 @@ interface TemplateFormState {
   name: string;
   description: string;
   checkTiming: 'start_of_shift' | 'end_of_shift';
+  templateType: TemplateType;
   assignedPositions: string[];
   apparatusType: string;
   apparatusId: string;
@@ -148,6 +372,7 @@ function defaultTemplateForm(): TemplateFormState {
     name: '',
     description: '',
     checkTiming: 'start_of_shift',
+    templateType: 'equipment',
     assignedPositions: [],
     apparatusType: '',
     apparatusId: '',
@@ -183,6 +408,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         name: data.name,
         description: data.description ?? '',
         checkTiming: data.checkTiming,
+        templateType: data.templateType ?? 'equipment',
         assignedPositions: data.assignedPositions ?? [],
         apparatusType: data.apparatusType ?? '',
         apparatusId: data.apparatusId ?? '',
@@ -205,6 +431,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             checkType: item.checkType,
             isRequired: item.isRequired,
             requiredQuantity: item.requiredQuantity != null ? String(item.requiredQuantity) : '',
+            expectedQuantity: item.expectedQuantity != null ? String(item.expectedQuantity) : '',
+            minLevel: item.minLevel != null ? String(item.minLevel) : '',
+            levelUnit: item.levelUnit ?? '',
+            serialNumber: item.serialNumber ?? '',
+            lotNumber: item.lotNumber ?? '',
             hasExpiration: item.hasExpiration,
             expirationDate: item.expirationDate ?? '',
             expirationWarningDays: String(item.expirationWarningDays ?? 30),
@@ -344,6 +575,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           checkType: created.checkType,
           isRequired: created.isRequired,
           requiredQuantity: created.requiredQuantity != null ? String(created.requiredQuantity) : '',
+          expectedQuantity: created.expectedQuantity != null ? String(created.expectedQuantity) : '',
+          minLevel: created.minLevel != null ? String(created.minLevel) : '',
+          levelUnit: created.levelUnit ?? '',
+          serialNumber: created.serialNumber ?? '',
+          lotNumber: created.lotNumber ?? '',
           hasExpiration: created.hasExpiration,
           expirationDate: created.expirationDate ?? '',
           expirationWarningDays: String(created.expirationWarningDays ?? 30),
@@ -427,6 +663,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             check_type: item.checkType,
             is_required: item.isRequired,
             required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
+            expected_quantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
+            min_level: item.minLevel ? Number(item.minLevel) : undefined,
+            level_unit: item.levelUnit.trim() || undefined,
+            serial_number: item.serialNumber.trim() || undefined,
+            lot_number: item.lotNumber.trim() || undefined,
             image_url: item.imageUrl.trim() || undefined,
             has_expiration: item.hasExpiration,
             expiration_date: item.expirationDate.trim() || undefined,
@@ -441,6 +682,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           name: form.name.trim(),
           description: form.description.trim() || undefined,
           check_timing: form.checkTiming,
+          template_type: form.templateType,
           assigned_positions: form.assignedPositions.length > 0 ? form.assignedPositions : undefined,
           apparatus_type: form.apparatusType || undefined,
           apparatus_id: form.apparatusId || undefined,
@@ -471,6 +713,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   check_type: item.checkType,
                   is_required: item.isRequired,
                   required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
+                  expected_quantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
+                  min_level: item.minLevel ? Number(item.minLevel) : undefined,
+                  level_unit: item.levelUnit.trim() || undefined,
+                  serial_number: item.serialNumber.trim() || undefined,
+                  lot_number: item.lotNumber.trim() || undefined,
                   image_url: item.imageUrl.trim() || undefined,
                   has_expiration: item.hasExpiration,
                   expiration_date: item.expirationDate.trim() || undefined,
@@ -489,6 +736,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           name: form.name.trim(),
           description: form.description.trim() || undefined,
           check_timing: form.checkTiming,
+          template_type: form.templateType,
           assigned_positions: form.assignedPositions.length > 0 ? form.assignedPositions : undefined,
           apparatus_type: form.apparatusType || undefined,
           apparatus_id: form.apparatusId || undefined,
@@ -506,6 +754,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               check_type: item.checkType,
               is_required: item.isRequired,
               required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
+              expected_quantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
+              min_level: item.minLevel ? Number(item.minLevel) : undefined,
+              level_unit: item.levelUnit.trim() || undefined,
+              serial_number: item.serialNumber.trim() || undefined,
+              lot_number: item.lotNumber.trim() || undefined,
               image_url: item.imageUrl.trim() || undefined,
               has_expiration: item.hasExpiration,
               expiration_date: item.expirationDate.trim() || undefined,
@@ -528,6 +781,125 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   };
 
   // ---------------------------------------------------------------------------
+  // Vehicle Preset Loader
+  // ---------------------------------------------------------------------------
+
+  const [showPresetPicker, setShowPresetPicker] = useState(false);
+
+  const loadVehiclePreset = (presetKey: string) => {
+    const preset = VEHICLE_PRESETS[presetKey];
+    if (!preset) return;
+
+    const newCompartments: CompartmentFormState[] = preset.compartments.map(
+      (comp) => ({
+        name: comp.name,
+        description: '',
+        imageUrl: '',
+        parentCompartmentId: '',
+        items: comp.items.map((item) => ({
+          ...emptyItem(),
+          name: item.name,
+          checkType: item.checkType,
+        })),
+      }),
+    );
+
+    if (compartments.length > 0) {
+      if (
+        !window.confirm(
+          'Loading a preset will replace all existing compartments. Continue?',
+        )
+      )
+        return;
+    }
+
+    setCompartments(newCompartments);
+    setShowPresetPicker(false);
+    // Expand all new compartments
+    const expanded = new Set<string>();
+    newCompartments.forEach((_, i) => expanded.add(`comp-${i}`));
+    setExpandedCompartments(expanded);
+    toast.success(`Loaded ${preset.label} vehicle check preset`);
+  };
+
+  // ---------------------------------------------------------------------------
+  // Drag & Drop
+  // ---------------------------------------------------------------------------
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const compartmentIds = useMemo(
+    () => compartments.map((c, i) => c.id ?? `comp-${i}`),
+    [compartments],
+  );
+
+  const handleCompartmentDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = compartmentIds.indexOf(String(active.id));
+    const newIndex = compartmentIds.indexOf(String(over.id));
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    setCompartments((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(oldIndex, 1);
+      if (!moved) return prev;
+      next.splice(newIndex, 0, moved);
+      return next;
+    });
+
+    // Persist reorder if template is saved
+    if (isEditing && templateId) {
+      const reorderedIds = [...compartmentIds];
+      const [movedId] = reorderedIds.splice(oldIndex, 1);
+      if (movedId) reorderedIds.splice(newIndex, 0, movedId);
+      const savedIds = reorderedIds.filter(
+        (id) => !id.startsWith('comp-'),
+      );
+      if (savedIds.length > 0) {
+        void schedulingService
+          .reorderCompartments(templateId, savedIds)
+          .catch(() => {
+            toast.error('Failed to save compartment order');
+          });
+      }
+    }
+  };
+
+  const handleItemDragEnd = (compIdx: number, event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const comp = compartments[compIdx];
+    if (!comp) return;
+
+    const itemIds = comp.items.map(
+      (item, i) => item.id ?? `item-${compIdx}-${i}`,
+    );
+    const oldIndex = itemIds.indexOf(String(active.id));
+    const newIndex = itemIds.indexOf(String(over.id));
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    setCompartments((prev) => {
+      const next = [...prev];
+      const c = next[compIdx];
+      if (!c) return prev;
+      const items = [...c.items];
+      const [moved] = items.splice(oldIndex, 1);
+      if (!moved) return prev;
+      items.splice(newIndex, 0, moved);
+      next[compIdx] = { ...c, items };
+      return next;
+    });
+
+    // No item reorder API endpoint exists yet — sort_order is saved on template save
+  };
+
+  // ---------------------------------------------------------------------------
   // Render: Loading
   // ---------------------------------------------------------------------------
 
@@ -547,12 +919,21 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     compIdx: number,
     itemIdx: number,
     item: ItemFormState,
+    dragHandleProps?: Record<string, unknown>,
   ) => (
     <div
       key={item.id ?? `item-${compIdx}-${itemIdx}`}
       className="rounded-md border border-theme-surface-border bg-theme-surface p-3 space-y-3"
     >
       <div className="flex items-start gap-3">
+        {/* Drag handle */}
+        <button
+          type="button"
+          className="mt-6 p-1 text-theme-text-muted cursor-grab active:cursor-grabbing touch-none"
+          {...(dragHandleProps ?? {})}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
         {/* Name + Description */}
         <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
@@ -624,17 +1005,84 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
         {/* Required Quantity (conditional) */}
         {item.checkType === 'quantity' && (
-          <div>
-            <label className={labelClass}>Required Qty</label>
-            <input
-              type="number"
-              className={inputClass}
-              min="0"
-              placeholder="0"
-              value={item.requiredQuantity}
-              onChange={(e) => updateItemField(compIdx, itemIdx, { requiredQuantity: e.target.value })}
-            />
-          </div>
+          <>
+            <div>
+              <label className={labelClass}>Required Qty</label>
+              <input
+                type="number"
+                className={inputClass}
+                min="0"
+                placeholder="0"
+                value={item.requiredQuantity}
+                onChange={(e) => updateItemField(compIdx, itemIdx, { requiredQuantity: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Expected Qty</label>
+              <input
+                type="number"
+                className={inputClass}
+                min="0"
+                placeholder="0"
+                value={item.expectedQuantity}
+                onChange={(e) => updateItemField(compIdx, itemIdx, { expectedQuantity: e.target.value })}
+              />
+            </div>
+          </>
+        )}
+
+        {/* Level fields (conditional) */}
+        {item.checkType === 'level' && (
+          <>
+            <div>
+              <label className={labelClass}>Min Level</label>
+              <input
+                type="number"
+                className={inputClass}
+                min="0"
+                step="0.1"
+                placeholder="0"
+                value={item.minLevel}
+                onChange={(e) => updateItemField(compIdx, itemIdx, { minLevel: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Unit</label>
+              <input
+                type="text"
+                className={inputClass}
+                placeholder="psi, %, gallons..."
+                value={item.levelUnit}
+                onChange={(e) => updateItemField(compIdx, itemIdx, { levelUnit: e.target.value })}
+              />
+            </div>
+          </>
+        )}
+
+        {/* Serial / Lot Number (conditional) */}
+        {(item.checkType === 'date_lot' || item.checkType === 'quantity') && (
+          <>
+            <div>
+              <label className={labelClass}>Serial #</label>
+              <input
+                type="text"
+                className={inputClass}
+                placeholder="Serial number"
+                value={item.serialNumber}
+                onChange={(e) => updateItemField(compIdx, itemIdx, { serialNumber: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Lot #</label>
+              <input
+                type="text"
+                className={inputClass}
+                placeholder="Lot number"
+                value={item.lotNumber}
+                onChange={(e) => updateItemField(compIdx, itemIdx, { lotNumber: e.target.value })}
+              />
+            </div>
+          </>
         )}
 
         {/* Image URL */}
@@ -700,18 +1148,71 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Render: Compartment Card
   // ---------------------------------------------------------------------------
 
-  const renderCompartment = (comp: CompartmentFormState, idx: number) => {
+  // ---------------------------------------------------------------------------
+  // Render: Sortable Item Wrapper
+  // ---------------------------------------------------------------------------
+
+  const SortableItemRow: React.FC<{
+    id: string;
+    compIdx: number;
+    itemIdx: number;
+    item: ItemFormState;
+  }> = ({ id, compIdx, itemIdx, item }) => {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+      zIndex: isDragging ? 10 : undefined,
+    };
+
+    return (
+      <div ref={setNodeRef} style={style} {...attributes}>
+        {renderItem(compIdx, itemIdx, item, listeners ?? undefined)}
+      </div>
+    );
+  };
+
+  // ---------------------------------------------------------------------------
+  // Render: Compartment
+  // ---------------------------------------------------------------------------
+
+  const renderCompartment = (
+    comp: CompartmentFormState,
+    idx: number,
+    dragHandleProps?: Record<string, unknown>,
+    sortableRef?: React.Ref<HTMLDivElement>,
+    sortableStyle?: React.CSSProperties,
+    sortableAttributes?: DraggableAttributes,
+  ) => {
     const key = comp.id ?? `comp-${idx}`;
     const isExpanded = expandedCompartments.has(key);
 
     return (
       <div
         key={key}
+        ref={sortableRef}
+        style={sortableStyle}
+        {...(sortableAttributes ?? {})}
         className="rounded-lg border border-theme-surface-border bg-theme-surface overflow-hidden"
       >
         {/* Compartment header */}
         <div className="flex items-center gap-2 px-4 py-3 bg-theme-surface">
-          <GripVertical className="h-5 w-5 text-theme-text-muted cursor-grab flex-shrink-0" />
+          <button
+            type="button"
+            className="p-0.5 text-theme-text-muted cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
+            {...(dragHandleProps ?? {})}
+          >
+            <GripVertical className="h-5 w-5" />
+          </button>
 
           <button
             type="button"
@@ -826,11 +1327,67 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 </p>
               )}
 
-              {comp.items.map((item, itemIdx) => renderItem(idx, itemIdx, item))}
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={(e: DragEndEvent) => handleItemDragEnd(idx, e)}
+              >
+                <SortableContext
+                  items={comp.items.map(
+                    (item, i) => item.id ?? `item-${idx}-${i}`,
+                  )}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {comp.items.map((item, itemIdx) => (
+                    <SortableItemRow
+                      key={item.id ?? `item-${idx}-${itemIdx}`}
+                      id={item.id ?? `item-${idx}-${itemIdx}`}
+                      compIdx={idx}
+                      itemIdx={itemIdx}
+                      item={item}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
             </div>
           </div>
         )}
       </div>
+    );
+  };
+
+  // ---------------------------------------------------------------------------
+  // Render: Sortable Compartment Wrapper
+  // ---------------------------------------------------------------------------
+
+  const SortableCompartmentRow: React.FC<{
+    id: string;
+    comp: CompartmentFormState;
+    idx: number;
+  }> = ({ id, comp, idx }) => {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id });
+
+    const style: React.CSSProperties = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+      zIndex: isDragging ? 10 : undefined,
+    };
+
+    return renderCompartment(
+      comp,
+      idx,
+      listeners ?? undefined,
+      setNodeRef,
+      style,
+      attributes,
     );
   };
 
@@ -918,6 +1475,24 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           </select>
         </div>
 
+        {/* Template Type */}
+        <div>
+          <label className={labelClass}>Template Type</label>
+          <select
+            className={selectClass}
+            value={form.templateType}
+            onChange={(e) =>
+              updateForm({ templateType: e.target.value as TemplateType })
+            }
+          >
+            {(Object.entries(TEMPLATE_TYPE_LABELS) as [TemplateType, string][]).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Assigned Positions */}
         <div>
           <label className={labelClass}>Assigned Positions</label>
@@ -989,26 +1564,87 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-theme-text-primary">Compartments</h2>
-          <button
-            type="button"
-            onClick={() => void addCompartment()}
-            className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            Add Compartment
-          </button>
+          <div className="flex items-center gap-2">
+            {(form.templateType === 'vehicle' || form.templateType === 'combined') && (
+              <button
+                type="button"
+                onClick={() => setShowPresetPicker(!showPresetPicker)}
+                className="flex items-center gap-1.5 rounded-md border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-sm font-medium text-orange-700 dark:text-orange-400 hover:bg-orange-500/20 transition-colors"
+              >
+                <Truck className="h-4 w-4" />
+                Load Vehicle Preset
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => void addCompartment()}
+              className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Add Compartment
+            </button>
+          </div>
         </div>
+
+        {/* Vehicle Preset Picker */}
+        {showPresetPicker && (
+          <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 p-4">
+            <p className="text-sm font-medium text-theme-text-primary mb-3">
+              Choose a pre-built vehicle check template:
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {Object.entries(VEHICLE_PRESETS).map(([key, preset]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => loadVehiclePreset(key)}
+                  className="rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary hover:border-orange-500/40 hover:bg-orange-500/10 transition-colors text-left"
+                >
+                  <span className="font-medium">{preset.label}</span>
+                  <span className="block text-xs text-theme-text-muted mt-0.5">
+                    {preset.compartments.length} sections,{' '}
+                    {preset.compartments.reduce(
+                      (sum, c) => sum + c.items.length,
+                      0,
+                    )}{' '}
+                    items
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {compartments.length === 0 && (
           <div className="rounded-lg border border-dashed border-theme-surface-border bg-theme-surface p-8 text-center">
             <p className="text-sm text-theme-text-muted">
-              No compartments yet. Add compartments to organize equipment check items by location on
-              the apparatus.
+              No compartments yet.
+              {form.templateType === 'vehicle' || form.templateType === 'combined'
+                ? ' Use "Load Vehicle Preset" above or add compartments manually.'
+                : ' Add compartments to organize equipment check items by location on the apparatus.'}
             </p>
           </div>
         )}
 
-        {compartments.map((comp, idx) => renderCompartment(comp, idx))}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleCompartmentDragEnd}
+        >
+          <SortableContext
+            items={compartmentIds}
+            strategy={verticalListSortingStrategy}
+          >
+            {compartments.map((comp, idx) => (
+              <SortableCompartmentRow
+                key={comp.id ?? `comp-${idx}`}
+                id={comp.id ?? `comp-${idx}`}
+                comp={comp}
+                idx={idx}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
       </div>
     </div>
   );

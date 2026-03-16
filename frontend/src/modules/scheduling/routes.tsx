@@ -16,6 +16,10 @@ const EquipmentCheckTemplateBuilder = lazyWithRetry(
   () => import('../../pages/scheduling/EquipmentCheckTemplateBuilder'),
 );
 
+const EquipmentCheckReportsPage = lazyWithRetry(
+  () => import('../../pages/scheduling/EquipmentCheckReportsPage'),
+);
+
 export const getSchedulingRoutes = () => {
   return (
     <React.Fragment>
@@ -40,6 +44,14 @@ export const getSchedulingRoutes = () => {
         element={
           <Suspense fallback={null}>
             <EquipmentCheckTemplateBuilder />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/scheduling/equipment-check-reports"
+        element={
+          <Suspense fallback={null}>
+            <EquipmentCheckReportsPage />
           </Suspense>
         }
       />

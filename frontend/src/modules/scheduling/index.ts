@@ -72,6 +72,13 @@ export type {
   ShiftEquipmentCheckRecord,
   ShiftCheckSummary,
   CheckItemHistory,
+  ComplianceReport,
+  ApparatusComplianceRecord,
+  MemberComplianceReportRecord,
+  FailureLogResponse,
+  FailureLogRecord,
+  ItemTrendResponse,
+  ItemTrendEntry,
 } from "./types/equipmentCheck";
 
 // Components

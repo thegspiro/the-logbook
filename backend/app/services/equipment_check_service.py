@@ -25,7 +25,7 @@ from app.models.training import (
     ShiftEquipmentCheck,
     ShiftEquipmentCheckItem,
 )
-from app.models.user import User
+from app.models.user import Organization, User
 
 
 class EquipmentCheckService:
@@ -174,14 +174,20 @@ class EquipmentCheckService:
         apparatus = result.scalars().first()
         apparatus_name = apparatus.name if apparatus else ""
 
+        clone_name = (
+            f"{apparatus_name} - {source.name}"
+            if apparatus_name
+            else source.name
+        )
         new_template = EquipmentCheckTemplate(
             id=generate_uuid(),
             organization_id=organization_id,
             apparatus_id=target_apparatus_id,
             apparatus_type=source.apparatus_type,
-            name=f"{apparatus_name} - {source.name}" if apparatus_name else source.name,
+            name=clone_name,
             description=source.description,
             check_timing=source.check_timing,
+            template_type=source.template_type,
             assigned_positions=source.assigned_positions,
             is_active=source.is_active,
             sort_order=source.sort_order,
@@ -539,7 +545,10 @@ class EquipmentCheckService:
 
         # Recount after auto-fail
         failed = sum(1 for i in items_data if i.get("status") == "fail")
-        overall_status = "pass" if failed == 0 and completed == total else "fail"
+        if failed == 0 and completed == total:
+            overall_status = "pass"
+        else:
+            overall_status = "fail"
         if completed < total:
             overall_status = "incomplete"
 
@@ -562,21 +571,117 @@ class EquipmentCheckService:
         self.db.add(check)
         await self.db.flush()
 
+        # Collect template item IDs for serial update lookups
+        template_item_ids = [
+            i.get("template_item_id") for i in items_data
+            if i.get("template_item_id")
+        ]
+        template_items_map: Dict[str, CheckTemplateItem] = {}
+        if template_item_ids:
+            tmpl_result = await self.db.execute(
+                select(CheckTemplateItem).where(
+                    CheckTemplateItem.id.in_(template_item_ids)
+                )
+            )
+            for ti in tmpl_result.scalars().all():
+                template_items_map[str(ti.id)] = ti
+
         for item_data in items_data:
+            # Detect serial/lot changes for date_lot items
+            tmpl_item_id = item_data.get("template_item_id")
+            serial_found = item_data.get("serial_found")
+            lot_found = item_data.get("lot_found")
+            updated_serial = False
+
+            if tmpl_item_id and (serial_found or lot_found):
+                tmpl_item = template_items_map.get(tmpl_item_id)
+                if tmpl_item:
+                    serial_changed = (
+                        serial_found
+                        and serial_found != (tmpl_item.serial_number or "")
+                    )
+                    lot_changed = (
+                        lot_found
+                        and lot_found != (tmpl_item.lot_number or "")
+                    )
+                    if serial_changed or lot_changed:
+                        updated_serial = True
+                        if serial_found:
+                            tmpl_item.serial_number = serial_found
+                        if lot_found:
+                            tmpl_item.lot_number = lot_found
+
             check_item = ShiftEquipmentCheckItem(
                 id=generate_uuid(),
                 check_id=check.id,
-                template_item_id=item_data.get("template_item_id"),
-                compartment_name=item_data.get("compartment_name", ""),
-                item_name=item_data.get("item_name", ""),
-                status=item_data.get("status", "not_checked"),
-                quantity_found=item_data.get("quantity_found"),
-                required_quantity=item_data.get("required_quantity"),
-                is_expired=item_data.get("is_expired", False),
-                expiration_date=item_data.get("expiration_date"),
+                template_item_id=tmpl_item_id,
+                compartment_name=item_data.get(
+                    "compartment_name", ""
+                ),
+                item_name=item_data.get(
+                    "item_name", ""
+                ),
+                check_type=item_data.get("check_type"),
+                status=item_data.get(
+                    "status", "not_checked"
+                ),
+                quantity_found=item_data.get(
+                    "quantity_found"
+                ),
+                required_quantity=item_data.get(
+                    "required_quantity"
+                ),
+                level_reading=item_data.get(
+                    "level_reading"
+                ),
+                level_unit=item_data.get("level_unit"),
+                serial_number=item_data.get(
+                    "serial_number"
+                ),
+                lot_number=item_data.get("lot_number"),
+                serial_found=serial_found,
+                lot_found=lot_found,
+                updated_serial=updated_serial,
+                photo_urls=item_data.get("photo_urls"),
+                is_expired=item_data.get(
+                    "is_expired", False
+                ),
+                expiration_date=item_data.get(
+                    "expiration_date"
+                ),
                 notes=item_data.get("notes"),
             )
             self.db.add(check_item)
+
+        # Update apparatus deficiency flag
+        if shift.apparatus_id:
+            apparatus_result = await self.db.execute(
+                select(Apparatus).where(
+                    Apparatus.id == shift.apparatus_id
+                )
+            )
+            apparatus = apparatus_result.scalars().first()
+            if apparatus:
+                if overall_status == "fail":
+                    if not apparatus.has_deficiency:
+                        apparatus.has_deficiency = True
+                        apparatus.deficiency_since = (
+                            datetime.now(timezone.utc)
+                        )
+                elif overall_status == "pass":
+                    apparatus.has_deficiency = False
+                    apparatus.deficiency_since = None
+
+        # Send failure notifications
+        if overall_status == "fail":
+            await self._send_check_failure_notification(
+                organization_id=organization_id,
+                shift=shift,
+                checked_by=checked_by,
+                template_id=template_id,
+                failed_count=failed,
+                total_count=total,
+            )
 
         await self.db.commit()
         return await self.get_check(check.id, organization_id)
@@ -750,10 +855,19 @@ class EquipmentCheckService:
             history.append(
                 {
                     "check_id": item.check_id,
-                    "shift_id": check.shift_id if check else None,
-                    "shift_date": shift.shift_date if shift else None,
+                    "shift_id": (
+                        check.shift_id if check else None
+                    ),
+                    "shift_date": (
+                        shift.shift_date
+                        if shift
+                        else None
+                    ),
                     "status": item.status,
                     "quantity_found": item.quantity_found,
+                    "level_reading": item.level_reading,
+                    "serial_number": item.serial_number,
+                    "lot_number": item.lot_number,
                     "is_expired": item.is_expired,
                     "notes": item.notes,
                     "checked_by_name": user_map.get(
@@ -761,7 +875,11 @@ class EquipmentCheckService:
                     )
                     if check and check.checked_by
                     else None,
-                    "checked_at": check.checked_at if check else None,
+                    "checked_at": (
+                        check.checked_at
+                        if check
+                        else None
+                    ),
                 }
             )
 
@@ -810,7 +928,7 @@ class EquipmentCheckService:
         organization_id: str,
         user_position: Optional[str],
     ) -> List[EquipmentCheckTemplate]:
-        """Resolve applicable templates for a shift apparatus + user position."""
+        """Resolve applicable templates for a shift apparatus."""
         templates = []
 
         if shift.apparatus_id:
@@ -909,10 +1027,17 @@ class EquipmentCheckService:
                 check_type=item.check_type,
                 is_required=item.is_required,
                 required_quantity=item.required_quantity,
+                expected_quantity=item.expected_quantity,
+                min_level=item.min_level,
+                level_unit=item.level_unit,
+                serial_number=item.serial_number,
+                lot_number=item.lot_number,
                 image_url=item.image_url,
                 has_expiration=item.has_expiration,
                 expiration_date=item.expiration_date,
-                expiration_warning_days=item.expiration_warning_days,
+                expiration_warning_days=(
+                    item.expiration_warning_days
+                ),
             )
             self.db.add(new_item)
 
@@ -980,4 +1105,687 @@ class EquipmentCheckService:
         return {
             str(u.id): f"{u.first_name} {u.last_name}".strip()
             for u in users
+        }
+
+    # ============================================
+    # Failure Notifications
+    # ============================================
+
+    async def _send_check_failure_notification(
+        self,
+        organization_id: str,
+        shift: Any,
+        checked_by: str,
+        template_id: Optional[str],
+        failed_count: int,
+        total_count: int,
+    ) -> None:
+        """Send in-app (and optionally email) notifications when an
+        equipment check fails.
+
+        Reads ``org.settings["equipment_check_alerts"]`` to decide
+        who to notify and whether to send email.  Failures are logged
+        but never propagated.
+        """
+        from loguru import logger
+
+        try:
+            org_result = await self.db.execute(
+                select(Organization).where(
+                    Organization.id == str(organization_id)
+                )
+            )
+            org = org_result.scalar_one_or_none()
+            if not org:
+                return
+
+            cfg = (org.settings or {}).get(
+                "equipment_check_alerts", {}
+            )
+            if not cfg.get("notify_on_failure", True):
+                return
+
+            # Resolve names
+            checker_name = "Unknown"
+            checker_result = await self.db.execute(
+                select(User).where(User.id == str(checked_by))
+            )
+            checker = checker_result.scalar_one_or_none()
+            if checker:
+                first = checker.first_name or ""
+                last = checker.last_name or ""
+                checker_name = f"{first} {last}".strip() or "Unknown"
+
+            template_name = "Unknown Template"
+            if template_id:
+                tmpl_result = await self.db.execute(
+                    select(EquipmentCheckTemplate.name).where(
+                        EquipmentCheckTemplate.id == template_id
+                    )
+                )
+                tmpl_row = tmpl_result.scalar_one_or_none()
+                if tmpl_row:
+                    template_name = tmpl_row
+
+            apparatus_name = ""
+            if shift.apparatus_id:
+                app_result = await self.db.execute(
+                    select(Apparatus.unit_number).where(
+                        Apparatus.id == shift.apparatus_id
+                    )
+                )
+                app_row = app_result.scalar_one_or_none()
+                if app_row:
+                    apparatus_name = app_row
+
+            # Collect recipients
+            recipient_ids: set[str] = set()
+
+            # Shift officer
+            if cfg.get("notify_shift_officer", True):
+                if shift.shift_officer_id:
+                    recipient_ids.add(
+                        str(shift.shift_officer_id)
+                    )
+
+            # Users with matching roles
+            notify_roles = cfg.get("notify_roles", [])
+            if notify_roles:
+                from app.models.user import Role, user_positions
+
+                role_result = await self.db.execute(
+                    select(user_positions.c.user_id)
+                    .join(
+                        Role,
+                        Role.id == user_positions.c.position_id,
+                    )
+                    .where(
+                        Role.organization_id == str(
+                            organization_id
+                        ),
+                        Role.slug.in_(notify_roles),
+                    )
+                )
+                for row in role_result.all():
+                    recipient_ids.add(str(row[0]))
+
+            # Don't notify the person who did the check
+            recipient_ids.discard(str(checked_by))
+            if not recipient_ids:
+                return
+
+            from app.models.notification import NotificationLog
+
+            shift_date_str = (
+                shift.shift_date.isoformat()
+                if shift.shift_date
+                else "unknown date"
+            )
+            apparatus_label = (
+                f" on {apparatus_name}" if apparatus_name else ""
+            )
+            message = (
+                f"Equipment check \"{template_name}\""
+                f"{apparatus_label} failed with "
+                f"{failed_count} of {total_count} items. "
+                f"Checked by {checker_name} "
+                f"on {shift_date_str}."
+            )
+
+            for rid in recipient_ids:
+                notif = NotificationLog(
+                    id=generate_uuid(),
+                    organization_id=str(organization_id),
+                    recipient_id=rid,
+                    channel="in_app",
+                    category="equipment_check",
+                    subject="Equipment Check Failed",
+                    message=message,
+                    action_url=(
+                        f"/scheduling/shifts/{shift.id}"
+                    ),
+                )
+                self.db.add(notif)
+            await self.db.flush()
+
+            # Optional email
+            if cfg.get("send_email", False):
+                try:
+                    from app.services.email_service import (
+                        EmailService,
+                    )
+
+                    recip_result = await self.db.execute(
+                        select(User.email).where(
+                            User.id.in_(list(recipient_ids)),
+                            User.email.isnot(None),
+                        )
+                    )
+                    to_emails = [
+                        r[0]
+                        for r in recip_result.all()
+                        if r[0]
+                    ]
+                    cc_emails = cfg.get("cc_emails", [])
+                    if to_emails:
+                        email_svc = EmailService(
+                            organization=org
+                        )
+                        subject = (
+                            "Equipment Check Failed"
+                            f" \u2014 {template_name}"
+                            f"{apparatus_label}"
+                        )
+                        html_body = (
+                            f"<p>{message}</p>"
+                            "<p>Please log in to review "
+                            "the failed items and take "
+                            "corrective action.</p>"
+                        )
+                        await email_svc.send_email(
+                            to_emails=to_emails,
+                            subject=subject,
+                            html_body=html_body,
+                            cc_emails=cc_emails or None,
+                            db=self.db,
+                            template_type=(
+                                "equipment_check_failure"
+                            ),
+                        )
+                except Exception as email_err:
+                    logger.warning(
+                        "Equipment check failure email "
+                        f"failed: {email_err}"
+                    )
+
+        except Exception as e:
+            logger.warning(
+                "Equipment check failure notification "
+                f"failed: {e}"
+            )
+
+    # ============================================
+    # Report Queries
+    # ============================================
+
+    async def get_compliance_report(
+        self,
+        organization_id: str,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> Dict[str, Any]:
+        """Aggregated compliance stats by apparatus + date range."""
+        from datetime import timedelta
+
+        if not date_from:
+            date_from = date.today() - timedelta(days=30)
+        if not date_to:
+            date_to = date.today()
+
+        date_to_end = datetime.combine(
+            date_to, datetime.max.time()
+        ).replace(tzinfo=timezone.utc)
+        date_from_start = datetime.combine(
+            date_from, datetime.min.time()
+        ).replace(tzinfo=timezone.utc)
+
+        # All checks in the date range
+        checks_q = await self.db.execute(
+            select(ShiftEquipmentCheck).where(
+                ShiftEquipmentCheck.organization_id
+                == organization_id,
+                ShiftEquipmentCheck.checked_at
+                >= date_from_start,
+                ShiftEquipmentCheck.checked_at
+                <= date_to_end,
+            )
+        )
+        checks = checks_q.scalars().all()
+
+        # Build apparatus map
+        apparatus_ids = {
+            c.apparatus_id
+            for c in checks
+            if c.apparatus_id
+        }
+        apparatus_map: Dict[str, Any] = {}
+        if apparatus_ids:
+            app_q = await self.db.execute(
+                select(Apparatus).where(
+                    Apparatus.id.in_(list(apparatus_ids))
+                )
+            )
+            for a in app_q.scalars().all():
+                apparatus_map[str(a.id)] = a
+
+        # Also get all org apparatus for deficiency status
+        all_app_q = await self.db.execute(
+            select(Apparatus).where(
+                Apparatus.organization_id == organization_id,
+            )
+        )
+        all_apparatus = all_app_q.scalars().all()
+
+        # Per-apparatus stats
+        app_stats: Dict[str, Dict[str, Any]] = {}
+        for a in all_apparatus:
+            aid = str(a.id)
+            app_stats[aid] = {
+                "apparatus_id": aid,
+                "apparatus_name": a.unit_number,
+                "last_check_date": None,
+                "last_checked_by": None,
+                "last_status": None,
+                "checks_completed": 0,
+                "checks_expected": 0,
+                "pass_count": 0,
+                "fail_count": 0,
+                "has_deficiency": bool(a.has_deficiency),
+                "deficiency_since": a.deficiency_since,
+            }
+
+        total_items_sum = 0
+        user_ids: set[str] = set()
+        for c in checks:
+            aid = str(c.apparatus_id) if c.apparatus_id else None
+            if aid and aid in app_stats:
+                stats = app_stats[aid]
+                stats["checks_completed"] += 1
+                if c.overall_status == "pass":
+                    stats["pass_count"] += 1
+                elif c.overall_status == "fail":
+                    stats["fail_count"] += 1
+                if (
+                    stats["last_check_date"] is None
+                    or (
+                        c.checked_at
+                        and c.checked_at
+                        > stats["last_check_date"]
+                    )
+                ):
+                    stats["last_check_date"] = c.checked_at
+                    stats["last_checked_by"] = c.checked_by
+                    stats["last_status"] = c.overall_status
+            total_items_sum += c.total_items or 0
+            if c.checked_by:
+                user_ids.add(str(c.checked_by))
+
+        # Resolve user names for last_checked_by
+        user_name_map = await self._get_user_name_map(
+            list(user_ids)
+        )
+        for stats in app_stats.values():
+            uid = stats.get("last_checked_by")
+            if uid and uid in user_name_map:
+                stats["last_checked_by"] = user_name_map[uid]
+
+        # Per-member stats
+        member_stats: Dict[str, Dict[str, Any]] = {}
+        for c in checks:
+            uid = str(c.checked_by) if c.checked_by else None
+            if not uid:
+                continue
+            if uid not in member_stats:
+                member_stats[uid] = {
+                    "user_id": uid,
+                    "user_name": user_name_map.get(
+                        uid, "Unknown"
+                    ),
+                    "checks_completed": 0,
+                    "pass_count": 0,
+                    "fail_count": 0,
+                }
+            member_stats[uid]["checks_completed"] += 1
+            if c.overall_status == "pass":
+                member_stats[uid]["pass_count"] += 1
+            elif c.overall_status == "fail":
+                member_stats[uid]["fail_count"] += 1
+
+        total_checks = len(checks)
+        pass_count = sum(
+            1
+            for c in checks
+            if c.overall_status == "pass"
+        )
+        pass_rate = (
+            round(pass_count / total_checks * 100, 1)
+            if total_checks > 0
+            else 0.0
+        )
+        avg_items = (
+            round(total_items_sum / total_checks, 1)
+            if total_checks > 0
+            else 0.0
+        )
+
+        return {
+            "total_checks": total_checks,
+            "pass_rate": pass_rate,
+            "overdue_count": 0,
+            "avg_items_per_check": avg_items,
+            "apparatus": list(app_stats.values()),
+            "members": list(member_stats.values()),
+        }
+
+    async def get_failure_log(
+        self,
+        organization_id: str,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+        apparatus_id: Optional[str] = None,
+        item_name: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        """Paginated failure log with filters."""
+        from datetime import timedelta
+
+        if not date_from:
+            date_from = date.today() - timedelta(days=30)
+        if not date_to:
+            date_to = date.today()
+
+        date_to_end = datetime.combine(
+            date_to, datetime.max.time()
+        ).replace(tzinfo=timezone.utc)
+        date_from_start = datetime.combine(
+            date_from, datetime.min.time()
+        ).replace(tzinfo=timezone.utc)
+
+        base_q = (
+            select(ShiftEquipmentCheckItem)
+            .join(
+                ShiftEquipmentCheck,
+                ShiftEquipmentCheck.id
+                == ShiftEquipmentCheckItem.check_id,
+            )
+            .where(
+                ShiftEquipmentCheck.organization_id
+                == organization_id,
+                ShiftEquipmentCheckItem.status == "fail",
+                ShiftEquipmentCheck.checked_at
+                >= date_from_start,
+                ShiftEquipmentCheck.checked_at
+                <= date_to_end,
+            )
+        )
+        if apparatus_id:
+            base_q = base_q.where(
+                ShiftEquipmentCheck.apparatus_id
+                == apparatus_id
+            )
+        if item_name:
+            base_q = base_q.where(
+                ShiftEquipmentCheckItem.item_name.ilike(
+                    f"%{item_name}%"
+                )
+            )
+
+        # Count
+        from sqlalchemy import func as sa_func
+
+        count_q = select(
+            sa_func.count(ShiftEquipmentCheckItem.id)
+        ).select_from(base_q.subquery())
+        total_result = await self.db.execute(count_q)
+        total = total_result.scalar() or 0
+
+        # Fetch page
+        items_q = (
+            base_q.order_by(
+                ShiftEquipmentCheck.checked_at.desc()
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+        items_result = await self.db.execute(items_q)
+        failed_items = items_result.scalars().all()
+
+        # Resolve check + apparatus data
+        check_ids = {
+            str(fi.check_id) for fi in failed_items
+        }
+        checks_map: Dict[str, ShiftEquipmentCheck] = {}
+        if check_ids:
+            cq = await self.db.execute(
+                select(ShiftEquipmentCheck).where(
+                    ShiftEquipmentCheck.id.in_(
+                        list(check_ids)
+                    )
+                )
+            )
+            for c in cq.scalars().all():
+                checks_map[str(c.id)] = c
+
+        user_ids_set: set[str] = set()
+        apparatus_ids_set: set[str] = set()
+        for c in checks_map.values():
+            if c.checked_by:
+                user_ids_set.add(str(c.checked_by))
+            if c.apparatus_id:
+                apparatus_ids_set.add(str(c.apparatus_id))
+
+        user_map = await self._get_user_name_map(
+            list(user_ids_set)
+        )
+        app_name_map: Dict[str, str] = {}
+        if apparatus_ids_set:
+            aq = await self.db.execute(
+                select(
+                    Apparatus.id, Apparatus.unit_number
+                ).where(
+                    Apparatus.id.in_(
+                        list(apparatus_ids_set)
+                    )
+                )
+            )
+            for row in aq.all():
+                app_name_map[str(row[0])] = row[1]
+
+        records = []
+        for fi in failed_items:
+            check = checks_map.get(str(fi.check_id))
+            records.append(
+                {
+                    "id": str(fi.id),
+                    "check_id": str(fi.check_id),
+                    "checked_at": (
+                        check.checked_at if check else None
+                    ),
+                    "apparatus_id": (
+                        str(check.apparatus_id)
+                        if check and check.apparatus_id
+                        else None
+                    ),
+                    "apparatus_name": (
+                        app_name_map.get(
+                            str(check.apparatus_id), ""
+                        )
+                        if check and check.apparatus_id
+                        else None
+                    ),
+                    "compartment_name": fi.compartment_name,
+                    "item_name": fi.item_name,
+                    "check_type": fi.check_type,
+                    "status": fi.status,
+                    "notes": fi.notes,
+                    "checked_by_name": (
+                        user_map.get(
+                            str(check.checked_by), "Unknown"
+                        )
+                        if check and check.checked_by
+                        else None
+                    ),
+                }
+            )
+
+        return {"items": records, "total": total}
+
+    async def get_item_trends(
+        self,
+        organization_id: str,
+        template_item_id: str,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+        interval: str = "weekly",
+    ) -> Dict[str, Any]:
+        """Per-item pass/fail trend over time."""
+        from datetime import timedelta
+
+        if not date_from:
+            date_from = date.today() - timedelta(days=90)
+        if not date_to:
+            date_to = date.today()
+
+        date_to_end = datetime.combine(
+            date_to, datetime.max.time()
+        ).replace(tzinfo=timezone.utc)
+        date_from_start = datetime.combine(
+            date_from, datetime.min.time()
+        ).replace(tzinfo=timezone.utc)
+
+        # Get all check items for this template item
+        q = await self.db.execute(
+            select(ShiftEquipmentCheckItem)
+            .join(
+                ShiftEquipmentCheck,
+                ShiftEquipmentCheck.id
+                == ShiftEquipmentCheckItem.check_id,
+            )
+            .where(
+                ShiftEquipmentCheck.organization_id
+                == organization_id,
+                ShiftEquipmentCheckItem.template_item_id
+                == template_item_id,
+                ShiftEquipmentCheck.checked_at
+                >= date_from_start,
+                ShiftEquipmentCheck.checked_at
+                <= date_to_end,
+            )
+            .order_by(ShiftEquipmentCheck.checked_at.asc())
+        )
+        items = q.scalars().all()
+
+        # Get check data for dates
+        check_ids = {str(i.check_id) for i in items}
+        checks_map: Dict[str, ShiftEquipmentCheck] = {}
+        if check_ids:
+            cq = await self.db.execute(
+                select(ShiftEquipmentCheck).where(
+                    ShiftEquipmentCheck.id.in_(
+                        list(check_ids)
+                    )
+                )
+            )
+            for c in cq.scalars().all():
+                checks_map[str(c.id)] = c
+
+        user_ids_set: set[str] = set()
+        for c in checks_map.values():
+            if c.checked_by:
+                user_ids_set.add(str(c.checked_by))
+        user_map = await self._get_user_name_map(
+            list(user_ids_set)
+        )
+
+        # Build trend buckets
+        from collections import defaultdict
+
+        if interval == "daily":
+            fmt = "%Y-%m-%d"
+        elif interval == "monthly":
+            fmt = "%Y-%m"
+        else:
+            fmt = "%Y-W%W"
+
+        buckets: Dict[
+            str, Dict[str, int]
+        ] = defaultdict(
+            lambda: {
+                "pass_count": 0,
+                "fail_count": 0,
+                "not_checked_count": 0,
+            }
+        )
+
+        for item in items:
+            check = checks_map.get(str(item.check_id))
+            if not check or not check.checked_at:
+                continue
+            period_key = check.checked_at.strftime(fmt)
+            if item.status == "pass":
+                buckets[period_key]["pass_count"] += 1
+            elif item.status == "fail":
+                buckets[period_key]["fail_count"] += 1
+            else:
+                buckets[period_key][
+                    "not_checked_count"
+                ] += 1
+
+        trends = [
+            {
+                "period": k,
+                "pass_count": v["pass_count"],
+                "fail_count": v["fail_count"],
+                "not_checked_count": v[
+                    "not_checked_count"
+                ],
+            }
+            for k, v in sorted(buckets.items())
+        ]
+
+        # Build history records
+        history = []
+        for item in items:
+            check = checks_map.get(str(item.check_id))
+            shift_date_val = None
+            if check and check.shift_id:
+                sq = await self.db.execute(
+                    select(Shift.shift_date).where(
+                        Shift.id == check.shift_id
+                    )
+                )
+                sd = sq.scalar_one_or_none()
+                if sd:
+                    shift_date_val = sd
+            history.append(
+                {
+                    "check_id": str(item.check_id),
+                    "shift_id": (
+                        str(check.shift_id)
+                        if check
+                        else ""
+                    ),
+                    "shift_date": shift_date_val,
+                    "status": item.status,
+                    "quantity_found": item.quantity_found,
+                    "level_reading": item.level_reading,
+                    "serial_number": item.serial_number,
+                    "lot_number": item.lot_number,
+                    "is_expired": item.is_expired,
+                    "notes": item.notes,
+                    "checked_by_name": (
+                        user_map.get(
+                            str(check.checked_by),
+                            "Unknown",
+                        )
+                        if check and check.checked_by
+                        else None
+                    ),
+                    "checked_at": (
+                        check.checked_at
+                        if check
+                        else None
+                    ),
+                }
+            )
+
+        item_name = "Unknown"
+        if items:
+            item_name = items[0].item_name or "Unknown"
+
+        return {
+            "item_name": item_name,
+            "trends": trends,
+            "history": history,
         }

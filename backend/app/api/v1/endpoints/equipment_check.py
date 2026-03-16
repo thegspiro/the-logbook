@@ -5,14 +5,18 @@ Manages equipment check templates (compartments + items) and shift
 equipment check submissions.
 """
 
+import base64
 from datetime import date
+from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
+from app.models.training import ShiftEquipmentCheck
 from app.models.user import User
 from app.schemas.equipment_check import (
     CheckTemplateCompartmentCreate,
@@ -21,9 +25,12 @@ from app.schemas.equipment_check import (
     CheckTemplateItemCreate,
     CheckTemplateItemResponse,
     CheckTemplateItemUpdate,
+    ComplianceReportResponse,
     EquipmentCheckTemplateCreate,
     EquipmentCheckTemplateResponse,
     EquipmentCheckTemplateUpdate,
+    FailureLogResponse,
+    ItemTrendResponse,
     ReorderRequest,
     ShiftCheckSummary,
     ShiftEquipmentCheckCreate,
@@ -455,4 +462,470 @@ async def get_my_checklist_history(
         end_date=end_date,
         limit=limit,
         offset=offset,
+    )
+
+
+# =====================================================================
+# Photo Upload
+# =====================================================================
+
+
+MAX_PHOTOS_PER_ITEM = 3
+MAX_PHOTO_SIZE = 5 * 1024 * 1024  # 5MB
+ALLOWED_IMAGE_MIMES = {"image/jpeg", "image/png", "image/webp"}
+
+
+@router.post(
+    "/checks/{check_id}/items/{item_id}/photos",
+    status_code=201,
+)
+async def upload_check_item_photos(
+    check_id: str,
+    item_id: str,
+    files: List[UploadFile] = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """
+    Upload photo(s) for an equipment check item.
+
+    Accepts up to 3 images per item. Photos are optimized (resized,
+    EXIF-stripped, converted to WebP) and stored as base64 data URIs.
+    """
+    from app.models.training import ShiftEquipmentCheckItem
+    from app.utils.image_processing import optimize_image
+
+    if len(files) > MAX_PHOTOS_PER_ITEM:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Maximum {MAX_PHOTOS_PER_ITEM} photos per item",
+        )
+
+    # Verify the check item exists and belongs to user's org
+    result = await db.execute(
+        select(ShiftEquipmentCheckItem)
+        .join(
+            ShiftEquipmentCheck,
+            ShiftEquipmentCheck.id == ShiftEquipmentCheckItem.check_id,
+        )
+        .where(
+            ShiftEquipmentCheckItem.id == item_id,
+            ShiftEquipmentCheckItem.check_id == check_id,
+            ShiftEquipmentCheck.organization_id
+            == current_user.organization_id,
+        )
+    )
+    check_item = result.scalars().first()
+    if not check_item:
+        raise HTTPException(
+            status_code=404, detail="Check item not found"
+        )
+
+    existing_urls: list = check_item.photo_urls or []
+    if len(existing_urls) + len(files) > MAX_PHOTOS_PER_ITEM:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Item already has {len(existing_urls)} photo(s); "
+                f"maximum is {MAX_PHOTOS_PER_ITEM}"
+            ),
+        )
+
+    new_urls: list[str] = []
+    for upload in files:
+        contents = await upload.read()
+        if len(contents) > MAX_PHOTO_SIZE:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File {upload.filename} exceeds 5MB limit",
+            )
+
+        # MIME validation via magic bytes
+        try:
+            import magic
+
+            detected_mime = magic.from_buffer(contents, mime=True)
+        except ImportError:
+            if contents[:8] == b"\x89PNG\r\n\x1a\n":
+                detected_mime = "image/png"
+            elif contents[:2] == b"\xff\xd8":
+                detected_mime = "image/jpeg"
+            elif (
+                contents[:4] == b"RIFF"
+                and contents[8:12] == b"WEBP"
+            ):
+                detected_mime = "image/webp"
+            else:
+                detected_mime = "unknown"
+
+        if detected_mime not in ALLOWED_IMAGE_MIMES:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Invalid file type for {upload.filename}. "
+                    "Allowed: JPEG, PNG, WebP"
+                ),
+            )
+
+        # Optimize: resize, strip EXIF, convert to WebP
+        optimized = optimize_image(
+            contents,
+            max_size=(1920, 1080),
+            quality=80,
+            output_format="WEBP",
+        )
+        data_uri = (
+            f"data:image/webp;base64,"
+            f"{base64.b64encode(optimized).decode()}"
+        )
+        new_urls.append(data_uri)
+
+    import copy
+
+    updated_urls = copy.deepcopy(existing_urls) + new_urls
+    check_item.photo_urls = updated_urls
+
+    from sqlalchemy.orm.attributes import flag_modified
+
+    flag_modified(check_item, "photo_urls")
+    await db.commit()
+
+    return {
+        "photo_urls": updated_urls,
+        "count": len(updated_urls),
+    }
+
+
+# =====================================================================
+# Reports
+# =====================================================================
+
+
+@router.get(
+    "/reports/compliance",
+    response_model=ComplianceReportResponse,
+)
+async def get_compliance_report(
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("equipment_check.view")
+    ),
+):
+    """Aggregated compliance stats by apparatus + date range."""
+    service = EquipmentCheckService(db)
+    return await service.get_compliance_report(
+        current_user.organization_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+
+@router.get(
+    "/reports/failures",
+    response_model=FailureLogResponse,
+)
+async def get_failure_log(
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    apparatus_id: str | None = Query(None),
+    item_name: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("equipment_check.view")
+    ),
+):
+    """Paginated failure log with filters."""
+    service = EquipmentCheckService(db)
+    return await service.get_failure_log(
+        current_user.organization_id,
+        date_from=date_from,
+        date_to=date_to,
+        apparatus_id=apparatus_id,
+        item_name=item_name,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
+    "/reports/item-trends",
+    response_model=ItemTrendResponse,
+)
+async def get_item_trends(
+    template_item_id: str = Query(...),
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    interval: str = Query("weekly"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("equipment_check.view")
+    ),
+):
+    """Per-item pass/fail trend over time."""
+    service = EquipmentCheckService(db)
+    return await service.get_item_trends(
+        current_user.organization_id,
+        template_item_id=template_item_id,
+        date_from=date_from,
+        date_to=date_to,
+        interval=interval,
+    )
+
+
+@router.get("/reports/export/csv")
+async def export_csv(
+    report_type: str = Query(...),
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    apparatus_id: str | None = Query(None),
+    template_item_id: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("equipment_check.view")
+    ),
+):
+    """Export report data as CSV."""
+    import csv
+    import io
+
+    from starlette.responses import StreamingResponse
+
+    service = EquipmentCheckService(db)
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    if report_type == "compliance":
+        data = await service.get_compliance_report(
+            current_user.organization_id,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        writer.writerow(
+            [
+                "Apparatus",
+                "Checks Completed",
+                "Pass",
+                "Fail",
+                "Last Check Date",
+                "Last Checked By",
+                "Has Deficiency",
+            ]
+        )
+        for a in data.get("apparatus", []):
+            writer.writerow(
+                [
+                    a.get("apparatus_name", ""),
+                    a.get("checks_completed", 0),
+                    a.get("pass_count", 0),
+                    a.get("fail_count", 0),
+                    a.get("last_check_date", ""),
+                    a.get("last_checked_by", ""),
+                    a.get("has_deficiency", False),
+                ]
+            )
+
+    elif report_type == "failures":
+        data = await service.get_failure_log(
+            current_user.organization_id,
+            date_from=date_from,
+            date_to=date_to,
+            apparatus_id=apparatus_id,
+            limit=10000,
+        )
+        writer.writerow(
+            [
+                "Date",
+                "Apparatus",
+                "Compartment",
+                "Item",
+                "Check Type",
+                "Status",
+                "Notes",
+                "Checked By",
+            ]
+        )
+        for f in data.get("items", []):
+            writer.writerow(
+                [
+                    f.get("checked_at", ""),
+                    f.get("apparatus_name", ""),
+                    f.get("compartment_name", ""),
+                    f.get("item_name", ""),
+                    f.get("check_type", ""),
+                    f.get("status", ""),
+                    f.get("notes", ""),
+                    f.get("checked_by_name", ""),
+                ]
+            )
+
+    elif (
+        report_type == "item-trends"
+        and template_item_id
+    ):
+        data = await service.get_item_trends(
+            current_user.organization_id,
+            template_item_id=template_item_id,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        writer.writerow(
+            [
+                "Period",
+                "Pass",
+                "Fail",
+                "Not Checked",
+            ]
+        )
+        for t in data.get("trends", []):
+            writer.writerow(
+                [
+                    t.get("period", ""),
+                    t.get("pass_count", 0),
+                    t.get("fail_count", 0),
+                    t.get("not_checked_count", 0),
+                ]
+            )
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid report_type",
+        )
+
+    output.seek(0)
+    filename = f"equipment_check_{report_type}.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename={filename}"
+            )
+        },
+    )
+
+
+@router.get("/reports/export/pdf")
+async def export_pdf(
+    report_type: str = Query(...),
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    apparatus_id: str | None = Query(None),
+    check_id: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("equipment_check.view")
+    ),
+):
+    """Export report data as PDF."""
+    from starlette.responses import Response
+
+    from app.services.equipment_check_pdf import (
+        generate_check_detail_pdf,
+        generate_compliance_pdf,
+        generate_failure_log_pdf,
+    )
+
+    service = EquipmentCheckService(db)
+    date_from_str = date_from.isoformat() if date_from else None
+    date_to_str = date_to.isoformat() if date_to else None
+
+    if report_type == "compliance":
+        data = await service.get_compliance_report(
+            current_user.organization_id,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        pdf_bytes = generate_compliance_pdf(
+            data,
+            date_from=date_from_str,
+            date_to=date_to_str,
+        )
+        filename = "equipment_check_compliance.pdf"
+
+    elif report_type == "failures":
+        data = await service.get_failure_log(
+            current_user.organization_id,
+            date_from=date_from,
+            date_to=date_to,
+            apparatus_id=apparatus_id,
+            limit=10000,
+        )
+        pdf_bytes = generate_failure_log_pdf(
+            data,
+            date_from=date_from_str,
+            date_to=date_to_str,
+        )
+        filename = "equipment_check_failures.pdf"
+
+    elif report_type == "check-detail" and check_id:
+        check = await service.get_check(
+            check_id, current_user.organization_id
+        )
+        if not check:
+            raise HTTPException(
+                status_code=404,
+                detail="Check not found",
+            )
+        # Convert ORM to dict for the PDF generator
+        check_dict = {
+            "overall_status": check.overall_status,
+            "checked_by_name": None,
+            "checked_at": (
+                check.checked_at.isoformat()
+                if check.checked_at
+                else ""
+            ),
+            "check_timing": check.check_timing,
+            "total_items": check.total_items,
+            "completed_items": check.completed_items,
+            "failed_items": check.failed_items,
+            "notes": check.notes,
+            "items": [
+                {
+                    "item_name": i.item_name,
+                    "compartment_name": i.compartment_name,
+                    "check_type": i.check_type,
+                    "status": i.status,
+                    "notes": i.notes,
+                }
+                for i in (check.items or [])
+            ],
+        }
+        # Resolve checker name
+        if check.checked_by:
+            from app.models.user import User as UserModel
+
+            u_result = await db.execute(
+                select(UserModel).where(
+                    UserModel.id == str(check.checked_by)
+                )
+            )
+            u = u_result.scalar_one_or_none()
+            if u:
+                first = u.first_name or ""
+                last = u.last_name or ""
+                check_dict["checked_by_name"] = (
+                    f"{first} {last}".strip() or "Unknown"
+                )
+        pdf_bytes = generate_check_detail_pdf(check_dict)
+        filename = f"equipment_check_{check_id[:8]}.pdf"
+
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid report_type",
+        )
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename={filename}"
+            )
+        },
     )

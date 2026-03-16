@@ -28,6 +28,11 @@ class CheckTemplateItemCreate(BaseModel):
     check_type: str = Field(default="pass_fail", max_length=30)
     is_required: bool = False
     required_quantity: Optional[int] = None
+    expected_quantity: Optional[int] = None
+    min_level: Optional[float] = None
+    level_unit: Optional[str] = Field(None, max_length=50)
+    serial_number: Optional[str] = Field(None, max_length=100)
+    lot_number: Optional[str] = Field(None, max_length=100)
     image_url: Optional[str] = Field(None, max_length=500)
     equipment_id: Optional[str] = None
     has_expiration: bool = False
@@ -44,6 +49,11 @@ class CheckTemplateItemUpdate(BaseModel):
     check_type: Optional[str] = Field(None, max_length=30)
     is_required: Optional[bool] = None
     required_quantity: Optional[int] = None
+    expected_quantity: Optional[int] = None
+    min_level: Optional[float] = None
+    level_unit: Optional[str] = Field(None, max_length=50)
+    serial_number: Optional[str] = Field(None, max_length=100)
+    lot_number: Optional[str] = Field(None, max_length=100)
     image_url: Optional[str] = Field(None, max_length=500)
     equipment_id: Optional[str] = None
     has_expiration: Optional[bool] = None
@@ -68,6 +78,11 @@ class CheckTemplateItemResponse(UTCResponseBase):
     check_type: str
     is_required: bool
     required_quantity: Optional[int] = None
+    expected_quantity: Optional[int] = None
+    min_level: Optional[float] = None
+    level_unit: Optional[str] = None
+    serial_number: Optional[str] = None
+    lot_number: Optional[str] = None
     image_url: Optional[str] = None
     equipment_id: Optional[str] = None
     has_expiration: bool
@@ -137,6 +152,7 @@ class EquipmentCheckTemplateCreate(BaseModel):
     apparatus_id: Optional[str] = None
     apparatus_type: Optional[str] = Field(None, max_length=50)
     check_timing: str = Field(..., max_length=30)
+    template_type: str = Field(default="equipment", max_length=30)
     assigned_positions: Optional[List[str]] = None
     is_active: bool = True
     sort_order: int = 0
@@ -151,6 +167,7 @@ class EquipmentCheckTemplateUpdate(BaseModel):
     apparatus_id: Optional[str] = None
     apparatus_type: Optional[str] = Field(None, max_length=50)
     check_timing: Optional[str] = Field(None, max_length=30)
+    template_type: Optional[str] = Field(None, max_length=30)
     assigned_positions: Optional[List[str]] = None
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None
@@ -172,6 +189,7 @@ class EquipmentCheckTemplateResponse(UTCResponseBase):
     name: str
     description: Optional[str] = None
     check_timing: str
+    template_type: str = "equipment"
     assigned_positions: Optional[List[str]] = None
     is_active: bool
     sort_order: int
@@ -195,6 +213,7 @@ class EquipmentCheckTemplateSummary(BaseModel):
     apparatus_id: Optional[str] = None
     apparatus_type: Optional[str] = None
     check_timing: str
+    template_type: str = "equipment"
     assigned_positions: Optional[List[str]] = None
     is_active: bool
     sort_order: int
@@ -213,9 +232,17 @@ class CheckItemResultSubmit(BaseModel):
     template_item_id: str
     compartment_name: str = Field(..., max_length=200)
     item_name: str = Field(..., max_length=200)
+    check_type: Optional[str] = Field(None, max_length=30)
     status: str = Field(..., max_length=30)  # pass, fail, not_checked
     quantity_found: Optional[int] = None
     required_quantity: Optional[int] = None
+    level_reading: Optional[float] = None
+    level_unit: Optional[str] = Field(None, max_length=50)
+    serial_number: Optional[str] = Field(None, max_length=100)
+    lot_number: Optional[str] = Field(None, max_length=100)
+    serial_found: Optional[str] = Field(None, max_length=100)
+    lot_found: Optional[str] = Field(None, max_length=100)
+    photo_urls: Optional[List[str]] = None
     is_expired: bool = False
     expiration_date: Optional[date] = None
     notes: Optional[str] = None
@@ -245,9 +272,18 @@ class ShiftEquipmentCheckItemResponse(UTCResponseBase):
     template_item_id: Optional[str] = None
     compartment_name: str
     item_name: str
+    check_type: Optional[str] = None
     status: str
     quantity_found: Optional[int] = None
     required_quantity: Optional[int] = None
+    level_reading: Optional[float] = None
+    level_unit: Optional[str] = None
+    serial_number: Optional[str] = None
+    lot_number: Optional[str] = None
+    serial_found: Optional[str] = None
+    lot_found: Optional[str] = None
+    updated_serial: bool = False
+    photo_urls: Optional[List[str]] = None
     is_expired: bool
     expiration_date: Optional[date] = None
     notes: Optional[str] = None
@@ -316,6 +352,9 @@ class CheckItemHistory(UTCResponseBase):
     shift_date: Optional[date] = None
     status: str
     quantity_found: Optional[int] = None
+    level_reading: Optional[float] = None
+    serial_number: Optional[str] = None
+    lot_number: Optional[str] = None
     is_expired: bool = False
     notes: Optional[str] = None
     checked_by_name: Optional[str] = None
@@ -331,3 +370,120 @@ class ReorderRequest(BaseModel):
     """Schema for reordering compartments or items."""
 
     ordered_ids: List[str]
+
+
+# ============================================
+# Report Schemas
+# ============================================
+
+
+class ApparatusComplianceRecord(BaseModel):
+    """Per-apparatus compliance summary for the report dashboard."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+    apparatus_id: str
+    apparatus_name: str
+    last_check_date: Optional[datetime] = None
+    last_checked_by: Optional[str] = None
+    last_status: Optional[str] = None
+    checks_completed: int = 0
+    checks_expected: int = 0
+    pass_count: int = 0
+    fail_count: int = 0
+    has_deficiency: bool = False
+    deficiency_since: Optional[datetime] = None
+
+
+class MemberComplianceReportRecord(BaseModel):
+    """Per-member check completion stats."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+    user_id: str
+    user_name: str
+    checks_completed: int = 0
+    pass_count: int = 0
+    fail_count: int = 0
+
+
+class ComplianceReportResponse(BaseModel):
+    """Aggregated compliance dashboard data."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+    total_checks: int = 0
+    pass_rate: float = 0.0
+    overdue_count: int = 0
+    avg_items_per_check: float = 0.0
+    apparatus: List[ApparatusComplianceRecord] = []
+    members: List[MemberComplianceReportRecord] = []
+
+
+class FailureLogRecord(BaseModel):
+    """A single failed-item entry for the failure log."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+    id: str
+    check_id: str
+    checked_at: Optional[datetime] = None
+    apparatus_id: Optional[str] = None
+    apparatus_name: Optional[str] = None
+    compartment_name: str
+    item_name: str
+    check_type: Optional[str] = None
+    status: str
+    notes: Optional[str] = None
+    checked_by_name: Optional[str] = None
+
+
+class FailureLogResponse(BaseModel):
+    """Paginated list of failure records."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+    items: List[FailureLogRecord] = []
+    total: int = 0
+
+
+class ItemTrendEntry(BaseModel):
+    """A single data point in item trend history."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+    period: str
+    pass_count: int = 0
+    fail_count: int = 0
+    not_checked_count: int = 0
+
+
+class ItemTrendResponse(BaseModel):
+    """Trend data for a specific template item over time."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+    item_name: str
+    trends: List[ItemTrendEntry] = []
+    history: List[CheckItemHistory] = []
