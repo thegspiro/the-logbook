@@ -165,6 +165,7 @@ class ApparatusTypeListItem(BaseModel):
     code: str
     category: ApparatusCategoryEnum
     is_system: bool
+    default_type: Optional[DefaultApparatusTypeEnum] = None
     icon: Optional[str] = None
     color: Optional[str] = None
     is_active: bool
@@ -237,6 +238,7 @@ class ApparatusStatusListItem(BaseModel):
     name: str
     code: str
     is_system: bool
+    default_status: Optional[DefaultApparatusStatusEnum] = None
     is_available: bool
     is_operational: bool
     is_archived_status: bool
