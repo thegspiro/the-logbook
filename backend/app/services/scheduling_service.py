@@ -166,7 +166,8 @@ class SchedulingService:
         apparatus_map: Dict[str, Any],
         user_name_map: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
-        """Add apparatus details, min_staffing, and shift officer name to a shift dict."""
+        """Add apparatus details, min_staffing, and shift officer
+        name to a shift dict."""
         aid = shift_dict.get("apparatus_id")
         # Normalize positions to structured format
         shift_slots = self.normalize_positions(
@@ -219,7 +220,8 @@ class SchedulingService:
     async def enrich_assignments_with_shifts(
         self, assignments: List[ShiftAssignment], organization_id: UUID
     ) -> List[Dict[str, Any]]:
-        """Convert assignment ORM objects to dicts with user_name and shift data populated."""
+        """Convert assignment ORM objects to dicts with user_name
+        and shift data populated."""
         if not assignments:
             return []
         user_ids = list({a.user_id for a in assignments if a.user_id})
@@ -425,7 +427,8 @@ class SchedulingService:
     async def _sync_officer_assignment(
         self, shift: "Shift", officer_id: str, organization_id: UUID
     ) -> None:
-        """Ensure the shift officer is assigned to the 'officer' position on the apparatus.
+        """Ensure the shift officer is assigned to the 'officer'
+        position on the apparatus.
 
         When a shift officer is designated and the apparatus has an 'officer'
         position, this creates or updates assignments so the officer fills that
@@ -977,7 +980,8 @@ class SchedulingService:
             if not pattern.template_id:
                 return (
                     [],
-                    "A shift template must be linked to the pattern before generating shifts",
+                    "A shift template must be linked to the "
+                    "pattern before generating shifts",
                 )
             template = await self.get_template_by_id(
                 pattern.template_id, organization_id
@@ -1005,7 +1009,11 @@ class SchedulingService:
                 )
             )
             org = org_result.scalar_one_or_none()
-            org_tz = ZoneInfo(org.timezone) if org and org.timezone else ZoneInfo("America/New_York")
+            org_tz = (
+                ZoneInfo(org.timezone)
+                if org and org.timezone
+                else ZoneInfo("America/New_York")
+            )
 
             config = pattern.schedule_config or {}
 
@@ -1067,7 +1075,8 @@ class SchedulingService:
 
                 elif pattern.pattern_type == PatternType.WEEKLY:
                     weekdays = config.get("weekdays", [])
-                    # Frontend stores weekdays in JS convention (0=Sun, 1=Mon, …, 6=Sat).
+                    # Frontend stores weekdays in JS convention
+                    # (0=Sun, 1=Mon, …, 6=Sat).
                     # Python's date.weekday() returns 0=Mon, …, 6=Sun.
                     # Convert Python weekday → JS weekday before comparing.
                     js_weekday = (current.weekday() + 1) % 7
@@ -1243,7 +1252,10 @@ class SchedulingService:
                     .where(ShiftAssignment.shift_id == str(shift_id))
                     .where(ShiftAssignment.user_id == str(user_id))
                     .where(
-                        ShiftAssignment.assignment_status != AssignmentStatus.DECLINED
+                        ShiftAssignment.assignment_status.notin_([
+                            AssignmentStatus.DECLINED,
+                            AssignmentStatus.CANCELLED,
+                        ])
                     )
                 )
                 if dup_result.scalar_one_or_none():
@@ -1260,7 +1272,10 @@ class SchedulingService:
                     .join(ShiftAssignment, ShiftAssignment.shift_id == Shift.id)
                     .where(ShiftAssignment.user_id == str(user_id))
                     .where(
-                        ShiftAssignment.assignment_status != AssignmentStatus.DECLINED
+                        ShiftAssignment.assignment_status.notin_([
+                            AssignmentStatus.DECLINED,
+                            AssignmentStatus.CANCELLED,
+                        ])
                     )
                     .where(Shift.id != str(shift_id))
                     .where(Shift.organization_id == str(organization_id))
@@ -1314,7 +1329,8 @@ class SchedulingService:
             )
             self.db.add(assignment)
 
-            # Auto-set shift officer when an officer-position member is assigned/signs up
+            # Auto-set shift officer when an officer-position member
+            # is assigned/signs up
             # and no shift officer has been designated yet
             officer_positions = {
                 ShiftPosition.OFFICER.value,
@@ -2171,7 +2187,8 @@ class SchedulingService:
         end_date: date,
         group_by: str = "day",
     ) -> List[Dict]:
-        """Get call volume grouped by period with type breakdown and avg response time"""
+        """Get call volume grouped by period with type breakdown
+        and avg response time."""
         # Get all calls with their shift dates in a single joined query
         result = await self.db.execute(
             select(ShiftCall, Shift.shift_date)
@@ -2527,7 +2544,8 @@ class SchedulingService:
                 )
 
         else:
-            # ONE_TIME or fallback: use requirement start_date..due_date or last 12 months
+            # ONE_TIME or fallback: use requirement
+            # start_date..due_date or last 12 months
             if requirement.start_date and requirement.due_date:
                 period_start = requirement.start_date
                 period_end = requirement.due_date
