@@ -12,6 +12,8 @@ down_revision = (
     "dc01a",
     "a1b2c3d4e5f6",
     "a9f3e7c10004",
+    "20260312_0200",
+    "20260313_0100",
 )
 branch_labels = None
 depends_on = None
