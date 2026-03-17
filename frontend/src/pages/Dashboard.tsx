@@ -70,6 +70,7 @@ import type { NotificationLogRecord } from "../services/api";
 import type { ShiftRecord } from "../modules/scheduling/services/api";
 import type { EventListItem } from "../types/event";
 import { dashboardService } from "../services/api";
+import { POSITION_LABELS } from "../constants/enums";
 
 /**
  * Main Dashboard Component
@@ -105,6 +106,10 @@ const Dashboard: React.FC = () => {
   const [openShifts, setOpenShifts] = useState<ShiftRecord[]>([]);
   const [loadingOpenShifts, setLoadingOpenShifts] = useState(true);
   const [signingUpShiftId, setSigningUpShiftId] = useState<string | null>(null);
+  const [signupExpandedId, setSignupExpandedId] = useState<string | null>(null);
+  const [dashboardSignupPosition, setDashboardSignupPosition] = useState('firefighter');
+  const [dashboardEligiblePositions, setDashboardEligiblePositions] = useState<string[]>([]);
+  const [loadingEligibility, setLoadingEligibility] = useState(false);
 
   // Hours
   const [hours, setHours] = useState({
@@ -326,11 +331,29 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const handleExpandSignup = async (shiftId: string) => {
+    setSignupExpandedId(shiftId);
+    setLoadingEligibility(true);
+    try {
+      const data = await schedulingService.getEligiblePositions(shiftId);
+      setDashboardEligiblePositions(data.positions);
+      const firstPos = data.positions[0];
+      if (firstPos) {
+        setDashboardSignupPosition(firstPos);
+      }
+    } catch {
+      setDashboardEligiblePositions([]);
+    } finally {
+      setLoadingEligibility(false);
+    }
+  };
+
   const handleSignup = async (shiftId: string) => {
     setSigningUpShiftId(shiftId);
     try {
-      await schedulingService.signupForShift(shiftId);
+      await schedulingService.signupForShift(shiftId, { position: dashboardSignupPosition });
       toast.success("Signed up for shift");
+      setSignupExpandedId(null);
       // Refresh both lists: the signed-up shift moves from open to my shifts
       void loadMyShifts();
       void loadOpenShifts();
@@ -1050,41 +1073,92 @@ const Dashboard: React.FC = () => {
               {openShifts.map((shift) => (
                 <div
                   key={shift.id}
-                  className="flex items-center justify-between p-3 bg-theme-surface-secondary rounded-lg"
+                  className="p-3 bg-theme-surface-secondary rounded-lg"
                 >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
-                      <CalendarPlus className="w-5 h-5 text-green-400" />
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
+                        <CalendarPlus className="w-5 h-5 text-green-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-theme-text-primary">
+                          {formatShiftDate(shift.shift_date)}
+                        </p>
+                        <p className="text-xs text-theme-text-muted">
+                          {formatShiftTime(shift.shift_date, shift.start_time)} -{" "}
+                          {formatShiftTime(shift.shift_date, shift.end_time)}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-theme-text-primary">
-                        {formatShiftDate(shift.shift_date)}
-                      </p>
-                      <p className="text-xs text-theme-text-muted">
-                        {formatShiftTime(shift.shift_date, shift.start_time)} -{" "}
-                        {formatShiftTime(shift.shift_date, shift.end_time)}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    {shift.min_staffing != null && (
-                      <span className="text-xs text-theme-text-muted">
-                        {shift.attendee_count}/{shift.min_staffing} filled
-                      </span>
-                    )}
-                    <button
-                      onClick={() => void handleSignup(shift.id)}
-                      disabled={signingUpShiftId === shift.id}
-                      className="btn-success disabled:cursor-not-allowed flex font-medium items-center px-3 py-1.5 space-x-1 text-xs"
-                    >
-                      {signingUpShiftId === shift.id ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <UserPlus className="w-3.5 h-3.5" />
+                    <div className="flex items-center space-x-3">
+                      {shift.min_staffing != null && (
+                        <span className="text-xs text-theme-text-muted">
+                          {shift.attendee_count}/{shift.min_staffing} filled
+                        </span>
                       )}
-                      <span>Sign Up</span>
-                    </button>
+                      {signupExpandedId !== shift.id && (
+                        <button
+                          onClick={() => void handleExpandSignup(shift.id)}
+                          className="btn-success flex font-medium items-center px-3 py-1.5 space-x-1 text-xs"
+                        >
+                          <UserPlus className="w-3.5 h-3.5" />
+                          <span>Sign Up</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
+                  {signupExpandedId === shift.id && (
+                    <div className="mt-2 pt-2 border-t border-theme-surface-border">
+                      {loadingEligibility ? (
+                        <div className="flex items-center justify-center py-2">
+                          <Loader2 className="w-4 h-4 animate-spin text-theme-text-muted" />
+                        </div>
+                      ) : dashboardEligiblePositions.length === 0 ? (
+                        <div className="flex items-center justify-between py-1">
+                          <p className="text-xs text-amber-600 dark:text-amber-400">
+                            Not eligible for this shift.
+                          </p>
+                          <button onClick={() => setSignupExpandedId(null)}
+                            className="text-xs text-theme-text-muted hover:text-theme-text-primary"
+                          >
+                            Close
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={dashboardSignupPosition}
+                            onChange={(e) => setDashboardSignupPosition(e.target.value)}
+                            className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-md px-2 py-1.5 text-xs text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500"
+                          >
+                            {dashboardEligiblePositions.map((pos) => (
+                              <option key={pos} value={pos}>
+                                {POSITION_LABELS[pos] ?? pos}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => void handleSignup(shift.id)}
+                            disabled={signingUpShiftId === shift.id}
+                            className="btn-success disabled:cursor-not-allowed flex font-medium items-center px-3 py-1.5 space-x-1 text-xs shrink-0"
+                          >
+                            {signingUpShiftId === shift.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                            )}
+                            <span>Confirm</span>
+                          </button>
+                          <button
+                            onClick={() => setSignupExpandedId(null)}
+                            className="text-xs text-theme-text-muted hover:text-theme-text-primary px-2 py-1.5"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

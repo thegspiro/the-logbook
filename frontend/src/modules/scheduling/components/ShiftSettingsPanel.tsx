@@ -15,6 +15,7 @@ import {
   ClipboardCheck,
   Bell,
   LayoutTemplate,
+  Shield,
 } from "lucide-react";
 import type { ShiftTemplateRecord } from "../services/api";
 import type { ShiftSettings } from "../types/shiftSettings";
@@ -30,10 +31,11 @@ import { ResourceTypeDefaultsCard } from "./ResourceTypeDefaultsCard";
 import { DepartmentDefaultsCard } from "./DepartmentDefaultsCard";
 import { PositionNamesCard } from "./PositionNamesCard";
 import { EquipmentCheckTemplateList } from "./EquipmentCheckTemplateList";
+import { EligibilitySettingsCard } from "./EligibilitySettingsCard";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-type SettingsTab = "general" | "apparatus" | "notifications" | "equipment";
+type SettingsTab = "general" | "apparatus" | "notifications" | "equipment" | "eligibility";
 
 const SETTINGS_TABS: {
   id: SettingsTab;
@@ -42,6 +44,7 @@ const SETTINGS_TABS: {
 }[] = [
   { id: "general", label: "General", icon: LayoutTemplate },
   { id: "apparatus", label: "Apparatus", icon: Truck },
+  { id: "eligibility", label: "Eligibility", icon: Shield },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "equipment", label: "Equipment", icon: ClipboardCheck },
 ];
@@ -225,6 +228,13 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ─── Eligibility Tab ─── */}
+      {activeTab === "eligibility" && (
+        <div className="space-y-6">
+          <EligibilitySettingsCard />
         </div>
       )}
 

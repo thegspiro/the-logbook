@@ -870,6 +870,7 @@ export interface OperationalRankResponse {
   description: string | null;
   sort_order: number;
   is_active: boolean;
+  eligible_positions: string[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -880,6 +881,7 @@ export interface OperationalRankCreate {
   description?: string;
   sort_order?: number;
   is_active?: boolean;
+  eligible_positions?: string[];
 }
 
 export interface OperationalRankUpdate {
@@ -888,6 +890,7 @@ export interface OperationalRankUpdate {
   description?: string | null;
   sort_order?: number;
   is_active?: boolean;
+  eligible_positions?: string[];
 }
 
 export interface RankValidationIssue {

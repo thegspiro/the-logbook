@@ -35,6 +35,10 @@ class RankCreate(BaseModel):
         default=0, description="Display ordering (lower = higher rank)"
     )
     is_active: bool = Field(default=True)
+    eligible_positions: Optional[List[str]] = Field(
+        default=None,
+        description="Shift positions this rank is eligible to sign up for",
+    )
 
 
 class RankUpdate(BaseModel):
@@ -45,6 +49,7 @@ class RankUpdate(BaseModel):
     description: Optional[str] = None
     sort_order: Optional[int] = None
     is_active: Optional[bool] = None
+    eligible_positions: Optional[List[str]] = None
 
 
 class RankResponse(UTCResponseBase):
@@ -59,6 +64,7 @@ class RankResponse(UTCResponseBase):
     description: Optional[str] = None
     sort_order: int
     is_active: bool
+    eligible_positions: Optional[List[str]] = None
     created_at: datetime
     updated_at: datetime
 
