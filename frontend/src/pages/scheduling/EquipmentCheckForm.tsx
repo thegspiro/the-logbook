@@ -230,6 +230,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       const currentFiles = results[itemId]?.photoFiles ?? [];
       const combined = [...currentFiles, ...newFiles].slice(0, 3);
 
+      // Revoke old blob URLs to prevent memory leaks
+      const oldUrls = results[itemId]?.photoUrls ?? [];
+      for (const url of oldUrls) {
+        if (url?.startsWith('blob:')) URL.revokeObjectURL(url);
+      }
+
       // Create preview URLs for display
       const previewUrls = combined.map((f) => URL.createObjectURL(f));
 
@@ -324,26 +330,23 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       const checkResult =
         await schedulingService.submitEquipmentCheck(shiftId, payload);
 
-      // Upload photos to check items after submission
+      // Upload photos to check items in parallel after submission
       if (itemsWithPhotos.length > 0 && checkResult.items) {
-        for (const { itemId, files } of itemsWithPhotos) {
-          // Find the created check item by template_item_id
-          const checkItem = checkResult.items.find(
-            (ci) => ci.templateItemId === itemId,
-          );
-          if (checkItem) {
-            try {
-              await schedulingService.uploadCheckItemPhotos(
-                checkResult.id,
-                checkItem.id,
-                files,
-              );
-            } catch {
-              // Photo upload failure shouldn't block the check
-              toast.error(`Failed to upload photos for ${checkItem.itemName}`);
-            }
-          }
-        }
+        await Promise.all(
+          itemsWithPhotos.map(({ itemId, files }) => {
+            const checkItem = checkResult.items?.find(
+              (ci) => ci.templateItemId === itemId,
+            );
+            if (!checkItem) return Promise.resolve();
+            return schedulingService
+              .uploadCheckItemPhotos(checkResult.id, checkItem.id, files)
+              .catch(() => {
+                toast.error(
+                  `Failed to upload photos for ${checkItem.itemName}`,
+                );
+              });
+          }),
+        );
       }
 
       toast.success('Equipment check submitted successfully');
