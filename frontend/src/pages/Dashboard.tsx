@@ -329,7 +329,7 @@ const Dashboard: React.FC = () => {
   const handleSignup = async (shiftId: string) => {
     setSigningUpShiftId(shiftId);
     try {
-      await schedulingService.signupForShift(shiftId, { position: "general" });
+      await schedulingService.signupForShift(shiftId);
       toast.success("Signed up for shift");
       // Refresh both lists: the signed-up shift moves from open to my shifts
       void loadMyShifts();

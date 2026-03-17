@@ -509,8 +509,8 @@ export const schedulingService = {
   },
 
   // --- Shift Signup (member self-service) ---
-  async signupForShift(shiftId: string, data: { position: string }): Promise<ShiftSignupResponse> {
-    const response = await api.post<ShiftSignupResponse>(`/scheduling/shifts/${shiftId}/signup`, data);
+  async signupForShift(shiftId: string, data?: { position?: string }): Promise<ShiftSignupResponse> {
+    const response = await api.post<ShiftSignupResponse>(`/scheduling/shifts/${shiftId}/signup`, data ?? {});
     return response.data;
   },
   async withdrawSignup(shiftId: string): Promise<void> {
