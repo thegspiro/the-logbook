@@ -212,6 +212,31 @@ async def get_open_shifts(
     # Optionally filter by apparatus_id
     if apparatus_id:
         shifts_list = [s for s in shifts_list if s.apparatus_id == apparatus_id]
+
+    # Exclude shifts the current user is already assigned to (prevent double-booking)
+    if shifts_list:
+        _active_statuses = [
+            AssignmentStatus.ASSIGNED.value,
+            AssignmentStatus.CONFIRMED.value,
+        ]
+        my_assignment_result = await service.db.execute(
+            select(ShiftAssignment.shift_id)
+            .where(ShiftAssignment.user_id == str(current_user.id))
+            .where(
+                ShiftAssignment.shift_id.in_([s.id for s in shifts_list])
+            )
+            .where(
+                ShiftAssignment.assignment_status.in_(_active_statuses)
+            )
+        )
+        my_assigned_shift_ids = {
+            str(row[0]) for row in my_assignment_result.all()
+        }
+        shifts_list = [
+            s for s in shifts_list
+            if str(s.id) not in my_assigned_shift_ids
+        ]
+
     return await _enrich_shifts(service, current_user.organization_id, shifts_list)
 
 
