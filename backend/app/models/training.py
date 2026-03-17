@@ -2145,6 +2145,11 @@ class Shift(Base):
     notes = Column(Text)
     activities = Column(JSON)  # Training, station duties, etc.
 
+    # When True, all members (including non-operational types) can self-signup.
+    # Copied from ShiftTemplate when a shift is created from a template.
+    open_to_all_members = Column(Boolean, default=False, nullable=False,
+                                 server_default="0")
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
@@ -2361,6 +2366,11 @@ class ShiftTemplate(Base):
     # Defaults
     is_default = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
+
+    # When True, all members (including non-operational membership types)
+    # can self-signup for positions defined on this template/shift.
+    open_to_all_members = Column(Boolean, default=False, nullable=False,
+                                 server_default="0")
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

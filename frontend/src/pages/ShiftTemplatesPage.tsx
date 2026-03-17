@@ -207,6 +207,7 @@ interface ShiftTemplate {
   apparatus_id?: string;
   is_default: boolean;
   is_active: boolean;
+  open_to_all_members?: boolean;
   created_at: string;
   updated_at: string;
   created_by?: string;
@@ -270,6 +271,7 @@ interface TemplateFormData {
   color: string;
   min_staffing: string;
   is_default: boolean;
+  open_to_all_members: boolean;
   positions: string[];
   category: TemplateCategory;
   apparatus_type: string;
@@ -308,6 +310,7 @@ const emptyTemplateForm: TemplateFormData = {
   color: '#dc2626',
   min_staffing: '1',
   is_default: false,
+  open_to_all_members: false,
   positions: [],
   category: 'standard',
   apparatus_type: '',
@@ -449,6 +452,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
           ? totalResourceStaffing
           : parseInt(formData.min_staffing, 10),
         is_default: formData.is_default,
+        open_to_all_members: formData.open_to_all_members,
         positions: effectivePositions.length > 0 ? effectivePositions : null,
         category: formData.category,
       };
@@ -915,6 +919,16 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
               className="rounded-sm border-theme-input-border"
             />
             Set as default template
+          </label>
+
+          <label className="flex items-center gap-2 text-sm text-theme-text-secondary cursor-pointer">
+            <input
+              type="checkbox"
+              checked={formData.open_to_all_members}
+              onChange={(e) => setFormData(prev => ({ ...prev, open_to_all_members: e.target.checked }))}
+              className="rounded-sm border-theme-input-border"
+            />
+            Open to all members (allow non-operational members to sign up)
           </label>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-theme-surface-border">
@@ -1442,6 +1456,7 @@ export const ShiftTemplatesPage: React.FC = () => {
       color: t.color || '#dc2626',
       min_staffing: String(t.min_staffing),
       is_default: t.is_default,
+      open_to_all_members: t.open_to_all_members ?? false,
       positions,
       category: (t.category as TemplateCategory) || 'standard',
       apparatus_type: t.apparatus_type || '',

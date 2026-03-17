@@ -22,7 +22,10 @@ from app.schemas.scheduling import (
     BasicApparatusCreate,
     BasicApparatusResponse,
     BasicApparatusUpdate,
+    EligiblePositionsResponse,
     GenerateShiftsRequest,
+    SchedulingEligibilitySettings,
+    SchedulingEligibilitySettingsResponse,
     SchedulingSummary,
     ShiftAssignmentCreate,
     ShiftAssignmentResponse,
@@ -56,6 +59,7 @@ from app.schemas.scheduling import (
     TimeOffStatus,
 )
 from app.services.scheduling_service import SchedulingService
+from app.services.shift_eligibility_service import ShiftEligibilityService
 
 router = APIRouter()
 
@@ -1329,7 +1333,29 @@ async def signup_for_shift(
     """
     Member signs up for an open position on a shift.
     Does not require scheduling.assign permission — any member can sign up.
+    Enforces position eligibility based on rank, training, and membership type.
     """
+    # Eligibility check (self-service only — admin assignments bypass this)
+    eligibility = ShiftEligibilityService(db)
+    eligible = await eligibility.get_eligible_positions(
+        user=current_user,
+        organization_id=current_user.organization_id,
+        shift_id=str(shift_id),
+    )
+    if not eligible:
+        raise HTTPException(
+            status_code=403,
+            detail="You are not eligible to sign up for this shift.",
+        )
+    if signup.position.value not in eligible:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"You are not eligible for the '{signup.position.value}' "
+                f"position. Eligible positions: {', '.join(eligible)}."
+            ),
+        )
+
     service = SchedulingService(db)
     assignment_data = {
         "user_id": str(current_user.id),
@@ -1570,3 +1596,95 @@ async def delete_basic_apparatus(
     existing = ensure_found(result.scalar_one_or_none(), "Apparatus")
     await db.delete(existing)
     await db.commit()
+
+
+# ============================================
+# Position Eligibility
+# ============================================
+
+
+@router.get(
+    "/eligibility/positions",
+    response_model=EligiblePositionsResponse,
+)
+async def get_eligible_positions(
+    shift_id: str | None = Query(None, description="Optional shift ID to check against"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Return the shift positions the current user is eligible to sign up for.
+
+    When ``shift_id`` is provided, the result is intersected with the
+    shift's defined positions and accounts for the shift's
+    ``open_to_all_members`` flag.
+
+    **Authentication required**
+    """
+    service = ShiftEligibilityService(db)
+    positions = await service.get_eligible_positions(
+        user=current_user,
+        organization_id=current_user.organization_id,
+        shift_id=shift_id,
+    )
+    is_excluded = len(positions) == 0 and not shift_id
+    return EligiblePositionsResponse(positions=positions, is_excluded=is_excluded)
+
+
+@router.get(
+    "/eligibility/settings",
+    response_model=SchedulingEligibilitySettingsResponse,
+)
+async def get_eligibility_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """
+    Get the org's scheduling eligibility configuration.
+
+    **Permissions required:** scheduling.manage
+    """
+    service = ShiftEligibilityService(db)
+    org = await service._get_org(current_user.organization_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    excluded = service.get_excluded_membership_types(org)
+    open_pos = service.get_open_positions(org)
+    return SchedulingEligibilitySettingsResponse(
+        excluded_membership_types=excluded,
+        open_positions=open_pos,
+    )
+
+
+@router.put(
+    "/eligibility/settings",
+    response_model=SchedulingEligibilitySettingsResponse,
+)
+async def update_eligibility_settings(
+    data: SchedulingEligibilitySettings,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """
+    Update the org's scheduling eligibility configuration.
+
+    **Permissions required:** scheduling.manage
+    """
+    service = ShiftEligibilityService(db)
+    try:
+        result = await service.update_scheduling_settings(
+            organization_id=current_user.organization_id,
+            excluded_membership_types=data.excluded_membership_types,
+            open_positions=data.open_positions,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return SchedulingEligibilitySettingsResponse(
+        excluded_membership_types=result.get(
+            "excluded_membership_types",
+            [],
+        ),
+        open_positions=result.get("open_positions", []),
+    )

@@ -145,6 +145,7 @@ export interface ShiftTemplateCreate {
   apparatus_type?: string;
   apparatus_id?: string;
   is_default?: boolean;
+  open_to_all_members?: boolean;
 }
 
 export interface ShiftTemplateUpdate {
@@ -160,6 +161,21 @@ export interface ShiftTemplateUpdate {
   apparatus_type?: string;
   apparatus_id?: string;
   is_default?: boolean;
+  open_to_all_members?: boolean;
+}
+
+// ============================================================================
+// Position Eligibility
+// ============================================================================
+
+export interface EligiblePositionsResponse {
+  positions: string[];
+  is_excluded: boolean;
+}
+
+export interface SchedulingEligibilitySettings {
+  excluded_membership_types: string[];
+  open_positions: string[];
 }
 
 // ============================================================================

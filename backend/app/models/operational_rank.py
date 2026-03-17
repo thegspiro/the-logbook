@@ -13,6 +13,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    JSON,
     String,
     Text,
     UniqueConstraint,
@@ -46,6 +47,10 @@ class OperationalRank(Base):
     description = Column(Text, nullable=True)
     sort_order = Column(Integer, nullable=False, default=0)
     is_active = Column(Boolean, nullable=False, default=True)
+
+    # Shift positions this rank is eligible to sign up for.
+    # e.g. ["officer", "driver", "firefighter", "ems"]
+    eligible_positions = Column(JSON, nullable=True, default=list)
 
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

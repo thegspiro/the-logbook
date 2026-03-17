@@ -49,6 +49,8 @@ import type {
   CallVolumeReport,
   AvailabilityRecord,
   ShiftSignupResponse,
+  EligiblePositionsResponse,
+  SchedulingEligibilitySettings,
 } from '../types';
 import type {
   EquipmentCheckTemplate,
@@ -96,6 +98,7 @@ export interface ShiftRecord {
   color?: string | null;
   notes?: string;
   activities?: unknown;
+  open_to_all_members?: boolean;
   attendee_count: number;
   created_at: string;
   updated_at: string;
@@ -141,6 +144,7 @@ export interface ShiftTemplateRecord {
   apparatus_type?: string;
   is_default: boolean;
   is_active: boolean;
+  open_to_all_members?: boolean;
 }
 
 /**
@@ -509,8 +513,8 @@ export const schedulingService = {
   },
 
   // --- Shift Signup (member self-service) ---
-  async signupForShift(shiftId: string, data: { position: string }): Promise<ShiftSignupResponse> {
-    const response = await api.post<ShiftSignupResponse>(`/scheduling/shifts/${shiftId}/signup`, data);
+  async signupForShift(shiftId: string, data?: { position?: string }): Promise<ShiftSignupResponse> {
+    const response = await api.post<ShiftSignupResponse>(`/scheduling/shifts/${shiftId}/signup`, data ?? {});
     return response.data;
   },
   async withdrawSignup(shiftId: string): Promise<void> {
@@ -520,6 +524,21 @@ export const schedulingService = {
   // --- Open Shifts ---
   async getOpenShifts(params?: { start_date?: string | undefined; end_date?: string; apparatus_id?: string }): Promise<ShiftRecord[]> {
     const response = await api.get<ShiftRecord[]>('/scheduling/shifts/open', { params });
+    return response.data;
+  },
+
+  // --- Position Eligibility ---
+  async getEligiblePositions(shiftId?: string): Promise<EligiblePositionsResponse> {
+    const params = shiftId ? { shift_id: shiftId } : undefined;
+    const response = await api.get<EligiblePositionsResponse>('/scheduling/eligibility/positions', { params });
+    return response.data;
+  },
+  async getEligibilitySettings(): Promise<SchedulingEligibilitySettings> {
+    const response = await api.get<SchedulingEligibilitySettings>('/scheduling/eligibility/settings');
+    return response.data;
+  },
+  async updateEligibilitySettings(data: Partial<SchedulingEligibilitySettings>): Promise<SchedulingEligibilitySettings> {
+    const response = await api.put<SchedulingEligibilitySettings>('/scheduling/eligibility/settings', data);
     return response.data;
   },
 

@@ -58,6 +58,7 @@ import { organizationService, ranksService } from '../services/api';
 import type { ModuleSettingsData, OperationalRankResponse, OrganizationProfile, RankValidationIssue } from '../services/api';
 import type { ContactInfoSettings, MembershipIdSettings, EmailServiceSettings, FileStorageSettings, AuthSettings } from '../types/user';
 import { invalidateRanksCache } from '../hooks/useRanks';
+import { POSITION_LABELS } from '../constants/enums';
 
 // ── Section definitions ──
 
@@ -477,6 +478,21 @@ export const SettingsPage: React.FC = () => {
     try {
       await ranksService.reorderRanks(reorderPayload);
     } catch { toast.error('Failed to reorder'); await fetchRanks(); }
+  };
+
+  const handleToggleEligiblePosition = async (rank: OperationalRankResponse, position: string) => {
+    const current = rank.eligible_positions ?? [];
+    const updated = current.includes(position)
+      ? current.filter((p) => p !== position)
+      : [...current, position];
+    try {
+      await ranksService.updateRank(rank.id, { eligible_positions: updated });
+      setRanks((prev) =>
+        prev.map((r) => (r.id === rank.id ? { ...r, eligible_positions: updated } : r)),
+      );
+    } catch {
+      toast.error('Failed to update eligible positions');
+    }
   };
 
   // ── Loading state ──
@@ -1068,6 +1084,27 @@ export const SettingsPage: React.FC = () => {
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-theme-text-primary">{rank.display_name}</p>
                       <p className="text-xs text-theme-text-muted">{rank.rank_code}</p>
+                      {/* Eligible shift positions */}
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {(['officer', 'driver', 'firefighter', 'ems', 'captain', 'lieutenant', 'probationary', 'volunteer', 'other'] as const).map((pos) => {
+                          const isEligible = (rank.eligible_positions ?? []).includes(pos);
+                          return (
+                            <button
+                              key={pos}
+                              type="button"
+                              onClick={() => { void handleToggleEligiblePosition(rank, pos); }}
+                              className={`px-1.5 py-0.5 text-[10px] rounded-sm transition-colors ${
+                                isEligible
+                                  ? 'bg-violet-500/15 text-violet-700 dark:text-violet-400 border border-violet-500/30'
+                                  : 'bg-theme-surface-hover/30 text-theme-text-muted/50 border border-transparent hover:border-theme-surface-border'
+                              }`}
+                              title={`${isEligible ? 'Remove' : 'Add'} ${POSITION_LABELS[pos] ?? pos} eligibility`}
+                            >
+                              {POSITION_LABELS[pos] ?? pos}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button

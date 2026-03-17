@@ -207,7 +207,7 @@ describe('Dashboard', () => {
       await user.click(screen.getByRole('button', { name: /sign up/i }));
 
       await waitFor(() => {
-        expect(mockSignupForShift).toHaveBeenCalledWith('open-1', { position: 'general' });
+        expect(mockSignupForShift).toHaveBeenCalledWith('open-1');
       });
     });
 

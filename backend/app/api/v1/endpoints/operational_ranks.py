@@ -34,6 +34,7 @@ def _rank_to_response(rank) -> RankResponse:
         description=rank.description,
         sort_order=rank.sort_order,
         is_active=rank.is_active,
+        eligible_positions=rank.eligible_positions,
         created_at=rank.created_at,
         updated_at=rank.updated_at,
     )

@@ -324,6 +324,7 @@ class ShiftTemplateCreate(BaseModel):
     apparatus_type: Optional[str] = None
     apparatus_id: Optional[str] = None
     is_default: bool = False
+    open_to_all_members: bool = False
 
 
 class ShiftTemplateUpdate(BaseModel):
@@ -341,6 +342,7 @@ class ShiftTemplateUpdate(BaseModel):
     apparatus_type: Optional[str] = None
     apparatus_id: Optional[str] = None
     is_default: Optional[bool] = None
+    open_to_all_members: Optional[bool] = None
 
 
 class ShiftTemplateResponse(UTCResponseBase):
@@ -361,6 +363,7 @@ class ShiftTemplateResponse(UTCResponseBase):
     apparatus_id: Optional[str] = None
     is_default: bool = False
     is_active: bool = True
+    open_to_all_members: bool = False
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None
@@ -651,6 +654,32 @@ class ShiftSignupRequest(BaseModel):
     """Schema for a member signing up for an open shift position"""
 
     position: ShiftPosition = ShiftPosition.FIREFIGHTER
+
+
+# ============================================
+# Position Eligibility
+# ============================================
+
+
+class EligiblePositionsResponse(BaseModel):
+    """Positions the current user is eligible to sign up for."""
+
+    positions: List[str]
+    is_excluded: bool = False
+
+
+class SchedulingEligibilitySettings(BaseModel):
+    """Org-level scheduling eligibility configuration."""
+
+    excluded_membership_types: Optional[List[str]] = None
+    open_positions: Optional[List[str]] = None
+
+
+class SchedulingEligibilitySettingsResponse(BaseModel):
+    """Current scheduling eligibility settings for the org."""
+
+    excluded_membership_types: List[str]
+    open_positions: List[str]
 
 
 # ============================================

@@ -25,16 +25,28 @@ _INACTIVE_STATUSES = {
 }
 
 
+# All shift position values for reference.
+_ALL_POSITIONS = [
+    "officer", "driver", "firefighter", "ems",
+    "captain", "lieutenant", "probationary", "volunteer", "other",
+]
+
 # Default ranks seeded for new organizations.
+# Format: (rank_code, display_name, sort_order, eligible_positions)
 DEFAULT_RANKS = [
-    ("fire_chief", "Fire Chief", 0),
-    ("deputy_chief", "Deputy Chief", 1),
-    ("assistant_chief", "Assistant Chief", 2),
-    ("captain", "Captain", 3),
-    ("lieutenant", "Lieutenant", 4),
-    ("engineer", "Engineer", 5),
-    ("firefighter", "Firefighter", 6),
-    ("emt", "EMT", 7),
+    ("fire_chief", "Fire Chief", 0, _ALL_POSITIONS),
+    ("deputy_chief", "Deputy Chief", 1, _ALL_POSITIONS),
+    ("assistant_chief", "Assistant Chief", 2, _ALL_POSITIONS),
+    ("captain", "Captain", 3,
+     ["captain", "officer", "driver", "firefighter", "ems", "lieutenant"]),
+    ("lieutenant", "Lieutenant", 4,
+     ["lieutenant", "officer", "driver", "firefighter", "ems"]),
+    ("engineer", "Engineer", 5,
+     ["driver", "firefighter", "ems"]),
+    ("firefighter", "Firefighter", 6,
+     ["firefighter", "ems"]),
+    ("emt", "EMT", 7,
+     ["ems", "firefighter"]),
 ]
 
 
@@ -57,12 +69,13 @@ class OperationalRankService:
             return []
 
         ranks = []
-        for code, label, order in DEFAULT_RANKS:
+        for code, label, order, positions in DEFAULT_RANKS:
             rank = OperationalRank(
                 organization_id=organization_id,
                 rank_code=code,
                 display_name=label,
                 sort_order=order,
+                eligible_positions=positions,
             )
             self.db.add(rank)
             ranks.append(rank)

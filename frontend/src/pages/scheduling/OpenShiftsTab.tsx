@@ -18,6 +18,7 @@ import { useTimezone } from '../../hooks/useTimezone';
 import { formatTime, getTodayLocalDate, toLocalDateString, formatDateCustom } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { POSITION_LABELS } from '../../constants/enums';
+import { useEligiblePositions } from '../../hooks/useEligiblePositions';
 
 interface OpenShiftsTabProps {
   onViewShift?: (shift: ShiftRecord) => void;
@@ -33,6 +34,11 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
   const [signupShiftId, setSignupShiftId] = useState<string | null>(null);
   const [signupPosition, setSignupPosition] = useState('firefighter');
   const [signingUp, setSigningUp] = useState(false);
+
+  // Fetch eligible positions for the currently selected shift
+  const { positions: eligiblePositions, isExcluded, loading: eligibilityLoading } = useEligiblePositions(
+    signupShiftId ?? undefined,
+  );
 
   const loadShifts = useCallback(async () => {
     setLoading(true);
@@ -211,18 +217,28 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                       {/* Signup form — stacks below card content on mobile */}
                       {signupShiftId === shift.id && (
                         <div className="mt-3 pt-3 border-t border-theme-surface-border">
+                          {eligibilityLoading ? (
+                            <div className="flex items-center justify-center py-3">
+                              <Loader2 className="w-4 h-4 animate-spin text-theme-text-muted" />
+                            </div>
+                          ) : isExcluded || eligiblePositions.length === 0 ? (
+                            <div className="flex items-center gap-2 py-2">
+                              <p className="text-sm text-amber-600 dark:text-amber-400">
+                                You are not eligible to sign up for this shift. Contact a scheduling admin for assistance.
+                              </p>
+                              <button onClick={() => setSignupShiftId(null)}
+                                className="px-3 py-1.5 text-sm text-theme-text-muted hover:text-theme-text-primary border border-theme-surface-border rounded-lg shrink-0"
+                              >
+                                Close
+                              </button>
+                            </div>
+                          ) : (
                           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                             <select value={signupPosition} onChange={e => setSignupPosition(e.target.value)}
                               className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500"
                             >
-                              {(shift.apparatus_positions && shift.apparatus_positions.length > 0
-                                ? shift.apparatus_positions.map(p => {
-                                    const name = typeof p === 'string' ? p : p.position;
-                                    return [name, POSITION_LABELS[name] || name.charAt(0).toUpperCase() + name.slice(1)] as const;
-                                  })
-                                : Object.entries(POSITION_LABELS)
-                              ).map(([val, label]) => (
-                                <option key={val} value={val}>{label}</option>
+                              {eligiblePositions.map((pos) => (
+                                <option key={pos} value={pos}>{POSITION_LABELS[pos] ?? pos}</option>
                               ))}
                             </select>
                             <div className="flex items-center gap-2">
@@ -239,6 +255,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                               </button>
                             </div>
                           </div>
+                          )}
                         </div>
                       )}
                     </div>
