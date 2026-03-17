@@ -315,7 +315,10 @@ const Dashboard: React.FC = () => {
         start_date: today,
         end_date: nextMonth,
       });
-      setOpenShifts(data);
+      // Filter out shifts the user is already signed up for (defense-in-depth;
+      // the backend also filters these, but guard against race conditions)
+      const myShiftIds = new Set(myShifts.map((s) => s.id));
+      setOpenShifts(data.filter((s) => !myShiftIds.has(s.id)));
     } catch {
       // Open shifts are non-critical
     } finally {
