@@ -211,6 +211,7 @@ export const SettingsPage: React.FC = () => {
   const [rankForm, setRankForm] = useState({ rank_code: '', display_name: '' });
   const [rankSaving, setRankSaving] = useState(false);
   const [deletingRankId, setDeletingRankId] = useState<string | null>(null);
+  const [editingPositionsRankId, setEditingPositionsRankId] = useState<string | null>(null);
 
   // Rank validation state
   const [rankValidationIssues, setRankValidationIssues] = useState<RankValidationIssue[]>([]);
@@ -1082,29 +1083,76 @@ export const SettingsPage: React.FC = () => {
                     </div>
                     <GripVertical className="w-4 h-4 text-theme-text-muted/40 shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-theme-text-primary">{rank.display_name}</p>
-                      <p className="text-xs text-theme-text-muted">{rank.rank_code}</p>
-                      {/* Eligible shift positions */}
-                      <div className="flex flex-wrap gap-1 mt-1.5">
-                        {(['officer', 'driver', 'firefighter', 'ems', 'captain', 'lieutenant', 'probationary', 'volunteer', 'other'] as const).map((pos) => {
-                          const isEligible = (rank.eligible_positions ?? []).includes(pos);
-                          return (
-                            <button
-                              key={pos}
-                              type="button"
-                              onClick={() => { void handleToggleEligiblePosition(rank, pos); }}
-                              className={`px-1.5 py-0.5 text-[10px] rounded-sm transition-colors ${
-                                isEligible
-                                  ? 'bg-violet-500/15 text-violet-700 dark:text-violet-400 border border-violet-500/30'
-                                  : 'bg-theme-surface-hover/30 text-theme-text-muted/50 border border-transparent hover:border-theme-surface-border'
-                              }`}
-                              title={`${isEligible ? 'Remove' : 'Add'} ${POSITION_LABELS[pos] ?? pos} eligibility`}
-                            >
-                              {POSITION_LABELS[pos] ?? pos}
-                            </button>
-                          );
-                        })}
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-theme-text-primary">{rank.display_name}</p>
+                        <p className="text-xs text-theme-text-muted">({rank.rank_code})</p>
                       </div>
+                      {/* Eligible shift positions — display mode */}
+                      {editingPositionsRankId !== rank.id && (
+                        <div className="flex flex-wrap items-center gap-1 mt-1">
+                          {(rank.eligible_positions ?? []).length > 0 ? (
+                            <>
+                              {(rank.eligible_positions ?? []).map((pos) => (
+                                <span
+                                  key={pos}
+                                  className="px-1.5 py-0.5 text-[10px] rounded bg-violet-500/15 text-violet-700 dark:text-violet-400 font-medium"
+                                >
+                                  {POSITION_LABELS[pos] ?? pos}
+                                </span>
+                              ))}
+                              <button
+                                type="button"
+                                onClick={() => setEditingPositionsRankId(rank.id)}
+                                className="px-1.5 py-0.5 text-[10px] rounded text-theme-text-muted hover:text-theme-accent-blue hover:bg-theme-accent-blue-muted transition-colors"
+                              >
+                                Edit
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setEditingPositionsRankId(rank.id)}
+                              className="text-[11px] text-theme-text-muted hover:text-theme-accent-blue transition-colors"
+                            >
+                              + Configure eligible positions
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      {/* Eligible shift positions — edit mode */}
+                      {editingPositionsRankId === rank.id && (
+                        <div className="mt-1.5 p-2 bg-theme-surface-secondary/60 rounded-md border border-theme-surface-border">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <p className="text-[11px] font-medium text-theme-text-secondary">Click to toggle eligible positions:</p>
+                            <button
+                              type="button"
+                              onClick={() => setEditingPositionsRankId(null)}
+                              className="text-[10px] text-theme-text-muted hover:text-theme-text-primary"
+                            >
+                              Done
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {(['officer', 'driver', 'firefighter', 'ems', 'captain', 'lieutenant', 'probationary', 'volunteer', 'other'] as const).map((pos) => {
+                              const isEligible = (rank.eligible_positions ?? []).includes(pos);
+                              return (
+                                <button
+                                  key={pos}
+                                  type="button"
+                                  onClick={() => { void handleToggleEligiblePosition(rank, pos); }}
+                                  className={`px-2 py-1 text-[11px] rounded-md font-medium transition-all ${
+                                    isEligible
+                                      ? 'bg-violet-600 text-white shadow-sm'
+                                      : 'bg-theme-surface border border-theme-surface-border text-theme-text-muted hover:border-violet-400 hover:text-violet-600 dark:hover:text-violet-400'
+                                  }`}
+                                >
+                                  {POSITION_LABELS[pos] ?? pos}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
