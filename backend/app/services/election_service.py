@@ -143,15 +143,8 @@ class ElectionService:
         text_parts = []
         for item in eligible_items:
             title = html.escape(item.get("title", "Untitled"))
-            item_type = (
-                item.get("type", "")
-                .replace("_", " ")
-                .title()
-            )
-            vote_type = (
-                item.get("vote_type", "")
-                .replace("_", " ")
-            )
+            item_type = item.get("type", "").replace("_", " ").title()
+            vote_type = item.get("vote_type", "").replace("_", " ")
             label = f"<strong>{title}</strong>"
             if item_type:
                 label += f" &mdash; {html.escape(item_type)}"
@@ -259,14 +252,10 @@ class ElectionService:
             select(Organization).where(Organization.id == organization_id)
         )
         org = org_result.scalar_one_or_none()
-        tier_config = (
-            (org.settings or {}).get("membership_tiers", {}) if org else {}
-        )
+        tier_config = (org.settings or {}).get("membership_tiers", {}) if org else {}
         tiers = tier_config.get("tiers", [])
         member_tier_id = getattr(user, "membership_type", None) or "active"
-        tier_def = next(
-            (t for t in tiers if t.get("id") == member_tier_id), None
-        )
+        tier_def = next((t for t in tiers if t.get("id") == member_tier_id), None)
 
         # Secretary override — if present, they are eligible for everything
         if election.voter_overrides and any(
@@ -279,9 +268,7 @@ class ElectionService:
             benefits = tier_def.get("benefits", {})
             if not benefits.get("voting_eligible", True):
                 tier_name = tier_def.get("name", member_tier_id)
-                return (
-                    f"Membership tier '{tier_name}' is not eligible to vote"
-                )
+                return f"Membership tier '{tier_name}' is not eligible to vote"
 
         # Check each item for role-type and attendance requirements
         role_blocked = 0
@@ -299,9 +286,7 @@ class ElectionService:
         total = len(ballot_items)
         reasons = []
         if role_blocked > 0:
-            reasons.append(
-                f"role type not eligible for {role_blocked}/{total} item(s)"
-            )
+            reasons.append(f"role type not eligible for {role_blocked}/{total} item(s)")
         if attendance_blocked > 0:
             reasons.append(
                 f"not checked in for {attendance_blocked}/{total} "
@@ -1885,11 +1870,13 @@ class ElectionService:
                     user.id, election_id, election.voter_anonymity_salt or ""
                 )
                 if user_hash not in voted_hashes:
-                    non_voters.append({
-                        "id": user.id,
-                        "full_name": user.full_name,
-                        "email": user.email,
-                    })
+                    non_voters.append(
+                        {
+                            "id": user.id,
+                            "full_name": user.full_name,
+                            "email": user.email,
+                        }
+                    )
         else:
             voted_ids = {v.voter_id for v in votes if v.voter_id}
             non_voters = [
@@ -3060,19 +3047,33 @@ Best regards,
 
         Returns: (recipients_count, failed_count, skipped_count, skipped_details)
         """
-        # Get election with organization
-        result = await self.db.execute(
-            select(Election, Organization)
-            .join(Organization, Election.organization_id == Organization.id)
+        # Get election
+        election_result = await self.db.execute(
+            select(Election)
             .where(Election.id == str(election_id))
             .where(Election.organization_id == str(organization_id))
         )
-        row = result.one_or_none()
+        election = election_result.scalar_one_or_none()
 
-        if not row:
+        if not election:
+            logger.warning(
+                f"Cannot send ballot emails: election not found | "
+                f"election={election_id} org={organization_id}"
+            )
             return 0, 0, 0, []
 
-        election, organization = row
+        # Load organization separately to avoid INNER JOIN masking the election
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        organization = org_result.scalar_one_or_none()
+
+        if not organization:
+            logger.error(
+                f"Cannot send ballot emails: organization not found | "
+                f"election={election_id} org={organization_id}"
+            )
+            return 0, 0, 0, []
 
         # Determine recipients (eagerly load roles for eligibility checks)
         if recipient_user_ids:
@@ -3093,6 +3094,12 @@ Best regards,
                 .options(selectinload(User.roles))
             )
             recipients = users_result.scalars().all()
+            if not recipients:
+                logger.warning(
+                    f"No matching users for eligible_voters list | "
+                    f"election={election_id} "
+                    f"eligible_voter_ids={election.eligible_voters}"
+                )
         else:
             # Send to all active users in organization
             users_result = await self.db.execute(
@@ -3104,6 +3111,11 @@ Best regards,
             recipients = users_result.scalars().all()
 
         if not recipients:
+            logger.warning(
+                f"No recipients found for ballot emails | "
+                f"election={election_id} org={organization_id} "
+                f"eligible_voters_set={election.eligible_voters is not None}"
+            )
             return 0, 0, 0, []
 
         # Initialize email service with organization settings
@@ -3137,9 +3149,7 @@ Best regards,
                 admin_contact_email = creator.email
         if not admin_contact_email:
             admin_contact_name = organization.name
-            admin_contact_email = (
-                getattr(organization, "email", None) or ""
-            )
+            admin_contact_email = getattr(organization, "email", None) or ""
 
         # Send individual ballot emails with unique tokens
         success_count = 0
@@ -3181,9 +3191,7 @@ Best regards,
                     continue
 
             # Build ballot items lists for the email
-            items_html, items_text = self._build_ballot_items_lists(
-                eligible_items
-            )
+            items_html, items_text = self._build_ballot_items_lists(eligible_items)
 
             # Generate unique voting token for this voter
             voting_token = await self._generate_voting_token(

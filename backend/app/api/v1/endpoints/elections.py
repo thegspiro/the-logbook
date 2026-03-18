@@ -1360,6 +1360,17 @@ async def send_ballot_emails(
         )
     )
 
+    total_attempted = recipients_count + failed_count + skipped_count
+    if total_attempted == 0:
+        return EmailBallotResponse(
+            success=False,
+            recipients_count=0,
+            failed_count=0,
+            skipped_count=0,
+            skipped_details=skipped_details,
+            message="No eligible recipients found. Check that the election has eligible voters configured or that active members exist.",
+        )
+
     parts = [f"Ballot emails sent to {recipients_count} recipient(s)"]
     if failed_count > 0:
         parts.append(f"{failed_count} failed")
@@ -1367,7 +1378,7 @@ async def send_ballot_emails(
         parts.append(f"{skipped_count} skipped (no eligible ballot items)")
 
     return EmailBallotResponse(
-        success=failed_count == 0,
+        success=recipients_count > 0 and failed_count == 0,
         recipients_count=recipients_count,
         failed_count=failed_count,
         skipped_count=skipped_count,
@@ -1389,9 +1400,7 @@ async def get_non_voters(
     **Requires permission: elections.manage**
     """
     service = ElectionService(db)
-    non_voters = await service.get_non_voters(
-        election_id, current_user.organization_id
-    )
+    non_voters = await service.get_non_voters(election_id, current_user.organization_id)
     return {"non_voters": non_voters, "count": len(non_voters)}
 
 
