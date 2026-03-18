@@ -7,8 +7,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
-import { electionService } from '../services/api';
-import { userService } from '../services/api';
+import { electionService, userService } from '../services/api';
 import type { Election, Attendee } from '../types/election';
 import type { User } from '../types/user';
 import { getErrorMessage } from '../utils/errorHandling';

@@ -664,7 +664,7 @@ export const ElectionDetailPage: React.FC = () => {
                   )}
                   <button
                     onClick={() => {
-                      setNewEndDate(election.end_date);
+                      setNewEndDate(formatForDateTimeInput(new Date(election.end_date), tz));
                       setShowExtendModal(true);
                     }}
                     className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"

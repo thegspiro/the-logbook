@@ -252,6 +252,15 @@ class ElectionUpdate(BaseModel):
     enable_runoffs: Optional[bool] = None
     runoff_type: Optional[str] = None
     max_runoff_rounds: Optional[int] = Field(None, ge=1, le=10)
+    quorum_type: Optional[str] = None
+    quorum_value: Optional[int] = Field(None, ge=1, le=100)
+
+    @field_validator("quorum_type")
+    @classmethod
+    def validate_quorum_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in ("none", "percentage", "count"):
+            raise ValueError("quorum_type must be 'none', 'percentage', or 'count'")
+        return v
 
     @field_validator("voting_method")
     @classmethod
@@ -281,11 +290,36 @@ class ElectionUpdate(BaseModel):
         return v
 
 
-class ElectionResponse(ElectionBase):
+class ElectionResponse(UTCResponseBase):
     """Schema for election response"""
 
     id: UUID
     organization_id: UUID
+    title: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = None
+    election_type: str = Field(default="general", max_length=50)
+    positions: Optional[List[str]] = None
+    ballot_items: Optional[List[BallotItem]] = None
+    position_eligibility: Optional[Dict[str, PositionEligibility]] = None
+    meeting_date: Optional[datetime] = None
+    meeting_id: Optional[UUID] = None
+    attendees: Optional[List[Dict[str, Any]]] = None
+    start_date: datetime
+    end_date: datetime
+    anonymous_voting: bool = True
+    allow_write_ins: bool = False
+    max_votes_per_position: int = 1
+    results_visible_immediately: bool = False
+    eligible_voters: Optional[List[UUID]] = None
+    voting_method: str = "simple_majority"
+    victory_condition: str = "most_votes"
+    victory_threshold: Optional[int] = None
+    victory_percentage: Optional[int] = None
+    enable_runoffs: bool = False
+    runoff_type: str = "top_two"
+    max_runoff_rounds: int = 3
+    quorum_type: str = "none"
+    quorum_value: Optional[int] = None
     status: str
     created_by: Optional[UUID] = None
     created_at: datetime
@@ -362,12 +396,17 @@ class CandidateUpdate(BaseModel):
     display_order: Optional[int] = None
 
 
-class CandidateResponse(CandidateBase):
+class CandidateResponse(UTCResponseBase):
     """Schema for candidate response"""
 
     id: UUID
     election_id: UUID
     user_id: Optional[UUID] = None
+    name: str = Field(..., min_length=1, max_length=200)
+    position: Optional[str] = Field(None, max_length=100)
+    statement: Optional[str] = None
+    photo_url: Optional[str] = Field(None, max_length=500)
+    display_order: int = 0
     nomination_date: datetime
     nominated_by: Optional[UUID] = None
     accepted: bool
@@ -716,3 +755,183 @@ class ProxyVoteCreate(BaseModel):
     vote_rank: Optional[int] = Field(
         None, ge=1, description="Rank for ranked-choice voting"
     )
+
+
+# ============================================
+# Response Models for Previously Untyped Endpoints
+# ============================================
+
+
+class SuccessResponse(BaseModel):
+    """Generic success response for simple operations"""
+
+    success: bool
+    message: str
+
+
+class ElectionSettingsResponse(BaseModel):
+    """Organization-level election settings"""
+
+    default_voting_method: Optional[str] = "simple_majority"
+    default_victory_condition: Optional[str] = "most_votes"
+    default_victory_percentage: Optional[int] = None
+    default_anonymous_voting: Optional[bool] = True
+    default_allow_write_ins: Optional[bool] = False
+    default_quorum_type: Optional[str] = "none"
+    default_quorum_value: Optional[int] = None
+    proxy_voting_enabled: Optional[bool] = False
+    max_proxies_per_person: Optional[int] = 1
+    security: Optional[Dict[str, Any]] = None
+
+
+class NonVoterRecord(BaseModel):
+    """A voter who hasn't voted yet"""
+
+    id: str
+    full_name: str
+    email: str
+
+
+class NonVotersResponse(BaseModel):
+    """Response for non-voters endpoint"""
+
+    non_voters: List[NonVoterRecord]
+    count: int
+
+
+class VoteIntegrityResponse(BaseModel):
+    """Response for vote integrity check"""
+
+    election_id: str
+    election_title: str
+    total_votes_checked: int
+    valid_votes: int
+    invalid_votes: int
+    chain_valid: bool
+    details: Optional[List[Dict[str, Any]]] = None
+    error: Optional[str] = None
+
+
+class SoftDeleteVoteResponse(BaseModel):
+    """Response after soft-deleting a vote"""
+
+    message: str
+    vote_id: str
+
+
+class ForensicsResponse(BaseModel):
+    """Response for election forensics report"""
+
+    election_id: str
+    election_title: str
+    integrity: Optional[Dict[str, Any]] = None
+    deleted_votes: Optional[List[Dict[str, Any]]] = None
+    rollback_history: Optional[List[Dict[str, Any]]] = None
+    token_access_log: Optional[List[Dict[str, Any]]] = None
+    audit_trail: Optional[List[Dict[str, Any]]] = None
+    anomalies: Optional[Dict[str, Any]] = None
+    voting_timeline: Optional[List[Dict[str, Any]]] = None
+
+
+class AttendeeListResponse(BaseModel):
+    """Response for attendance list"""
+
+    attendees: List[AttendeeRecord]
+    total: int
+
+
+class VoterOverrideRecord(BaseModel):
+    """A single voter override entry"""
+
+    user_id: str
+    member_name: Optional[str] = None
+    reason: str
+    overridden_by: str
+    overridden_by_name: Optional[str] = None
+    overridden_at: str
+
+
+class VoterOverrideListResponse(BaseModel):
+    """Response for voter override list"""
+
+    election_id: str
+    election_title: str
+    overrides: List[VoterOverrideRecord]
+
+
+class BulkVoterOverrideAddedMember(BaseModel):
+    """A member who was added in a bulk override operation"""
+
+    user_id: str
+    name: str
+
+
+class BulkVoterOverrideResponse(BaseModel):
+    """Response for bulk voter override"""
+
+    success: bool
+    added: List[BulkVoterOverrideAddedMember]
+    added_count: int
+    skipped_count: int
+    message: str
+
+
+class TestBallotResponse(BaseModel):
+    """Response for test ballot send"""
+
+    success: bool
+    message: str
+
+
+class BallotPreviewItem(BaseModel):
+    """Ballot item with eligibility annotation"""
+
+    id: str
+    type: str
+    title: str
+    description: Optional[str] = None
+    position: Optional[str] = None
+    eligible_voter_types: List[str] = Field(default=["all"])
+    vote_type: str = "approval"
+    require_attendance: bool = False
+    eligibility: Dict[str, Any]
+
+
+class BallotPreviewCandidate(BaseModel):
+    """Simplified candidate for ballot preview"""
+
+    id: str
+    name: str
+    position: Optional[str] = None
+    statement: Optional[str] = None
+
+
+class BallotPreviewEligibility(BaseModel):
+    """Eligibility summary for ballot preview"""
+
+    is_eligible: bool
+    reason: Optional[str] = None
+
+
+class BallotPreviewResponse(BaseModel):
+    """Response for ballot preview endpoint"""
+
+    election_id: str
+    election_title: str
+    user_id: str
+    user_name: str
+    overall_eligibility: BallotPreviewEligibility
+    ballot_items: List[Dict[str, Any]]
+    candidates: List[BallotPreviewCandidate]
+    eligible_item_count: int
+    total_item_count: int
+    would_receive_ballot: bool
+
+
+class VoteReceiptResponse(BaseModel):
+    """Response for vote receipt verification"""
+
+    verified: bool
+    message: str
+    voted_at: Optional[str] = None
+    position: Optional[str] = None

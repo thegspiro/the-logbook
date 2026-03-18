@@ -100,7 +100,6 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
     }
   };
 
-
   if (loading) {
     return (
       <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6">
