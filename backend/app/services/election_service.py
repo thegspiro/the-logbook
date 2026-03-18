@@ -3105,6 +3105,13 @@ Best regards,
             recipients = users_result.scalars().all()
 
         if not recipients:
+            logger.warning(
+                "No recipients found for ballot emails"
+                f" | election={election_id}"
+                f" org={organization_id}"
+                f" eligible_voters_set={bool(election.eligible_voters)}"
+                f" recipient_ids_provided={bool(recipient_user_ids)}"
+            )
             return 0, 0, 0, []
 
         # Initialize email service with organization settings
