@@ -252,6 +252,15 @@ class ElectionUpdate(BaseModel):
     enable_runoffs: Optional[bool] = None
     runoff_type: Optional[str] = None
     max_runoff_rounds: Optional[int] = Field(None, ge=1, le=10)
+    quorum_type: Optional[str] = None
+    quorum_value: Optional[int] = Field(None, ge=1, le=100)
+
+    @field_validator("quorum_type")
+    @classmethod
+    def validate_quorum_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in ("none", "percentage", "count"):
+            raise ValueError("quorum_type must be 'none', 'percentage', or 'count'")
+        return v
 
     @field_validator("voting_method")
     @classmethod
@@ -281,11 +290,36 @@ class ElectionUpdate(BaseModel):
         return v
 
 
-class ElectionResponse(ElectionBase):
+class ElectionResponse(UTCResponseBase):
     """Schema for election response"""
 
     id: UUID
     organization_id: UUID
+    title: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = None
+    election_type: str = Field(default="general", max_length=50)
+    positions: Optional[List[str]] = None
+    ballot_items: Optional[List[BallotItem]] = None
+    position_eligibility: Optional[Dict[str, PositionEligibility]] = None
+    meeting_date: Optional[datetime] = None
+    meeting_id: Optional[UUID] = None
+    attendees: Optional[List[Dict[str, Any]]] = None
+    start_date: datetime
+    end_date: datetime
+    anonymous_voting: bool = True
+    allow_write_ins: bool = False
+    max_votes_per_position: int = 1
+    results_visible_immediately: bool = False
+    eligible_voters: Optional[List[UUID]] = None
+    voting_method: str = "simple_majority"
+    victory_condition: str = "most_votes"
+    victory_threshold: Optional[int] = None
+    victory_percentage: Optional[int] = None
+    enable_runoffs: bool = False
+    runoff_type: str = "top_two"
+    max_runoff_rounds: int = 3
+    quorum_type: str = "none"
+    quorum_value: Optional[int] = None
     status: str
     created_by: Optional[UUID] = None
     created_at: datetime
@@ -362,12 +396,17 @@ class CandidateUpdate(BaseModel):
     display_order: Optional[int] = None
 
 
-class CandidateResponse(CandidateBase):
+class CandidateResponse(UTCResponseBase):
     """Schema for candidate response"""
 
     id: UUID
     election_id: UUID
     user_id: Optional[UUID] = None
+    name: str = Field(..., min_length=1, max_length=200)
+    position: Optional[str] = Field(None, max_length=100)
+    statement: Optional[str] = None
+    photo_url: Optional[str] = Field(None, max_length=500)
+    display_order: int = 0
     nomination_date: datetime
     nominated_by: Optional[UUID] = None
     accepted: bool

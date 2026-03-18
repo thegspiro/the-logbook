@@ -10,7 +10,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { electionService } from '../services/electionService';
+import { electionService } from '../services/api';
 import type { ElectionSettings, ElectionListItem } from '../types/election';
 import { getErrorMessage } from '../utils/errorHandling';
 
