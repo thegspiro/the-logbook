@@ -2708,16 +2708,17 @@ async def send_event_notification(
 
     await log_audit_event(
         db=db,
-        user_id=str(current_user.id),
-        action="event.send_notification",
-        resource_type="event",
-        resource_id=str(event_id),
-        details={
+        event_type="event.send_notification",
+        event_category="events",
+        severity="info",
+        event_data={
+            "event_id": str(event_id),
             "notification_type": body.notification_type.value,
             "target": body.target.value,
             "recipients_count": recipients_count,
             "has_custom_message": body.message is not None,
         },
+        user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),
     )
 
@@ -2810,15 +2811,16 @@ async def import_events_csv(
 
     await log_audit_event(
         db=db,
-        user_id=current_user.id,
-        action="events.import_csv",
-        resource_type="event",
-        details={
+        event_type="events.import_csv",
+        event_category="events",
+        severity="info",
+        event_data={
             "imported_count": imported_count,
             "error_count": len(errors),
             "filename": file.filename,
         },
-        organization_id=current_user.organization_id,
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
     )
 
     return CSVImportResponse(

@@ -30,6 +30,8 @@ import { useTimezone } from '../../hooks/useTimezone';
 import { formatTime, getTodayLocalDate, formatDateCustom, localToUTC } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, UserStatus, AssignmentStatus } from '../../constants/enums';
+import { PositionListEditor } from '../../modules/scheduling/components/PositionListEditor';
+import { BUILTIN_POSITIONS } from '../../modules/scheduling/types/shiftSettings';
 
 interface ShiftDetailPanelProps {
   shift: ShiftRecord;
@@ -91,6 +93,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     color: shift.color || '',
     notes: shift.notes || '',
     shift_officer_id: shift.shift_officer_id || '',
+    positions: shift.positions ?? [],
   });
   const [saving, setSaving] = useState(false);
 
@@ -349,6 +352,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
         shift_officer_id: editForm.shift_officer_id || null,
         apparatus_id: editForm.apparatus_id || null,
         color: editForm.color || null,
+        positions: editForm.positions.length > 0 ? editForm.positions : null,
       };
       if (editForm.start_time) {
         payload.start_time = localToUTC(`${editForm.shift_date}T${editForm.start_time}`, tz);
@@ -590,7 +594,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
             <div className="flex items-center gap-1 shrink-0">
               {canManage && !isPast && (
                 <>
-                  <button onClick={() => { setEditForm({ shift_date: shift.shift_date, start_time: toTimeValue(shift.start_time), end_time: toTimeValue(shift.end_time), apparatus_id: shift.apparatus_id || '', color: shift.color || '', notes: shift.notes || '', shift_officer_id: shift.shift_officer_id || '' }); setIsEditing(!isEditing); }}
+                  <button onClick={() => { setEditForm({ shift_date: shift.shift_date, start_time: toTimeValue(shift.start_time), end_time: toTimeValue(shift.end_time), apparatus_id: shift.apparatus_id || '', color: shift.color || '', notes: shift.notes || '', shift_officer_id: shift.shift_officer_id || '', positions: shift.positions ?? [] }); setIsEditing(!isEditing); }}
                     className="p-2 text-theme-text-muted hover:text-violet-500 hover:bg-violet-500/10 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Edit shift"
                   >
                     <Pencil className="w-4 h-4" />
@@ -714,6 +718,14 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                   <p className="text-xs text-theme-text-muted mt-1">Loading members...</p>
                 )}
               </div>
+              <PositionListEditor
+                structured
+                positions={editForm.positions}
+                onChangeStructured={positions => setEditForm(p => ({ ...p, positions }))}
+                availablePositions={BUILTIN_POSITIONS}
+                label="Positions"
+                addButtonLabel="Add position"
+              />
               <div className="flex items-center gap-2 justify-end">
                 <button onClick={() => setIsEditing(false)} className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>
                 <button onClick={() => { void handleSaveEdit(); }} disabled={saving}

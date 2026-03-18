@@ -2259,11 +2259,20 @@ class SchedulingService:
         limit: int = 50,
     ) -> Tuple[List[Dict], int]:
         """Get all shifts where a user has an assignment or attendance record"""
-        # Build subquery for shifts with assignments or attendance for this user
+        # Build subquery for shifts with active assignments or attendance for
+        # this user.  Exclude declined, cancelled, and no-show assignments so
+        # the dashboard "My Upcoming Shifts" only shows shifts the user is
+        # actively on.
+        active_statuses = [
+            AssignmentStatus.ASSIGNED,
+            AssignmentStatus.CONFIRMED,
+            AssignmentStatus.PENDING,
+        ]
         assignment_shift_ids = (
             select(ShiftAssignment.shift_id)
             .where(ShiftAssignment.user_id == str(user_id))
             .where(ShiftAssignment.organization_id == str(organization_id))
+            .where(ShiftAssignment.assignment_status.in_(active_statuses))
         )
         attendance_shift_ids = select(ShiftAttendance.shift_id).where(
             ShiftAttendance.user_id == str(user_id)
