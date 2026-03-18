@@ -63,17 +63,18 @@ describe('EventForm', () => {
       );
 
       await waitFor(() => {
-        // Check section headings (h2 elements)
-        const headings = screen.getAllByRole('heading', { level: 2 });
-        const headingTexts = headings.map(h => h.textContent);
-        expect(headingTexts).toContain('Event Details');
-        expect(headingTexts).toContain('Notifications');
-        expect(headingTexts).toContain('Check-In Settings');
-        expect(headingTexts).toContain('RSVP Settings');
-        expect(headingTexts).toContain('Attendance');
-        expect(headingTexts).toContain('Location');
-        expect(headingTexts).toContain('Schedule');
+        expect(screen.getAllByRole('heading', { level: 2 }).length).toBeGreaterThan(0);
       });
+
+      const headings = screen.getAllByRole('heading', { level: 2 });
+      const headingTexts = headings.map(h => h.textContent);
+      expect(headingTexts).toContain('Event Details');
+      expect(headingTexts).toContain('Notifications');
+      expect(headingTexts).toContain('Check-In Settings');
+      expect(headingTexts).toContain('RSVP Settings');
+      expect(headingTexts).toContain('Attendance');
+      expect(headingTexts).toContain('Location');
+      expect(headingTexts).toContain('Schedule');
     });
 
     it('should render submit and cancel buttons', () => {
@@ -412,7 +413,7 @@ describe('EventForm', () => {
       const cancelButton = screen.getByRole('button', { name: /cancel/i });
       await user.click(cancelButton);
 
-      expect(mockOnCancel).toHaveBeenCalled();
+      expect(mockOnCancel).toHaveBeenCalledWith();
     });
   });
 

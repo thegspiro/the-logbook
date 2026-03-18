@@ -34,6 +34,7 @@ vi.mock('@/utils/dateFormatting', () => ({
 }));
 
 import { StageConfigModal } from './StageConfigModal';
+import type { PipelineStageCreate } from '../types';
 
 const mockForms: FormsListResponse = {
   forms: [
@@ -565,9 +566,10 @@ describe('StageConfigModal', () => {
     await user.click(screen.getByText('Add Stage'));
 
     expect(onSave).toHaveBeenCalledTimes(1);
-    const savedData = onSave.mock.calls[0]?.[0];
-    expect(savedData?.config?.custom_sections).toHaveLength(1);
-    expect(savedData?.config?.custom_sections?.[0]).toMatchObject({
+    const savedData = onSave.mock.calls[0]?.[0] as PipelineStageCreate | undefined;
+    const customSections = savedData?.config?.custom_sections as Array<Record<string, unknown>> | undefined;
+    expect(customSections).toHaveLength(1);
+    expect(customSections?.[0]).toMatchObject({
       title: 'Important',
       content: 'Details here',
       enabled: true,
@@ -590,7 +592,7 @@ describe('StageConfigModal', () => {
     await user.click(screen.getByText('Add Stage'));
 
     expect(onSave).toHaveBeenCalledTimes(1);
-    const savedData = onSave.mock.calls[0]?.[0];
+    const savedData = onSave.mock.calls[0]?.[0] as PipelineStageCreate | undefined;
     expect(savedData?.config?.section_order).toEqual(
       expect.arrayContaining(['welcome', 'faq_link', 'next_meeting', 'status_tracker'])
     );
@@ -612,11 +614,12 @@ describe('StageConfigModal', () => {
 
     await user.click(screen.getByText('Add Stage'));
 
-    const savedData = onSave.mock.calls[0]?.[0];
+    const savedData = onSave.mock.calls[0]?.[0] as PipelineStageCreate | undefined;
+    const sectionOrder = savedData?.config?.section_order as string[] | undefined;
     // 4 built-in + 2 custom
-    expect(savedData?.config?.section_order).toHaveLength(6);
+    expect(sectionOrder).toHaveLength(6);
     // First 4 are the built-in ones
-    expect(savedData?.config?.section_order?.slice(0, 4)).toEqual([
+    expect(sectionOrder?.slice(0, 4)).toEqual([
       'welcome', 'faq_link', 'next_meeting', 'status_tracker',
     ]);
   });
@@ -636,7 +639,7 @@ describe('StageConfigModal', () => {
 
     await user.click(screen.getByText('Add Stage'));
 
-    const savedData = onSave.mock.calls[0]?.[0];
+    const savedData = onSave.mock.calls[0]?.[0] as PipelineStageCreate | undefined;
     // Should be back to just 4 built-in
     expect(savedData?.config?.section_order).toHaveLength(4);
   });
@@ -677,7 +680,7 @@ describe('StageConfigModal', () => {
 
     await user.click(screen.getByText('Update Stage'));
 
-    const savedData = onSave.mock.calls[0]?.[0];
+    const savedData = onSave.mock.calls[0]?.[0] as PipelineStageCreate | undefined;
     // section_order should be auto-populated with default + custom IDs
     expect(savedData?.config?.section_order).toEqual(
       expect.arrayContaining(['welcome', 'faq_link', 'next_meeting', 'status_tracker', 'cs-1'])

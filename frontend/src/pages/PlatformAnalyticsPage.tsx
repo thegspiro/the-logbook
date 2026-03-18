@@ -76,7 +76,7 @@ const PlatformAnalyticsPage: React.FC = () => {
     link.download = `platform-analytics-${getTodayLocalDate(tz)}.json`;
     link.click();
     URL.revokeObjectURL(url);
-  }, []);
+  }, [tz]);
 
   if (loading) {
     return (

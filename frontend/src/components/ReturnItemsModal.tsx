@@ -150,7 +150,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, tz]);
 
   useEffect(() => {
     if (isOpen) {

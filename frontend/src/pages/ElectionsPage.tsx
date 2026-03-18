@@ -4,7 +4,7 @@
  * Lists all elections and allows creating new ones.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { electionService, meetingsService, ranksService } from '../services/api';
 import type { MeetingRecord, OperationalRankResponse } from '../services/api';
@@ -51,20 +51,6 @@ export const ElectionsPage: React.FC = () => {
   const canManage = checkPermission('elections.manage');
   const tz = useTimezone();
 
-  useEffect(() => {
-    void fetchElections();
-    void fetchMeetings();
-    void fetchRanks();
-  }, []);
-
-  useEffect(() => {
-    if (statusFilter === 'all') {
-      setFilteredElections(elections);
-    } else {
-      setFilteredElections(elections.filter(e => e.status === statusFilter));
-    }
-  }, [elections, statusFilter]);
-
   const fetchElections = async () => {
     try {
       setLoading(true);
@@ -78,7 +64,7 @@ export const ElectionsPage: React.FC = () => {
     }
   };
 
-  const fetchMeetings = async () => {
+  const fetchMeetings = useCallback(async () => {
     try {
       const today = getTodayLocalDate(tz);
       const data = await meetingsService.getMeetings({ from_date: today, limit: 100 });
@@ -86,7 +72,21 @@ export const ElectionsPage: React.FC = () => {
     } catch {
       // Non-critical — meeting selector will just be empty
     }
-  };
+  }, [tz]);
+
+  useEffect(() => {
+    void fetchElections();
+    void fetchMeetings();
+    void fetchRanks();
+  }, [fetchMeetings]);
+
+  useEffect(() => {
+    if (statusFilter === 'all') {
+      setFilteredElections(elections);
+    } else {
+      setFilteredElections(elections.filter(e => e.status === statusFilter));
+    }
+  }, [elections, statusFilter]);
 
   const fetchRanks = async () => {
     try {
