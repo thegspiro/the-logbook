@@ -325,10 +325,12 @@ class ElectionService:
         # Check each item for role-type and attendance requirements
         role_blocked = 0
         attendance_blocked = 0
+        required_types_seen: set = set()
         for item in ballot_items:
             eligible_types = item.get("eligible_voter_types", ["all"])
             if not await self._user_has_role_type(user, eligible_types):
                 role_blocked += 1
+                required_types_seen.update(eligible_types)
                 continue
             if item.get("require_attendance", False):
                 if not self._is_user_attending(str(user.id), election):
@@ -336,9 +338,14 @@ class ElectionService:
                     continue
 
         total = len(ballot_items)
+        user_roles = ", ".join(r.slug for r in user.roles) or "none"
         reasons = []
         if role_blocked > 0:
-            reasons.append(f"role type not eligible for {role_blocked}/{total} item(s)")
+            required_label = ", ".join(sorted(required_types_seen))
+            reasons.append(
+                f"role type not eligible for {role_blocked}/{total} item(s) "
+                f"(requires: {required_label}; member has: {user_roles})"
+            )
         if attendance_blocked > 0:
             reasons.append(
                 f"not checked in for {attendance_blocked}/{total} "
@@ -646,7 +653,11 @@ class ElectionService:
                     has_voted=False,
                     positions_voted=[],
                     positions_remaining=[],
-                    reason="You are not eligible to vote in this election",
+                    reason=(
+                        "This election is restricted to a specific voter list "
+                        "and you are not on it. Contact the election administrator "
+                        "if you believe this is an error."
+                    ),
                 )
 
         # Get user with roles for position-specific eligibility checking
@@ -732,12 +743,17 @@ class ElectionService:
             if position_rules:
                 voter_types = position_rules.get("voter_types", ["all"])
                 if not await self._user_has_role_type(user, voter_types):
+                    eligible_label = ", ".join(voter_types)
                     return VoterEligibility(
                         is_eligible=False,
                         has_voted=False,
                         positions_voted=[],
                         positions_remaining=[],
-                        reason=f"You do not have the required role type to vote for {position}",
+                        reason=(
+                            f"Voting for the {position} position requires one of "
+                            f"these voter types: {eligible_label}. Your current "
+                            f"roles do not qualify."
+                        ),
                     )
 
         # Check ballot item eligibility (member class + attendance)
@@ -751,12 +767,20 @@ class ElectionService:
                 # Check member class / role eligibility
                 eligible_types = item.get("eligible_voter_types", ["all"])
                 if not await self._user_has_role_type(user, eligible_types):
+                    eligible_label = ", ".join(eligible_types)
+                    user_roles = ", ".join(
+                        r.slug for r in user.roles
+                    ) or "none"
                     return VoterEligibility(
                         is_eligible=False,
                         has_voted=False,
                         positions_voted=[],
                         positions_remaining=[],
-                        reason="Your member class is not eligible to vote on this item",
+                        reason=(
+                            f"This ballot item requires one of these voter types: "
+                            f"{eligible_label}. Your current roles ({user_roles}) "
+                            f"do not qualify."
+                        ),
                     )
                 # Check attendance requirement
                 if item.get("require_attendance", False):
@@ -3260,7 +3284,10 @@ Best regards,
                             election=election,
                             organization_id=str(organization_id),
                         )
-                        or "No eligible ballot items"
+                        or (
+                            "No eligible ballot items — role type and "
+                            "attendance did not match any item requirements"
+                        )
                     )
                     skipped_details.append(
                         {
@@ -3613,9 +3640,15 @@ Best regards,
                 if eligible_list and str(user.id) not in [
                     str(v) for v in eligible_list
                 ]:
-                    reason = "Not in the eligible voters list"
+                    reason = (
+                        "Not in the eligible voters list — this election "
+                        "is restricted to specific members"
+                    )
                 else:
-                    reason = "No eligible ballot items"
+                    reason = (
+                        "No eligible ballot items — member's role type and "
+                        "attendance status did not match any item requirements"
+                    )
 
             name = html.escape(user.full_name or user.username)
             safe_reason = html.escape(reason)

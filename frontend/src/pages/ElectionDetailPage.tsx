@@ -256,9 +256,7 @@ export const ElectionDetailPage: React.FC = () => {
 
       if (!response.success && response.recipients_count === 0 && response.failed_count === 0) {
         toast.error(
-          response.skipped_count > 0
-            ? `No ballots sent — ${response.skipped_count} voter(s) skipped (no eligible ballot items)`
-            : (response.message || 'No eligible recipients found. Verify election settings.'),
+          response.message || 'No eligible recipients found. Verify election settings.',
         );
         return;
       }
@@ -268,7 +266,7 @@ export const ElectionDetailPage: React.FC = () => {
         parts.push(`${response.failed_count} failed`);
       }
       if (response.skipped_count > 0) {
-        parts.push(`${response.skipped_count} skipped (ineligible)`);
+        parts.push(`${response.skipped_count} skipped (see details below)`);
       }
 
       if (!response.success) {

@@ -1431,13 +1431,30 @@ async def send_ballot_emails(
 
     total_attempted = recipients_count + failed_count + skipped_count
     if total_attempted == 0:
+        # Build a diagnostic message explaining why nobody was found
+        if email_data.recipient_user_ids:
+            hint = (
+                "None of the specified recipients were found in this "
+                "organization. Verify the selected members are active."
+            )
+        elif election.eligible_voters:
+            hint = (
+                "The election has an eligible voters list configured, but "
+                "none of those members were found. Verify the listed members "
+                "are still active in the organization."
+            )
+        else:
+            hint = (
+                "No active members were found in the organization. Ensure "
+                "members exist and are marked as active."
+            )
         return EmailBallotResponse(
             success=False,
             recipients_count=0,
             failed_count=0,
             skipped_count=0,
             skipped_details=skipped_details,
-            message="No eligible recipients found. Check that the election has eligible voters configured or that active members exist.",
+            message=f"No eligible recipients found. {hint}",
         )
 
     parts = [f"Ballot emails sent to {recipients_count} recipient(s)"]
