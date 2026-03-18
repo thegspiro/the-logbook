@@ -51,6 +51,7 @@ from app.schemas.election import (
     VoteResponse,
 )
 from app.core.security_middleware import check_rate_limit
+from app.core.utils import safe_error_detail
 from app.services.election_service import ElectionService
 
 router = APIRouter()
@@ -1138,9 +1139,14 @@ async def check_eligibility(
     **Authentication required**
     """
     service = ElectionService(db)
-    return await service.check_voter_eligibility(
-        current_user.id, election_id, current_user.organization_id
-    )
+    try:
+        return await service.check_voter_eligibility(
+            current_user.id, election_id, current_user.organization_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
 @router.post(
@@ -1247,11 +1253,13 @@ async def cast_bulk_votes(
         await savepoint.commit()
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
         await savepoint.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to cast bulk votes — all votes rolled back",
+            detail=safe_error_detail(
+                e, "Failed to cast bulk votes — all votes rolled back"
+            ),
         )
 
     return votes
@@ -1278,9 +1286,14 @@ async def get_results(
     **Authentication required**
     """
     service = ElectionService(db)
-    results = await service.get_election_results(
-        election_id, current_user.organization_id, current_user.id
-    )
+    try:
+        results = await service.get_election_results(
+            election_id, current_user.organization_id, current_user.id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
     if not results:
         raise HTTPException(
@@ -1303,7 +1316,14 @@ async def get_stats(
     **Requires permission: elections.manage**
     """
     service = ElectionService(db)
-    stats = await service.get_election_stats(election_id, current_user.organization_id)
+    try:
+        stats = await service.get_election_stats(
+            election_id, current_user.organization_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
     if not stats:
         raise HTTPException(
@@ -1350,16 +1370,21 @@ async def send_ballot_emails(
     )
 
     service = ElectionService(db)
-    recipients_count, failed_count, skipped_count, skipped_details = (
-        await service.send_ballot_emails(
-            election_id=election_id,
-            organization_id=current_user.organization_id,
-            recipient_user_ids=email_data.recipient_user_ids,
-            subject=email_data.subject,
-            message=email_data.message,
-            base_ballot_url=base_ballot_url,
+    try:
+        recipients_count, failed_count, skipped_count, skipped_details = (
+            await service.send_ballot_emails(
+                election_id=election_id,
+                organization_id=current_user.organization_id,
+                recipient_user_ids=email_data.recipient_user_ids,
+                subject=email_data.subject,
+                message=email_data.message,
+                base_ballot_url=base_ballot_url,
+            )
         )
-    )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
     total_attempted = recipients_count + failed_count + skipped_count
     if total_attempted == 0:
@@ -1404,10 +1429,15 @@ async def send_election_report(
     **Requires permission: elections.manage**
     """
     service = ElectionService(db)
-    success, message = await service.generate_and_send_election_report(
-        election_id=election_id,
-        organization_id=current_user.organization_id,
-    )
+    try:
+        success, message = await service.generate_and_send_election_report(
+            election_id=election_id,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
@@ -1428,7 +1458,14 @@ async def get_non_voters(
     **Requires permission: elections.manage**
     """
     service = ElectionService(db)
-    non_voters = await service.get_non_voters(election_id, current_user.organization_id)
+    try:
+        non_voters = await service.get_non_voters(
+            election_id, current_user.organization_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
     return {"non_voters": non_voters, "count": len(non_voters)}
 
 
@@ -1452,9 +1489,14 @@ async def verify_vote_integrity(
     **Requires permission: elections.manage**
     """
     service = ElectionService(db)
-    result = await service.verify_vote_integrity(
-        election_id, current_user.organization_id
-    )
+    try:
+        result = await service.verify_vote_integrity(
+            election_id, current_user.organization_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
     if "error" in result:
         raise HTTPException(
@@ -1482,9 +1524,14 @@ async def soft_delete_vote(
     **Requires permission: elections.manage**
     """
     service = ElectionService(db)
-    vote = await service.soft_delete_vote(
-        vote_id, current_user.id, reason, current_user.organization_id
-    )
+    try:
+        vote = await service.soft_delete_vote(
+            vote_id, current_user.id, reason, current_user.organization_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
     if not vote:
         raise HTTPException(
@@ -1512,9 +1559,14 @@ async def get_election_forensics(
     **Requires permission: elections.manage**
     """
     service = ElectionService(db)
-    report = await service.get_election_forensics(
-        election_id, current_user.organization_id
-    )
+    try:
+        report = await service.get_election_forensics(
+            election_id, current_user.organization_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
     if not report:
         raise HTTPException(
@@ -1546,7 +1598,14 @@ async def get_attendees(
     **Requires permission: elections.view**
     """
     service = ElectionService(db)
-    attendees = await service.get_attendees(election_id, current_user.organization_id)
+    try:
+        attendees = await service.get_attendees(
+            election_id, current_user.organization_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
     if attendees is None:
         raise HTTPException(
@@ -2129,16 +2188,21 @@ async def send_test_ballot(
     base_ballot_url = f"{frontend_origin}/ballot"
 
     service = ElectionService(db)
-    recipients_count, failed_count, skipped_count, _skipped_details = (
-        await service.send_ballot_emails(
-            election_id=election_id,
-            organization_id=current_user.organization_id,
-            recipient_user_ids=[current_user.id],
-            subject=f"[TEST] Ballot: {election.title}",
-            message="This is a TEST ballot. Votes cast will not count toward real results.",
-            base_ballot_url=base_ballot_url,
+    try:
+        recipients_count, failed_count, skipped_count, _skipped_details = (
+            await service.send_ballot_emails(
+                election_id=election_id,
+                organization_id=current_user.organization_id,
+                recipient_user_ids=[current_user.id],
+                subject=f"[TEST] Ballot: {election.title}",
+                message="This is a TEST ballot. Votes cast will not count toward real results.",
+                base_ballot_url=base_ballot_url,
+            )
         )
-    )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
     return {
         "success": failed_count == 0 and skipped_count == 0,
@@ -2202,9 +2266,14 @@ async def preview_ballot_for_user(
 
     # Check overall eligibility
     service = ElectionService(db)
-    eligibility = await service.check_voter_eligibility(
-        user_id, election_id, current_user.organization_id
-    )
+    try:
+        eligibility = await service.check_voter_eligibility(
+            user_id, election_id, current_user.organization_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
     # Get candidates
     candidates_result = await db.execute(

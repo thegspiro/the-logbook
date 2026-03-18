@@ -154,6 +154,7 @@ export const ElectionsPage: React.FC = () => {
       // Convert local datetime-local values to UTC before sending to backend
       const submitData = {
         ...formData,
+        description: formData.description?.trim() || undefined,
         start_date: localToUTC(formData.start_date, tz),
         end_date: localToUTC(formData.end_date, tz),
       };
