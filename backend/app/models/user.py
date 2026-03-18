@@ -45,8 +45,9 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects import mysql
 from sqlalchemy.ext.mutable import MutableDict
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import relationship, synonym
-from sqlalchemy.sql import func
+from sqlalchemy.sql import and_, func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
@@ -392,10 +393,16 @@ class User(Base):
         """Get user's full name"""
         return f"{self.first_name} {self.last_name}".strip()
 
-    @property
+    @hybrid_property
     def is_active(self) -> bool:
         """Check if user account is active"""
         return self.status == UserStatus.ACTIVE and not self.deleted_at
+
+    @is_active.expression
+    @classmethod
+    def is_active(cls):
+        """SQL expression for is_active filtering in queries"""
+        return and_(cls.status == UserStatus.ACTIVE, cls.deleted_at.is_(None))
 
     @property
     def is_locked(self) -> bool:
