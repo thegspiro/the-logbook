@@ -4,6 +4,7 @@ Election Service
 Business logic for election management including elections, candidates, voting, and results.
 """
 
+import copy
 import hashlib
 import hmac
 import html
@@ -2200,12 +2201,10 @@ class ElectionService:
             "reason": reason,
         }
 
-        # Initialize rollback_history if it doesn't exist
-        if election.rollback_history is None:
-            election.rollback_history = []
-
-        # Add to rollback history
-        election.rollback_history.append(rollback_record)
+        # Deep copy to avoid SQLAlchemy JSON mutation detection issue
+        history = copy.deepcopy(election.rollback_history or [])
+        history.append(rollback_record)
+        election.rollback_history = history
 
         # Update status
         election.status = new_status
