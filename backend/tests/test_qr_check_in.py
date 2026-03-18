@@ -368,5 +368,63 @@ class TestSelfCheckIn:
         assert rsvp is None
 
 
+class TestCheckInWindowConsistency:
+    """Verify that qr-check-in-data and self-check-in use the same time window"""
+
+    @pytest.mark.asyncio
+    async def test_qr_data_and_self_check_in_agree_on_window(self):
+        """
+        Regression: qr-check-in-data previously used a hardcoded 1-hour window
+        while self-check-in used the event's check_in_window_type settings.
+        Both must now use the same _get_check_in_window logic.
+        """
+        now = datetime.now(timezone.utc)
+        org_id = uuid4()
+        # Event starts in 45 minutes — within old 1-hour window but
+        # outside the default FLEXIBLE 30-minute window
+        event = _make_event(
+            org_id=org_id,
+            start_datetime=now + timedelta(minutes=45),
+            end_datetime=now + timedelta(hours=2),
+        )
+        org = _make_org(org_id=org_id)
+
+        # QR data should report is_valid=False (outside 30-min window)
+        mock_db = _mock_db_returning(event, org)
+        service = EventService(mock_db)
+        data, error = await service.get_qr_check_in_data(event.id, org_id)
+
+        assert error is None
+        assert data is not None
+        assert data["is_valid"] is False, (
+            "QR data should not show check-in as active when outside "
+            "the event's configured check-in window"
+        )
+
+    @pytest.mark.asyncio
+    async def test_qr_data_valid_within_configured_window(self):
+        """Check-in should be valid within the configured minutes_before window"""
+        now = datetime.now(timezone.utc)
+        org_id = uuid4()
+        # Event starts in 45 minutes with a 60-minute window
+        from app.models.event import CheckInWindowType
+        event = _make_event(
+            org_id=org_id,
+            start_datetime=now + timedelta(minutes=45),
+            end_datetime=now + timedelta(hours=2),
+            check_in_window_type=CheckInWindowType.FLEXIBLE,
+            check_in_minutes_before=60,
+        )
+        org = _make_org(org_id=org_id)
+
+        mock_db = _mock_db_returning(event, org)
+        service = EventService(mock_db)
+        data, error = await service.get_qr_check_in_data(event.id, org_id)
+
+        assert error is None
+        assert data is not None
+        assert data["is_valid"] is True
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

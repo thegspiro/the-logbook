@@ -1320,8 +1320,9 @@ class EventService:
         """
         Get QR code check-in data for an event
 
-        Returns check-in URL and validates that the event is within the valid time window
-        (1 hour before start until actual_end_time or scheduled end_datetime).
+        Returns check-in URL and validates that the event is within the valid
+        check-in window based on the event's check_in_window_type settings
+        (same logic as self_check_in).
 
         Returns: (data_dict, error_message)
         """
@@ -1337,6 +1338,9 @@ class EventService:
         if not event:
             return None, "Event not found"
 
+        if event.is_cancelled:
+            return None, "Event has been cancelled"
+
         # Fetch organization timezone for display
         org_result = await self.db.execute(
             select(Organization).where(Organization.id == str(organization_id))
@@ -1344,27 +1348,9 @@ class EventService:
         org = org_result.scalar_one_or_none()
         org_timezone = org.timezone if org else None
 
-        if event.is_cancelled:
-            return None, "Event has been cancelled"
-
-        # Check time window
+        # Check time window using the same logic as self_check_in
         now = datetime.now(dt_timezone.utc)
-        # Database datetimes may be naive (stored as UTC without tzinfo), so
-        # attach UTC tzinfo to avoid "can't compare offset-naive and
-        # offset-aware datetimes" errors.
-        start_dt = (
-            event.start_datetime.replace(tzinfo=dt_timezone.utc)
-            if event.start_datetime.tzinfo is None
-            else event.start_datetime
-        )
-        check_in_start = start_dt - timedelta(hours=1)
-
-        # Use actual_end_time if set (early end), otherwise use scheduled end_datetime
-        end_dt = event.actual_end_time if event.actual_end_time else event.end_datetime
-        check_in_end = (
-            end_dt.replace(tzinfo=dt_timezone.utc) if end_dt.tzinfo is None else end_dt
-        )
-
+        check_in_start, check_in_end = self._get_check_in_window(event)
         is_valid = check_in_start <= now <= check_in_end
 
         location_name = None
@@ -1394,13 +1380,14 @@ class EventService:
             "timezone": org_timezone,
         }, None
 
-    def _validate_check_in_window(
-        self, event: Event, now: datetime, tz_name: Optional[str] = None
-    ) -> Tuple[bool, Optional[str]]:
+    @staticmethod
+    def _get_check_in_window(
+        event: Event,
+    ) -> Tuple[datetime, datetime]:
         """
-        Validate if check-in is allowed based on event's check-in window settings
+        Calculate the check-in window boundaries based on event settings.
 
-        Returns: (is_valid, error_message)
+        Returns: (check_in_start, check_in_end) — both UTC-aware datetimes.
         """
         check_in_window_type = event.check_in_window_type or CheckInWindowType.FLEXIBLE
 
@@ -1409,7 +1396,6 @@ class EventService:
             return dt.replace(tzinfo=dt_timezone.utc) if dt.tzinfo is None else dt
 
         if check_in_window_type == CheckInWindowType.FLEXIBLE:
-            # Allow check-in within configurable window before event starts, until event ends
             minutes_before = (
                 event.check_in_minutes_before
                 if event.check_in_minutes_before is not None
@@ -1423,7 +1409,6 @@ class EventService:
             )
 
         elif check_in_window_type == CheckInWindowType.STRICT:
-            # Only between actual start and end times
             check_in_start = _ensure_utc(
                 event.actual_start_time
                 if event.actual_start_time
@@ -1434,7 +1419,6 @@ class EventService:
             )
 
         else:  # WINDOW type
-            # Configurable window before/after start
             minutes_before = (
                 event.check_in_minutes_before
                 if event.check_in_minutes_before is not None
@@ -1451,6 +1435,18 @@ class EventService:
             check_in_end = _ensure_utc(event.end_datetime) + timedelta(
                 minutes=minutes_after
             )
+
+        return check_in_start, check_in_end
+
+    def _validate_check_in_window(
+        self, event: Event, now: datetime, tz_name: Optional[str] = None
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Validate if check-in is allowed based on event's check-in window settings
+
+        Returns: (is_valid, error_message)
+        """
+        check_in_start, check_in_end = self._get_check_in_window(event)
 
         if now < check_in_start:
             # Always convert UTC to local time for user-facing messages
