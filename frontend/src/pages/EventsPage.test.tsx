@@ -323,11 +323,8 @@ describe('EventsPage', () => {
 
       renderWithRouter(<EventsPage />);
 
-      await waitFor(() => {
-        const createLink = screen.getByRole('link', { name: /create event/i });
-        expect(createLink).toBeInTheDocument();
-        expect(createLink).toHaveAttribute('href', '/events/new');
-      });
+      const createLink = await screen.findByRole('link', { name: /create event/i });
+      expect(createLink).toHaveAttribute('href', '/events/new');
     });
 
     it('should not show Create Event button for non-managers', async () => {

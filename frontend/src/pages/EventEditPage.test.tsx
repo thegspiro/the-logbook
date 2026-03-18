@@ -133,12 +133,9 @@ describe('EventEditPage', () => {
 
       renderWithRouter(<EventEditPage />);
 
-      await waitFor(() => {
-        const backLink = screen.getByRole('link', { name: /back to event/i });
-        expect(backLink).toBeInTheDocument();
-        expect(backLink).toHaveAttribute('href', '/events/evt-1');
-        expect(screen.getByText(/Existing Event/)).toBeInTheDocument();
-      });
+      const backLink = await screen.findByRole('link', { name: /back to event/i });
+      expect(backLink).toHaveAttribute('href', '/events/evt-1');
+      expect(screen.getByText(/Existing Event/)).toBeInTheDocument();
     });
 
     it('should pre-fill form with event data', async () => {
@@ -249,11 +246,8 @@ describe('EventEditPage', () => {
 
       renderWithRouter(<EventEditPage />);
 
-      await waitFor(() => {
-        const backLink = screen.getByRole('link', { name: /back to event/i });
-        expect(backLink).toBeInTheDocument();
-        expect(backLink).toHaveAttribute('href', '/events/evt-1');
-      });
+      const backLink = await screen.findByRole('link', { name: /back to event/i });
+      expect(backLink).toHaveAttribute('href', '/events/evt-1');
     });
   });
 });

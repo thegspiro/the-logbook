@@ -84,7 +84,7 @@ const isoToDateKey = (iso: string, timezone?: string): string => {
 };
 
 export const CalendarView: React.FC<CalendarViewProps> = ({ events, timezone }) => {
-  const today = new Date();
+  const today = useMemo(() => new Date(), []);
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);

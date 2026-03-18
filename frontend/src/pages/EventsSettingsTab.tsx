@@ -157,14 +157,14 @@ const EventsSettingsTab: React.FC = () => {
     successMsg?: string,
     errorMsg?: string,
   ) => saveSettings(
-    { request_pipeline: { ...settings!.request_pipeline, ...pipelinePatch } },
+    { request_pipeline: { ...(settings?.request_pipeline ?? {} as EventModuleSettings['request_pipeline']), ...pipelinePatch } },
     successMsg,
     errorMsg,
   );
 
   // ─── Event Type Visibility ──────────────────────────────────────────────────
 
-  const toggleVisibility = async (eventType: EventType) => {
+  const toggleVisibility = (eventType: EventType) => {
     if (!settings) return;
     const current = settings.visible_event_types;
     const isVisible = current.includes(eventType);
@@ -186,7 +186,7 @@ const EventsSettingsTab: React.FC = () => {
     );
   };
 
-  const toggleCategoryVisibility = async (categoryValue: string) => {
+  const toggleCategoryVisibility = (categoryValue: string) => {
     if (!settings) return;
     const current = settings.visible_custom_categories || [];
     const isVisible = current.includes(categoryValue);
@@ -229,7 +229,7 @@ const EventsSettingsTab: React.FC = () => {
     }
   };
 
-  const removeCustomCategory = async (categoryValue: string) => {
+  const removeCustomCategory = (categoryValue: string) => {
     if (!settings) return;
     const existing = settings.custom_event_categories || [];
     // Also remove from visible list so deleted slugs don't linger
@@ -266,7 +266,7 @@ const EventsSettingsTab: React.FC = () => {
     if (result) setNewTypeLabel('');
   };
 
-  const removeOutreachType = async (typeValue: string) => {
+  const removeOutreachType = (typeValue: string) => {
     if (!settings) return;
     if (typeValue === 'other') { toast.error('"Other" cannot be removed.'); return; }
     void saveSettings(
@@ -278,11 +278,11 @@ const EventsSettingsTab: React.FC = () => {
 
   // ─── Request Pipeline ─────────────────────────────────────────────────────
 
-  const updateLeadTime = async (days: number) => {
+  const updateLeadTime = (days: number) => {
     void savePipeline({ min_lead_time_days: days }, `Minimum lead time set to ${days} days.`, 'Failed to update lead time.');
   };
 
-  const updateDefaultAssignee = async (userId: string | null) => {
+  const updateDefaultAssignee = (userId: string | null) => {
     void savePipeline(
       { default_assignee_id: userId },
       userId ? 'Default assignee updated.' : 'Default assignee cleared.',
@@ -323,7 +323,7 @@ const EventsSettingsTab: React.FC = () => {
     if (result) { setNewTaskLabel(''); setNewTaskDesc(''); }
   };
 
-  const removePipelineTask = async (taskId: string) => {
+  const removePipelineTask = (taskId: string) => {
     if (!settings) return;
     void savePipeline(
       { tasks: settings.request_pipeline.tasks.filter((t) => t.id !== taskId) },
@@ -332,7 +332,7 @@ const EventsSettingsTab: React.FC = () => {
     );
   };
 
-  const reorderTask = async (index: number, direction: 'up' | 'down') => {
+  const reorderTask = (index: number, direction: 'up' | 'down') => {
     if (!settings) return;
     const tasks = [...settings.request_pipeline.tasks];
     const swapIndex = direction === 'up' ? index - 1 : index + 1;
@@ -349,7 +349,7 @@ const EventsSettingsTab: React.FC = () => {
 
   // ─── Email Triggers & Templates ───────────────────────────────────────────
 
-  const toggleEmailTrigger = async (triggerKey: string) => {
+  const toggleEmailTrigger = (triggerKey: string) => {
     if (!settings) return;
     const triggers = { ...settings.request_pipeline.email_triggers };
     const current = triggers[triggerKey] || { enabled: false };
