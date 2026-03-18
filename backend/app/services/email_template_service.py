@@ -140,9 +140,15 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
     "series_end_reminder": [
         {"name": "recipient_name", "description": "Recipient's display name"},
         {"name": "event_title", "description": "Title of the recurring event series"},
-        {"name": "recurrence_pattern", "description": "Recurrence pattern (e.g. Weekly, Monthly)"},
+        {
+            "name": "recurrence_pattern",
+            "description": "Recurrence pattern (e.g. Weekly, Monthly)",
+        },
         {"name": "series_end_date", "description": "Date the recurring series ends"},
-        {"name": "remaining_occurrences", "description": "Number of remaining occurrences"},
+        {
+            "name": "remaining_occurrences",
+            "description": "Number of remaining occurrences",
+        },
         {"name": "event_url", "description": "Link to view the parent event"},
     ],
     "event_cancellation": [
@@ -254,6 +260,46 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "election_title", "description": "Title of the deleted election"},
         {"name": "performer_name", "description": "Name of the person who deleted it"},
         {"name": "reason", "description": "Reason for deletion"},
+        {"name": "organization_name", "description": "Organization name"},
+    ],
+    "election_report": [
+        {"name": "recipient_name", "description": "Recipient's display name"},
+        {"name": "election_title", "description": "Title of the election"},
+        {"name": "election_type", "description": "Type of election"},
+        {"name": "start_date", "description": "Voting start date"},
+        {"name": "end_date", "description": "Voting end date"},
+        {"name": "total_eligible_voters", "description": "Number of eligible voters"},
+        {"name": "total_votes_cast", "description": "Number of votes cast"},
+        {
+            "name": "voter_turnout_percentage",
+            "description": "Voter turnout as a percentage",
+        },
+        {"name": "quorum_status", "description": "Whether quorum was met"},
+        {"name": "quorum_detail", "description": "Quorum requirement details"},
+        {
+            "name": "results_html",
+            "description": "HTML table of election results by position",
+        },
+        {
+            "name": "results_text",
+            "description": "Plain-text election results by position",
+        },
+        {
+            "name": "ballot_recipients_html",
+            "description": "HTML list of members who received ballots",
+        },
+        {
+            "name": "ballot_recipients_text",
+            "description": "Plain-text list of members who received ballots",
+        },
+        {
+            "name": "skipped_voters_html",
+            "description": "HTML table of members who did not receive ballots with reasons",
+        },
+        {
+            "name": "skipped_voters_text",
+            "description": "Plain-text list of members who did not receive ballots with reasons",
+        },
         {"name": "organization_name", "description": "Organization name"},
     ],
     "member_archived": [
@@ -624,6 +670,76 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "election_title": "Captain Election 2026",
         "performer_name": "Secretary Robert Johnson",
         "reason": "Election created in error — new election will be scheduled",
+        "organization_name": "Sample Fire Department",
+        "organization_logo": "https://example.com/logo.png",
+        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
+        "organization_phone": "(555) 555-1234",
+        "organization_email": "info@samplefd.org",
+    },
+    "election_report": {
+        "recipient_name": "Secretary Robert Johnson",
+        "election_title": "Captain Election 2026",
+        "election_type": "Officer Election",
+        "start_date": "March 28, 2026 at 08:00 AM",
+        "end_date": "April 1, 2026 at 05:00 PM",
+        "total_eligible_voters": "45",
+        "total_votes_cast": "38",
+        "voter_turnout_percentage": "84.4",
+        "quorum_status": "Quorum Met",
+        "quorum_detail": "Quorum requires 50% turnout. Actual: 84.4% (38/45).",
+        "results_html": (
+            '<table style="width:100%;border-collapse:collapse;margin:10px 0;">'
+            '<tr style="background:#f3f4f6;"><th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">Position</th>'
+            '<th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">Candidate</th>'
+            '<th style="padding:8px;text-align:center;border-bottom:2px solid #e5e7eb;">Votes</th>'
+            '<th style="padding:8px;text-align:center;border-bottom:2px solid #e5e7eb;">%</th>'
+            '<th style="padding:8px;text-align:center;border-bottom:2px solid #e5e7eb;">Result</th></tr>'
+            '<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;">Captain</td>'
+            '<td style="padding:8px;border-bottom:1px solid #e5e7eb;">John Smith</td>'
+            '<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">22</td>'
+            '<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">57.9%</td>'
+            '<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">\u2705 Elected</td></tr>'
+            '<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;">Captain</td>'
+            '<td style="padding:8px;border-bottom:1px solid #e5e7eb;">Jane Doe</td>'
+            '<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">16</td>'
+            '<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">42.1%</td>'
+            '<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">&mdash;</td></tr>'
+            "</table>"
+        ),
+        "results_text": (
+            "Position: Captain\n"
+            "  John Smith — 22 votes (57.9%) — ELECTED\n"
+            "  Jane Doe — 16 votes (42.1%)"
+        ),
+        "ballot_recipients_html": (
+            "<ul>"
+            "<li>John Smith (jsmith@example.com)</li>"
+            "<li>Jane Doe (jdoe@example.com)</li>"
+            "<li>Mike Wilson (mwilson@example.com)</li>"
+            "<li>... and 35 others</li>"
+            "</ul>"
+        ),
+        "ballot_recipients_text": (
+            "  - John Smith (jsmith@example.com)\n"
+            "  - Jane Doe (jdoe@example.com)\n"
+            "  - Mike Wilson (mwilson@example.com)\n"
+            "  ... and 35 others"
+        ),
+        "skipped_voters_html": (
+            '<table style="width:100%;border-collapse:collapse;margin:10px 0;">'
+            '<tr style="background:#f3f4f6;"><th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">Member</th>'
+            '<th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">Reason</th></tr>'
+            '<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;">Tom Brown</td>'
+            "<td style=\"padding:8px;border-bottom:1px solid #e5e7eb;\">Membership tier 'Social' is not eligible to vote</td></tr>"
+            '<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;">Sarah Lee</td>'
+            '<td style="padding:8px;border-bottom:1px solid #e5e7eb;">Not checked in as present at the meeting</td></tr>'
+            "</table>"
+        ),
+        "skipped_voters_text": (
+            "  - Tom Brown: Membership tier 'Social' is not eligible to vote\n"
+            "  - Sarah Lee: Not checked in as present at the meeting"
+        ),
         "organization_name": "Sample Fire Department",
         "organization_logo": "https://example.com/logo.png",
         "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
@@ -1477,6 +1593,84 @@ Please do not reply to this email."""
 DEFAULT_BALLOT_NOTIFICATION_SUBJECT = "Ballot Available: {{election_title}}"
 
 
+# Default election report email
+DEFAULT_ELECTION_REPORT_HTML = """<div class="container">
+    <div class="logo">{{organization_logo_img}}</div>
+    <div class="header" style="background-color: #059669;">
+        <h1>Election Report</h1>
+    </div>
+    <div class="content">
+        <p>Hello {{recipient_name}},</p>
+
+        <p>The following election has been closed. Below is the official report.</p>
+
+        <div class="details">
+            <p><strong>Election:</strong> {{election_title}}</p>
+            <p><strong>Type:</strong> {{election_type}}</p>
+            <p><strong>Voting Period:</strong> {{start_date}} &mdash; {{end_date}}</p>
+        </div>
+
+        <h2 style="margin-top:20px;font-size:16px;border-bottom:2px solid #e5e7eb;padding-bottom:6px;">Turnout &amp; Quorum</h2>
+        <div class="details">
+            <p><strong>Eligible Voters:</strong> {{total_eligible_voters}}</p>
+            <p><strong>Votes Cast:</strong> {{total_votes_cast}}</p>
+            <p><strong>Turnout:</strong> {{voter_turnout_percentage}}%</p>
+            <p><strong>Quorum:</strong> {{quorum_status}}</p>
+            <p>{{quorum_detail}}</p>
+        </div>
+
+        <h2 style="margin-top:20px;font-size:16px;border-bottom:2px solid #e5e7eb;padding-bottom:6px;">Results</h2>
+        {{results_html}}
+
+        <h2 style="margin-top:20px;font-size:16px;border-bottom:2px solid #e5e7eb;padding-bottom:6px;">Ballot Recipients ({{total_eligible_voters}})</h2>
+        <p>The following members received ballots:</p>
+        {{ballot_recipients_html}}
+
+        <h2 style="margin-top:20px;font-size:16px;border-bottom:2px solid #e5e7eb;padding-bottom:6px;">Members Who Did Not Receive Ballots</h2>
+        <p>The following active members were not sent a ballot, with the reason why:</p>
+        {{skipped_voters_html}}
+    </div>
+    <div class="footer">
+        <p>This is an automated election report from {{organization_name}}.</p>
+        <p>Please retain this email for your records.</p>
+    </div>
+</div>"""
+
+DEFAULT_ELECTION_REPORT_TEXT = """Election Report — {{election_title}}
+
+Hello {{recipient_name}},
+
+The following election has been closed. Below is the official report.
+
+Election: {{election_title}}
+Type: {{election_type}}
+Voting Period: {{start_date}} — {{end_date}}
+
+TURNOUT & QUORUM
+Eligible Voters: {{total_eligible_voters}}
+Votes Cast: {{total_votes_cast}}
+Turnout: {{voter_turnout_percentage}}%
+Quorum: {{quorum_status}}
+{{quorum_detail}}
+
+RESULTS
+{{results_text}}
+
+BALLOT RECIPIENTS ({{total_eligible_voters}})
+{{ballot_recipients_text}}
+
+MEMBERS WHO DID NOT RECEIVE BALLOTS
+{{skipped_voters_text}}
+
+---
+This is an automated election report from {{organization_name}}.
+Please retain this email for your records."""
+
+DEFAULT_ELECTION_REPORT_SUBJECT = (
+    "Election Report: {{election_title}} — {{organization_name}}"
+)
+
+
 # Default event cancellation email
 DEFAULT_EVENT_CANCELLATION_HTML = """<div class="container">
     <div class="logo">{{organization_logo_img}}</div>
@@ -2044,6 +2238,9 @@ class EmailTemplateService:
         "items_returned_html",
         "organization_logo_img",
         "ballot_items_html",
+        "results_html",
+        "ballot_recipients_html",
+        "skipped_voters_html",
         "custom_message_html",
     }
 
@@ -2253,6 +2450,33 @@ class EmailTemplateService:
             created.append(template)
             logger.info(
                 f"Created default ballot notification email template for org {organization_id}"
+            )
+
+        # Check for election report template
+        existing = await self.get_template(
+            organization_id,
+            EmailTemplateType.ELECTION_REPORT,
+            active_only=False,
+        )
+        if not existing:
+            template = await self.create_template(
+                organization_id=organization_id,
+                template_type=EmailTemplateType.ELECTION_REPORT,
+                name="Election Report",
+                subject=DEFAULT_ELECTION_REPORT_SUBJECT,
+                html_body=DEFAULT_ELECTION_REPORT_HTML,
+                text_body=DEFAULT_ELECTION_REPORT_TEXT,
+                description=(
+                    "Sent to the secretary when an election is closed. "
+                    "Includes election results, ballot recipients, and "
+                    "reasons why members did not receive ballots."
+                ),
+                allow_attachments=False,
+                created_by=created_by,
+            )
+            created.append(template)
+            logger.info(
+                f"Created default election report email template for org {organization_id}"
             )
 
         # Check for member dropped template

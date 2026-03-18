@@ -52,10 +52,7 @@ def build_email_logo_html(organization: Optional[Organization]) -> str:
     img = build_email_logo_img(organization)
     if not img:
         return ""
-    return (
-        f'<div style="text-align:center;padding:16px 0;">'
-        f'{img}</div>'
-    )
+    return f'<div style="text-align:center;padding:16px 0;">' f"{img}</div>"
 
 
 class EmailService:
@@ -109,9 +106,7 @@ class EmailService:
             decrypted = decrypt_settings_secrets(self.organization.settings)
             org_email_config = decrypted.get("email_service", {})
             if org_email_config.get("enabled"):
-                encryption = org_email_config.get(
-                    "smtp_encryption", "tls"
-                )
+                encryption = org_email_config.get("smtp_encryption", "tls")
                 return {
                     "host": org_email_config.get("smtp_host"),
                     "port": org_email_config.get("smtp_port", 587),
@@ -144,18 +139,14 @@ class EmailService:
         encryption = self._smtp_config.get("encryption", "tls")
 
         if not host or not self._smtp_config.get("from_email"):
-            raise ValueError(
-                "SMTP host and from_email are required"
-            )
+            raise ValueError("SMTP host and from_email are required")
 
         timeout = 30
         context = ssl.create_default_context()
 
         if encryption == "ssl":
             # Implicit TLS (port 465) — entire connection is encrypted
-            server = smtplib.SMTP_SSL(
-                host, port, context=context, timeout=timeout
-            )
+            server = smtplib.SMTP_SSL(host, port, context=context, timeout=timeout)
         elif encryption in ("tls", "starttls"):
             # STARTTLS (port 587) — upgrade plain connection to encrypted
             server = smtplib.SMTP(host, port, timeout=timeout)
@@ -168,10 +159,7 @@ class EmailService:
             server.ehlo()
 
         try:
-            if (
-                self._smtp_config["user"]
-                and self._smtp_config["password"]
-            ):
+            if self._smtp_config["user"] and self._smtp_config["password"]:
                 server.login(
                     self._smtp_config["user"],
                     self._smtp_config["password"],
@@ -217,9 +205,9 @@ class EmailService:
         """
         if not settings.EMAIL_ENABLED and not (
             self.organization
-            and (self.organization.settings or {}).get("email_service", {}).get(
-                "enabled"
-            )
+            and (self.organization.settings or {})
+            .get("email_service", {})
+            .get("enabled")
         ):
             logger.info(
                 f"Email disabled. Would send to {len(to_emails)} recipients: {subject}"
@@ -332,9 +320,7 @@ class EmailService:
             MessageHistoryStatus,
         )
 
-        org_id = (
-            str(self.organization.id) if self.organization else None
-        )
+        org_id = str(self.organization.id) if self.organization else None
         status = (
             MessageHistoryStatus.SENT
             if success_count > 0
@@ -413,9 +399,7 @@ class EmailService:
         # present, or yields an empty string so the placeholder disappears.
         custom_message_html = ""
         if custom_message:
-            custom_message_html = (
-                f"<p>{_html.escape(custom_message)}</p>"
-            )
+            custom_message_html = f"<p>{_html.escape(custom_message)}</p>"
 
         context = {
             "recipient_name": recipient_name,
@@ -470,7 +454,11 @@ class EmailService:
             )
 
             context["organization_logo_img"] = self._build_logo_img()
-            _raw_html_vars = {"organization_logo_img", "ballot_items_html", "custom_message_html"}
+            _raw_html_vars = {
+                "organization_logo_img",
+                "ballot_items_html",
+                "custom_message_html",
+            }
 
             def _replace(text: str) -> str:
                 def replacer(match):
@@ -497,6 +485,130 @@ class EmailService:
         )
 
         return success_count > 0
+
+    async def send_election_report(
+        self,
+        to_emails: List[str],
+        recipient_name: str,
+        election_title: str,
+        election_type: str,
+        start_date: str,
+        end_date: str,
+        total_eligible_voters: int,
+        total_votes_cast: int,
+        voter_turnout_percentage: float,
+        quorum_status: str,
+        quorum_detail: str,
+        results_html: str,
+        results_text: str,
+        ballot_recipients_html: str,
+        ballot_recipients_text: str,
+        skipped_voters_html: str,
+        skipped_voters_text: str,
+        cc_emails: Optional[List[str]] = None,
+        db: Any = None,
+        organization_id: Optional[str] = None,
+    ) -> tuple[int, int]:
+        """
+        Send an election report email to the secretary/leadership.
+
+        Returns:
+            Tuple of (success_count, failure_count)
+        """
+        org_name = ""
+        if self.organization:
+            org_name = getattr(self.organization, "name", "")
+
+        context = {
+            "recipient_name": recipient_name,
+            "election_title": election_title,
+            "election_type": election_type,
+            "start_date": start_date,
+            "end_date": end_date,
+            "total_eligible_voters": str(total_eligible_voters),
+            "total_votes_cast": str(total_votes_cast),
+            "voter_turnout_percentage": f"{voter_turnout_percentage:.1f}",
+            "quorum_status": quorum_status,
+            "quorum_detail": quorum_detail,
+            "results_html": results_html,
+            "results_text": results_text,
+            "ballot_recipients_html": ballot_recipients_html,
+            "ballot_recipients_text": ballot_recipients_text,
+            "skipped_voters_html": skipped_voters_html,
+            "skipped_voters_text": skipped_voters_text,
+            "organization_name": org_name,
+        }
+
+        subject = None
+        html_body = None
+        text_body = None
+
+        # Try loading the admin-configured template from the database
+        if db and organization_id:
+            try:
+                from app.models.email_template import EmailTemplateType
+                from app.services.email_template_service import EmailTemplateService
+
+                template_service = EmailTemplateService(db)
+                template = await template_service.get_template(
+                    organization_id, EmailTemplateType.ELECTION_REPORT
+                )
+                if template:
+                    subject, html_body, text_body = template_service.render(
+                        template, context, organization=self.organization
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to load election report template, using default: {e}"
+                )
+
+        # Fall back to inline default if no template loaded
+        if not subject:
+            import re
+
+            from app.services.email_template_service import (
+                DEFAULT_CSS,
+                DEFAULT_ELECTION_REPORT_HTML,
+                DEFAULT_ELECTION_REPORT_SUBJECT,
+                DEFAULT_ELECTION_REPORT_TEXT,
+            )
+
+            context["organization_logo_img"] = self._build_logo_img()
+            _raw_html_vars = {
+                "organization_logo_img",
+                "results_html",
+                "ballot_recipients_html",
+                "skipped_voters_html",
+            }
+
+            def _replace(text: str) -> str:
+                def replacer(match):
+                    var = match.group(1).strip()
+                    value = str(context.get(var, match.group(0)))
+                    if var in _raw_html_vars:
+                        return value
+                    return _html.escape(value)
+
+                return re.sub(r"\{\{(\s*\w+\s*)\}\}", replacer, text)
+
+            subject = _replace(DEFAULT_ELECTION_REPORT_SUBJECT)
+            html_body = (
+                f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head>"
+                f"<body>{_replace(DEFAULT_ELECTION_REPORT_HTML)}</body></html>"
+            )
+            text_body = _replace(DEFAULT_ELECTION_REPORT_TEXT)
+
+        success_count, failure_count = await self.send_email(
+            to_emails=to_emails,
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            cc_emails=cc_emails,
+            db=db,
+            template_type="election_report",
+        )
+
+        return success_count, failure_count
 
     async def send_training_approval_request(
         self,
