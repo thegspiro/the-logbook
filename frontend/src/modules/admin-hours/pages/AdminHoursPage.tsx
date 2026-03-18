@@ -11,7 +11,7 @@ import { useAdminHoursStore } from '../store/adminHoursStore';
 import type { AdminHoursEntryCreate } from '../types';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { formatDate, formatTime, formatForDateTimeInput, localToUTC } from '../../../utils/dateFormatting';
+import { formatDate, formatTime, localToUTC } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import DateTimeQuarterHour from '../../../components/ux/DateTimeQuarterHour';
 
@@ -158,11 +158,6 @@ const AdminHoursPage: React.FC = () => {
     const end = new Date(localToUTC(manualData.clock_out_at, tz)).getTime();
     return !isNaN(start) && !isNaN(end) && end > start;
   }, [manualData, tz]);
-
-  // Max datetime for future date prevention (in org timezone)
-  const maxDatetime = useMemo(() => {
-    return formatForDateTimeInput(new Date(), tz);
-  }, [tz]);
 
   // Stale session warning
   const isSessionNearLimit = useMemo(() => {
