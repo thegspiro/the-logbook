@@ -2230,15 +2230,24 @@ class ElectionService:
             user_id=str(performed_by),
         )
 
-        # Send email notifications to leadership
-        notifications_sent = await self._notify_leadership_of_rollback(
-            election=election,
-            performed_by=performed_by,
-            organization_id=organization_id,
-            from_status=from_status,
-            to_status=to_status,
-            reason=reason,
-        )
+        # Send email notifications to leadership (non-blocking — the
+        # rollback is already committed, so notification failures must
+        # not cause the endpoint to return 500)
+        notifications_sent = 0
+        try:
+            notifications_sent = await self._notify_leadership_of_rollback(
+                election=election,
+                performed_by=performed_by,
+                organization_id=organization_id,
+                from_status=from_status,
+                to_status=to_status,
+                reason=reason,
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to send rollback notifications (non-blocking) | "
+                f"election={election_id} error={e}"
+            )
 
         return election, notifications_sent, None
 
@@ -2322,7 +2331,7 @@ class ElectionService:
         sent_count = 0
         for user in leadership_users:
             # Don't notify the person who performed the rollback
-            if user.id == performed_by:
+            if str(user.id) == str(performed_by):
                 continue
 
             subject = f"ALERT: Election Rolled Back - {election.title}"
