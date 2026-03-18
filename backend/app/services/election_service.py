@@ -3240,24 +3240,31 @@ Best regards,
             # If this voter has a proxy, CC the proxy holder
             cc_email = proxy_cc_map.get(str(recipient.id))
 
-            sent = await email_service.send_ballot_notification(
-                to_email=recipient.email,
-                recipient_name=recipient.full_name,
-                election_title=election.title,
-                ballot_url=ballot_url,
-                meeting_date=election.meeting_date,
-                custom_message=message,
-                cc_emails=[cc_email] if cc_email else None,
-                start_date=election.start_date,
-                end_date=election.end_date,
-                positions=election.positions,
-                ballot_items_html=items_html,
-                ballot_items_text=items_text,
-                admin_contact_name=admin_contact_name,
-                admin_contact_email=admin_contact_email,
-                db=self.db,
-                organization_id=str(organization_id),
-            )
+            try:
+                sent = await email_service.send_ballot_notification(
+                    to_email=recipient.email,
+                    recipient_name=recipient.full_name,
+                    election_title=election.title,
+                    ballot_url=ballot_url,
+                    meeting_date=election.meeting_date,
+                    custom_message=message,
+                    cc_emails=[cc_email] if cc_email else None,
+                    start_date=election.start_date,
+                    end_date=election.end_date,
+                    positions=election.positions,
+                    ballot_items_html=items_html,
+                    ballot_items_text=items_text,
+                    admin_contact_name=admin_contact_name,
+                    admin_contact_email=admin_contact_email,
+                    db=self.db,
+                    organization_id=str(organization_id),
+                )
+            except Exception as e:
+                logger.error(
+                    f"Ballot email send failed | election={election_id} "
+                    f"recipient={recipient.id} error={e}"
+                )
+                sent = False
 
             if sent:
                 success_count += 1
