@@ -2710,29 +2710,29 @@ Best regards,
         if str(delegating_user_id) == str(proxy_user_id):
             return None, "A member cannot be their own proxy"
 
-        # Verify both users exist in the same org
-        for uid, label in [
-            (delegating_user_id, "Delegating member"),
-            (proxy_user_id, "Proxy member"),
-        ]:
-            u_result = await self.db.execute(
-                select(User)
-                .where(User.id == str(uid))
-                .where(User.organization_id == str(organization_id))
-            )
-            if not u_result.scalar_one_or_none():
-                return None, f"{label} not found"
-
+        # Verify all users exist in the same org (single query per user)
         delegating_result = await self.db.execute(
-            select(User).where(User.id == str(delegating_user_id))
+            select(User)
+            .where(User.id == str(delegating_user_id))
+            .where(User.organization_id == str(organization_id))
         )
-        delegating_user = delegating_result.scalar_one()
+        delegating_user = delegating_result.scalar_one_or_none()
+        if not delegating_user:
+            return None, "Delegating member not found"
+
         proxy_result = await self.db.execute(
-            select(User).where(User.id == str(proxy_user_id))
+            select(User)
+            .where(User.id == str(proxy_user_id))
+            .where(User.organization_id == str(organization_id))
         )
-        proxy_user = proxy_result.scalar_one()
+        proxy_user = proxy_result.scalar_one_or_none()
+        if not proxy_user:
+            return None, "Proxy member not found"
+
         auth_result = await self.db.execute(
-            select(User).where(User.id == str(authorized_by))
+            select(User)
+            .where(User.id == str(authorized_by))
+            .where(User.organization_id == str(organization_id))
         )
         authorizer = auth_result.scalar_one_or_none()
         if not authorizer:
@@ -3157,7 +3157,9 @@ Best regards,
                 delegating_uid = auth.get("delegating_user_id")
                 if proxy_uid and delegating_uid:
                     proxy_u_result = await self.db.execute(
-                        select(User).where(User.id == proxy_uid)
+                        select(User)
+                        .where(User.id == proxy_uid)
+                        .where(User.organization_id == str(organization_id))
                     )
                     proxy_u = proxy_u_result.scalar_one_or_none()
                     if proxy_u:
@@ -3239,24 +3241,31 @@ Best regards,
             # If this voter has a proxy, CC the proxy holder
             cc_email = proxy_cc_map.get(str(recipient.id))
 
-            sent = await email_service.send_ballot_notification(
-                to_email=recipient.email,
-                recipient_name=recipient.full_name,
-                election_title=election.title,
-                ballot_url=ballot_url,
-                meeting_date=election.meeting_date,
-                custom_message=message,
-                cc_emails=[cc_email] if cc_email else None,
-                start_date=election.start_date,
-                end_date=election.end_date,
-                positions=election.positions,
-                ballot_items_html=items_html,
-                ballot_items_text=items_text,
-                admin_contact_name=admin_contact_name,
-                admin_contact_email=admin_contact_email,
-                db=self.db,
-                organization_id=str(organization_id),
-            )
+            try:
+                sent = await email_service.send_ballot_notification(
+                    to_email=recipient.email,
+                    recipient_name=recipient.full_name,
+                    election_title=election.title,
+                    ballot_url=ballot_url,
+                    meeting_date=election.meeting_date,
+                    custom_message=message,
+                    cc_emails=[cc_email] if cc_email else None,
+                    start_date=election.start_date,
+                    end_date=election.end_date,
+                    positions=election.positions,
+                    ballot_items_html=items_html,
+                    ballot_items_text=items_text,
+                    admin_contact_name=admin_contact_name,
+                    admin_contact_email=admin_contact_email,
+                    db=self.db,
+                    organization_id=str(organization_id),
+                )
+            except Exception as e:
+                logger.error(
+                    f"Ballot email send failed | election={election_id} "
+                    f"recipient={recipient.id} error={e}"
+                )
+                sent = False
 
             if sent:
                 success_count += 1
