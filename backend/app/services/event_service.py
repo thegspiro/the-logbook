@@ -27,7 +27,7 @@ from app.models.event import (
     RSVPHistory,
     RSVPStatus,
 )
-from app.models.notification import NotificationChannel
+from app.models.notification import NotificationCategory, NotificationChannel
 from app.models.training import TrainingRecord, TrainingSession, TrainingStatus
 from app.models.user import Organization, User
 from app.schemas.event import (
@@ -2630,6 +2630,15 @@ class EventService:
                 and uid in all_member_ids
             ]
 
+        type_labels = {
+            "announcement": "Announcement",
+            "reminder": "Reminder",
+            "follow_up": "Follow-up",
+            "missed_event": "Missed event notice",
+            "check_in_confirmation": "Check-in confirmation",
+        }
+        label = type_labels.get(notification_type, notification_type)
+
         _logger.info(
             "Event notification: type={}, target={}, event={}, "
             "recipients={}, custom_message={}",
@@ -2640,18 +2649,65 @@ class EventService:
             bool(message),
         )
 
-        type_labels = {
-            "announcement": "Announcement",
-            "reminder": "Reminder",
-            "follow_up": "Follow-up",
-            "missed_event": "Missed event notice",
-            "check_in_confirmation": "Check-in confirmation",
+        # Build notification subject and body
+        subject = f"{label}: {event.title}"
+        default_messages = {
+            "announcement": (
+                f'New announcement for "{event.title}". '
+                f"Check the event page for details."
+            ),
+            "reminder": (
+                f'Reminder: "{event.title}" is coming up. '
+                f"Please check the event details."
+            ),
+            "follow_up": (
+                f'Follow-up regarding "{event.title}". '
+                f"Please review the event page."
+            ),
+            "missed_event": (
+                f'You missed "{event.title}". '
+                f"Please review the event details."
+            ),
+            "check_in_confirmation": (
+                f'Your check-in for "{event.title}" has been confirmed.'
+            ),
         }
-        label = type_labels.get(notification_type, notification_type)
+        body = message or default_messages.get(
+            notification_type,
+            f'Notification regarding "{event.title}".',
+        )
+        action_url = f"/events/{event_id}"
+        now = datetime.now(dt_timezone.utc)
+
+        # Create in-app notifications for each recipient
+        notif_service = NotificationsService(self.db)
+        delivered_count = 0
+        for uid in recipient_ids:
+            entry, error = await notif_service.log_notification(
+                organization_id=organization_id,
+                log_data={
+                    "recipient_id": uid,
+                    "channel": NotificationChannel.IN_APP,
+                    "subject": subject,
+                    "message": body,
+                    "category": NotificationCategory.EVENTS,
+                    "action_url": action_url,
+                    "delivered": True,
+                    "sent_at": now,
+                },
+            )
+            if entry:
+                delivered_count += 1
+            else:
+                _logger.warning(
+                    "Failed to deliver notification to user {}: {}",
+                    uid,
+                    error,
+                )
 
         summary = (
-            f"{label} notification queued for "
-            f"{len(recipient_ids)} recipient(s)"
+            f"{label} notification sent to "
+            f"{delivered_count} recipient(s)"
         )
 
-        return len(recipient_ids), summary
+        return delivered_count, summary
