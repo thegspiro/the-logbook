@@ -233,6 +233,11 @@ export const ElectionDetailPage: React.FC = () => {
       setEmailMessage('');
       void fetchElection(); // Refresh to update email_sent status
 
+      if (!response.success && response.recipients_count === 0 && response.failed_count === 0) {
+        toast.error(response.message || 'No eligible recipients found. Verify election settings.');
+        return;
+      }
+
       const parts = [`Ballots sent to ${response.recipients_count} voter(s)`];
       if (response.failed_count > 0) {
         parts.push(`${response.failed_count} failed`);
@@ -241,7 +246,7 @@ export const ElectionDetailPage: React.FC = () => {
         parts.push(`${response.skipped_count} skipped (ineligible)`);
       }
 
-      if (response.failed_count > 0) {
+      if (!response.success) {
         toast.error(parts.join(', '));
       } else {
         toast.success(parts.join(', '));
