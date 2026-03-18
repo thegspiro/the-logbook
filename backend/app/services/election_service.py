@@ -2710,29 +2710,29 @@ Best regards,
         if str(delegating_user_id) == str(proxy_user_id):
             return None, "A member cannot be their own proxy"
 
-        # Verify both users exist in the same org
-        for uid, label in [
-            (delegating_user_id, "Delegating member"),
-            (proxy_user_id, "Proxy member"),
-        ]:
-            u_result = await self.db.execute(
-                select(User)
-                .where(User.id == str(uid))
-                .where(User.organization_id == str(organization_id))
-            )
-            if not u_result.scalar_one_or_none():
-                return None, f"{label} not found"
-
+        # Verify all users exist in the same org (single query per user)
         delegating_result = await self.db.execute(
-            select(User).where(User.id == str(delegating_user_id))
+            select(User)
+            .where(User.id == str(delegating_user_id))
+            .where(User.organization_id == str(organization_id))
         )
-        delegating_user = delegating_result.scalar_one()
+        delegating_user = delegating_result.scalar_one_or_none()
+        if not delegating_user:
+            return None, "Delegating member not found"
+
         proxy_result = await self.db.execute(
-            select(User).where(User.id == str(proxy_user_id))
+            select(User)
+            .where(User.id == str(proxy_user_id))
+            .where(User.organization_id == str(organization_id))
         )
-        proxy_user = proxy_result.scalar_one()
+        proxy_user = proxy_result.scalar_one_or_none()
+        if not proxy_user:
+            return None, "Proxy member not found"
+
         auth_result = await self.db.execute(
-            select(User).where(User.id == str(authorized_by))
+            select(User)
+            .where(User.id == str(authorized_by))
+            .where(User.organization_id == str(organization_id))
         )
         authorizer = auth_result.scalar_one_or_none()
         if not authorizer:
@@ -3156,7 +3156,9 @@ Best regards,
                 delegating_uid = auth.get("delegating_user_id")
                 if proxy_uid and delegating_uid:
                     proxy_u_result = await self.db.execute(
-                        select(User).where(User.id == proxy_uid)
+                        select(User)
+                        .where(User.id == proxy_uid)
+                        .where(User.organization_id == str(organization_id))
                     )
                     proxy_u = proxy_u_result.scalar_one_or_none()
                     if proxy_u:
