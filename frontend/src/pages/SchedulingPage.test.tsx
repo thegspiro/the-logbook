@@ -70,7 +70,7 @@ describe('SchedulingPage', () => {
       });
     });
 
-    it('should render admin tabs when user has scheduling.manage permission', async () => {
+    it('should render admin links when user has scheduling.manage permission', async () => {
       mockCheckPermission.mockImplementation((perm: string) => {
         return perm === 'scheduling.manage';
       });
@@ -78,14 +78,26 @@ describe('SchedulingPage', () => {
       renderWithRouter(<SchedulingPage />);
 
       await waitFor(() => {
-        expect(screen.getAllByText('Templates').length).toBeGreaterThanOrEqual(1);
-        expect(screen.getAllByText('Patterns').length).toBeGreaterThanOrEqual(1);
-        expect(screen.getAllByText('Reports').length).toBeGreaterThanOrEqual(1);
-        expect(screen.getAllByText('Settings').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getByText('Administration')).toBeInTheDocument();
+        expect(screen.getByText('Templates')).toBeInTheDocument();
+        expect(screen.getByText('Patterns')).toBeInTheDocument();
+        expect(screen.getByText('Reports')).toBeInTheDocument();
+        expect(screen.getByText('Settings')).toBeInTheDocument();
       });
+
+      // Admin links should be actual links, not tabs
+      const links = screen.getAllByRole('link');
+      const adminLinks = links.filter((link) =>
+        link.getAttribute('href')?.startsWith('/scheduling/'),
+      );
+      const hrefs = adminLinks.map((link) => link.getAttribute('href'));
+      expect(hrefs).toContain('/scheduling/templates');
+      expect(hrefs).toContain('/scheduling/patterns');
+      expect(hrefs).toContain('/scheduling/reports');
+      expect(hrefs).toContain('/scheduling/settings');
     });
 
-    it('should not render admin tabs for non-admin users', async () => {
+    it('should not render admin links for non-admin users', async () => {
       mockCheckPermission.mockReturnValue(false);
 
       renderWithRouter(<SchedulingPage />);
@@ -94,9 +106,9 @@ describe('SchedulingPage', () => {
         expectTabVisible('Schedule');
       });
 
+      expect(screen.queryByText('Administration')).not.toBeInTheDocument();
       expect(screen.queryByText('Templates')).not.toBeInTheDocument();
       expect(screen.queryByText('Patterns')).not.toBeInTheDocument();
-      expect(screen.queryByText('Settings')).not.toBeInTheDocument();
     });
   });
 

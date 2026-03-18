@@ -20,11 +20,13 @@ import {
   ArrowLeftRight,
   ClipboardList,
   BarChart3,
-  Truck,
   Settings,
   Repeat,
   FileText,
+  ExternalLink,
+  Truck,
 } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
 import { useTimezone } from "../hooks/useTimezone";
 import { formatTime, formatDateCustom, localToUTC } from "../utils/dateFormatting";
@@ -41,14 +43,9 @@ import TimeQuarterHour from "../components/ux/TimeQuarterHour";
 const MyShiftsTab = lazyWithRetry(() => import("./scheduling/MyShiftsTab"));
 const OpenShiftsTab = lazyWithRetry(() => import("./scheduling/OpenShiftsTab"));
 const RequestsTab = lazyWithRetry(() => import("./scheduling/RequestsTab"));
-const ShiftTemplatesPage = lazyWithRetry(() => import("./ShiftTemplatesPage"));
-const SchedulingReportsPage = lazyWithRetry(
-  () => import("./SchedulingReportsPage"),
-);
 const ShiftDetailPanel = lazyWithRetry(
   () => import("./scheduling/ShiftDetailPanel"),
 );
-const PatternsTab = lazyWithRetry(() => import("./scheduling/PatternsTab"));
 const ShiftReportsTab = lazyWithRetry(
   () => import("./scheduling/ShiftReportsTab"),
 );
@@ -62,11 +59,7 @@ type TabId =
   | "open-shifts"
   | "requests"
   | "equipment-checks"
-  | "templates"
-  | "patterns"
-  | "shift-reports"
-  | "reports"
-  | "settings";
+  | "shift-reports";
 type ViewMode = "week" | "month";
 
 // Fallback templates when no backend templates are configured
@@ -173,18 +166,25 @@ const TAB_CONFIG: {
   id: TabId;
   label: string;
   icon: React.ElementType;
-  adminOnly?: boolean;
 }[] = [
   { id: "schedule", label: "Schedule", icon: CalendarDays },
   { id: "my-shifts", label: "My Shifts", icon: Clock },
   { id: "open-shifts", label: "Open Shifts", icon: UserPlus },
   { id: "requests", label: "Requests", icon: ArrowLeftRight },
   { id: "equipment-checks", label: "Equipment Checks", icon: ClipboardList },
-  { id: "templates", label: "Templates", icon: ClipboardList, adminOnly: true },
-  { id: "patterns", label: "Patterns", icon: Repeat, adminOnly: true },
   { id: "shift-reports", label: "Shift Reports", icon: FileText },
-  { id: "reports", label: "Reports", icon: BarChart3, adminOnly: true },
-  { id: "settings", label: "Settings", icon: Settings, adminOnly: true },
+];
+
+const ADMIN_LINKS: {
+  label: string;
+  path: string;
+  icon: React.ElementType;
+  description: string;
+}[] = [
+  { label: "Templates", path: "/scheduling/templates", icon: ClipboardList, description: "Manage shift templates" },
+  { label: "Patterns", path: "/scheduling/patterns", icon: Repeat, description: "Configure shift patterns" },
+  { label: "Reports", path: "/scheduling/reports", icon: BarChart3, description: "View scheduling reports" },
+  { label: "Settings", path: "/scheduling/settings", icon: Settings, description: "Department settings" },
 ];
 
 const TabLoadingFallback = () => (
@@ -195,6 +195,7 @@ const TabLoadingFallback = () => (
 
 const SchedulingPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
+  const navigate = useNavigate();
   const tz = useTimezone();
   const canManage = checkPermission("scheduling.manage");
 
@@ -457,10 +458,7 @@ const SchedulingPage: React.FC = () => {
 
   const hasShifts = shifts.length > 0;
 
-  const visibleTabs = useMemo(
-    () => TAB_CONFIG.filter((t) => !t.adminOnly || canManage),
-    [canManage],
-  );
+  const visibleTabs = TAB_CONFIG;
 
   return (
     <div className="min-h-screen">
@@ -1081,7 +1079,7 @@ const SchedulingPage: React.FC = () => {
         )}
 
         {/* Other Tabs */}
-        {activeTab !== "schedule" && activeTab !== "settings" && (
+        {activeTab !== "schedule" && (
           <Suspense fallback={<TabLoadingFallback />}>
             {activeTab === "my-shifts" && (
               <MyShiftsTab onViewShift={handleShiftClick} />
@@ -1091,20 +1089,40 @@ const SchedulingPage: React.FC = () => {
             )}
             {activeTab === "requests" && <RequestsTab />}
             {activeTab === "equipment-checks" && <MyChecklistsPage />}
-            {activeTab === "templates" && <ShiftTemplatesPage />}
-            {activeTab === "patterns" && <PatternsTab />}
             {activeTab === "shift-reports" && <ShiftReportsTab />}
-            {activeTab === "reports" && <SchedulingReportsPage />}
           </Suspense>
         )}
 
-        {/* Settings Tab (inline, not lazy) */}
-        {activeTab === "settings" && (
-          <ShiftSettingsPanel
-            templates={backendTemplates}
-            apparatusList={apparatusList}
-            onNavigateToTemplates={() => setActiveTab("templates")}
-          />
+        {/* Admin Quick Links */}
+        {canManage && (
+          <div className="mt-8 border-t border-theme-surface-border pt-6">
+            <h2 className="text-sm font-semibold text-theme-text-muted uppercase tracking-wider mb-3">
+              Administration
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {ADMIN_LINKS.map((link) => {
+                const Icon = link.icon;
+                return (
+                  <Link
+                    key={link.path}
+                    to={link.path}
+                    className="flex items-center gap-3 p-3 bg-theme-surface border border-theme-surface-border rounded-xl hover:bg-theme-surface-hover transition-colors group"
+                  >
+                    <Icon className="w-5 h-5 text-violet-500 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-theme-text-primary truncate">
+                        {link.label}
+                      </p>
+                      <p className="text-xs text-theme-text-muted truncate hidden sm:block">
+                        {link.description}
+                      </p>
+                    </div>
+                    <ExternalLink className="w-3.5 h-3.5 text-theme-text-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
         )}
 
         {/* Shift Detail Panel */}
@@ -1312,13 +1330,13 @@ const SchedulingPage: React.FC = () => {
                             type="button"
                             onClick={() => {
                               setShowCreateShift(false);
-                              setActiveTab("templates");
+                              void navigate("/scheduling/templates");
                             }}
                             className="text-violet-600 dark:text-violet-400 hover:underline"
                           >
                             Configure your own
                           </button>{" "}
-                          in the Templates tab.
+                          on the Templates page.
                         </p>
                       )}
                     </div>
@@ -1618,11 +1636,6 @@ const SchedulingPage: React.FC = () => {
     </div>
   );
 };
-
-// ShiftSettingsPanel and SchedulingNotificationsPanel have been extracted
-// to modules/scheduling/components/ for maintainability.
-import { ShiftSettingsPanel } from "../modules/scheduling/components/ShiftSettingsPanel";
-
 
 
 export default SchedulingPage;
