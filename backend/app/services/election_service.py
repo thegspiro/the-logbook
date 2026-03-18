@@ -4,6 +4,7 @@ Election Service
 Business logic for election management including elections, candidates, voting, and results.
 """
 
+import copy
 import hashlib
 import hmac
 import html
@@ -349,8 +350,8 @@ class ElectionService:
         if not user:
             return None, "User not found"
 
-        # Initialize attendees list
-        attendees = election.attendees or []
+        # Deep copy to break shared references with SQLAlchemy's committed state
+        attendees = copy.deepcopy(election.attendees or [])
 
         # Check if already checked in
         if any(a.get("user_id") == str(user_id) for a in attendees):
@@ -405,7 +406,7 @@ class ElectionService:
         if not election:
             return False, "Election not found"
 
-        attendees = election.attendees or []
+        attendees = copy.deepcopy(election.attendees or [])
         original_count = len(attendees)
         attendees = [a for a in attendees if a.get("user_id") != str(user_id)]
 
@@ -2725,7 +2726,7 @@ Best regards,
         if not authorizer:
             return None, "Authorizing user not found"
 
-        authorizations = election.proxy_authorizations or []
+        authorizations = copy.deepcopy(election.proxy_authorizations or [])
 
         # Prevent duplicate active authorization for the same delegating member
         for auth in authorizations:
@@ -2797,7 +2798,7 @@ Best regards,
         if not election:
             return False, "Election not found"
 
-        authorizations = election.proxy_authorizations or []
+        authorizations = copy.deepcopy(election.proxy_authorizations or [])
         found = False
         for auth in authorizations:
             if auth.get("id") == authorization_id:
