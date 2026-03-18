@@ -5,6 +5,8 @@ import { publicFormsService } from '../services/api';
 import type { PublicFormDef, PublicFormField } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
 import { FieldType } from '../constants/enums';
+import TimeQuarterHour from '../components/ux/TimeQuarterHour';
+import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 
 // Sanitize any text content that came from the server
 const clean = (text: string | null | undefined): string => {
@@ -170,9 +172,7 @@ const PublicFormPage = () => {
 
       case FieldType.TIME:
         return (
-          <input
-            type="time"
-            step="900"
+          <TimeQuarterHour
             className={baseInputClass}
             value={value}
             onChange={(e) => handleFieldChange(field.id, e.target.value)}
@@ -182,12 +182,10 @@ const PublicFormPage = () => {
 
       case FieldType.DATETIME:
         return (
-          <input
-            type="datetime-local"
-            step="900"
+          <DateTimeQuarterHour
             className={baseInputClass}
             value={value}
-            onChange={(e) => handleFieldChange(field.id, e.target.value)}
+            onChange={(val) => handleFieldChange(field.id, val)}
             required={field.required}
           />
         );

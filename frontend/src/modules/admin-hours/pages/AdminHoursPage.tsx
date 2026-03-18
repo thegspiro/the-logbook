@@ -13,6 +13,7 @@ import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatDate, formatTime, formatForDateTimeInput, localToUTC } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
+import DateTimeQuarterHour from '../../../components/ux/DateTimeQuarterHour';
 
 const PAGE_SIZE = 20;
 
@@ -301,23 +302,18 @@ const AdminHoursPage: React.FC = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-1">Start Time *</label>
-                <input
-                  type="datetime-local"
+                <DateTimeQuarterHour
                   value={manualData.clock_in_at}
-                  onChange={(e) => setManualData({ ...manualData, clock_in_at: e.target.value })}
-                  max={maxDatetime}
+                  onChange={(val) => setManualData({ ...manualData, clock_in_at: val })}
                   required
                   className="card-secondary focus:ring-2 focus:ring-theme-focus-ring px-3 py-2 text-theme-text-primary w-full"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-1">End Time *</label>
-                <input
-                  type="datetime-local"
+                <DateTimeQuarterHour
                   value={manualData.clock_out_at}
-                  onChange={(e) => setManualData({ ...manualData, clock_out_at: e.target.value })}
-                  max={maxDatetime}
-                  min={manualData.clock_in_at ?? undefined}
+                  onChange={(val) => setManualData({ ...manualData, clock_out_at: val })}
                   required
                   className="card-secondary focus:ring-2 focus:ring-theme-focus-ring px-3 py-2 text-theme-text-primary w-full"
                 />

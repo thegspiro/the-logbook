@@ -18,6 +18,7 @@ import { getRSVPStatusLabel, getRSVPStatusColor, downloadICSFile } from '../util
 import { formatDateTime, formatShortDateTime, formatTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum } from '../constants/enums';
+import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 import { Bell, Repeat, CalendarPlus, Clock, ChevronDown, MapPin } from 'lucide-react';
 import { renderSimpleMarkdown } from '../utils/simpleMarkdown';
 import { EventAttachmentsList } from '../components/event-detail/EventAttachmentsList';
@@ -1842,12 +1843,10 @@ export const EventDetailPage: React.FC = () => {
                       <label htmlFor="actual_start_time" className="block text-sm font-medium text-theme-text-secondary">
                         Actual Start Time
                       </label>
-                      <input
-                        type="datetime-local"
-                        step="900"
+                      <DateTimeQuarterHour
                         id="actual_start_time"
                         value={actualStartTime}
-                        onChange={(e) => setActualStartTime(e.target.value)}
+                        onChange={(val) => setActualStartTime(val)}
                         className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
                       />
                       {event?.actual_start_time && (
@@ -1861,12 +1860,10 @@ export const EventDetailPage: React.FC = () => {
                       <label htmlFor="actual_end_time" className="block text-sm font-medium text-theme-text-secondary">
                         Actual End Time
                       </label>
-                      <input
-                        type="datetime-local"
-                        step="900"
+                      <DateTimeQuarterHour
                         id="actual_end_time"
                         value={actualEndTime}
-                        onChange={(e) => setActualEndTime(e.target.value)}
+                        onChange={(val) => setActualEndTime(val)}
                         className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
                       />
                       {event?.actual_end_time && (
@@ -1945,12 +1942,10 @@ export const EventDetailPage: React.FC = () => {
                       <label htmlFor="override_check_in" className="block text-sm font-medium text-theme-text-secondary">
                         Check-in Time
                       </label>
-                      <input
-                        type="datetime-local"
-                        step="900"
+                      <DateTimeQuarterHour
                         id="override_check_in"
                         value={overrideCheckIn}
-                        onChange={(e) => setOverrideCheckIn(e.target.value)}
+                        onChange={(val) => setOverrideCheckIn(val)}
                         className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
                       />
                     </div>
@@ -1959,12 +1954,10 @@ export const EventDetailPage: React.FC = () => {
                       <label htmlFor="override_check_out" className="block text-sm font-medium text-theme-text-secondary">
                         Check-out Time
                       </label>
-                      <input
-                        type="datetime-local"
-                        step="900"
+                      <DateTimeQuarterHour
                         id="override_check_out"
                         value={overrideCheckOut}
-                        onChange={(e) => setOverrideCheckOut(e.target.value)}
+                        onChange={(val) => setOverrideCheckOut(val)}
                         className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
                       />
                     </div>

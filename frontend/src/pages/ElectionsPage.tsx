@@ -15,6 +15,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 import { HelpLink } from '../components/HelpLink';
+import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 
 export const ElectionsPage: React.FC = () => {
   const [elections, setElections] = useState<ElectionListItem[]>([]);
@@ -436,14 +437,11 @@ export const ElectionsPage: React.FC = () => {
                     <label htmlFor="election-start-date" className="block text-sm font-medium text-theme-text-primary">
                       Start Date & Time <span aria-hidden="true">*</span>
                     </label>
-                    <input
-                      type="datetime-local"
-                      step="900"
+                    <DateTimeQuarterHour
                       id="election-start-date"
                       required
-                      aria-required="true"
                       value={formData.start_date}
-                      onChange={(e) => handleStartDateChange(e.target.value)}
+                      onChange={(val) => handleStartDateChange(val)}
                       className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
                     />
                   </div>
@@ -452,14 +450,11 @@ export const ElectionsPage: React.FC = () => {
                     <label htmlFor="election-end-date" className="block text-sm font-medium text-theme-text-primary">
                       End Date & Time <span aria-hidden="true">*</span>
                     </label>
-                    <input
-                      type="datetime-local"
-                      step="900"
+                    <DateTimeQuarterHour
                       id="election-end-date"
                       required
-                      aria-required="true"
                       value={formData.end_date}
-                      onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                      onChange={(val) => setFormData({ ...formData, end_date: val })}
                       className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
                     />
 

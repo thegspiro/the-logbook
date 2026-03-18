@@ -10,6 +10,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
+import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 import {
   ClipboardList,
   Clock,
@@ -940,10 +941,9 @@ const EventRequestsTab: React.FC = () => {
                                       <label className="block text-xs font-medium text-theme-text-muted mb-1">
                                         Start Date & Time *
                                       </label>
-                                      <input
-                                        type="datetime-local"
+                                      <DateTimeQuarterHour
                                         value={scheduleDate}
-                                        onChange={(e) => setScheduleDate(e.target.value)}
+                                        onChange={(val) => setScheduleDate(val)}
                                         className="form-input text-sm"
                                       />
                                     </div>
@@ -951,10 +951,9 @@ const EventRequestsTab: React.FC = () => {
                                       <label className="block text-xs font-medium text-theme-text-muted mb-1">
                                         End Date & Time
                                       </label>
-                                      <input
-                                        type="datetime-local"
+                                      <DateTimeQuarterHour
                                         value={scheduleEndDate}
-                                        onChange={(e) => setScheduleEndDate(e.target.value)}
+                                        onChange={(val) => setScheduleEndDate(val)}
                                         className="form-input text-sm"
                                       />
                                     </div>
@@ -1020,10 +1019,9 @@ const EventRequestsTab: React.FC = () => {
                                     <label className="block text-xs font-medium text-theme-text-muted mb-1">
                                       New tentative date (optional — leave blank for TBD)
                                     </label>
-                                    <input
-                                      type="datetime-local"
+                                    <DateTimeQuarterHour
                                       value={postponeNewDate}
-                                      onChange={(e) => setPostponeNewDate(e.target.value)}
+                                      onChange={(val) => setPostponeNewDate(val)}
                                       className="form-input text-sm"
                                     />
                                   </div>
