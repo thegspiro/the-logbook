@@ -232,7 +232,15 @@ class EquipmentCheckService:
             self._create_item(compartment.id, item_data)
 
         await self.db.commit()
-        return compartment
+
+        # Re-fetch with eager-loaded relationships to avoid MissingGreenlet
+        # errors when FastAPI serializes the response outside the async context.
+        result = await self.db.execute(
+            select(CheckTemplateCompartment)
+            .options(selectinload(CheckTemplateCompartment.items))
+            .where(CheckTemplateCompartment.id == compartment.id)
+        )
+        return result.scalars().first()
 
     async def update_compartment(
         self,
@@ -252,7 +260,14 @@ class EquipmentCheckService:
                 setattr(compartment, key, value)
 
         await self.db.commit()
-        return compartment
+
+        # Re-fetch with eager-loaded relationships to avoid MissingGreenlet
+        result = await self.db.execute(
+            select(CheckTemplateCompartment)
+            .options(selectinload(CheckTemplateCompartment.items))
+            .where(CheckTemplateCompartment.id == compartment.id)
+        )
+        return result.scalars().first()
 
     async def delete_compartment(
         self, compartment_id: str, organization_id: str
