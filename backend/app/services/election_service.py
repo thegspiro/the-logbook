@@ -3514,6 +3514,158 @@ Best regards,
             )
             return False, "Failed to send election report email"
 
+    async def send_eligibility_summary_email(
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+        sent_count: int,
+        skipped_count: int,
+        skipped_details: List[Dict],
+    ) -> Tuple[bool, str]:
+        """
+        Send the secretary an email summarizing who received ballots
+        and who was skipped (with per-member reasons).
+
+        Called after ballot emails are dispatched when the secretary
+        opts in via the send_eligibility_summary flag.
+
+        Returns: (success, message)
+        """
+        from app.services.email_service import EmailService
+
+        # Load election
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
+        )
+        election = result.scalar_one_or_none()
+        if not election:
+            return False, "Election not found"
+
+        # Load organization
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        organization = org_result.scalar_one_or_none()
+        if not organization:
+            return False, "Organization not found"
+
+        # Determine the secretary (election creator)
+        to_emails: List[str] = []
+        secretary_name = "Secretary"
+        if election.created_by:
+            creator_result = await self.db.execute(
+                select(User).where(User.id == election.created_by)
+            )
+            creator = creator_result.scalar_one_or_none()
+            if creator and creator.email:
+                to_emails.append(creator.email)
+                secretary_name = creator.full_name or "Secretary"
+
+        if not to_emails:
+            return False, "No recipient found for eligibility summary"
+
+        # Look up recipient names from election.email_recipients
+        recipient_names: List[str] = []
+        email_recipient_ids = election.email_recipients or []
+        if email_recipient_ids:
+            users_result = await self.db.execute(
+                select(User).where(
+                    User.id.in_([str(uid) for uid in email_recipient_ids])
+                )
+            )
+            recipient_users = users_result.scalars().all()
+            recipient_names = [
+                u.full_name or u.username for u in recipient_users
+            ]
+
+        # Build the recipients list (who got ballots)
+        recipients_html_parts = ["<ul>"]
+        recipients_text_parts = []
+        for name in sorted(recipient_names):
+            safe_name = html.escape(name)
+            recipients_html_parts.append(f"<li>{safe_name}</li>")
+            recipients_text_parts.append(f"  - {name}")
+        recipients_html_parts.append("</ul>")
+        if not recipient_names:
+            recipients_html_parts = [
+                "<p><em>No members received ballots.</em></p>"
+            ]
+            recipients_text_parts = ["  (none)"]
+
+        recipients_html = "\n".join(recipients_html_parts)
+        recipients_text = "\n".join(recipients_text_parts)
+
+        # Build the skipped voters table (who was skipped and why)
+        if skipped_details:
+            skipped_html_parts = [
+                '<table style="width:100%;border-collapse:collapse;'
+                'margin-top:8px;">',
+                "<tr>"
+                '<th style="text-align:left;padding:8px;border-bottom:'
+                '2px solid #e5e7eb;font-weight:600;">Member</th>'
+                '<th style="text-align:left;padding:8px;border-bottom:'
+                '2px solid #e5e7eb;font-weight:600;">Reason</th>'
+                "</tr>",
+            ]
+            skipped_text_parts = []
+            for detail in sorted(skipped_details, key=lambda d: d["name"]):
+                safe_name = html.escape(detail["name"])
+                safe_reason = html.escape(detail["reason"])
+                skipped_html_parts.append(
+                    f'<tr><td style="padding:8px;border-bottom:1px solid '
+                    f'#e5e7eb;">{safe_name}</td>'
+                    f'<td style="padding:8px;border-bottom:1px solid '
+                    f'#e5e7eb;">{safe_reason}</td></tr>'
+                )
+                skipped_text_parts.append(
+                    f"  - {detail['name']}: {detail['reason']}"
+                )
+            skipped_html_parts.append("</table>")
+            skipped_html = "\n".join(skipped_html_parts)
+            skipped_text = "\n".join(skipped_text_parts)
+        else:
+            skipped_html = (
+                "<p><em>All members met eligibility requirements "
+                "&mdash; no one was skipped.</em></p>"
+            )
+            skipped_text = "  All members met eligibility requirements."
+
+        # Attendee count
+        total_checked_in = len(election.attendees or [])
+
+        email_service = EmailService(organization)
+        success_count, failure_count = (
+            await email_service.send_eligibility_summary(
+                to_emails=to_emails,
+                recipient_name=secretary_name,
+                election_title=election.title,
+                sent_count=sent_count,
+                skipped_count=skipped_count,
+                total_checked_in=total_checked_in,
+                recipients_html=recipients_html,
+                recipients_text=recipients_text,
+                skipped_voters_html=skipped_html,
+                skipped_voters_text=skipped_text,
+                db=self.db,
+                organization_id=str(organization_id),
+            )
+        )
+
+        if success_count > 0:
+            logger.info(
+                f"Eligibility summary sent | election={election_id} "
+                f"to={to_emails}"
+            )
+            return True, f"Eligibility summary sent to {', '.join(to_emails)}"
+        else:
+            logger.error(
+                f"Failed to send eligibility summary | "
+                f"election={election_id} failures={failure_count}"
+            )
+            return False, "Failed to send eligibility summary email"
+
     def _build_results_tables(self, results) -> Tuple[str, str]:
         """Build HTML and plain-text tables of election results."""
         if not results or not results.results_by_position:

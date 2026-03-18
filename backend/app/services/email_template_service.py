@@ -1671,6 +1671,73 @@ DEFAULT_ELECTION_REPORT_SUBJECT = (
 )
 
 
+# Default ballot eligibility summary email (sent to secretary after ballot dispatch)
+DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_HTML = """<div class="container">
+    <div class="logo">{{organization_logo_img}}</div>
+    <div class="header" style="background-color: #d97706;">
+        <h1>Ballot Eligibility Summary</h1>
+    </div>
+    <div class="content">
+        <p>Hello {{recipient_name}},</p>
+
+        <p>Ballot emails for <strong>{{election_title}}</strong> have been sent. Below is a summary of member eligibility.</p>
+
+        <div class="details">
+            <p><strong>Ballots Sent:</strong> {{sent_count}}</p>
+            <p><strong>Members Skipped:</strong> {{skipped_count}}</p>
+            <p><strong>Total Checked In:</strong> {{total_checked_in}}</p>
+        </div>
+
+        <h2 style="margin-top:20px;font-size:16px;border-bottom:2px solid #e5e7eb;padding-bottom:6px;">Members Who Received Ballots ({{sent_count}})</h2>
+        {{recipients_html}}
+
+        <h2 style="margin-top:20px;font-size:16px;border-bottom:2px solid #f59e0b;padding-bottom:6px;color:#92400e;">Members Who Did Not Receive Ballots ({{skipped_count}})</h2>
+        <p>The following members were skipped because they did not meet the eligibility requirements for any ballot item. The specific reason for each member is listed below.</p>
+        {{skipped_voters_html}}
+
+        <h2 style="margin-top:20px;font-size:16px;border-bottom:2px solid #e5e7eb;padding-bottom:6px;">What You Can Do</h2>
+        <ul>
+            <li><strong>Voter Overrides:</strong> If a skipped member should be allowed to vote, use the Voter Override feature on the election page to grant them an exception.</li>
+            <li><strong>Check-In Members:</strong> If a member was skipped due to attendance, check them in on the Meeting Attendance panel and resend ballots.</li>
+            <li><strong>Review Tier Settings:</strong> If a membership tier is incorrectly marked as ineligible, update it in Organization Settings &gt; Membership Tiers.</li>
+        </ul>
+    </div>
+    <div class="footer">
+        <p>This is an automated eligibility summary from {{organization_name}}.</p>
+        <p>Please retain this email for your records.</p>
+    </div>
+</div>"""
+
+DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_TEXT = """Ballot Eligibility Summary — {{election_title}}
+
+Hello {{recipient_name}},
+
+Ballot emails for "{{election_title}}" have been sent. Below is a summary of member eligibility.
+
+Ballots Sent: {{sent_count}}
+Members Skipped: {{skipped_count}}
+Total Checked In: {{total_checked_in}}
+
+MEMBERS WHO RECEIVED BALLOTS ({{sent_count}})
+{{recipients_text}}
+
+MEMBERS WHO DID NOT RECEIVE BALLOTS ({{skipped_count}})
+{{skipped_voters_text}}
+
+WHAT YOU CAN DO
+- Voter Overrides: If a skipped member should be allowed to vote, use the Voter Override feature on the election page.
+- Check-In Members: If a member was skipped due to attendance, check them in and resend ballots.
+- Review Tier Settings: If a membership tier is incorrectly marked as ineligible, update it in Organization Settings > Membership Tiers.
+
+---
+This is an automated eligibility summary from {{organization_name}}.
+Please retain this email for your records."""
+
+DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_SUBJECT = (
+    "Ballot Eligibility Summary: {{election_title}} — {{organization_name}}"
+)
+
+
 # Default event cancellation email
 DEFAULT_EVENT_CANCELLATION_HTML = """<div class="container">
     <div class="logo">{{organization_logo_img}}</div>

@@ -1457,6 +1457,21 @@ async def send_ballot_emails(
             message=f"No eligible recipients found. {hint}",
         )
 
+    # Send eligibility summary email to secretary if requested
+    if email_data.send_eligibility_summary and total_attempted > 0:
+        try:
+            await service.send_eligibility_summary_email(
+                election_id=election_id,
+                organization_id=current_user.organization_id,
+                sent_count=recipients_count,
+                skipped_count=skipped_count,
+                skipped_details=skipped_details,
+            )
+        except Exception as e:
+            logger.warning(
+                f"Failed to send eligibility summary email: {e}"
+            )
+
     parts = [f"Ballot emails sent to {recipients_count} recipient(s)"]
     if failed_count > 0:
         parts.append(f"{failed_count} failed")
@@ -1465,6 +1480,8 @@ async def send_ballot_emails(
             f"{skipped_count} skipped (did not meet ballot item requirements "
             f"— see skipped details for per-member reasons)"
         )
+    if email_data.send_eligibility_summary and total_attempted > 0:
+        parts.append("eligibility summary emailed to you")
 
     return EmailBallotResponse(
         success=recipients_count > 0 and failed_count == 0,

@@ -48,6 +48,7 @@ export const ElectionDetailPage: React.FC = () => {
   const [emailMessage, setEmailMessage] = useState('');
   const [isSendingEmails, setIsSendingEmails] = useState(false);
   const [sendEmailError, setSendEmailError] = useState<string | null>(null);
+  const [sendEligibilitySummary, setSendEligibilitySummary] = useState(true);
   const [lastSkippedDetails, setLastSkippedDetails] = useState<Array<{ name: string; reason: string }>>([]);
 
   // Remind Non-Voters state
@@ -248,6 +249,7 @@ export const ElectionDetailPage: React.FC = () => {
         subject: emailSubject.trim() || undefined,
         message: emailMessage.trim() || undefined,
         include_ballot_link: true,
+        send_eligibility_summary: sendEligibilitySummary,
       });
 
       setShowSendEmailModal(false);
@@ -1126,7 +1128,7 @@ export const ElectionDetailPage: React.FC = () => {
                                   style={{
                                     width: `${Math.min(
                                       100,
-                                      (count / Math.max(...Object.values(forensicsReport.voting_timeline))) * 100
+                                      (Number(count) / Math.max(...Object.values(forensicsReport.voting_timeline).map(Number))) * 100
                                     )}%`,
                                   }}
                                 />
@@ -1291,6 +1293,18 @@ export const ElectionDetailPage: React.FC = () => {
                     className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
                   />
                 </div>
+
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={sendEligibilitySummary}
+                    onChange={(e) => setSendEligibilitySummary(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-theme-input-border text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-theme-text-secondary">
+                    Email me a summary of who received ballots and who was skipped (with reasons)
+                  </span>
+                </label>
               </div>
 
               <div className="mt-6 flex justify-end space-x-3">

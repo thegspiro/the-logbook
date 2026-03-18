@@ -34,6 +34,7 @@ class EmailTemplateType(str, enum.Enum):
     PROPERTY_RETURN_REMINDER = "property_return_reminder"
     INACTIVITY_WARNING = "inactivity_warning"
     ELECTION_REPORT = "election_report"
+    BALLOT_ELIGIBILITY_SUMMARY = "ballot_eligibility_summary"
     ELECTION_ROLLBACK = "election_rollback"
     ELECTION_DELETED = "election_deleted"
     MEMBER_ARCHIVED = "member_archived"
