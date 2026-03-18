@@ -1461,7 +1461,10 @@ async def send_ballot_emails(
     if failed_count > 0:
         parts.append(f"{failed_count} failed")
     if skipped_count > 0:
-        parts.append(f"{skipped_count} skipped (no eligible ballot items)")
+        parts.append(
+            f"{skipped_count} skipped (did not meet ballot item requirements "
+            f"— see skipped details for per-member reasons)"
+        )
 
     return EmailBallotResponse(
         success=recipients_count > 0 and failed_count == 0,

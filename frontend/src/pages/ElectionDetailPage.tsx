@@ -48,6 +48,7 @@ export const ElectionDetailPage: React.FC = () => {
   const [emailMessage, setEmailMessage] = useState('');
   const [isSendingEmails, setIsSendingEmails] = useState(false);
   const [sendEmailError, setSendEmailError] = useState<string | null>(null);
+  const [lastSkippedDetails, setLastSkippedDetails] = useState<Array<{ name: string; reason: string }>>([]);
 
   // Remind Non-Voters state
   const [isLoadingNonVoters, setIsLoadingNonVoters] = useState(false);
@@ -254,6 +255,15 @@ export const ElectionDetailPage: React.FC = () => {
       setEmailMessage('');
       void fetchElection(); // Refresh to update email_sent status
 
+      // Persist skipped details so they stay visible in a banner
+      if (response.skipped_details && response.skipped_details.length > 0) {
+        setLastSkippedDetails(
+          response.skipped_details.map((d) => ({ name: d.name, reason: d.reason })),
+        );
+      } else {
+        setLastSkippedDetails([]);
+      }
+
       if (!response.success && response.recipients_count === 0 && response.failed_count === 0) {
         toast.error(
           response.message || 'No eligible recipients found. Verify election settings.',
@@ -266,24 +276,13 @@ export const ElectionDetailPage: React.FC = () => {
         parts.push(`${response.failed_count} failed`);
       }
       if (response.skipped_count > 0) {
-        parts.push(`${response.skipped_count} skipped (see details below)`);
+        parts.push(`${response.skipped_count} skipped (see banner below)`);
       }
 
       if (!response.success) {
         toast.error(parts.join(', '));
       } else {
         toast.success(parts.join(', '));
-      }
-
-      // Log skipped details so admin can see why members were skipped
-      if (response.skipped_details && response.skipped_details.length > 0) {
-        const skippedNames = response.skipped_details
-          .map((d) => `${d.name}: ${d.reason}`)
-          .join('\n');
-        toast(`Members skipped:\n${skippedNames}`, {
-          duration: 8000,
-          icon: '\u26A0\uFE0F',
-        });
       }
     } catch (err: unknown) {
       setSendEmailError(getErrorMessage(err, 'Failed to send ballot emails'));
@@ -333,11 +332,21 @@ export const ElectionDetailPage: React.FC = () => {
       setShowRemindModal(false);
       setRemindMessage('');
 
-      if (response.failed_count > 0) {
-        toast.success(`Reminders sent to ${response.recipients_count} non-voters (${response.failed_count} failed)`);
-      } else {
-        toast.success(`Reminders sent to ${response.recipients_count} non-voters`);
+      // Show skipped details from reminders in the persistent banner
+      if (response.skipped_details && response.skipped_details.length > 0) {
+        setLastSkippedDetails(
+          response.skipped_details.map((d) => ({ name: d.name, reason: d.reason })),
+        );
       }
+
+      const parts = [`Reminders sent to ${response.recipients_count} non-voter(s)`];
+      if (response.failed_count > 0) {
+        parts.push(`${response.failed_count} failed`);
+      }
+      if (response.skipped_count > 0) {
+        parts.push(`${response.skipped_count} skipped (see banner)`);
+      }
+      toast.success(parts.join(', '));
     } catch (err: unknown) {
       setRemindError(getErrorMessage(err, 'Failed to send reminders'));
     } finally {
@@ -555,6 +564,39 @@ export const ElectionDetailPage: React.FC = () => {
                 : ''}
               Review the Forensics & Integrity section below for details.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Skipped Voters Banner — persists until dismissed */}
+      {canManage && lastSkippedDetails.length > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 mb-6">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <h3 className="text-sm font-bold text-amber-700 dark:text-amber-300">
+                {lastSkippedDetails.length} member(s) skipped when sending ballots
+              </h3>
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 mb-2">
+                These members were not sent a ballot because they did not meet the eligibility requirements for any ballot item.
+                You can use voter overrides to grant exceptions.
+              </p>
+              <ul className="text-sm text-amber-700 dark:text-amber-300 space-y-1">
+                {lastSkippedDetails.map((d, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className="font-medium shrink-0">{d.name}:</span>
+                    <span className="text-amber-600 dark:text-amber-400">{d.reason}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <button
+              type="button"
+              onClick={() => setLastSkippedDetails([])}
+              className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 ml-4 shrink-0"
+              aria-label="Dismiss skipped voters banner"
+            >
+              &times;
+            </button>
           </div>
         </div>
       )}
@@ -1214,7 +1256,10 @@ export const ElectionDetailPage: React.FC = () => {
 
               <div className="space-y-4">
                 <p className="text-sm text-theme-text-secondary">
-                  This will send ballot emails with unique voting links to all eligible voters.
+                  {election.eligible_voters && election.eligible_voters.length > 0
+                    ? `This will send ballot emails to the ${election.eligible_voters.length} member(s) on the eligible voters list.`
+                    : 'This will send ballot emails to all active members in the organization.'}
+                  {' '}Members whose roles or attendance do not match any ballot item requirements will be skipped, with reasons shown after sending.
                 </p>
 
                 <div>
