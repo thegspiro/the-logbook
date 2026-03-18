@@ -335,8 +335,8 @@ class ElectionService:
         if not user:
             return None, "User not found"
 
-        # Initialize attendees list
-        attendees = election.attendees or []
+        # Deep copy to break shared references with SQLAlchemy's committed state
+        attendees = copy.deepcopy(election.attendees or [])
 
         # Check if already checked in
         if any(a.get("user_id") == str(user_id) for a in attendees):
@@ -391,7 +391,7 @@ class ElectionService:
         if not election:
             return False, "Election not found"
 
-        attendees = election.attendees or []
+        attendees = copy.deepcopy(election.attendees or [])
         original_count = len(attendees)
         attendees = [a for a in attendees if a.get("user_id") != str(user_id)]
 
@@ -2738,7 +2738,7 @@ Best regards,
         if not authorizer:
             return None, "Authorizing user not found"
 
-        authorizations = election.proxy_authorizations or []
+        authorizations = copy.deepcopy(election.proxy_authorizations or [])
 
         # Prevent duplicate active authorization for the same delegating member
         for auth in authorizations:
@@ -2810,7 +2810,7 @@ Best regards,
         if not election:
             return False, "Election not found"
 
-        authorizations = election.proxy_authorizations or []
+        authorizations = copy.deepcopy(election.proxy_authorizations or [])
         found = False
         for auth in authorizations:
             if auth.get("id") == authorization_id:
@@ -3141,6 +3141,7 @@ Best regards,
                 f"No recipients found for ballot emails | "
                 f"election={election_id} org={organization_id} "
                 f"eligible_voters_set={election.eligible_voters is not None}"
+                f" recipient_ids_provided={bool(recipient_user_ids)}"
             )
             return 0, 0, 0, []
 
@@ -3747,7 +3748,7 @@ Best regards,
         election.last_chain_hash = vote.chain_hash
 
         # Track which positions have been voted on via this token
-        positions_voted = voting_token.positions_voted or []
+        positions_voted = copy.deepcopy(voting_token.positions_voted or [])
         if position and position not in positions_voted:
             positions_voted.append(position)
             voting_token.positions_voted = positions_voted

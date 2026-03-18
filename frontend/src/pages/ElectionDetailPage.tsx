@@ -255,7 +255,11 @@ export const ElectionDetailPage: React.FC = () => {
       void fetchElection(); // Refresh to update email_sent status
 
       if (!response.success && response.recipients_count === 0 && response.failed_count === 0) {
-        toast.error(response.message || 'No eligible recipients found. Verify election settings.');
+        toast.error(
+          response.skipped_count > 0
+            ? `No ballots sent — ${response.skipped_count} voter(s) skipped (no eligible ballot items)`
+            : (response.message || 'No eligible recipients found. Verify election settings.'),
+        );
         return;
       }
 
@@ -639,7 +643,13 @@ export const ElectionDetailPage: React.FC = () => {
                 <>
                   <button
                     onClick={() => setShowSendEmailModal(true)}
+                    disabled={!election.ballot_items || election.ballot_items.length === 0}
                     className="btn-primary"
+                    title={
+                      !election.ballot_items || election.ballot_items.length === 0
+                        ? 'Add ballot items before sending emails'
+                        : undefined
+                    }
                   >
                     {election.email_sent ? 'Resend Ballot Emails' : 'Send Ballot Emails'}
                   </button>

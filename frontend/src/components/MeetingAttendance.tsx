@@ -77,11 +77,14 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
     try {
       setChecking(userId);
       const result = await electionService.checkInAttendee(electionId, userId);
-      setAttendees((prev) => [...prev, result.attendee]);
       toast.success(result.message);
 
-      // Refresh election data
-      const updated = await electionService.getElection(electionId);
+      // Refresh from server to confirm persistence
+      const [attendeeData, updated] = await Promise.all([
+        electionService.getAttendees(electionId),
+        electionService.getElection(electionId),
+      ]);
+      setAttendees(attendeeData.attendees);
       onUpdate(updated);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to check in member'));
@@ -95,10 +98,14 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
 
     try {
       await electionService.removeAttendee(electionId, userId);
-      setAttendees((prev) => prev.filter((a) => a.user_id !== userId));
       toast.success(`${name} removed from attendance`);
 
-      const updated = await electionService.getElection(electionId);
+      // Refresh from server to confirm persistence
+      const [attendeeData, updated] = await Promise.all([
+        electionService.getAttendees(electionId),
+        electionService.getElection(electionId),
+      ]);
+      setAttendees(attendeeData.attendees);
       onUpdate(updated);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to remove attendee'));
