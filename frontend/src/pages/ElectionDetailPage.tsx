@@ -254,18 +254,26 @@ export const ElectionDetailPage: React.FC = () => {
       setEmailMessage('');
       void fetchElection(); // Refresh to update email_sent status
 
-      const parts = [`Ballots sent to ${response.recipients_count} voter(s)`];
-      if (response.failed_count > 0) {
-        parts.push(`${response.failed_count} failed`);
-      }
-      if (response.skipped_count > 0) {
-        parts.push(`${response.skipped_count} skipped (ineligible)`);
-      }
-
-      if (response.failed_count > 0) {
-        toast.error(parts.join(', '));
+      if (response.recipients_count === 0 && response.failed_count === 0) {
+        toast.error(
+          response.skipped_count > 0
+            ? `No ballots sent — ${response.skipped_count} voter(s) skipped (no eligible ballot items)`
+            : 'No ballots sent — no eligible recipients found. Check that voters are configured or ballot items are added.',
+        );
       } else {
-        toast.success(parts.join(', '));
+        const parts = [`Ballots sent to ${response.recipients_count} voter(s)`];
+        if (response.failed_count > 0) {
+          parts.push(`${response.failed_count} failed`);
+        }
+        if (response.skipped_count > 0) {
+          parts.push(`${response.skipped_count} skipped (ineligible)`);
+        }
+
+        if (response.failed_count > 0) {
+          toast.error(parts.join(', '));
+        } else {
+          toast.success(parts.join(', '));
+        }
       }
 
       // Log skipped details so admin can see why members were skipped
@@ -634,7 +642,13 @@ export const ElectionDetailPage: React.FC = () => {
                 <>
                   <button
                     onClick={() => setShowSendEmailModal(true)}
+                    disabled={!election.ballot_items || election.ballot_items.length === 0}
                     className="btn-primary"
+                    title={
+                      !election.ballot_items || election.ballot_items.length === 0
+                        ? 'Add ballot items before sending emails'
+                        : undefined
+                    }
                   >
                     {election.email_sent ? 'Resend Ballot Emails' : 'Send Ballot Emails'}
                   </button>

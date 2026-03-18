@@ -2196,12 +2196,10 @@ class ElectionService:
             "reason": reason,
         }
 
-        # Initialize rollback_history if it doesn't exist
-        if election.rollback_history is None:
-            election.rollback_history = []
-
-        # Add to rollback history
-        election.rollback_history.append(rollback_record)
+        # Deep copy rollback history to ensure SQLAlchemy detects changes
+        rollback_history = copy.deepcopy(election.rollback_history or [])
+        rollback_history.append(rollback_record)
+        election.rollback_history = rollback_history
 
         # Update status
         election.status = new_status
@@ -3448,7 +3446,7 @@ Best regards,
         election.last_chain_hash = vote.chain_hash
 
         # Track which positions have been voted on via this token
-        positions_voted = voting_token.positions_voted or []
+        positions_voted = copy.deepcopy(voting_token.positions_voted or [])
         if position and position not in positions_voted:
             positions_voted.append(position)
             voting_token.positions_voted = positions_voted

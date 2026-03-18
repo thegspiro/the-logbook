@@ -1641,7 +1641,7 @@ async def add_voter_override(
             status_code=status.HTTP_404_NOT_FOUND, detail="Member not found"
         )
 
-    overrides = election.voter_overrides or []
+    overrides = copy.deepcopy(election.voter_overrides or [])
 
     # Prevent duplicate overrides for the same user
     if any(o.get("user_id") == str(body.user_id) for o in overrides):
@@ -1742,7 +1742,7 @@ async def remove_voter_override(
             status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
 
-    overrides = election.voter_overrides or []
+    overrides = copy.deepcopy(election.voter_overrides or [])
     original_len = len(overrides)
     overrides = [o for o in overrides if o.get("user_id") != str(user_id)]
 
@@ -1813,7 +1813,7 @@ async def bulk_add_voter_overrides(
             status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
 
-    overrides = election.voter_overrides or []
+    overrides = copy.deepcopy(election.voter_overrides or [])
     existing_ids = {o.get("user_id") for o in overrides}
 
     added = []
