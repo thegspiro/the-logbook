@@ -2940,7 +2940,10 @@ Best regards,
         if auth.get("proxy_user_id") != str(proxy_user_id):
             return None, "You are not the designated proxy for this authorization"
 
-        delegating_user_id = UUID(auth["delegating_user_id"])
+        try:
+            delegating_user_id = UUID(auth["delegating_user_id"])
+        except (ValueError, KeyError):
+            return None, "Invalid proxy authorization data"
 
         # Check the *delegating* member's eligibility (they are the voter of record)
         eligibility = await self.check_voter_eligibility(

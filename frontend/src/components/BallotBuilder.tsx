@@ -559,7 +559,6 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
   // Card interaction state
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [_dragActiveId, setDragActiveId] = useState<string | null>(null);
 
   const isClosed =
     election.status === ElectionStatus.CLOSED ||
@@ -637,12 +636,11 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
   );
 
   // ── Drag handlers ──
-  const handleDragStart = (event: DragStartEvent) => {
-    setDragActiveId(String(event.active.id));
+  const handleDragStart = (_event: DragStartEvent) => {
+    // DndContext requires onDragStart; no additional state needed
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
-    setDragActiveId(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
