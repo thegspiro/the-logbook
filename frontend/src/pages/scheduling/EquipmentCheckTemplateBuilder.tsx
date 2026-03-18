@@ -381,6 +381,81 @@ function defaultTemplateForm(): TemplateFormState {
 }
 
 // ============================================================================
+// Sortable wrapper components (defined outside the main component so React
+// sees a stable component type across re-renders — prevents input focus loss)
+// ============================================================================
+
+interface SortableItemWrapperProps {
+  id: string;
+  children: (opts: {
+    listeners: Record<string, unknown> | undefined;
+    setNodeRef: React.Ref<HTMLDivElement>;
+    style: React.CSSProperties;
+    attributes: DraggableAttributes;
+  }) => React.ReactNode;
+}
+
+const SortableItemWrapper: React.FC<SortableItemWrapperProps> = ({
+  id,
+  children,
+}) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes}>
+      {children({
+        listeners: (listeners ?? undefined) as Record<string, unknown> | undefined,
+        setNodeRef,
+        style,
+        attributes,
+      })}
+    </div>
+  );
+};
+
+interface SortableCompartmentWrapperProps {
+  id: string;
+  children: (opts: {
+    listeners: Record<string, unknown> | undefined;
+    setNodeRef: React.Ref<HTMLDivElement>;
+    style: React.CSSProperties;
+    attributes: DraggableAttributes;
+  }) => React.ReactNode;
+}
+
+const SortableCompartmentWrapper: React.FC<SortableCompartmentWrapperProps> = ({
+  id,
+  children,
+}) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  };
+
+  return (
+    <>{children({
+      listeners: (listeners ?? undefined) as Record<string, unknown> | undefined,
+      setNodeRef,
+      style,
+      attributes,
+    })}</>
+  );
+};
+
+// ============================================================================
 // Component
 // ============================================================================
 
@@ -1152,35 +1227,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Render: Sortable Item Wrapper
   // ---------------------------------------------------------------------------
 
-  const SortableItemRow: React.FC<{
-    id: string;
-    compIdx: number;
-    itemIdx: number;
-    item: ItemFormState;
-  }> = ({ id, compIdx, itemIdx, item }) => {
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-      isDragging,
-    } = useSortable({ id });
-
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-      opacity: isDragging ? 0.5 : 1,
-      zIndex: isDragging ? 10 : undefined,
-    };
-
-    return (
-      <div ref={setNodeRef} style={style} {...attributes}>
-        {renderItem(compIdx, itemIdx, item, listeners ?? undefined)}
-      </div>
-    );
-  };
-
   // ---------------------------------------------------------------------------
   // Render: Compartment
   // ---------------------------------------------------------------------------
@@ -1339,13 +1385,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   strategy={verticalListSortingStrategy}
                 >
                   {comp.items.map((item, itemIdx) => (
-                    <SortableItemRow
+                    <SortableItemWrapper
                       key={item.id ?? `item-${idx}-${itemIdx}`}
                       id={item.id ?? `item-${idx}-${itemIdx}`}
-                      compIdx={idx}
-                      itemIdx={itemIdx}
-                      item={item}
-                    />
+                    >
+                      {({ listeners: itemListeners }) =>
+                        renderItem(idx, itemIdx, item, itemListeners)
+                      }
+                    </SortableItemWrapper>
                   ))}
                 </SortableContext>
               </DndContext>
@@ -1359,37 +1406,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // ---------------------------------------------------------------------------
   // Render: Sortable Compartment Wrapper
   // ---------------------------------------------------------------------------
-
-  const SortableCompartmentRow: React.FC<{
-    id: string;
-    comp: CompartmentFormState;
-    idx: number;
-  }> = ({ id, comp, idx }) => {
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-      isDragging,
-    } = useSortable({ id });
-
-    const style: React.CSSProperties = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-      opacity: isDragging ? 0.5 : 1,
-      zIndex: isDragging ? 10 : undefined,
-    };
-
-    return renderCompartment(
-      comp,
-      idx,
-      listeners ?? undefined,
-      setNodeRef,
-      style,
-      attributes,
-    );
-  };
 
   // ---------------------------------------------------------------------------
   // Render: Main
@@ -1636,12 +1652,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             strategy={verticalListSortingStrategy}
           >
             {compartments.map((comp, idx) => (
-              <SortableCompartmentRow
+              <SortableCompartmentWrapper
                 key={comp.id ?? `comp-${idx}`}
                 id={comp.id ?? `comp-${idx}`}
-                comp={comp}
-                idx={idx}
-              />
+              >
+                {({ listeners: compListeners, setNodeRef, style, attributes }) =>
+                  renderCompartment(comp, idx, compListeners, setNodeRef, style, attributes)
+                }
+              </SortableCompartmentWrapper>
             ))}
           </SortableContext>
         </DndContext>
