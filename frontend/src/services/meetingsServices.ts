@@ -6,7 +6,7 @@ import api from './apiClient';
 import type { MeetingRecord, MeetingAttendee, MeetingActionItem, MeetingsSummary } from './documentsService';
 
 export const meetingsService = {
-  async getMeetings(params?: { meeting_type?: string; status?: string; search?: string; skip?: number; limit?: number }): Promise<{ meetings: MeetingRecord[]; total: number; skip: number; limit: number }> {
+  async getMeetings(params?: { meeting_type?: string; status?: string; search?: string; from_date?: string; skip?: number; limit?: number }): Promise<{ meetings: MeetingRecord[]; total: number; skip: number; limit: number }> {
     const response = await api.get<{ meetings: MeetingRecord[]; total: number; skip: number; limit: number }>('/meetings', { params });
     return response.data;
   },

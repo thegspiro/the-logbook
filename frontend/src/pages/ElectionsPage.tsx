@@ -13,7 +13,7 @@ import { useAuthStore } from '../stores/authStore';
 import { ElectionStatus, VoteType } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatDate, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
+import { formatDate, formatForDateTimeInput, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
 import { HelpLink } from '../components/HelpLink';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 
@@ -80,7 +80,8 @@ export const ElectionsPage: React.FC = () => {
 
   const fetchMeetings = async () => {
     try {
-      const data = await meetingsService.getMeetings({ limit: 100 });
+      const today = getTodayLocalDate(tz);
+      const data = await meetingsService.getMeetings({ from_date: today, limit: 100 });
       setMeetings(data.meetings);
     } catch {
       // Non-critical — meeting selector will just be empty
