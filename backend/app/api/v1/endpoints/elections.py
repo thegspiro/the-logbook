@@ -23,10 +23,13 @@ from app.models.user import User
 from app.schemas.election import (
     AttendeeCheckIn,
     AttendeeCheckInResponse,
+    AttendeeListResponse,
+    BallotPreviewResponse,
     BallotSubmission,
     BallotSubmissionResponse,
     BallotTemplatesResponse,
     BulkVoteCreate,
+    BulkVoterOverrideResponse,
     CandidateCreate,
     CandidateResponse,
     CandidateUpdate,
@@ -39,15 +42,26 @@ from app.schemas.election import (
     ElectionResults,
     ElectionRollback,
     ElectionRollbackResponse,
+    ElectionSettingsResponse,
     ElectionStats,
     ElectionUpdate,
     EmailBallot,
     EmailBallotResponse,
+    ForensicsResponse,
+    NonVotersResponse,
     ProxyAuthorizationCreate,
     ProxyAuthorizationListResponse,
+    ProxyAuthorizationResponse,
     ProxyVoteCreate,
+    SoftDeleteVoteResponse,
+    SuccessResponse,
+    TestBallotResponse,
     VoteCreate,
+    VoteIntegrityResponse,
+    VoteReceiptResponse,
     VoterEligibility,
+    VoterOverrideListResponse,
+    VoterOverrideRecord,
     VoteResponse,
 )
 from app.core.security_middleware import check_rate_limit
@@ -396,7 +410,7 @@ class ElectionSettingsUpdate(BaseModel):
     proxy_voting_enabled: Optional[bool] = None
 
 
-@router.get("/settings", response_model=None)
+@router.get("/settings", response_model=ElectionSettingsResponse)
 async def get_election_settings(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("elections.manage")),
@@ -451,7 +465,7 @@ async def get_election_settings(
     }
 
 
-@router.patch("/settings")
+@router.patch("/settings", response_model=ElectionSettingsResponse)
 async def update_election_settings(
     settings_update: ElectionSettingsUpdate,
     db: AsyncSession = Depends(get_db),
@@ -554,12 +568,8 @@ async def get_election(
     **Authentication required**
     **Requires permission: elections.view**
     """
-    result = await db.execute(
-        select(Election)
-        .where(Election.id == str(election_id))
-        .where(Election.organization_id == current_user.organization_id)
-    )
-    election = result.scalar_one_or_none()
+    service = ElectionService(db)
+    election = await service.get_election(election_id, current_user.organization_id)
 
     if not election:
         raise HTTPException(
@@ -582,12 +592,8 @@ async def update_election(
     **Authentication required**
     **Requires permission: elections.manage**
     """
-    result = await db.execute(
-        select(Election)
-        .where(Election.id == str(election_id))
-        .where(Election.organization_id == current_user.organization_id)
-    )
-    election = result.scalar_one_or_none()
+    service = ElectionService(db)
+    election = await service.get_election(election_id, current_user.organization_id)
 
     if not election:
         raise HTTPException(
@@ -728,6 +734,19 @@ async def update_election(
     await db.commit()
     await db.refresh(election)
 
+    await log_audit_event(
+        db=db,
+        event_type="election_updated",
+        event_category="elections",
+        severity="info",
+        event_data={
+            "election_id": str(election_id),
+            "title": election.title,
+            "updated_fields": list(update_data.keys()),
+        },
+        user_id=str(current_user.id),
+    )
+
     return election
 
 
@@ -749,12 +768,8 @@ async def delete_election(
     **Authentication required**
     **Requires permission: elections.manage**
     """
-    result = await db.execute(
-        select(Election)
-        .where(Election.id == str(election_id))
-        .where(Election.organization_id == current_user.organization_id)
-    )
-    election = result.scalar_one_or_none()
+    service = ElectionService(db)
+    election = await service.get_election(election_id, current_user.organization_id)
 
     if not election:
         raise HTTPException(
@@ -945,26 +960,15 @@ async def list_candidates(
     **Authentication required**
     **Requires permission: elections.view**
     """
-    # Verify election exists and belongs to organization
-    election_result = await db.execute(
-        select(Election)
-        .where(Election.id == str(election_id))
-        .where(Election.organization_id == current_user.organization_id)
-    )
-    election = election_result.scalar_one_or_none()
+    service = ElectionService(db)
+    election = await service.get_election(election_id, current_user.organization_id)
 
     if not election:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
 
-    result = await db.execute(
-        select(Candidate)
-        .where(Candidate.election_id == str(election_id))
-        .order_by(Candidate.position, Candidate.display_order)
-    )
-
-    return result.scalars().all()
+    return await service.list_candidates(election_id)
 
 
 @router.post(
@@ -984,13 +988,8 @@ async def create_candidate(
     **Authentication required**
     **Requires permission: elections.manage**
     """
-    # Verify election exists and belongs to organization
-    election_result = await db.execute(
-        select(Election)
-        .where(Election.id == str(election_id))
-        .where(Election.organization_id == current_user.organization_id)
-    )
-    election = election_result.scalar_one_or_none()
+    service = ElectionService(db)
+    election = await service.get_election(election_id, current_user.organization_id)
 
     if not election:
         raise HTTPException(
@@ -1033,6 +1032,20 @@ async def create_candidate(
     await db.commit()
     await db.refresh(new_candidate)
 
+    await log_audit_event(
+        db=db,
+        event_type="candidate_created",
+        event_category="elections",
+        severity="info",
+        event_data={
+            "election_id": str(election_id),
+            "candidate_id": str(new_candidate.id),
+            "candidate_name": candidate.name,
+            "position": candidate.position,
+        },
+        user_id=str(current_user.id),
+    )
+
     return new_candidate
 
 
@@ -1073,6 +1086,20 @@ async def update_candidate(
 
     await db.commit()
     await db.refresh(candidate)
+
+    await log_audit_event(
+        db=db,
+        event_type="candidate_updated",
+        event_category="elections",
+        severity="info",
+        event_data={
+            "election_id": str(election_id),
+            "candidate_id": str(candidate_id),
+            "candidate_name": candidate.name,
+            "updated_fields": list(update_data.keys()),
+        },
+        user_id=str(current_user.id),
+    )
 
     return candidate
 
@@ -1118,8 +1145,24 @@ async def delete_candidate(
             detail="Cannot delete candidate with existing votes",
         )
 
+    candidate_name = candidate.name
+    candidate_position = candidate.position
     await db.delete(candidate)
     await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="candidate_deleted",
+        event_category="elections",
+        severity="warning",
+        event_data={
+            "election_id": str(election_id),
+            "candidate_id": str(candidate_id),
+            "candidate_name": candidate_name,
+            "position": candidate_position,
+        },
+        user_id=str(current_user.id),
+    )
 
 
 # ============================================
@@ -1445,7 +1488,7 @@ async def send_election_report(
     return ElectionReportResponse(success=True, message=message)
 
 
-@router.get("/{election_id}/non-voters")
+@router.get("/{election_id}/non-voters", response_model=NonVotersResponse)
 async def get_non_voters(
     election_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -1474,7 +1517,7 @@ async def get_non_voters(
 # ============================================
 
 
-@router.get("/{election_id}/integrity")
+@router.get("/{election_id}/integrity", response_model=VoteIntegrityResponse)
 async def verify_vote_integrity(
     election_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -1506,7 +1549,7 @@ async def verify_vote_integrity(
     return result
 
 
-@router.delete("/{election_id}/votes/{vote_id}")
+@router.delete("/{election_id}/votes/{vote_id}", response_model=SoftDeleteVoteResponse)
 async def soft_delete_vote(
     election_id: UUID,
     vote_id: UUID,
@@ -1542,7 +1585,7 @@ async def soft_delete_vote(
     return {"message": "Vote soft-deleted successfully", "vote_id": str(vote.id)}
 
 
-@router.get("/{election_id}/forensics")
+@router.get("/{election_id}/forensics", response_model=ForensicsResponse)
 async def get_election_forensics(
     election_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -1585,7 +1628,7 @@ async def get_election_forensics(
 # ============================================
 
 
-@router.get("/{election_id}/attendees")
+@router.get("/{election_id}/attendees", response_model=AttendeeListResponse)
 async def get_attendees(
     election_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -1654,7 +1697,7 @@ async def check_in_attendee(
     )
 
 
-@router.delete("/{election_id}/attendees/{user_id}", status_code=status.HTTP_200_OK)
+@router.delete("/{election_id}/attendees/{user_id}", response_model=SuccessResponse, status_code=status.HTTP_200_OK)
 async def remove_attendee(
     election_id: UUID,
     user_id: UUID,
@@ -1696,7 +1739,7 @@ class VoterOverrideRequest(BaseModel):
     )
 
 
-@router.post("/{election_id}/voter-overrides", status_code=status.HTTP_201_CREATED)
+@router.post("/{election_id}/voter-overrides", response_model=VoterOverrideRecord, status_code=status.HTTP_201_CREATED)
 async def add_voter_override(
     election_id: UUID,
     body: VoterOverrideRequest,
@@ -1784,7 +1827,7 @@ async def add_voter_override(
     return override_record
 
 
-@router.get("/{election_id}/voter-overrides")
+@router.get("/{election_id}/voter-overrides", response_model=VoterOverrideListResponse)
 async def list_voter_overrides(
     election_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -1814,7 +1857,7 @@ async def list_voter_overrides(
 
 
 @router.delete(
-    "/{election_id}/voter-overrides/{user_id}", status_code=status.HTTP_200_OK
+    "/{election_id}/voter-overrides/{user_id}", response_model=SuccessResponse, status_code=status.HTTP_200_OK
 )
 async def remove_voter_override(
     election_id: UUID,
@@ -1879,7 +1922,7 @@ class BulkVoterOverrideRequest(BaseModel):
     )
 
 
-@router.post("/{election_id}/voter-overrides/bulk", status_code=status.HTTP_201_CREATED)
+@router.post("/{election_id}/voter-overrides/bulk", response_model=BulkVoterOverrideResponse, status_code=status.HTTP_201_CREATED)
 async def bulk_add_voter_overrides(
     election_id: UUID,
     body: BulkVoterOverrideRequest,
@@ -1982,7 +2025,7 @@ async def bulk_add_voter_overrides(
 # ==================== Proxy Voting ====================
 
 
-@router.post("/{election_id}/proxy-authorizations", status_code=status.HTTP_201_CREATED)
+@router.post("/{election_id}/proxy-authorizations", response_model=ProxyAuthorizationResponse, status_code=status.HTTP_201_CREATED)
 async def add_proxy_authorization(
     election_id: UUID,
     body: ProxyAuthorizationCreate,
@@ -2057,6 +2100,7 @@ async def list_proxy_authorizations(
 
 @router.delete(
     "/{election_id}/proxy-authorizations/{authorization_id}",
+    response_model=SuccessResponse,
     status_code=status.HTTP_200_OK,
 )
 async def revoke_proxy_authorization(
@@ -2153,7 +2197,7 @@ async def cast_proxy_vote(
 # ============================================
 
 
-@router.post("/{election_id}/send-test-ballot")
+@router.post("/{election_id}/send-test-ballot", response_model=TestBallotResponse)
 async def send_test_ballot(
     election_id: UUID,
     request: Request,
@@ -2218,7 +2262,7 @@ async def send_test_ballot(
     }
 
 
-@router.get("/{election_id}/preview-ballot")
+@router.get("/{election_id}/preview-ballot", response_model=BallotPreviewResponse)
 async def preview_ballot_for_user(
     election_id: UUID,
     user_id: UUID,
@@ -2353,7 +2397,7 @@ async def preview_ballot_for_user(
 # ============================================
 
 
-@router.get("/{election_id}/verify-receipt")
+@router.get("/{election_id}/verify-receipt", response_model=VoteReceiptResponse)
 async def verify_vote_receipt(
     election_id: UUID,
     receipt: str,

@@ -68,6 +68,57 @@ class ElectionService:
             ip_address=ip_address,
         )
 
+    # ------------------------------------------------------------------
+    # Election CRUD helpers
+    # ------------------------------------------------------------------
+
+    async def list_elections(
+        self,
+        organization_id,
+        status_filter: Optional[str] = None,
+    ) -> List[Election]:
+        """List elections for an organization, optionally filtered by status."""
+        query = select(Election).where(
+            Election.organization_id == str(organization_id)
+        )
+
+        if status_filter:
+            status_enum = ElectionStatus(status_filter)
+            query = query.where(Election.status == status_enum)
+
+        query = query.order_by(Election.start_date.desc())
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_election(
+        self,
+        election_id,
+        organization_id,
+    ) -> Optional[Election]:
+        """Get a single election by ID within the given organization."""
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
+        )
+        return result.scalar_one_or_none()
+
+    async def list_candidates(
+        self,
+        election_id,
+    ) -> List[Candidate]:
+        """List accepted/all candidates for an election ordered by position."""
+        result = await self.db.execute(
+            select(Candidate)
+            .where(Candidate.election_id == str(election_id))
+            .order_by(Candidate.position, Candidate.display_order)
+        )
+        return list(result.scalars().all())
+
+    # ------------------------------------------------------------------
+    # Role / eligibility helpers
+    # ------------------------------------------------------------------
+
     async def _user_has_role_type(self, user: User, role_types: List[str]) -> bool:
         """
         Check if a user has any of the specified role types/slugs
@@ -1935,19 +1986,15 @@ class ElectionService:
         if len(all_candidates) < 2:
             return None  # Can't have a runoff with less than 2 candidates
 
-        # Get vote counts for each candidate (exclude soft-deleted)
-        votes_result = await self.db.execute(
-            select(Vote)
+        # Aggregate vote counts at the DB level instead of loading all
+        # vote rows into Python memory.
+        vote_counts_result = await self.db.execute(
+            select(Vote.candidate_id, func.count(Vote.id))
             .where(Vote.election_id == election.id)
             .where(Vote.deleted_at.is_(None))
+            .group_by(Vote.candidate_id)
         )
-        all_votes = list(votes_result.scalars().all())
-
-        candidate_vote_counts = {}
-        for vote in all_votes:
-            candidate_vote_counts[vote.candidate_id] = (
-                candidate_vote_counts.get(vote.candidate_id, 0) + 1
-            )
+        candidate_vote_counts = dict(vote_counts_result.all())
 
         # Sort candidates by vote count
         sorted_candidates = sorted(
@@ -2031,10 +2078,13 @@ class ElectionService:
         self, election_id: UUID, organization_id: UUID
     ) -> Tuple[Optional[Election], Optional[str]]:
         """Close an election and finalize results, creating runoff if needed"""
+        # SELECT ... FOR UPDATE prevents concurrent close_election calls from
+        # both reading the election as OPEN and creating duplicate runoffs.
         result = await self.db.execute(
             select(Election)
             .where(Election.id == str(election_id))
             .where(Election.organization_id == str(organization_id))
+            .with_for_update()
         )
         election = result.scalar_one_or_none()
 
@@ -2108,10 +2158,13 @@ class ElectionService:
         self, election_id: UUID, organization_id: UUID
     ) -> Tuple[Optional[Election], Optional[str]]:
         """Open an election for voting"""
+        # SELECT ... FOR UPDATE prevents concurrent open calls from
+        # both reading the election as DRAFT and opening it simultaneously.
         result = await self.db.execute(
             select(Election)
             .where(Election.id == str(election_id))
             .where(Election.organization_id == str(organization_id))
+            .with_for_update()
         )
         election = result.scalar_one_or_none()
 

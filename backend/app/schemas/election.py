@@ -755,3 +755,183 @@ class ProxyVoteCreate(BaseModel):
     vote_rank: Optional[int] = Field(
         None, ge=1, description="Rank for ranked-choice voting"
     )
+
+
+# ============================================
+# Response Models for Previously Untyped Endpoints
+# ============================================
+
+
+class SuccessResponse(BaseModel):
+    """Generic success response for simple operations"""
+
+    success: bool
+    message: str
+
+
+class ElectionSettingsResponse(BaseModel):
+    """Organization-level election settings"""
+
+    default_voting_method: Optional[str] = "simple_majority"
+    default_victory_condition: Optional[str] = "most_votes"
+    default_victory_percentage: Optional[int] = None
+    default_anonymous_voting: Optional[bool] = True
+    default_allow_write_ins: Optional[bool] = False
+    default_quorum_type: Optional[str] = "none"
+    default_quorum_value: Optional[int] = None
+    proxy_voting_enabled: Optional[bool] = False
+    max_proxies_per_person: Optional[int] = 1
+    security: Optional[Dict[str, Any]] = None
+
+
+class NonVoterRecord(BaseModel):
+    """A voter who hasn't voted yet"""
+
+    id: str
+    full_name: str
+    email: str
+
+
+class NonVotersResponse(BaseModel):
+    """Response for non-voters endpoint"""
+
+    non_voters: List[NonVoterRecord]
+    count: int
+
+
+class VoteIntegrityResponse(BaseModel):
+    """Response for vote integrity check"""
+
+    election_id: str
+    election_title: str
+    total_votes_checked: int
+    valid_votes: int
+    invalid_votes: int
+    chain_valid: bool
+    details: Optional[List[Dict[str, Any]]] = None
+    error: Optional[str] = None
+
+
+class SoftDeleteVoteResponse(BaseModel):
+    """Response after soft-deleting a vote"""
+
+    message: str
+    vote_id: str
+
+
+class ForensicsResponse(BaseModel):
+    """Response for election forensics report"""
+
+    election_id: str
+    election_title: str
+    integrity: Optional[Dict[str, Any]] = None
+    deleted_votes: Optional[List[Dict[str, Any]]] = None
+    rollback_history: Optional[List[Dict[str, Any]]] = None
+    token_access_log: Optional[List[Dict[str, Any]]] = None
+    audit_trail: Optional[List[Dict[str, Any]]] = None
+    anomalies: Optional[Dict[str, Any]] = None
+    voting_timeline: Optional[List[Dict[str, Any]]] = None
+
+
+class AttendeeListResponse(BaseModel):
+    """Response for attendance list"""
+
+    attendees: List[AttendeeRecord]
+    total: int
+
+
+class VoterOverrideRecord(BaseModel):
+    """A single voter override entry"""
+
+    user_id: str
+    member_name: Optional[str] = None
+    reason: str
+    overridden_by: str
+    overridden_by_name: Optional[str] = None
+    overridden_at: str
+
+
+class VoterOverrideListResponse(BaseModel):
+    """Response for voter override list"""
+
+    election_id: str
+    election_title: str
+    overrides: List[VoterOverrideRecord]
+
+
+class BulkVoterOverrideAddedMember(BaseModel):
+    """A member who was added in a bulk override operation"""
+
+    user_id: str
+    name: str
+
+
+class BulkVoterOverrideResponse(BaseModel):
+    """Response for bulk voter override"""
+
+    success: bool
+    added: List[BulkVoterOverrideAddedMember]
+    added_count: int
+    skipped_count: int
+    message: str
+
+
+class TestBallotResponse(BaseModel):
+    """Response for test ballot send"""
+
+    success: bool
+    message: str
+
+
+class BallotPreviewItem(BaseModel):
+    """Ballot item with eligibility annotation"""
+
+    id: str
+    type: str
+    title: str
+    description: Optional[str] = None
+    position: Optional[str] = None
+    eligible_voter_types: List[str] = Field(default=["all"])
+    vote_type: str = "approval"
+    require_attendance: bool = False
+    eligibility: Dict[str, Any]
+
+
+class BallotPreviewCandidate(BaseModel):
+    """Simplified candidate for ballot preview"""
+
+    id: str
+    name: str
+    position: Optional[str] = None
+    statement: Optional[str] = None
+
+
+class BallotPreviewEligibility(BaseModel):
+    """Eligibility summary for ballot preview"""
+
+    is_eligible: bool
+    reason: Optional[str] = None
+
+
+class BallotPreviewResponse(BaseModel):
+    """Response for ballot preview endpoint"""
+
+    election_id: str
+    election_title: str
+    user_id: str
+    user_name: str
+    overall_eligibility: BallotPreviewEligibility
+    ballot_items: List[Dict[str, Any]]
+    candidates: List[BallotPreviewCandidate]
+    eligible_item_count: int
+    total_item_count: int
+    would_receive_ballot: bool
+
+
+class VoteReceiptResponse(BaseModel):
+    """Response for vote receipt verification"""
+
+    verified: bool
+    message: str
+    voted_at: Optional[str] = None
+    position: Optional[str] = None
