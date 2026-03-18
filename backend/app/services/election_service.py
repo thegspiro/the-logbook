@@ -144,15 +144,8 @@ class ElectionService:
         text_parts = []
         for item in eligible_items:
             title = html.escape(item.get("title", "Untitled"))
-            item_type = (
-                item.get("type", "")
-                .replace("_", " ")
-                .title()
-            )
-            vote_type = (
-                item.get("vote_type", "")
-                .replace("_", " ")
-            )
+            item_type = item.get("type", "").replace("_", " ").title()
+            vote_type = item.get("vote_type", "").replace("_", " ")
             label = f"<strong>{title}</strong>"
             if item_type:
                 label += f" &mdash; {html.escape(item_type)}"
@@ -260,14 +253,10 @@ class ElectionService:
             select(Organization).where(Organization.id == organization_id)
         )
         org = org_result.scalar_one_or_none()
-        tier_config = (
-            (org.settings or {}).get("membership_tiers", {}) if org else {}
-        )
+        tier_config = (org.settings or {}).get("membership_tiers", {}) if org else {}
         tiers = tier_config.get("tiers", [])
         member_tier_id = getattr(user, "membership_type", None) or "active"
-        tier_def = next(
-            (t for t in tiers if t.get("id") == member_tier_id), None
-        )
+        tier_def = next((t for t in tiers if t.get("id") == member_tier_id), None)
 
         # Secretary override — if present, they are eligible for everything
         if election.voter_overrides and any(
@@ -280,9 +269,7 @@ class ElectionService:
             benefits = tier_def.get("benefits", {})
             if not benefits.get("voting_eligible", True):
                 tier_name = tier_def.get("name", member_tier_id)
-                return (
-                    f"Membership tier '{tier_name}' is not eligible to vote"
-                )
+                return f"Membership tier '{tier_name}' is not eligible to vote"
 
         # Check each item for role-type and attendance requirements
         role_blocked = 0
@@ -300,9 +287,7 @@ class ElectionService:
         total = len(ballot_items)
         reasons = []
         if role_blocked > 0:
-            reasons.append(
-                f"role type not eligible for {role_blocked}/{total} item(s)"
-            )
+            reasons.append(f"role type not eligible for {role_blocked}/{total} item(s)")
         if attendance_blocked > 0:
             reasons.append(
                 f"not checked in for {attendance_blocked}/{total} "
@@ -1404,7 +1389,11 @@ class ElectionService:
         }
 
     async def get_election_results(
-        self, election_id: UUID, organization_id: UUID, user_id: Optional[UUID] = None
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+        user_id: Optional[UUID] = None,
+        _internal_bypass_visibility: bool = False,
     ) -> Optional[ElectionResults]:
         """
         Get comprehensive election results
@@ -1445,8 +1434,10 @@ class ElectionService:
         election_has_closed = end_date is not None and current_time > end_date
 
         can_view = (
-            election.status == ElectionStatus.CLOSED and election_has_closed
-        ) or election.results_visible_immediately
+            (election.status == ElectionStatus.CLOSED and election_has_closed)
+            or election.results_visible_immediately
+            or _internal_bypass_visibility
+        )
 
         if not can_view:
             # Before closing: use get_election_stats() for ballot counts only
@@ -1886,11 +1877,13 @@ class ElectionService:
                     user.id, election_id, election.voter_anonymity_salt or ""
                 )
                 if user_hash not in voted_hashes:
-                    non_voters.append({
-                        "id": user.id,
-                        "full_name": user.full_name,
-                        "email": user.email,
-                    })
+                    non_voters.append(
+                        {
+                            "id": user.id,
+                            "full_name": user.full_name,
+                            "email": user.email,
+                        }
+                    )
         else:
             voted_ids = {v.voter_id for v in votes if v.voter_id}
             non_voters = [
@@ -2097,6 +2090,18 @@ class ElectionService:
                     },
                 )
 
+        # Fire-and-forget: send election report to secretary
+        try:
+            await self.generate_and_send_election_report(
+                election_id=election_id,
+                organization_id=organization_id,
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to send election report (non-blocking) | "
+                f"election={election_id} error={e}"
+            )
+
         return election, None
 
     async def open_election(
@@ -2196,10 +2201,10 @@ class ElectionService:
             "reason": reason,
         }
 
-        # Deep copy rollback history to ensure SQLAlchemy detects changes
-        rollback_history = copy.deepcopy(election.rollback_history or [])
-        rollback_history.append(rollback_record)
-        election.rollback_history = rollback_history
+        # Deep copy to avoid SQLAlchemy JSON mutation detection issue
+        history = copy.deepcopy(election.rollback_history or [])
+        history.append(rollback_record)
+        election.rollback_history = history
 
         # Update status
         election.status = new_status
@@ -2225,15 +2230,24 @@ class ElectionService:
             user_id=str(performed_by),
         )
 
-        # Send email notifications to leadership
-        notifications_sent = await self._notify_leadership_of_rollback(
-            election=election,
-            performed_by=performed_by,
-            organization_id=organization_id,
-            from_status=from_status,
-            to_status=to_status,
-            reason=reason,
-        )
+        # Send email notifications to leadership (non-blocking — the
+        # rollback is already committed, so notification failures must
+        # not cause the endpoint to return 500)
+        notifications_sent = 0
+        try:
+            notifications_sent = await self._notify_leadership_of_rollback(
+                election=election,
+                performed_by=performed_by,
+                organization_id=organization_id,
+                from_status=from_status,
+                to_status=to_status,
+                reason=reason,
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to send rollback notifications (non-blocking) | "
+                f"election={election_id} error={e}"
+            )
 
         return election, notifications_sent, None
 
@@ -2304,7 +2318,7 @@ class ElectionService:
         safe_org_name = html.escape(organization.name)
 
         # Compute timestamp once for all recipients
-        org_tz = getattr(organization, "timezone", "America/New_York")
+        org_tz = getattr(organization, "timezone", None) or "America/New_York"
         formatted_time = (
             datetime.now(timezone.utc)
             .astimezone(ZoneInfo(org_tz))
@@ -2317,7 +2331,7 @@ class ElectionService:
         sent_count = 0
         for user in leadership_users:
             # Don't notify the person who performed the rollback
-            if user.id == performed_by:
+            if str(user.id) == str(performed_by):
                 continue
 
             subject = f"ALERT: Election Rolled Back - {election.title}"
@@ -2485,7 +2499,7 @@ Best regards,
         election_status = election.status.value.upper()
 
         # Compute timestamp once for all recipients
-        org_tz = getattr(organization, "timezone", "America/New_York")
+        org_tz = getattr(organization, "timezone", None) or "America/New_York"
         formatted_time = (
             datetime.now(timezone.utc)
             .astimezone(ZoneInfo(org_tz))
@@ -3059,19 +3073,33 @@ Best regards,
 
         Returns: (recipients_count, failed_count, skipped_count, skipped_details)
         """
-        # Get election with organization
-        result = await self.db.execute(
-            select(Election, Organization)
-            .join(Organization, Election.organization_id == Organization.id)
+        # Get election
+        election_result = await self.db.execute(
+            select(Election)
             .where(Election.id == str(election_id))
             .where(Election.organization_id == str(organization_id))
         )
-        row = result.one_or_none()
+        election = election_result.scalar_one_or_none()
 
-        if not row:
+        if not election:
+            logger.warning(
+                f"Cannot send ballot emails: election not found | "
+                f"election={election_id} org={organization_id}"
+            )
             return 0, 0, 0, []
 
-        election, organization = row
+        # Load organization separately to avoid INNER JOIN masking the election
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        organization = org_result.scalar_one_or_none()
+
+        if not organization:
+            logger.error(
+                f"Cannot send ballot emails: organization not found | "
+                f"election={election_id} org={organization_id}"
+            )
+            return 0, 0, 0, []
 
         # Determine recipients (eagerly load roles for eligibility checks)
         if recipient_user_ids:
@@ -3092,6 +3120,12 @@ Best regards,
                 .options(selectinload(User.roles))
             )
             recipients = users_result.scalars().all()
+            if not recipients:
+                logger.warning(
+                    f"No matching users for eligible_voters list | "
+                    f"election={election_id} "
+                    f"eligible_voter_ids={election.eligible_voters}"
+                )
         else:
             # Send to all active users in organization
             users_result = await self.db.execute(
@@ -3104,10 +3138,9 @@ Best regards,
 
         if not recipients:
             logger.warning(
-                "No recipients found for ballot emails"
-                f" | election={election_id}"
-                f" org={organization_id}"
-                f" eligible_voters_set={bool(election.eligible_voters)}"
+                f"No recipients found for ballot emails | "
+                f"election={election_id} org={organization_id} "
+                f"eligible_voters_set={election.eligible_voters is not None}"
                 f" recipient_ids_provided={bool(recipient_user_ids)}"
             )
             return 0, 0, 0, []
@@ -3143,9 +3176,7 @@ Best regards,
                 admin_contact_email = creator.email
         if not admin_contact_email:
             admin_contact_name = organization.name
-            admin_contact_email = (
-                getattr(organization, "email", None) or ""
-            )
+            admin_contact_email = getattr(organization, "email", None) or ""
 
         # Send individual ballot emails with unique tokens
         success_count = 0
@@ -3187,9 +3218,7 @@ Best regards,
                     continue
 
             # Build ballot items lists for the email
-            items_html, items_text = self._build_ballot_items_lists(
-                eligible_items
-            )
+            items_html, items_text = self._build_ballot_items_lists(eligible_items)
 
             # Generate unique voting token for this voter
             voting_token = await self._generate_voting_token(
@@ -3260,6 +3289,279 @@ Best regards,
         )
 
         return success_count, failed_count, skipped_count, skipped_details
+
+    async def generate_and_send_election_report(
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+    ) -> Tuple[bool, str]:
+        """
+        Generate and send an election report email to the secretary (election
+        creator) and any leadership members.
+
+        The report includes:
+        - Election results (per-position winners, vote counts, percentages)
+        - Quorum status
+        - Who received ballots
+        - Who didn't receive ballots and why
+
+        Returns: (success, message)
+        """
+        from app.services.email_service import EmailService
+
+        # Load election
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
+        )
+        election = result.scalar_one_or_none()
+        if not election:
+            return False, "Election not found"
+
+        # Load organization
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        organization = org_result.scalar_one_or_none()
+        if not organization:
+            return False, "Organization not found"
+
+        # Get election results (bypass visibility check since we're
+        # generating the official report after closing)
+        results = await self.get_election_results(
+            election_id, organization_id, _internal_bypass_visibility=True
+        )
+
+        # Build results HTML/text
+        results_html, results_text = self._build_results_tables(results)
+
+        # Determine eligible voters count and build turnout info
+        total_eligible = 0
+        total_votes = 0
+        turnout = 0.0
+        quorum_status = "N/A"
+        quorum_detail = ""
+
+        if results:
+            total_eligible = results.total_eligible_voters
+            total_votes = results.total_votes
+            turnout = results.voter_turnout_percentage
+            quorum_status = "Quorum Met" if results.quorum_met else "Quorum NOT Met"
+            quorum_detail = results.quorum_detail or ""
+
+        # Build ballot recipients list and skipped voters list
+        ballot_recipients_html, ballot_recipients_text = (
+            await self._build_ballot_recipient_lists(election, organization_id)
+        )
+        skipped_html, skipped_text = await self._build_skipped_voter_lists(
+            election, organization_id
+        )
+
+        # Determine report recipients (election creator + leadership)
+        to_emails = []
+        recipient_name = "Secretary"
+        if election.created_by:
+            creator_result = await self.db.execute(
+                select(User).where(User.id == election.created_by)
+            )
+            creator = creator_result.scalar_one_or_none()
+            if creator and creator.email:
+                to_emails.append(creator.email)
+                recipient_name = creator.full_name or "Secretary"
+
+        if not to_emails:
+            return False, "No recipient found for election report"
+
+        # Format dates using org timezone
+        org_tz = getattr(organization, "timezone", None) or "America/New_York"
+        try:
+            tz = ZoneInfo(org_tz)
+        except Exception:
+            tz = ZoneInfo("America/New_York")
+
+        def _fmt_dt(dt):
+            if not dt:
+                return ""
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(tz).strftime("%B %d, %Y at %I:%M %p")
+
+        email_service = EmailService(organization)
+        success_count, failure_count = await email_service.send_election_report(
+            to_emails=to_emails,
+            recipient_name=recipient_name,
+            election_title=election.title,
+            election_type=election.election_type or "General",
+            start_date=_fmt_dt(election.start_date),
+            end_date=_fmt_dt(election.end_date),
+            total_eligible_voters=total_eligible,
+            total_votes_cast=total_votes,
+            voter_turnout_percentage=turnout,
+            quorum_status=quorum_status,
+            quorum_detail=quorum_detail,
+            results_html=results_html,
+            results_text=results_text,
+            ballot_recipients_html=ballot_recipients_html,
+            ballot_recipients_text=ballot_recipients_text,
+            skipped_voters_html=skipped_html,
+            skipped_voters_text=skipped_text,
+            db=self.db,
+            organization_id=str(organization_id),
+        )
+
+        if success_count > 0:
+            logger.info(
+                f"Election report sent | election={election_id} " f"to={to_emails}"
+            )
+            return True, f"Election report sent to {', '.join(to_emails)}"
+        else:
+            logger.error(
+                f"Failed to send election report | election={election_id} "
+                f"failures={failure_count}"
+            )
+            return False, "Failed to send election report email"
+
+    def _build_results_tables(self, results) -> Tuple[str, str]:
+        """Build HTML and plain-text tables of election results."""
+        if not results or not results.results_by_position:
+            return (
+                "<p><em>No results available.</em></p>",
+                "No results available.",
+            )
+
+        # HTML table
+        rows = []
+        rows.append(
+            '<table style="width:100%;border-collapse:collapse;margin:10px 0;">'
+            '<tr style="background:#f3f4f6;">'
+            '<th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">Position</th>'
+            '<th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">Candidate</th>'
+            '<th style="padding:8px;text-align:center;border-bottom:2px solid #e5e7eb;">Votes</th>'
+            '<th style="padding:8px;text-align:center;border-bottom:2px solid #e5e7eb;">%</th>'
+            '<th style="padding:8px;text-align:center;border-bottom:2px solid #e5e7eb;">Result</th>'
+            "</tr>"
+        )
+
+        text_parts = []
+        for pos_result in results.results_by_position:
+            position = html.escape(pos_result.position)
+            text_parts.append(f"Position: {pos_result.position}")
+            for candidate in pos_result.candidates:
+                name = html.escape(candidate.candidate_name)
+                pct = f"{candidate.percentage:.1f}%"
+                result_label = "\u2705 Elected" if candidate.is_winner else "\u2014"
+                rows.append(
+                    f'<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;">{position}</td>'
+                    f'<td style="padding:8px;border-bottom:1px solid #e5e7eb;">{name}</td>'
+                    f'<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">{candidate.vote_count}</td>'
+                    f'<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">{pct}</td>'
+                    f'<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">{result_label}</td></tr>'
+                )
+                winner_text = " — ELECTED" if candidate.is_winner else ""
+                text_parts.append(
+                    f"  {candidate.candidate_name} — {candidate.vote_count} votes ({pct}){winner_text}"
+                )
+
+        rows.append("</table>")
+        return "\n".join(rows), "\n".join(text_parts)
+
+    async def _build_ballot_recipient_lists(
+        self, election: Election, organization_id: str
+    ) -> Tuple[str, str]:
+        """Build HTML and text lists of members who received ballots."""
+        recipient_ids = election.email_recipients or []
+        if not recipient_ids:
+            return (
+                "<p><em>No ballot emails were sent.</em></p>",
+                "No ballot emails were sent.",
+            )
+
+        users_result = await self.db.execute(
+            select(User)
+            .where(User.id.in_([str(uid) for uid in recipient_ids]))
+            .where(User.organization_id == organization_id)
+        )
+        users = users_result.scalars().all()
+
+        if not users:
+            return (
+                "<p><em>No ballot emails were sent.</em></p>",
+                "No ballot emails were sent.",
+            )
+
+        html_items = []
+        text_items = []
+        for user in sorted(users, key=lambda u: u.full_name or u.username):
+            name = html.escape(user.full_name or user.username)
+            email_addr = html.escape(user.email)
+            html_items.append(f"<li>{name} ({email_addr})</li>")
+            text_items.append(f"  - {user.full_name or user.username} ({user.email})")
+
+        return (
+            f"<ul>{''.join(html_items)}</ul>",
+            "\n".join(text_items),
+        )
+
+    async def _build_skipped_voter_lists(
+        self, election: Election, organization_id: str
+    ) -> Tuple[str, str]:
+        """Build HTML and text lists of members who did NOT receive ballots, with reasons."""
+        recipient_ids = set(str(uid) for uid in (election.email_recipients or []))
+
+        # Get all active users in the org
+        users_result = await self.db.execute(
+            select(User)
+            .where(User.organization_id == organization_id)
+            .where(User.is_active == True)  # noqa: E712
+            .options(selectinload(User.roles))
+        )
+        all_active = users_result.scalars().all()
+
+        # Find users who didn't get a ballot
+        skipped_users = [u for u in all_active if str(u.id) not in recipient_ids]
+
+        if not skipped_users:
+            return (
+                "<p><em>All active members received ballots.</em></p>",
+                "All active members received ballots.",
+            )
+
+        html_rows = [
+            '<table style="width:100%;border-collapse:collapse;margin:10px 0;">'
+            '<tr style="background:#f3f4f6;">'
+            '<th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">Member</th>'
+            '<th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">Reason</th>'
+            "</tr>"
+        ]
+        text_items = []
+
+        for user in sorted(skipped_users, key=lambda u: u.full_name or u.username):
+            reason = await self._get_ineligibility_reason_for_user(
+                user=user,
+                election=election,
+                organization_id=organization_id,
+            )
+            if not reason:
+                # Check if they were in the eligible list at all
+                eligible_list = election.eligible_voters
+                if eligible_list and str(user.id) not in [
+                    str(v) for v in eligible_list
+                ]:
+                    reason = "Not in the eligible voters list"
+                else:
+                    reason = "No eligible ballot items"
+
+            name = html.escape(user.full_name or user.username)
+            safe_reason = html.escape(reason)
+            html_rows.append(
+                f'<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;">{name}</td>'
+                f'<td style="padding:8px;border-bottom:1px solid #e5e7eb;">{safe_reason}</td></tr>'
+            )
+            text_items.append(f"  - {user.full_name or user.username}: {reason}")
+
+        html_rows.append("</table>")
+        return "\n".join(html_rows), "\n".join(text_items)
 
     async def has_user_voted(
         self, user_id: UUID, election_id: UUID, election: Optional[Election] = None
