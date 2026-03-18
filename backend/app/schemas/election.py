@@ -539,6 +539,13 @@ class ElectionRollbackResponse(BaseModel):
     notifications_sent: int
 
 
+class ElectionReportResponse(BaseModel):
+    """Response after sending an election report"""
+
+    success: bool
+    message: str
+
+
 class ElectionDelete(BaseModel):
     """Schema for deleting an election. Reason required for non-draft elections."""
 

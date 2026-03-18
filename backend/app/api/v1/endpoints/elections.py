@@ -34,6 +34,7 @@ from app.schemas.election import (
     ElectionDelete,
     ElectionDeleteResponse,
     ElectionListResponse,
+    ElectionReportResponse,
     ElectionResponse,
     ElectionResults,
     ElectionRollback,
@@ -1385,6 +1386,33 @@ async def send_ballot_emails(
         skipped_details=skipped_details,
         message=". ".join(parts),
     )
+
+
+@router.post("/{election_id}/send-report", response_model=ElectionReportResponse)
+async def send_election_report(
+    election_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Send an election report email to the secretary.
+
+    The report includes election results, ballot recipients, and reasons
+    why specific members did not receive ballots.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    success, message = await service.generate_and_send_election_report(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not success:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+    return ElectionReportResponse(success=True, message=message)
 
 
 @router.get("/{election_id}/non-voters")
