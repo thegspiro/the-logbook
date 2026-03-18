@@ -13,6 +13,7 @@ import { DEFAULT_PAGE_SIZE } from '../../../constants/config';
 import type { AdminHoursEntryEdit } from '../types';
 import { formatDate, formatForDateTimeInput, localToUTC } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
+import DateTimeQuarterHour from '../../../components/ux/DateTimeQuarterHour';
 import toast from 'react-hot-toast';
 
 const PendingReviewTab: React.FC = () => {
@@ -201,20 +202,17 @@ const PendingReviewTab: React.FC = () => {
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-theme-text-muted mb-1">Start Time</label>
-                        <input
-                          type="datetime-local"
+                        <DateTimeQuarterHour
                           value={editData.clock_in_at ?? ''}
-                          onChange={(e) => setEditData({ ...editData, clock_in_at: e.target.value })}
+                          onChange={(val) => setEditData({ ...editData, clock_in_at: val })}
                           className="card-secondary focus:ring-2 focus:ring-theme-focus-ring px-2 py-1.5 text-sm text-theme-text-primary w-full"
                         />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-theme-text-muted mb-1">End Time</label>
-                        <input
-                          type="datetime-local"
+                        <DateTimeQuarterHour
                           value={editData.clock_out_at ?? ''}
-                          onChange={(e) => setEditData({ ...editData, clock_out_at: e.target.value })}
-                          min={editData.clock_in_at ?? undefined}
+                          onChange={(val) => setEditData({ ...editData, clock_out_at: val })}
                           className="card-secondary focus:ring-2 focus:ring-theme-focus-ring px-2 py-1.5 text-sm text-theme-text-primary w-full"
                         />
                       </div>

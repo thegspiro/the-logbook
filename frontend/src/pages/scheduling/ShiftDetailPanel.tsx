@@ -32,6 +32,7 @@ import { getErrorMessage } from '../../utils/errorHandling';
 import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, UserStatus, AssignmentStatus } from '../../constants/enums';
 import { PositionListEditor } from '../../modules/scheduling/components/PositionListEditor';
 import { BUILTIN_POSITIONS } from '../../modules/scheduling/types/shiftSettings';
+import TimeQuarterHour from '../../components/ux/TimeQuarterHour';
 
 interface ShiftDetailPanelProps {
   shift: ShiftRecord;
@@ -648,14 +649,14 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-theme-text-secondary mb-1">Start Time</label>
-                  <input type="time" value={editForm.start_time}
+                  <TimeQuarterHour value={editForm.start_time}
                     onChange={e => setEditForm(p => ({...p, start_time: e.target.value}))}
                     className={inputCls}
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-theme-text-secondary mb-1">End Time</label>
-                  <input type="time" value={editForm.end_time}
+                  <TimeQuarterHour value={editForm.end_time}
                     onChange={e => setEditForm(p => ({...p, end_time: e.target.value}))}
                     className={inputCls}
                   />

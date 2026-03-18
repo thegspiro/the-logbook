@@ -18,6 +18,7 @@ import { VoterOverrideManagement } from '../components/VoterOverrideManagement';
 import { ProxyVotingManagement } from '../components/ProxyVotingManagement';
 import { useAuthStore } from '../stores/authStore';
 import { ElectionStatus, VoteType, BallotItemType } from '../constants/enums';
+import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatDateTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
@@ -1438,12 +1439,10 @@ export const ElectionDetailPage: React.FC = () => {
                   <label htmlFor="extend-new-end-time" className="block text-sm font-medium text-theme-text-secondary">
                     New End Time
                   </label>
-                  <input
-                    type="datetime-local"
-                    step="900"
+                  <DateTimeQuarterHour
                     id="extend-new-end-time"
                     value={newEndDate}
-                    onChange={(e) => setNewEndDate(e.target.value)}
+                    onChange={(val) => setNewEndDate(val)}
                     className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
                   />
 

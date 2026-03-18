@@ -14,6 +14,8 @@ import { formsService } from '../../services/api';
 import type { MemberLookupResult } from '../../services/api';
 import { FieldType } from '../../constants/enums';
 import { useRanks } from '../../hooks/useRanks';
+import TimeQuarterHour from '../ux/TimeQuarterHour';
+import DateTimeQuarterHour from '../ux/DateTimeQuarterHour';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -321,33 +323,23 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
 
       case FieldType.TIME:
         return (
-          <input
+          <TimeQuarterHour
             id={`field-${field.id}`}
-            type="time"
-            step="900"
             className={inputClass}
             value={value}
             onChange={(e) => onChange(field.id, e.target.value)}
-            onBlur={handleBlur}
             required={field.required}
-            disabled={disabled}
-            {...ariaProps}
           />
         );
 
       case FieldType.DATETIME:
         return (
-          <input
+          <DateTimeQuarterHour
             id={`field-${field.id}`}
-            type="datetime-local"
-            step="900"
             className={inputClass}
             value={value}
-            onChange={(e) => onChange(field.id, e.target.value)}
-            onBlur={handleBlur}
+            onChange={(val) => onChange(field.id, val)}
             required={field.required}
-            disabled={disabled}
-            {...ariaProps}
           />
         );
 

@@ -10,6 +10,7 @@ import { useAPIKeys } from '../hooks/usePublicPortal';
 import type { CreateAPIKeyRequest, PublicPortalAPIKey } from '../types';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDateTime, localToUTC } from '../../../utils/dateFormatting';
+import DateTimeQuarterHour from '../../../components/ux/DateTimeQuarterHour';
 
 interface CreateKeyModalProps {
   isOpen: boolean;
@@ -121,14 +122,12 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
               <label htmlFor="api-key-expiration" className="block text-sm font-medium text-theme-text-secondary mb-1">
                 Expiration Date
               </label>
-              <input
+              <DateTimeQuarterHour
                 id="api-key-expiration"
-                type="datetime-local"
-                step="900"
                 value={formData.expires_at || ''}
-                onChange={(e) => setFormData({
+                onChange={(val) => setFormData({
                   ...formData,
-                  expires_at: e.target.value || undefined
+                  expires_at: val || undefined
                 })}
                 className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
               />

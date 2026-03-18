@@ -11,6 +11,7 @@ import type { EmailTemplate, ScheduledEmailCreate } from '../../../services/api'
 import { useScheduledEmailsStore } from '../store/scheduledEmailsStore';
 import { localToUTC, getTodayLocalDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
+import TimeQuarterHour from '../../../components/ux/TimeQuarterHour';
 
 interface ScheduleEmailFormProps {
   templates: EmailTemplate[];
@@ -178,8 +179,7 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({
           </div>
           <div>
             <label className={labelClass}>Time *</label>
-            <input
-              type="time"
+            <TimeQuarterHour
               value={scheduledTime}
               onChange={(e) => setScheduledTime(e.target.value)}
               className={inputClass}

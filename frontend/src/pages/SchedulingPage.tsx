@@ -35,6 +35,7 @@ import type {
 } from "../modules/scheduling";
 import { resolveTemplatePositions, normalizePositions } from "../modules/scheduling/services/api";
 import { lazyWithRetry } from "../utils/lazyWithRetry";
+import TimeQuarterHour from "../components/ux/TimeQuarterHour";
 
 // Lazy-loaded tab components
 const MyShiftsTab = lazyWithRetry(() => import("./scheduling/MyShiftsTab"));
@@ -1333,8 +1334,7 @@ const SchedulingPage: React.FC = () => {
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="block text-xs text-theme-text-muted mb-1">Start Time</label>
-                          <input
-                            type="time"
+                          <TimeQuarterHour
                             value={shiftForm.customStartTime}
                             onChange={(e) => setShiftForm({ ...shiftForm, customStartTime: e.target.value })}
                             placeholder={(() => {
@@ -1346,8 +1346,7 @@ const SchedulingPage: React.FC = () => {
                         </div>
                         <div>
                           <label className="block text-xs text-theme-text-muted mb-1">End Time</label>
-                          <input
-                            type="time"
+                          <TimeQuarterHour
                             value={shiftForm.customEndTime}
                             onChange={(e) => setShiftForm({ ...shiftForm, customEndTime: e.target.value })}
                             className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500"

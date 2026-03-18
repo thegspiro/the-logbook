@@ -33,6 +33,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 import { Collapsible } from './ux/Collapsible';
+import DateTimeQuarterHour from './ux/DateTimeQuarterHour';
 
 export interface ConflictEvent {
   id: string;
@@ -622,13 +623,11 @@ export const EventForm: React.FC<EventFormProps> = ({
             <label htmlFor="start-datetime" className={labelClass}>
               Start Date & Time <span className="text-red-700 dark:text-red-500">*</span>
             </label>
-            <input
-              type="datetime-local"
-              step="900"
+            <DateTimeQuarterHour
               id="start-datetime"
               required
               value={formData.start_datetime}
-              onChange={(e) => handleStartDateChange(e.target.value)}
+              onChange={(val) => handleStartDateChange(val)}
               className={inputClass}
             />
           </div>
@@ -636,13 +635,11 @@ export const EventForm: React.FC<EventFormProps> = ({
             <label htmlFor="end-datetime" className={labelClass}>
               End Date & Time <span className="text-red-700 dark:text-red-500">*</span>
             </label>
-            <input
-              type="datetime-local"
-              step="900"
+            <DateTimeQuarterHour
               id="end-datetime"
               required
               value={formData.end_datetime}
-              onChange={(e) => update({ end_datetime: e.target.value })}
+              onChange={(val) => update({ end_datetime: val })}
               className={inputClass}
             />
           </div>
@@ -1032,12 +1029,10 @@ export const EventForm: React.FC<EventFormProps> = ({
                 <label htmlFor="rsvp-deadline" className={labelClass}>
                   RSVP Deadline
                 </label>
-                <input
-                  type="datetime-local"
-                  step="900"
+                <DateTimeQuarterHour
                   id="rsvp-deadline"
                   value={formData.rsvp_deadline || ''}
-                  onChange={(e) => update({ rsvp_deadline: e.target.value })}
+                  onChange={(val) => update({ rsvp_deadline: val })}
                   className={inputClass}
                 />
               </div>

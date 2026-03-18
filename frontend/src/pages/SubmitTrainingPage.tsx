@@ -13,6 +13,7 @@ import {
   Edit2,
   Info,
 } from 'lucide-react';
+import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 import { trainingSubmissionService, trainingService } from '../services/api';
 import type {
   TrainingSubmission,
@@ -252,12 +253,9 @@ const SubmissionForm: React.FC<{
           <label className="block text-sm font-medium text-theme-text-secondary mb-1">
             Start Date & Time <span className="text-red-700 dark:text-red-400">*</span>
           </label>
-          <input
-            type="datetime-local"
-            step="900"
+          <DateTimeQuarterHour
             value={startDatetime}
-            onChange={(e) => {
-              const val = e.target.value;
+            onChange={(val) => {
               setStartDatetime(val);
               // Auto-populate end datetime to start + 1 hour if end is empty or before new start
               if (val) {
@@ -279,12 +277,9 @@ const SubmissionForm: React.FC<{
           <label className="block text-sm font-medium text-theme-text-secondary mb-1">
             End Date & Time <span className="text-red-700 dark:text-red-400">*</span>
           </label>
-          <input
-            type="datetime-local"
-            step="900"
+          <DateTimeQuarterHour
             value={endDatetime}
-            onChange={(e) => setEndDatetime(e.target.value)}
-            min={startDatetime ?? undefined}
+            onChange={(val) => setEndDatetime(val)}
             className="form-input text-sm"
             required
           />

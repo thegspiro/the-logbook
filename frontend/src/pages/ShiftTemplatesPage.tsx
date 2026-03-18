@@ -41,6 +41,7 @@ import type { ApparatusOption } from '../modules/scheduling/services/api';
 import type { ShiftTemplateCreate, ShiftPatternCreate } from '../modules/scheduling/types';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
+import TimeQuarterHour from '../components/ux/TimeQuarterHour';
 
 // ============================================
 // Interfaces
@@ -789,10 +790,8 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
               <label htmlFor="template-start" className="block text-sm font-medium text-theme-text-secondary mb-1">
                 Start Time <span aria-hidden="true">*</span>
               </label>
-              <input
+              <TimeQuarterHour
                 id="template-start"
-                type="time"
-                step="900"
                 value={formData.start_time_of_day}
                 onChange={(e) => setFormData(prev => ({ ...prev, start_time_of_day: e.target.value }))}
                 className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
@@ -803,10 +802,8 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
               <label htmlFor="template-end" className="block text-sm font-medium text-theme-text-secondary mb-1">
                 End Time <span aria-hidden="true">*</span>
               </label>
-              <input
+              <TimeQuarterHour
                 id="template-end"
-                type="time"
-                step="900"
                 value={formData.end_time_of_day}
                 onChange={(e) => setFormData(prev => ({ ...prev, end_time_of_day: e.target.value }))}
                 className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"

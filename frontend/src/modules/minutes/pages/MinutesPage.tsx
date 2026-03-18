@@ -26,6 +26,7 @@ import type { MeetingRecord, MeetingsSummary } from '../../../services/api';
 import { minutesService } from '../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import type { MeetingType } from '../types/minutes';
+import TimeQuarterHour from '../../../components/ux/TimeQuarterHour';
 
 const MEETING_TYPES: { value: MeetingType; label: string; color: string }[] = [
   { value: 'business', label: 'Business Meeting', color: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-500/20 dark:text-cyan-400' },
@@ -581,10 +582,8 @@ const MinutesPage: React.FC = () => {
                     </div>
                     <div>
                       <label htmlFor="meeting-time" className="block text-sm font-medium text-theme-text-secondary mb-1">Meeting Time</label>
-                      <input
+                      <TimeQuarterHour
                         id="meeting-time"
-                        type="time"
-                        step="900"
                         value={minutesForm.meetingTime}
                         onChange={(e) => setMinutesForm({ ...minutesForm, meetingTime: e.target.value })}
                         className="form-input"
