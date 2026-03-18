@@ -90,11 +90,15 @@ class MeetingsService:
         meeting_type: Optional[str] = None,
         status: Optional[str] = None,
         search: Optional[str] = None,
+        from_date: Optional[date] = None,
         skip: int = 0,
         limit: int = 100,
     ) -> Tuple[List[Meeting], int]:
         """Get meetings with filtering and pagination"""
         query = select(Meeting).where(Meeting.organization_id == str(organization_id))
+
+        if from_date:
+            query = query.where(Meeting.meeting_date >= from_date)
 
         if meeting_type:
             try:

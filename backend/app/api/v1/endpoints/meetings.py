@@ -5,6 +5,7 @@ Endpoints for meeting minutes including meetings, attendees,
 action items, and approval workflows.
 """
 
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -41,6 +42,7 @@ async def list_meetings(
     meeting_type: str | None = None,
     status: str | None = None,
     search: str | None = None,
+    from_date: date | None = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
@@ -53,6 +55,7 @@ async def list_meetings(
         meeting_type=meeting_type,
         status=status,
         search=search,
+        from_date=from_date,
         skip=skip,
         limit=limit,
     )

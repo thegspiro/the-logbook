@@ -908,4 +908,3 @@ async def bulk_enroll_members(
         enrolled_users=[e.user_id for e in enrollments],
         errors=errors,
     )
-
