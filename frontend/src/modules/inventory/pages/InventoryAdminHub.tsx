@@ -96,19 +96,19 @@ export const InventoryAdminHub: React.FC = () => {
     <div className="min-h-screen">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-600 rounded-lg p-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="bg-blue-600 rounded-lg p-2 shrink-0">
               <Package className="w-6 h-6 text-white" />
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-theme-text-primary">Inventory Administration</h1>
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold text-theme-text-primary truncate">Inventory Administration</h1>
               <p className="text-sm text-theme-text-muted">Manage equipment, assignments, and compliance</p>
             </div>
           </div>
           <button
             onClick={() => { void loadSummary(); }}
-            className="btn-secondary btn-md"
+            className="btn-secondary btn-md shrink-0 self-start sm:self-auto"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">Refresh</span>

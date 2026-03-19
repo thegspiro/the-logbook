@@ -328,12 +328,12 @@ const MyEquipmentPage: React.FC = () => {
                 <h3 className="text-sm font-medium text-theme-text-secondary mb-2">Equipment Requests</h3>
                 <div className="space-y-2">
                   {equipRequests.map((r) => (
-                    <div key={r.id} className="flex items-center justify-between p-2 rounded bg-theme-surface-secondary/50 text-sm">
-                      <div>
-                        <span className="font-medium text-theme-text-primary">{r.item_name}</span>
-                        <span className="text-theme-text-muted ml-2">{r.request_type} &middot; {formatDate(r.created_at, tz)}</span>
+                    <div key={r.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 p-2 rounded bg-theme-surface-secondary/50 text-sm">
+                      <div className="min-w-0">
+                        <span className="font-medium text-theme-text-primary truncate block sm:inline">{r.item_name}</span>
+                        <span className="text-theme-text-muted ml-0 sm:ml-2 text-xs block sm:inline">{r.request_type} &middot; {formatDate(r.created_at, tz)}</span>
                       </div>
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[r.status] ?? 'text-theme-text-muted'}`}>{r.status}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 self-start sm:self-auto ${STATUS_BADGE[r.status] ?? 'text-theme-text-muted'}`}>{r.status}</span>
                     </div>
                   ))}
                 </div>
@@ -344,12 +344,12 @@ const MyEquipmentPage: React.FC = () => {
                 <h3 className="text-sm font-medium text-theme-text-secondary mb-2">Return Requests</h3>
                 <div className="space-y-2">
                   {returnRequests.map((r) => (
-                    <div key={r.id} className="flex items-center justify-between p-2 rounded bg-theme-surface-secondary/50 text-sm">
-                      <div>
-                        <span className="font-medium text-theme-text-primary">{r.item_name}</span>
-                        <span className="text-theme-text-muted ml-2">{r.return_type} &middot; {formatDate(r.created_at, tz)}</span>
+                    <div key={r.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 p-2 rounded bg-theme-surface-secondary/50 text-sm">
+                      <div className="min-w-0">
+                        <span className="font-medium text-theme-text-primary truncate block sm:inline">{r.item_name}</span>
+                        <span className="text-theme-text-muted ml-0 sm:ml-2 text-xs block sm:inline">{r.return_type} &middot; {formatDate(r.created_at, tz)}</span>
                       </div>
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[r.status] ?? 'text-theme-text-muted'}`}>{r.status}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 self-start sm:self-auto ${STATUS_BADGE[r.status] ?? 'text-theme-text-muted'}`}>{r.status}</span>
                     </div>
                   ))}
                 </div>

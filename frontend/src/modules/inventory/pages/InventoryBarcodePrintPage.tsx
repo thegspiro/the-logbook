@@ -476,13 +476,13 @@ const InventoryBarcodePrintPage: React.FC = () => {
                 {items.length} item{items.length !== 1 ? 's' : ''} &middot; {labelItems.length} label{labelItems.length !== 1 ? 's' : ''} total
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <button
                 onClick={() => setShowSettings(!showSettings)}
                 className="flex items-center gap-2 px-3 py-2 border border-theme-surface-border rounded-lg text-sm text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
               >
                 <Settings2 className="h-4 w-4" />
-                Settings
+                <span className="hidden sm:inline">Settings</span>
               </button>
               <button
                 onClick={() => { void handleDownloadPdf(); }}
@@ -498,7 +498,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
                 className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
               >
                 <Printer className="h-4 w-4" />
-                Print Labels
+                <span className="hidden sm:inline">Print</span> Labels
               </button>
             </div>
           </div>

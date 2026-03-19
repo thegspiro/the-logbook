@@ -84,14 +84,14 @@ const TreeRow: React.FC<TreeRowProps> = ({ node, depth, expanded, onToggle, onEd
           {node.item_count} {node.item_count === 1 ? 'item' : 'items'}
         </span>
         {node.barcode && <span className="text-xs text-theme-text-muted font-mono shrink-0 hidden sm:inline">{node.barcode}</span>}
-        <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-1 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
           <button onClick={() => onEdit(node)} aria-label={`Edit ${node.name}`}
-            className="p-1 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover">
-            <Pencil className="w-3.5 h-3.5" />
+            className="p-2 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover">
+            <Pencil className="w-4 h-4" />
           </button>
           <button onClick={() => onDelete(node)} aria-label={`Delete ${node.name}`}
-            className="p-1 rounded text-theme-text-muted hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/10">
-            <Trash2 className="w-3.5 h-3.5" />
+            className="p-2 rounded text-theme-text-muted hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/10">
+            <Trash2 className="w-4 h-4" />
           </button>
         </div>
       </div>

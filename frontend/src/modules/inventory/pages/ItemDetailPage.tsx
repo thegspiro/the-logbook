@@ -257,19 +257,23 @@ const ItemDetailPage: React.FC = () => {
       </nav>
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <span className="text-theme-text-muted">{typeIcon(itemType)}</span>
-          <h1 className="text-2xl font-bold text-theme-text-primary">{item.name}</h1>
-          <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${getStatusStyle(item.status)}`}>
-            {item.status.replace('_', ' ')}
-          </span>
-          <span className={`text-xs font-medium ${getConditionColor(item.condition)}`}>
-            {labelFor(item.condition)}
-          </span>
-          <span className="text-xs bg-theme-surface border border-theme-surface-border rounded px-1.5 py-0.5 text-theme-text-muted">
-            {item.tracking_type === 'individual' ? 'Individual' : 'Pool'}
-          </span>
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-theme-text-muted shrink-0">{typeIcon(itemType)}</span>
+            <h1 className="text-2xl font-bold text-theme-text-primary truncate">{item.name}</h1>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${getStatusStyle(item.status)}`}>
+              {item.status.replace('_', ' ')}
+            </span>
+            <span className={`text-xs font-medium ${getConditionColor(item.condition)}`}>
+              {labelFor(item.condition)}
+            </span>
+            <span className="text-xs bg-theme-surface border border-theme-surface-border rounded px-1.5 py-0.5 text-theme-text-muted">
+              {item.tracking_type === 'individual' ? 'Individual' : 'Pool'}
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Link
