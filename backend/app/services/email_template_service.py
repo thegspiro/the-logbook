@@ -2240,9 +2240,11 @@ class EmailTemplateService:
                         getattr(organization, "physical_zip", None),
                     ),
                 )
-        # Build a ready-to-use <img> tag so templates can just insert it
+        # Build a ready-to-use <img> tag so templates can just insert it.
+        # Skip base64 data URIs — they embed the full image payload in the
+        # HTML and easily exceed Gmail's 102 KB message-clipping threshold.
         logo_val = ctx.get("organization_logo", "")
-        if logo_val:
+        if logo_val and not str(logo_val).startswith("data:"):
             import html as _h
 
             org_name = ctx.get("organization_name", "Organization")
@@ -2274,6 +2276,23 @@ class EmailTemplateService:
 </html>"""
 
         return subject, full_html, text_body
+
+    @classmethod
+    def render_static(
+        cls,
+        template: EmailTemplate,
+        context: Dict[str, Any],
+        organization: Optional[Any] = None,
+    ) -> Tuple[str, str, Optional[str]]:
+        """Render a template without requiring a DB session.
+
+        Identical to :meth:`render` but usable without instantiating the
+        service (no ``db`` parameter needed).  Useful when the template
+        has already been loaded and only rendering is required.
+        """
+        # Create a lightweight instance — render() does not use self.db
+        instance = cls.__new__(cls)
+        return instance.render(template, context, organization=organization)
 
     @staticmethod
     def _format_address(
