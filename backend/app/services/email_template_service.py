@@ -2277,6 +2277,23 @@ class EmailTemplateService:
 
         return subject, full_html, text_body
 
+    @classmethod
+    def render_static(
+        cls,
+        template: EmailTemplate,
+        context: Dict[str, Any],
+        organization: Optional[Any] = None,
+    ) -> Tuple[str, str, Optional[str]]:
+        """Render a template without requiring a DB session.
+
+        Identical to :meth:`render` but usable without instantiating the
+        service (no ``db`` parameter needed).  Useful when the template
+        has already been loaded and only rendering is required.
+        """
+        # Create a lightweight instance — render() does not use self.db
+        instance = cls.__new__(cls)
+        return instance.render(template, context, organization=organization)
+
     @staticmethod
     def _format_address(
         line1: Optional[str],

@@ -7,13 +7,14 @@ Handles sending emails using SMTP or organization-specific email service configu
 import asyncio
 import html as _html
 import os
+import re
 import smtplib
 from datetime import datetime, timezone
 from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
 from loguru import logger
@@ -21,6 +22,119 @@ from loguru import logger
 from app.core.config import settings
 from app.models.user import Organization
 from app.schemas.organization import decrypt_settings_secrets
+
+
+def inline_email_css(html: str) -> str:
+    """Inline ``<style>`` CSS into HTML element ``style=""`` attributes.
+
+    Gmail and many email clients strip ``<style>`` blocks entirely, so
+    class-based CSS never applies.  This function extracts rules from the
+    first ``<style>`` block, converts simple selectors to inline styles,
+    and removes the ``<style>`` block.
+
+    Supported selectors:
+    * ``body { ... }``
+    * ``.classname { ... }``
+    * ``.parent child { ... }`` (e.g. ``.header h1``, ``.content p``)
+    """
+    style_match = re.search(r"<style[^>]*>(.*?)</style>", html, re.DOTALL)
+    if not style_match:
+        return html
+    css = style_match.group(1)
+
+    # --- parse rules --------------------------------------------------
+    class_styles: Dict[str, str] = {}
+    child_styles: List[Tuple[str, str, str]] = []  # (parent_cls, child_tag, styles)
+
+    for m in re.finditer(r"([^{}]+)\{([^}]+)\}", css):
+        selector = m.group(1).strip()
+        styles = re.sub(r"\s+", " ", m.group(2).strip()).rstrip(";") + ";"
+
+        # body { ... }
+        if selector == "body":
+            html = _merge_body_style(html, styles)
+            continue
+
+        # .parent child { ... }  (e.g. .header h1)
+        compound = re.match(r"^\.([\w-]+)\s+([\w]+)$", selector)
+        if compound:
+            child_styles.append((compound.group(1), compound.group(2), styles))
+            continue
+
+        # .classname { ... }
+        simple = re.match(r"^\.([\w-]+)$", selector)
+        if simple:
+            class_styles[simple.group(1)] = styles
+
+    # --- inline class styles ------------------------------------------
+    def _replace_class(match: re.Match) -> str:
+        tag = match.group(0)
+        cls_m = re.search(r'class="([\w-]+)"', tag)
+        if not cls_m or cls_m.group(1) not in class_styles:
+            return tag
+        return _add_style_to_tag(tag, class_styles[cls_m.group(1)])
+
+    html = re.sub(r"<[a-zA-Z]\w*\b[^>]*\bclass=\"[\w-]+\"[^>]*/?>", _replace_class, html)
+
+    # --- inline compound (parent > child) styles ----------------------
+    for parent_cls, child_tag, styles in child_styles:
+        # Find content inside elements with parent_cls and style child tags
+        pattern = (
+            r"(<[a-zA-Z]\w*\b[^>]*\bclass=\""
+            + re.escape(parent_cls)
+            + r"\"[^>]*>)"
+            r"(.*?)"
+            r"(</[a-zA-Z]\w*>)"
+        )
+
+        def _replace_children(outer: re.Match, ctag: str = child_tag, cstyles: str = styles) -> str:
+            open_tag = outer.group(1)
+            inner = outer.group(2)
+            close_tag = outer.group(3)
+            inner = re.sub(
+                rf"<{ctag}\b([^>]*)>",
+                lambda m: _add_style_to_tag(m.group(0), cstyles),
+                inner,
+            )
+            return open_tag + inner + close_tag
+
+        html = re.sub(pattern, _replace_children, html, flags=re.DOTALL)
+
+    # --- remove <style> block -----------------------------------------
+    html = re.sub(r"\s*<style[^>]*>.*?</style>\s*", "", html, flags=re.DOTALL)
+
+    return html
+
+
+def _merge_body_style(html: str, styles: str) -> str:
+    """Add *styles* to the ``<body>`` tag, preserving existing inline styles."""
+    body_m = re.search(r"<body\b([^>]*)>", html)
+    if not body_m:
+        return html
+    attrs = body_m.group(1)
+    existing = re.search(r'style="([^"]*)"', attrs)
+    if existing:
+        merged = f"{styles} {existing.group(1)}".strip()
+        new_attrs = attrs[: existing.start()] + f'style="{merged}"' + attrs[existing.end():]
+    else:
+        new_attrs = f'{attrs} style="{styles}"'
+    return html[: body_m.start()] + f"<body{new_attrs}>" + html[body_m.end():]
+
+
+def _add_style_to_tag(tag: str, new_styles: str) -> str:
+    """Add inline styles to an opening HTML tag.
+
+    Existing inline styles take precedence (they are appended *after*
+    the new class-derived styles so later declarations win).
+    """
+    existing_m = re.search(r'style="([^"]*)"', tag)
+    if existing_m:
+        merged = f"{new_styles} {existing_m.group(1)}".strip()
+        return tag[: existing_m.start()] + f'style="{merged}"' + tag[existing_m.end():]
+    # Insert style before the closing > (or />)
+    if tag.endswith("/>"):
+        return tag[:-2] + f' style="{new_styles}" />'
+    return tag[:-1] + f' style="{new_styles}">'
 
 
 def build_email_logo_img(organization: Optional[Organization]) -> str:
@@ -137,8 +251,8 @@ class EmailService:
             "encryption": getattr(settings, "SMTP_ENCRYPTION", "tls"),
         }
 
-    def _smtp_send(self, recipients: List[str], message: str) -> None:
-        """Synchronous SMTP send — called via asyncio.to_thread."""
+    def _smtp_connect(self) -> smtplib.SMTP:
+        """Create an authenticated SMTP connection (synchronous)."""
         import ssl
 
         host = self._smtp_config["host"]
@@ -152,25 +266,27 @@ class EmailService:
         context = ssl.create_default_context()
 
         if encryption == "ssl":
-            # Implicit TLS (port 465) — entire connection is encrypted
             server = smtplib.SMTP_SSL(host, port, context=context, timeout=timeout)
         elif encryption in ("tls", "starttls"):
-            # STARTTLS (port 587) — upgrade plain connection to encrypted
             server = smtplib.SMTP(host, port, timeout=timeout)
             server.ehlo()
             server.starttls(context=context)
             server.ehlo()
         else:
-            # No encryption (port 25) — plain SMTP, not recommended
             server = smtplib.SMTP(host, port, timeout=timeout)
             server.ehlo()
 
+        if self._smtp_config["user"] and self._smtp_config["password"]:
+            server.login(
+                self._smtp_config["user"],
+                self._smtp_config["password"],
+            )
+        return server
+
+    def _smtp_send(self, recipients: List[str], message: str) -> None:
+        """Synchronous SMTP send — called via asyncio.to_thread."""
+        server = self._smtp_connect()
         try:
-            if self._smtp_config["user"] and self._smtp_config["password"]:
-                server.login(
-                    self._smtp_config["user"],
-                    self._smtp_config["password"],
-                )
             server.sendmail(
                 self._smtp_config["from_email"],
                 recipients,
@@ -178,6 +294,88 @@ class EmailService:
             )
         finally:
             server.quit()
+
+    def _smtp_send_batch(
+        self, messages: List[Tuple[List[str], str]]
+    ) -> List[bool]:
+        """Send multiple emails through a single SMTP connection."""
+        server = self._smtp_connect()
+        results: List[bool] = []
+        try:
+            for recipients, msg_str in messages:
+                try:
+                    server.sendmail(
+                        self._smtp_config["from_email"],
+                        recipients,
+                        msg_str,
+                    )
+                    results.append(True)
+                except Exception as e:
+                    logger.error(f"Batch email send failed: {e}")
+                    results.append(False)
+        finally:
+            server.quit()
+        return results
+
+    def build_message(
+        self,
+        to_email: str,
+        subject: str,
+        html_body: str,
+        text_body: Optional[str] = None,
+        cc_emails: Optional[List[str]] = None,
+        bcc_emails: Optional[List[str]] = None,
+    ) -> Tuple[List[str], str]:
+        """Build a MIME email message without sending.
+
+        Returns ``(all_recipients, mime_message_string)``.
+        """
+        html_body = inline_email_css(html_body)
+
+        msg = MIMEMultipart("alternative")
+        if text_body:
+            msg.attach(MIMEText(text_body, "plain"))
+        msg.attach(MIMEText(html_body, "html"))
+
+        msg["From"] = (
+            f"{self._smtp_config['from_name']} <{self._smtp_config['from_email']}>"
+        )
+        msg["To"] = to_email
+        msg["Subject"] = subject
+        msg["Date"] = datetime.now(timezone.utc).strftime(
+            "%a, %d %b %Y %H:%M:%S +0000"
+        )
+
+        all_recipients = [to_email]
+        if cc_emails:
+            msg["Cc"] = ", ".join(cc_emails)
+            all_recipients.extend(cc_emails)
+        if bcc_emails:
+            all_recipients.extend(bcc_emails)
+
+        return all_recipients, msg.as_string()
+
+    async def send_batch(
+        self, messages: List[Tuple[List[str], str]]
+    ) -> List[bool]:
+        """Send pre-built messages through a single SMTP connection.
+
+        Each item is ``(all_recipients, mime_message_string)`` as returned
+        by :meth:`build_message`.
+        """
+        if not messages:
+            return []
+        if not settings.EMAIL_ENABLED and not (
+            self.organization
+            and (self.organization.settings or {})
+            .get("email_service", {})
+            .get("enabled")
+        ):
+            logger.info(
+                f"Email disabled. Would batch-send {len(messages)} messages."
+            )
+            return [False] * len(messages)
+        return await asyncio.to_thread(self._smtp_send_batch, messages)
 
     async def send_email(
         self,
@@ -220,6 +418,10 @@ class EmailService:
                 f"Email disabled. Would send to {len(to_emails)} recipients: {subject}"
             )
             return 0, len(to_emails)
+
+        # Inline CSS: convert <style> class rules to inline style=""
+        # attributes so they survive Gmail's <style> stripping.
+        html_body = inline_email_css(html_body)
 
         success_count = 0
         failure_count = 0
@@ -352,15 +554,13 @@ class EmailService:
         db.add(history)
         await db.flush()
 
-    async def send_ballot_notification(
+    def render_ballot_notification(
         self,
-        to_email: str,
         recipient_name: str,
         election_title: str,
         ballot_url: Optional[str],
         meeting_date: Optional[datetime],
         custom_message: Optional[str] = None,
-        cc_emails: Optional[List[str]] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         positions: Optional[List[str]] = None,
@@ -368,32 +568,14 @@ class EmailService:
         ballot_items_text: str = "",
         admin_contact_name: str = "",
         admin_contact_email: str = "",
-        db: Any = None,
-        organization_id: Optional[str] = None,
-    ) -> bool:
-        """
-        Send a ballot notification email
+        template: Any = None,
+    ) -> Tuple[str, str, Optional[str]]:
+        """Render ballot notification email content without sending.
 
-        Args:
-            to_email: Recipient email address
-            recipient_name: Recipient's name
-            election_title: Title of the election/ballot
-            ballot_url: URL to the voting page
-            meeting_date: Date of the meeting
-            custom_message: Optional custom message from secretary
-            cc_emails: Optional CC recipient list
-            start_date: When voting opens (UTC)
-            end_date: When voting closes (UTC)
-            positions: List of positions being voted on
-            ballot_items_html: HTML list of ballot items this voter is eligible for
-            ballot_items_text: Plain-text list of ballot items
-            admin_contact_name: Election administrator's display name
-            admin_contact_email: Election administrator's email address
-            db: Optional async database session (for loading templates)
-            organization_id: Optional org ID (for loading templates)
+        If *template* (an ``EmailTemplate`` instance) is provided it is
+        used; otherwise the built-in default template is rendered.
 
-        Returns:
-            True if sent successfully
+        Returns ``(subject, html_body, text_body)``.
         """
         org_name = ""
         if self.organization:
@@ -402,8 +584,6 @@ class EmailService:
         if self.organization:
             org_logo = getattr(self.organization, "logo", None) or ""
 
-        # Build custom_message_html: wraps the message in a <p> tag if
-        # present, or yields an empty string so the placeholder disappears.
         custom_message_html = ""
         if custom_message:
             custom_message_html = f"<p>{_html.escape(custom_message)}</p>"
@@ -430,29 +610,16 @@ class EmailService:
         html_body = None
         text_body = None
 
-        # Try loading the admin-configured template from the database
-        if db and organization_id:
-            try:
-                from app.models.email_template import EmailTemplateType
-                from app.services.email_template_service import EmailTemplateService
+        # Use pre-loaded admin template if provided
+        if template:
+            from app.services.email_template_service import EmailTemplateService
 
-                template_service = EmailTemplateService(db)
-                template = await template_service.get_template(
-                    organization_id, EmailTemplateType.BALLOT_NOTIFICATION
-                )
-                if template:
-                    subject, html_body, text_body = template_service.render(
-                        template, context, organization=self.organization
-                    )
-            except Exception as e:
-                logger.warning(
-                    f"Failed to load ballot notification template, using default: {e}"
-                )
+            subject, html_body, text_body = EmailTemplateService.render_static(
+                template, context, organization=self.organization
+            )
 
         # Fall back to inline default if no template loaded
         if not subject:
-            import re
-
             from app.services.email_template_service import (
                 DEFAULT_BALLOT_NOTIFICATION_HTML,
                 DEFAULT_BALLOT_NOTIFICATION_SUBJECT,
@@ -468,7 +635,7 @@ class EmailService:
             }
 
             def _replace(text: str) -> str:
-                def replacer(match):
+                def replacer(match: re.Match) -> str:
                     var = match.group(1).strip()
                     value = str(context.get(var, match.group(0)))
                     if var in _raw_html_vars:
@@ -478,8 +645,79 @@ class EmailService:
                 return re.sub(r"\{\{(\s*\w+\s*)\}\}", replacer, text)
 
             subject = _replace(DEFAULT_BALLOT_NOTIFICATION_SUBJECT)
-            html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{_replace(DEFAULT_BALLOT_NOTIFICATION_HTML)}</body></html>"
+            html_body = (
+                f"<!DOCTYPE html><html><head>"
+                f"<style>{DEFAULT_CSS}</style>"
+                f"</head><body>"
+                f"{_replace(DEFAULT_BALLOT_NOTIFICATION_HTML)}"
+                f"</body></html>"
+            )
             text_body = _replace(DEFAULT_BALLOT_NOTIFICATION_TEXT)
+
+        return subject, html_body, text_body  # type: ignore[return-value]
+
+    async def send_ballot_notification(
+        self,
+        to_email: str,
+        recipient_name: str,
+        election_title: str,
+        ballot_url: Optional[str],
+        meeting_date: Optional[datetime],
+        custom_message: Optional[str] = None,
+        cc_emails: Optional[List[str]] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        positions: Optional[List[str]] = None,
+        ballot_items_html: str = "",
+        ballot_items_text: str = "",
+        admin_contact_name: str = "",
+        admin_contact_email: str = "",
+        db: Any = None,
+        organization_id: Optional[str] = None,
+        template: Any = None,
+    ) -> bool:
+        """
+        Send a ballot notification email.
+
+        When *template* is provided the DB lookup is skipped.  Pass
+        ``db`` / ``organization_id`` only when no pre-loaded template is
+        available (they trigger a per-call DB query).
+
+        Returns:
+            True if sent successfully
+        """
+        loaded_template = template
+
+        # Load from DB only if no template was pre-loaded
+        if not loaded_template and db and organization_id:
+            try:
+                from app.models.email_template import EmailTemplateType
+                from app.services.email_template_service import EmailTemplateService
+
+                template_service = EmailTemplateService(db)
+                loaded_template = await template_service.get_template(
+                    organization_id, EmailTemplateType.BALLOT_NOTIFICATION
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to load ballot notification template, using default: {e}"
+                )
+
+        subject, html_body, text_body = self.render_ballot_notification(
+            recipient_name=recipient_name,
+            election_title=election_title,
+            ballot_url=ballot_url,
+            meeting_date=meeting_date,
+            custom_message=custom_message,
+            start_date=start_date,
+            end_date=end_date,
+            positions=positions,
+            ballot_items_html=ballot_items_html,
+            ballot_items_text=ballot_items_text,
+            admin_contact_name=admin_contact_name,
+            admin_contact_email=admin_contact_email,
+            template=loaded_template,
+        )
 
         success_count, failure_count = await self.send_email(
             to_emails=[to_email],

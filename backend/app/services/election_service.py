@@ -4,7 +4,6 @@ Election Service
 Business logic for election management including elections, candidates, voting, and results.
 """
 
-import asyncio
 import copy
 import hashlib
 import hmac
@@ -3237,6 +3236,23 @@ Best regards,
         # Initialize email service with organization settings
         email_service = EmailService(organization)
 
+        # Pre-load the admin-configured ballot notification template (once)
+        # so each recipient's email can be rendered without a per-email DB query.
+        ballot_template = None
+        try:
+            from app.models.email_template import EmailTemplateType
+            from app.services.email_template_service import EmailTemplateService
+
+            template_service = EmailTemplateService(self.db)
+            ballot_template = await template_service.get_template(
+                str(organization_id), EmailTemplateType.BALLOT_NOTIFICATION
+            )
+        except Exception as e:
+            logger.warning(
+                f"Failed to load ballot notification template, "
+                f"using default | election={election_id} error={e}"
+            )
+
         # Build a lookup of delegating_user_id -> proxy user email
         # so we can CC the proxy holder on ballot notifications.
         # Batch-fetch all proxy users in a single query instead of N+1.
@@ -3363,35 +3379,66 @@ Best regards,
                 }
             )
 
-        # ---- Phase 2: Send emails concurrently ----
-        # Emails are sent in parallel (up to 10 concurrent SMTP connections)
-        # to avoid exceeding the API timeout with many recipients.
-        # db is not passed to concurrent sends to avoid shared-session issues;
-        # the default inline template is used and the aggregate audit log below
-        # records the overall result.
-        sem = asyncio.Semaphore(10)
-
-        async def _send_one(params: Dict) -> bool:
-            async with sem:
-                rid = params.pop("recipient_id")
-                try:
-                    return await email_service.send_ballot_notification(
-                        **params,
-                        db=None,
-                        organization_id=None,
+        # ---- Phase 2: Render + batch send via single SMTP connection ----
+        # Render each email using the pre-loaded template (or default),
+        # build MIME messages, then send all through one SMTP connection
+        # to avoid per-email TCP+TLS+auth overhead.
+        mime_messages = []
+        for params in pending_emails:
+            rid = params.pop("recipient_id")
+            cc_emails = params.pop("cc_emails", None)
+            try:
+                subj, html_body, text_body = (
+                    email_service.render_ballot_notification(
+                        recipient_name=params["recipient_name"],
+                        election_title=params["election_title"],
+                        ballot_url=params["ballot_url"],
+                        meeting_date=params["meeting_date"],
+                        custom_message=params["custom_message"],
+                        start_date=params["start_date"],
+                        end_date=params["end_date"],
+                        positions=params["positions"],
+                        ballot_items_html=params["ballot_items_html"],
+                        ballot_items_text=params["ballot_items_text"],
+                        admin_contact_name=params["admin_contact_name"],
+                        admin_contact_email=params["admin_contact_email"],
+                        template=ballot_template,
                     )
-                except Exception as e:
-                    logger.error(
-                        f"Ballot email send failed | election={election_id} "
-                        f"recipient={rid} error={e}"
-                    )
-                    return False
+                )
+                recipients, msg_str = email_service.build_message(
+                    to_email=params["to_email"],
+                    subject=subj,
+                    html_body=html_body,
+                    text_body=text_body,
+                    cc_emails=cc_emails,
+                )
+                mime_messages.append((recipients, msg_str))
+            except Exception as e:
+                logger.error(
+                    f"Ballot email render failed | election={election_id} "
+                    f"recipient={rid} error={e}"
+                )
+                mime_messages.append(None)
 
-        results = await asyncio.gather(
-            *[_send_one(p) for p in pending_emails]
-        )
-        success_count = sum(1 for r in results if r)
-        failed_count = sum(1 for r in results if not r)
+        # Send all rendered messages through a single SMTP connection
+        if any(m is not None for m in mime_messages):
+            batch_to_send = [m for m in mime_messages if m is not None]
+            send_results = await email_service.send_batch(batch_to_send)
+
+            # Map results back, counting None entries as failures
+            result_iter = iter(send_results)
+            success_count = 0
+            failed_count = 0
+            for m in mime_messages:
+                if m is None:
+                    failed_count += 1
+                elif next(result_iter):
+                    success_count += 1
+                else:
+                    failed_count += 1
+        else:
+            success_count = 0
+            failed_count = len(mime_messages)
 
         # Update election with email sent status
         election.email_sent = True
