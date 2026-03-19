@@ -413,12 +413,12 @@ const ItemDetailPage: React.FC = () => {
       {/*  Tabs                                                         */}
       {/* ============================================================ */}
       <div>
-        <div className="flex border-b border-theme-surface-border gap-4">
+        <div className="flex border-b border-theme-surface-border gap-4 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
           {visibleTabs.map(t => (
             <button
               key={t.key}
               onClick={() => setActiveTab(t.key)}
-              className={`pb-2 text-sm font-medium border-b-2 transition-colors ${
+              className={`pb-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap shrink-0 ${
                 activeTab === t.key
                   ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                   : 'border-transparent text-theme-text-muted hover:text-theme-text-primary'
@@ -461,12 +461,12 @@ const ItemDetailPage: React.FC = () => {
                 placeholder="Enter user ID"
               />
             </div>
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">
               <button onClick={() => setShowAssignModal(false)} className="btn-secondary btn-md">Cancel</button>
               <button
                 onClick={() => void handleAssign()}
                 disabled={assigning || !assignUserId.trim()}
-                className="btn-info btn-md inline-flex items-center gap-1"
+                className="btn-info btn-md inline-flex items-center justify-center gap-1"
               >
                 {assigning && <Loader2 className="w-4 h-4 animate-spin" />}
                 Assign

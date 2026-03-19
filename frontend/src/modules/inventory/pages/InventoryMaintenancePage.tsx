@@ -226,40 +226,72 @@ const InventoryMaintenancePage: React.FC = () => {
             <p className="text-theme-text-muted">No items due for maintenance.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-theme-surface-border text-left">
-                  {['Item Name', 'Category', 'Last Inspection', 'Next Due', 'Days Until Due', 'Condition', 'Action'].map((h) => (
-                    <th key={h} className={thCls}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {allDueItems.map((item) => {
-                  const days = daysUntilDue(item.next_inspection_due);
-                  return (
-                    <tr key={item.id} className="border-b border-theme-surface-border hover:bg-theme-surface-hover transition-colors">
-                      <td className="px-3 py-3">
-                        <button onClick={() => void loadHistory(item)} className="text-theme-text-primary font-medium hover:underline text-left flex items-center gap-1">
-                          {item.name}<ChevronRight className="w-3 h-3 text-theme-text-muted" />
-                        </button>
+          <>
+            {/* Desktop table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-theme-surface-border text-left">
+                    {['Item Name', 'Category', 'Last Inspection', 'Next Due', 'Days Until Due', 'Condition', 'Action'].map((h) => (
+                      <th key={h} className={thCls}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {allDueItems.map((item) => {
+                    const days = daysUntilDue(item.next_inspection_due);
+                    return (
+                      <tr key={item.id} className="border-b border-theme-surface-border hover:bg-theme-surface-hover transition-colors">
+                        <td className="px-3 py-3">
+                          <button onClick={() => void loadHistory(item)} className="text-theme-text-primary font-medium hover:underline text-left flex items-center gap-1">
+                            {item.name}<ChevronRight className="w-3 h-3 text-theme-text-muted" />
+                          </button>
+                          {item.serial_number && <span className="text-xs text-theme-text-muted block">SN: {item.serial_number}</span>}
+                        </td>
+                        <td className="px-3 py-3 text-theme-text-secondary">{item.station ?? '--'}</td>
+                        <td className="px-3 py-3 text-theme-text-secondary">{item.last_inspection_date ? formatDate(item.last_inspection_date, tz) : '--'}</td>
+                        <td className="px-3 py-3 text-theme-text-secondary">{item.next_inspection_due ? formatDate(item.next_inspection_due, tz) : '--'}</td>
+                        <td className={`px-3 py-3 ${getDueColor(days)}`}>{getDueLabel(days)}</td>
+                        <td className={`px-3 py-3 capitalize ${getConditionColor(item.condition)}`}>{item.condition?.replace(/_/g, ' ') ?? '--'}</td>
+                        <td className="px-3 py-3">
+                          <button onClick={() => openModal(item)} className="btn-info btn-sm">Log Maintenance</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile cards */}
+            <div className="md:hidden space-y-3">
+              {allDueItems.map((item) => {
+                const days = daysUntilDue(item.next_inspection_due);
+                return (
+                  <div key={item.id} className="card-secondary p-4 space-y-2 active:bg-theme-surface-hover transition-colors">
+                    <div className="flex items-start justify-between gap-2">
+                      <button onClick={() => void loadHistory(item)} className="text-left min-w-0">
+                        <span className="text-sm font-medium text-theme-text-primary hover:underline block truncate">{item.name}</span>
                         {item.serial_number && <span className="text-xs text-theme-text-muted block">SN: {item.serial_number}</span>}
-                      </td>
-                      <td className="px-3 py-3 text-theme-text-secondary">{item.station ?? '--'}</td>
-                      <td className="px-3 py-3 text-theme-text-secondary">{item.last_inspection_date ? formatDate(item.last_inspection_date, tz) : '--'}</td>
-                      <td className="px-3 py-3 text-theme-text-secondary">{item.next_inspection_due ? formatDate(item.next_inspection_due, tz) : '--'}</td>
-                      <td className={`px-3 py-3 ${getDueColor(days)}`}>{getDueLabel(days)}</td>
-                      <td className={`px-3 py-3 capitalize ${getConditionColor(item.condition)}`}>{item.condition?.replace(/_/g, ' ') ?? '--'}</td>
-                      <td className="px-3 py-3">
-                        <button onClick={() => openModal(item)} className="btn-info btn-sm">Log Maintenance</button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      </button>
+                      <span className={`text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap ${getDueColor(days)} ${(days ?? 1) < 0 ? 'bg-red-500/10' : (days ?? 31) <= 7 ? 'bg-orange-500/10' : 'bg-theme-surface'}`}>
+                        {getDueLabel(days)}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-theme-text-muted">
+                      <span>Station: {item.station ?? '--'}</span>
+                      <span className={`capitalize ${getConditionColor(item.condition)}`}>{item.condition?.replace(/_/g, ' ') ?? '--'}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-theme-text-muted">
+                      <span>Last: {item.last_inspection_date ? formatDate(item.last_inspection_date, tz) : '--'}</span>
+                      <span>Due: {item.next_inspection_due ? formatDate(item.next_inspection_due, tz) : '--'}</span>
+                    </div>
+                    <button onClick={() => openModal(item)} className="btn-info btn-sm w-full mt-1">Log Maintenance</button>
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )
       ) : !selectedItem ? (
         <div className="text-center py-16">
@@ -318,9 +350,9 @@ const InventoryMaintenancePage: React.FC = () => {
       <Modal isOpen={modalItem !== null} onClose={() => setModalItem(null)}
         title={`Log Maintenance — ${modalItem?.name ?? ''}`} size="lg"
         footer={
-          <div className="flex items-center justify-end gap-3">
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3">
             <button onClick={() => setModalItem(null)} className="btn-secondary btn-md">Cancel</button>
-            <button onClick={() => void handleSave()} disabled={isSaving} className="btn-info btn-md flex gap-2 items-center">
+            <button onClick={() => void handleSave()} disabled={isSaving} className="btn-info btn-md flex gap-2 items-center justify-center">
               {isSaving && <Loader2 className="w-4 h-4 animate-spin" />} Save Record
             </button>
           </div>

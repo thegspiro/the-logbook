@@ -411,6 +411,29 @@ const InventoryItemsPage: React.FC = () => {
         </div>
       )}
 
+      {/* Mobile sort controls */}
+      {!loading && items.length > 0 && (
+        <div className="md:hidden flex items-center gap-2 mb-3">
+          <label className="text-xs text-theme-text-muted shrink-0">Sort:</label>
+          <select
+            className="form-input text-xs py-1.5 flex-1"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortKey)}
+          >
+            {SORT_COLS.map((c) => (
+              <option key={c.key} value={c.key}>{c.label}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => setSortOrd((p) => p === 'asc' ? 'desc' : 'asc')}
+            className="p-2 rounded border border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary active:bg-theme-surface-hover"
+            aria-label={`Sort ${sortOrd === 'asc' ? 'descending' : 'ascending'}`}
+          >
+            {sortOrd === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+        </div>
+      )}
+
       {/* Mobile cards */}
       {!loading && items.length > 0 && (
         <div className="md:hidden space-y-3">

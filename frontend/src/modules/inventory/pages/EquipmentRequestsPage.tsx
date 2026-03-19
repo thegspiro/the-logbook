@@ -6,7 +6,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ClipboardList, RefreshCw, Check, XCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, ClipboardList, RefreshCw, Check, XCircle, Loader2, Filter } from 'lucide-react';
+import { FloatingActionButton } from '../../../components/ux/FloatingActionButton';
 import { inventoryService } from '../../../services/api';
 import type { EquipmentRequestItem } from '../types';
 import { REQUEST_STATUS_BADGES } from '../types';
@@ -161,6 +162,27 @@ const EquipmentRequestsPage: React.FC = () => {
           </div>
         )}
 
+        {/* Mobile FAB */}
+        <FloatingActionButton
+          actions={[
+            {
+              id: 'filter',
+              label: statusFilter === 'pending' ? 'Show Approved' : statusFilter === 'approved' ? 'Show Denied' : statusFilter === 'denied' ? 'Show All' : 'Show Pending',
+              icon: <Filter className="w-5 h-5" />,
+              onClick: () => setStatusFilter((prev) => prev === 'pending' ? 'approved' : prev === 'approved' ? 'denied' : prev === 'denied' ? '' : 'pending'),
+              color: 'bg-purple-600',
+            },
+            {
+              id: 'refresh',
+              label: 'Refresh',
+              icon: <RefreshCw className="w-5 h-5" />,
+              onClick: () => { void loadRequests(); },
+              color: 'bg-blue-600',
+            },
+          ]}
+          color="bg-purple-600"
+        />
+
         {/* Review Modal */}
         <Modal
           isOpen={reviewModal.open}
@@ -191,11 +213,11 @@ const EquipmentRequestsPage: React.FC = () => {
                 />
               </div>
 
-              <div className="flex justify-end gap-3">
+              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3">
                 <button
                   onClick={() => { void handleReview('denied'); }}
                   disabled={submitting}
-                  className="btn-primary btn-md flex items-center gap-1.5 disabled:opacity-50"
+                  className="btn-primary btn-md flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
                   <XCircle className="w-4 h-4" />
                   Deny
@@ -203,7 +225,7 @@ const EquipmentRequestsPage: React.FC = () => {
                 <button
                   onClick={() => { void handleReview('approved'); }}
                   disabled={submitting}
-                  className="btn-success btn-md flex items-center gap-1.5 disabled:opacity-50"
+                  className="btn-success btn-md flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
                   <Check className="w-4 h-4" />
                   Approve

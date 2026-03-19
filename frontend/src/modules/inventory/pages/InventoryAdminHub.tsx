@@ -117,7 +117,7 @@ export const InventoryAdminHub: React.FC = () => {
 
         {/* Summary stats */}
         {summary && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-8">
             <div className="card-secondary p-3 text-center">
               <p className="text-2xl font-bold text-theme-text-primary">{summary.total_items}</p>
               <p className="text-xs text-theme-text-muted">Total Items</p>

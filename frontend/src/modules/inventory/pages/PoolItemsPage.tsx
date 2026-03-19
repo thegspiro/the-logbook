@@ -148,7 +148,7 @@ const PoolCard: React.FC<PoolCardProps> = ({
           ) : (
             <ul className="space-y-2 max-h-48 overflow-y-auto">
               {issuances.filter(i => !i.is_returned).map(iss => (
-                <li key={iss.id} className="flex items-center justify-between text-sm bg-theme-surface rounded px-3 py-2">
+                <li key={iss.id} className="flex items-center justify-between text-sm bg-theme-surface rounded px-3 py-3">
                   <div className="min-w-0">
                     <span className="text-theme-text-primary">{iss.user_id.slice(0, 8)}...</span>
                     <span className="text-theme-text-muted ml-2">qty {iss.quantity_issued}</span>
@@ -156,7 +156,7 @@ const PoolCard: React.FC<PoolCardProps> = ({
                   </div>
                   <button
                     type="button"
-                    className="btn-info btn-sm shrink-0"
+                    className="btn-info px-3 py-2 text-xs shrink-0"
                     onClick={() => onReturn(iss)}
                   >
                     Return
@@ -593,13 +593,13 @@ const PoolItemsPage: React.FC = () => {
           </div>
 
           {/* Submit */}
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2">
             <button type="button" className="btn-secondary btn-md" onClick={() => setIssueModalOpen(false)}>
               Cancel
             </button>
             <button
               type="button"
-              className="btn-info btn-md flex items-center gap-1 disabled:opacity-50"
+              className="btn-info btn-md flex items-center justify-center gap-1 disabled:opacity-50"
               disabled={!issueUserId || issueQty < 1 || issueSubmitting}
               onClick={() => void handleIssue()}
             >
@@ -638,13 +638,13 @@ const PoolItemsPage: React.FC = () => {
             <label className="block text-sm font-medium text-theme-text-secondary mb-1">Notes (optional)</label>
             <input type="text" className="form-input w-full" value={returnNotes} onChange={e => setReturnNotes(e.target.value)} />
           </div>
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2">
             <button type="button" className="btn-secondary btn-md" onClick={() => setReturnModalOpen(false)}>
               Cancel
             </button>
             <button
               type="button"
-              className="btn-info btn-md flex items-center gap-1 disabled:opacity-50"
+              className="btn-info btn-md flex items-center justify-center gap-1 disabled:opacity-50"
               disabled={returnSubmitting}
               onClick={() => void handleReturn()}
             >
@@ -710,13 +710,13 @@ const PoolItemsPage: React.FC = () => {
           </div>
 
           {/* Submit */}
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2">
             <button type="button" className="btn-secondary btn-md" onClick={() => setBulkModalOpen(false)}>
               Cancel
             </button>
             <button
               type="button"
-              className="btn-info btn-md flex items-center gap-1 disabled:opacity-50"
+              className="btn-info btn-md flex items-center justify-center gap-1 disabled:opacity-50"
               disabled={!bulkItemId || bulkRows.every(r => !r.userId) || bulkSubmitting}
               onClick={() => void handleBulkIssue()}
             >
