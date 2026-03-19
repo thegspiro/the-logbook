@@ -9,6 +9,8 @@ import html as _html
 import os
 import re
 import smtplib
+import time
+import uuid
 from datetime import datetime, timezone
 from email import encoders
 from email.mime.base import MIMEBase
@@ -189,6 +191,16 @@ class EmailService:
         self.organization = organization
         self._smtp_config = self._get_smtp_config()
 
+    def _make_message_id(self) -> str:
+        """Generate a unique RFC 5322 Message-ID header value.
+
+        Gmail and other strict SMTP servers reject messages without a
+        Message-ID.  The format is ``<uuid@domain>``.
+        """
+        from_email = self._smtp_config.get("from_email", "")
+        domain = from_email.split("@")[1] if "@" in from_email else "localhost"
+        return f"<{uuid.uuid4()}@{domain}>"
+
     @staticmethod
     def _esc(value: str) -> str:
         """HTML-escape a string for safe insertion into email HTML bodies."""
@@ -251,6 +263,27 @@ class EmailService:
             "encryption": getattr(settings, "SMTP_ENCRYPTION", "tls"),
         }
 
+    def _get_ehlo_hostname(self) -> str:
+        """Return the hostname used for SMTP EHLO/HELO.
+
+        Priority:
+        1. ``SMTP_EHLO_HOSTNAME`` from config
+        2. Organization-specific SMTP host (if org email settings are active)
+        3. Domain portion of the ``from_email`` address
+
+        Microsoft's Enhanced Filtering rejects connections whose EHLO
+        hostname doesn't resolve in DNS, so using the actual sending
+        domain is critical.
+        """
+        # Explicit config takes top priority
+        explicit = getattr(settings, "SMTP_EHLO_HOSTNAME", None)
+        if explicit:
+            return explicit
+        from_email = self._smtp_config.get("from_email", "")
+        if "@" in from_email:
+            return from_email.split("@")[1]
+        return "localhost"
+
     def _smtp_connect(self) -> smtplib.SMTP:
         """Create an authenticated SMTP connection (synchronous)."""
         import ssl
@@ -264,16 +297,20 @@ class EmailService:
 
         timeout = 30
         context = ssl.create_default_context()
+        ehlo_hostname = self._get_ehlo_hostname()
 
         if encryption == "ssl":
-            server = smtplib.SMTP_SSL(host, port, context=context, timeout=timeout)
+            server = smtplib.SMTP_SSL(
+                host, port, local_hostname=ehlo_hostname,
+                context=context, timeout=timeout,
+            )
         elif encryption in ("tls", "starttls"):
-            server = smtplib.SMTP(host, port, timeout=timeout)
+            server = smtplib.SMTP(host, port, local_hostname=ehlo_hostname, timeout=timeout)
             server.ehlo()
             server.starttls(context=context)
             server.ehlo()
         else:
-            server = smtplib.SMTP(host, port, timeout=timeout)
+            server = smtplib.SMTP(host, port, local_hostname=ehlo_hostname, timeout=timeout)
             server.ehlo()
 
         if self._smtp_config["user"] and self._smtp_config["password"]:
@@ -298,23 +335,64 @@ class EmailService:
     def _smtp_send_batch(
         self, messages: List[Tuple[List[str], str]]
     ) -> List[bool]:
-        """Send multiple emails through a single SMTP connection."""
+        """Send multiple emails through a single SMTP connection.
+
+        Includes rate-limit mitigation:
+        * ``RSET`` between messages to cleanly reset the envelope
+        * 0.25 s pause between sends to stay within provider rate limits
+        * Automatic reconnection if the server drops the connection
+        """
         server = self._smtp_connect()
         results: List[bool] = []
+        from_email = self._smtp_config["from_email"]
         try:
-            for recipients, msg_str in messages:
+            for idx, (recipients, msg_str) in enumerate(messages):
                 try:
-                    server.sendmail(
-                        self._smtp_config["from_email"],
-                        recipients,
-                        msg_str,
-                    )
+                    server.sendmail(from_email, recipients, msg_str)
                     results.append(True)
+                except smtplib.SMTPServerDisconnected:
+                    # Server dropped the connection (rate limit, timeout,
+                    # etc.) — reconnect and retry this message once.
+                    logger.warning(
+                        "SMTP server disconnected during batch send, reconnecting"
+                    )
+                    try:
+                        server = self._smtp_connect()
+                        server.sendmail(from_email, recipients, msg_str)
+                        results.append(True)
+                    except Exception as e2:
+                        logger.error(f"Batch email retry failed: {e2}")
+                        results.append(False)
+                except smtplib.SMTPResponseException as e:
+                    logger.error(
+                        f"Batch email rejected (code={e.smtp_code}): {e.smtp_error}"
+                    )
+                    results.append(False)
+                    # 421/451/452 = rate limit / too many connections
+                    if e.smtp_code in (421, 451, 452):
+                        logger.info("Rate limit detected, reconnecting after 2 s")
+                        time.sleep(2)
+                        try:
+                            server.quit()
+                        except Exception:
+                            pass
+                        server = self._smtp_connect()
                 except Exception as e:
                     logger.error(f"Batch email send failed: {e}")
                     results.append(False)
+
+                # Brief pause between messages to avoid rate limiting
+                if idx < len(messages) - 1:
+                    try:
+                        server.rset()
+                    except Exception:
+                        pass
+                    time.sleep(0.25)
         finally:
-            server.quit()
+            try:
+                server.quit()
+            except Exception:
+                pass
         return results
 
     def build_message(
@@ -325,8 +403,15 @@ class EmailService:
         text_body: Optional[str] = None,
         cc_emails: Optional[List[str]] = None,
         bcc_emails: Optional[List[str]] = None,
+        reply_to: Optional[str] = None,
+        list_unsubscribe: Optional[str] = None,
     ) -> Tuple[List[str], str]:
         """Build a MIME email message without sending.
+
+        Args:
+            reply_to: Optional Reply-To email address.
+            list_unsubscribe: Optional List-Unsubscribe URL (RFC 8058).
+                Required by Gmail/Microsoft for bulk email.
 
         Returns ``(all_recipients, mime_message_string)``.
         """
@@ -345,6 +430,12 @@ class EmailService:
         msg["Date"] = datetime.now(timezone.utc).strftime(
             "%a, %d %b %Y %H:%M:%S +0000"
         )
+        msg["Message-ID"] = self._make_message_id()
+        if reply_to:
+            msg["Reply-To"] = reply_to
+        if list_unsubscribe:
+            msg["List-Unsubscribe"] = f"<{list_unsubscribe}>"
+            msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
 
         all_recipients = [to_email]
         if cc_emails:
@@ -389,6 +480,8 @@ class EmailService:
         db: Any = None,
         template_type: Optional[str] = None,
         sent_by: Optional[str] = None,
+        reply_to: Optional[str] = None,
+        list_unsubscribe: Optional[str] = None,
     ) -> tuple[int, int]:
         """
         Send an email to one or more recipients
@@ -468,6 +561,12 @@ class EmailService:
                 msg["Date"] = datetime.now(timezone.utc).strftime(
                     "%a, %d %b %Y %H:%M:%S +0000"
                 )
+                msg["Message-ID"] = self._make_message_id()
+                if reply_to:
+                    msg["Reply-To"] = reply_to
+                if list_unsubscribe:
+                    msg["List-Unsubscribe"] = f"<{list_unsubscribe}>"
+                    msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
 
                 # Add CC and BCC recipients
                 all_recipients = [to_email]

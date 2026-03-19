@@ -10,7 +10,7 @@ The Elections module provides a complete election management system with ranked-
 - **Multiple Election Types** — Officer elections, bylaw votes, membership approvals
 - **Ballot Forensics** — Tamper-proof audit trail for every ballot cast
 - **Election Packages** — Auto-generated from prospective member pipeline stages
-- **Voting Eligibility** — Based on meeting attendance percentage and membership tier
+- **Voting Eligibility** — Based on membership type, meeting attendance, and membership tier rules
 - **Secret Ballots** — Encrypted ballots with anonymous vote verification
 - **Real-Time Results** — Live tallying with round-by-round breakdowns
 - **Audit Logging** — Complete trail of election creation, voting, and result certification
@@ -39,6 +39,45 @@ The Elections module provides a complete election management system with ranked-
 4. **Close Voting** — Automatically at the scheduled end time or manually by admin
 5. **Certify Results** — Admin reviews results, round-by-round tallies, and certifies the outcome
 6. **Archive** — Election and all ballots are preserved for audit
+
+---
+
+## Voter Eligibility
+
+Voter eligibility for each ballot item is determined by the member's **membership type** (`User.membership_type`), not by their assigned roles/positions. A member may hold multiple roles (e.g. EMT on the operational side and Quartermaster on the administrative side), but their membership type is a single classification that controls which ballot items they can vote on.
+
+### Membership Type vs Roles
+
+| Concept | Field | Purpose | Example |
+|---------|-------|---------|---------|
+| **Membership Type** | `User.membership_type` | Department classification; determines ballot eligibility | Active, Administrative, Life, Probationary |
+| **Role / Position** | `User.roles` | Assigned positions; determines system permissions | EMT, Quartermaster, Secretary, Chief |
+
+A member's role (e.g. EMT) does **not** make them eligible for "operational" ballot items. Their membership type (e.g. "active") does.
+
+### Eligible Voter Types
+
+Each ballot item has an `eligible_voter_types` field that controls who can vote on it. These map to membership types:
+
+| Voter Type | Eligible Membership Types | Use Case |
+|------------|--------------------------|----------|
+| `all` | Everyone | General resolutions, budget votes |
+| `operational` | Active | Operational officer elections (Chief, Captain, etc.) |
+| `administrative` | Administrative | Administrative-specific votes |
+| `regular` | Active + Life | Bylaw amendments, membership approvals |
+| `life` | Life | Life-member-only votes |
+| `probationary` | Probationary | Probationary-specific votes |
+| *(role slug)* | *(any member holding that role)* | Fine-grained restrictions by specific position |
+
+Specific role slugs (e.g. `chief`, `secretary`) can also be used as a fallback for niche eligibility rules that go beyond membership type.
+
+### Additional Eligibility Checks
+
+Beyond membership type, a member may also be restricted by:
+
+- **Membership tier rules** — Organization settings can mark certain tiers as not voting-eligible or require minimum meeting attendance percentages
+- **Attendance requirement** — Individual ballot items can require the voter to be checked in as present at the meeting
+- **Secretary overrides** — The secretary can grant eligibility overrides for individual members, bypassing all other checks
 
 ---
 

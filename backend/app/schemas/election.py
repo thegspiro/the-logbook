@@ -37,8 +37,13 @@ class BallotItem(BaseModel):
     eligible_voter_types: List[str] = Field(
         default=["all"],
         description=(
-            "Member class or role slug: 'all', 'regular', 'life', "
-            "'probationary', 'operational', 'administrative', or specific role slugs"
+            "Voter eligibility category based on membership_type. "
+            "'all' = everyone, 'operational' = active members, "
+            "'administrative' = administrative members, "
+            "'regular' = active + life, 'life' = life only, "
+            "'probationary' = probationary only. "
+            "Specific role slugs (e.g. 'chief') are also accepted "
+            "as a fallback for fine-grained restrictions."
         ),
     )
     vote_type: str = Field(
