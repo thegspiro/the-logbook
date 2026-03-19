@@ -655,6 +655,16 @@ export const ElectionDetailPage: React.FC = () => {
               </div>
             </div>
           )}
+          {election.event_id && (
+            <div>
+              <div className="text-sm text-theme-text-muted">Linked Event</div>
+              <div className="mt-1 text-sm font-medium text-theme-text-primary">
+                <Link to={`/events/${election.event_id}`} className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
+                  View Event &rarr;
+                </Link>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Secretary Controls */}

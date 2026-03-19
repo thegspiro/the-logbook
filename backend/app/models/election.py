@@ -74,6 +74,11 @@ class Election(Base):
         String(36), ForeignKey("meetings.id", ondelete="SET NULL"), nullable=True
     )
 
+    # Optional link to a calendar event (e.g. business meeting events)
+    event_id = Column(
+        String(36), ForeignKey("events.id", ondelete="SET NULL"), nullable=True
+    )
+
     # Timing
     start_date = Column(DateTime(timezone=True), nullable=False)
     end_date = Column(DateTime(timezone=True), nullable=False)
@@ -185,6 +190,7 @@ class Election(Base):
         "Vote", back_populates="election", cascade="all, delete-orphan"
     )
     meeting = relationship("Meeting", foreign_keys=[meeting_id])
+    event = relationship("Event", foreign_keys=[event_id])
 
     __table_args__ = (
         Index("ix_elections_organization_id", "organization_id"),
