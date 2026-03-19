@@ -3411,6 +3411,12 @@ Best regards,
                     html_body=html_body,
                     text_body=text_body,
                     cc_emails=cc_emails,
+                    reply_to=admin_contact_email or None,
+                    list_unsubscribe=(
+                        f"mailto:{admin_contact_email}"
+                        if admin_contact_email
+                        else None
+                    ),
                 )
                 mime_messages.append((recipients, msg_str))
             except Exception as e:

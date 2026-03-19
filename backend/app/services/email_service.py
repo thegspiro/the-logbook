@@ -263,6 +263,27 @@ class EmailService:
             "encryption": getattr(settings, "SMTP_ENCRYPTION", "tls"),
         }
 
+    def _get_ehlo_hostname(self) -> str:
+        """Return the hostname used for SMTP EHLO/HELO.
+
+        Priority:
+        1. ``SMTP_EHLO_HOSTNAME`` from config
+        2. Organization-specific SMTP host (if org email settings are active)
+        3. Domain portion of the ``from_email`` address
+
+        Microsoft's Enhanced Filtering rejects connections whose EHLO
+        hostname doesn't resolve in DNS, so using the actual sending
+        domain is critical.
+        """
+        # Explicit config takes top priority
+        explicit = getattr(settings, "SMTP_EHLO_HOSTNAME", None)
+        if explicit:
+            return explicit
+        from_email = self._smtp_config.get("from_email", "")
+        if "@" in from_email:
+            return from_email.split("@")[1]
+        return "localhost"
+
     def _smtp_connect(self) -> smtplib.SMTP:
         """Create an authenticated SMTP connection (synchronous)."""
         import ssl
@@ -276,16 +297,20 @@ class EmailService:
 
         timeout = 30
         context = ssl.create_default_context()
+        ehlo_hostname = self._get_ehlo_hostname()
 
         if encryption == "ssl":
-            server = smtplib.SMTP_SSL(host, port, context=context, timeout=timeout)
+            server = smtplib.SMTP_SSL(
+                host, port, local_hostname=ehlo_hostname,
+                context=context, timeout=timeout,
+            )
         elif encryption in ("tls", "starttls"):
-            server = smtplib.SMTP(host, port, timeout=timeout)
+            server = smtplib.SMTP(host, port, local_hostname=ehlo_hostname, timeout=timeout)
             server.ehlo()
             server.starttls(context=context)
             server.ehlo()
         else:
-            server = smtplib.SMTP(host, port, timeout=timeout)
+            server = smtplib.SMTP(host, port, local_hostname=ehlo_hostname, timeout=timeout)
             server.ehlo()
 
         if self._smtp_config["user"] and self._smtp_config["password"]:
@@ -378,8 +403,15 @@ class EmailService:
         text_body: Optional[str] = None,
         cc_emails: Optional[List[str]] = None,
         bcc_emails: Optional[List[str]] = None,
+        reply_to: Optional[str] = None,
+        list_unsubscribe: Optional[str] = None,
     ) -> Tuple[List[str], str]:
         """Build a MIME email message without sending.
+
+        Args:
+            reply_to: Optional Reply-To email address.
+            list_unsubscribe: Optional List-Unsubscribe URL (RFC 8058).
+                Required by Gmail/Microsoft for bulk email.
 
         Returns ``(all_recipients, mime_message_string)``.
         """
@@ -399,6 +431,11 @@ class EmailService:
             "%a, %d %b %Y %H:%M:%S +0000"
         )
         msg["Message-ID"] = self._make_message_id()
+        if reply_to:
+            msg["Reply-To"] = reply_to
+        if list_unsubscribe:
+            msg["List-Unsubscribe"] = f"<{list_unsubscribe}>"
+            msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
 
         all_recipients = [to_email]
         if cc_emails:
@@ -443,6 +480,8 @@ class EmailService:
         db: Any = None,
         template_type: Optional[str] = None,
         sent_by: Optional[str] = None,
+        reply_to: Optional[str] = None,
+        list_unsubscribe: Optional[str] = None,
     ) -> tuple[int, int]:
         """
         Send an email to one or more recipients
@@ -523,6 +562,11 @@ class EmailService:
                     "%a, %d %b %Y %H:%M:%S +0000"
                 )
                 msg["Message-ID"] = self._make_message_id()
+                if reply_to:
+                    msg["Reply-To"] = reply_to
+                if list_unsubscribe:
+                    msg["List-Unsubscribe"] = f"<{list_unsubscribe}>"
+                    msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
 
                 # Add CC and BCC recipients
                 all_recipients = [to_email]

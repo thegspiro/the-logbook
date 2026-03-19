@@ -420,6 +420,7 @@ class Settings(BaseSettings):
     SMTP_FROM_EMAIL: str = "noreply@example.com"
     SMTP_FROM_NAME: str = "Intranet Platform"
     SMTP_ENCRYPTION: str = "tls"  # tls (STARTTLS/587), ssl (465), none (25)
+    SMTP_EHLO_HOSTNAME: str | None = None  # EHLO hostname; defaults to from_email domain
 
     # ============================================
     # SMS (Twilio)
