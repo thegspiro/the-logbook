@@ -3384,6 +3384,9 @@ Best regards,
         # build MIME messages, then send all through one SMTP connection
         # to avoid per-email TCP+TLS+auth overhead.
         mime_messages = []
+        # Track which user ID corresponds to each slot in mime_messages
+        # so we can correlate send results back to specific users.
+        mime_user_ids: List[Optional[str]] = []
         for params in pending_emails:
             rid = params.pop("recipient_id")
             cc_emails = params.pop("cc_emails", None)
@@ -3419,37 +3422,49 @@ Best regards,
                     ),
                 )
                 mime_messages.append((recipients, msg_str))
+                mime_user_ids.append(rid)
             except Exception as e:
                 logger.error(
                     f"Ballot email render failed | election={election_id} "
                     f"recipient={rid} error={e}"
                 )
                 mime_messages.append(None)
+                mime_user_ids.append(rid)
 
         # Send all rendered messages through a single SMTP connection
         if any(m is not None for m in mime_messages):
             batch_to_send = [m for m in mime_messages if m is not None]
             send_results = await email_service.send_batch(batch_to_send)
 
-            # Map results back, counting None entries as failures
+            # Map results back, counting None entries as failures and
+            # recording which user IDs actually received their email.
             result_iter = iter(send_results)
             success_count = 0
             failed_count = 0
-            for m in mime_messages:
+            sent_user_ids: List[str] = []
+            for idx, m in enumerate(mime_messages):
+                uid = mime_user_ids[idx]
                 if m is None:
                     failed_count += 1
                 elif next(result_iter):
                     success_count += 1
+                    if uid:
+                        sent_user_ids.append(uid)
                 else:
                     failed_count += 1
         else:
             success_count = 0
             failed_count = len(mime_messages)
+            sent_user_ids = []
 
-        # Update election with email sent status
+        # Update election with email sent status — only record the user
+        # IDs whose email was actually delivered to the SMTP server.
+        # Previously this stored ALL intended recipients (including
+        # skipped and failed), causing the UI to show members as
+        # "ballot sent" when they never received one.
         election.email_sent = True
         election.email_sent_at = datetime.now(timezone.utc)
-        election.email_recipients = [str(user.id) for user in recipients]
+        election.email_recipients = sent_user_ids
 
         # Commit all voting tokens and election updates
         await self.db.commit()
