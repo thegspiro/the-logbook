@@ -41,6 +41,7 @@ export interface Election {
   position_eligibility?: { [position: string]: PositionEligibility };
   meeting_date?: string;
   meeting_id?: string;
+  event_id?: string;
   attendees?: Attendee[];
   start_date: string;
   end_date: string;
@@ -93,6 +94,7 @@ export interface ElectionCreate {
   position_eligibility?: { [position: string]: PositionEligibility } | undefined;
   meeting_date?: string | undefined;
   meeting_id?: string | undefined;
+  event_id?: string | undefined;
   start_date: string;
   end_date: string;
   anonymous_voting?: boolean | undefined;
@@ -118,6 +120,7 @@ export interface ElectionUpdate {
   position_eligibility?: { [position: string]: PositionEligibility };
   meeting_date?: string;
   meeting_id?: string;
+  event_id?: string;
   start_date?: string;
   end_date?: string;
   // NOTE: status is intentionally excluded — use /open, /close, /rollback endpoints

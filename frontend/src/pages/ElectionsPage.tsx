@@ -6,8 +6,9 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { electionService, meetingsService, ranksService } from '../services/api';
+import { electionService, eventService, meetingsService, ranksService } from '../services/api';
 import type { MeetingRecord, OperationalRankResponse } from '../services/api';
+import type { EventListItem } from '../types/event';
 import type { ElectionListItem, ElectionCreate, VotingMethod, VictoryCondition } from '../types/election';
 import { useAuthStore } from '../stores/authStore';
 import { ElectionStatus, VoteType } from '../constants/enums';
@@ -45,6 +46,7 @@ export const ElectionsPage: React.FC = () => {
   const [positionInput, setPositionInput] = useState('');
   const [showPositionDropdown, setShowPositionDropdown] = useState(false);
   const [meetings, setMeetings] = useState<MeetingRecord[]>([]);
+  const [businessMeetingEvents, setBusinessMeetingEvents] = useState<EventListItem[]>([]);
   const [availableRanks, setAvailableRanks] = useState<OperationalRankResponse[]>([]);
 
   const { checkPermission } = useAuthStore();
@@ -67,8 +69,12 @@ export const ElectionsPage: React.FC = () => {
   const fetchMeetings = useCallback(async () => {
     try {
       const today = getTodayLocalDate(tz);
-      const data = await meetingsService.getMeetings({ from_date: today, limit: 100 });
-      setMeetings(data.meetings);
+      const [meetingsData, eventsData] = await Promise.all([
+        meetingsService.getMeetings({ from_date: today, limit: 100 }),
+        eventService.getEvents({ event_type: 'business_meeting', start_after: today, limit: 100 }),
+      ]);
+      setMeetings(meetingsData.meetings);
+      setBusinessMeetingEvents(eventsData);
     } catch {
       // Non-critical — meeting selector will just be empty
     }
@@ -97,18 +103,33 @@ export const ElectionsPage: React.FC = () => {
     }
   };
 
-  const handleMeetingChange = (meetingId: string) => {
-    if (!meetingId) {
-      setFormData({ ...formData, meeting_id: undefined });
+  const handleMeetingChange = (value: string) => {
+    if (!value) {
+      setFormData({ ...formData, meeting_id: undefined, event_id: undefined });
       return;
     }
-    const meeting = meetings.find(m => m.id === meetingId);
-    if (meeting) {
-      setFormData({
-        ...formData,
-        meeting_id: meetingId,
-        meeting_date: meeting.meeting_date,
-      });
+    // Values are prefixed with "meeting:" or "event:" to distinguish sources
+    const [source, id] = [value.slice(0, value.indexOf(':')), value.slice(value.indexOf(':') + 1)];
+    if (source === 'meeting') {
+      const meeting = meetings.find(m => m.id === id);
+      if (meeting) {
+        setFormData({
+          ...formData,
+          meeting_id: id,
+          event_id: undefined,
+          meeting_date: meeting.meeting_date,
+        });
+      }
+    } else if (source === 'event') {
+      const event = businessMeetingEvents.find(e => e.id === id);
+      if (event) {
+        setFormData({
+          ...formData,
+          meeting_id: undefined,
+          event_id: id,
+          meeting_date: event.start_datetime,
+        });
+      }
     }
   };
 
@@ -418,16 +439,25 @@ export const ElectionsPage: React.FC = () => {
                   </label>
                   <select
                     id="election-meeting"
-                    value={formData.meeting_id || ''}
+                    value={formData.meeting_id ? `meeting:${formData.meeting_id}` : formData.event_id ? `event:${formData.event_id}` : ''}
                     onChange={(e) => handleMeetingChange(e.target.value)}
                     className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
                   >
                     <option value="">No linked meeting</option>
-                    {meetings.map((meeting) => (
-                      <option key={meeting.id} value={meeting.id}>
-                        {meeting.title} ({formatDate(meeting.meeting_date, tz)})
+                    {businessMeetingEvents.map((event) => (
+                      <option key={`event-${event.id}`} value={`event:${event.id}`}>
+                        {event.title} ({formatDate(event.start_datetime, tz)})
                       </option>
                     ))}
+                    {meetings.length > 0 && (
+                      <optgroup label="Meeting Minutes">
+                        {meetings.map((meeting) => (
+                          <option key={`meeting-${meeting.id}`} value={`meeting:${meeting.id}`}>
+                            {meeting.title} ({formatDate(meeting.meeting_date, tz)})
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
                   <p className="mt-1 text-xs text-theme-text-muted">
                     Optionally link this election to a meeting for shared context and attendance.

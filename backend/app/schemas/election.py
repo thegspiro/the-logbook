@@ -125,6 +125,9 @@ class ElectionBase(BaseModel):
     meeting_id: Optional[UUID] = Field(
         default=None, description="Optional link to a formal meeting record"
     )
+    event_id: Optional[UUID] = Field(
+        default=None, description="Optional link to a calendar event (e.g. business meeting)"
+    )
     attendees: Optional[List[Dict[str, Any]]] = Field(
         default=None, description="Meeting attendees checked in for voting"
     )
@@ -238,6 +241,7 @@ class ElectionUpdate(BaseModel):
     position_eligibility: Optional[Dict[str, PositionEligibility]] = None
     meeting_date: Optional[datetime] = None
     meeting_id: Optional[UUID] = None
+    event_id: Optional[UUID] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     anonymous_voting: Optional[bool] = None
@@ -303,6 +307,7 @@ class ElectionResponse(UTCResponseBase):
     position_eligibility: Optional[Dict[str, PositionEligibility]] = None
     meeting_date: Optional[datetime] = None
     meeting_id: Optional[UUID] = None
+    event_id: Optional[UUID] = None
     attendees: Optional[List[Dict[str, Any]]] = None
     start_date: datetime
     end_date: datetime
