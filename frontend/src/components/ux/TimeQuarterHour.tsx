@@ -1,11 +1,11 @@
 /**
- * TimeQuarterHour — Quarter-hour time picker
+ * TimeQuarterHour — Quarter-hour time picker with separate hour/minute selects
  *
- * Replaces `<input type="time" step="900">` which browsers mostly ignore.
- * Renders a `<select>` dropdown whose options are locked to :00, :15, :30, :45.
+ * Renders two side-by-side `<select>` dropdowns: one for hour (12-hour with
+ * AM/PM) and one for minute (00, 15, 30, 45). Emits "HH:MM" in 24-hour format.
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 
 interface TimeQuarterHourProps {
   /** Time string in "HH:MM" 24-hour format, e.g. "09:30" */
@@ -18,35 +18,25 @@ interface TimeQuarterHourProps {
   'aria-label'?: string;
 }
 
-/** Pre-computed quarter-hour options: ["00:00","00:15",…,"23:45"]. */
-const TIME_OPTIONS: { value: string; label: string }[] = (() => {
-  const opts: { value: string; label: string }[] = [];
-  for (let h = 0; h < 24; h++) {
-    for (const m of [0, 15, 30, 45]) {
-      const hh = String(h).padStart(2, '0');
-      const mm = String(m).padStart(2, '0');
-      const val = `${hh}:${mm}`;
+const HOURS_12 = Array.from({ length: 12 }, (_, i) => {
+  const hour12 = i === 0 ? 12 : i;
+  return { display: String(hour12), value: i };
+});
 
-      const period = h < 12 ? 'AM' : 'PM';
-      const displayH = h === 0 ? 12 : h > 12 ? h - 12 : h;
-      const label = `${displayH}:${mm} ${period}`;
+const MINUTE_OPTIONS = ['00', '15', '30', '45'] as const;
 
-      opts.push({ value: val, label });
-    }
-  }
-  return opts;
-})();
-
-/**
- * Snap an arbitrary "HH:MM" string to the nearest quarter hour.
- * e.g. "14:23" → "14:15", "14:08" → "14:00", "14:47" → "14:45"
- */
-function snapToQuarter(time: string): string {
+function parse24(time: string): { hour24: number; minute: number } | null {
   const parts = time.split(':');
-  const h = parts[0] ?? '00';
-  const rawM = parseInt(parts[1] ?? '0', 10);
-  const snapped = Math.floor(rawM / 15) * 15;
-  return `${h}:${String(snapped).padStart(2, '0')}`;
+  const h = parseInt(parts[0] ?? '', 10);
+  const m = parseInt(parts[1] ?? '', 10);
+  if (isNaN(h) || isNaN(m)) return null;
+  return { hour24: h, minute: Math.floor(m / 15) * 15 };
+}
+
+function to24(hour12Index: number, period: 'AM' | 'PM'): number {
+  // hour12Index: 0=12, 1=1, 2=2, …, 11=11
+  if (period === 'AM') return hour12Index; // 0→0, 1→1, …, 11→11
+  return hour12Index + 12; // 0→12, 1→13, …, 11→23
 }
 
 const TimeQuarterHour: React.FC<TimeQuarterHourProps> = ({
@@ -58,30 +48,86 @@ const TimeQuarterHour: React.FC<TimeQuarterHourProps> = ({
   placeholder,
   'aria-label': ariaLabel,
 }) => {
-  const snappedValue = value ? snapToQuarter(value) : '';
+  const parsed = useMemo(() => (value ? parse24(value) : null), [value]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    onChange({ target: { value: e.target.value } });
+  const hour12Index = parsed ? parsed.hour24 % 12 : null;
+  const minute = parsed ? parsed.minute : null;
+  const period: 'AM' | 'PM' = parsed ? (parsed.hour24 < 12 ? 'AM' : 'PM') : 'AM';
+
+  const emit = (h12: number, m: number, p: 'AM' | 'PM') => {
+    const h24 = to24(h12, p);
+    const val = `${String(h24).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    onChange({ target: { value: val } });
   };
 
+  const handleHourChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newH = parseInt(e.target.value, 10);
+    if (isNaN(newH)) return;
+    emit(newH, minute ?? 0, period);
+  };
+
+  const handleMinuteChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newM = parseInt(e.target.value, 10);
+    if (isNaN(newM)) return;
+    emit(hour12Index ?? 0, newM, period);
+  };
+
+  const handlePeriodChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newP = e.target.value as 'AM' | 'PM';
+    emit(hour12Index ?? 0, minute ?? 0, newP);
+  };
+
+  const label = ariaLabel || placeholder || 'Time';
+
   return (
-    <select
-      id={id}
-      value={snappedValue}
-      onChange={handleChange}
-      className={className}
-      required={required}
-      aria-label={ariaLabel || placeholder || 'Time'}
-    >
-      {!snappedValue && (
-        <option value="">{placeholder || '--:--'}</option>
-      )}
-      {TIME_OPTIONS.map((opt) => (
-        <option key={opt.value} value={opt.value}>
-          {opt.label}
-        </option>
-      ))}
-    </select>
+    <div className="flex gap-1.5 items-center">
+      <select
+        id={id}
+        value={hour12Index !== null ? String(hour12Index) : ''}
+        onChange={handleHourChange}
+        className={className}
+        required={required}
+        aria-label={`${label} hour`}
+      >
+        {hour12Index === null && (
+          <option value="">--</option>
+        )}
+        {HOURS_12.map((h) => (
+          <option key={h.value} value={String(h.value)}>
+            {h.display}
+          </option>
+        ))}
+      </select>
+
+      <span className="text-theme-text-secondary font-medium select-none">:</span>
+
+      <select
+        value={minute !== null ? String(minute).padStart(2, '0') : ''}
+        onChange={handleMinuteChange}
+        className={className}
+        required={required}
+        aria-label={`${label} minute`}
+      >
+        {minute === null && (
+          <option value="">--</option>
+        )}
+        {MINUTE_OPTIONS.map((m) => (
+          <option key={m} value={m}>
+            {m}
+          </option>
+        ))}
+      </select>
+
+      <select
+        value={period}
+        onChange={handlePeriodChange}
+        className={className}
+        aria-label={`${label} AM/PM`}
+      >
+        <option value="AM">AM</option>
+        <option value="PM">PM</option>
+      </select>
+    </div>
   );
 };
 
