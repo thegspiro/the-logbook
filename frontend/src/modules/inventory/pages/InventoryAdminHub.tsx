@@ -41,9 +41,9 @@ interface NavCardProps {
 const NavCard: React.FC<NavCardProps> = ({ to, icon, title, description, badge, badgeColor }) => (
   <Link
     to={to}
-    className="card-secondary p-4 hover:bg-theme-surface-hover transition-colors group flex items-start gap-4"
+    className="card-secondary p-3 sm:p-4 hover:bg-theme-surface-hover active:bg-theme-surface-hover transition-colors group flex items-center sm:items-start gap-3 sm:gap-4"
   >
-    <div className="shrink-0 w-10 h-10 rounded-lg bg-theme-surface-secondary flex items-center justify-center text-theme-text-muted group-hover:text-theme-text-primary transition-colors">
+    <div className="shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-theme-surface-secondary flex items-center justify-center text-theme-text-muted group-hover:text-theme-text-primary transition-colors">
       {icon}
     </div>
     <div className="min-w-0 flex-1">
@@ -55,7 +55,7 @@ const NavCard: React.FC<NavCardProps> = ({ to, icon, title, description, badge, 
           </span>
         )}
       </div>
-      <p className="text-xs text-theme-text-muted mt-0.5">{description}</p>
+      <p className="text-xs text-theme-text-muted mt-0.5 hidden sm:block">{description}</p>
     </div>
   </Link>
 );
@@ -117,34 +117,54 @@ export const InventoryAdminHub: React.FC = () => {
 
         {/* Summary stats */}
         {summary && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-            <div className="card-secondary p-3 text-center">
-              <p className="text-2xl font-bold text-theme-text-primary">{summary.total_items}</p>
-              <p className="text-xs text-theme-text-muted">Total Items</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-8">
+            <div className="card-secondary p-3 flex items-center gap-2.5 sm:flex-col sm:items-center sm:text-center">
+              <div className="p-1.5 rounded-lg bg-theme-surface-secondary sm:hidden">
+                <Package className="w-4 h-4 text-theme-text-muted" />
+              </div>
+              <div>
+                <p className="text-xl sm:text-2xl font-bold text-theme-text-primary">{summary.total_items}</p>
+                <p className="text-[11px] sm:text-xs text-theme-text-muted">Total Items</p>
+              </div>
             </div>
-            <div className="card-secondary p-3 text-center">
-              <p className="text-2xl font-bold text-green-600 dark:text-green-400">{summary.items_by_status['available'] ?? 0}</p>
-              <p className="text-xs text-theme-text-muted">Available</p>
+            <div className="card-secondary p-3 flex items-center gap-2.5 sm:flex-col sm:items-center sm:text-center">
+              <div className="p-1.5 rounded-lg bg-green-500/10 sm:hidden">
+                <Package className="w-4 h-4 text-green-600 dark:text-green-400" />
+              </div>
+              <div>
+                <p className="text-xl sm:text-2xl font-bold text-green-600 dark:text-green-400">{summary.items_by_status['available'] ?? 0}</p>
+                <p className="text-[11px] sm:text-xs text-theme-text-muted">Available</p>
+              </div>
             </div>
-            <div className="card-secondary p-3 text-center">
-              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{summary.active_checkouts}</p>
-              <p className="text-xs text-theme-text-muted">Checked Out</p>
+            <div className="card-secondary p-3 flex items-center gap-2.5 sm:flex-col sm:items-center sm:text-center">
+              <div className="p-1.5 rounded-lg bg-blue-500/10 sm:hidden">
+                <ArrowDownToLine className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <p className="text-xl sm:text-2xl font-bold text-blue-600 dark:text-blue-400">{summary.active_checkouts}</p>
+                <p className="text-[11px] sm:text-xs text-theme-text-muted">Checked Out</p>
+              </div>
             </div>
-            <div className="card-secondary p-3 text-center">
-              <p className={`text-2xl font-bold ${summary.overdue_checkouts > 0 ? 'text-red-600 dark:text-red-400' : 'text-theme-text-primary'}`}>
-                {summary.overdue_checkouts}
-              </p>
-              <p className="text-xs text-theme-text-muted">Overdue</p>
+            <div className="card-secondary p-3 flex items-center gap-2.5 sm:flex-col sm:items-center sm:text-center">
+              <div className={`p-1.5 rounded-lg sm:hidden ${summary.overdue_checkouts > 0 ? 'bg-red-500/10' : 'bg-theme-surface-secondary'}`}>
+                <AlertTriangle className={`w-4 h-4 ${summary.overdue_checkouts > 0 ? 'text-red-600 dark:text-red-400' : 'text-theme-text-muted'}`} />
+              </div>
+              <div>
+                <p className={`text-xl sm:text-2xl font-bold ${summary.overdue_checkouts > 0 ? 'text-red-600 dark:text-red-400' : 'text-theme-text-primary'}`}>
+                  {summary.overdue_checkouts}
+                </p>
+                <p className="text-[11px] sm:text-xs text-theme-text-muted">Overdue</p>
+              </div>
             </div>
           </div>
         )}
 
         {/* Low stock alerts */}
         {lowStockAlerts.length > 0 && (
-          <div className="mb-8 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
+          <div className="mb-8 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 sm:p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
               <div className="flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 shrink-0" />
                 <h3 className="text-sm font-semibold text-yellow-700 dark:text-yellow-300">
                   Low Stock Alerts ({lowStockAlerts.length})
                 </h3>
@@ -158,19 +178,28 @@ export const InventoryAdminHub: React.FC = () => {
             </div>
             <div className="space-y-2">
               {lowStockAlerts.slice(0, 5).map((alert) => (
-                <div key={alert.category_id} className="flex items-center justify-between bg-yellow-500/5 rounded px-3 py-2">
-                  <div>
-                    <p className="text-sm font-medium text-yellow-700 dark:text-yellow-300">{alert.category_name}</p>
+                <div key={alert.category_id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2 bg-yellow-500/5 rounded px-3 py-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-yellow-700 dark:text-yellow-300 truncate">{alert.category_name}</p>
+                      <span className={`px-2 py-0.5 text-xs font-medium rounded-full shrink-0 sm:hidden ${
+                        alert.current_stock === 0
+                          ? 'bg-red-500/20 text-red-700 dark:text-red-400'
+                          : 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400'
+                      }`}>
+                        {alert.current_stock === 0 ? 'Out' : 'Low'}
+                      </span>
+                    </div>
                     <p className="text-xs text-yellow-600 dark:text-yellow-400">
                       {alert.current_stock} in stock &middot; threshold: {alert.threshold}
                       {alert.items && alert.items.length > 0 && (
-                        <span className="ml-1">
+                        <span className="hidden sm:inline ml-1">
                           ({alert.items.map((i) => `${i.name}: ${i.quantity}`).join(', ')})
                         </span>
                       )}
                     </p>
                   </div>
-                  <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                  <span className={`px-2 py-0.5 text-xs font-medium rounded-full shrink-0 hidden sm:inline ${
                     alert.current_stock === 0
                       ? 'bg-red-500/20 text-red-700 dark:text-red-400'
                       : 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400'
