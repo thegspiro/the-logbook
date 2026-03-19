@@ -89,7 +89,7 @@ export const LogoutConfirmModal: React.FC<LogoutConfirmModalProps> = ({
           </div>
 
           {/* Actions */}
-          <div className="flex space-x-3">
+          <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3">
             <button
               onClick={onCancel}
               className="flex-1 px-4 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring transition-colors"

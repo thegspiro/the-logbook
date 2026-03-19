@@ -97,7 +97,7 @@ const ConfigurationTab: React.FC = () => {
           )}
 
           {/* Add Origin */}
-          <div className="flex space-x-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <input
               type="url"
               value={newOrigin}
@@ -108,7 +108,7 @@ const ConfigurationTab: React.FC = () => {
             />
             <button
               onClick={handleAddOrigin}
-              className="btn-info flex items-center space-x-2"
+              className="btn-info flex items-center justify-center gap-2 shrink-0"
             >
               <Plus className="w-4 h-4" />
               <span>Add</span>

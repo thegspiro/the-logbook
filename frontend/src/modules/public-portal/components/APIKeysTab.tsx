@@ -138,7 +138,7 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
           </div>
 
           {/* Actions */}
-          <div className="flex justify-end space-x-3 mt-6">
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 mt-6">
             <button
               type="button"
               onClick={onClose}
@@ -150,7 +150,7 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
             <button
               type="submit"
               disabled={isSubmitting}
-              className="btn-info rounded-md"
+              className="btn-info rounded-md text-center"
             >
               {isSubmitting ? 'Creating...' : 'Create API Key'}
             </button>
@@ -294,7 +294,7 @@ const RevokeConfirmModal: React.FC<RevokeConfirmModalProps> = ({
           This action will immediately stop all requests using this key. This cannot be undone.
         </p>
 
-        <div className="flex justify-end space-x-3">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3">
           <button
             onClick={onCancel}
             className="px-4 py-2 text-theme-text-secondary bg-theme-surface-secondary rounded-md hover:bg-theme-surface-hover"
@@ -303,7 +303,7 @@ const RevokeConfirmModal: React.FC<RevokeConfirmModalProps> = ({
           </button>
           <button
             onClick={onConfirm}
-            className="btn-primary rounded-md"
+            className="btn-primary rounded-md text-center"
           >
             Revoke Key
           </button>
@@ -397,7 +397,36 @@ export const APIKeysTab: React.FC = () => {
           </button>
         </div>
       ) : (
-        <div className="bg-theme-surface border border-theme-surface-border rounded-lg overflow-hidden">
+        <>
+        {/* Mobile cards */}
+        <div className="sm:hidden space-y-3">
+          {apiKeys.map((key) => (
+            <div key={key.id} className="bg-theme-surface border border-theme-surface-border rounded-lg p-4 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-theme-text-primary truncate">{key.name}</span>
+                {getStatusBadge(key)}
+              </div>
+              <code className="text-xs font-mono bg-theme-surface-secondary px-2 py-1 rounded-sm block">
+                {key.key_prefix}...
+              </code>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-theme-text-muted">
+                <span>{key.rate_limit || key.effective_rate_limit}/hour</span>
+                <span>Created: {formatDateTime(key.created_at, tz)}</span>
+              </div>
+              {key.is_active && (
+                <button
+                  onClick={() => setRevokeTarget({ id: key.id, name: key.name })}
+                  className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 text-xs font-medium mt-1"
+                >
+                  Revoke
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden sm:block bg-theme-surface border border-theme-surface-border rounded-lg overflow-hidden">
           <table className="min-w-full divide-y divide-theme-surface-border" aria-label="API keys list">
             <thead className="bg-theme-surface-secondary">
               <tr>
@@ -462,6 +491,7 @@ export const APIKeysTab: React.FC = () => {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       {/* Modals */}
