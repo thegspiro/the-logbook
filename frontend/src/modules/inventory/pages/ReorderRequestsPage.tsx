@@ -214,9 +214,9 @@ const ReorderFormModal: React.FC<{
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 pt-2 border-t border-theme-surface-border">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2 border-t border-theme-surface-border">
           <button type="button" onClick={onClose} className="btn-secondary btn-md">Cancel</button>
-          <button type="submit" disabled={saving} className="btn-info btn-md disabled:opacity-50">
+          <button type="submit" disabled={saving} className="btn-info btn-md disabled:opacity-50 text-center">
             {saving ? 'Saving...' : editRequest ? 'Update' : 'Create Request'}
           </button>
         </div>
@@ -299,9 +299,9 @@ const StatusUpdateModal: React.FC<{
           <label className={lbl}>Notes</label>
           <textarea className={inp} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </div>
-        <div className="flex justify-end gap-2 pt-2 border-t border-theme-surface-border">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2 border-t border-theme-surface-border">
           <button type="button" onClick={onClose} className="btn-secondary btn-md">Cancel</button>
-          <button type="submit" disabled={saving} className="btn-info btn-md disabled:opacity-50">
+          <button type="submit" disabled={saving} className="btn-info btn-md disabled:opacity-50 text-center">
             {saving ? 'Updating...' : 'Update Status'}
           </button>
         </div>

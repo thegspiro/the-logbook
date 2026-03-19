@@ -406,25 +406,25 @@ const MyEquipmentPage: React.FC = () => {
                   {c.expected_return_at && <span>Due: {formatDate(c.expected_return_at, tz)}</span>}
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-col sm:flex-row gap-2 sm:flex-wrap">
                 <button
                   type="button"
                   onClick={() => { setCiCondition('good'); setCiNotes(''); setCheckInModal({ open: true, checkoutId: c.checkout_id }); }}
-                  className="text-xs px-3 py-1.5 rounded border border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary transition-colors whitespace-nowrap"
+                  className="text-xs px-3 py-2 sm:py-1.5 rounded border border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary active:bg-theme-surface-secondary transition-colors whitespace-nowrap"
                 >
                   Check In
                 </button>
                 <button
                   type="button"
                   onClick={() => { setExtendDate(''); setExtendModal({ open: true, checkoutId: c.checkout_id }); }}
-                  className="text-xs px-3 py-1.5 rounded border border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary transition-colors whitespace-nowrap"
+                  className="text-xs px-3 py-2 sm:py-1.5 rounded border border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary active:bg-theme-surface-secondary transition-colors whitespace-nowrap"
                 >
                   <CalendarClock className="h-3 w-3 inline mr-1" />Extend
                 </button>
                 <button
                   type="button"
                   onClick={() => setReturnModal({ open: true, returnType: 'checkout', itemId: c.item_id, refId: c.checkout_id, maxQty: 1 })}
-                  className="text-xs px-3 py-1.5 rounded border border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary transition-colors whitespace-nowrap"
+                  className="text-xs px-3 py-2 sm:py-1.5 rounded border border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary active:bg-theme-surface-secondary transition-colors whitespace-nowrap"
                 >
                   <CornerDownLeft className="h-3 w-3 inline mr-1" />Request Return
                 </button>
@@ -529,11 +529,11 @@ const MyEquipmentPage: React.FC = () => {
               <textarea rows={3} value={reqReason} onChange={(e) => setReqReason(e.target.value)} className={inputClass} placeholder="Why do you need this item?" />
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2">
               <button type="button" onClick={() => { setRequestModal(false); resetRequestForm(); }} className="btn-secondary btn-md">
                 Cancel
               </button>
-              <button type="button" onClick={() => void submitRequest()} disabled={!reqSelected || submitting} className="btn-info btn-md disabled:opacity-50">
+              <button type="button" onClick={() => void submitRequest()} disabled={!reqSelected || submitting} className="btn-info btn-md disabled:opacity-50 text-center">
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin inline mr-1" /> : null}Submit Request
               </button>
             </div>
@@ -553,11 +553,11 @@ const MyEquipmentPage: React.FC = () => {
               <label className={labelClass}>Damage Notes (optional)</label>
               <textarea rows={3} value={ciNotes} onChange={(e) => setCiNotes(e.target.value)} className={inputClass} placeholder="Describe any damage..." />
             </div>
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2">
               <button type="button" onClick={() => setCheckInModal({ open: false, checkoutId: '' })} className="btn-secondary btn-md">
                 Cancel
               </button>
-              <button type="button" onClick={() => void handleCheckIn()} disabled={submitting} className="btn-info btn-md disabled:opacity-50">
+              <button type="button" onClick={() => void handleCheckIn()} disabled={submitting} className="btn-info btn-md disabled:opacity-50 text-center">
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin inline mr-1" /> : null}Check In
               </button>
             </div>
@@ -571,11 +571,11 @@ const MyEquipmentPage: React.FC = () => {
               <label className={labelClass}>New Return Date</label>
               <input type="date" value={extendDate} onChange={(e) => setExtendDate(e.target.value)} className={inputClass} />
             </div>
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2">
               <button type="button" onClick={() => setExtendModal({ open: false, checkoutId: '' })} className="btn-secondary btn-md">
                 Cancel
               </button>
-              <button type="button" onClick={() => void handleExtend()} disabled={!extendDate || submitting} className="btn-info btn-md disabled:opacity-50">
+              <button type="button" onClick={() => void handleExtend()} disabled={!extendDate || submitting} className="btn-info btn-md disabled:opacity-50 text-center">
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin inline mr-1" /> : null}Extend
               </button>
             </div>
@@ -601,11 +601,11 @@ const MyEquipmentPage: React.FC = () => {
               <label className={labelClass}>Notes (optional)</label>
               <textarea rows={3} value={retNotes} onChange={(e) => setRetNotes(e.target.value)} className={inputClass} placeholder="Any notes for the quartermaster..." />
             </div>
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2">
               <button type="button" onClick={() => setReturnModal({ open: false, returnType: 'assignment', itemId: '', refId: '', maxQty: 1 })} className="btn-secondary btn-md">
                 Cancel
               </button>
-              <button type="button" onClick={() => void handleReturnRequest()} disabled={submitting} className="btn-info btn-md disabled:opacity-50">
+              <button type="button" onClick={() => void handleReturnRequest()} disabled={submitting} className="btn-info btn-md disabled:opacity-50 text-center">
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin inline mr-1" /> : null}Submit
               </button>
             </div>

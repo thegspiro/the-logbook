@@ -165,15 +165,13 @@ const InventoryMembersPage: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <Link to="/inventory/admin" className="text-sm text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1" title="Back to Inventory Admin">
-            <ArrowLeft className="h-4 w-4" /> Back to Admin
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-theme-text-primary">Members Equipment</h1>
-            <p className="text-sm text-theme-text-muted">View and manage equipment assigned to members</p>
-          </div>
+      <Link to="/inventory/admin" className="text-sm text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 mb-4" title="Back to Inventory Admin">
+        <ArrowLeft className="h-4 w-4" /> Back to Admin
+      </Link>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-theme-text-primary">Members Equipment</h1>
+          <p className="text-sm text-theme-text-muted">View and manage equipment assigned to members</p>
         </div>
         <div className="flex items-center gap-2">
           {canManage && (
@@ -182,7 +180,7 @@ const InventoryMembersPage: React.FC = () => {
               className="btn-success btn-md flex items-center gap-2"
               title="Scan a member's digital ID to start assigning items"
             >
-              <ScanLine className="w-4 h-4" /> Scan Member ID
+              <ScanLine className="w-4 h-4" /> <span className="hidden sm:inline">Scan Member ID</span><span className="sm:hidden">Scan</span>
             </button>
           )}
           <button onClick={() => { void loadMembers(); }} className="btn-secondary btn-md flex items-center gap-1.5" title="Refresh">
@@ -286,10 +284,10 @@ const InventoryMembersPage: React.FC = () => {
                     <p className="text-xs text-theme-text-muted">items</p>
                   </div>
                   {canManage && (
-                    <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
-                        className="btn-success btn-sm flex items-center gap-1"
+                        className="btn-success btn-sm flex items-center justify-center gap-1 active:opacity-80"
                         onClick={() => openScanModal(member)}
                         title="Assign items to this member"
                       >
@@ -298,7 +296,7 @@ const InventoryMembersPage: React.FC = () => {
                       {member.total_items > 0 && (
                         <button
                           type="button"
-                          className="btn-secondary btn-sm flex items-center gap-1"
+                          className="btn-secondary btn-sm flex items-center justify-center gap-1 active:opacity-80"
                           onClick={() => openReturnModal(member)}
                           title="Return items from this member"
                         >

@@ -166,7 +166,7 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
             )}
 
             {/* Action Buttons */}
-            <div className="flex space-x-3">
+            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3">
               <button
                 onClick={() => setShowModal(false)}
                 disabled={isResetting}

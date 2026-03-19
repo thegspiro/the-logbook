@@ -95,15 +95,15 @@ const RecertificationSection: React.FC = () => {
             Define renewal requirements for expiring certifications (NREMT, ACLS, etc.)
           </p>
         </div>
-        <div className="flex space-x-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <button
             onClick={() => { void handleGenerateTasks(); }}
-            className="btn-secondary flex items-center space-x-1 px-3 py-2 text-sm rounded-lg"
+            className="btn-secondary flex items-center gap-1 px-3 py-2 text-sm rounded-lg"
           >
             <RefreshCw className="w-4 h-4" />
             <span>Generate Tasks</span>
           </button>
-          <button className="btn-primary flex items-center space-x-1 px-3 py-2 text-sm rounded-lg">
+          <button className="btn-primary flex items-center gap-1 px-3 py-2 text-sm rounded-lg">
             <Plus className="w-4 h-4" />
             <span>Add Pathway</span>
           </button>
@@ -128,7 +128,7 @@ const RecertificationSection: React.FC = () => {
                   {pathway.description && (
                     <p className="text-sm text-theme-text-muted mt-1">{pathway.description}</p>
                   )}
-                  <div className="flex items-center space-x-4 mt-2 text-xs text-theme-text-muted">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-theme-text-muted">
                     <span>Type: {pathway.renewal_type}</span>
                     {pathway.required_hours && <span>Hours: {pathway.required_hours}</span>}
                     <span>Window: {pathway.renewal_window_days} days</span>
@@ -157,14 +157,14 @@ const RecertificationSection: React.FC = () => {
           <h4 className="text-sm font-medium text-theme-text-primary mb-3">Active Renewal Tasks</h4>
           <div className="space-y-2">
             {renewalTasks.map((task) => (
-              <div key={task.id} className="card-secondary p-3 flex items-center justify-between">
-                <div>
+              <div key={task.id} className="card-secondary p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="min-w-0">
                   <span className="text-sm text-theme-text-primary">{task.pathway_name || 'Renewal'}</span>
                   <span className="text-xs text-theme-text-muted ml-2">
                     Expires: {task.certification_expiration_date}
                   </span>
                 </div>
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center gap-3 shrink-0">
                   <div className="w-24 bg-theme-surface-secondary rounded-full h-2">
                     <div
                       className="bg-blue-500 h-2 rounded-full"
@@ -232,9 +232,9 @@ const CompetencySection: React.FC = () => {
         </button>
       </div>
 
-      <div className="flex space-x-2 mb-4">
+      <div className="flex flex-wrap gap-2 mb-4">
         {competencyLevels.map((l) => (
-          <div key={l.level} className="flex items-center space-x-1 text-xs text-theme-text-muted">
+          <div key={l.level} className="flex items-center gap-1 text-xs text-theme-text-muted">
             <div className={`w-3 h-3 rounded-full ${l.color}`} />
             <span>{l.label}</span>
           </div>

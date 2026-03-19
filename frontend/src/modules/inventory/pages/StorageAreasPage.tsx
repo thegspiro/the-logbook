@@ -62,12 +62,15 @@ interface TreeRowProps {
 const TreeRow: React.FC<TreeRowProps> = ({ node, depth, expanded, onToggle, onEdit, onDelete }) => {
   const has = node.treeChildren.length > 0;
   const open = expanded.has(node.id);
+  // Cap indentation on mobile to prevent overflow on small screens
+  const cappedDepth = typeof window !== 'undefined' && window.innerWidth < 768 ? Math.min(depth, 3) : depth;
+  const indent = cappedDepth * 16 + 12;
   return (
     <>
-      <div className="flex items-center gap-2 py-2 px-3 hover:bg-theme-surface-hover rounded-lg transition-colors group"
-        style={{ paddingLeft: `${depth * 24 + 12}px` }}>
+      <div className="flex items-center gap-2 py-2.5 px-3 hover:bg-theme-surface-hover active:bg-theme-surface-hover rounded-lg transition-colors group"
+        style={{ paddingLeft: `${indent}px` }}>
         <button onClick={() => onToggle(node.id)} disabled={!has}
-          className="w-5 h-5 flex items-center justify-center shrink-0 text-theme-text-muted"
+          className="w-6 h-6 flex items-center justify-center shrink-0 text-theme-text-muted"
           aria-label={has ? (open ? 'Collapse' : 'Expand') : undefined}>
           {has ? (open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />) : <span className="w-4 h-4" />}
         </button>
@@ -76,8 +79,9 @@ const TreeRow: React.FC<TreeRowProps> = ({ node, depth, expanded, onToggle, onEd
           <span className="text-sm font-medium text-theme-text-primary truncate block">
             {node.name}{node.label && <span className="ml-1.5 text-theme-text-muted font-normal">({node.label})</span>}
           </span>
+          {depth > 3 && <span className="text-[10px] text-theme-text-muted md:hidden">depth {depth + 1}</span>}
         </div>
-        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/30 shrink-0">
+        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/30 shrink-0 hidden sm:inline">
           {getTypeLabel(node.storage_type)}
         </span>
         <span className="text-xs text-theme-text-muted shrink-0 w-16 text-right">
