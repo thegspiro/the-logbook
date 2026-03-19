@@ -88,6 +88,8 @@ const Dashboard: React.FC = () => {
 
   // Admin summary (only loaded for users with settings.manage)
   const isAdmin = checkPermission("settings.manage");
+  const isInventoryAdmin =
+    isAdmin || checkPermission("inventory.manage");
   const [adminSummary, setAdminSummary] = useState<AdminSummary | null>(null);
   const [loadingAdmin, setLoadingAdmin] = useState(isAdmin);
 
@@ -1489,7 +1491,11 @@ const Dashboard: React.FC = () => {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
                   <Package className="w-5 h-5 text-emerald-500" />
-                  <span>Equipment & Inventory</span>
+                  <span>
+                    {isInventoryAdmin
+                      ? "Equipment & Inventory"
+                      : "My Equipment"}
+                  </span>
                 </h3>
                 <button
                   onClick={() => navigate("/inventory")}
@@ -1503,7 +1509,7 @@ const Dashboard: React.FC = () => {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                 <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
                   <p className="text-theme-text-muted text-xs font-medium uppercase">
-                    Total Items
+                    {isInventoryAdmin ? "Total Items" : "My Items"}
                   </p>
                   <p className="text-theme-text-primary text-xl font-bold mt-1">
                     {inventorySummary.total_items}
@@ -1511,7 +1517,7 @@ const Dashboard: React.FC = () => {
                 </div>
                 <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
                   <p className="text-theme-text-muted text-xs font-medium uppercase">
-                    Total Value
+                    {isInventoryAdmin ? "Total Value" : "My Value"}
                   </p>
                   <p className="text-emerald-700 dark:text-emerald-400 text-xl font-bold mt-1">
                     $
@@ -1523,7 +1529,7 @@ const Dashboard: React.FC = () => {
                 </div>
                 <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
                   <p className="text-theme-text-muted text-xs font-medium uppercase">
-                    Checked Out
+                    {isInventoryAdmin ? "Checked Out" : "My Checkouts"}
                   </p>
                   <p className="text-yellow-700 dark:text-yellow-400 text-xl font-bold mt-1">
                     {inventorySummary.active_checkouts}
@@ -1572,7 +1578,7 @@ const Dashboard: React.FC = () => {
                 >
                   My Equipment
                 </button>
-                {isAdmin && (
+                {isInventoryAdmin && (
                   <button
                     onClick={() => navigate("/inventory/checkouts")}
                     className="px-4 py-2 border border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary text-sm rounded-lg transition-colors text-center"

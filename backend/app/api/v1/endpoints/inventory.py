@@ -25,7 +25,12 @@ from fastapi import (
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import (
+    _collect_user_permissions,
+    _has_permission,
+    get_current_user,
+    require_permission,
+)
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail, sanitize_error_message
@@ -1892,15 +1897,30 @@ async def get_inventory_summary(
     current_user: User = Depends(require_permission("inventory.view")),
 ):
     """
-    Get overall inventory summary statistics
+    Get inventory summary statistics.
+
+    Admins (inventory.manage or settings.manage) see org-wide totals.
+    Regular users see only their personally checked-out and assigned items.
 
     **Authentication required**
     **Requires permission: inventory.view**
     """
     service = InventoryService(db)
-    summary = await service.get_inventory_summary(
-        organization_id=current_user.organization_id
-    )
+
+    user_perms = _collect_user_permissions(current_user)
+    is_admin = _has_permission(
+        "inventory.manage", user_perms
+    ) or _has_permission("settings.manage", user_perms)
+
+    if is_admin:
+        summary = await service.get_inventory_summary(
+            organization_id=current_user.organization_id
+        )
+    else:
+        summary = await service.get_user_inventory_summary(
+            organization_id=current_user.organization_id,
+            user_id=str(current_user.id),
+        )
     return summary
 
 
@@ -1927,11 +1947,22 @@ async def get_low_stock_alerts(
     current_user: User = Depends(require_permission("inventory.view")),
 ):
     """
-    Get categories with low stock alerts
+    Get categories with low stock alerts.
+
+    Only admins (inventory.manage or settings.manage) see low-stock alerts.
+    Regular users receive an empty list.
 
     **Authentication required**
     **Requires permission: inventory.view**
     """
+    user_perms = _collect_user_permissions(current_user)
+    is_admin = _has_permission(
+        "inventory.manage", user_perms
+    ) or _has_permission("settings.manage", user_perms)
+
+    if not is_admin:
+        return []
+
     service = InventoryService(db)
     low_stock = await service.get_low_stock_items(
         organization_id=current_user.organization_id

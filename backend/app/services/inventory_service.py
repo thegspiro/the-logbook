@@ -1551,6 +1551,138 @@ class InventoryService:
             "maintenance_due_count": len(maintenance_due) + items_in_maintenance,
         }
 
+    async def get_user_inventory_summary(
+        self, organization_id: UUID, user_id: str
+    ) -> Dict[str, Any]:
+        """Get inventory summary scoped to a single user's checkouts and
+        assignments."""
+        org_id = str(organization_id)
+
+        # Item IDs the user currently has checked out
+        checkout_items_q = (
+            select(CheckOutRecord.item_id)
+            .where(CheckOutRecord.organization_id == org_id)
+            .where(CheckOutRecord.user_id == user_id)
+            .where(CheckOutRecord.is_returned == False)  # noqa: E712
+        )
+        checkout_item_ids_result = await self.db.execute(checkout_items_q)
+        checkout_item_ids = {
+            row[0] for row in checkout_item_ids_result.all()
+        }
+
+        # Item IDs permanently assigned to the user
+        assignment_items_q = (
+            select(ItemAssignment.item_id)
+            .where(ItemAssignment.organization_id == org_id)
+            .where(ItemAssignment.user_id == user_id)
+            .where(ItemAssignment.is_active == True)  # noqa: E712
+        )
+        assignment_item_ids_result = await self.db.execute(assignment_items_q)
+        assignment_item_ids = {
+            row[0] for row in assignment_item_ids_result.all()
+        }
+
+        user_item_ids = checkout_item_ids | assignment_item_ids
+
+        if not user_item_ids:
+            return {
+                "total_items": 0,
+                "items_by_status": {},
+                "items_by_condition": {},
+                "total_value": 0.0,
+                "active_checkouts": 0,
+                "overdue_checkouts": 0,
+                "maintenance_due_count": 0,
+            }
+
+        # Total items (sum quantities)
+        total_result = await self.db.execute(
+            select(func.coalesce(func.sum(InventoryItem.quantity), 0))
+            .where(InventoryItem.id.in_(user_item_ids))
+            .where(InventoryItem.active == True)  # noqa: E712
+        )
+        total_items = total_result.scalar()
+
+        # Items by status
+        status_result = await self.db.execute(
+            select(
+                InventoryItem.status,
+                func.count(InventoryItem.id).label("count"),
+            )
+            .where(InventoryItem.id.in_(user_item_ids))
+            .where(InventoryItem.active == True)  # noqa: E712
+            .group_by(InventoryItem.status)
+        )
+        items_by_status = {
+            row.status.value: row.count for row in status_result.all()
+        }
+
+        # Items by condition
+        condition_result = await self.db.execute(
+            select(
+                InventoryItem.condition,
+                func.count(InventoryItem.id).label("count"),
+            )
+            .where(InventoryItem.id.in_(user_item_ids))
+            .where(InventoryItem.active == True)  # noqa: E712
+            .group_by(InventoryItem.condition)
+        )
+        items_by_condition = {
+            row.condition.value: row.count
+            for row in condition_result.all()
+        }
+
+        # Total value
+        value_result = await self.db.execute(
+            select(
+                func.coalesce(
+                    func.sum(
+                        InventoryItem.current_value * InventoryItem.quantity
+                    ),
+                    0,
+                )
+            )
+            .where(InventoryItem.id.in_(user_item_ids))
+            .where(InventoryItem.active == True)  # noqa: E712
+        )
+        total_value = value_result.scalar() or Decimal("0.00")
+
+        # User's active checkouts
+        active_checkouts = len(checkout_item_ids)
+
+        # User's overdue checkouts
+        overdue_result = await self.db.execute(
+            select(func.count(CheckOutRecord.id))
+            .where(CheckOutRecord.organization_id == org_id)
+            .where(CheckOutRecord.user_id == user_id)
+            .where(CheckOutRecord.is_returned == False)  # noqa: E712
+            .where(CheckOutRecord.is_overdue == True)  # noqa: E712
+        )
+        overdue_checkouts = overdue_result.scalar() or 0
+
+        # Maintenance due on user's items
+        cutoff_date = date.today() + timedelta(days=7)
+        maint_result = await self.db.execute(
+            select(func.count(InventoryItem.id))
+            .where(InventoryItem.id.in_(user_item_ids))
+            .where(InventoryItem.active == True)  # noqa: E712
+            .where(InventoryItem.next_inspection_due <= cutoff_date)
+        )
+        maintenance_due_count = maint_result.scalar() or 0
+
+        items_in_maintenance = items_by_status.get("in_maintenance", 0)
+
+        return {
+            "total_items": total_items,
+            "items_by_status": items_by_status,
+            "items_by_condition": items_by_condition,
+            "total_value": float(total_value),
+            "active_checkouts": active_checkouts,
+            "overdue_checkouts": overdue_checkouts,
+            "maintenance_due_count": maintenance_due_count
+            + items_in_maintenance,
+        }
+
     async def get_summary_by_location(
         self, organization_id: UUID
     ) -> List[Dict[str, Any]]:
