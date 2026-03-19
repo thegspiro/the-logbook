@@ -1431,20 +1431,57 @@ async def send_ballot_emails(
 
     total_attempted = recipients_count + failed_count + skipped_count
     if total_attempted == 0:
+        # Build a diagnostic message explaining why nobody was found
+        if email_data.recipient_user_ids:
+            hint = (
+                "None of the specified recipients were found in this "
+                "organization. Verify the selected members are active."
+            )
+        elif election.eligible_voters:
+            hint = (
+                "The election has an eligible voters list configured, but "
+                "none of those members were found. Verify the listed members "
+                "are still active in the organization."
+            )
+        else:
+            hint = (
+                "No active members were found in the organization. Ensure "
+                "members exist and are marked as active."
+            )
         return EmailBallotResponse(
             success=False,
             recipients_count=0,
             failed_count=0,
             skipped_count=0,
             skipped_details=skipped_details,
-            message="No eligible recipients found. Check that the election has eligible voters configured or that active members exist.",
+            message=f"No eligible recipients found. {hint}",
         )
+
+    # Send eligibility summary email to secretary if requested
+    if email_data.send_eligibility_summary and total_attempted > 0:
+        try:
+            await service.send_eligibility_summary_email(
+                election_id=election_id,
+                organization_id=current_user.organization_id,
+                sent_count=recipients_count,
+                skipped_count=skipped_count,
+                skipped_details=skipped_details,
+            )
+        except Exception as e:
+            logger.warning(
+                f"Failed to send eligibility summary email: {e}"
+            )
 
     parts = [f"Ballot emails sent to {recipients_count} recipient(s)"]
     if failed_count > 0:
         parts.append(f"{failed_count} failed")
     if skipped_count > 0:
-        parts.append(f"{skipped_count} skipped (no eligible ballot items)")
+        parts.append(
+            f"{skipped_count} skipped (did not meet ballot item requirements "
+            f"— see skipped details for per-member reasons)"
+        )
+    if email_data.send_eligibility_summary and total_attempted > 0:
+        parts.append("eligibility summary emailed to you")
 
     return EmailBallotResponse(
         success=recipients_count > 0 and failed_count == 0,

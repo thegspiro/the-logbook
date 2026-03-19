@@ -261,6 +261,7 @@ export interface EmailBallot {
   subject?: string | undefined;
   message?: string | undefined;
   include_ballot_link?: boolean | undefined;
+  send_eligibility_summary?: boolean | undefined;
 }
 
 export interface SkippedVoterDetail {

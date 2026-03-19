@@ -540,6 +540,11 @@ class EmailBallot(BaseModel):
     include_ballot_link: bool = Field(
         default=True, description="Include link to voting page"
     )
+    send_eligibility_summary: bool = Field(
+        default=False,
+        description="Email the secretary a summary of who received "
+        "ballots and who was skipped with reasons",
+    )
 
 
 class SkippedVoterDetail(BaseModel):

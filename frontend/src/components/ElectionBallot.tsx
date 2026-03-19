@@ -226,7 +226,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
   if (!eligibility.is_eligible && !eligibility.has_voted) {
     return (
       <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-6">
-        <p className="text-yellow-700 dark:text-yellow-300">{eligibility.reason || 'You are not eligible to vote in this election.'}</p>
+        <p className="text-yellow-700 dark:text-yellow-300">{eligibility.reason || 'You are not eligible to vote in this election. Contact the election administrator for details.'}</p>
       </div>
     );
   }

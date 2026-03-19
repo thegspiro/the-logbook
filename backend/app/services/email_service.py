@@ -610,6 +610,124 @@ class EmailService:
 
         return success_count, failure_count
 
+    async def send_eligibility_summary(
+        self,
+        to_emails: List[str],
+        recipient_name: str,
+        election_title: str,
+        sent_count: int,
+        skipped_count: int,
+        total_checked_in: int,
+        recipients_html: str,
+        recipients_text: str,
+        skipped_voters_html: str,
+        skipped_voters_text: str,
+        cc_emails: Optional[List[str]] = None,
+        db: Any = None,
+        organization_id: Optional[str] = None,
+    ) -> tuple[int, int]:
+        """
+        Send a ballot eligibility summary email to the secretary after
+        ballot emails are dispatched.
+
+        Lists who received ballots and who was skipped with reasons.
+
+        Returns:
+            Tuple of (success_count, failure_count)
+        """
+        org_name = ""
+        if self.organization:
+            org_name = getattr(self.organization, "name", "")
+
+        context = {
+            "recipient_name": recipient_name,
+            "election_title": election_title,
+            "sent_count": str(sent_count),
+            "skipped_count": str(skipped_count),
+            "total_checked_in": str(total_checked_in),
+            "recipients_html": recipients_html,
+            "recipients_text": recipients_text,
+            "skipped_voters_html": skipped_voters_html,
+            "skipped_voters_text": skipped_voters_text,
+            "organization_name": org_name,
+        }
+
+        subject = None
+        html_body = None
+        text_body = None
+
+        # Try loading the admin-configured template from the database
+        if db and organization_id:
+            try:
+                from app.models.email_template import EmailTemplateType
+                from app.services.email_template_service import (
+                    EmailTemplateService,
+                )
+
+                template_service = EmailTemplateService(db)
+                template = await template_service.get_template(
+                    organization_id,
+                    EmailTemplateType.BALLOT_ELIGIBILITY_SUMMARY,
+                )
+                if template:
+                    subject, html_body, text_body = template_service.render(
+                        template, context, organization=self.organization
+                    )
+            except Exception as e:
+                logger.warning(
+                    "Failed to load eligibility summary template, "
+                    f"using default: {e}"
+                )
+
+        # Fall back to inline default if no template loaded
+        if not subject:
+            import re
+
+            from app.services.email_template_service import (
+                DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_HTML,
+                DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_SUBJECT,
+                DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_TEXT,
+                DEFAULT_CSS,
+            )
+
+            context["organization_logo_img"] = self._build_logo_img()
+            _raw_html_vars = {
+                "organization_logo_img",
+                "recipients_html",
+                "skipped_voters_html",
+            }
+
+            def _replace(text: str) -> str:
+                def replacer(match):
+                    var = match.group(1).strip()
+                    value = str(context.get(var, match.group(0)))
+                    if var in _raw_html_vars:
+                        return value
+                    return _html.escape(value)
+
+                return re.sub(r"\{\{(\s*\w+\s*)\}\}", replacer, text)
+
+            subject = _replace(DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_SUBJECT)
+            html_body = (
+                f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style>"
+                f"</head><body>"
+                f"{_replace(DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_HTML)}"
+                f"</body></html>"
+            )
+            text_body = _replace(DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_TEXT)
+
+        success_count, failure_count = await self.send_email(
+            to_emails=to_emails,
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            cc_emails=cc_emails,
+            db=db,
+            template_type="ballot_eligibility_summary",
+        )
+
+        return success_count, failure_count
+
     async def send_training_approval_request(
         self,
         to_emails: List[str],
