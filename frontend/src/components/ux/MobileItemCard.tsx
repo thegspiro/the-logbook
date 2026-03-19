@@ -226,6 +226,7 @@ export const MobileItemCard: React.FC<MobileItemCardProps> = ({
               title="Write off"
             >
               <FileX className="w-3.5 h-3.5" aria-hidden="true" />
+              Write Off
             </button>
           )}
           {canRetire && onRetire && (
@@ -235,6 +236,7 @@ export const MobileItemCard: React.FC<MobileItemCardProps> = ({
               title="Retire"
             >
               <Archive className="w-3.5 h-3.5" aria-hidden="true" />
+              Retire
             </button>
           )}
         </div>
