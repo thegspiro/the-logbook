@@ -23,9 +23,7 @@ from sqlalchemy.orm import selectinload
 from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.constants import (
-    ADMINISTRATIVE_ROLE_SLUGS,
     LEADERSHIP_ROLE_SLUGS,
-    OPERATIONAL_ROLE_SLUGS,
 )
 from app.models.election import Candidate, Election, ElectionStatus, Vote, VotingToken
 from app.models.user import Organization, User
@@ -121,55 +119,54 @@ class ElectionService:
 
     async def _user_has_role_type(self, user: User, role_types: List[str]) -> bool:
         """
-        Check if a user has any of the specified role types/slugs
+        Check if a user has any of the specified voter-type categories.
+
+        Eligibility is determined primarily by the member's
+        ``membership_type`` (department membership classification), with a
+        fallback to direct role-slug matching for custom/specific slugs.
 
         role_types can include:
         - "all" - everyone is eligible
-        - "operational" - users with operational roles (firefighter, driver, officer roles)
-        - "administrative" - users with administrative roles (secretary, treasurer, etc.)
-        - "regular" - active members who are not probationary (regular + life)
-        - "life" - life members only
-        - "probationary" - probationary members only
+        - "operational" - members with membership_type "active"
+        - "administrative" - members with membership_type "administrative"
+        - "regular" - active or life members (membership_type in active, life)
+        - "life" - life members only (membership_type "life")
+        - "probationary" - probationary members (membership_type "probationary")
         - Specific role slugs like "chief", "president", etc.
         """
         if not role_types or "all" in role_types:
             return True
 
-        from app.models.user import UserStatus
+        from app.models.user import MembershipType
 
-        user_role_slugs = [role.slug for role in user.roles]
+        member_type = getattr(user, "membership_type", None) or "active"
 
-        # Check for direct role slug matches
-        for role_slug in user_role_slugs:
-            if role_slug in role_types:
-                return True
-
-        # Check for role type categories
-        operational_roles = OPERATIONAL_ROLE_SLUGS
-        administrative_roles = ADMINISTRATIVE_ROLE_SLUGS
-
+        # Membership-type category checks
         if "operational" in role_types:
-            if any(slug in operational_roles for slug in user_role_slugs):
+            if member_type == MembershipType.ACTIVE:
                 return True
 
         if "administrative" in role_types:
-            if any(slug in administrative_roles for slug in user_role_slugs):
+            if member_type == MembershipType.ADMINISTRATIVE:
                 return True
 
-        # Member class categories based on user status
-        # "regular" = active members who are not probationary (includes life members)
+        # "regular" = active or life members (non-probationary voting members)
         if "regular" in role_types:
-            if user.status == UserStatus.ACTIVE:
+            if member_type in (MembershipType.ACTIVE, MembershipType.LIFE):
                 return True
 
-        # "life" = members with a "life_member" role slug
         if "life" in role_types:
-            if "life_member" in user_role_slugs:
+            if member_type == MembershipType.LIFE:
                 return True
 
-        # "probationary" = members with probationary status
         if "probationary" in role_types:
-            if user.status == UserStatus.PROBATIONARY:
+            if member_type == MembershipType.PROBATIONARY:
+                return True
+
+        # Fallback: check for direct role slug matches
+        user_role_slugs = [role.slug for role in user.roles]
+        for role_slug in user_role_slugs:
+            if role_slug in role_types:
                 return True
 
         return False
@@ -346,13 +343,13 @@ class ElectionService:
                     continue
 
         total = len(ballot_items)
-        user_roles = ", ".join(r.slug for r in user.roles) or "none"
+        member_type = getattr(user, "membership_type", None) or "active"
         reasons = []
         if role_blocked > 0:
             required_label = ", ".join(sorted(required_types_seen))
             reasons.append(
-                f"role type not eligible for {role_blocked}/{total} item(s) "
-                f"(requires: {required_label}; member has: {user_roles})"
+                f"membership type not eligible for {role_blocked}/{total} item(s) "
+                f"(requires: {required_label}; member has: {member_type})"
             )
         if attendance_blocked > 0:
             reasons.append(
@@ -752,6 +749,7 @@ class ElectionService:
                 voter_types = position_rules.get("voter_types", ["all"])
                 if not await self._user_has_role_type(user, voter_types):
                     eligible_label = ", ".join(voter_types)
+                    member_type = getattr(user, "membership_type", None) or "active"
                     return VoterEligibility(
                         is_eligible=False,
                         has_voted=False,
@@ -760,7 +758,7 @@ class ElectionService:
                         reason=(
                             f"Voting for the {position} position requires one of "
                             f"these voter types: {eligible_label}. Your current "
-                            f"roles do not qualify."
+                            f"membership type ({member_type}) does not qualify."
                         ),
                     )
 
@@ -776,9 +774,7 @@ class ElectionService:
                 eligible_types = item.get("eligible_voter_types", ["all"])
                 if not await self._user_has_role_type(user, eligible_types):
                     eligible_label = ", ".join(eligible_types)
-                    user_roles = ", ".join(
-                        r.slug for r in user.roles
-                    ) or "none"
+                    member_type = getattr(user, "membership_type", None) or "active"
                     return VoterEligibility(
                         is_eligible=False,
                         has_voted=False,
@@ -786,8 +782,8 @@ class ElectionService:
                         positions_remaining=[],
                         reason=(
                             f"This ballot item requires one of these voter types: "
-                            f"{eligible_label}. Your current roles ({user_roles}) "
-                            f"do not qualify."
+                            f"{eligible_label}. Your current membership type "
+                            f"({member_type}) does not qualify."
                         ),
                     )
                 # Check attendance requirement
