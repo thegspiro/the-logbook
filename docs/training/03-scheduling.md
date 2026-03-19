@@ -508,6 +508,150 @@ FF Schmidt was on a 2-week Leave of Absence (April 1-14), so his requirement was
 
 ---
 
+## Position Eligibility & Equipment Checks (2026-03-19)
+
+### Shift Position Eligibility
+
+Operational ranks now define which shift positions each rank is eligible for. When members sign up for open shifts, they only see positions their rank qualifies for.
+
+**Setting up eligible positions:**
+
+1. Navigate to **Settings > Operational Ranks**.
+2. For each rank, select the eligible positions using the toggle matrix.
+3. Save. Existing ranks are backfilled with default eligible positions.
+
+> **Screenshot needed:**
+> _[Screenshot of the Settings > Operational Ranks page showing the eligible positions matrix — a grid with ranks on the left (Chief, Captain, Lieutenant, Firefighter, Probationary) and position types across the top (Officer, Driver, Firefighter, EMT), with toggles for each combination]_
+
+**How it affects shift signup:**
+
+- The Dashboard's open shifts section only shows the **Sign Up** button for shifts where the member's rank qualifies for at least one open position
+- When clicking Sign Up, only eligible positions appear in the dropdown
+- Ranks with no `eligible_positions` defined default to all positions being eligible (backward-compatible)
+
+> **Screenshot needed:**
+> _[Screenshot of the Dashboard "Open Shifts" section showing shift cards — one with a "Sign Up" button (member is eligible) and one without (member's rank doesn't qualify for remaining open positions)]_
+
+### Scheduling Admin Pages
+
+Admin functionality has been extracted into dedicated pages for better navigation:
+
+| URL | Page | What It Does |
+|-----|------|-------------|
+| `/scheduling/templates` | Templates | Manage shift templates |
+| `/scheduling/patterns` | Patterns | Create and manage shift patterns |
+| `/scheduling/reports` | Reports | View hours, coverage, and compliance reports |
+| `/scheduling/settings` | Settings | Configure scheduling rules and preferences |
+
+Each page has back navigation to the main scheduling hub. Access requires `scheduling.manage` permission.
+
+> **Screenshot needed:**
+> _[Screenshot of one of the scheduling admin sub-pages (e.g., Templates) showing the page header with back navigation arrow, and the content area below]_
+
+### Equipment Check System
+
+The Equipment Check system allows structured, shift-based vehicle and equipment inspections. It consists of three parts: template building, check submission, and reporting.
+
+#### For Administrators: Building Templates
+
+Navigate to **Scheduling > Settings > Equipment** to see the template list, then click **Create Template** to open the template builder.
+
+1. Set the template name, timing (start or end of shift), and type (equipment, vehicle, or combined)
+2. Optionally assign to a specific apparatus or apparatus type
+3. Optionally restrict to specific positions (e.g., only Driver/Operator sees this checklist)
+4. Add **compartments** — named sections representing physical areas (e.g., "Officer Door Entry", "Pump Panel", "Cab Interior")
+5. Within each compartment, add **items** with one of 7 check types:
+
+| Check Type | What It Records | Example |
+|-----------|----------------|---------|
+| **Pass/Fail** | Binary pass or fail | "Fire extinguisher pin intact" |
+| **Present** | Item is present or missing | "Traffic cones (6)" |
+| **Functional** | Item works or doesn't | "PA system" |
+| **Quantity** | Numeric count | "SCBA bottles — required: 4" |
+| **Level** | Fill level with unit | "Fuel — gallons" |
+| **Date/Lot** | Expiration date and lot number | "EpiPen — exp: 2026-09" |
+| **Reading** | Numeric reading with unit | "Pump engine hours — hours" |
+
+6. Items can track serial numbers, lot numbers, expiration dates (with warning windows), and required quantities
+7. Use **drag-and-drop** to reorder compartments and items
+8. Use **vehicle check presets** to import common inspection categories for engine, ladder, or ambulance types
+
+> **Screenshot needed:**
+> _[Screenshot of the Equipment Check Template Builder showing the template header (name, timing, type), a compartment ("Cab Interior") expanded with several check items of different types (pass/fail, quantity, date/lot), and the drag-handle icons for reordering]_
+
+> **Screenshot needed:**
+> _[Screenshot of the vehicle check preset picker showing preset categories (Engine, Ladder, Ambulance) with preview of included compartments and items]_
+
+#### For Members: Submitting Equipment Checks
+
+During a shift, members see pending equipment checks on their dashboard or via **Scheduling > My Checklists**.
+
+1. Open the checklist for your current shift
+2. Work through each compartment and item:
+   - **Pass/Fail**: Tap pass or fail
+   - **Quantity**: Enter the count
+   - **Level**: Enter the level reading
+   - **Date/Lot**: Verify expiration date and lot number
+   - **Reading**: Enter the reading value
+3. Optionally attach photos to any item (up to 3 per item)
+4. Submit the completed check
+
+> **Screenshot needed:**
+> _[Screenshot of the equipment check form on a mobile device showing a compartment heading, several check items with pass/fail toggle buttons, a quantity field, and the photo attachment button]_
+
+**Auto-fail rules:**
+- Items with `has_expiration: true` and a past expiration date auto-fail regardless of the submitted result
+- Items below the `required_quantity` auto-fail
+- A single failed item marks the entire apparatus as **deficient** — the apparatus record shows a deficiency badge until a subsequent full check passes all items
+
+#### For Officers: Reports
+
+Navigate to **Scheduling > Equipment Check Reports** to view three report tabs:
+
+| Tab | What It Shows |
+|-----|-------------|
+| **Compliance Dashboard** | Pass rates by apparatus, member compliance stats, check frequency |
+| **Failure/Deficiency Log** | Paginated list of failed items with filters by apparatus, date, and check type |
+| **Item Trend History** | Pass/fail trends over time by interval (daily, weekly, monthly) |
+
+Reports can be exported as **CSV** or **PDF**.
+
+> **Screenshot needed:**
+> _[Screenshot of the Equipment Check Reports page showing the Compliance Dashboard tab with apparatus cards showing pass rates (e.g., "Engine 1: 98% pass rate"), and the tab bar showing Compliance / Failures / Trends]_
+
+#### Equipment Check Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| No template assigned to apparatus | No checklist appears for that shift |
+| Position-based template | Only members in assigned positions see the checklist |
+| Expired item submitted as "Pass" | Auto-fails with "expired" reason |
+| Item below required quantity | Auto-fails with "under required quantity" reason |
+| All items pass | Clears apparatus deficiency flag if previously set |
+| Photo upload | Max 3 per item, max 10 MB each, auto-converted to WebP |
+| Template cloning | Deep clones compartments and items to another apparatus |
+| Serial/lot number update | Submitting new serial/lot updates the template item for future reference |
+
+### Structured Position Slots & Decline Handling
+
+Shifts now define required and optional position slots. When a member declines or is removed from a shift:
+
+- The system sends a decline notification
+- The open slot becomes visible on the shift card for re-assignment
+- Other eligible members can sign up for the vacated slot
+
+> **Screenshot needed:**
+> _[Screenshot of the ShiftDetailPanel showing position slots — some filled (with member name and green badge), one marked "Open" with a yellow badge, and an "Assign" button next to the open slot]_
+
+### Additional Fixes (2026-03-19)
+
+- **Dashboard shows only relevant shifts**: My Upcoming Shifts hides declined and cancelled assignments; Open Shifts hides shifts the user already signed up for
+- **Shift signup re-enrollment**: Members who previously cancelled can re-sign up (cleanup of old cancelled assignment prevents constraint violation)
+- **Attendee count accuracy**: Cancelled and no-show assignments no longer inflate the displayed count
+- **Timezone fixes**: Fixed naive local times being sent as UTC when creating shifts from the scheduling page; fixed template-based generation ignoring org timezone
+
+---
+
 ## Template Positions & Timezone Fixes (2026-03-15)
 
 ### Template Positions Carry to Crew Roster
@@ -558,6 +702,15 @@ Two timezone display issues were corrected:
 | "Too many attempts" on shift signup | Rate limiting may be active. Wait a few seconds and try again. |
 | Cannot edit shift times after creation | Officers with `scheduling.manage` can now edit shift start/end times, apparatus, color, notes, and custom creation times from the shift detail panel. |
 | Position change requires opening a modal | Use the new inline position change UI directly on the shift card to change a member's assigned position without navigating away. |
+| Shift signup shows no positions | Your rank may not have eligible positions configured. Ask your administrator to check Settings > Operational Ranks. |
+| Dashboard still shows cancelled shifts | Fixed 2026-03-19 — declined and cancelled assignments are now filtered from "My Upcoming Shifts". Pull latest. |
+| Sign Up button not appearing for open shifts | Your rank may not be eligible for the remaining open positions. Check with your administrator. |
+| Equipment check template not appearing for shift | Template must be assigned to the shift's apparatus (or apparatus type) and your position must match the template's assigned positions. |
+| Equipment check shows auto-fail on a working item | Check the item's expiration date — items past their expiration auto-fail regardless of submitted result. |
+| Apparatus shows deficiency badge but check passed | A subsequent full check must pass ALL items to clear the deficiency flag. Partial checks don't clear it. |
+| Equipment check photo won't upload | Photos must be JPEG, PNG, or WebP and under 10 MB. Max 3 photos per item. |
+| Equipment check reports showing no data | Ensure at least one equipment check has been submitted. Check the date range filter. |
+| Shift times showing in wrong timezone | Fixed 2026-03-19 — shift creation now converts local times to UTC using org timezone. Template-generated shifts also inherit correct timezone. |
 
 ---
 

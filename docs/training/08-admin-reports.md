@@ -770,6 +770,36 @@ Profiles allow different compliance standards for different groups:
 | Pipeline overview report missing | Added 2026-03-15 — new `PipelineOverviewRenderer` in Reports module. Configure stage grouping in Pipeline Settings > Report Stage Groups. |
 | Pipeline report stage groups | Configure in Pipeline Settings. Groups combine multiple stages into labeled groups (e.g., "Early Stages" = Application + Interview) for the pipeline overview report. |
 | Modal cannot be closed by clicking backdrop | Fixed 2026-03-14 — all modals across the app now have correct backdrop click-to-dismiss and z-index stacking. Pull latest frontend code. |
+| Dark mode backgrounds bleeding through | Fixed 2026-03-18 — overlays, dropdowns, drawer panels, and sticky elements now use opaque backgrounds in dark mode. Pull latest frontend. |
+| High-contrast mode missing styles | Fixed 2026-03-18 — high-contrast variants added across 25+ files. Pull latest frontend. |
+| API datetime fields missing timezone | Fixed 2026-03-16 — all API response schemas now inherit from `UTCResponseBase` which stamps naive datetimes with `+00:00`. Pull latest backend. |
+| Equipment check reports not showing | Navigate to `/scheduling/equipment-check-reports`. Requires `equipment_check.manage` permission. At least one check must be submitted. *(added 2026-03-19)* |
+| Operational ranks eligible positions not saving | Ensure you are on the latest migration. The `eligible_positions` JSON column was added 2026-03-19. Run `alembic upgrade head`. |
+| Scheduling admin pages return 404 | Admin tabs were extracted into dedicated routes (`/scheduling/templates`, `/scheduling/patterns`, etc.) in 2026-03-19. Pull latest frontend. |
+
+---
+
+## Dark Mode & Accessibility (2026-03-18)
+
+Dark mode and high-contrast mode have been hardened across the application:
+
+- **Opaque backgrounds**: All overlays, dropdowns, drawer panels, and sticky elements now use opaque backgrounds instead of transparent/semi-transparent that caused content bleed-through in dark mode
+- **Comprehensive dark variants**: Added `dark:` Tailwind variants across 25+ files for icon badges, stat cards, settings UI, form inputs, and table rows
+- **High-contrast support**: Additional high-contrast CSS variants for accessibility compliance
+
+> **Screenshot needed:**
+> _[Screenshot comparing the same page in light mode and dark mode side-by-side, showing a dropdown or overlay with the opaque background correctly rendering in dark mode without content bleeding through]_
+
+## UTC Timezone Consistency (2026-03-16)
+
+All API response schemas now inherit from `UTCResponseBase`, which automatically stamps naive `datetime` fields with UTC timezone info (`+00:00` suffix). This ensures JavaScript correctly interprets times as UTC and applies local timezone conversion.
+
+**What changed:**
+- Previously, some API datetime fields were returned without timezone info, causing JavaScript's `new Date()` to treat them as local time
+- Now, all datetime fields include `+00:00` (equivalent to `Z`), so UTC-to-local conversion works correctly
+- Combined with the existing SQLAlchemy `load` event listener (which stamps datetimes at ORM level), timezone consistency is enforced at both the database and API layers
+
+> **Edge case:** Response schemas with `Optional[datetime]` skip stamping when the value is `None`. The validator runs as `model_validator(mode="before")` so it processes raw dict data before Pydantic validation.
 
 ---
 

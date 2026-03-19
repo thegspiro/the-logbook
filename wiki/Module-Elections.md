@@ -63,6 +63,45 @@ PATCH  /api/v1/elections/settings               # Update election settings
 
 ---
 
+## Recent Improvements (2026-03-19)
+
+### Hardening, Audit Logging & Email Improvements
+
+- **Comprehensive audit logging**: All election state changes (create, open, close, certify, cancel, extend, rollback) now generate audit log entries with actor, action, and metadata
+- **Response model standardization**: All election response schemas use `UTCResponseBase` for consistent datetime serialization with UTC timezone markers. Added missing `quorum_required` and `quorum_met` fields
+- **Race condition fixes**: Proxy authorization and vote casting now use database-level locking to prevent concurrent modification. Cross-tenant data access blocked with `organization_id` filtering
+- **JSON column mutation fixes**: Fixed `rollback_history` and attendee check-in not persisting due to in-place JSON mutation. Uses `copy.deepcopy()` pattern
+- **Ballot sending reliability**: Fixed ballot emails silently returning 0 recipients — root cause was `User.is_active` property not queryable in SQLAlchemy filters; converted to `hybrid_property`. Added per-recipient exception handling and diagnostic logging
+- **Eligibility summary email**: After dispatching ballots, the secretary receives a summary email listing skipped voters with reasons (no email, ineligible, already voted)
+- **Secretary-facing error messages**: Election errors now include actionable details (e.g., "Election has no candidates" instead of generic "cannot open election")
+- **Election report email**: Officers can email election results as a formatted report
+- **Upcoming business meetings section**: Election detail page shows upcoming business meetings for linking elections to meeting records
+- **Linked meetings filter**: Correctly shows only upcoming meetings (not past ones)
+- **Extend modal date display fix**: Fixed incorrect date formatting in the election extension modal
+- **Safe error handling**: All elections endpoints wrapped with `safe_error_detail()`
+- **Empty string form value fix**: Optional election form fields use `||` instead of `??`
+
+### API Endpoints — Election Report & Summary (2026-03-19)
+
+```
+POST   /api/v1/elections/{id}/send-report-email      # Email election results report
+```
+
+### Edge Cases (2026-03-19)
+
+| Scenario | Behavior |
+|----------|----------|
+| Ballot email to recipient with no email | Skipped with reason logged; included in eligibility summary |
+| One failed email in batch | Per-recipient exception handling; other recipients still receive |
+| Proxy authorization cross-tenant | Blocked by `organization_id` filter — returns 404 |
+| Rollback history mutation | Uses `copy.deepcopy()` before appending |
+| Elections with only ballot items | Can be opened — `open_election` no longer requires candidates |
+| Eligibility summary email | Sent only to the user who triggered ballot dispatch |
+| No eligible voters found | Descriptive error instead of false success with 0 recipients |
+| Concurrent vote attempts | Database-level locking prevents double-voting race conditions |
+
+---
+
 ## Recent Improvements (2026-03-12)
 
 - **Ballot email notifications**: Election creators can send ballot notification emails to eligible voters directly from the election detail page. Emails include election title, voting period, direct ballot link, and organization logo

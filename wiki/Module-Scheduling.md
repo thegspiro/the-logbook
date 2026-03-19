@@ -114,6 +114,56 @@ GET    /api/v1/scheduling/apparatus          # List basic apparatus
 
 ---
 
+## Recent Improvements (2026-03-19)
+
+### Position Eligibility, Admin Sub-Pages & Timezone Fixes
+
+- **Shift position eligibility system**: Operational ranks now define `eligible_positions` — a list of shift positions each rank is qualified for. Dashboard signup validates against eligibility. Existing ranks backfilled via migration
+- **Rank eligible positions UI redesign**: Settings page shows a clear matrix of ranks × positions with toggle controls
+- **Scheduling admin sub-pages**: Admin tabs extracted into dedicated routed pages: `/scheduling/templates`, `/scheduling/patterns`, `/scheduling/reports`, `/scheduling/settings` with back navigation and `ProtectedRoute` gating
+- **Shift settings tabbed sub-navigation**: Settings page reorganized into tabbed sections
+- **Structured position slots**: Shifts define required and optional position slots with decline notifications
+- **Open slot visibility**: Declined or removed members reveal open slots for re-assignment
+- **Position editing in shift detail**: Officers edit position assignments directly in the shift detail edit form
+- **Dashboard shift display fixes**: No longer shows shifts user already signed up for; hides declined/cancelled shifts from "My Upcoming Shifts"; fixes 422 error from invalid `general` position on signup
+- **Shift signup re-enrollment**: Members who previously cancelled can re-sign up for the same shift
+- **Attendee count fix**: Cancelled and no-show assignments no longer inflate the displayed count
+- **Shift timezone fixes**: Fixed naive local times sent as UTC when creating shifts; fixed template generation ignoring org timezone; fixed naive datetime construction across 7 backend services
+- **UTC response schema refactor**: `UTCResponseBase` base class stamps naive datetimes with UTC timezone markers in all scheduling response schemas
+- **Equipment check system**: Full-stack vehicle and equipment inspection system (see [Apparatus Module](Module-Apparatus#equipment-check-system-2026-03-19))
+
+### New Pages (2026-03-19)
+
+| URL | Page | Permission |
+|-----|------|------------|
+| `/scheduling/templates` | Scheduling Templates | `scheduling.manage` |
+| `/scheduling/patterns` | Scheduling Patterns | `scheduling.manage` |
+| `/scheduling/reports` | Scheduling Reports | `scheduling.manage` |
+| `/scheduling/settings` | Scheduling Settings | `scheduling.manage` |
+| `/scheduling/equipment-check-templates/new` | Equipment Check Template Builder | `equipment_check.manage` |
+| `/scheduling/equipment-check-templates/:templateId` | Edit Equipment Check Template | `equipment_check.manage` |
+| `/scheduling/equipment-check-reports` | Equipment Check Reports | `equipment_check.manage` |
+
+### Data Model Changes (2026-03-19)
+
+| Table | Column | Description |
+|-------|--------|-------------|
+| `operational_ranks` | `eligible_positions` (JSON) | Shift positions this rank is qualified for |
+| `shift_assignments` | `position_slot_id` (String, nullable) | Links to a structured position slot |
+
+### Edge Cases (2026-03-19)
+
+| Scenario | Behavior |
+|----------|----------|
+| Ranks with no `eligible_positions` | Default to all positions being eligible (backward-compatible) |
+| Dashboard signup button | Only appears for shifts with open positions the member's rank qualifies for |
+| Previously cancelled signup | Cleaned up before re-enrollment to avoid constraint violations |
+| Shift create from scheduling page | Converts local times to UTC using org timezone before API call |
+| Template-generated shifts | Inherit timezone-correct start/end times |
+| Declined assignments | Create open slots visible to other members |
+
+---
+
 ## Recent Improvements (2026-03-15)
 
 ### Template Positions & Timezone Fixes

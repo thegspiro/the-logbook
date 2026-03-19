@@ -106,6 +106,7 @@ All routes registered in `backend/app/api/v1/api.py`:
 | `/api/v1/event-requests` | `event_requests.py` | event-requests | 18 |
 | `/api/v1/locations` | `locations.py` | locations | 6 |
 | `/api/v1/apparatus` | `apparatus.py` | apparatus | ~68 |
+| `/api/v1/equipment-checks` | `equipment_check.py` | equipment-checks | ~25 |
 | `/api/v1/facilities` | `facilities.py` | facilities | ~28 |
 | `/api/v1/security` | `security_monitoring.py` | security | 13 |
 | `/api/v1/dashboard` | `dashboard.py` | dashboard | 4 |
@@ -148,7 +149,7 @@ All routes registered in `backend/app/api/v1/api.py`:
 | `/api/v1/operational-ranks` | `operational_ranks.py` | operational-ranks | 7 |
 | `/api/v1/onboarding` | `onboarding.py` | onboarding | 25 |
 | `/api/v1/public-portal` | `public_portal_admin.py` | public-portal-admin | 13 |
-| **Total** | | | **~800+** |
+| **Total** | | | **~825+** |
 
 ### Key Cross-Module API Endpoints
 
@@ -172,6 +173,8 @@ These endpoints bridge data across modules:
 | `/compliance/annual-report` | GET | Annual compliance report | Training + Users + Compliance |
 | `/reports/generate` | POST | Cross-module report generation | All modules |
 | `/users/{user_id}/property-return-report` | GET | Property return preview | Users + Inventory |
+| `/equipment-checks/shifts/{shift_id}/checklists` | GET | Applicable checklists for shift | Equipment Checks + Scheduling + Apparatus |
+| `/equipment-checks/reports/compliance` | GET | Apparatus compliance stats | Equipment Checks + Apparatus |
 
 ---
 
@@ -188,7 +191,7 @@ These endpoints bridge data across modules:
 | `skills_testing.py` | SkillTemplate, SkillTest | skill_templates, skill_tests |
 | `election.py` | Election, Candidate, Vote, VotingToken | elections, candidates, ballots, voting_tokens |
 | `inventory.py` | InventoryCategory, InventoryItem, ItemAssignment, CheckOutRecord, MaintenanceRecord, StorageArea | inventory_categories, inventory_items, item_assignments, inventory_checkouts, maintenance_records, storage_areas |
-| `apparatus.py` | Apparatus, ApparatusType, ApparatusStatus, ApparatusCustomField, ApparatusPhoto, ApparatusDocument, ApparatusMaintenanceType, ApparatusMaintenance, ApparatusFuelLog, ApparatusOperator, ApparatusEquipment, ApparatusLocationHistory, ApparatusStatusHistory, ApparatusNFPACompliance, ApparatusReportConfig | apparatus, apparatus_types, apparatus_statuses, apparatus_custom_fields, apparatus_photos, apparatus_documents, apparatus_maintenance_types, apparatus_maintenance, apparatus_fuel_logs, apparatus_operators, apparatus_equipment, apparatus_location_history, apparatus_status_history, apparatus_nfpa_compliance, apparatus_report_configs |
+| `apparatus.py` | Apparatus, ApparatusType, ApparatusStatus, ApparatusCustomField, ApparatusPhoto, ApparatusDocument, ApparatusMaintenanceType, ApparatusMaintenance, ApparatusFuelLog, ApparatusOperator, ApparatusEquipment, ApparatusLocationHistory, ApparatusStatusHistory, ApparatusNFPACompliance, ApparatusReportConfig, EquipmentCheckTemplate, CheckTemplateCompartment, CheckTemplateItem, ShiftEquipmentCheck, ShiftEquipmentCheckItem | apparatus, apparatus_types, apparatus_statuses, apparatus_custom_fields, apparatus_photos, apparatus_documents, apparatus_maintenance_types, apparatus_maintenance, apparatus_fuel_logs, apparatus_operators, apparatus_equipment, apparatus_location_history, apparatus_status_history, apparatus_nfpa_compliance, apparatus_report_configs, equipment_check_templates, check_template_compartments, check_template_items, shift_equipment_checks, shift_equipment_check_items |
 | `facilities.py` | Facility, FacilityType, FacilityStatus, FacilityPhoto, FacilityDocument, FacilityMaintenanceType, FacilityMaintenance, FacilitySystem, FacilityInspection, FacilityUtilityAccount, FacilityUtilityReading, FacilityAccessKey, FacilityRoom, FacilityEmergencyContact, FacilityShutoffLocation, FacilityCapitalProject, FacilityInsurancePolicy, FacilityOccupant, FacilityComplianceChecklist, FacilityComplianceItem, FacilityCategory | facilities, facility_types, facility_statuses, facility_photos, facility_documents, facility_maintenance_types, facility_maintenance, facility_systems, facility_inspections, facility_utility_accounts, facility_utility_readings, facility_access_keys, facility_rooms, facility_emergency_contacts, facility_shutoff_locations, facility_capital_projects, facility_insurance_policies, facility_occupants, facility_compliance_checklists, facility_compliance_items, facility_categories |
 | `meeting.py` | Meeting, MeetingAttendee, MeetingActionItem | meetings, meeting_attendees, meeting_action_items |
 | `minute.py` | MeetingMinutes, MinutesTemplate, Motion, ActionItem | meeting_minutes, minute_templates, motions, action_items |
@@ -251,7 +254,9 @@ Organization ─┬─< User ─┬─< EventRSVP
               │               ├─< ApparatusFuelLog
               │               ├─< ApparatusOperator
               │               ├─< ApparatusEquipment
-              │               └─< ApparatusPhoto / ApparatusDocument
+              │               ├─< ApparatusPhoto / ApparatusDocument
+              │               ├─< EquipmentCheckTemplate ─< CheckTemplateCompartment ─< CheckTemplateItem
+              │               └─< ShiftEquipmentCheck ─< ShiftEquipmentCheckItem
               │
               ├─< Facility ─┬─< FacilityMaintenance
               │              ├─< FacilityInspection
@@ -309,6 +314,9 @@ Organization ─┬─< User ─┬─< EventRSVP
 | `notification.py` | NotificationChannel | in_app, email, sms, push |
 | `membership_pipeline.py` | ProspectStatus | active, accepted, rejected, withdrawn, on_hold, expired |
 | `membership_pipeline.py` | PipelineStepType | application, document_upload, background_check, interview, training, election_vote, committee_review, orientation, custom |
+| `apparatus.py` | CheckType | pass_fail, present, functional, quantity, level, date_lot, reading |
+| `apparatus.py` | TemplateType | equipment, vehicle, combined |
+| `apparatus.py` | CheckTiming | start_of_shift, end_of_shift |
 | `admin_hours.py` | AdminHoursEntryStatus | pending, approved, rejected |
 | `admin_hours.py` | AdminHoursEntryMethod | clock, manual, qr_code |
 | `grant.py` | ApplicationStatus | draft, submitted, under_review, approved, denied, withdrawn, active, closed, completed |
@@ -349,6 +357,7 @@ All services in `backend/app/services/`:
 | `election_service.py` | ElectionService | Election, Candidate, Vote, VotingToken | create_election, open_election, close_election, cast_vote, get_results, verify_integrity, manage_proxy_voting |
 | `inventory_service.py` | InventoryService | InventoryItem, InventoryCategory, ItemAssignment, CheckOutRecord | create_item, assign_item, checkout, checkin, get_summary, import_csv, generate_labels |
 | `apparatus_service.py` | ApparatusService | Apparatus, ApparatusType, ApparatusStatus, ApparatusMaintenance | create_apparatus, manage_types, manage_statuses, manage_maintenance, manage_fuel_logs, manage_operators, manage_equipment |
+| `equipment_check_service.py` | EquipmentCheckService | EquipmentCheckTemplate, ShiftEquipmentCheck | manage_templates, manage_compartments, manage_items, submit_check, get_reports, manage_photos |
 | `facilities_service.py` | FacilitiesService | Facility, FacilityType, FacilityMaintenance, FacilityInspection | create_facility, manage_maintenance, manage_inspections, manage_utility_readings |
 | `location_service.py` | LocationService | Location | create_location, update_location, get_display_info |
 | `meetings_service.py` | MeetingsService | Meeting, MeetingAttendee, MeetingActionItem | create_meeting, manage_attendees, manage_action_items, create_from_event |

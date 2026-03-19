@@ -513,6 +513,35 @@ Over time, these readings build a usage trend that helps identify anomalies (e.g
 
 ---
 
+## Equipment Checks (2026-03-19)
+
+The Equipment Check system provides structured vehicle and equipment inspections tied to shift operations. For detailed documentation including template building, check submission, and reporting, see [Shifts & Scheduling > Equipment Check System](./03-scheduling.md#equipment-check-system).
+
+### Key Points for Apparatus & Facilities Users
+
+- **Deficiency tracking**: When any equipment check item fails, the apparatus is automatically flagged as deficient (`has_deficiency = true`, `deficiency_since` records the date). The deficiency badge appears on the apparatus list and detail pages
+- **Auto-clear**: When a subsequent full check passes all items, the deficiency flag is automatically cleared
+- **Failure notifications**: Failed check items trigger in-app notifications to shift officers and configurable roles (e.g., apparatus maintenance officer)
+- **Cross-reference**: Equipment check reports are accessible from both the Scheduling module (`/scheduling/equipment-check-reports`) and the apparatus detail page
+
+> **Screenshot needed:**
+> _[Screenshot of the Apparatus List page showing an apparatus card with a red "Deficient" badge and the deficiency date, alongside a healthy apparatus with a green "OK" badge]_
+
+> **Screenshot needed:**
+> _[Screenshot of the Apparatus Detail page showing the deficiency alert banner at the top with the date and a link to view the failed equipment check]_
+
+### Edge Cases — Equipment Checks
+
+| Scenario | Behavior |
+|----------|----------|
+| Apparatus with no template assigned | No checklist appears for shifts using this apparatus |
+| Single failed item | Marks entire apparatus as deficient |
+| Passing check after deficiency | Clears flag only when ALL items pass |
+| Expired item (past expiration date) | Auto-fails regardless of submitted result |
+| Item below required quantity | Auto-fails |
+
+---
+
 ## Troubleshooting
 
 | Issue | Solution |
@@ -533,6 +562,11 @@ Over time, these readings build a usage trend that helps identify anomalies (e.g
 | Maintenance routes returning 404 | Fixed in March 2026 — route ordering issue where `GET /{facility_id}` matched before static routes like `/maintenance`. Pull latest and restart. |
 | NFPA zone classification not visible on rooms | As of 2026-03-06, rooms support NFPA 1500/1585 zone classification (hot/transition/cold). Check the Rooms tab in facility detail for zone badges. |
 | Facility detail only shows Rooms tab | As of 2026-03-06, the FacilityDetailPanel has tabbed sub-sections: Rooms, Building Systems, and Emergency Contacts. Pull latest and rebuild. |
+| Apparatus deficiency badge won't clear | A subsequent full check must pass ALL items. Partial checks or checks with any failure won't clear the flag. |
+| Equipment check template not appearing for shift | Verify the template is assigned to the shift's apparatus (or apparatus type) and that your position matches the template's assigned positions. |
+| Photo upload fails on equipment check | Photos must be JPEG, PNG, or WebP and under 10 MB. Max 3 photos per item. |
+| Apparatus type/status dropdowns missing defaults | Fixed 2026-03-19 — list schemas were missing default enum fields. Pull latest. |
+| Dark mode colors look wrong on apparatus page | Fixed 2026-03-18 — dark mode and high-contrast variants added across 25+ files. Pull latest. |
 
 ---
 

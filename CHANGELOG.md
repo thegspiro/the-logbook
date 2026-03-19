@@ -7,6 +7,145 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Equipment Check System — Full-Stack Vehicle & Equipment Inspections (2026-03-19)
+
+- **Equipment check template builder**: Admin UI for creating structured checklist templates with nested compartments and items. Supports 7 check types: `pass_fail`, `present`, `functional`, `quantity`, `level`, `date_lot`, `reading`. Templates can be assigned per-apparatus or per-apparatus-type with optional position-based assignment. Drag-and-drop reordering of compartments and items
+- **Vehicle check preset picker**: Pre-built templates for common vehicle inspection categories (engine, ladder, ambulance) that can be imported into the template builder
+- **Phone-first equipment check form**: Hybrid mobile/desktop form for submitting equipment checks during a shift. Collects item results with pass/fail, quantities, readings, expiration dates, serial/lot numbers, and optional photo attachments (up to 3 per item, auto-optimized to WebP)
+- **Equipment check reports page**: Three-tab reports interface — Compliance Dashboard (apparatus stats, pass rates, member compliance), Failure/Deficiency Log (paginated failures with filters), and Item Trend History (pass/fail trends by interval). Supports CSV and PDF export
+- **Apparatus deficiency flag**: Apparatus records now track `has_deficiency` and `deficiency_since` fields. Equipment check failures auto-set the deficiency flag; passing checks auto-clear it
+- **Failure notifications**: Failed equipment check items trigger in-app notifications (and optional email) to shift officers and configurable roles
+- **Inline serial/lot number updates**: Submitting a check with new serial or lot numbers updates the template item's stored values for future reference
+- **Photo attachments on check items**: Support for uploading photos per check item (JPEG, PNG, WebP), stored and served as optimized WebP
+
+**Data Model Changes:**
+
+| Table | New Columns/Tables | Description |
+|-------|-------------------|-------------|
+| `equipment_check_templates` | New table | Master template with name, timing (start/end of shift), type (equipment/vehicle/combined), assigned positions |
+| `check_template_compartments` | New table | Named sections within a template (nested via `parent_compartment_id`) |
+| `check_template_items` | New table | Individual check items with type, expiration tracking, serial/lot, quantity requirements |
+| `shift_equipment_checks` | New table | Submitted check records linked to shifts |
+| `shift_equipment_check_items` | New table | Individual item results within a submitted check |
+| `apparatus` | `has_deficiency` (Boolean), `deficiency_since` (DateTime) | Deficiency tracking from equipment checks |
+
+**API Routes:**
+
+| Prefix | Description |
+|--------|-------------|
+| `POST /api/v1/equipment-checks/templates` | Template CRUD |
+| `POST /api/v1/equipment-checks/templates/{id}/compartments` | Compartment management |
+| `POST /api/v1/equipment-checks/compartments/{id}/items` | Item management |
+| `GET /api/v1/equipment-checks/shifts/{shift_id}/checklists` | Get applicable checklists for a shift |
+| `POST /api/v1/equipment-checks/shifts/{shift_id}/checks` | Submit equipment check |
+| `GET /api/v1/equipment-checks/my-checklists` | Member's pending and recent checklists |
+| `POST /api/v1/equipment-checks/checks/{id}/items/{item_id}/photos` | Photo upload |
+| `GET /api/v1/equipment-checks/reports/*` | Compliance, failures, trends, CSV/PDF export |
+
+**Edge Cases:**
+- Templates with `template_type: vehicle` show the vehicle check preset picker; `equipment` templates show standard items
+- Empty compartments are allowed (for future item population)
+- Expired items (`has_expiration: true` with past `expiration_date`) auto-fail regardless of the submitted result
+- Items below `required_quantity` auto-fail
+- A single failed item marks the entire apparatus as deficient; the flag clears only when a subsequent full check passes all items
+- Photo uploads are limited to 3 per item per check; larger files are rejected (max 10 MB each)
+- Position-based assignment means only members assigned to those positions see the checklist on their shift
+
+### Scheduling Module — Position Eligibility, Admin Sub-Pages & Timezone Fixes (2026-03-19)
+
+- **Shift position eligibility system**: Operational ranks now define `eligible_positions` — a list of shift positions each rank is qualified for. When signing up for open shifts, members only see positions their rank allows. Dashboard shift signup validates against eligibility. Existing ranks backfilled with default eligible positions via migration
+- **Rank eligible positions UI redesign**: Settings page shows a clear matrix of ranks × positions with toggle controls
+- **Scheduling admin sub-pages**: Admin tabs (Templates, Patterns, Reports, Settings) extracted into dedicated routed pages under `/scheduling/templates`, `/scheduling/patterns`, `/scheduling/reports`, `/scheduling/settings` with back navigation and `ProtectedRoute` gating
+- **Shift settings tabbed sub-navigation**: Settings page reorganized into tabbed sections for better organization
+- **Structured position slots**: Shifts now define required and optional position slots with decline notifications
+- **Open slot visibility**: When members decline or are removed, open slots are shown for re-assignment
+- **Position editing in shift detail**: Officers can edit position assignments directly in the shift detail edit form
+- **Dashboard shift display fixes**: Dashboard no longer shows shifts the user already signed up for, hides declined/cancelled shifts from "My Upcoming Shifts", and fixes the 422 error from sending invalid `general` position on signup
+- **Shift signup re-enrollment**: Members who previously cancelled can now re-sign up for the same shift
+- **Attendee count fix**: Cancelled and no-show assignments no longer inflate the displayed attendee count
+- **Shift timezone fixes**: Fixed naive local times being sent as UTC when creating shifts from the scheduling page. Fixed template-based shift generation ignoring org timezone. Fixed naive datetime construction across 7 backend services
+- **UTC response schema refactor**: Introduced `UTCResponseBase` class — all scheduling response schemas inherit from it to automatically stamp naive datetimes with UTC timezone markers
+
+**Data Model Changes:**
+
+| Table | New Columns | Description |
+|-------|-------------|-------------|
+| `operational_ranks` | `eligible_positions` (JSON) | List of shift positions this rank is qualified for |
+| `shift_assignments` | `position_slot_id` (String, nullable) | Links assignment to a structured position slot |
+
+**New Pages:**
+
+| URL | Page | Permission |
+|-----|------|------------|
+| `/scheduling/templates` | Scheduling Templates | `scheduling.manage` |
+| `/scheduling/patterns` | Scheduling Patterns | `scheduling.manage` |
+| `/scheduling/reports` | Scheduling Reports | `scheduling.manage` |
+| `/scheduling/settings` | Scheduling Settings | `scheduling.manage` |
+| `/scheduling/equipment-check-templates/new` | Equipment Check Template Builder | `equipment_check.manage` |
+| `/scheduling/equipment-check-templates/:templateId` | Edit Equipment Check Template | `equipment_check.manage` |
+| `/scheduling/equipment-check-reports` | Equipment Check Reports | `equipment_check.manage` |
+
+**Edge Cases:**
+- Ranks with no `eligible_positions` defined default to all positions being eligible (backward-compatible)
+- Dashboard signup button only appears for shifts with open positions the member's rank qualifies for
+- Previously cancelled signups are cleaned up before re-enrollment to avoid duplicate constraint violations
+- Shift create from scheduling page now converts local times to UTC using org timezone before sending to API
+- Template-generated shifts inherit timezone-correct start/end times
+
+### Elections Module — Hardening, Audit Logging & Email Improvements (2026-03-19)
+
+- **Comprehensive audit logging**: All election state changes (create, open, close, certify, cancel, extend, rollback) now generate audit log entries with actor, action, and metadata
+- **Response model standardization**: All election response schemas now use `UTCResponseBase` for consistent datetime serialization with UTC timezone markers
+- **Quorum fields**: Election responses now include `quorum_required` and `quorum_met` fields
+- **Race condition fixes**: Proxy authorization and vote casting now use database-level locking to prevent concurrent modification. Cross-tenant data access blocked with organization_id filtering
+- **JSON column mutation fixes**: Fixed `rollback_history` and `attendee check-in` not persisting due to in-place JSON mutation without `flag_modified()`. Uses `copy.deepcopy()` pattern
+- **Ballot sending reliability**: Fixed ballot emails silently returning 0 recipients — root cause was `User.is_active` property not being queryable in SQLAlchemy filters; converted to `hybrid_property`. Added exception handling per-recipient in send loop to prevent partial delivery failures. Added diagnostic logging for skipped voters
+- **Eligibility summary email**: After dispatching ballots, the secretary receives a summary email listing all skipped voters with reasons (no email, ineligible, already voted)
+- **Secretary-facing error messages**: Election error messages now include actionable details (e.g., "Election has no candidates" instead of generic "cannot open election")
+- **Election report email**: Officers can email election results as a formatted report
+- **Upcoming business meetings section**: Election detail page shows upcoming business meetings for linking elections to meeting records
+- **Linked meetings filter**: Elections linked to meetings now correctly show only upcoming meetings (not past ones)
+- **Extend modal date display fix**: Fixed incorrect date formatting in the election extension modal
+- **Safe error handling**: All elections endpoints wrapped with `safe_error_detail()` for consistent, sanitized error responses
+- **Empty string form value fix**: Optional election form fields use `||` instead of `??` to coerce empty strings
+
+**Edge Cases:**
+- Ballot email send loop catches per-recipient exceptions so one failed email doesn't block remaining recipients
+- Proxy authorization checks organization_id to prevent cross-tenant abuse
+- Rollback history uses `copy.deepcopy()` before appending to prevent SQLAlchemy silent no-op
+- Elections with only ballot items (no candidates) can be opened — `open_election` no longer requires candidates
+- Eligibility summary email is sent only to the user who triggered the ballot dispatch
+- If no voters are found after filtering, the API returns a descriptive error instead of a false success with 0 recipients
+
+### Dark Mode & High-Contrast Hardening (2026-03-18)
+
+- **Opaque backgrounds for all floating UI**: Overlays, dropdowns, drawer panels, and sticky elements now use opaque backgrounds in dark mode instead of transparent/semi-transparent backgrounds that caused content bleed-through
+- **Dark mode variants across 25+ files**: Added missing `dark:` Tailwind variants for icon badges, stat cards, settings UI, form inputs, and table rows
+- **High-contrast mode support**: Additional high-contrast variants for accessibility compliance
+
+### Event Notifications — In-App Delivery (2026-03-17)
+
+- **In-app notification delivery**: Event notifications (announcement, reminder, follow-up, missed_event, check_in_confirmation) now deliver via in-app notifications in addition to email. Notifications appear in the member's notification bell
+
+### Time Picker Standardization (2026-03-17)
+
+- **15-minute increment enforcement**: All time pickers across the application (event forms, shift forms, scheduling) now restrict to quarter-hour increments (`:00`, `:15`, `:30`, `:45`), consistent with the `DateTimeQuarterHour` component
+
+### Check-In Timing Fix (2026-03-17)
+
+- **QR display and self-check-in timing mismatch**: Fixed a bug where the QR code display page and the self-check-in page used different datetime sources for the check-in window, causing valid check-ins to be rejected as outside the window
+
+### UTC Timezone Marker — API Response Schemas (2026-03-16)
+
+- **Naive datetime UTC stamping in API responses**: All API response schemas now inherit from `UTCResponseBase` which automatically stamps naive `datetime` fields with UTC timezone info (`+00:00` suffix). This ensures JavaScript's `new Date()` correctly interprets times as UTC rather than local time, fixing the root cause of timezone display bugs across the frontend
+- **Scheduling-specific fix**: Scheduling response schemas were the first to receive the fix, then extended to all modules via the shared base class
+- **SQLAlchemy `load` event listener**: The existing ORM-level fix (stamping naive datetimes on load) is complemented by the schema-level fix for comprehensive coverage
+
+**Edge Cases:**
+- Response schemas with `Optional[datetime]` fields skip stamping when the value is `None`
+- The `UTCResponseBase` validator runs as a `model_validator(mode="before")` so it processes raw dict data before Pydantic validation
+- Existing frontend code using `formatDate()`/`formatDateTime()` utilities works correctly with both `Z` and `+00:00` suffixed timestamps
+
 ### Training Module — Recurring Sessions & Quarter-Hour Time Picker (2026-03-15)
 
 - **Recurring training sessions**: Training sessions can now recur using the same recurrence infrastructure as events (daily, weekly, biweekly, monthly, monthly_weekday, annually, annually_weekday, custom patterns). Backend creates recurring events via `EventService` and links a `TrainingSession` to each occurrence. Selecting an existing course auto-populates training type, credit hours, instructor, expiration months, and max participants with a preview card
