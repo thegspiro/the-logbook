@@ -565,6 +565,15 @@ const FormsPage: React.FC = () => {
     }
   };
 
+  const cardBorderColor = (s: string) => {
+    switch (s) {
+      case FormStatus.PUBLISHED: return 'border-l-green-500';
+      case FormStatus.DRAFT: return 'border-l-yellow-500';
+      case FormStatus.ARCHIVED: return 'border-l-theme-text-muted';
+      default: return 'border-l-theme-text-muted';
+    }
+  };
+
   return (
     <div className="min-h-screen">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
@@ -730,7 +739,7 @@ const FormsPage: React.FC = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {forms.map((form) => (
-                  <div key={form.id} className="card-hover p-5">
+                  <div key={form.id} className={`card-hover p-5 border-l-4 ${cardBorderColor(form.status)}`}>
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <h3 className="text-theme-text-primary font-semibold">{form.name}</h3>
@@ -738,6 +747,18 @@ const FormsPage: React.FC = () => {
                           <span className={`px-2 py-0.5 text-xs rounded-sm border ${statusColor(form.status)}`}>
                             {form.status}
                           </span>
+                          {form.status === FormStatus.PUBLISHED && (
+                            <span className="px-2 py-0.5 text-xs bg-green-500/10 text-green-700 dark:text-green-400 rounded-sm border border-green-500/30 inline-flex items-center space-x-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                              <span>Accepting submissions</span>
+                            </span>
+                          )}
+                          {form.status !== FormStatus.PUBLISHED && (
+                            <span className="px-2 py-0.5 text-xs bg-theme-surface-secondary text-theme-text-muted rounded-sm border border-theme-surface-border inline-flex items-center space-x-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-theme-text-muted" />
+                              <span>Not accepting submissions</span>
+                            </span>
+                          )}
                           <span className="px-2 py-0.5 text-xs bg-red-500/10 text-red-700 dark:text-red-400 rounded-sm border border-red-500/30">
                             {form.category}
                           </span>
@@ -752,6 +773,16 @@ const FormsPage: React.FC = () => {
                     </div>
                     {form.description && (
                       <p className="text-theme-text-secondary text-sm mb-3 line-clamp-2">{form.description}</p>
+                    )}
+
+                    {/* Warning: public form not yet published */}
+                    {form.is_public && form.status !== FormStatus.PUBLISHED && (
+                      <div className="flex items-center gap-2 mb-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg px-3 py-2">
+                        <AlertTriangle className="w-4 h-4 text-yellow-600 dark:text-yellow-400 shrink-0" aria-hidden="true" />
+                        <span className="text-yellow-700 dark:text-yellow-300 text-xs">
+                          This form is marked public but is not published — the public URL is inactive and submissions are blocked.
+                        </span>
+                      </div>
                     )}
 
                     {/* Public URL */}
@@ -803,6 +834,17 @@ const FormsPage: React.FC = () => {
                       </div>
                     </div>
 
+                    {/* Prominent Publish CTA for draft forms */}
+                    {canManage && form.status === FormStatus.DRAFT && (
+                      <button
+                        onClick={() => { void handlePublish(form.id); }}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-500 rounded-lg transition-colors mt-3"
+                      >
+                        <Send className="w-4 h-4" aria-hidden="true" />
+                        Publish Form
+                      </button>
+                    )}
+
                     {/* Action buttons */}
                     <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-theme-surface-border">
                       {canManage && (
@@ -837,15 +879,6 @@ const FormsPage: React.FC = () => {
                         >
                           <Plug className="w-3.5 h-3.5" aria-hidden="true" />
                           Integrations
-                        </button>
-                      )}
-                      {canManage && form.status === FormStatus.DRAFT && (
-                        <button
-                          onClick={() => { void handlePublish(form.id); }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 dark:text-green-400 bg-green-500/10 hover:bg-green-500/20 rounded-lg transition-colors"
-                        >
-                          <Send className="w-3.5 h-3.5" aria-hidden="true" />
-                          Publish
                         </button>
                       )}
                       {canManage && form.status === FormStatus.PUBLISHED && (
