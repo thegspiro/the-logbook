@@ -4,6 +4,7 @@ Election Service
 Business logic for election management including elections, candidates, voting, and results.
 """
 
+import asyncio
 import copy
 import hashlib
 import hmac
@@ -219,6 +220,7 @@ class ElectionService:
         user: "User",
         election: Election,
         organization_id: str,
+        organization: Optional["Organization"] = None,
     ) -> List[Dict]:
         """
         Return the subset of election.ballot_items that the user is eligible
@@ -234,11 +236,14 @@ class ElectionService:
             # the election uses the positional voting path — always eligible.
             return []
 
-        # Pre-load org tier config once for the whole check
-        org_result = await self.db.execute(
-            select(Organization).where(Organization.id == organization_id)
-        )
-        org = org_result.scalar_one_or_none()
+        # Use pre-loaded org if provided, otherwise query
+        if organization:
+            org = organization
+        else:
+            org_result = await self.db.execute(
+                select(Organization).where(Organization.id == organization_id)
+            )
+            org = org_result.scalar_one_or_none()
         tier_config = (org.settings or {}).get("membership_tiers", {}) if org else {}
         tiers = tier_config.get("tiers", [])
         member_tier_id = getattr(user, "membership_type", None) or "active"
@@ -287,6 +292,7 @@ class ElectionService:
         user: "User",
         election: Election,
         organization_id: str,
+        organization: Optional["Organization"] = None,
     ) -> Optional[str]:
         """
         Return a human-readable reason explaining why a user has zero
@@ -299,11 +305,14 @@ class ElectionService:
         if not ballot_items:
             return None
 
-        # Pre-load org tier config
-        org_result = await self.db.execute(
-            select(Organization).where(Organization.id == organization_id)
-        )
-        org = org_result.scalar_one_or_none()
+        # Use pre-loaded org if provided, otherwise query
+        if organization:
+            org = organization
+        else:
+            org_result = await self.db.execute(
+                select(Organization).where(Organization.id == organization_id)
+            )
+            org = org_result.scalar_one_or_none()
         tier_config = (org.settings or {}).get("membership_tiers", {}) if org else {}
         tiers = tier_config.get("tiers", [])
         member_tier_id = getattr(user, "membership_type", None) or "active"
@@ -3229,21 +3238,30 @@ Best regards,
         email_service = EmailService(organization)
 
         # Build a lookup of delegating_user_id -> proxy user email
-        # so we can CC the proxy holder on ballot notifications
+        # so we can CC the proxy holder on ballot notifications.
+        # Batch-fetch all proxy users in a single query instead of N+1.
         proxy_cc_map: Dict[str, str] = {}
+        proxy_user_ids: set = set()
+        proxy_mappings: List[Tuple[str, str]] = []
         for auth in election.proxy_authorizations or []:
             if not auth.get("revoked_at"):
                 proxy_uid = auth.get("proxy_user_id")
                 delegating_uid = auth.get("delegating_user_id")
                 if proxy_uid and delegating_uid:
-                    proxy_u_result = await self.db.execute(
-                        select(User)
-                        .where(User.id == proxy_uid)
-                        .where(User.organization_id == str(organization_id))
-                    )
-                    proxy_u = proxy_u_result.scalar_one_or_none()
-                    if proxy_u:
-                        proxy_cc_map[delegating_uid] = proxy_u.email
+                    proxy_user_ids.add(proxy_uid)
+                    proxy_mappings.append((delegating_uid, proxy_uid))
+        if proxy_user_ids:
+            proxy_result = await self.db.execute(
+                select(User)
+                .where(User.id.in_(list(proxy_user_ids)))
+                .where(User.organization_id == str(organization_id))
+            )
+            proxy_users_by_id = {
+                str(u.id): u.email for u in proxy_result.scalars().all()
+            }
+            for delegating_uid, proxy_uid in proxy_mappings:
+                if proxy_uid in proxy_users_by_id:
+                    proxy_cc_map[delegating_uid] = proxy_users_by_id[proxy_uid]
 
         # Resolve admin contact info (election creator or org email)
         admin_contact_name = ""
@@ -3260,21 +3278,21 @@ Best regards,
             admin_contact_name = organization.name
             admin_contact_email = getattr(organization, "email", None) or ""
 
-        # Send individual ballot emails with unique tokens
-        success_count = 0
-        failed_count = 0
+        # ---- Phase 1: Prepare emails (sequential — DB + eligibility) ----
         skipped_count = 0
         skipped_details: List[Dict] = []
+        pending_emails: List[Dict] = []
 
         for recipient in recipients:
             # Empty ballot prevention: skip members who have zero eligible
             # ballot items so they don't receive a confusing empty ballot.
-            eligible_items = []
+            eligible_items: List[Dict] = []
             if election.ballot_items:
                 eligible_items = await self._get_eligible_ballot_items_for_user(
                     user=recipient,
                     election=election,
                     organization_id=str(organization_id),
+                    organization=organization,
                 )
                 if not eligible_items:
                     skipped_count += 1
@@ -3283,6 +3301,7 @@ Best regards,
                             user=recipient,
                             election=election,
                             organization_id=str(organization_id),
+                            organization=organization,
                         )
                         or (
                             "No eligible ballot items — role type and "
@@ -3324,36 +3343,55 @@ Best regards,
             # If this voter has a proxy, CC the proxy holder
             cc_email = proxy_cc_map.get(str(recipient.id))
 
-            try:
-                sent = await email_service.send_ballot_notification(
-                    to_email=recipient.email,
-                    recipient_name=recipient.full_name,
-                    election_title=election.title,
-                    ballot_url=ballot_url,
-                    meeting_date=election.meeting_date,
-                    custom_message=message,
-                    cc_emails=[cc_email] if cc_email else None,
-                    start_date=election.start_date,
-                    end_date=election.end_date,
-                    positions=election.positions,
-                    ballot_items_html=items_html,
-                    ballot_items_text=items_text,
-                    admin_contact_name=admin_contact_name,
-                    admin_contact_email=admin_contact_email,
-                    db=self.db,
-                    organization_id=str(organization_id),
-                )
-            except Exception as e:
-                logger.error(
-                    f"Ballot email send failed | election={election_id} "
-                    f"recipient={recipient.id} error={e}"
-                )
-                sent = False
+            pending_emails.append(
+                {
+                    "recipient_id": str(recipient.id),
+                    "to_email": recipient.email,
+                    "recipient_name": recipient.full_name,
+                    "election_title": election.title,
+                    "ballot_url": ballot_url,
+                    "meeting_date": election.meeting_date,
+                    "custom_message": message,
+                    "cc_emails": [cc_email] if cc_email else None,
+                    "start_date": election.start_date,
+                    "end_date": election.end_date,
+                    "positions": election.positions,
+                    "ballot_items_html": items_html,
+                    "ballot_items_text": items_text,
+                    "admin_contact_name": admin_contact_name,
+                    "admin_contact_email": admin_contact_email,
+                }
+            )
 
-            if sent:
-                success_count += 1
-            else:
-                failed_count += 1
+        # ---- Phase 2: Send emails concurrently ----
+        # Emails are sent in parallel (up to 10 concurrent SMTP connections)
+        # to avoid exceeding the API timeout with many recipients.
+        # db is not passed to concurrent sends to avoid shared-session issues;
+        # the default inline template is used and the aggregate audit log below
+        # records the overall result.
+        sem = asyncio.Semaphore(10)
+
+        async def _send_one(params: Dict) -> bool:
+            async with sem:
+                rid = params.pop("recipient_id")
+                try:
+                    return await email_service.send_ballot_notification(
+                        **params,
+                        db=None,
+                        organization_id=None,
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Ballot email send failed | election={election_id} "
+                        f"recipient={rid} error={e}"
+                    )
+                    return False
+
+        results = await asyncio.gather(
+            *[_send_one(p) for p in pending_emails]
+        )
+        success_count = sum(1 for r in results if r)
+        failed_count = sum(1 for r in results if not r)
 
         # Update election with email sent status
         election.email_sent = True
