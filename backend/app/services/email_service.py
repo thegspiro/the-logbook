@@ -9,6 +9,8 @@ import html as _html
 import os
 import re
 import smtplib
+import time
+import uuid
 from datetime import datetime, timezone
 from email import encoders
 from email.mime.base import MIMEBase
@@ -189,6 +191,16 @@ class EmailService:
         self.organization = organization
         self._smtp_config = self._get_smtp_config()
 
+    def _make_message_id(self) -> str:
+        """Generate a unique RFC 5322 Message-ID header value.
+
+        Gmail and other strict SMTP servers reject messages without a
+        Message-ID.  The format is ``<uuid@domain>``.
+        """
+        from_email = self._smtp_config.get("from_email", "")
+        domain = from_email.split("@")[1] if "@" in from_email else "localhost"
+        return f"<{uuid.uuid4()}@{domain}>"
+
     @staticmethod
     def _esc(value: str) -> str:
         """HTML-escape a string for safe insertion into email HTML bodies."""
@@ -298,23 +310,64 @@ class EmailService:
     def _smtp_send_batch(
         self, messages: List[Tuple[List[str], str]]
     ) -> List[bool]:
-        """Send multiple emails through a single SMTP connection."""
+        """Send multiple emails through a single SMTP connection.
+
+        Includes rate-limit mitigation:
+        * ``RSET`` between messages to cleanly reset the envelope
+        * 0.25 s pause between sends to stay within provider rate limits
+        * Automatic reconnection if the server drops the connection
+        """
         server = self._smtp_connect()
         results: List[bool] = []
+        from_email = self._smtp_config["from_email"]
         try:
-            for recipients, msg_str in messages:
+            for idx, (recipients, msg_str) in enumerate(messages):
                 try:
-                    server.sendmail(
-                        self._smtp_config["from_email"],
-                        recipients,
-                        msg_str,
-                    )
+                    server.sendmail(from_email, recipients, msg_str)
                     results.append(True)
+                except smtplib.SMTPServerDisconnected:
+                    # Server dropped the connection (rate limit, timeout,
+                    # etc.) — reconnect and retry this message once.
+                    logger.warning(
+                        "SMTP server disconnected during batch send, reconnecting"
+                    )
+                    try:
+                        server = self._smtp_connect()
+                        server.sendmail(from_email, recipients, msg_str)
+                        results.append(True)
+                    except Exception as e2:
+                        logger.error(f"Batch email retry failed: {e2}")
+                        results.append(False)
+                except smtplib.SMTPResponseException as e:
+                    logger.error(
+                        f"Batch email rejected (code={e.smtp_code}): {e.smtp_error}"
+                    )
+                    results.append(False)
+                    # 421/451/452 = rate limit / too many connections
+                    if e.smtp_code in (421, 451, 452):
+                        logger.info("Rate limit detected, reconnecting after 2 s")
+                        time.sleep(2)
+                        try:
+                            server.quit()
+                        except Exception:
+                            pass
+                        server = self._smtp_connect()
                 except Exception as e:
                     logger.error(f"Batch email send failed: {e}")
                     results.append(False)
+
+                # Brief pause between messages to avoid rate limiting
+                if idx < len(messages) - 1:
+                    try:
+                        server.rset()
+                    except Exception:
+                        pass
+                    time.sleep(0.25)
         finally:
-            server.quit()
+            try:
+                server.quit()
+            except Exception:
+                pass
         return results
 
     def build_message(
@@ -345,6 +398,7 @@ class EmailService:
         msg["Date"] = datetime.now(timezone.utc).strftime(
             "%a, %d %b %Y %H:%M:%S +0000"
         )
+        msg["Message-ID"] = self._make_message_id()
 
         all_recipients = [to_email]
         if cc_emails:
@@ -468,6 +522,7 @@ class EmailService:
                 msg["Date"] = datetime.now(timezone.utc).strftime(
                     "%a, %d %b %Y %H:%M:%S +0000"
                 )
+                msg["Message-ID"] = self._make_message_id()
 
                 # Add CC and BCC recipients
                 all_recipients = [to_email]
