@@ -12,7 +12,7 @@ export interface BallotItem {
   title: string;
   description?: string | undefined;
   position?: string | undefined;
-  eligible_voter_types: string[]; // ['all'], ['regular'], ['life'], ['probationary'], ['operational'], ['administrative'], or specific role slugs
+  eligible_voter_types: string[]; // Based on membership_type: 'all', 'operational' (active), 'administrative', 'regular' (active+life), 'life', 'probationary', or specific role slugs as fallback
   vote_type: string; // approval, candidate_selection
   required_for_approval?: number;
   require_attendance?: boolean; // If true, voter must be checked in as present at the meeting

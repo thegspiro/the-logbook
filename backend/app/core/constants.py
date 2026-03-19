@@ -36,7 +36,13 @@ TRAINING_OFFICER_ROLE_SLUGS: list[str] = [
     "chief",
 ]
 
-# Operational (line) roles for election eligibility categorisation
+# Operational (line) role slugs.
+#
+# NOTE: These are *position* slugs, NOT voter-eligibility categories.
+# Election voter eligibility (eligible_voter_types) is determined by
+# the member's ``membership_type`` field (active, administrative, life,
+# etc.), not by which role slugs they hold.  See
+# ``ElectionService._user_has_role_type()`` for the full mapping.
 OPERATIONAL_ROLE_SLUGS: list[str] = [
     "chief",
     "assistant_chief",
@@ -48,7 +54,10 @@ OPERATIONAL_ROLE_SLUGS: list[str] = [
     "paramedic",
 ]
 
-# Administrative (corporate) roles for election eligibility categorisation
+# Administrative (corporate) role slugs.
+#
+# Same caveat as above: these are position slugs used for permission
+# lookups and UI grouping, not for election voter-type eligibility.
 ADMINISTRATIVE_ROLE_SLUGS: list[str] = [
     "president",
     "vice_president",

@@ -72,13 +72,16 @@ const BALLOT_TYPE_LABELS: Record<string, string> = {
 
 // ─── Shared constants ───────────────────────────────────────────
 
+// These categories correspond to the member's membership_type field,
+// NOT their assigned role/position slugs.  See MembershipType enum and
+// ElectionService._user_has_role_type() for the authoritative mapping.
 const VOTER_TYPE_OPTIONS = [
   { value: 'all', label: 'All Members' },
-  { value: 'regular', label: 'Regular Members' },
+  { value: 'regular', label: 'Regular Members (Active + Life)' },
   { value: 'life', label: 'Life Members' },
   { value: 'regular,life', label: 'Regular + Life Members' },
   { value: 'probationary', label: 'Probationary Members' },
-  { value: 'operational', label: 'Operational Members' },
+  { value: 'operational', label: 'Operational Members (Active)' },
   { value: 'administrative', label: 'Administrative Members' },
 ];
 
