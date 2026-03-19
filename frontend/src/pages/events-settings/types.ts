@@ -74,9 +74,22 @@ export interface EmailSectionProps extends SettingsSectionProps {
   onNewTemplateTriggerChange: (value: string) => void;
 }
 
+/** Minimal form info shown in the events settings panel. */
+export interface EventRequestFormSummary {
+  id: string;
+  name: string;
+  status: string;
+  is_public: boolean;
+  public_slug?: string;
+  submission_count?: number;
+  published_at?: string;
+}
+
 /** Props for the Public Form section. */
 export interface FormSectionProps {
   generatingForm: boolean;
   onGenerateForm: () => void;
   onNavigateToForms: () => void;
+  eventRequestForms: EventRequestFormSummary[];
+  loadingForms: boolean;
 }
