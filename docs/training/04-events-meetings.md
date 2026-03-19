@@ -852,6 +852,68 @@ Thank you for working with Riverside Fire-Rescue!
 | Series end reminder not received | Reminders are sent 7 days before the last occurrence. If the series has already ended, no reminder is sent. Verify the series has a defined end date. |
 | Event times show wrong in edit form | Fixed 2026-03-15 — the time extraction function was returning UTC instead of local time. Shift/event edit forms now use `Intl.DateTimeFormat` with the user's timezone. |
 | Conflict detection false negative near midnight | Fixed 2026-03-15 — conflict detection now uses timezone-aware date arithmetic. Events spanning midnight in the org's timezone are correctly identified. |
+| In-app event notifications not appearing | Fixed 2026-03-17 — event notifications now deliver via in-app notifications in addition to email. Check the notification bell icon. |
+| Time picker allows non-quarter-hour values | Fixed 2026-03-17 — all time pickers now enforce 15-minute increments (`:00`, `:15`, `:30`, `:45`). |
+| Valid check-in rejected as "outside window" | Fixed 2026-03-17 — QR display and self-check-in pages were using different datetime sources for the check-in window. Now consistent. |
+| Event times display incorrectly across timezones | Fixed 2026-03-16 — all event response schemas now stamp naive datetimes with UTC timezone markers via `UTCResponseBase`. |
+| Election ballot emails sent but 0 recipients | Fixed 2026-03-19 — `User.is_active` converted to `hybrid_property` for SQLAlchemy query compatibility. Added per-recipient exception handling. |
+| Election error messages unhelpful | Fixed 2026-03-19 — error messages now include actionable details (e.g., "Election has no candidates"). |
+| Election results not arriving by email | Use the new **Send Report Email** button on the election detail page to email formatted results. Added 2026-03-19. |
+| Ballot sending skips voters without explanation | The secretary now receives an eligibility summary email after ballot dispatch listing all skipped voters with reasons. Added 2026-03-19. |
+
+---
+
+## Event Notifications — In-App Delivery (2026-03-17)
+
+Event notifications now deliver via **in-app notifications** in addition to email. When a coordinator sends a notification from the event detail page (announcement, reminder, follow-up, missed_event, or check_in_confirmation), targeted members receive the notification in their notification bell.
+
+> **Screenshot needed:**
+> _[Screenshot of the notification bell dropdown showing an event notification entry (e.g., "Reminder: Monthly Business Meeting tomorrow at 7 PM") alongside other notification types]_
+
+## Time Picker Standardization (2026-03-17)
+
+All time pickers across the application now enforce **15-minute increments** (`:00`, `:15`, `:30`, `:45`). This applies to event creation/editing, shift creation, and scheduling forms, consistent with the `DateTimeQuarterHour` component introduced in the training module.
+
+> **Edge case:** Pre-existing events with non-quarter-hour times (e.g., `:07`, `:42`) retain their stored values. The constraint applies only on the next edit — the time picker will round to the nearest quarter-hour.
+
+## Elections — Hardening & Email Improvements (2026-03-19)
+
+### Ballot Sending Reliability
+
+The ballot email dispatch system has been significantly hardened:
+
+1. **Root cause fix**: `User.is_active` was a Python property, invisible to SQLAlchemy queries. Converted to `hybrid_property` so active user filtering works in database queries
+2. **Per-recipient exception handling**: If one email fails, the loop continues sending to remaining recipients instead of aborting
+3. **Diagnostic logging**: When no recipients are found, detailed logs explain why (no email address, ineligible, already voted)
+4. **Eligibility summary email**: The secretary who dispatched ballots receives a summary listing all skipped voters with actionable reasons
+
+> **Screenshot needed:**
+> _[Screenshot of the election detail page showing the "Send Ballots" button and, after sending, the eligibility summary showing "Sent: 45, Skipped: 3" with expandable reasons for skipped voters]_
+
+### Election Report Email
+
+Officers can email election results as a formatted report directly from the election detail page using the **Send Report Email** button.
+
+> **Screenshot needed:**
+> _[Screenshot of the election detail page with the "Send Report Email" button visible in the actions area, and the report email preview showing round-by-round results]_
+
+### Upcoming Business Meetings
+
+The election detail page now shows a section listing **upcoming business meetings** that the election can be linked to for procedural compliance.
+
+> **Screenshot needed:**
+> _[Screenshot of the election detail page showing the "Upcoming Business Meetings" section with a list of upcoming meetings and "Link" buttons]_
+
+### Edge Cases — Elections (2026-03-19)
+
+| Scenario | Behavior |
+|----------|----------|
+| Voter with no email address | Skipped in ballot dispatch; listed in eligibility summary |
+| One email fails in batch | Per-recipient handling; other recipients still receive |
+| Cross-tenant proxy authorization | Blocked by organization_id filter — returns 404 |
+| Rollback history not saving | Fixed — uses `copy.deepcopy()` before appending |
+| Election with only ballot items | Can be opened without candidates |
+| Concurrent vote attempts | Database-level locking prevents race conditions |
 
 ---
 

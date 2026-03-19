@@ -201,6 +201,25 @@ DELETE /api/v1/event-requests/email-templates/{id}         # Delete template
 
 ---
 
+## Recent Changes (2026-03-19)
+
+### In-App Notifications, Time Picker & Check-In Fix
+
+- **In-app notification delivery**: Event notifications (announcement, reminder, follow-up, missed_event, check_in_confirmation) now deliver via in-app notifications in addition to email
+- **15-minute increment enforcement**: All time pickers across event forms now restrict to quarter-hour increments (`:00`, `:15`, `:30`, `:45`)
+- **QR display / self-check-in timing mismatch fix**: Fixed a bug where the QR code display page and the self-check-in page used different datetime sources for the check-in window, causing valid check-ins to be rejected
+- **UTC timezone stamping**: All event response schemas now inherit from `UTCResponseBase`, ensuring consistent timezone serialization
+
+### Edge Cases (2026-03-19)
+
+| Scenario | Behavior |
+|----------|----------|
+| In-app notifications | Appear in the member's notification bell alongside email delivery |
+| Time picker with pre-existing non-quarter values | Rounds to the nearest quarter-hour on next edit |
+| Check-in window near midnight | Uses consistent datetime source for both QR display and self-check-in |
+
+---
+
 ## Recent Changes (2026-03-15)
 
 ### Series End Reminders & Check-In Fix

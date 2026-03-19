@@ -287,6 +287,27 @@ Tab-based interface with the following views:
 | `reports` | Reports | Yes |
 | `settings` | Settings | Yes |
 
+### Scheduling Admin Pages (2026-03-19)
+
+| URL | Page | Permission |
+|-----|------|------------|
+| `/scheduling/templates` | Shift Templates Management | `scheduling.manage` |
+| `/scheduling/patterns` | Shift Pattern Management | `scheduling.manage` |
+| `/scheduling/reports` | Scheduling Reports | `scheduling.manage` |
+| `/scheduling/settings` | Scheduling Settings | `scheduling.manage` |
+
+> Admin tabs have been extracted into dedicated routed pages with back navigation. The tab-based interface remains functional but links navigate to full pages.
+
+### Equipment Check Pages (2026-03-19)
+
+| URL | Page | Permission |
+|-----|------|------------|
+| `/scheduling/equipment-check-templates/new` | Equipment Check Template Builder | `equipment_check.manage` |
+| `/scheduling/equipment-check-templates/:templateId` | Edit Equipment Check Template | `equipment_check.manage` |
+| `/scheduling/equipment-check-reports` | Equipment Check Reports | `equipment_check.manage` |
+
+> The **Template Builder** provides a drag-and-drop interface for creating structured checklists with nested compartments and multiple check types (pass/fail, quantity, level, date/lot, reading). The **Reports** page has three tabs: Compliance Dashboard, Failure/Deficiency Log, and Item Trend History with CSV and PDF export.
+
 ---
 
 ## Elections
