@@ -2240,9 +2240,11 @@ class EmailTemplateService:
                         getattr(organization, "physical_zip", None),
                     ),
                 )
-        # Build a ready-to-use <img> tag so templates can just insert it
+        # Build a ready-to-use <img> tag so templates can just insert it.
+        # Skip base64 data URIs — they embed the full image payload in the
+        # HTML and easily exceed Gmail's 102 KB message-clipping threshold.
         logo_val = ctx.get("organization_logo", "")
-        if logo_val:
+        if logo_val and not str(logo_val).startswith("data:"):
             import html as _h
 
             org_name = ctx.get("organization_name", "Organization")

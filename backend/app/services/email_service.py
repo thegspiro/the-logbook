@@ -28,11 +28,18 @@ def build_email_logo_img(organization: Optional[Organization]) -> str:
 
     Use this when inserting into a template that already provides its own
     wrapper element (e.g. ``<div class="logo">{{organization_logo_img}}</div>``).
+
+    Base64 data URIs are skipped because they can easily exceed Gmail's
+    102 KB message-clipping threshold.
     """
     if not organization:
         return ""
     logo_url = getattr(organization, "logo", None) or ""
     if not logo_url:
+        return ""
+    # Data URIs embed the full image payload in the HTML, often 100–500 KB,
+    # which pushes the email over Gmail's 102 KB clipping limit.
+    if logo_url.startswith("data:"):
         return ""
     org_name = getattr(organization, "name", "Organization")
     safe_url = _html.escape(str(logo_url))
