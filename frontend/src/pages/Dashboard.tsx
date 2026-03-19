@@ -574,7 +574,7 @@ const Dashboard: React.FC = () => {
               Department Overview
             </h3>
             <div
-              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4"
+              className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4"
               role="region"
               aria-label="Department overview"
             >
@@ -700,7 +700,7 @@ const Dashboard: React.FC = () => {
 
         {/* Hours Summary Cards */}
         <div
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8"
+          className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8"
           role="region"
           aria-label="Hours summary"
         >
@@ -828,9 +828,9 @@ const Dashboard: React.FC = () => {
                       if (!msg.is_read) void markMessageRead(msg.id);
                     }}
                   >
-                    <div className="flex items-start justify-between gap-3">
+                    <div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                           {msg.is_pinned && (
                             <Pin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                           )}
@@ -851,45 +851,47 @@ const Dashboard: React.FC = () => {
                         <p className="text-theme-text-secondary text-sm whitespace-pre-line line-clamp-3">
                           {msg.body}
                         </p>
-                        <div className="flex items-center gap-3 mt-2 text-xs text-theme-text-muted">
-                          {msg.author_name && (
-                            <span>From: {msg.author_name}</span>
-                          )}
-                          {msg.created_at && (
-                            <span>{formatDate(msg.created_at, tz)}</span>
-                          )}
+                        <div className="flex items-center justify-between gap-3 mt-2">
+                          <div className="flex items-center gap-3 text-xs text-theme-text-muted">
+                            {msg.author_name && (
+                              <span>From: {msg.author_name}</span>
+                            )}
+                            {msg.created_at && (
+                              <span>{formatDate(msg.created_at, tz)}</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {!msg.is_read && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void markMessageRead(msg.id);
+                                }}
+                                className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1"
+                                title="Mark as read"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {msg.requires_acknowledgment &&
+                              !msg.is_acknowledged && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void acknowledgeMessage(msg.id);
+                                  }}
+                                  className="text-xs px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-sm font-medium"
+                                >
+                                  Acknowledge
+                                </button>
+                              )}
+                            {msg.is_acknowledged && (
+                              <span className="text-xs text-green-400 flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3" /> Acknowledged
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex flex-col gap-1 shrink-0">
-                        {!msg.is_read && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void markMessageRead(msg.id);
-                            }}
-                            className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1"
-                            title="Mark as read"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                        {msg.requires_acknowledgment &&
-                          !msg.is_acknowledged && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void acknowledgeMessage(msg.id);
-                              }}
-                              className="text-xs px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-sm font-medium"
-                            >
-                              Acknowledge
-                            </button>
-                          )}
-                        {msg.is_acknowledged && (
-                          <span className="text-xs text-green-400 flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3" /> Acknowledged
-                          </span>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -946,13 +948,13 @@ const Dashboard: React.FC = () => {
                       if (notification.action_url && notification.action_url.startsWith('/'))
                         navigate(notification.action_url);
                     }}
-                    className={`w-full text-left p-3 rounded-lg transition-colors ${
+                    className={`w-full text-left p-2.5 sm:p-3 rounded-lg transition-colors ${
                       notification.read
                         ? "bg-theme-surface-secondary text-theme-text-muted"
                         : "bg-blue-500/10 border border-blue-500/20 text-theme-text-primary"
                     }`}
                   >
-                    <div className="flex items-start justify-between">
+                    <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">
                           {notification.subject || "Notification"}
@@ -961,15 +963,15 @@ const Dashboard: React.FC = () => {
                           {notification.message || ""}
                         </p>
                       </div>
-                      <div className="flex items-center ml-2 shrink-0">
+                      <div className="flex items-center shrink-0">
                         <span
-                          className="text-xs text-theme-text-muted whitespace-nowrap"
+                          className="text-[11px] sm:text-xs text-theme-text-muted whitespace-nowrap"
                           title={formatDate(notification.sent_at, tz)}
                         >
                           {formatRelativeTime(notification.sent_at)}
                         </span>
                         {notification.action_url && (
-                          <ChevronRight className="w-3.5 h-3.5 text-theme-text-muted ml-1" />
+                          <ChevronRight className="w-3.5 h-3.5 text-theme-text-muted ml-1 hidden sm:block" />
                         )}
                       </div>
                     </div>
@@ -1013,27 +1015,32 @@ const Dashboard: React.FC = () => {
                 {myShifts.map((shift) => (
                   <div
                     key={shift.id}
-                    className="flex items-center justify-between p-3 bg-theme-surface-secondary rounded-lg"
+                    className="p-3 bg-theme-surface-secondary rounded-lg"
                   >
                     <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                      <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center shrink-0">
                         <Calendar className="w-5 h-5 text-blue-400" />
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-theme-text-primary">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-theme-text-primary truncate">
                           {formatShiftDate(shift.shift_date)}
                         </p>
                         <p className="text-xs text-theme-text-muted">
                           {formatShiftTime(shift.shift_date, shift.start_time)}{" "}
                           - {formatShiftTime(shift.shift_date, shift.end_time)}
                         </p>
+                        {shift.shift_officer_name && (
+                          <p className="text-xs text-theme-text-muted mt-0.5 sm:hidden">
+                            Officer: {shift.shift_officer_name}
+                          </p>
+                        )}
                       </div>
+                      {shift.shift_officer_name && (
+                        <span className="text-xs text-theme-text-muted hidden sm:inline shrink-0">
+                          Officer: {shift.shift_officer_name}
+                        </span>
+                      )}
                     </div>
-                    {shift.shift_officer_name && (
-                      <span className="text-xs text-theme-text-muted">
-                        Officer: {shift.shift_officer_name}
-                      </span>
-                    )}
                   </div>
                 ))}
               </div>
@@ -1077,13 +1084,13 @@ const Dashboard: React.FC = () => {
                   key={shift.id}
                   className="p-3 bg-theme-surface-secondary rounded-lg"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div className="flex items-center space-x-3 min-w-0">
+                      <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center shrink-0">
                         <CalendarPlus className="w-5 h-5 text-green-400" />
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-theme-text-primary">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-theme-text-primary truncate">
                           {formatShiftDate(shift.shift_date)}
                         </p>
                         <p className="text-xs text-theme-text-muted">
@@ -1092,7 +1099,7 @@ const Dashboard: React.FC = () => {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center justify-end space-x-3 shrink-0">
                       {shift.min_staffing != null && (
                         <span className="text-xs text-theme-text-muted">
                           {shift.attendee_count}/{shift.min_staffing} filled
@@ -1202,30 +1209,32 @@ const Dashboard: React.FC = () => {
                 <button
                   key={evt.id}
                   onClick={() => navigate(`/events/${evt.id}`)}
-                  className="w-full flex items-center justify-between p-3 bg-theme-surface-secondary rounded-lg hover:bg-theme-surface-hover transition-colors text-left"
+                  className="w-full p-3 bg-theme-surface-secondary rounded-lg hover:bg-theme-surface-hover transition-colors text-left"
                 >
                   <div className="flex items-center space-x-3 min-w-0">
                     <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center shrink-0">
                       <Calendar className="w-5 h-5 text-purple-400" />
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-theme-text-primary truncate">
-                        {evt.title}
-                      </p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-theme-text-primary truncate">
+                          {evt.title}
+                        </p>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {evt.user_rsvp_status && (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getRSVPStatusColor(evt.user_rsvp_status)}`}>
+                              {getRSVPStatusLabel(evt.user_rsvp_status)}
+                            </span>
+                          )}
+                          <ChevronRight className="w-4 h-4 text-theme-text-muted hidden sm:block" />
+                        </div>
+                      </div>
                       <p className="text-xs text-theme-text-muted">
                         {formatShortDateTime(evt.start_datetime, tz)}
                         {" \u2022 "}
                         {getEventTypeLabel(evt.event_type)}
                       </p>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0 ml-2">
-                    {evt.user_rsvp_status && (
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getRSVPStatusColor(evt.user_rsvp_status)}`}>
-                        {getRSVPStatusLabel(evt.user_rsvp_status)}
-                      </span>
-                    )}
-                    <ChevronRight className="w-4 h-4 text-theme-text-muted" />
                   </div>
                 </button>
               ))}
