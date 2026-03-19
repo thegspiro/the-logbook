@@ -25,7 +25,7 @@ import {
   Tag,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { eventService, eventRequestService, userService } from '../services/api';
+import { eventService, eventRequestService, userService, formsService } from '../services/api';
 import type { EventModuleSettings, EventType, EventCategoryConfig, EmailTemplate } from '../types/event';
 import { getEventTypeLabel } from '../utils/eventHelpers';
 import {
@@ -36,7 +36,7 @@ import {
   EmailSection,
   FormSection,
 } from './events-settings';
-import type { OrgMember } from './events-settings';
+import type { OrgMember, EventRequestFormSummary } from './events-settings';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -94,6 +94,8 @@ const EventsSettingsTab: React.FC = () => {
 
   // Form generation
   const [generatingForm, setGeneratingForm] = useState(false);
+  const [eventRequestForms, setEventRequestForms] = useState<EventRequestFormSummary[]>([]);
+  const [loadingForms, setLoadingForms] = useState(false);
 
   // ─── Data Fetching ──────────────────────────────────────────────────────────
 
@@ -129,6 +131,25 @@ const EventsSettingsTab: React.FC = () => {
     };
     void fetchTemplates();
   }, []);
+
+  const fetchEventRequestForms = useCallback(async () => {
+    try {
+      setLoadingForms(true);
+      const response = await formsService.getForms({ limit: 50 });
+      const filtered = response.forms.filter(
+        (f) => f.integration_type === 'event_request'
+      );
+      setEventRequestForms(filtered);
+    } catch {
+      // Silently fail — the list is supplemental
+    } finally {
+      setLoadingForms(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchEventRequestForms();
+  }, [fetchEventRequestForms]);
 
   // ─── Save Helper ───────────────────────────────────────────────────────────
 
@@ -402,9 +423,9 @@ const EventsSettingsTab: React.FC = () => {
     try {
       setGeneratingForm(true);
       const result = await eventRequestService.generateForm();
-      toast.success('Event request form created! Redirecting to Forms...');
+      toast.success('Event request form created!');
       toast(`Public URL: ${window.location.origin}${result.public_url}`, { duration: 8000 });
-      navigate('/forms');
+      void fetchEventRequestForms();
     } catch {
       toast.error('Failed to generate form. It may already exist.');
     } finally {
@@ -520,6 +541,8 @@ const EventsSettingsTab: React.FC = () => {
             generatingForm={generatingForm}
             onGenerateForm={() => void handleGenerateForm()}
             onNavigateToForms={() => navigate('/forms')}
+            eventRequestForms={eventRequestForms}
+            loadingForms={loadingForms}
           />
         );
     }

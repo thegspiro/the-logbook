@@ -4,4 +4,4 @@ export { default as OutreachSection } from './OutreachSection';
 export { default as PipelineSection } from './PipelineSection';
 export { default as EmailSection } from './EmailSection';
 export { default as FormSection } from './FormSection';
-export type { OrgMember } from './types';
+export type { OrgMember, EventRequestFormSummary } from './types';
