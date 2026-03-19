@@ -7,7 +7,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft, RefreshCw, Search, ChevronUp, ChevronDown, Printer, Download,
-  Archive, ArrowUpDown, Plus, Package, AlertTriangle, Wrench, ChevronRight, MapPin,
+  Archive, ArrowUpDown, Plus, Package, AlertTriangle, Wrench, ChevronRight, MapPin, UserPlus,
 } from 'lucide-react';
 import { inventoryService, locationsService } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
@@ -217,7 +217,7 @@ const InventoryItemsPage: React.FC = () => {
   const fabActions = useMemo(() => {
     const a = [];
     if (canManage) a.push({ id: 'add', label: 'Add Item', icon: <Plus className="w-5 h-5" />, onClick: openAdd, color: 'bg-emerald-600' });
-    a.push({ id: 'export', label: 'Export CSV', icon: <Download className="w-5 h-5" />, onClick: () => void exportCsv(), color: 'bg-blue-600' });
+    if (canManage) a.push({ id: 'assign', label: 'Assign Items', icon: <UserPlus className="w-5 h-5" />, onClick: () => navigate('/inventory/admin/members'), color: 'bg-blue-600' });
     return a;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canManage]);
