@@ -54,8 +54,8 @@ const AdminHoursPage: React.FC = () => {
   const loadData = useCallback(() => {
     void fetchCategories();
     void fetchMyEntries({
-      status: statusFilter ?? undefined,
-      categoryId: categoryFilter ?? undefined,
+      status: statusFilter || undefined,
+      categoryId: categoryFilter || undefined,
       skip: page * PAGE_SIZE,
       limit: PAGE_SIZE,
     });
@@ -113,8 +113,8 @@ const AdminHoursPage: React.FC = () => {
       setShowManualForm(false);
       setManualData({ category_id: '', clock_in_at: '', clock_out_at: '', description: '' });
       void fetchMyEntries({
-        status: statusFilter ?? undefined,
-        categoryId: categoryFilter ?? undefined,
+        status: statusFilter || undefined,
+        categoryId: categoryFilter || undefined,
         skip: page * PAGE_SIZE,
         limit: PAGE_SIZE,
       });

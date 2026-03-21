@@ -258,7 +258,11 @@ async def clock_out(
             "clock_out_at": entry.clock_out_at,
             "duration_minutes": entry.duration_minutes,
             "status": entry.status.value,
-            "message": f"Clocked out of {category.name if category else 'admin hours'} ({entry.duration_minutes} minutes)",
+            "message": (
+                f"Clocked out of "
+                f"{category.name if category else 'admin hours'} "
+                f"({entry.duration_minutes} minutes)"
+            ),
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -293,7 +297,11 @@ async def clock_out_by_category(
             "clock_out_at": entry.clock_out_at,
             "duration_minutes": entry.duration_minutes,
             "status": entry.status.value,
-            "message": f"Clocked out of {category.name if category else 'admin hours'} ({entry.duration_minutes} minutes)",
+            "message": (
+                f"Clocked out of "
+                f"{category.name if category else 'admin hours'} "
+                f"({entry.duration_minutes} minutes)"
+            ),
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -488,7 +496,12 @@ async def list_my_entries(
         skip=pagination.skip,
         limit=pagination.limit,
     )
-    return {"entries": entries, "total": total, "skip": pagination.skip, "limit": pagination.limit}
+    return {
+        "entries": entries,
+        "total": total,
+        "skip": pagination.skip,
+        "limit": pagination.limit,
+    }
 
 
 @router.get("/entries", response_model=AdminHoursPaginatedEntries)
@@ -517,7 +530,12 @@ async def list_all_entries(
         skip=pagination.skip,
         limit=pagination.limit,
     )
-    return {"entries": entries, "total": total, "skip": pagination.skip, "limit": pagination.limit}
+    return {
+        "entries": entries,
+        "total": total,
+        "skip": pagination.skip,
+        "limit": pagination.limit,
+    }
 
 
 # =============================================================================
