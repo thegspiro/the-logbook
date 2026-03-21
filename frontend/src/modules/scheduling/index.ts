@@ -31,8 +31,6 @@ export type {
   ShiftUpdate,
   AttendanceCreate,
   AttendanceUpdate,
-  ShiftCallCreate,
-  ShiftCallUpdate,
   AssignmentCreate,
   AssignmentUpdate,
   SwapRequestCreate,

@@ -54,34 +54,6 @@ export interface AttendanceUpdate {
 }
 
 // ============================================================================
-// Shift Call Create/Update
-// ============================================================================
-
-export interface ShiftCallCreate {
-  incident_type: string;
-  incident_number?: string;
-  dispatched_at?: string;
-  on_scene_at?: string;
-  cleared_at?: string;
-  cancelled_en_route?: boolean;
-  medical_refusal?: boolean;
-  responding_members?: string[];
-  notes?: string;
-}
-
-export interface ShiftCallUpdate {
-  incident_number?: string;
-  incident_type?: string;
-  dispatched_at?: string;
-  on_scene_at?: string;
-  cleared_at?: string;
-  cancelled_en_route?: boolean;
-  medical_refusal?: boolean;
-  responding_members?: string[];
-  notes?: string;
-}
-
-// ============================================================================
 // Assignment Create/Update
 // ============================================================================
 
