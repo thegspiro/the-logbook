@@ -6,7 +6,7 @@
  * types, expiration tracking, and drag-handle placeholders for reordering.
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -21,6 +21,10 @@ import {
   AlertTriangle,
   Loader2,
   Truck,
+  Eye,
+  X,
+  Copy,
+  ChevronsUpDown,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -41,11 +45,13 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { schedulingService } from '@/modules/scheduling';
+import { EquipmentCheckForm } from '@/pages/scheduling/EquipmentCheckForm';
 import type {
   EquipmentCheckTemplate,
   EquipmentCheckTemplateCreate,
   CheckTemplateCompartmentCreate,
   CheckTemplateItemCreate,
+  CheckTemplateItem,
   CheckType,
   TemplateType,
 } from '@/modules/scheduling/types/equipmentCheck';
@@ -91,6 +97,16 @@ const CHECK_TYPES = [
   { value: 'date_lot', label: 'Date / Lot' },
   { value: 'reading', label: 'Reading' },
 ] as const;
+
+const CHECK_TYPE_HELP: Record<string, string> = {
+  pass_fail: 'Simple pass or fail check. Good for binary inspections like "lights working" or "no visible damage".',
+  present: 'Verify the item is present. Use for mandatory equipment that must be on the apparatus.',
+  functional: 'Test that the item works correctly. Similar to pass/fail but implies active testing.',
+  quantity: 'Count items and compare against a required minimum. Shows fields for required and expected quantities.',
+  level: 'Read a gauge or measure a level (e.g., fuel, pressure, fluid). Shows min level and unit fields.',
+  date_lot: 'Track serial/lot numbers and verify against expected values. Good for medical supplies and dated items.',
+  reading: 'Record a numeric reading without a pass/fail threshold. Good for odometer, hour meters, etc.',
+};
 
 // Pre-built vehicle check compartment templates by apparatus type
 interface VehiclePreset {
@@ -470,6 +486,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [expandedCompartments, setExpandedCompartments] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [cloning, setCloning] = useState(false);
+  const isDirty = useRef(false);
 
   // ---------------------------------------------------------------------------
   // Load existing template
@@ -534,11 +552,30 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   }, [templateId, loadTemplate]);
 
   // ---------------------------------------------------------------------------
+  // Unsaved changes warning
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (isDirty.current) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
+
+  const markDirty = useCallback(() => {
+    isDirty.current = true;
+  }, []);
+
+  // ---------------------------------------------------------------------------
   // Template metadata helpers
   // ---------------------------------------------------------------------------
 
   const updateForm = (patch: Partial<TemplateFormState>) => {
     setForm((prev) => ({ ...prev, ...patch }));
+    markDirty();
   };
 
   const togglePosition = (pos: string) => {
@@ -610,11 +647,19 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       next[idx] = { ...existing, ...patch };
       return next;
     });
+    markDirty();
   };
 
   const deleteCompartment = async (idx: number) => {
     const comp = compartments[idx];
     if (!comp) return;
+
+    const itemCount = comp.items.length;
+    const label = comp.name || 'Untitled Compartment';
+    const msg = itemCount > 0
+      ? `Delete "${label}" and its ${itemCount} item${itemCount !== 1 ? 's' : ''}? This cannot be undone.`
+      : `Delete "${label}"? This cannot be undone.`;
+    if (!window.confirm(msg)) return;
 
     if (comp.id) {
       try {
@@ -626,6 +671,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
     }
     setCompartments((prev) => prev.filter((_, i) => i !== idx));
+    markDirty();
   };
 
   // ---------------------------------------------------------------------------
@@ -689,6 +735,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       next[compartmentIdx] = { ...comp, items };
       return next;
     });
+    markDirty();
   };
 
   const deleteItem = async (compartmentIdx: number, itemIdx: number) => {
@@ -696,6 +743,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (!comp) return;
     const item = comp.items[itemIdx];
     if (!item) return;
+
+    const label = item.name || 'Untitled Item';
+    if (!window.confirm(`Delete "${label}"? This cannot be undone.`)) return;
 
     if (item.id) {
       try {
@@ -711,6 +761,23 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     updateCompartmentField(compartmentIdx, { items: updatedItems });
   };
 
+  const duplicateItem = (compartmentIdx: number, itemIdx: number) => {
+    const comp = compartments[compartmentIdx];
+    if (!comp) return;
+    const item = comp.items[itemIdx];
+    if (!item) return;
+
+    const { id: _discardId, ...rest } = item;
+    const copy: ItemFormState = {
+      ...rest,
+      name: `${item.name} (copy)`,
+    };
+    const updatedItems = [...comp.items];
+    updatedItems.splice(itemIdx + 1, 0, copy);
+    updateCompartmentField(compartmentIdx, { items: updatedItems });
+    toast.success('Item duplicated');
+  };
+
   // ---------------------------------------------------------------------------
   // Save
   // ---------------------------------------------------------------------------
@@ -719,6 +786,37 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (!form.name.trim()) {
       toast.error('Template name is required');
       return;
+    }
+
+    // Validate compartments and items
+    const warnings: string[] = [];
+    for (const comp of compartments) {
+      if (!comp.name.trim()) {
+        warnings.push('One or more compartments have no name.');
+        break;
+      }
+    }
+    for (const comp of compartments) {
+      if (comp.items.length === 0) {
+        warnings.push(`Compartment "${comp.name || 'Untitled'}" has no items.`);
+        break;
+      }
+      for (const item of comp.items) {
+        if (!item.name.trim()) {
+          warnings.push(`One or more items in "${comp.name || 'Untitled'}" have no name.`);
+          break;
+        }
+        if (item.hasExpiration && !item.expirationDate.trim()) {
+          warnings.push(`"${item.name || 'Untitled'}" has expiration enabled but no date set.`);
+          break;
+        }
+      }
+    }
+    if (warnings.length > 0) {
+      const proceed = window.confirm(
+        `Save with warnings?\n\n${warnings.join('\n')}\n\nContinue anyway?`,
+      );
+      if (!proceed) return;
     }
 
     setSaving(true);
@@ -769,42 +867,48 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           await schedulingService.addCompartment(templateId, payload);
         }
 
-        // Update existing compartments
+        // Update existing compartments and items in parallel
+        const updatePromises: Promise<unknown>[] = [];
         for (const comp of compartments) {
           if (comp.id) {
-            await schedulingService.updateCompartment(comp.id, {
-              name: comp.name || undefined,
-              description: comp.description.trim() || undefined,
-              image_url: comp.imageUrl.trim() || undefined,
-              parent_compartment_id: comp.parentCompartmentId || undefined,
-            });
+            updatePromises.push(
+              schedulingService.updateCompartment(comp.id, {
+                name: comp.name || undefined,
+                description: comp.description.trim() || undefined,
+                image_url: comp.imageUrl.trim() || undefined,
+                parent_compartment_id: comp.parentCompartmentId || undefined,
+              }),
+            );
 
-            // Update existing items
             for (const item of comp.items) {
               if (item.id) {
-                await schedulingService.updateCheckItem(item.id, {
-                  name: item.name || undefined,
-                  description: item.description.trim() || undefined,
-                  check_type: item.checkType,
-                  is_required: item.isRequired,
-                  required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
-                  expected_quantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
-                  min_level: item.minLevel ? Number(item.minLevel) : undefined,
-                  level_unit: item.levelUnit.trim() || undefined,
-                  serial_number: item.serialNumber.trim() || undefined,
-                  lot_number: item.lotNumber.trim() || undefined,
-                  image_url: item.imageUrl.trim() || undefined,
-                  has_expiration: item.hasExpiration,
-                  expiration_date: item.expirationDate.trim() || undefined,
-                  expiration_warning_days: item.expirationWarningDays
-                    ? Number(item.expirationWarningDays)
-                    : undefined,
-                });
+                updatePromises.push(
+                  schedulingService.updateCheckItem(item.id, {
+                    name: item.name || undefined,
+                    description: item.description.trim() || undefined,
+                    check_type: item.checkType,
+                    is_required: item.isRequired,
+                    required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
+                    expected_quantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
+                    min_level: item.minLevel ? Number(item.minLevel) : undefined,
+                    level_unit: item.levelUnit.trim() || undefined,
+                    serial_number: item.serialNumber.trim() || undefined,
+                    lot_number: item.lotNumber.trim() || undefined,
+                    image_url: item.imageUrl.trim() || undefined,
+                    has_expiration: item.hasExpiration,
+                    expiration_date: item.expirationDate.trim() || undefined,
+                    expiration_warning_days: item.expirationWarningDays
+                      ? Number(item.expirationWarningDays)
+                      : undefined,
+                  }),
+                );
               }
             }
           }
         }
+        await Promise.all(updatePromises);
 
+        isDirty.current = false;
         toast.success('Template updated');
       } else {
         const createPayload: EquipmentCheckTemplateCreate = {
@@ -843,11 +947,18 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             })),
           })),
         };
-        await schedulingService.createEquipmentCheckTemplate(createPayload);
+        const created = await schedulingService.createEquipmentCheckTemplate(createPayload);
+        isDirty.current = false;
         toast.success('Template created');
+        // Navigate to edit mode so subsequent saves work as updates
+        navigate(`/scheduling/equipment-check-templates/${created.id}`, { replace: true });
+        return;
       }
 
-      navigate(-1);
+      // Re-fetch the template to sync local state with server
+      if (isEditing && templateId) {
+        void loadTemplate(templateId);
+      }
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to save template'));
     } finally {
@@ -860,6 +971,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   const [showPresetPicker, setShowPresetPicker] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   const loadVehiclePreset = (presetKey: string) => {
     const preset = VEHICLE_PRESETS[presetKey];
@@ -896,6 +1008,87 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     setExpandedCompartments(expanded);
     toast.success(`Loaded ${preset.label} vehicle check preset`);
   };
+
+  // ---------------------------------------------------------------------------
+  // Clone template
+  // ---------------------------------------------------------------------------
+
+  const handleClone = async () => {
+    if (!templateId) return;
+    setCloning(true);
+    try {
+      const cloned = await schedulingService.cloneEquipmentCheckTemplate(templateId, '');
+      isDirty.current = false;
+      toast.success('Template cloned');
+      navigate(`/scheduling/equipment-check-templates/${cloned.id}`, { replace: true });
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to clone template'));
+    } finally {
+      setCloning(false);
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Collapse / expand all compartments
+  // ---------------------------------------------------------------------------
+
+  const expandAllCompartments = () => {
+    const all = new Set<string>();
+    compartments.forEach((c, i) => all.add(c.id ?? `comp-${i}`));
+    setExpandedCompartments(all);
+  };
+
+  const collapseAllCompartments = () => {
+    setExpandedCompartments(new Set());
+  };
+
+  // ---------------------------------------------------------------------------
+  // Preview: build a mock EquipmentCheckTemplate from current form state
+  // ---------------------------------------------------------------------------
+
+  const buildPreviewTemplate = useCallback((): EquipmentCheckTemplate => {
+    return {
+      id: templateId ?? 'preview',
+      organizationId: '',
+      name: form.name || 'Untitled Template',
+      ...(form.description ? { description: form.description } : {}),
+      checkTiming: form.checkTiming,
+      templateType: form.templateType,
+      ...(form.assignedPositions.length > 0 ? { assignedPositions: form.assignedPositions } : {}),
+      ...(form.apparatusType ? { apparatusType: form.apparatusType } : {}),
+      ...(form.apparatusId ? { apparatusId: form.apparatusId } : {}),
+      isActive: form.isActive,
+      sortOrder: 0,
+      compartments: compartments.map((c, cIdx) => ({
+        id: c.id ?? `preview-comp-${cIdx}`,
+        templateId: templateId ?? 'preview',
+        name: c.name || 'Untitled Compartment',
+        ...(c.description ? { description: c.description } : {}),
+        sortOrder: cIdx,
+        ...(c.imageUrl ? { imageUrl: c.imageUrl } : {}),
+        ...(c.parentCompartmentId ? { parentCompartmentId: c.parentCompartmentId } : {}),
+        items: c.items.map((item, iIdx): CheckTemplateItem => ({
+          id: item.id ?? `preview-item-${cIdx}-${iIdx}`,
+          compartmentId: c.id ?? `preview-comp-${cIdx}`,
+          name: item.name || 'Untitled Item',
+          ...(item.description ? { description: item.description } : {}),
+          sortOrder: iIdx,
+          checkType: item.checkType,
+          isRequired: item.isRequired,
+          ...(item.requiredQuantity ? { requiredQuantity: Number(item.requiredQuantity) } : {}),
+          ...(item.expectedQuantity ? { expectedQuantity: Number(item.expectedQuantity) } : {}),
+          ...(item.minLevel ? { minLevel: Number(item.minLevel) } : {}),
+          ...(item.levelUnit ? { levelUnit: item.levelUnit } : {}),
+          ...(item.serialNumber ? { serialNumber: item.serialNumber } : {}),
+          ...(item.lotNumber ? { lotNumber: item.lotNumber } : {}),
+          ...(item.imageUrl ? { imageUrl: item.imageUrl } : {}),
+          hasExpiration: item.hasExpiration,
+          ...(item.expirationDate ? { expirationDate: item.expirationDate } : {}),
+          expirationWarningDays: item.expirationWarningDays ? Number(item.expirationWarningDays) : 30,
+        })),
+      })),
+    };
+  }, [form, compartments, templateId]);
 
   // ---------------------------------------------------------------------------
   // Drag & Drop
@@ -1033,15 +1226,25 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           </div>
         </div>
 
-        {/* Delete */}
-        <button
-          type="button"
-          onClick={() => void deleteItem(compIdx, itemIdx)}
-          className="mt-6 p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-          title="Delete item"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+        {/* Item actions */}
+        <div className="mt-6 flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={() => duplicateItem(compIdx, itemIdx)}
+            className="p-1.5 text-theme-text-muted hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+            title="Duplicate item"
+          >
+            <Copy className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => void deleteItem(compIdx, itemIdx)}
+            className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+            title="Delete item"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1063,6 +1266,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </option>
             ))}
           </select>
+          {CHECK_TYPE_HELP[item.checkType] && (
+            <p className="mt-1 text-[10px] text-theme-text-muted leading-tight">
+              {CHECK_TYPE_HELP[item.checkType]}
+            </p>
+          )}
         </div>
 
         {/* Required */}
@@ -1418,7 +1626,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => navigate(-1)}
+            onClick={() => {
+              if (isDirty.current && !window.confirm('You have unsaved changes. Leave anyway?')) return;
+              navigate(-1);
+            }}
             className="p-2 rounded-md text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface transition-colors"
             title="Go back"
           >
@@ -1428,19 +1639,42 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             {isEditing ? `Edit: ${form.name || 'Template'}` : 'New Equipment Check Template'}
           </h1>
         </div>
-        <button
-          type="button"
-          onClick={() => void handleSave()}
-          disabled={saving}
-          className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
-        >
-          {saving ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="h-4 w-4" />
+        <div className="flex items-center gap-2">
+          {isEditing && templateId && (
+            <button
+              type="button"
+              onClick={() => void handleClone()}
+              disabled={cloning}
+              className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-4 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary disabled:opacity-50 transition-colors"
+              title="Clone this template"
+            >
+              {cloning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+              Clone
+            </button>
           )}
-          {saving ? 'Saving...' : 'Save Template'}
-        </button>
+          <button
+            type="button"
+            onClick={() => setShowPreview(true)}
+            disabled={compartments.length === 0}
+            className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-4 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary disabled:opacity-50 transition-colors"
+          >
+            <Eye className="h-4 w-4" />
+            Preview
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleSave()}
+            disabled={saving}
+            className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            {saving ? 'Saving...' : 'Save Template'}
+          </button>
+        </div>
       </div>
 
       {/* Template Metadata Card */}
@@ -1578,8 +1812,21 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
       {/* Compartments Section */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-theme-text-primary">Compartments</h2>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-semibold text-theme-text-primary">Compartments</h2>
+            {compartments.length > 1 && (
+              <button
+                type="button"
+                onClick={expandedCompartments.size === compartments.length ? collapseAllCompartments : expandAllCompartments}
+                className="flex items-center gap-1 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                title={expandedCompartments.size === compartments.length ? 'Collapse all' : 'Expand all'}
+              >
+                <ChevronsUpDown className="h-3.5 w-3.5" />
+                {expandedCompartments.size === compartments.length ? 'Collapse all' : 'Expand all'}
+              </button>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             {(form.templateType === 'vehicle' || form.templateType === 'combined') && (
               <button
@@ -1664,6 +1911,41 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           </SortableContext>
         </DndContext>
       </div>
+
+      {/* Preview Modal */}
+      {showPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="relative mx-4 flex max-h-[90vh] w-full max-w-lg flex-col rounded-xl bg-theme-surface shadow-xl">
+            {/* Modal header */}
+            <div className="flex items-center justify-between border-b border-theme-surface-border px-4 py-3">
+              <h2 className="text-lg font-semibold text-theme-text-primary">
+                Check Preview
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowPreview(false)}
+                className="rounded-lg p-1.5 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {/* Modal body — scrollable */}
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="mb-3 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
+                <p className="text-xs text-blue-700 dark:text-blue-400">
+                  This is a preview of how the check will appear to members during their shift.
+                  Inputs are interactive for demonstration but nothing will be submitted.
+                </p>
+              </div>
+              <EquipmentCheckForm
+                shiftId="preview"
+                template={buildPreviewTemplate()}
+                previewMode
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
