@@ -32,7 +32,6 @@ interface LabelPreset {
   height: string;
   barcodeHeight: number;
   barcodeWidth: number;
-  /** Font size for the human-readable text beneath the barcode (px) */
   barcodeFontSize: number;
   nameFontSize: string;
   subtitleFontSize: string;
@@ -346,7 +345,6 @@ const InventoryBarcodePrintPage: React.FC = () => {
     }
   }, []);
 
-  // Items without printable barcodes
   const itemsWithoutBarcodes = items.filter(item => !getBarcodeValue(item));
 
   const handlePrint = () => {
@@ -354,7 +352,6 @@ const InventoryBarcodePrintPage: React.FC = () => {
       toast.error('Barcodes are still rendering. Please wait a moment.');
       return;
     }
-    // Double-check SVGs have content before printing
     const svgs = document.querySelectorAll('.barcode-label svg');
     const emptyCount = Array.from(svgs).filter(svg => !svg.innerHTML || svg.innerHTML.trim().length < 20).length;
     if (emptyCount > 0 && emptyCount === svgs.length) {
@@ -420,7 +417,6 @@ const InventoryBarcodePrintPage: React.FC = () => {
     }
   };
 
-  // Build the repeated items list based on copies
   const labelItems: InventoryItem[] = [];
   for (let c = 0; c < copies; c++) {
     for (const item of items) {

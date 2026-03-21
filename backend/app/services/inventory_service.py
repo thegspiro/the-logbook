@@ -2669,13 +2669,11 @@ class InventoryService:
                 item.barcode or item.asset_tag or item.serial_number or item.id[:12]
             )
 
-            # Item name (truncated to fit label width)
             c.setFont("Helvetica-Bold", 7)
             max_name_chars = int(label_w / (7 * 0.5))
             name = item.name[:max_name_chars] + ("..." if len(item.name) > max_name_chars else "")
             c.drawString(x + 6, y + label_h - 12, name)
 
-            # Secondary info line
             info_parts = []
             if item.asset_tag and item.asset_tag != barcode_value:
                 info_parts.append(f"Asset: {item.asset_tag}")
@@ -2685,7 +2683,6 @@ class InventoryService:
                 c.setFont("Helvetica", 5.5)
                 c.drawString(x + 6, y + label_h - 20, "  |  ".join(info_parts))
 
-            # Barcode — fit within the 1" label height
             # ISO/IEC 15417 quiet zone: leave space on each side of the barcode
             quiet_zone = 10 * _MIN_BAR_WIDTH_INCH * inch
             bar_height = 0.35 * inch
@@ -2702,7 +2699,6 @@ class InventoryService:
             barcode_x = x + (label_w - barcode_obj.width) / 2
             barcode_obj.drawOn(c, barcode_x, y + 10)
 
-            # Barcode text below
             c.setFont("Courier", 5.5)
             c.drawCentredString(x + label_w / 2, y + 3, barcode_value)
 
