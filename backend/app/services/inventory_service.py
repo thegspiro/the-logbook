@@ -2478,7 +2478,7 @@ class InventoryService:
     # Predefined label formats: (width_inches, height_inches, description)
     LABEL_FORMATS: Dict[str, Dict[str, Any]] = {
         "letter": {
-            "description": "Standard letter (8.5x11) - 2x5 grid",
+            "description": "Standard letter (8.5x11) - Avery 5160, 3x10 grid",
             "type": "sheet",
         },
         "dymo_30252": {
@@ -2506,9 +2506,21 @@ class InventoryService:
             "type": "thermal",
         },
         "rollo_4x6": {
-            "description": "Rollo 4x6 Shipping Label",
+            "description": "Rollo 4x6 Shipping Label (4 x 6 in)",
             "width": 4.0,
             "height": 6.0,
+            "type": "thermal",
+        },
+        "rollo_2x1": {
+            "description": "Rollo / Thermal 2x1 Label (2 x 1 in)",
+            "width": 2.0,
+            "height": 1.0,
+            "type": "thermal",
+        },
+        "thermal_1x1": {
+            "description": "Thermal 1x1 Square Label (1 x 1 in)",
+            "width": 1.0,
+            "height": 1.0,
             "type": "thermal",
         },
     }
