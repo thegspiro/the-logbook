@@ -109,6 +109,7 @@ export const BallotVotingPage: React.FC = () => {
     } as Record<string, ItemChoice>));
   }, []);
 
+  /** Validates all choices (e.g. write-ins must have names) then shows the confirmation modal. */
   const handleSubmitBallot = () => {
     // Validate write-ins have names
     for (const [itemId, itemChoice] of Object.entries(choices)) {
@@ -122,6 +123,7 @@ export const BallotVotingPage: React.FC = () => {
     setShowConfirmation(true);
   };
 
+  /** Transforms choices into BallotItemVote[] and submits them atomically via the token endpoint. */
   const handleConfirmSubmit = async () => {
     if (!election) return;
 
@@ -147,6 +149,7 @@ export const BallotVotingPage: React.FC = () => {
     }
   };
 
+  /** Converts a choice value (approve/deny/abstain/write_in/UUID) to a display label. */
   const getChoiceLabel = (itemId: string): string => {
     const itemChoice = choices[itemId];
     if (!itemChoice) return 'Abstain';
@@ -168,6 +171,10 @@ export const BallotVotingPage: React.FC = () => {
     }
   };
 
+  /**
+   * Returns accepted candidates for a ballot item. Matches by position field,
+   * falling back to title-based matching for items without an explicit position.
+   */
   const getCandidatesForItem = (item: BallotItem): Candidate[] => {
     if (item.position) {
       return candidates.filter((c) => c.position === item.position && !c.is_write_in);
