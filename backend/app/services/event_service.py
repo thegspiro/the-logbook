@@ -7,6 +7,7 @@ Business logic for event management.
 import calendar
 import csv
 import io
+import logging
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -37,8 +38,11 @@ from app.schemas.event import (
     RSVPCreate,
     RSVPOverride,
 )
+from app.services.admin_hours_service import AdminHoursService
 from app.services.location_service import LocationService
 from app.services.notifications_service import NotificationsService
+
+logger = logging.getLogger(__name__)
 
 
 class EventService:
@@ -1358,6 +1362,39 @@ class EventService:
                 ):
                     training_record.hours_completed = round(duration_minutes / 60.0, 2)
 
+        await self.db.commit()
+
+        # Auto-credit event hours to admin hours categories via mappings
+        admin_hours_service = AdminHoursService(self.db)
+        event_type_val = (
+            event.event_type.value if event.event_type else None
+        )
+        for rsvp in rsvps:
+            check_in_time = rsvp.override_check_in_at or rsvp.checked_in_at
+            duration = (
+                rsvp.override_duration_minutes
+                or rsvp.attendance_duration_minutes
+            )
+            if not check_in_time or not duration or duration <= 0:
+                continue
+            check_out_time = rsvp.checked_out_at or effective_end
+            try:
+                await admin_hours_service.credit_event_attendance(
+                    organization_id=str(event.organization_id),
+                    user_id=str(rsvp.user_id),
+                    event_id=str(event.id),
+                    rsvp_id=str(rsvp.id),
+                    event_title=event.title or "Event",
+                    check_in_at=check_in_time,
+                    check_out_at=check_out_time,
+                    duration_minutes=duration,
+                    event_type=event_type_val,
+                    custom_category=event.custom_category,
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to credit admin hours for RSVP %s", rsvp.id
+                )
         await self.db.commit()
 
         return updated_count, None

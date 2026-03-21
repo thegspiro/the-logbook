@@ -130,11 +130,16 @@ class AdminHoursEntryResponse(UTCResponseBase):
     created_at: datetime
     updated_at: datetime
 
+    # Event attendance source
+    source_event_id: Optional[str] = None
+    source_rsvp_id: Optional[str] = None
+
     # Joined fields
     category_name: Optional[str] = None
     category_color: Optional[str] = None
     user_name: Optional[str] = None
     approver_name: Optional[str] = None
+    source_event_name: Optional[str] = None
 
 
 class AdminHoursActiveSession(UTCResponseBase):
@@ -243,3 +248,57 @@ class AdminHoursQRData(BaseModel):
     category_description: Optional[str] = None
     category_color: Optional[str] = None
     organization_name: Optional[str] = None
+
+
+# =============================================================================
+# Event Hour Mapping Schemas
+# =============================================================================
+
+
+class AdminHoursComplianceItem(UTCResponseBase):
+    """Single category compliance progress for a user"""
+
+    model_config = _RESPONSE_CONFIG
+
+    category_id: str
+    category_name: str
+    category_color: Optional[str] = None
+    required_hours: float
+    logged_hours: float
+    frequency: str
+    status: str
+    period_start: str
+    period_end: str
+
+
+class EventHourMappingCreate(BaseModel):
+    """Schema for creating an event-to-admin-hours mapping"""
+
+    event_type: Optional[str] = None
+    custom_category: Optional[str] = None
+    admin_hours_category_id: str
+    percentage: int = Field(100, ge=1, le=100)
+
+
+class EventHourMappingUpdate(BaseModel):
+    """Schema for updating an event hour mapping"""
+
+    percentage: Optional[int] = Field(None, ge=1, le=100)
+    is_active: Optional[bool] = None
+
+
+class EventHourMappingResponse(UTCResponseBase):
+    """Response schema for an event hour mapping"""
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    organization_id: str
+    event_type: Optional[str] = None
+    custom_category: Optional[str] = None
+    admin_hours_category_id: str
+    admin_hours_category_name: Optional[str] = None
+    admin_hours_category_color: Optional[str] = None
+    percentage: int
+    is_active: bool
+    created_at: datetime

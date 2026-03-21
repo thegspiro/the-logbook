@@ -13,14 +13,16 @@ from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import aliased, selectinload
 
 from app.models.admin_hours import (
     AdminHoursCategory,
     AdminHoursEntry,
     AdminHoursEntryMethod,
     AdminHoursEntryStatus,
+    EventHourMapping,
 )
+from app.models.event import Event
 from app.models.user import Organization, User
 
 logger = logging.getLogger(__name__)
@@ -488,12 +490,14 @@ class AdminHoursService:
                 AdminHoursCategory.color,
                 Approver.first_name,
                 Approver.last_name,
+                Event.title,
             )
             .join(
                 AdminHoursCategory,
                 AdminHoursEntry.category_id == AdminHoursCategory.id,
             )
             .outerjoin(Approver, AdminHoursEntry.approved_by == Approver.id)
+            .outerjoin(Event, AdminHoursEntry.source_event_id == Event.id)
             .where(base_where)
         )
         count_query = select(func.count(AdminHoursEntry.id)).where(base_where)
@@ -521,8 +525,13 @@ class AdminHoursService:
         rows = result.all()
 
         entries = []
-        for entry, cat_name, cat_color, approver_first, approver_last in rows:
-            d = self._entry_to_dict(entry, cat_name, cat_color)
+        for row in rows:
+            entry, cat_name, cat_color = row[0], row[1], row[2]
+            approver_first, approver_last = row[3], row[4]
+            event_title = row[5]
+            d = self._entry_to_dict(
+                entry, cat_name, cat_color, source_event_name=event_title
+            )
             if approver_first and approver_last:
                 d["approver_name"] = f"{approver_first} {approver_last}"
             entries.append(d)
@@ -556,6 +565,7 @@ class AdminHoursService:
                 EntryUser.last_name,
                 Approver.first_name,
                 Approver.last_name,
+                Event.title,
             )
             .join(
                 AdminHoursCategory,
@@ -563,6 +573,7 @@ class AdminHoursService:
             )
             .join(EntryUser, AdminHoursEntry.user_id == EntryUser.id)
             .outerjoin(Approver, AdminHoursEntry.approved_by == Approver.id)
+            .outerjoin(Event, AdminHoursEntry.source_event_id == Event.id)
             .where(base_where)
         )
         count_query = select(func.count(AdminHoursEntry.id)).where(base_where)
@@ -601,7 +612,10 @@ class AdminHoursService:
             last_name = row[4]
             approver_first = row[5]
             approver_last = row[6]
-            d = self._entry_to_dict(entry, cat_name, cat_color)
+            event_title = row[7]
+            d = self._entry_to_dict(
+                entry, cat_name, cat_color, source_event_name=event_title
+            )
             d["user_name"] = f"{first_name} {last_name}"
             if approver_first and approver_last:
                 d["approver_name"] = f"{approver_first} {approver_last}"
@@ -1085,6 +1099,7 @@ class AdminHoursService:
         category_name: str,
         category_color: Optional[str],
         user_name: Optional[str] = None,
+        source_event_name: Optional[str] = None,
     ) -> Dict:
         """Convert an entry + joined fields to a dict."""
         d: Dict = {
@@ -1105,9 +1120,431 @@ class AdminHoursService:
             "rejection_reason": entry.rejection_reason,
             "created_at": entry.created_at,
             "updated_at": entry.updated_at,
+            "source_event_id": entry.source_event_id,
+            "source_rsvp_id": entry.source_rsvp_id,
             "category_name": category_name,
             "category_color": category_color,
             "user_name": user_name,
             "approver_name": None,
+            "source_event_name": source_event_name,
         }
         return d
+
+    # =========================================================================
+    # Event Hour Mappings
+    # =========================================================================
+
+    async def list_event_hour_mappings(
+        self,
+        organization_id: str,
+        include_inactive: bool = False,
+    ) -> List[Dict]:
+        """List all event hour mappings for an organization."""
+        query = (
+            select(EventHourMapping, AdminHoursCategory)
+            .join(
+                AdminHoursCategory,
+                EventHourMapping.admin_hours_category_id == AdminHoursCategory.id,
+            )
+            .where(EventHourMapping.organization_id == organization_id)
+        )
+        if not include_inactive:
+            query = query.where(EventHourMapping.is_active.is_(True))
+        query = query.order_by(
+            EventHourMapping.event_type,
+            EventHourMapping.custom_category,
+        )
+        result = await self.db.execute(query)
+        rows = result.all()
+        return [
+            {
+                "id": mapping.id,
+                "organization_id": mapping.organization_id,
+                "event_type": mapping.event_type,
+                "custom_category": mapping.custom_category,
+                "admin_hours_category_id": mapping.admin_hours_category_id,
+                "admin_hours_category_name": cat.name,
+                "admin_hours_category_color": cat.color,
+                "percentage": mapping.percentage,
+                "is_active": mapping.is_active,
+                "created_at": mapping.created_at,
+            }
+            for mapping, cat in rows
+        ]
+
+    async def create_event_hour_mapping(
+        self,
+        organization_id: str,
+        created_by: str,
+        event_type: Optional[str],
+        custom_category: Optional[str],
+        admin_hours_category_id: str,
+        percentage: int = 100,
+    ) -> EventHourMapping:
+        """Create an event-to-admin-hours mapping.
+
+        Validates that the target category exists and that total percentage
+        for the same source doesn't exceed 100%.
+        """
+        if not event_type and not custom_category:
+            raise ValueError("Either event_type or custom_category is required")
+        if event_type and custom_category:
+            raise ValueError(
+                "Only one of event_type or custom_category can be set"
+            )
+
+        # Verify target category exists in this org
+        cat = await self.get_category(admin_hours_category_id, organization_id)
+        if not cat:
+            raise ValueError("Admin hours category not found")
+
+        # Check total percentage for this source won't exceed 100
+        existing_query = select(
+            func.coalesce(func.sum(EventHourMapping.percentage), 0)
+        ).where(
+            EventHourMapping.organization_id == organization_id,
+            EventHourMapping.is_active.is_(True),
+        )
+        if event_type:
+            existing_query = existing_query.where(
+                EventHourMapping.event_type == event_type
+            )
+        else:
+            existing_query = existing_query.where(
+                EventHourMapping.custom_category == custom_category
+            )
+        result = await self.db.execute(existing_query)
+        current_total = result.scalar() or 0
+
+        if current_total + percentage > 100:
+            raise ValueError(
+                f"Total percentage would be {current_total + percentage}%. "
+                f"Maximum is 100% (currently {current_total}% allocated)."
+            )
+
+        mapping = EventHourMapping(
+            organization_id=organization_id,
+            event_type=event_type,
+            custom_category=custom_category,
+            admin_hours_category_id=admin_hours_category_id,
+            percentage=percentage,
+            created_by=created_by,
+        )
+        self.db.add(mapping)
+        await self.db.flush()
+        await self.db.refresh(mapping, ["created_at", "updated_at"])
+        return mapping
+
+    async def update_event_hour_mapping(
+        self,
+        mapping_id: str,
+        organization_id: str,
+        percentage: Optional[int] = None,
+        is_active: Optional[bool] = None,
+    ) -> EventHourMapping:
+        """Update an event hour mapping's percentage or active status."""
+        result = await self.db.execute(
+            select(EventHourMapping).where(
+                EventHourMapping.id == mapping_id,
+                EventHourMapping.organization_id == organization_id,
+            )
+        )
+        mapping = result.scalar_one_or_none()
+        if not mapping:
+            raise ValueError("Mapping not found")
+
+        if percentage is not None:
+            # Validate new total won't exceed 100
+            existing_query = select(
+                func.coalesce(func.sum(EventHourMapping.percentage), 0)
+            ).where(
+                EventHourMapping.organization_id == organization_id,
+                EventHourMapping.is_active.is_(True),
+                EventHourMapping.id != mapping_id,
+            )
+            if mapping.event_type:
+                existing_query = existing_query.where(
+                    EventHourMapping.event_type == mapping.event_type
+                )
+            else:
+                existing_query = existing_query.where(
+                    EventHourMapping.custom_category == mapping.custom_category
+                )
+            result = await self.db.execute(existing_query)
+            other_total = result.scalar() or 0
+            if other_total + percentage > 100:
+                raise ValueError(
+                    f"Total percentage would be {other_total + percentage}%. "
+                    f"Maximum is 100% (currently {other_total}% allocated "
+                    f"by other mappings)."
+                )
+            mapping.percentage = percentage
+
+        if is_active is not None:
+            mapping.is_active = is_active
+
+        await self.db.flush()
+        return mapping
+
+    async def delete_event_hour_mapping(
+        self,
+        mapping_id: str,
+        organization_id: str,
+    ) -> None:
+        """Delete an event hour mapping."""
+        result = await self.db.execute(
+            select(EventHourMapping).where(
+                EventHourMapping.id == mapping_id,
+                EventHourMapping.organization_id == organization_id,
+            )
+        )
+        mapping = result.scalar_one_or_none()
+        if not mapping:
+            raise ValueError("Mapping not found")
+        await self.db.delete(mapping)
+        await self.db.flush()
+
+    async def get_mappings_for_event(
+        self,
+        organization_id: str,
+        event_type: Optional[str],
+        custom_category: Optional[str],
+    ) -> List[Tuple[str, int, Optional["AdminHoursCategory"]]]:
+        """Get active mappings for a given event type or custom category.
+
+        Returns list of (category_id, percentage, category) tuples.
+        """
+        query = (
+            select(EventHourMapping, AdminHoursCategory)
+            .join(
+                AdminHoursCategory,
+                EventHourMapping.admin_hours_category_id == AdminHoursCategory.id,
+            )
+            .where(
+                EventHourMapping.organization_id == organization_id,
+                EventHourMapping.is_active.is_(True),
+                AdminHoursCategory.is_active.is_(True),
+            )
+        )
+        if event_type:
+            query = query.where(EventHourMapping.event_type == event_type)
+        elif custom_category:
+            query = query.where(
+                EventHourMapping.custom_category == custom_category
+            )
+        else:
+            return []
+
+        result = await self.db.execute(query)
+        return [
+            (mapping.admin_hours_category_id, mapping.percentage, cat)
+            for mapping, cat in result.all()
+        ]
+
+    async def credit_event_attendance(
+        self,
+        organization_id: str,
+        user_id: str,
+        event_id: str,
+        rsvp_id: str,
+        event_title: str,
+        check_in_at: datetime,
+        check_out_at: datetime,
+        duration_minutes: int,
+        event_type: Optional[str],
+        custom_category: Optional[str],
+    ) -> int:
+        """Create admin hours entries from event attendance.
+
+        Looks up active mappings for the event type/custom category and
+        creates one entry per mapping with proportional duration.
+        Returns the number of entries created.
+        """
+        mappings = await self.get_mappings_for_event(
+            organization_id, event_type, custom_category
+        )
+        if not mappings:
+            return 0
+
+        created_count = 0
+        for category_id, percentage, category in mappings:
+            # Skip if entry already exists for this RSVP + category (idempotent)
+            existing = await self.db.execute(
+                select(AdminHoursEntry.id).where(
+                    AdminHoursEntry.source_rsvp_id == rsvp_id,
+                    AdminHoursEntry.category_id == category_id,
+                )
+            )
+            if existing.scalar_one_or_none():
+                continue
+
+            proportional_minutes = max(1, int(duration_minutes * percentage / 100))
+
+            status = self._determine_post_clockout_status(
+                category, proportional_minutes
+            )
+
+            entry = AdminHoursEntry(
+                organization_id=organization_id,
+                user_id=user_id,
+                category_id=category_id,
+                clock_in_at=_ensure_utc(check_in_at),
+                clock_out_at=_ensure_utc(check_out_at),
+                duration_minutes=proportional_minutes,
+                description=f"Event attendance: {event_title}",
+                entry_method=AdminHoursEntryMethod.EVENT_ATTENDANCE,
+                status=status,
+                source_event_id=event_id,
+                source_rsvp_id=rsvp_id,
+            )
+            if status == AdminHoursEntryStatus.APPROVED:
+                entry.approved_at = _ensure_utc(check_out_at)
+            self.db.add(entry)
+            created_count += 1
+
+        if created_count:
+            await self.db.flush()
+
+        return created_count
+
+    # =========================================================================
+    # Admin Hours Compliance
+    # =========================================================================
+
+    async def get_user_hours_compliance(
+        self,
+        organization_id: str,
+        user_id: str,
+        year: int,
+    ) -> List[Dict]:
+        """Get a user's admin hours progress against compliance requirements.
+
+        Returns a list of requirement progress items with hours logged vs required.
+        """
+        from app.models.compliance_config import ComplianceConfig, ComplianceProfile
+        from app.models.user import User as UserModel
+
+        # Get user to check membership type and roles
+        user_result = await self.db.execute(
+            select(UserModel).where(UserModel.id == user_id)
+        )
+        user = user_result.scalar_one_or_none()
+        if not user:
+            return []
+
+        # Get compliance config with profiles
+        config_result = await self.db.execute(
+            select(ComplianceConfig)
+            .options(selectinload(ComplianceConfig.profiles))
+            .where(ComplianceConfig.organization_id == organization_id)
+        )
+        config = config_result.scalars().first()
+        if not config:
+            return []
+
+        # Find applicable profiles for this user
+        user_membership = user.membership_type
+        user_position_ids = [str(p.id) for p in (user.positions or [])]
+
+        applicable_profiles: List[ComplianceProfile] = []
+        for profile in config.profiles:
+            if not profile.is_active:
+                continue
+            if not profile.admin_hours_requirements:
+                continue
+
+            types = profile.membership_types or []
+            roles = profile.role_ids or []
+            matches_type = not types or user_membership in types
+            matches_role = not roles or any(
+                r in user_position_ids for r in roles
+            )
+            if matches_type and matches_role:
+                applicable_profiles.append(profile)
+
+        if not applicable_profiles:
+            return []
+
+        # Use highest priority profile
+        applicable_profiles.sort(key=lambda p: p.priority or 0, reverse=True)
+        best_profile = applicable_profiles[0]
+        requirements = best_profile.admin_hours_requirements or []
+
+        # Calculate date range for the year
+        year_start = datetime(year, 1, 1, tzinfo=timezone.utc)
+        year_end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+
+        results = []
+        for req in requirements:
+            cat_id = req.get("category_id", "")
+            required_hours = req.get("required_hours", 0)
+            frequency = req.get("frequency", "annual")
+
+            # Get category info
+            cat = await self.get_category(cat_id, organization_id)
+            if not cat:
+                continue
+
+            # Determine period based on frequency
+            if frequency == "quarterly":
+                # Current quarter
+                from datetime import date
+
+                today = date.today()
+                q_start_month = ((today.month - 1) // 3) * 3 + 1
+                period_start = datetime(
+                    today.year, q_start_month, 1, tzinfo=timezone.utc
+                )
+                if q_start_month + 3 > 12:
+                    period_end = datetime(
+                        today.year + 1, 1, 1, tzinfo=timezone.utc
+                    )
+                else:
+                    period_end = datetime(
+                        today.year, q_start_month + 3, 1, tzinfo=timezone.utc
+                    )
+            else:
+                period_start = year_start
+                period_end = year_end
+
+            # Sum approved hours for this user + category + period
+            hours_result = await self.db.execute(
+                select(
+                    func.coalesce(
+                        func.sum(AdminHoursEntry.duration_minutes), 0
+                    )
+                ).where(
+                    AdminHoursEntry.user_id == user_id,
+                    AdminHoursEntry.category_id == cat_id,
+                    AdminHoursEntry.status == AdminHoursEntryStatus.APPROVED,
+                    AdminHoursEntry.clock_in_at >= period_start,
+                    AdminHoursEntry.clock_in_at < period_end,
+                )
+            )
+            total_minutes = hours_result.scalar() or 0
+            logged_hours = round(total_minutes / 60, 2)
+
+            status = "compliant"
+            if logged_hours < required_hours:
+                pct = (logged_hours / required_hours * 100) if required_hours else 0
+                if pct < (
+                    best_profile.at_risk_threshold_override
+                    or config.at_risk_threshold
+                ):
+                    status = "non_compliant"
+                else:
+                    status = "at_risk"
+
+            results.append({
+                "category_id": cat_id,
+                "category_name": cat.name,
+                "category_color": cat.color,
+                "required_hours": required_hours,
+                "logged_hours": logged_hours,
+                "frequency": frequency,
+                "status": status,
+                "period_start": period_start.isoformat(),
+                "period_end": period_end.isoformat(),
+            })
+
+        return results

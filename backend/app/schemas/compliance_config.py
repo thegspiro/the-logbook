@@ -14,6 +14,22 @@ from app.schemas.base import UTCResponseBase
 
 
 # =============================================================================
+# Admin Hours Requirement (embedded in ComplianceProfile)
+# =============================================================================
+
+
+class AdminHoursRequirementItem(BaseModel):
+    """A single admin hours category requirement within a compliance profile."""
+
+    category_id: str
+    required_hours: float = Field(..., gt=0)
+    frequency: str = Field(
+        "annual",
+        description="annual, biannual, or quarterly",
+    )
+
+
+# =============================================================================
 # Compliance Profile Schemas
 # =============================================================================
 
@@ -33,6 +49,7 @@ class ComplianceProfileBase(BaseModel):
     )
     required_requirement_ids: Optional[List[str]] = None
     optional_requirement_ids: Optional[List[str]] = None
+    admin_hours_requirements: Optional[List[AdminHoursRequirementItem]] = None
     is_active: bool = True
     priority: int = 0
 
@@ -58,6 +75,7 @@ class ComplianceProfileUpdate(BaseModel):
     )
     required_requirement_ids: Optional[List[str]] = None
     optional_requirement_ids: Optional[List[str]] = None
+    admin_hours_requirements: Optional[List[AdminHoursRequirementItem]] = None
     is_active: Optional[bool] = None
     priority: Optional[int] = None
 

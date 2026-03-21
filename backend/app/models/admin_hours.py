@@ -2,12 +2,24 @@
 Admin Hours Models
 
 Database models for tracking administrative hours logged by members.
-Supports QR code clock-in/clock-out and manual entry with optional approval workflows.
+Supports QR code clock-in/clock-out, manual entry with optional approval workflows,
+and automatic crediting from event attendance via configurable mappings.
 """
 
 from enum import Enum
 
-from sqlalchemy import Boolean, Column, DateTime, Float, Index, Integer, String, Text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Float,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import relationship
@@ -22,6 +34,7 @@ class AdminHoursEntryMethod(str, Enum):
 
     QR_SCAN = "qr_scan"
     MANUAL = "manual"
+    EVENT_ATTENDANCE = "event_attendance"
 
 
 class AdminHoursEntryStatus(str, Enum):
@@ -131,6 +144,18 @@ class AdminHoursEntry(Base):
         default=AdminHoursEntryMethod.MANUAL,
     )
 
+    # Event attendance source (set when entry_method = EVENT_ATTENDANCE)
+    source_event_id = Column(
+        String(36),
+        ForeignKey("events.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    source_rsvp_id = Column(
+        String(36),
+        ForeignKey("event_rsvps.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     # Approval workflow
     status = Column(
         SQLEnum(
@@ -159,6 +184,7 @@ class AdminHoursEntry(Base):
     category = relationship("AdminHoursCategory", back_populates="entries")
     user = relationship("User", foreign_keys=[user_id])
     approver = relationship("User", foreign_keys=[approved_by])
+    source_event = relationship("Event", foreign_keys=[source_event_id])
 
     __table_args__ = (
         Index("ix_admin_hours_entries_org_id", "organization_id"),
@@ -169,5 +195,76 @@ class AdminHoursEntry(Base):
             "ix_admin_hours_entries_user_active",
             "user_id",
             "status",
+        ),
+        Index("ix_admin_hours_entries_source_rsvp", "source_rsvp_id", "category_id"),
+    )
+
+
+class EventHourMapping(Base):
+    """Maps event types/custom categories to admin hours categories.
+
+    Allows organizations to configure how event attendance hours are
+    automatically credited to admin hours categories, with optional
+    percentage splits (e.g., 70% Training, 30% Professional Development).
+    """
+
+    __tablename__ = "event_hour_mappings"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # Source: exactly one of these must be set
+    event_type = Column(String(50), nullable=True)
+    custom_category = Column(String(100), nullable=True)
+
+    # Target admin hours category + percentage of hours to credit
+    admin_hours_category_id = Column(
+        String(36),
+        ForeignKey("admin_hours_categories.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    percentage = Column(Integer, nullable=False, default=100)
+
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    # Relationships
+    admin_hours_category = relationship("AdminHoursCategory")
+
+    __table_args__ = (
+        CheckConstraint(
+            "percentage >= 1 AND percentage <= 100",
+            name="ck_event_hour_mappings_percentage_range",
+        ),
+        CheckConstraint(
+            "(event_type IS NOT NULL AND custom_category IS NULL) OR "
+            "(event_type IS NULL AND custom_category IS NOT NULL)",
+            name="ck_event_hour_mappings_one_source",
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "event_type",
+            "custom_category",
+            "admin_hours_category_id",
+            name="uq_event_hour_mappings_source_target",
+        ),
+        Index("ix_event_hour_mappings_org_id", "organization_id"),
+        Index(
+            "ix_event_hour_mappings_org_event_type",
+            "organization_id",
+            "event_type",
         ),
     )

@@ -47,17 +47,20 @@ export interface AdminHoursEntry {
   clockOutAt: string | null;
   durationMinutes: number | null;
   description: string | null;
-  entryMethod: 'qr_scan' | 'manual';
+  entryMethod: 'qr_scan' | 'manual' | 'event_attendance';
   status: 'active' | 'pending' | 'approved' | 'rejected';
   approvedBy: string | null;
   approvedAt: string | null;
   rejectionReason: string | null;
+  sourceEventId: string | null;
+  sourceRsvpId: string | null;
   createdAt: string;
   updatedAt: string;
   categoryName: string | null;
   categoryColor: string | null;
   userName: string | null;
   approverName: string | null;
+  sourceEventName: string | null;
 }
 
 export interface AdminHoursEntryCreate {
@@ -149,4 +152,46 @@ export interface AdminHoursQRData {
   categoryDescription: string | null;
   categoryColor: string | null;
   organizationName: string | null;
+}
+
+
+// =============================================================================
+// Event Hour Mappings
+// =============================================================================
+
+export interface EventHourMapping {
+  id: string;
+  organizationId: string;
+  eventType: string | null;
+  customCategory: string | null;
+  adminHoursCategoryId: string;
+  adminHoursCategoryName: string | null;
+  adminHoursCategoryColor: string | null;
+  percentage: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface EventHourMappingCreate {
+  event_type?: string | undefined;
+  custom_category?: string | undefined;
+  admin_hours_category_id: string;
+  percentage: number;
+}
+
+export interface EventHourMappingUpdate {
+  percentage?: number | undefined;
+  is_active?: boolean | undefined;
+}
+
+export interface AdminHoursComplianceItem {
+  categoryId: string;
+  categoryName: string;
+  categoryColor: string | null;
+  requiredHours: number;
+  loggedHours: number;
+  frequency: string;
+  status: string;
+  periodStart: string;
+  periodEnd: string;
 }

@@ -17,6 +17,10 @@ import type {
   AdminHoursSummary,
   AdminHoursQRData,
   AdminHoursPaginatedEntries,
+  EventHourMapping,
+  EventHourMappingCreate,
+  EventHourMappingUpdate,
+  AdminHoursComplianceItem,
 } from '../types';
 
 const api = createApiClient();
@@ -203,5 +207,45 @@ export const adminHoursEntryService = {
   async forceClockOut(entryId: string): Promise<AdminHoursEntry> {
     const response = await api.post<AdminHoursEntry>(`/admin-hours/entries/${entryId}/force-clock-out`);
     return response.data;
+  },
+};
+
+// =============================================================================
+// Event Hour Mappings
+// =============================================================================
+
+// =============================================================================
+// Admin Hours Compliance
+// =============================================================================
+
+export const adminHoursComplianceService = {
+  async getUserCompliance(userId: string, year?: number): Promise<AdminHoursComplianceItem[]> {
+    const response = await api.get<AdminHoursComplianceItem[]>(`/admin-hours/compliance/${userId}`, {
+      params: year ? { year } : undefined,
+    });
+    return response.data;
+  },
+};
+
+export const eventHourMappingService = {
+  async list(params?: { includeInactive?: boolean | undefined }): Promise<EventHourMapping[]> {
+    const response = await api.get<EventHourMapping[]>('/admin-hours/event-mappings', {
+      params: { include_inactive: params?.includeInactive ?? false },
+    });
+    return response.data;
+  },
+
+  async create(data: EventHourMappingCreate): Promise<EventHourMapping> {
+    const response = await api.post<EventHourMapping>('/admin-hours/event-mappings', data);
+    return response.data;
+  },
+
+  async update(mappingId: string, data: EventHourMappingUpdate): Promise<EventHourMapping> {
+    const response = await api.patch<EventHourMapping>(`/admin-hours/event-mappings/${mappingId}`, data);
+    return response.data;
+  },
+
+  async delete(mappingId: string): Promise<void> {
+    await api.delete(`/admin-hours/event-mappings/${mappingId}`);
   },
 };
