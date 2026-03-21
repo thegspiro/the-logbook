@@ -119,4 +119,30 @@ describe('MemberIdScannerModal', () => {
       expect(mockStart).toHaveBeenCalled();
     });
   });
+
+  it('should fall back to user-facing camera when environment camera fails', async () => {
+    mockStart
+      .mockRejectedValueOnce(new Error('No environment camera'))
+      .mockResolvedValueOnce(undefined);
+
+    render(<MemberIdScannerModal {...defaultProps} />);
+
+    await waitFor(() => {
+      expect(mockStart).toHaveBeenCalledTimes(2);
+    });
+    expect(mockStart).toHaveBeenNthCalledWith(
+      1,
+      { facingMode: 'environment' },
+      expect.any(Object),
+      expect.any(Function),
+      expect.any(Function),
+    );
+    expect(mockStart).toHaveBeenNthCalledWith(
+      2,
+      { facingMode: 'user' },
+      expect.any(Object),
+      expect.any(Function),
+      expect.any(Function),
+    );
+  });
 });

@@ -10,12 +10,13 @@
  *  3. Repeat for all items
  *  4. Review the list, then tap "Confirm" to submit the batch
  *
- * The modal uses the device camera for barcode scanning via the BarcodeDetector
- * API (Chrome/Edge 83+, Android). Falls back to manual text entry on
- * unsupported browsers.
+ * Camera scanning uses the native BarcodeDetector API when available
+ * (Chrome/Edge 83+, Android) for best performance, and falls back to
+ * html5-qrcode on all other browsers (Firefox, Safari, etc.).
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { Modal } from './Modal';
 import { Camera, Check, AlertTriangle, Package, Trash2, Loader2, Search } from 'lucide-react';
 import { RETURN_CONDITION_OPTIONS } from '../constants/enums';
@@ -63,6 +64,16 @@ interface InventoryScanModalProps {
 
 const hasBarcodeDetector = typeof window !== 'undefined' && 'BarcodeDetector' in window;
 
+const HTML5_QRCODE_FORMATS = [
+  Html5QrcodeSupportedFormats.CODE_128,
+  Html5QrcodeSupportedFormats.CODE_39,
+  Html5QrcodeSupportedFormats.EAN_13,
+  Html5QrcodeSupportedFormats.EAN_8,
+  Html5QrcodeSupportedFormats.UPC_A,
+  Html5QrcodeSupportedFormats.UPC_E,
+  Html5QrcodeSupportedFormats.QR_CODE,
+];
+
 // ── Component ──────────────────────────────────────────────────────
 
 export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
@@ -91,6 +102,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const detectorRef = useRef<BarcodeDetector | null>(null);
+  const html5QrRef = useRef<Html5Qrcode | null>(null);
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -109,30 +121,81 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
+    if (html5QrRef.current) {
+      void html5QrRef.current.stop().catch(() => {});
+      html5QrRef.current = null;
+    }
     setCameraActive(false);
   }, []);
 
-  const startCamera = useCallback(async () => {
-    if (!hasBarcodeDetector) return;
-
+  /** Request a camera stream, trying rear first then falling back to front. */
+  const acquireCameraStream = async (): Promise<MediaStream> => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      return await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment' },
       });
-      streamRef.current = stream;
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-      detectorRef.current = new (window as any).BarcodeDetector({
-        formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code'],
-      });
-
-      // Set cameraActive first so the <video> element mounts, then
-      // a useEffect will wire up the stream once the element exists.
-      setCameraActive(true);
     } catch {
-      setLookupError('Camera access denied. Please allow camera permissions, or type codes manually.');
-      setTimeout(() => setLookupError(null), 5000);
-      setCameraActive(false);
+      return await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user' },
+      });
+    }
+  };
+
+  const startCamera = useCallback(async () => {
+    if (hasBarcodeDetector) {
+      // Native BarcodeDetector path (Chrome/Edge/Android)
+      try {
+        const stream = await acquireCameraStream();
+        streamRef.current = stream;
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        detectorRef.current = new (window as any).BarcodeDetector({
+          formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code'],
+        });
+
+        setCameraActive(true);
+      } catch {
+        setLookupError('Camera access denied. Please allow camera permissions, or type codes manually.');
+        setTimeout(() => setLookupError(null), 5000);
+        setCameraActive(false);
+      }
+    } else {
+      // html5-qrcode fallback (Firefox, Safari, older browsers)
+      try {
+        const scanner = new Html5Qrcode('inventory-scanner-viewport', {
+          formatsToSupport: HTML5_QRCODE_FORMATS,
+          verbose: false,
+        });
+        html5QrRef.current = scanner;
+
+        const scanConfig = { fps: 10, qrbox: { width: 250, height: 150 } };
+        const onSuccess = (decodedText: string) => {
+          handleCodeScannedRef.current(decodedText);
+        };
+        const onFailure = () => {};
+
+        try {
+          await scanner.start(
+            { facingMode: 'environment' },
+            scanConfig,
+            onSuccess,
+            onFailure,
+          );
+        } catch {
+          await scanner.start(
+            { facingMode: 'user' },
+            scanConfig,
+            onSuccess,
+            onFailure,
+          );
+        }
+
+        setCameraActive(true);
+      } catch {
+        setLookupError('Camera access denied. Please allow camera permissions, or type codes manually.');
+        setTimeout(() => setLookupError(null), 5000);
+        setCameraActive(false);
+      }
     }
   }, []);
 
@@ -522,20 +585,18 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
             <div className="space-y-3">
               {/* Camera toggle + manual input */}
               <div className="flex gap-2">
-                {hasBarcodeDetector && (
-                  <button
-                    type="button"
-                    onClick={cameraActive ? stopCamera : startCamera}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm ${
-                      cameraActive
-                        ? 'border-red-300 bg-red-50 text-red-700 dark:border-red-700 dark:bg-red-900/20 dark:text-red-400'
-                        : 'border-theme-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary'
-                    }`}
-                  >
-                    <Camera className="h-4 w-4" />
-                    {cameraActive ? 'Stop Camera' : 'Start Camera'}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={cameraActive ? stopCamera : () => { void startCamera(); }}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm ${
+                    cameraActive
+                      ? 'border-red-300 bg-red-50 text-red-700 dark:border-red-700 dark:bg-red-900/20 dark:text-red-400'
+                      : 'border-theme-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary'
+                  }`}
+                >
+                  <Camera className="h-4 w-4" />
+                  {cameraActive ? 'Stop Camera' : 'Start Camera'}
+                </button>
                 <form onSubmit={handleManualSubmit} className="flex-1 flex gap-2">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-theme-text-muted" />
@@ -630,22 +691,28 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                 </form>
               </div>
 
-              {/* Camera video preview — always mounted so videoRef is available
-                  when startCamera captures the stream */}
-              <div
-                className={`relative rounded-lg overflow-hidden bg-black ${cameraActive ? '' : 'hidden'}`}
-              >
-                <video
-                  ref={videoRef}
-                  className="w-full h-48 object-cover"
-                  playsInline
-                  muted
+              {/* Camera preview: native video for BarcodeDetector, div for html5-qrcode */}
+              {hasBarcodeDetector ? (
+                <div
+                  className={`relative rounded-lg overflow-hidden bg-black ${cameraActive ? '' : 'hidden'}`}
+                >
+                  <video
+                    ref={videoRef}
+                    className="w-full h-48 object-cover"
+                    playsInline
+                    muted
+                  />
+                  <div className="absolute inset-0 border-2 border-red-500/50 pointer-events-none" />
+                  <p className="absolute bottom-2 left-0 right-0 text-center text-xs text-white/80">
+                    Point camera at barcode
+                  </p>
+                </div>
+              ) : (
+                <div
+                  id="inventory-scanner-viewport"
+                  className={`rounded-lg overflow-hidden ${cameraActive ? '' : 'hidden'}`}
                 />
-                <div className="absolute inset-0 border-2 border-red-500/50 pointer-events-none" />
-                <p className="absolute bottom-2 left-0 right-0 text-center text-xs text-white/80">
-                  Point camera at barcode
-                </p>
-              </div>
+              )}
 
               {/* Lookup error */}
               {lookupError && (
@@ -674,9 +741,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
 
               {scannedItems.length === 0 ? (
                 <div className="text-center py-8 text-theme-text-muted text-sm">
-                  {hasBarcodeDetector
-                    ? 'Scan a barcode or type a code to get started'
-                    : 'Type a barcode, serial number, or asset tag to get started'}
+                  Scan a barcode or type a code to get started
                 </div>
               ) : (
                 <div className="space-y-2 max-h-64 overflow-y-auto">
@@ -805,12 +870,6 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
           </div>
         )}
 
-        {/* Browser compatibility warning */}
-        {!hasBarcodeDetector && (
-          <p className="text-xs text-theme-text-muted text-center mt-2">
-            Camera scanning is not supported in this browser. Use manual entry instead.
-          </p>
-        )}
       </div>
     </Modal>
   );

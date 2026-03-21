@@ -145,20 +145,35 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
     setError(null);
     handledRef.current = false;
 
+    const scanConfig = { fps: 10, qrbox: { width: 250, height: 250 } };
+    const onSuccess = (decodedText: string) => {
+      void handleScanResult(decodedText);
+    };
+    const onFailure = () => {
+      // No code in frame — ignore
+    };
+
     try {
       const html5QrCode = new Html5Qrcode('member-scanner-viewport');
       scannerRef.current = html5QrCode;
 
-      await html5QrCode.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        (decodedText) => {
-          void handleScanResult(decodedText);
-        },
-        () => {
-          // No code in frame — ignore
-        },
-      );
+      try {
+        // Prefer rear camera (mobile devices)
+        await html5QrCode.start(
+          { facingMode: 'environment' },
+          scanConfig,
+          onSuccess,
+          onFailure,
+        );
+      } catch {
+        // Fall back to front-facing / any available camera (desktop webcams)
+        await html5QrCode.start(
+          { facingMode: 'user' },
+          scanConfig,
+          onSuccess,
+          onFailure,
+        );
+      }
 
       setScanning(true);
     } catch (err: unknown) {
