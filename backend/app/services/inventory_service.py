@@ -2597,7 +2597,7 @@ class InventoryService:
 
     @staticmethod
     def _generate_sheet_labels(items: list) -> BytesIO:
-        """Generate labels on standard letter-size sheets in a 2x5 grid."""
+        """Generate labels on standard letter-size sheets in an Avery 5160 layout (3x10 grid, 30/page)."""
         from reportlab.graphics.barcode import code128
         from reportlab.lib.pagesizes import letter
         from reportlab.lib.units import inch
@@ -2607,12 +2607,14 @@ class InventoryService:
         c = canvas.Canvas(buf, pagesize=letter)
         page_w, page_h = letter
 
-        cols = 2
-        rows = 5
-        margin_x = 0.5 * inch
+        # Avery 5160: 3 columns x 10 rows, each label 2.625" x 1"
+        cols = 3
+        rows = 10
+        label_w = 2.625 * inch
+        label_h = 1.0 * inch
+        # Avery 5160 margins: 0.1875" left/right, 0.5" top/bottom
+        margin_x = (page_w - cols * label_w) / 2
         margin_y = 0.5 * inch
-        label_w = (page_w - 2 * margin_x) / cols
-        label_h = (page_h - 2 * margin_y) / rows
         labels_per_page = cols * rows
 
         for idx, item in enumerate(items):
@@ -2626,41 +2628,44 @@ class InventoryService:
             x = margin_x + col * label_w
             y = page_h - margin_y - (row + 1) * label_h
 
-            # Label border (light gray)
-            c.setStrokeColorRGB(0.8, 0.8, 0.8)
-            c.setLineWidth(0.5)
-            c.rect(x + 4, y + 4, label_w - 8, label_h - 8)
-
             barcode_value = (
                 item.barcode or item.asset_tag or item.serial_number or item.id[:12]
             )
 
-            # Item name (truncated)
-            c.setFont("Helvetica-Bold", 9)
-            name = item.name[:40] + ("..." if len(item.name) > 40 else "")
-            c.drawString(x + 10, y + label_h - 22, name)
+            # Item name (truncated to fit label width)
+            c.setFont("Helvetica-Bold", 7)
+            max_name_chars = int(label_w / (7 * 0.5))
+            name = item.name[:max_name_chars] + ("..." if len(item.name) > max_name_chars else "")
+            c.drawString(x + 6, y + label_h - 12, name)
 
             # Secondary info line
-            c.setFont("Helvetica", 7)
             info_parts = []
-            if item.asset_tag:
+            if item.asset_tag and item.asset_tag != barcode_value:
                 info_parts.append(f"Asset: {item.asset_tag}")
-            if item.serial_number:
+            if item.serial_number and item.serial_number != barcode_value:
                 info_parts.append(f"S/N: {item.serial_number}")
             if info_parts:
-                c.drawString(x + 10, y + label_h - 34, "  |  ".join(info_parts))
+                c.setFont("Helvetica", 5.5)
+                c.drawString(x + 6, y + label_h - 20, "  |  ".join(info_parts))
 
-            # Barcode
+            # Barcode — fit within the 1" label height
+            bar_height = 0.35 * inch
+            bar_width_unit = 0.008 * inch
             barcode_obj = code128.Code128(
-                barcode_value, barWidth=0.012 * inch, barHeight=0.45 * inch
+                barcode_value, barWidth=bar_width_unit, barHeight=bar_height
             )
-            barcode_width = barcode_obj.width
-            barcode_x = x + (label_w - barcode_width) / 2
-            barcode_obj.drawOn(c, barcode_x, y + 22)
+            max_barcode_width = label_w - 12
+            while barcode_obj.width > max_barcode_width and bar_width_unit > 0.005 * inch:
+                bar_width_unit -= 0.001 * inch
+                barcode_obj = code128.Code128(
+                    barcode_value, barWidth=bar_width_unit, barHeight=bar_height
+                )
+            barcode_x = x + (label_w - barcode_obj.width) / 2
+            barcode_obj.drawOn(c, barcode_x, y + 10)
 
             # Barcode text below
-            c.setFont("Courier", 7)
-            c.drawCentredString(x + label_w / 2, y + 12, barcode_value)
+            c.setFont("Courier", 5.5)
+            c.drawCentredString(x + label_w / 2, y + 3, barcode_value)
 
         c.save()
         buf.seek(0)
@@ -2737,11 +2742,11 @@ class InventoryService:
                 y_cursor -= name_font_size
                 c.drawString(padding, y_cursor, name)
 
-                # Secondary info
+                # Secondary info (skip fields already shown as the barcode value)
                 info_parts = []
-                if item.asset_tag:
+                if item.asset_tag and item.asset_tag != barcode_value:
                     info_parts.append(f"Asset: {item.asset_tag}")
-                if item.serial_number:
+                if item.serial_number and item.serial_number != barcode_value:
                     info_parts.append(f"S/N: {item.serial_number}")
                 if info_parts:
                     y_cursor -= info_font_size + 2
@@ -2792,11 +2797,11 @@ class InventoryService:
                 y_cursor = label_h - padding - name_font_size
                 c.drawCentredString(label_w / 2, y_cursor, name)
 
-                # Secondary info
+                # Secondary info (skip fields already shown as the barcode value)
                 info_parts = []
-                if item.asset_tag:
+                if item.asset_tag and item.asset_tag != barcode_value:
                     info_parts.append(f"Asset: {item.asset_tag}")
-                if item.serial_number:
+                if item.serial_number and item.serial_number != barcode_value:
                     info_parts.append(f"S/N: {item.serial_number}")
                 if info_parts:
                     y_cursor -= info_font_size + 4
