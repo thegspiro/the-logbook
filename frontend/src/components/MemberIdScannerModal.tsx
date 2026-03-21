@@ -10,12 +10,11 @@
  *   - QR code  — JSON payload `{ type: "member_id", id, membership_number?, org? }`
  *   - Code128 barcode — plain membership number string
  *
- * Uses the `html5-qrcode` library (same as MemberScanPage) for broad
- * device/browser support including iOS Safari.
+ * Uses the `html5-qrcode` library for broad device/browser support
+ * including iOS Safari.
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
 import {
   ScanLine,
   Camera,
@@ -26,15 +25,11 @@ import {
 } from 'lucide-react';
 import { inventoryService, type MemberInventorySummary } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
+import { useHtml5Scanner } from '../hooks/useHtml5Scanner';
+import { isMemberIdPayload } from '../types/scanner';
+import { QR_SCAN_CONFIG } from '../constants/camera';
 
 // ── Types ──────────────────────────────────────────────────────────
-
-interface MemberIdPayload {
-  type: 'member_id';
-  id: string;
-  membership_number?: string;
-  org?: string;
-}
 
 interface IdentifiedMember {
   userId: string;
@@ -47,14 +42,6 @@ interface MemberIdScannerModalProps {
   onMemberIdentified: (member: IdentifiedMember) => void;
 }
 
-// ── Helpers ────────────────────────────────────────────────────────
-
-function isMemberIdPayload(value: unknown): value is MemberIdPayload {
-  if (typeof value !== 'object' || value === null) return false;
-  const obj = value as Record<string, unknown>;
-  return obj['type'] === 'member_id' && typeof obj['id'] === 'string';
-}
-
 // ── Component ──────────────────────────────────────────────────────
 
 export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
@@ -62,12 +49,9 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
   onClose,
   onMemberIdentified,
 }) => {
-  const scannerRef = useRef<Html5Qrcode | null>(null);
-  const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lookingUp, setLookingUp] = useState(false);
   const handledRef = useRef(false);
-  // Cache members list so repeated scans don't re-fetch
   const membersRef = useRef<MemberInventorySummary[] | null>(null);
 
   /** Resolve a scanned value to a member. */
@@ -80,7 +64,6 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
       setError(null);
 
       try {
-        // 1. Try JSON QR payload
         let parsed: unknown = null;
         try {
           parsed = JSON.parse(decoded);
@@ -89,8 +72,6 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
         }
 
         if (isMemberIdPayload(parsed)) {
-          // We have the member ID directly — fetch their name from the
-          // members summary so we can display it in the checkout modal.
           if (!membersRef.current) {
             const data = await inventoryService.getMembersSummary();
             membersRef.current = data.members;
@@ -103,7 +84,6 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
             });
             return;
           }
-          // If not found in inventory members, still navigate with the id
           onMemberIdentified({
             userId: parsed.id,
             memberName: parsed.membership_number ?? 'Member',
@@ -111,7 +91,6 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
           return;
         }
 
-        // 2. Plain string — look up by membership number
         if (!membersRef.current) {
           const data = await inventoryService.getMembersSummary();
           membersRef.current = data.members;
@@ -140,69 +119,22 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
     [onMemberIdentified],
   );
 
-  /** Start the camera scanner. */
-  const startScanner = useCallback(async () => {
-    setError(null);
-    handledRef.current = false;
-
-    const scanConfig = { fps: 10, qrbox: { width: 250, height: 250 } };
-    const onSuccess = (decodedText: string) => {
+  const onScan = useCallback(
+    (decodedText: string) => {
       void handleScanResult(decodedText);
-    };
-    const onFailure = () => {
-      // No code in frame — ignore
-    };
+    },
+    [handleScanResult],
+  );
 
-    try {
-      const html5QrCode = new Html5Qrcode('member-scanner-viewport');
-      scannerRef.current = html5QrCode;
-
-      try {
-        // Prefer rear camera (mobile devices)
-        await html5QrCode.start(
-          { facingMode: 'environment' },
-          scanConfig,
-          onSuccess,
-          onFailure,
-        );
-      } catch {
-        // Fall back to front-facing / any available camera (desktop webcams)
-        await html5QrCode.start(
-          { facingMode: 'user' },
-          scanConfig,
-          onSuccess,
-          onFailure,
-        );
-      }
-
-      setScanning(true);
-    } catch (err: unknown) {
-      setError(
-        getErrorMessage(
-          err,
-          'Could not start camera. Please allow camera access and try again.',
-        ),
-      );
-    }
-  }, [handleScanResult]);
-
-  /** Stop the active scanner. */
-  const stopScanner = useCallback(async () => {
-    if (scannerRef.current) {
-      try {
-        await scannerRef.current.stop();
-      } catch {
-        // Already stopped
-      }
-      scannerRef.current = null;
-    }
-    setScanning(false);
-  }, []);
+  const { scanning, startScanner, stopScanner } = useHtml5Scanner({
+    viewportId: 'member-scanner-viewport',
+    scanConfig: QR_SCAN_CONFIG,
+    onScan,
+  });
 
   // Auto-start camera when modal opens
   useEffect(() => {
     if (isOpen) {
-      // Small delay to let the DOM element mount
       const timer = setTimeout(() => {
         void startScanner();
       }, 100);
@@ -211,7 +143,7 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
     return undefined;
   }, [isOpen, startScanner]);
 
-  // Cleanup on close / unmount
+  // Cleanup on close
   useEffect(() => {
     if (!isOpen) {
       void stopScanner();
@@ -221,14 +153,6 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
       membersRef.current = null;
     }
   }, [isOpen, stopScanner]);
-
-  useEffect(() => {
-    return () => {
-      if (scannerRef.current) {
-        void scannerRef.current.stop().catch(() => {});
-      }
-    };
-  }, []);
 
   if (!isOpen) return null;
 

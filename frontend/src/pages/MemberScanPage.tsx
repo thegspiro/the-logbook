@@ -12,9 +12,8 @@
  * Accessible at /members/scan.
  */
 
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useRef, useState, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Html5Qrcode } from "html5-qrcode";
 import {
   ScanLine,
   ArrowLeft,
@@ -24,30 +23,16 @@ import {
 } from "lucide-react";
 import { userService } from "../services/api";
 import { getErrorMessage } from "../utils/errorHandling";
-
-interface MemberIdPayload {
-  type: "member_id";
-  id: string;
-  membership_number?: string;
-  org?: string;
-}
-
-function isMemberIdPayload(value: unknown): value is MemberIdPayload {
-  if (typeof value !== "object" || value === null) return false;
-  const obj = value as Record<string, unknown>;
-  return obj["type"] === "member_id" && typeof obj["id"] === "string";
-}
+import { useHtml5Scanner } from "../hooks/useHtml5Scanner";
+import { isMemberIdPayload } from "../types/scanner";
+import { QR_SCAN_CONFIG } from "../constants/camera";
 
 export const MemberScanPage: React.FC = () => {
   const navigate = useNavigate();
-  const scannerRef = useRef<Html5Qrcode | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
 
-  const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastScan, setLastScan] = useState<string | null>(null);
   const [lookingUp, setLookingUp] = useState(false);
-  // Track whether we've already handled a scan to prevent duplicate navigation
   const handledRef = useRef(false);
 
   /** Try to resolve the scanned value to a member and navigate. */
@@ -61,7 +46,6 @@ export const MemberScanPage: React.FC = () => {
       setError(null);
 
       try {
-        // 1. Try to parse as a QR JSON payload
         let parsed: unknown = null;
         try {
           parsed = JSON.parse(decoded);
@@ -74,7 +58,6 @@ export const MemberScanPage: React.FC = () => {
           return;
         }
 
-        // 2. Plain string — look up by membership number
         const users = await userService.getUsers();
         const match = users.find(
           (u) =>
@@ -97,74 +80,18 @@ export const MemberScanPage: React.FC = () => {
     [navigate],
   );
 
-  /** Start scanning via the device camera. */
-  const startScanner = useCallback(async () => {
-    if (!containerRef.current) return;
-    setError(null);
-    handledRef.current = false;
-
-    const scanConfig = { fps: 10, qrbox: { width: 250, height: 250 } };
-    const onSuccess = (decodedText: string) => {
+  const onScan = useCallback(
+    (decodedText: string) => {
       void handleScanResult(decodedText);
-    };
-    const onFailure = () => {
-      // No code in frame — ignore
-    };
+    },
+    [handleScanResult],
+  );
 
-    try {
-      const html5QrCode = new Html5Qrcode("scanner-viewport");
-      scannerRef.current = html5QrCode;
-
-      try {
-        // Prefer rear camera (mobile devices)
-        await html5QrCode.start(
-          { facingMode: "environment" },
-          scanConfig,
-          onSuccess,
-          onFailure,
-        );
-      } catch {
-        // Fall back to front-facing / any available camera (desktop webcams)
-        await html5QrCode.start(
-          { facingMode: "user" },
-          scanConfig,
-          onSuccess,
-          onFailure,
-        );
-      }
-
-      setScanning(true);
-    } catch (err: unknown) {
-      setError(
-        getErrorMessage(
-          err,
-          "Could not start camera. Please allow camera access and try again.",
-        ),
-      );
-    }
-  }, [handleScanResult]);
-
-  /** Stop the active scanner. */
-  const stopScanner = useCallback(async () => {
-    if (scannerRef.current) {
-      try {
-        await scannerRef.current.stop();
-      } catch {
-        // Already stopped
-      }
-      scannerRef.current = null;
-    }
-    setScanning(false);
-  }, []);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (scannerRef.current) {
-        void scannerRef.current.stop().catch(() => {});
-      }
-    };
-  }, []);
+  const { scanning, startScanner, stopScanner } = useHtml5Scanner({
+    viewportId: "scanner-viewport",
+    scanConfig: QR_SCAN_CONFIG,
+    onScan,
+  });
 
   return (
     <div className="min-h-screen max-w-lg mx-auto px-4 py-8">
@@ -188,10 +115,7 @@ export const MemberScanPage: React.FC = () => {
       </div>
 
       {/* Scanner Viewport */}
-      <div
-        ref={containerRef}
-        className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden mb-6"
-      >
+      <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden mb-6">
         <div
           id="scanner-viewport"
           data-testid="scanner-viewport"

@@ -16,7 +16,6 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { Modal } from './Modal';
 import { Camera, Check, AlertTriangle, Package, Trash2, Loader2, Search } from 'lucide-react';
 import { RETURN_CONDITION_OPTIONS } from '../constants/enums';
@@ -27,6 +26,13 @@ import {
   BatchCheckoutResponse,
   BatchReturnResponse,
 } from '../services/api';
+import { useHtml5Scanner } from '../hooks/useHtml5Scanner';
+import {
+  HAS_BARCODE_DETECTOR,
+  BARCODE_SCAN_CONFIG,
+  INVENTORY_BARCODE_FORMATS,
+  NATIVE_BARCODE_FORMATS,
+} from '../constants/camera';
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -62,18 +68,6 @@ interface InventoryScanModalProps {
 
 // ── Helpers ────────────────────────────────────────────────────────
 
-const hasBarcodeDetector = typeof window !== 'undefined' && 'BarcodeDetector' in window;
-
-const HTML5_QRCODE_FORMATS = [
-  Html5QrcodeSupportedFormats.CODE_128,
-  Html5QrcodeSupportedFormats.CODE_39,
-  Html5QrcodeSupportedFormats.EAN_13,
-  Html5QrcodeSupportedFormats.EAN_8,
-  Html5QrcodeSupportedFormats.UPC_A,
-  Html5QrcodeSupportedFormats.UPC_E,
-  Html5QrcodeSupportedFormats.QR_CODE,
-];
-
 // ── Component ──────────────────────────────────────────────────────
 
 export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
@@ -98,11 +92,10 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   const [searchLoading, setSearchLoading] = useState(false);
   const [activeDropdownIndex, setActiveDropdownIndex] = useState(-1);
 
-  // Refs
+  // Refs — native BarcodeDetector path only
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const detectorRef = useRef<BarcodeDetector | null>(null);
-  const html5QrRef = useRef<Html5Qrcode | null>(null);
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -111,6 +104,21 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   const handleCodeScannedRef = useRef<(code: string) => void>(() => {});
 
   // ── Camera scanning ──────────────────────────────────────────
+
+  // html5-qrcode fallback (Firefox, Safari, older browsers)
+  const onHtml5Scan = useCallback((decodedText: string) => {
+    handleCodeScannedRef.current(decodedText);
+  }, []);
+
+  const {
+    startScanner: startHtml5Scanner,
+    stopScanner: stopHtml5Scanner,
+  } = useHtml5Scanner({
+    viewportId: 'inventory-scanner-viewport',
+    scanConfig: BARCODE_SCAN_CONFIG,
+    onScan: onHtml5Scan,
+    formatsToSupport: INVENTORY_BARCODE_FORMATS,
+  });
 
   const stopCamera = useCallback(() => {
     if (scanIntervalRef.current) {
@@ -121,12 +129,11 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
-    if (html5QrRef.current) {
-      void html5QrRef.current.stop().catch(() => {});
-      html5QrRef.current = null;
+    if (!HAS_BARCODE_DETECTOR) {
+      void stopHtml5Scanner();
     }
     setCameraActive(false);
-  }, []);
+  }, [stopHtml5Scanner]);
 
   /** Request a camera stream, trying rear first then falling back to front. */
   const acquireCameraStream = async (): Promise<MediaStream> => {
@@ -142,15 +149,14 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   };
 
   const startCamera = useCallback(async () => {
-    if (hasBarcodeDetector) {
-      // Native BarcodeDetector path (Chrome/Edge/Android)
+    if (HAS_BARCODE_DETECTOR) {
       try {
         const stream = await acquireCameraStream();
         streamRef.current = stream;
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         detectorRef.current = new (window as any).BarcodeDetector({
-          formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code'],
+          formats: [...NATIVE_BARCODE_FORMATS],
         });
 
         setCameraActive(true);
@@ -160,36 +166,8 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
         setCameraActive(false);
       }
     } else {
-      // html5-qrcode fallback (Firefox, Safari, older browsers)
       try {
-        const scanner = new Html5Qrcode('inventory-scanner-viewport', {
-          formatsToSupport: HTML5_QRCODE_FORMATS,
-          verbose: false,
-        });
-        html5QrRef.current = scanner;
-
-        const scanConfig = { fps: 10, qrbox: { width: 250, height: 150 } };
-        const onSuccess = (decodedText: string) => {
-          handleCodeScannedRef.current(decodedText);
-        };
-        const onFailure = () => {};
-
-        try {
-          await scanner.start(
-            { facingMode: 'environment' },
-            scanConfig,
-            onSuccess,
-            onFailure,
-          );
-        } catch {
-          await scanner.start(
-            { facingMode: 'user' },
-            scanConfig,
-            onSuccess,
-            onFailure,
-          );
-        }
-
+        await startHtml5Scanner();
         setCameraActive(true);
       } catch {
         setLookupError('Camera access denied. Please allow camera permissions, or type codes manually.');
@@ -197,10 +175,11 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
         setCameraActive(false);
       }
     }
-  }, []);
+  }, [startHtml5Scanner]);
 
   // Once cameraActive flips to true the <video> element mounts.
   // Wire the stream to it and start the barcode-polling interval.
+  // (BarcodeDetector path only — html5-qrcode manages its own video.)
   useEffect(() => {
     if (!cameraActive || !streamRef.current) return;
 
@@ -244,7 +223,6 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   useEffect(() => {
     if (!isOpen) {
       stopCamera();
-      // Reset state when modal closes
       setScannedItems([]);
       setManualCode('');
       setLookupError(null);
@@ -692,7 +670,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
               </div>
 
               {/* Camera preview: native video for BarcodeDetector, div for html5-qrcode */}
-              {hasBarcodeDetector ? (
+              {HAS_BARCODE_DETECTOR ? (
                 <div
                   className={`relative rounded-lg overflow-hidden bg-black ${cameraActive ? '' : 'hidden'}`}
                 >
