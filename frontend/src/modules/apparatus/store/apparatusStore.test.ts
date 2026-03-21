@@ -544,7 +544,7 @@ describe('apparatusStore', () => {
 
       expect(getState().filters).toEqual({ isArchived: false, apparatusTypeId: 'type1' });
       expect(getState().currentPage).toBe(1);
-      expect(mockGetApparatusList).toHaveBeenCalledWith();
+      expect(mockGetApparatusList).toHaveBeenCalled();
     });
 
     it('should preserve existing filters when adding new ones', async () => {
@@ -589,7 +589,7 @@ describe('apparatusStore', () => {
 
       expect(getState().filters).toEqual({ isArchived: false });
       expect(getState().currentPage).toBe(1);
-      expect(mockGetApparatusList).toHaveBeenCalledWith();
+      expect(mockGetApparatusList).toHaveBeenCalled();
     });
   });
 

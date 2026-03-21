@@ -14,6 +14,7 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     getShifts: (...args: unknown[]) => mockGetShifts(...args) as unknown,
     signupForShift: (...args: unknown[]) => mockSignupForShift(...args) as unknown,
     withdrawSignup: vi.fn().mockResolvedValue(undefined),
+    getEligiblePositions: vi.fn().mockResolvedValue({ positions: [] }),
   },
 }));
 

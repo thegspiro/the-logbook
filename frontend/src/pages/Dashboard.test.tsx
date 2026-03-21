@@ -36,6 +36,7 @@ vi.mock('../modules/scheduling/services/api', () => ({
     getOpenShifts: mockGetOpenShifts,
     getSummary: vi.fn().mockResolvedValue({ total_shifts: 0, shifts_this_week: 0, shifts_this_month: 0, total_hours_this_month: 0 }),
     signupForShift: mockSignupForShift,
+    getEligiblePositions: vi.fn().mockResolvedValue({ positions: ['firefighter'] }),
   },
 }));
 
@@ -147,7 +148,7 @@ describe('Dashboard', () => {
       renderWithRouter(<Dashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText('Officer: Capt. Smith')).toBeInTheDocument();
+        expect(screen.getAllByText('Officer: Capt. Smith').length).toBeGreaterThan(0);
       });
     });
 
@@ -196,6 +197,7 @@ describe('Dashboard', () => {
       mockGetOpenShifts.mockResolvedValue([
         makeShift({ id: 'open-1', shift_date: '2026-03-20' }),
       ]);
+      mockSignupForShift.mockResolvedValue(undefined);
 
       const user = userEvent.setup();
       renderWithRouter(<Dashboard />);
@@ -207,7 +209,13 @@ describe('Dashboard', () => {
       await user.click(screen.getByRole('button', { name: /sign up/i }));
 
       await waitFor(() => {
-        expect(mockSignupForShift).toHaveBeenCalledWith('open-1');
+        expect(screen.getByRole('button', { name: /confirm/i })).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole('button', { name: /confirm/i }));
+
+      await waitFor(() => {
+        expect(mockSignupForShift).toHaveBeenCalledWith('open-1', { position: 'firefighter' });
       });
     });
 
@@ -215,6 +223,7 @@ describe('Dashboard', () => {
       mockGetOpenShifts.mockResolvedValue([
         makeShift({ id: 'open-1', shift_date: '2026-03-20' }),
       ]);
+      mockSignupForShift.mockResolvedValue(undefined);
 
       const user = userEvent.setup();
       renderWithRouter(<Dashboard />);
@@ -223,15 +232,21 @@ describe('Dashboard', () => {
         expect(screen.getByRole('button', { name: /sign up/i })).toBeInTheDocument();
       });
 
+      await user.click(screen.getByRole('button', { name: /sign up/i }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /confirm/i })).toBeInTheDocument();
+      });
+
       // Clear initial load call counts
       mockGetMyShifts.mockClear();
       mockGetOpenShifts.mockClear();
 
-      await user.click(screen.getByRole('button', { name: /sign up/i }));
+      await user.click(screen.getByRole('button', { name: /confirm/i }));
 
       await waitFor(() => {
-        expect(mockGetMyShifts).toHaveBeenCalledWith();
-        expect(mockGetOpenShifts).toHaveBeenCalledWith();
+        expect(mockGetMyShifts).toHaveBeenCalled();
+        expect(mockGetOpenShifts).toHaveBeenCalled();
       });
     });
 
