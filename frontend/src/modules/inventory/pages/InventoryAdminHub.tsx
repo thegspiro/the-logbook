@@ -36,14 +36,15 @@ interface NavCardProps {
   description: string;
   badge?: number | undefined;
   badgeColor?: string | undefined;
+  iconBg?: string | undefined;
 }
 
-const NavCard: React.FC<NavCardProps> = ({ to, icon, title, description, badge, badgeColor }) => (
+const NavCard: React.FC<NavCardProps> = ({ to, icon, title, description, badge, badgeColor, iconBg }) => (
   <Link
     to={to}
     className="card-secondary p-3 sm:p-4 hover:bg-theme-surface-hover active:bg-theme-surface-hover transition-colors group flex items-center sm:items-start gap-3 sm:gap-4"
   >
-    <div className="shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-theme-surface-secondary flex items-center justify-center text-theme-text-muted group-hover:text-theme-text-primary transition-colors">
+    <div className={`shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center transition-colors ${iconBg ?? 'bg-theme-surface-secondary text-theme-text-muted group-hover:text-theme-text-primary'}`}>
       {icon}
     </div>
     <div className="min-w-0 flex-1">
@@ -58,6 +59,51 @@ const NavCard: React.FC<NavCardProps> = ({ to, icon, title, description, badge, 
       <p className="text-xs text-theme-text-muted mt-0.5 hidden sm:block">{description}</p>
     </div>
   </Link>
+);
+
+interface ProminentCardProps {
+  to: string;
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  stat?: string | number | undefined;
+  statLabel?: string | undefined;
+  iconBg: string;
+}
+
+const ProminentCard: React.FC<ProminentCardProps> = ({ to, icon, title, description, stat, statLabel, iconBg }) => (
+  <Link
+    to={to}
+    className="card-secondary p-4 sm:p-5 hover:bg-theme-surface-hover active:bg-theme-surface-hover transition-all group flex flex-col gap-3"
+  >
+    <div className="flex items-center justify-between">
+      <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center ${iconBg}`}>
+        {icon}
+      </div>
+      {stat != null && (
+        <div className="text-right">
+          <p className="text-xl sm:text-2xl font-bold text-theme-text-primary">{stat}</p>
+          {statLabel && <p className="text-[11px] text-theme-text-muted">{statLabel}</p>}
+        </div>
+      )}
+    </div>
+    <div>
+      <h3 className="text-sm font-semibold text-theme-text-primary">{title}</h3>
+      <p className="text-xs text-theme-text-muted mt-0.5">{description}</p>
+    </div>
+  </Link>
+);
+
+interface SectionProps {
+  title: string;
+  children: React.ReactNode;
+}
+
+const Section: React.FC<SectionProps> = ({ title, children }) => (
+  <div>
+    <h2 className="text-xs font-semibold uppercase tracking-wider text-theme-text-muted mb-3">{title}</h2>
+    {children}
+  </div>
 );
 
 export const InventoryAdminHub: React.FC = () => {
@@ -115,47 +161,14 @@ export const InventoryAdminHub: React.FC = () => {
           </button>
         </div>
 
-        {/* Summary stats */}
+        {/* Quick stats bar */}
         {summary && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-8">
-            <div className="card-secondary p-3 flex items-center gap-2.5 sm:flex-col sm:items-center sm:text-center">
-              <div className="p-1.5 rounded-lg bg-theme-surface-secondary sm:hidden">
-                <Package className="w-4 h-4 text-theme-text-muted" />
-              </div>
-              <div>
-                <p className="text-xl sm:text-2xl font-bold text-theme-text-primary">{summary.total_items}</p>
-                <p className="text-[11px] sm:text-xs text-theme-text-muted">Total Items</p>
-              </div>
-            </div>
-            <div className="card-secondary p-3 flex items-center gap-2.5 sm:flex-col sm:items-center sm:text-center">
-              <div className="p-1.5 rounded-lg bg-green-500/10 sm:hidden">
-                <Package className="w-4 h-4 text-green-600 dark:text-green-400" />
-              </div>
-              <div>
-                <p className="text-xl sm:text-2xl font-bold text-green-600 dark:text-green-400">{summary.items_by_status['available'] ?? 0}</p>
-                <p className="text-[11px] sm:text-xs text-theme-text-muted">Available</p>
-              </div>
-            </div>
-            <div className="card-secondary p-3 flex items-center gap-2.5 sm:flex-col sm:items-center sm:text-center">
-              <div className="p-1.5 rounded-lg bg-blue-500/10 sm:hidden">
-                <ArrowDownToLine className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <p className="text-xl sm:text-2xl font-bold text-blue-600 dark:text-blue-400">{summary.active_checkouts}</p>
-                <p className="text-[11px] sm:text-xs text-theme-text-muted">Checked Out</p>
-              </div>
-            </div>
-            <div className="card-secondary p-3 flex items-center gap-2.5 sm:flex-col sm:items-center sm:text-center">
-              <div className={`p-1.5 rounded-lg sm:hidden ${summary.overdue_checkouts > 0 ? 'bg-red-500/10' : 'bg-theme-surface-secondary'}`}>
-                <AlertTriangle className={`w-4 h-4 ${summary.overdue_checkouts > 0 ? 'text-red-600 dark:text-red-400' : 'text-theme-text-muted'}`} />
-              </div>
-              <div>
-                <p className={`text-xl sm:text-2xl font-bold ${summary.overdue_checkouts > 0 ? 'text-red-600 dark:text-red-400' : 'text-theme-text-primary'}`}>
-                  {summary.overdue_checkouts}
-                </p>
-                <p className="text-[11px] sm:text-xs text-theme-text-muted">Overdue</p>
-              </div>
-            </div>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 mb-8 text-sm text-theme-text-muted">
+            <span><span className="font-semibold text-green-600 dark:text-green-400">{summary.items_by_status['available'] ?? 0}</span> available</span>
+            <span><span className="font-semibold text-blue-600 dark:text-blue-400">{summary.active_checkouts}</span> checked out</span>
+            {summary.maintenance_due_count > 0 && (
+              <span><span className="font-semibold text-orange-600 dark:text-orange-400">{summary.maintenance_due_count}</span> maintenance due</span>
+            )}
           </div>
         )}
 
@@ -215,109 +228,144 @@ export const InventoryAdminHub: React.FC = () => {
           </div>
         )}
 
-        {/* Navigation grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <NavCard
+        {/* Prominent top cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
+          <ProminentCard
             to="/inventory/admin/items"
-            icon={<Package className="w-5 h-5" />}
+            icon={<Package className="w-5 h-5 text-blue-600 dark:text-blue-400" />}
             title="Items"
             description="Browse, add, edit, and manage individual equipment"
-            badge={summary?.total_items}
+            stat={summary?.total_items}
+            statLabel="total"
+            iconBg="bg-blue-500/10"
           />
-          <NavCard
-            to="/inventory/admin/pool"
-            icon={<Layers className="w-5 h-5" />}
-            title="Pool Items"
-            description="Manage quantity-tracked items, issue to members"
-          />
-          <NavCard
-            to="/inventory/admin/categories"
-            icon={<Tag className="w-5 h-5" />}
-            title="Categories"
-            description="Organize items by type with tracking settings"
-          />
-          <NavCard
+          <ProminentCard
             to="/inventory/admin/members"
-            icon={<Users className="w-5 h-5" />}
+            icon={<Users className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />}
             title="Members"
             description="View and manage per-member equipment assignments"
+            iconBg="bg-emerald-500/10"
           />
-          <NavCard
-            to="/inventory/admin/maintenance"
-            icon={<Wrench className="w-5 h-5" />}
-            title="Maintenance"
-            description="Track inspections, repairs, and compliance"
-            badge={summary?.maintenance_due_count}
-            badgeColor="bg-orange-500/10 text-orange-700 dark:text-orange-400"
-          />
-          <NavCard
+          <ProminentCard
             to="/inventory/checkouts"
-            icon={<ArrowDownToLine className="w-5 h-5" />}
+            icon={<ArrowDownToLine className="w-5 h-5 text-amber-600 dark:text-amber-400" />}
             title="Checkouts"
             description="Manage active and overdue equipment checkouts"
-            badge={summary?.overdue_checkouts}
-            badgeColor="bg-red-500/10 text-red-700 dark:text-red-400"
+            stat={summary?.overdue_checkouts}
+            statLabel="overdue"
+            iconBg="bg-amber-500/10"
           />
-          <NavCard
-            to="/inventory/admin/charges"
-            icon={<DollarSign className="w-5 h-5" />}
-            title="Charges"
-            description="Cost recovery for lost or damaged items"
-          />
-          <NavCard
-            to="/inventory/admin/returns"
-            icon={<CornerDownLeft className="w-5 h-5" />}
-            title="Return Requests"
-            description="Review and process member return requests"
-            badge={pendingReturns > 0 ? pendingReturns : undefined}
-            badgeColor="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
-          />
-          <NavCard
-            to="/inventory/storage-areas"
-            icon={<MapPin className="w-5 h-5" />}
-            title="Storage Areas"
-            description="Manage storage locations within facilities"
-          />
-          <NavCard
-            to="/inventory/import"
-            icon={<Upload className="w-5 h-5" />}
-            title="Import / Export"
-            description="Bulk import from CSV or export inventory data"
-          />
-          <NavCard
-            to="/inventory/admin/requests"
-            icon={<ClipboardList className="w-5 h-5" />}
-            title="Equipment Requests"
-            description="Review member requests for equipment"
-            badge={pendingRequests > 0 ? pendingRequests : undefined}
-            badgeColor="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
-          />
-          <NavCard
-            to="/inventory/admin/write-offs"
-            icon={<FileX className="w-5 h-5" />}
-            title="Write-Offs"
-            description="Process loss and damage write-off requests"
-          />
-          <NavCard
-            to="/inventory/admin/reorder"
-            icon={<Truck className="w-5 h-5" />}
-            title="Reorder Requests"
-            description="Track and manage supply reorder requests"
-            badge={lowStockAlerts.length > 0 ? lowStockAlerts.length : undefined}
-            badgeColor="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
-          />
-          <NavCard
-            to="/inventory/admin/kits"
-            icon={<BoxSelect className="w-5 h-5" />}
-            title="Equipment Kits"
-            description="Create and manage kit templates for multi-item issuance"
-          />
-          <NavCard
-            to="/inventory/admin/variant-groups"
-            icon={<Ruler className="w-5 h-5" />}
-            title="Variant Groups"
-            description="Group pool item variants by size, style, and color"
-          />
+        </div>
+
+        {/* Inventory Management */}
+        <div className="space-y-8">
+          <Section title="Inventory Management">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <NavCard
+                to="/inventory/admin/pool"
+                icon={<Layers className="w-5 h-5 text-blue-600 dark:text-blue-400" />}
+                title="Pool Items"
+                description="Manage quantity-tracked items, issue to members"
+                iconBg="bg-blue-500/10 text-blue-600 dark:text-blue-400"
+              />
+              <NavCard
+                to="/inventory/admin/categories"
+                icon={<Tag className="w-5 h-5 text-blue-600 dark:text-blue-400" />}
+                title="Categories"
+                description="Organize items by type with tracking settings"
+                iconBg="bg-blue-500/10 text-blue-600 dark:text-blue-400"
+              />
+              <NavCard
+                to="/inventory/admin/kits"
+                icon={<BoxSelect className="w-5 h-5 text-purple-600 dark:text-purple-400" />}
+                title="Equipment Kits"
+                description="Create and manage kit templates for multi-item issuance"
+                iconBg="bg-purple-500/10 text-purple-600 dark:text-purple-400"
+              />
+              <NavCard
+                to="/inventory/admin/variant-groups"
+                icon={<Ruler className="w-5 h-5 text-purple-600 dark:text-purple-400" />}
+                title="Variant Groups"
+                description="Group pool item variants by size, style, and color"
+                iconBg="bg-purple-500/10 text-purple-600 dark:text-purple-400"
+              />
+              <NavCard
+                to="/inventory/admin/maintenance"
+                icon={<Wrench className="w-5 h-5 text-orange-600 dark:text-orange-400" />}
+                title="Maintenance"
+                description="Track inspections, repairs, and compliance"
+                badge={summary?.maintenance_due_count}
+                badgeColor="bg-orange-500/10 text-orange-700 dark:text-orange-400"
+                iconBg="bg-orange-500/10 text-orange-600 dark:text-orange-400"
+              />
+              <NavCard
+                to="/inventory/storage-areas"
+                icon={<MapPin className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />}
+                title="Storage Areas"
+                description="Manage storage locations within facilities"
+                iconBg="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400"
+              />
+            </div>
+          </Section>
+
+          {/* Requests & Workflows */}
+          <Section title="Requests & Workflows">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <NavCard
+                to="/inventory/admin/requests"
+                icon={<ClipboardList className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />}
+                title="Equipment Requests"
+                description="Review member requests for equipment"
+                badge={pendingRequests > 0 ? pendingRequests : undefined}
+                badgeColor="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
+                iconBg="bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+              />
+              <NavCard
+                to="/inventory/admin/returns"
+                icon={<CornerDownLeft className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />}
+                title="Return Requests"
+                description="Review and process member return requests"
+                badge={pendingReturns > 0 ? pendingReturns : undefined}
+                badgeColor="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
+                iconBg="bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+              />
+              <NavCard
+                to="/inventory/admin/charges"
+                icon={<DollarSign className="w-5 h-5 text-green-600 dark:text-green-400" />}
+                title="Charges"
+                description="Cost recovery for lost or damaged items"
+                iconBg="bg-green-500/10 text-green-600 dark:text-green-400"
+              />
+              <NavCard
+                to="/inventory/admin/write-offs"
+                icon={<FileX className="w-5 h-5 text-red-600 dark:text-red-400" />}
+                title="Write-Offs"
+                description="Process loss and damage write-off requests"
+                iconBg="bg-red-500/10 text-red-600 dark:text-red-400"
+              />
+              <NavCard
+                to="/inventory/admin/reorder"
+                icon={<Truck className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />}
+                title="Reorder Requests"
+                description="Track and manage supply reorder requests"
+                badge={lowStockAlerts.length > 0 ? lowStockAlerts.length : undefined}
+                badgeColor="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
+                iconBg="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+              />
+            </div>
+          </Section>
+
+          {/* Tools */}
+          <Section title="Tools">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <NavCard
+                to="/inventory/import"
+                icon={<Upload className="w-5 h-5 text-theme-text-muted group-hover:text-theme-text-primary" />}
+                title="Import / Export"
+                description="Bulk import from CSV or export inventory data"
+              />
+            </div>
+          </Section>
         </div>
       </div>
     </div>
