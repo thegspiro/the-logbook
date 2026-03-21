@@ -40,9 +40,12 @@ interface LabelPreset {
   columns: number;
 }
 
+// Each preset uses a `backendFormat` key that maps directly to a backend
+// LABEL_FORMATS entry, so the PDF download always generates at the exact
+// same dimensions as the on-screen preview — no size mismatches.
 const LABEL_PRESETS: LabelPreset[] = [
   {
-    id: 'dymo-30252',
+    id: 'dymo_30252',
     name: 'Dymo 30252',
     description: '1.125" x 3.5" — Standard address label',
     width: '3.5in', height: '1.125in',
@@ -52,7 +55,27 @@ const LABEL_PRESETS: LabelPreset[] = [
     pageWidth: '3.5in', pageHeight: '1.125in', columns: 1,
   },
   {
-    id: 'dymo-30336',
+    id: 'dymo_30256',
+    name: 'Dymo 30256',
+    description: '2.3125" x 4" — Shipping label',
+    width: '4in', height: '2.3125in',
+    barcodeHeight: 50, barcodeWidth: 1.8,
+    nameFontSize: '11pt', subtitleFontSize: '8pt',
+    padding: '0.08in 0.12in',
+    pageWidth: '4in', pageHeight: '2.3125in', columns: 1,
+  },
+  {
+    id: 'dymo_30334',
+    name: 'Dymo 30334',
+    description: '2.25" x 1.25" — Multi-purpose label',
+    width: '2.25in', height: '1.25in',
+    barcodeHeight: 35, barcodeWidth: 1.1,
+    nameFontSize: '8pt', subtitleFontSize: '6.5pt',
+    padding: '0.05in 0.08in',
+    pageWidth: '2.25in', pageHeight: '1.25in', columns: 1,
+  },
+  {
+    id: 'dymo_30336',
     name: 'Dymo 30336',
     description: '1" x 2.125" — Small multipurpose label',
     width: '2.125in', height: '1in',
@@ -62,7 +85,17 @@ const LABEL_PRESETS: LabelPreset[] = [
     pageWidth: '2.125in', pageHeight: '1in', columns: 1,
   },
   {
-    id: 'rollo-2x1',
+    id: 'rollo_4x6',
+    name: 'Rollo 4" x 6"',
+    description: '4" x 6" — Shipping label',
+    width: '4in', height: '6in',
+    barcodeHeight: 60, barcodeWidth: 2,
+    nameFontSize: '14pt', subtitleFontSize: '10pt',
+    padding: '0.12in 0.2in',
+    pageWidth: '4in', pageHeight: '6in', columns: 1,
+  },
+  {
+    id: 'rollo_2x1',
     name: 'Rollo / Thermal 2" x 1"',
     description: '2" x 1" — Small thermal label',
     width: '2in', height: '1in',
@@ -72,7 +105,7 @@ const LABEL_PRESETS: LabelPreset[] = [
     pageWidth: '2in', pageHeight: '1in', columns: 1,
   },
   {
-    id: 'thermal-1x1',
+    id: 'thermal_1x1',
     name: 'Thermal 1" x 1"',
     description: '1" x 1" — Square asset tag',
     width: '1in', height: '1in',
@@ -82,7 +115,7 @@ const LABEL_PRESETS: LabelPreset[] = [
     pageWidth: '1in', pageHeight: '1in', columns: 1,
   },
   {
-    id: 'letter-grid',
+    id: 'letter',
     name: 'Letter Paper (Grid)',
     description: '8.5" x 11" — 30 labels per page (Avery 5160)',
     width: '2.625in', height: '1in',
@@ -93,16 +126,7 @@ const LABEL_PRESETS: LabelPreset[] = [
   },
 ];
 
-const DEFAULT_PRESET_ID = 'dymo-30252';
-
-/** Map frontend preset IDs to backend label format keys */
-const PRESET_TO_BACKEND: Record<string, string> = {
-  'dymo-30252': 'dymo_30252',
-  'dymo-30336': 'dymo_30336',
-  'rollo-2x1': 'custom',
-  'thermal-1x1': 'custom',
-  'letter-grid': 'letter',
-};
+const DEFAULT_PRESET_ID = 'dymo_30252';
 
 /** Gets a printable barcode value for an item, using the same fallback chain as the backend */
 function getBarcodeValue(item: InventoryItem): string | null {
@@ -309,14 +333,10 @@ const InventoryBarcodePrintPage: React.FC = () => {
     if (items.length === 0) return;
     setDownloadingPdf(true);
     try {
-      const backendFormat = PRESET_TO_BACKEND[preset.id] || 'letter';
-      const customW = backendFormat === 'custom' ? parseFloat(preset.width) : undefined;
-      const customH = backendFormat === 'custom' ? parseFloat(preset.height) : undefined;
+      // preset.id matches backend LABEL_FORMATS keys directly
       const { blob, autoPopulated } = await inventoryService.generateBarcodeLabels(
         items.map(i => i.id),
-        backendFormat,
-        customW,
-        customH,
+        preset.id,
       );
       if (autoPopulated > 0) {
         toast.success(`${autoPopulated} item${autoPopulated !== 1 ? 's' : ''} had barcode values auto-generated`);

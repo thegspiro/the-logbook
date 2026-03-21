@@ -927,7 +927,7 @@ class LabelGenerateRequest(BaseModel):
     )
     label_format: str = Field(
         default="letter",
-        description="Label format: letter, dymo_30252, dymo_30256, dymo_30334, dymo_30336, rollo_4x6, or custom",
+        description="Label format: letter, dymo_30252, dymo_30256, dymo_30334, dymo_30336, rollo_4x6, rollo_2x1, thermal_1x1, or custom",
     )
     custom_width: Optional[float] = Field(
         None, gt=0, description="Width in inches (required for custom format)"
