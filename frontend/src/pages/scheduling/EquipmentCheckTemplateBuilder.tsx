@@ -25,6 +25,12 @@ import {
   X,
   Copy,
   ChevronsUpDown,
+  PanelLeftClose,
+  PanelLeftOpen,
+  ChevronRight,
+  CheckCircle2,
+  Circle,
+  Hash,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -488,6 +494,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [cloning, setCloning] = useState(false);
   const isDirty = useRef(false);
+  const [sidebarOpen, setSidebarOpen] = useState(!isEditing);
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   // ---------------------------------------------------------------------------
   // Load existing template
@@ -1042,6 +1050,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     setExpandedCompartments(new Set());
   };
 
+  const toggleItemExpanded = (itemKey: string) => {
+    setExpandedItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemKey)) next.delete(itemKey);
+      else next.add(itemKey);
+      return next;
+    });
+  };
+
   // ---------------------------------------------------------------------------
   // Preview: build a mock EquipmentCheckTemplate from current form state
   // ---------------------------------------------------------------------------
@@ -1089,6 +1106,37 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       })),
     };
   }, [form, compartments, templateId]);
+
+  // ---------------------------------------------------------------------------
+  // Template stats
+  // ---------------------------------------------------------------------------
+
+  const stats = useMemo(() => {
+    const allItems = compartments.flatMap((c) => c.items);
+    const totalItems = allItems.length;
+    const requiredItems = allItems.filter((i) => i.isRequired).length;
+    const withExpiration = allItems.filter((i) => i.hasExpiration).length;
+    const namedItems = allItems.filter((i) => i.name.trim()).length;
+    const namedCompartments = compartments.filter((c) => c.name.trim()).length;
+    return {
+      compartmentCount: compartments.length,
+      totalItems,
+      requiredItems,
+      withExpiration,
+      completeness: totalItems > 0 ? Math.round((namedItems / totalItems) * 100) : 100,
+      namedCompartments,
+    };
+  }, [compartments]);
+
+  // ---------------------------------------------------------------------------
+  // Compartment status helpers
+  // ---------------------------------------------------------------------------
+
+  const getCompartmentStatus = (comp: CompartmentFormState): 'complete' | 'warning' | 'empty' => {
+    if (comp.items.length === 0) return 'empty';
+    const allNamed = comp.items.every((i) => i.name.trim());
+    return allNamed ? 'complete' : 'warning';
+  };
 
   // ---------------------------------------------------------------------------
   // Drag & Drop
@@ -1188,244 +1236,222 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     itemIdx: number,
     item: ItemFormState,
     dragHandleProps?: Record<string, unknown>,
-  ) => (
-    <div
-      key={item.id ?? `item-${compIdx}-${itemIdx}`}
-      className="rounded-md border border-theme-surface-border bg-theme-surface p-3 space-y-3"
-    >
-      <div className="flex items-start gap-3">
-        {/* Drag handle */}
-        <button
-          type="button"
-          className="mt-6 p-1 text-theme-text-muted cursor-grab active:cursor-grabbing touch-none"
-          {...(dragHandleProps ?? {})}
+  ) => {
+    const itemKey = item.id ?? `item-${compIdx}-${itemIdx}`;
+    const isItemExpanded = expandedItems.has(itemKey);
+    const checkTypeLabel = CHECK_TYPES.find((ct) => ct.value === item.checkType)?.label ?? item.checkType;
+
+    return (
+      <div
+        key={itemKey}
+        className="rounded-md border border-theme-surface-border bg-theme-surface overflow-hidden"
+      >
+        {/* Compact row — always visible */}
+        <div
+          className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-theme-surface-secondary/50 transition-colors"
+          onClick={() => toggleItemExpanded(itemKey)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleItemExpanded(itemKey); }}
         >
-          <GripVertical className="h-4 w-4" />
-        </button>
-        {/* Name + Description */}
-        <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className={labelClass}>Name</label>
-            <input
-              type="text"
-              className={inputClass}
-              placeholder="Item name"
-              value={item.name}
-              onChange={(e) => updateItemField(compIdx, itemIdx, { name: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Description</label>
-            <input
-              type="text"
-              className={inputClass}
-              placeholder="Optional description"
-              value={item.description}
-              onChange={(e) => updateItemField(compIdx, itemIdx, { description: e.target.value })}
-            />
-          </div>
-        </div>
-
-        {/* Item actions */}
-        <div className="mt-6 flex items-center gap-0.5">
           <button
             type="button"
-            onClick={() => duplicateItem(compIdx, itemIdx)}
-            className="p-1.5 text-theme-text-muted hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
-            title="Duplicate item"
+            className="p-0.5 text-theme-text-muted cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
+            onClick={(e) => e.stopPropagation()}
+            {...(dragHandleProps ?? {})}
           >
-            <Copy className="h-4 w-4" />
+            <GripVertical className="h-4 w-4" />
           </button>
-          <button
-            type="button"
-            onClick={() => void deleteItem(compIdx, itemIdx)}
-            className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-            title="Delete item"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {/* Check Type */}
-        <div>
-          <label className={labelClass}>Check Type</label>
-          <select
-            className={selectClass}
-            value={item.checkType}
-            onChange={(e) =>
-              updateItemField(compIdx, itemIdx, {
-                checkType: e.target.value as ItemFormState['checkType'],
-              })
-            }
-          >
-            {CHECK_TYPES.map((ct) => (
-              <option key={ct.value} value={ct.value}>
-                {ct.label}
-              </option>
-            ))}
-          </select>
-          {CHECK_TYPE_HELP[item.checkType] && (
-            <p className="mt-1 text-[10px] text-theme-text-muted leading-tight">
-              {CHECK_TYPE_HELP[item.checkType]}
-            </p>
+          {isItemExpanded ? (
+            <ChevronDown className="h-3.5 w-3.5 text-theme-text-muted flex-shrink-0" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 text-theme-text-muted flex-shrink-0" />
           )}
+
+          <span className={`flex-1 text-sm truncate ${item.name.trim() ? 'text-theme-text-primary font-medium' : 'text-theme-text-muted italic'}`}>
+            {item.name.trim() || 'Untitled Item'}
+          </span>
+
+          {/* Badges */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <span className="rounded-full bg-theme-surface-secondary px-2 py-0.5 text-[10px] font-medium text-theme-text-muted">
+              {checkTypeLabel}
+            </span>
+            {item.isRequired && (
+              <span className="rounded-full bg-red-100 dark:bg-red-900/30 px-1.5 py-0.5 text-[10px] font-medium text-red-600 dark:text-red-400">
+                Req
+              </span>
+            )}
+            {item.hasExpiration && (
+              <AlertTriangle className="h-3 w-3 text-yellow-500" />
+            )}
+          </div>
+
+          {/* Actions — stop propagation so clicking them doesn't toggle expansion */}
+          <div className="flex items-center gap-0.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => duplicateItem(compIdx, itemIdx)}
+              className="p-1 text-theme-text-muted hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+              title="Duplicate item"
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => void deleteItem(compIdx, itemIdx)}
+              className="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+              title="Delete item"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
 
-        {/* Required */}
-        <div className="flex items-end pb-2">
-          <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
-            <input
-              type="checkbox"
-              className={checkboxClass}
-              checked={item.isRequired}
-              onChange={(e) => updateItemField(compIdx, itemIdx, { isRequired: e.target.checked })}
-            />
-            Required
-          </label>
-        </div>
+        {/* Expanded form — visible on click */}
+        {isItemExpanded && (
+          <div className="border-t border-theme-surface-border px-3 py-3 space-y-3">
+            {/* Name + Description */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>Name</label>
+                <input
+                  type="text"
+                  className={inputClass}
+                  placeholder="Item name"
+                  value={item.name}
+                  onChange={(e) => updateItemField(compIdx, itemIdx, { name: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Description</label>
+                <input
+                  type="text"
+                  className={inputClass}
+                  placeholder="Optional description"
+                  value={item.description}
+                  onChange={(e) => updateItemField(compIdx, itemIdx, { description: e.target.value })}
+                />
+              </div>
+            </div>
 
-        {/* Required Quantity (conditional) */}
-        {item.checkType === 'quantity' && (
-          <>
-            <div>
-              <label className={labelClass}>Required Qty</label>
-              <input
-                type="number"
-                className={inputClass}
-                min="0"
-                placeholder="0"
-                value={item.requiredQuantity}
-                onChange={(e) => updateItemField(compIdx, itemIdx, { requiredQuantity: e.target.value })}
-              />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {/* Check Type */}
+              <div>
+                <label className={labelClass}>Check Type</label>
+                <select
+                  className={selectClass}
+                  value={item.checkType}
+                  onChange={(e) =>
+                    updateItemField(compIdx, itemIdx, {
+                      checkType: e.target.value as ItemFormState['checkType'],
+                    })
+                  }
+                >
+                  {CHECK_TYPES.map((ct) => (
+                    <option key={ct.value} value={ct.value}>
+                      {ct.label}
+                    </option>
+                  ))}
+                </select>
+                {CHECK_TYPE_HELP[item.checkType] && (
+                  <p className="mt-1 text-[10px] text-theme-text-muted leading-tight">
+                    {CHECK_TYPE_HELP[item.checkType]}
+                  </p>
+                )}
+              </div>
+
+              {/* Required */}
+              <div className="flex items-end pb-2">
+                <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
+                  <input
+                    type="checkbox"
+                    className={checkboxClass}
+                    checked={item.isRequired}
+                    onChange={(e) => updateItemField(compIdx, itemIdx, { isRequired: e.target.checked })}
+                  />
+                  Required
+                </label>
+              </div>
+
+              {/* Conditional: Quantity */}
+              {item.checkType === 'quantity' && (
+                <>
+                  <div>
+                    <label className={labelClass}>Required Qty</label>
+                    <input type="number" className={inputClass} min="0" placeholder="0" value={item.requiredQuantity} onChange={(e) => updateItemField(compIdx, itemIdx, { requiredQuantity: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Expected Qty</label>
+                    <input type="number" className={inputClass} min="0" placeholder="0" value={item.expectedQuantity} onChange={(e) => updateItemField(compIdx, itemIdx, { expectedQuantity: e.target.value })} />
+                  </div>
+                </>
+              )}
+
+              {/* Conditional: Level */}
+              {item.checkType === 'level' && (
+                <>
+                  <div>
+                    <label className={labelClass}>Min Level</label>
+                    <input type="number" className={inputClass} min="0" step="0.1" placeholder="0" value={item.minLevel} onChange={(e) => updateItemField(compIdx, itemIdx, { minLevel: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Unit</label>
+                    <input type="text" className={inputClass} placeholder="psi, %, gallons..." value={item.levelUnit} onChange={(e) => updateItemField(compIdx, itemIdx, { levelUnit: e.target.value })} />
+                  </div>
+                </>
+              )}
+
+              {/* Conditional: Serial/Lot */}
+              {(item.checkType === 'date_lot' || item.checkType === 'quantity') && (
+                <>
+                  <div>
+                    <label className={labelClass}>Serial #</label>
+                    <input type="text" className={inputClass} placeholder="Serial number" value={item.serialNumber} onChange={(e) => updateItemField(compIdx, itemIdx, { serialNumber: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Lot #</label>
+                    <input type="text" className={inputClass} placeholder="Lot number" value={item.lotNumber} onChange={(e) => updateItemField(compIdx, itemIdx, { lotNumber: e.target.value })} />
+                  </div>
+                </>
+              )}
+
+              {/* Image URL */}
+              <div>
+                <label className={labelClass}>
+                  <Image className="inline h-3.5 w-3.5 mr-1" />
+                  Image URL
+                </label>
+                <input type="text" className={inputClass} placeholder="https://..." value={item.imageUrl} onChange={(e) => updateItemField(compIdx, itemIdx, { imageUrl: e.target.value })} />
+              </div>
             </div>
-            <div>
-              <label className={labelClass}>Expected Qty</label>
-              <input
-                type="number"
-                className={inputClass}
-                min="0"
-                placeholder="0"
-                value={item.expectedQuantity}
-                onChange={(e) => updateItemField(compIdx, itemIdx, { expectedQuantity: e.target.value })}
-              />
+
+            {/* Expiration row */}
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
+                <input type="checkbox" className={checkboxClass} checked={item.hasExpiration} onChange={(e) => updateItemField(compIdx, itemIdx, { hasExpiration: e.target.checked })} />
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Has Expiration
+              </label>
+              {item.hasExpiration && (
+                <>
+                  <div>
+                    <label className={labelClass}>Expiration Date</label>
+                    <input type="date" className={inputClass} value={item.expirationDate} onChange={(e) => updateItemField(compIdx, itemIdx, { expirationDate: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Warning Days</label>
+                    <input type="number" className={inputClass} min="0" placeholder="30" value={item.expirationWarningDays} onChange={(e) => updateItemField(compIdx, itemIdx, { expirationWarningDays: e.target.value })} />
+                  </div>
+                </>
+              )}
             </div>
-          </>
+          </div>
         )}
-
-        {/* Level fields (conditional) */}
-        {item.checkType === 'level' && (
-          <>
-            <div>
-              <label className={labelClass}>Min Level</label>
-              <input
-                type="number"
-                className={inputClass}
-                min="0"
-                step="0.1"
-                placeholder="0"
-                value={item.minLevel}
-                onChange={(e) => updateItemField(compIdx, itemIdx, { minLevel: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Unit</label>
-              <input
-                type="text"
-                className={inputClass}
-                placeholder="psi, %, gallons..."
-                value={item.levelUnit}
-                onChange={(e) => updateItemField(compIdx, itemIdx, { levelUnit: e.target.value })}
-              />
-            </div>
-          </>
-        )}
-
-        {/* Serial / Lot Number (conditional) */}
-        {(item.checkType === 'date_lot' || item.checkType === 'quantity') && (
-          <>
-            <div>
-              <label className={labelClass}>Serial #</label>
-              <input
-                type="text"
-                className={inputClass}
-                placeholder="Serial number"
-                value={item.serialNumber}
-                onChange={(e) => updateItemField(compIdx, itemIdx, { serialNumber: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Lot #</label>
-              <input
-                type="text"
-                className={inputClass}
-                placeholder="Lot number"
-                value={item.lotNumber}
-                onChange={(e) => updateItemField(compIdx, itemIdx, { lotNumber: e.target.value })}
-              />
-            </div>
-          </>
-        )}
-
-        {/* Image URL */}
-        <div>
-          <label className={labelClass}>
-            <Image className="inline h-3.5 w-3.5 mr-1" />
-            Image URL
-          </label>
-          <input
-            type="text"
-            className={inputClass}
-            placeholder="https://..."
-            value={item.imageUrl}
-            onChange={(e) => updateItemField(compIdx, itemIdx, { imageUrl: e.target.value })}
-          />
-        </div>
       </div>
-
-      {/* Expiration row */}
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
-          <input
-            type="checkbox"
-            className={checkboxClass}
-            checked={item.hasExpiration}
-            onChange={(e) => updateItemField(compIdx, itemIdx, { hasExpiration: e.target.checked })}
-          />
-          <AlertTriangle className="h-3.5 w-3.5" />
-          Has Expiration
-        </label>
-
-        {item.hasExpiration && (
-          <>
-            <div>
-              <label className={labelClass}>Expiration Date</label>
-              <input
-                type="date"
-                className={inputClass}
-                value={item.expirationDate}
-                onChange={(e) => updateItemField(compIdx, itemIdx, { expirationDate: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Warning Days</label>
-              <input
-                type="number"
-                className={inputClass}
-                min="0"
-                placeholder="30"
-                value={item.expirationWarningDays}
-                onChange={(e) =>
-                  updateItemField(compIdx, itemIdx, { expirationWarningDays: e.target.value })
-                }
-              />
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
+    );
+  };
 
   // ---------------------------------------------------------------------------
   // Render: Compartment Card
@@ -1471,25 +1497,50 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           <button
             type="button"
             onClick={() => toggleCompartmentExpanded(key)}
-            className="flex items-center gap-2 flex-1 text-left"
+            className="flex items-center gap-2 flex-1 text-left min-w-0"
           >
             {isExpanded ? (
-              <ChevronUp className="h-4 w-4 text-theme-text-muted" />
+              <ChevronUp className="h-4 w-4 text-theme-text-muted flex-shrink-0" />
             ) : (
-              <ChevronDown className="h-4 w-4 text-theme-text-muted" />
+              <ChevronDown className="h-4 w-4 text-theme-text-muted flex-shrink-0" />
             )}
-            <span className="font-medium text-theme-text-primary">
+            <span className="font-medium text-theme-text-primary truncate">
               {comp.name || 'Untitled Compartment'}
             </span>
-            <span className="text-xs text-theme-text-muted">
-              ({comp.items.length} item{comp.items.length !== 1 ? 's' : ''})
-            </span>
           </button>
+
+          {/* Status badges */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {(() => {
+              const status = getCompartmentStatus(comp);
+              return (
+                <>
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                    status === 'complete'
+                      ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                      : status === 'warning'
+                        ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                        : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                  }`}>
+                    {status === 'complete' && <CheckCircle2 className="h-2.5 w-2.5" />}
+                    {status === 'warning' && <AlertTriangle className="h-2.5 w-2.5" />}
+                    {status === 'empty' && <Circle className="h-2.5 w-2.5" />}
+                    {comp.items.length} item{comp.items.length !== 1 ? 's' : ''}
+                  </span>
+                  {comp.items.filter((i) => i.isRequired).length > 0 && (
+                    <span className="rounded-full bg-red-100 dark:bg-red-900/30 px-1.5 py-0.5 text-[10px] font-medium text-red-600 dark:text-red-400">
+                      {comp.items.filter((i) => i.isRequired).length} req
+                    </span>
+                  )}
+                </>
+              );
+            })()}
+          </div>
 
           <button
             type="button"
             onClick={() => void deleteCompartment(idx)}
-            className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+            className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors flex-shrink-0"
             title="Delete compartment"
           >
             <Trash2 className="h-4 w-4" />
@@ -1619,308 +1670,317 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Render: Main
   // ---------------------------------------------------------------------------
 
+  // ---------------------------------------------------------------------------
+  // Sidebar content (template metadata)
+  // ---------------------------------------------------------------------------
+
+  const renderSidebar = () => (
+    <div className="space-y-4">
+      {/* Name */}
+      <div>
+        <label className={labelClass}>
+          Name <span className="text-red-500">*</span>
+        </label>
+        <input type="text" className={inputClass} placeholder="e.g. Engine Daily Check" value={form.name} onChange={(e) => updateForm({ name: e.target.value })} />
+      </div>
+
+      {/* Description */}
+      <div>
+        <label className={labelClass}>Description</label>
+        <textarea className={inputClass} rows={2} placeholder="Describe what this template covers..." value={form.description} onChange={(e) => updateForm({ description: e.target.value })} />
+      </div>
+
+      {/* Check Timing */}
+      <div>
+        <label className={labelClass}>
+          <Clock className="inline h-3.5 w-3.5 mr-1" />
+          Check Timing
+        </label>
+        <select className={selectClass} value={form.checkTiming} onChange={(e) => updateForm({ checkTiming: e.target.value as TemplateFormState['checkTiming'] })}>
+          <option value="start_of_shift">Start of Shift</option>
+          <option value="end_of_shift">End of Shift</option>
+        </select>
+      </div>
+
+      {/* Template Type */}
+      <div>
+        <label className={labelClass}>Template Type</label>
+        <select className={selectClass} value={form.templateType} onChange={(e) => updateForm({ templateType: e.target.value as TemplateType })}>
+          {(Object.entries(TEMPLATE_TYPE_LABELS) as [TemplateType, string][]).map(([value, label]) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Assigned Positions */}
+      <div>
+        <label className={labelClass}>Assigned Positions</label>
+        <div className="flex flex-wrap gap-2 mt-1">
+          {POSITIONS.map((pos) => (
+            <label key={pos} className="flex items-center gap-1.5 text-xs text-theme-text-secondary capitalize">
+              <input type="checkbox" className={checkboxClass} checked={form.assignedPositions.includes(pos)} onChange={() => togglePosition(pos)} />
+              {pos}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Apparatus Type */}
+      <div>
+        <label className={labelClass}>Apparatus Type</label>
+        <select className={selectClass} value={form.apparatusType} onChange={(e) => updateForm({ apparatusType: e.target.value })}>
+          <option value="">-- Select Type --</option>
+          {APPARATUS_TYPES.map((t) => (
+            <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Apparatus ID */}
+      <div>
+        <label className={labelClass}>Specific Apparatus ID</label>
+        <input type="text" className={inputClass} placeholder="Leave blank for all of type" value={form.apparatusId} onChange={(e) => updateForm({ apparatusId: e.target.value })} />
+      </div>
+
+      {/* Active toggle */}
+      <div className="flex items-center gap-2">
+        <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
+          <input type="checkbox" className={checkboxClass} checked={form.isActive} onChange={(e) => updateForm({ isActive: e.target.checked })} />
+          Active
+        </label>
+        <span className="text-[10px] text-theme-text-muted">
+          Inactive = hidden from shift checklists
+        </span>
+      </div>
+    </div>
+  );
+
+  // ---------------------------------------------------------------------------
+  // Main render
+  // ---------------------------------------------------------------------------
+
   return (
-    <div className="mx-auto max-w-4xl space-y-6 pb-12">
+    <div className="pb-16">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="mx-auto max-w-7xl flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3 min-w-0">
           <button
             type="button"
             onClick={() => {
               if (isDirty.current && !window.confirm('You have unsaved changes. Leave anyway?')) return;
               navigate(-1);
             }}
-            className="p-2 rounded-md text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface transition-colors"
+            className="p-2 rounded-md text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface transition-colors flex-shrink-0"
             title="Go back"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <h1 className="text-2xl font-bold text-theme-text-primary">
+          <h1 className="text-2xl font-bold text-theme-text-primary truncate">
             {isEditing ? `Edit: ${form.name || 'Template'}` : 'New Equipment Check Template'}
           </h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           {isEditing && templateId && (
             <button
               type="button"
               onClick={() => void handleClone()}
               disabled={cloning}
-              className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-4 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary disabled:opacity-50 transition-colors"
+              className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary disabled:opacity-50 transition-colors"
               title="Clone this template"
             >
               {cloning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
-              Clone
+              <span className="hidden sm:inline">Clone</span>
             </button>
           )}
           <button
             type="button"
             onClick={() => setShowPreview(true)}
             disabled={compartments.length === 0}
-            className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-4 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary disabled:opacity-50 transition-colors"
+            className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary disabled:opacity-50 transition-colors"
           >
             <Eye className="h-4 w-4" />
-            Preview
+            <span className="hidden sm:inline">Preview</span>
           </button>
           <button
             type="button"
             onClick={() => void handleSave()}
             disabled={saving}
-            className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            className="flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
-            {saving ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
-            {saving ? 'Saving...' : 'Save Template'}
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {saving ? 'Saving...' : 'Save'}
           </button>
         </div>
       </div>
 
-      {/* Template Metadata Card */}
-      <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6 space-y-5">
-        <h2 className="text-lg font-semibold text-theme-text-primary">Template Details</h2>
-
-        {/* Name */}
-        <div>
-          <label className={labelClass}>
-            Name <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            className={inputClass}
-            placeholder="e.g. Engine Daily Check"
-            value={form.name}
-            onChange={(e) => updateForm({ name: e.target.value })}
-          />
-        </div>
-
-        {/* Description */}
-        <div>
-          <label className={labelClass}>Description</label>
-          <textarea
-            className={inputClass}
-            rows={3}
-            placeholder="Describe what this template covers..."
-            value={form.description}
-            onChange={(e) => updateForm({ description: e.target.value })}
-          />
-        </div>
-
-        {/* Check Timing */}
-        <div>
-          <label className={labelClass}>
-            <Clock className="inline h-3.5 w-3.5 mr-1" />
-            Check Timing
-          </label>
-          <select
-            className={selectClass}
-            value={form.checkTiming}
-            onChange={(e) =>
-              updateForm({ checkTiming: e.target.value as TemplateFormState['checkTiming'] })
-            }
-          >
-            <option value="start_of_shift">Start of Shift</option>
-            <option value="end_of_shift">End of Shift</option>
-          </select>
-        </div>
-
-        {/* Template Type */}
-        <div>
-          <label className={labelClass}>Template Type</label>
-          <select
-            className={selectClass}
-            value={form.templateType}
-            onChange={(e) =>
-              updateForm({ templateType: e.target.value as TemplateType })
-            }
-          >
-            {(Object.entries(TEMPLATE_TYPE_LABELS) as [TemplateType, string][]).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Assigned Positions */}
-        <div>
-          <label className={labelClass}>Assigned Positions</label>
-          <div className="flex flex-wrap gap-3 mt-1">
-            {POSITIONS.map((pos) => (
-              <label
-                key={pos}
-                className="flex items-center gap-2 text-sm text-theme-text-secondary capitalize"
-              >
-                <input
-                  type="checkbox"
-                  className={checkboxClass}
-                  checked={form.assignedPositions.includes(pos)}
-                  onChange={() => togglePosition(pos)}
-                />
-                {pos}
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {/* Apparatus Type */}
-        <div>
-          <label className={labelClass}>Apparatus Type</label>
-          <select
-            className={selectClass}
-            value={form.apparatusType}
-            onChange={(e) => updateForm({ apparatusType: e.target.value })}
-          >
-            <option value="">-- Select Type --</option>
-            {APPARATUS_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t.charAt(0).toUpperCase() + t.slice(1)}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Apparatus ID (specific apparatus) */}
-        <div>
-          <label className={labelClass}>Specific Apparatus ID</label>
-          <input
-            type="text"
-            className={inputClass}
-            placeholder="Leave blank to apply to all of the selected type"
-            value={form.apparatusId}
-            onChange={(e) => updateForm({ apparatusId: e.target.value })}
-          />
-        </div>
-
-        {/* Active toggle */}
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
-            <input
-              type="checkbox"
-              className={checkboxClass}
-              checked={form.isActive}
-              onChange={(e) => updateForm({ isActive: e.target.checked })}
-            />
-            Active
-          </label>
-          <span className="text-xs text-theme-text-muted">
-            Inactive templates will not appear in shift checklists
-          </span>
-        </div>
-      </div>
-
-      {/* Compartments Section */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold text-theme-text-primary">Compartments</h2>
-            {compartments.length > 1 && (
+      {/* Sidebar + Main content */}
+      <div className="mx-auto max-w-7xl flex gap-6">
+        {/* Sidebar — Template details */}
+        <div className={`flex-shrink-0 transition-all duration-200 ${sidebarOpen ? 'w-72' : 'w-0'} overflow-hidden`}>
+          <div className="w-72 rounded-lg border border-theme-surface-border bg-theme-surface p-4 sticky top-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-theme-text-primary uppercase tracking-wide">Template Details</h2>
               <button
                 type="button"
-                onClick={expandedCompartments.size === compartments.length ? collapseAllCompartments : expandAllCompartments}
-                className="flex items-center gap-1 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
-                title={expandedCompartments.size === compartments.length ? 'Collapse all' : 'Expand all'}
+                onClick={() => setSidebarOpen(false)}
+                className="p-1 text-theme-text-muted hover:text-theme-text-primary rounded transition-colors lg:hidden"
+                title="Close sidebar"
               >
-                <ChevronsUpDown className="h-3.5 w-3.5" />
-                {expandedCompartments.size === compartments.length ? 'Collapse all' : 'Expand all'}
+                <PanelLeftClose className="h-4 w-4" />
               </button>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {(form.templateType === 'vehicle' || form.templateType === 'combined') && (
-              <button
-                type="button"
-                onClick={() => setShowPresetPicker(!showPresetPicker)}
-                className="flex items-center gap-1.5 rounded-md border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-sm font-medium text-orange-700 dark:text-orange-400 hover:bg-orange-500/20 transition-colors"
-              >
-                <Truck className="h-4 w-4" />
-                Load Vehicle Preset
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => void addCompartment()}
-              className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-            >
-              <Plus className="h-4 w-4" />
-              Add Compartment
-            </button>
+            </div>
+            {renderSidebar()}
           </div>
         </div>
 
-        {/* Vehicle Preset Picker */}
-        {showPresetPicker && (
-          <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 p-4">
-            <p className="text-sm font-medium text-theme-text-primary mb-3">
-              Choose a pre-built vehicle check template:
-            </p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {Object.entries(VEHICLE_PRESETS).map(([key, preset]) => (
+        {/* Main — Compartments */}
+        <div className="flex-1 min-w-0 space-y-4">
+          {/* Sidebar toggle (when collapsed) + section header */}
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-3">
+              {!sidebarOpen && (
                 <button
-                  key={key}
                   type="button"
-                  onClick={() => loadVehiclePreset(key)}
-                  className="rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary hover:border-orange-500/40 hover:bg-orange-500/10 transition-colors text-left"
+                  onClick={() => setSidebarOpen(true)}
+                  className="p-1.5 rounded-md border border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface transition-colors"
+                  title="Show template details"
                 >
-                  <span className="font-medium">{preset.label}</span>
-                  <span className="block text-xs text-theme-text-muted mt-0.5">
-                    {preset.compartments.length} sections,{' '}
-                    {preset.compartments.reduce(
-                      (sum, c) => sum + c.items.length,
-                      0,
-                    )}{' '}
-                    items
-                  </span>
+                  <PanelLeftOpen className="h-4 w-4" />
                 </button>
-              ))}
+              )}
+              <h2 className="text-lg font-semibold text-theme-text-primary">Compartments</h2>
+              {compartments.length > 1 && (
+                <button
+                  type="button"
+                  onClick={expandedCompartments.size === compartments.length ? collapseAllCompartments : expandAllCompartments}
+                  className="flex items-center gap-1 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                  title={expandedCompartments.size === compartments.length ? 'Collapse all' : 'Expand all'}
+                >
+                  <ChevronsUpDown className="h-3.5 w-3.5" />
+                  {expandedCompartments.size === compartments.length ? 'Collapse all' : 'Expand all'}
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {(form.templateType === 'vehicle' || form.templateType === 'combined') && (
+                <button
+                  type="button"
+                  onClick={() => setShowPresetPicker(!showPresetPicker)}
+                  className="flex items-center gap-1.5 rounded-md border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-sm font-medium text-orange-700 dark:text-orange-400 hover:bg-orange-500/20 transition-colors"
+                >
+                  <Truck className="h-4 w-4" />
+                  Load Vehicle Preset
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => void addCompartment()}
+                className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+                Add Compartment
+              </button>
             </div>
           </div>
-        )}
 
-        {compartments.length === 0 && (
-          <div className="rounded-lg border border-dashed border-theme-surface-border bg-theme-surface p-8 text-center">
-            <p className="text-sm text-theme-text-muted">
-              No compartments yet.
-              {form.templateType === 'vehicle' || form.templateType === 'combined'
-                ? ' Use "Load Vehicle Preset" above or add compartments manually.'
-                : ' Add compartments to organize equipment check items by location on the apparatus.'}
-            </p>
-          </div>
-        )}
+          {/* Vehicle Preset Picker */}
+          {showPresetPicker && (
+            <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 p-4">
+              <p className="text-sm font-medium text-theme-text-primary mb-3">
+                Choose a pre-built vehicle check template:
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {Object.entries(VEHICLE_PRESETS).map(([key, preset]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => loadVehiclePreset(key)}
+                    className="rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary hover:border-orange-500/40 hover:bg-orange-500/10 transition-colors text-left"
+                  >
+                    <span className="font-medium">{preset.label}</span>
+                    <span className="block text-xs text-theme-text-muted mt-0.5">
+                      {preset.compartments.length} sections, {preset.compartments.reduce((sum, c) => sum + c.items.length, 0)} items
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleCompartmentDragEnd}
-        >
-          <SortableContext
-            items={compartmentIds}
-            strategy={verticalListSortingStrategy}
-          >
-            {compartments.map((comp, idx) => (
-              <SortableCompartmentWrapper
-                key={comp.id ?? `comp-${idx}`}
-                id={comp.id ?? `comp-${idx}`}
-              >
-                {({ listeners: compListeners, setNodeRef, style, attributes }) =>
-                  renderCompartment(comp, idx, compListeners, setNodeRef, style, attributes)
-                }
-              </SortableCompartmentWrapper>
-            ))}
-          </SortableContext>
-        </DndContext>
+          {compartments.length === 0 && (
+            <div className="rounded-lg border border-dashed border-theme-surface-border bg-theme-surface p-8 text-center">
+              <p className="text-sm text-theme-text-muted">
+                No compartments yet.
+                {form.templateType === 'vehicle' || form.templateType === 'combined'
+                  ? ' Use "Load Vehicle Preset" above or add compartments manually.'
+                  : ' Add compartments to organize equipment check items by location on the apparatus.'}
+              </p>
+            </div>
+          )}
+
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCompartmentDragEnd}>
+            <SortableContext items={compartmentIds} strategy={verticalListSortingStrategy}>
+              {compartments.map((comp, idx) => (
+                <SortableCompartmentWrapper key={comp.id ?? `comp-${idx}`} id={comp.id ?? `comp-${idx}`}>
+                  {({ listeners: compListeners, setNodeRef, style, attributes }) =>
+                    renderCompartment(comp, idx, compListeners, setNodeRef, style, attributes)
+                  }
+                </SortableCompartmentWrapper>
+              ))}
+            </SortableContext>
+          </DndContext>
+        </div>
       </div>
+
+      {/* Sticky footer stats bar */}
+      {stats.totalItems > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-theme-surface-border bg-theme-surface/95 backdrop-blur-sm">
+          <div className="mx-auto max-w-7xl flex items-center justify-between px-4 py-2">
+            <div className="flex items-center gap-4 text-xs text-theme-text-muted">
+              <span className="flex items-center gap-1">
+                <Hash className="h-3 w-3" />
+                {stats.compartmentCount} compartment{stats.compartmentCount !== 1 ? 's' : ''}
+              </span>
+              <span className="flex items-center gap-1">
+                <CheckCircle2 className="h-3 w-3" />
+                {stats.totalItems} item{stats.totalItems !== 1 ? 's' : ''}
+              </span>
+              {stats.requiredItems > 0 && (
+                <span className="flex items-center gap-1 text-red-500">
+                  <AlertTriangle className="h-3 w-3" />
+                  {stats.requiredItems} required
+                </span>
+              )}
+              {stats.withExpiration > 0 && (
+                <span className="flex items-center gap-1 text-yellow-600 dark:text-yellow-400">
+                  <Clock className="h-3 w-3" />
+                  {stats.withExpiration} with expiration
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {stats.completeness < 100 && (
+                <span className="text-xs text-yellow-600 dark:text-yellow-400">
+                  {stats.completeness}% items named
+                </span>
+              )}
+              <div className="w-20 h-1.5 rounded-full bg-theme-surface-border overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${stats.completeness === 100 ? 'bg-green-500' : 'bg-yellow-500'}`}
+                  style={{ width: `${stats.completeness}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Preview Modal */}
       {showPreview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="relative mx-4 flex max-h-[90vh] w-full max-w-lg flex-col rounded-xl bg-theme-surface shadow-xl">
-            {/* Modal header */}
             <div className="flex items-center justify-between border-b border-theme-surface-border px-4 py-3">
-              <h2 className="text-lg font-semibold text-theme-text-primary">
-                Check Preview
-              </h2>
+              <h2 className="text-lg font-semibold text-theme-text-primary">Check Preview</h2>
               <button
                 type="button"
                 onClick={() => setShowPreview(false)}
@@ -1929,7 +1989,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            {/* Modal body — scrollable */}
             <div className="flex-1 overflow-y-auto p-4">
               <div className="mb-3 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
                 <p className="text-xs text-blue-700 dark:text-blue-400">
@@ -1937,11 +1996,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   Inputs are interactive for demonstration but nothing will be submitted.
                 </p>
               </div>
-              <EquipmentCheckForm
-                shiftId="preview"
-                template={buildPreviewTemplate()}
-                previewMode
-              />
+              <EquipmentCheckForm shiftId="preview" template={buildPreviewTemplate()} previewMode />
             </div>
           </div>
         </div>
