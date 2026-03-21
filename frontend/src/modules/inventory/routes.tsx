@@ -68,6 +68,9 @@ const ReorderRequestsPage = lazyWithRetry(
 const EquipmentKitsPage = lazyWithRetry(
   () => import('./pages/EquipmentKitsPage'),
 );
+const VariantGroupsPage = lazyWithRetry(
+  () => import('./pages/VariantGroupsPage'),
+);
 
 export const getInventoryRoutes = () => {
   return (
@@ -221,6 +224,17 @@ export const getInventoryRoutes = () => {
           <ProtectedRoute requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <EquipmentKitsPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/inventory/admin/variant-groups"
+        element={
+          <ProtectedRoute requiredPermission="inventory.manage">
+            <Suspense fallback={null}>
+              <VariantGroupsPage />
             </Suspense>
           </ProtectedRoute>
         }
