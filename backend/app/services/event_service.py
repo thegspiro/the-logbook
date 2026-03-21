@@ -519,6 +519,47 @@ class EventService:
 
         return True
 
+    async def delete_event_series(
+        self,
+        parent_event_id: UUID,
+        organization_id: UUID,
+        delete_future_only: bool = False,
+    ) -> int:
+        """Delete all events in a recurring series.
+
+        Returns the number of events deleted.
+        """
+        conditions = [
+            Event.organization_id == str(organization_id),
+            or_(
+                Event.id == str(parent_event_id),
+                Event.recurrence_parent_id == str(parent_event_id),
+            ),
+        ]
+
+        if delete_future_only:
+            conditions.append(Event.start_datetime >= datetime.now(dt_timezone.utc))
+
+        result = await self.db.execute(select(Event).where(*conditions))
+        events = result.scalars().all()
+
+        if not events:
+            return 0
+
+        for event in events:
+            await self.db.delete(event)
+
+        try:
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise ValueError(
+                "Cannot delete series because some events have linked records "
+                "(e.g. meeting minutes). Remove or unlink them first."
+            )
+
+        return len(events)
+
     # RSVP Methods
 
     async def create_or_update_rsvp(
