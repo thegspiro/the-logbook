@@ -40,6 +40,30 @@ A task is not complete if any of the following are true after your changes:
 - `flake8` reports violations in any modified Python file
 - `npm run lint` exits non-zero
 - Any existing test is newly failing
+## Code Comments & Documentation
+
+Comments exist to explain **why**, not **what**. Experienced developers can read
+the code. A comment that restates the syntax it sits next to adds noise and
+becomes a maintenance liability the moment the code changes. Delete it.
+
+### What Belongs in a Comment
+
+Write a comment when the code alone cannot communicate:
+
+- **Business rules and domain constraints** — e.g., why a specific status
+  transition is prohibited, or why a field has a seemingly arbitrary length limit
+- **Non-obvious technical decisions** — e.g., why a query is structured to avoid
+  a MySQL optimizer pitfall, or why a particular async pattern was chosen over a
+  simpler one
+- **External dependencies and their quirks** — e.g., a third-party API behavior,
+  a browser inconsistency, or a known library bug being worked around
+- **Safety-critical invariants** — e.g., a condition that must remain true to
+  prevent a security or data integrity issue, where a casual refactor could
+  silently break it
+- **Intentional departures from convention** — if code deliberately does
+  something that looks wrong but is correct for a specific reason, say so
+```python
+
 ## Pre-Commit Verification Checklist
 
 Before committing any changes, mentally verify these items (the most frequent sources of bugs):
