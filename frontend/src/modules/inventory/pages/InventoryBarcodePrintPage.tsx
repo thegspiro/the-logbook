@@ -104,9 +104,9 @@ const PRESET_TO_BACKEND: Record<string, string> = {
   'letter-grid': 'letter',
 };
 
-/** Gets a printable barcode value for an item, or null if none available */
+/** Gets a printable barcode value for an item, using the same fallback chain as the backend */
 function getBarcodeValue(item: InventoryItem): string | null {
-  const value = item.barcode || item.asset_tag || item.serial_number;
+  const value = item.barcode || item.asset_tag || item.serial_number || item.id?.slice(0, 12);
   if (!value || value.trim().length === 0) return null;
   return value.trim();
 }
@@ -166,9 +166,11 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, onRendered })
     );
   }
 
-  const subtitle = item.asset_tag
+  // Show secondary identifier only if it differs from the barcode value,
+  // avoiding redundant text on the label.
+  const subtitle = item.asset_tag && item.asset_tag !== barcodeValue
     ? `AT: ${item.asset_tag}`
-    : item.serial_number
+    : item.serial_number && item.serial_number !== barcodeValue
       ? `S/N: ${item.serial_number}`
       : null;
 
@@ -265,13 +267,17 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const expectedLabelCount = items.length * copies;
   totalLabelsRef.current = expectedLabelCount;
 
-  // Reset rendered count when items or copies change.
+  // Reset rendered count when items, copies, or preset change so the
+  // print button is gated until all labels have re-rendered.
   const prevItemsRef = useRef(items);
   const prevCopiesRef = useRef(copies);
-  if (prevItemsRef.current !== items || prevCopiesRef.current !== copies) {
+  const prevPresetRef = useRef(presetId);
+  if (prevItemsRef.current !== items || prevCopiesRef.current !== copies || prevPresetRef.current !== presetId) {
     renderedCountRef.current = 0;
+    setBarcodesReady(false);
     prevItemsRef.current = items;
     prevCopiesRef.current = copies;
+    prevPresetRef.current = presetId;
   }
 
   const handleLabelRendered = useCallback(() => {
