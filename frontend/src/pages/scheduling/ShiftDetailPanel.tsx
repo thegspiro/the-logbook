@@ -1040,7 +1040,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           )}
 
           {/* Sign Up (for members not yet assigned — non-apparatus mode) */}
-          {!hasApparatusPositions && !isPast && !isUserAssigned && !canAssign && (
+          {!hasApparatusPositions && !isPast && !isUserAssigned && (
             <div className="p-4 border border-dashed border-violet-500/30 rounded-lg bg-violet-500/5">
               <h3 className="text-sm font-semibold text-theme-text-primary mb-2 flex items-center gap-2">
                 <UserPlus className="w-4 h-4 text-violet-500" /> Sign Up for This Shift
