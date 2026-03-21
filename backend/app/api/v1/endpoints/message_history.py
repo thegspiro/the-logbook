@@ -114,9 +114,7 @@ async def send_test_email(
     """
     # Load organization for org-specific SMTP settings
     org_result = await db.execute(
-        select(Organization).where(
-            Organization.id == current_user.organization_id
-        )
+        select(Organization).where(Organization.id == current_user.organization_id)
     )
     organization = org_result.scalar_one_or_none()
 

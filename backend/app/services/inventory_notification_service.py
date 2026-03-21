@@ -370,7 +370,11 @@ class InventoryNotificationService:
             context["organization_logo_img"] = build_email_logo_img(org)
 
             # Variables that are already rendered HTML and must NOT be escaped
-            _html_vars = {"items_issued_html", "items_returned_html", "organization_logo_img"}
+            _html_vars = {
+                "items_issued_html",
+                "items_returned_html",
+                "organization_logo_img",
+            }
 
             def _replace(text: str) -> str:
                 def replacer(match):

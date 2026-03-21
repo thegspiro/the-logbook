@@ -171,9 +171,7 @@ async def list_documents(
     # Enforce folder-level access when listing by folder
     if folder_uuid:
         folder = ensure_found(
-            await service.get_folder_by_id(
-                folder_uuid, current_user.organization_id
-            ),
+            await service.get_folder_by_id(folder_uuid, current_user.organization_id),
             "Folder",
         )
         if not service.can_access_folder(folder, current_user):
@@ -324,9 +322,7 @@ async def get_document(
     """Get a document by ID"""
     service = DocumentsService(db)
     document = ensure_found(
-        await service.get_document_by_id(
-            document_id, current_user.organization_id
-        ),
+        await service.get_document_by_id(document_id, current_user.organization_id),
         "Document",
     )
     return document

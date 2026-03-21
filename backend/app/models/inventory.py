@@ -2073,6 +2073,4 @@ class MemberSizePreferences(Base):
     # Relationships
     user = relationship("User", foreign_keys=[user_id])
 
-    __table_args__ = (
-        Index("idx_member_sizes_org", "organization_id"),
-    )
+    __table_args__ = (Index("idx_member_sizes_org", "organization_id"),)

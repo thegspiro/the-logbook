@@ -39,9 +39,7 @@ async def list_requirements(
     is_active: Optional[bool] = Query(None),
     screening_type: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("medical_screening.view")
-    ),
+    current_user: User = Depends(require_permission("medical_screening.view")),
 ):
     """List screening requirements for the current organization."""
     service = MedicalScreeningService(db)
@@ -60,9 +58,7 @@ async def list_requirements(
 async def get_requirement(
     requirement_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("medical_screening.view")
-    ),
+    current_user: User = Depends(require_permission("medical_screening.view")),
 ):
     """Get a single screening requirement."""
     service = MedicalScreeningService(db)
@@ -85,9 +81,7 @@ async def get_requirement(
 async def create_requirement(
     data: ScreeningRequirementCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("medical_screening.manage")
-    ),
+    current_user: User = Depends(require_permission("medical_screening.manage")),
 ):
     """Create a new screening requirement."""
     service = MedicalScreeningService(db)
@@ -107,9 +101,7 @@ async def update_requirement(
     requirement_id: str,
     data: ScreeningRequirementUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("medical_screening.manage")
-    ),
+    current_user: User = Depends(require_permission("medical_screening.manage")),
 ):
     """Update a screening requirement."""
     service = MedicalScreeningService(db)
@@ -132,9 +124,7 @@ async def update_requirement(
 async def delete_requirement(
     requirement_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("medical_screening.manage")
-    ),
+    current_user: User = Depends(require_permission("medical_screening.manage")),
 ):
     """Delete a screening requirement."""
     service = MedicalScreeningService(db)
@@ -162,9 +152,7 @@ async def list_records(
     screening_type: Optional[str] = Query(None),
     record_status: Optional[str] = Query(None, alias="status"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("medical_screening.view")
-    ),
+    current_user: User = Depends(require_permission("medical_screening.view")),
 ):
     """List screening records with optional filters."""
     service = MedicalScreeningService(db)
@@ -185,15 +173,11 @@ async def list_records(
 async def get_record(
     record_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("medical_screening.view")
-    ),
+    current_user: User = Depends(require_permission("medical_screening.view")),
 ):
     """Get a single screening record."""
     service = MedicalScreeningService(db)
-    record = await service.get_record(
-        record_id, current_user.organization_id
-    )
+    record = await service.get_record(record_id, current_user.organization_id)
     if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -210,9 +194,7 @@ async def get_record(
 async def create_record(
     data: ScreeningRecordCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("medical_screening.manage")
-    ),
+    current_user: User = Depends(require_permission("medical_screening.manage")),
 ):
     """Create a new screening record."""
     service = MedicalScreeningService(db)
@@ -232,9 +214,7 @@ async def update_record(
     record_id: str,
     data: ScreeningRecordUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("medical_screening.manage")
-    ),
+    current_user: User = Depends(require_permission("medical_screening.manage")),
 ):
     """Update a screening record."""
     service = MedicalScreeningService(db)
@@ -260,15 +240,11 @@ async def update_record(
 async def delete_record(
     record_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("medical_screening.manage")
-    ),
+    current_user: User = Depends(require_permission("medical_screening.manage")),
 ):
     """Delete a screening record."""
     service = MedicalScreeningService(db)
-    deleted = await service.delete_record(
-        record_id, current_user.organization_id
-    )
+    deleted = await service.delete_record(record_id, current_user.organization_id)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -287,9 +263,7 @@ async def delete_record(
 async def get_user_compliance(
     user_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("medical_screening.view")
-    ),
+    current_user: User = Depends(require_permission("medical_screening.view")),
 ):
     """Get compliance status for a specific user."""
     service = MedicalScreeningService(db)
@@ -306,9 +280,7 @@ async def get_user_compliance(
 async def get_prospect_compliance(
     prospect_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("medical_screening.view")
-    ),
+    current_user: User = Depends(require_permission("medical_screening.view")),
 ):
     """Get compliance status for a prospective member."""
     service = MedicalScreeningService(db)
@@ -325,9 +297,7 @@ async def get_prospect_compliance(
 async def get_expiring_screenings(
     days: int = Query(default=30, ge=1, le=365),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("medical_screening.view")
-    ),
+    current_user: User = Depends(require_permission("medical_screening.view")),
 ):
     """Get screening records expiring within the specified number of days."""
     service = MedicalScreeningService(db)

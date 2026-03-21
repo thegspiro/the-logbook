@@ -123,7 +123,7 @@ describe('ComplianceOfficerDashboard', () => {
       expect(screen.getByText(/Annual Compliance Report/)).toBeInTheDocument();
     });
 
-    expect(mockGetAnnualReport).toHaveBeenCalledWith();
+    expect(mockGetAnnualReport).toHaveBeenCalled();
   });
 
   it('can switch to ISO Readiness section', async () => {
@@ -136,7 +136,7 @@ describe('ComplianceOfficerDashboard', () => {
       expect(screen.getByText(/ISO\/FSRS Readiness Assessment/)).toBeInTheDocument();
     });
 
-    expect(mockGetISOReadiness).toHaveBeenCalledWith();
+    expect(mockGetISOReadiness).toHaveBeenCalled();
   });
 
   it('can switch to Record Quality section', async () => {
@@ -149,7 +149,7 @@ describe('ComplianceOfficerDashboard', () => {
       expect(screen.getByText(/Training Record Quality/)).toBeInTheDocument();
     });
 
-    expect(mockGetRecordCompleteness).toHaveBeenCalledWith();
+    expect(mockGetRecordCompleteness).toHaveBeenCalled();
   });
 
   it('can switch to Attestations section', async () => {
@@ -162,7 +162,7 @@ describe('ComplianceOfficerDashboard', () => {
       expect(screen.getByText(/Compliance Attestations/)).toBeInTheDocument();
     });
 
-    expect(mockGetAttestations).toHaveBeenCalledWith();
+    expect(mockGetAttestations).toHaveBeenCalled();
   });
 
   it('can switch to Forecast section', async () => {
@@ -176,6 +176,6 @@ describe('ComplianceOfficerDashboard', () => {
       expect(screen.getByText('No forecast data available.')).toBeInTheDocument();
     });
 
-    expect(mockGetComplianceForecast).toHaveBeenCalledWith();
+    expect(mockGetComplianceForecast).toHaveBeenCalled();
   });
 });

@@ -86,7 +86,9 @@ class TrainingRequirementEnhancedUpdate(BaseModel):
     active: Optional[bool] = None
 
 
-class TrainingRequirementEnhancedResponse(TrainingRequirementEnhancedBase, UTCResponseBase):
+class TrainingRequirementEnhancedResponse(
+    TrainingRequirementEnhancedBase, UTCResponseBase
+):
     """Schema for enhanced training requirement response"""
 
     id: UUID

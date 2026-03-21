@@ -133,7 +133,9 @@ async def get_pending_exceptions(
     Requires security.manage or settings.manage permission.
     """
     async with handle_service_errors("Failed to get pending exceptions"):
-        org_id = str(current_user.organization_id) if current_user.organization_id else None
+        org_id = (
+            str(current_user.organization_id) if current_user.organization_id else None
+        )
         exceptions = await ip_security_service.get_pending_requests(
             db=db,
             organization_id=org_id,
@@ -175,7 +177,9 @@ async def get_all_exceptions(
             query = query.where(IPException.approval_status == status)
             count_query = count_query.where(IPException.approval_status == status)
 
-        query = query.order_by(IPException.created_at.desc()).limit(limit).offset(offset)
+        query = (
+            query.order_by(IPException.created_at.desc()).limit(limit).offset(offset)
+        )
 
         result = await db.execute(query)
         items = list(result.scalars().all())
@@ -377,7 +381,9 @@ async def get_blocked_attempts(
         count_query = select(func.count(BlockedAccessAttempt.id))
 
         if country_code:
-            query = query.where(BlockedAccessAttempt.country_code == country_code.upper())
+            query = query.where(
+                BlockedAccessAttempt.country_code == country_code.upper()
+            )
             count_query = count_query.where(
                 BlockedAccessAttempt.country_code == country_code.upper()
             )

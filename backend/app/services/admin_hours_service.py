@@ -1189,9 +1189,7 @@ class AdminHoursService:
         if not event_type and not custom_category:
             raise ValueError("Either event_type or custom_category is required")
         if event_type and custom_category:
-            raise ValueError(
-                "Only one of event_type or custom_category can be set"
-            )
+            raise ValueError("Only one of event_type or custom_category can be set")
 
         # Verify target category exists in this org
         cat = await self.get_category(admin_hours_category_id, organization_id)
@@ -1329,9 +1327,7 @@ class AdminHoursService:
         if event_type:
             query = query.where(EventHourMapping.event_type == event_type)
         elif custom_category:
-            query = query.where(
-                EventHourMapping.custom_category == custom_category
-            )
+            query = query.where(EventHourMapping.custom_category == custom_category)
         else:
             return []
 
@@ -1456,9 +1452,7 @@ class AdminHoursService:
             types = profile.membership_types or []
             roles = profile.role_ids or []
             matches_type = not types or user_membership in types
-            matches_role = not roles or any(
-                r in user_position_ids for r in roles
-            )
+            matches_role = not roles or any(r in user_position_ids for r in roles)
             if matches_type and matches_role:
                 applicable_profiles.append(profile)
 
@@ -1496,9 +1490,7 @@ class AdminHoursService:
                     today.year, q_start_month, 1, tzinfo=timezone.utc
                 )
                 if q_start_month + 3 > 12:
-                    period_end = datetime(
-                        today.year + 1, 1, 1, tzinfo=timezone.utc
-                    )
+                    period_end = datetime(today.year + 1, 1, 1, tzinfo=timezone.utc)
                 else:
                     period_end = datetime(
                         today.year, q_start_month + 3, 1, tzinfo=timezone.utc
@@ -1510,9 +1502,7 @@ class AdminHoursService:
             # Sum approved hours for this user + category + period
             hours_result = await self.db.execute(
                 select(
-                    func.coalesce(
-                        func.sum(AdminHoursEntry.duration_minutes), 0
-                    )
+                    func.coalesce(func.sum(AdminHoursEntry.duration_minutes), 0)
                 ).where(
                     AdminHoursEntry.user_id == user_id,
                     AdminHoursEntry.category_id == cat_id,
@@ -1528,23 +1518,24 @@ class AdminHoursService:
             if logged_hours < required_hours:
                 pct = (logged_hours / required_hours * 100) if required_hours else 0
                 if pct < (
-                    best_profile.at_risk_threshold_override
-                    or config.at_risk_threshold
+                    best_profile.at_risk_threshold_override or config.at_risk_threshold
                 ):
                     status = "non_compliant"
                 else:
                     status = "at_risk"
 
-            results.append({
-                "category_id": cat_id,
-                "category_name": cat.name,
-                "category_color": cat.color,
-                "required_hours": required_hours,
-                "logged_hours": logged_hours,
-                "frequency": frequency,
-                "status": status,
-                "period_start": period_start.isoformat(),
-                "period_end": period_end.isoformat(),
-            })
+            results.append(
+                {
+                    "category_id": cat_id,
+                    "category_name": cat.name,
+                    "category_color": cat.color,
+                    "required_hours": required_hours,
+                    "logged_hours": logged_hours,
+                    "frequency": frequency,
+                    "status": status,
+                    "period_start": period_start.isoformat(),
+                    "period_end": period_end.isoformat(),
+                }
+            )
 
         return results

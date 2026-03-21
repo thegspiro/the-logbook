@@ -220,8 +220,7 @@ async def list_compliance_reports(
         )
         return {
             "reports": [
-                ComplianceReportSummary.model_validate(r)
-                for r in result["reports"]
+                ComplianceReportSummary.model_validate(r) for r in result["reports"]
             ],
             "total": result["total"],
             "limit": result["limit"],

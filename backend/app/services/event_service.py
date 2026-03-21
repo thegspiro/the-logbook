@@ -638,8 +638,7 @@ class EventService:
 
         # Check capacity if user is going
         old_status_was_going = (
-            existing_rsvp
-            and existing_rsvp.status == RSVPStatus.GOING
+            existing_rsvp and existing_rsvp.status == RSVPStatus.GOING
         )
         if rsvp_data.status == RSVPStatus.GOING.value and event.max_attendees:
             # Count current "going" RSVPs, excluding this user's RSVP if updating
@@ -735,22 +734,24 @@ class EventService:
         # Build response
         items = []
         for entry in history_entries:
-            items.append({
-                "id": entry.id,
-                "rsvp_id": entry.rsvp_id,
-                "event_id": entry.event_id,
-                "user_id": entry.user_id,
-                "old_status": entry.old_status,
-                "new_status": entry.new_status,
-                "changed_at": entry.changed_at,
-                "changed_by": entry.changed_by,
-                "user_name": user_names.get(entry.user_id, "Unknown"),
-                "changer_name": (
-                    user_names.get(entry.changed_by, "Unknown")
-                    if entry.changed_by
-                    else None
-                ),
-            })
+            items.append(
+                {
+                    "id": entry.id,
+                    "rsvp_id": entry.rsvp_id,
+                    "event_id": entry.event_id,
+                    "user_id": entry.user_id,
+                    "old_status": entry.old_status,
+                    "new_status": entry.new_status,
+                    "changed_at": entry.changed_at,
+                    "changed_by": entry.changed_by,
+                    "user_name": user_names.get(entry.user_id, "Unknown"),
+                    "changer_name": (
+                        user_names.get(entry.changed_by, "Unknown")
+                        if entry.changed_by
+                        else None
+                    ),
+                }
+            )
         return items
 
     async def promote_from_waitlist(
@@ -1366,14 +1367,11 @@ class EventService:
 
         # Auto-credit event hours to admin hours categories via mappings
         admin_hours_service = AdminHoursService(self.db)
-        event_type_val = (
-            event.event_type.value if event.event_type else None
-        )
+        event_type_val = event.event_type.value if event.event_type else None
         for rsvp in rsvps:
             check_in_time = rsvp.override_check_in_at or rsvp.checked_in_at
             duration = (
-                rsvp.override_duration_minutes
-                or rsvp.attendance_duration_minutes
+                rsvp.override_duration_minutes or rsvp.attendance_duration_minutes
             )
             if not check_in_time or not duration or duration <= 0:
                 continue
@@ -1392,9 +1390,7 @@ class EventService:
                     custom_category=event.custom_category,
                 )
             except Exception:
-                logger.exception(
-                    "Failed to credit admin hours for RSVP %s", rsvp.id
-                )
+                logger.exception("Failed to credit admin hours for RSVP %s", rsvp.id)
         await self.db.commit()
 
         return updated_count, None
@@ -2128,7 +2124,8 @@ class EventService:
         if exceptions:
             exception_dates = set(exceptions)
             occurrences = [
-                (s, e) for s, e in occurrences
+                (s, e)
+                for s, e in occurrences
                 if s.strftime("%Y-%m-%d") not in exception_dates
             ]
 
@@ -2421,8 +2418,7 @@ class EventService:
 
         # Verify the event exists and belongs to the organization
         result = await self.db.execute(
-            select(Event)
-            .where(
+            select(Event).where(
                 Event.id == str(event_id),
                 Event.organization_id == str(organization_id),
             )
@@ -2436,8 +2432,7 @@ class EventService:
 
         # Get all active members in the organization
         members_result = await self.db.execute(
-            select(User.id)
-            .where(
+            select(User.id).where(
                 User.organization_id == str(organization_id),
                 User.is_active == True,  # noqa: E712
             )
@@ -2454,18 +2449,14 @@ class EventService:
 
         # For non_respondents: exclude members who already have an RSVP
         rsvp_result = await self.db.execute(
-            select(EventRSVP.user_id)
-            .where(EventRSVP.event_id == str(event_id))
+            select(EventRSVP.user_id).where(EventRSVP.event_id == str(event_id))
         )
         rsvp_user_ids = {str(row[0]) for row in rsvp_result.all()}
 
-        non_respondents = [
-            uid for uid in all_member_ids if uid not in rsvp_user_ids
-        ]
+        non_respondents = [uid for uid in all_member_ids if uid not in rsvp_user_ids]
 
         _logger.info(
-            "Sending reminders to {} non-respondents (out of {} total) "
-            "for event {}",
+            "Sending reminders to {} non-respondents (out of {} total) " "for event {}",
             len(non_respondents),
             len(all_member_ids),
             event_id,
@@ -2523,9 +2514,9 @@ class EventService:
                 func.sum(
                     case((EventRSVP.status == RSVPStatus.GOING, 1), else_=0)
                 ).label("going_count"),
-                func.sum(
-                    case((EventRSVP.checked_in.is_(True), 1), else_=0)
-                ).label("checked_in_count"),
+                func.sum(case((EventRSVP.checked_in.is_(True), 1), else_=0)).label(
+                    "checked_in_count"
+                ),
             )
             .join(Event, Event.id == EventRSVP.event_id)
             .where(*rsvp_filter)
@@ -2535,12 +2526,8 @@ class EventService:
         going_count = row.going_count or 0
         checked_in_count = row.checked_in_count or 0
 
-        avg_attendance_rate = (
-            checked_in_count / going_count if going_count > 0 else 0.0
-        )
-        check_in_rate = (
-            checked_in_count / total_rsvps if total_rsvps > 0 else 0.0
-        )
+        avg_attendance_rate = checked_in_count / going_count if going_count > 0 else 0.0
+        check_in_rate = checked_in_count / total_rsvps if total_rsvps > 0 else 0.0
 
         # 3) Average check-in time before event start (minutes)
         #    Uses raw SQL text for MySQL TIMESTAMPDIFF.
@@ -2620,22 +2607,18 @@ class EventService:
                 func.sum(
                     case((EventRSVP.status == RSVPStatus.GOING, 1), else_=0)
                 ).label("going_count"),
-                func.sum(
-                    case((EventRSVP.checked_in.is_(True), 1), else_=0)
-                ).label("checked_in_count"),
+                func.sum(case((EventRSVP.checked_in.is_(True), 1), else_=0)).label(
+                    "checked_in_count"
+                ),
             )
             .join(EventRSVP, EventRSVP.event_id == Event.id)
             .where(*base_filter)
             .group_by(Event.id, Event.title, Event.event_type, Event.start_datetime)
             .having(
-                func.sum(
-                    case((EventRSVP.status == RSVPStatus.GOING, 1), else_=0)
-                ) > 0
+                func.sum(case((EventRSVP.status == RSVPStatus.GOING, 1), else_=0)) > 0
             )
             .order_by(
-                func.sum(
-                    case((EventRSVP.checked_in.is_(True), 1), else_=0)
-                ).desc()
+                func.sum(case((EventRSVP.checked_in.is_(True), 1), else_=0)).desc()
             )
             .limit(10)
         )
@@ -2702,8 +2685,7 @@ class EventService:
 
         # Verify the event exists and belongs to the organization
         result = await self.db.execute(
-            select(Event)
-            .where(
+            select(Event).where(
                 Event.id == str(event_id),
                 Event.organization_id == str(organization_id),
             )
@@ -2717,8 +2699,7 @@ class EventService:
 
         # Fetch all active members
         members_result = await self.db.execute(
-            select(User.id)
-            .where(
+            select(User.id).where(
                 User.organization_id == str(organization_id),
                 User.is_active == True,  # noqa: E712
             )
@@ -2727,8 +2708,7 @@ class EventService:
 
         # Fetch RSVPs for filtering
         rsvp_result = await self.db.execute(
-            select(EventRSVP)
-            .where(EventRSVP.event_id == str(event_id))
+            select(EventRSVP).where(EventRSVP.event_id == str(event_id))
         )
         rsvps = rsvp_result.scalars().all()
 
@@ -2743,28 +2723,25 @@ class EventService:
             recipient_ids = list(all_member_ids)
         elif target == "going":
             recipient_ids = [
-                uid for uid, r in rsvp_by_user.items()
+                uid
+                for uid, r in rsvp_by_user.items()
                 if r.status == RSVPStatus.GOING and uid in all_member_ids
             ]
         elif target == "not_responded":
             responded_ids = set(rsvp_by_user.keys())
-            recipient_ids = [
-                uid for uid in all_member_ids
-                if uid not in responded_ids
-            ]
+            recipient_ids = [uid for uid in all_member_ids if uid not in responded_ids]
         elif target == "checked_in":
             recipient_ids = [
-                uid for uid, r in rsvp_by_user.items()
+                uid
+                for uid, r in rsvp_by_user.items()
                 if r.checked_in and uid in all_member_ids
             ]
         elif target == "not_checked_in":
-            checked_in_ids = {
-                uid for uid, r in rsvp_by_user.items()
-                if r.checked_in
-            }
+            checked_in_ids = {uid for uid, r in rsvp_by_user.items() if r.checked_in}
             # Members who RSVP'd going but did not check in
             recipient_ids = [
-                uid for uid, r in rsvp_by_user.items()
+                uid
+                for uid, r in rsvp_by_user.items()
                 if r.status == RSVPStatus.GOING
                 and uid not in checked_in_ids
                 and uid in all_member_ids
@@ -2805,8 +2782,7 @@ class EventService:
                 f"Please review the event page."
             ),
             "missed_event": (
-                f'You missed "{event.title}". '
-                f"Please review the event details."
+                f'You missed "{event.title}". ' f"Please review the event details."
             ),
             "check_in_confirmation": (
                 f'Your check-in for "{event.title}" has been confirmed.'
@@ -2845,9 +2821,6 @@ class EventService:
                     error,
                 )
 
-        summary = (
-            f"{label} notification sent to "
-            f"{delivered_count} recipient(s)"
-        )
+        summary = f"{label} notification sent to " f"{delivered_count} recipient(s)"
 
         return delivered_count, summary

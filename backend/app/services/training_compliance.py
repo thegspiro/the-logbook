@@ -505,7 +505,8 @@ def _evaluate_member_compliance(
 
 
 async def _load_compliance_config(
-    db: AsyncSession, org_id: str,
+    db: AsyncSession,
+    org_id: str,
 ) -> Optional[ComplianceConfig]:
     """Load compliance config with profiles for an organization."""
     result = await db.execute(
@@ -558,9 +559,7 @@ async def compute_org_compliance_pct(db: AsyncSession, org_id: str) -> float:
         return 100.0  # No requirements = fully compliant
 
     # Build requirements lookup by ID
-    reqs_by_id: Dict[str, TrainingRequirement] = {
-        str(r.id): r for r in requirements
-    }
+    reqs_by_id: Dict[str, TrainingRequirement] = {str(r.id): r for r in requirements}
 
     # Load compliance config (if configured)
     config = await _load_compliance_config(db, org_id)
@@ -568,7 +567,9 @@ async def compute_org_compliance_pct(db: AsyncSession, org_id: str) -> float:
     if config and config.profiles:
         # Sort by priority descending (higher priority first)
         profiles = sorted(
-            config.profiles, key=lambda p: p.priority, reverse=True,
+            config.profiles,
+            key=lambda p: p.priority,
+            reverse=True,
         )
 
     # Default thresholds
@@ -620,13 +621,9 @@ async def compute_org_compliance_pct(db: AsyncSession, org_id: str) -> float:
                 ]
                 # Use profile threshold overrides if set
                 if profile.compliant_threshold_override is not None:
-                    member_compliant_threshold = (
-                        profile.compliant_threshold_override
-                    )
+                    member_compliant_threshold = profile.compliant_threshold_override
                 if profile.at_risk_threshold_override is not None:
-                    member_at_risk_threshold = (
-                        profile.at_risk_threshold_override
-                    )
+                    member_at_risk_threshold = profile.at_risk_threshold_override
 
         status, _ = _evaluate_member_compliance(
             member_reqs,

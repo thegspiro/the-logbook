@@ -49,9 +49,7 @@ class MedicalScreeningService:
         if is_active is not None:
             query = query.where(ScreeningRequirement.is_active == is_active)
         if screening_type:
-            query = query.where(
-                ScreeningRequirement.screening_type == screening_type
-            )
+            query = query.where(ScreeningRequirement.screening_type == screening_type)
         query = query.order_by(ScreeningRequirement.name)
         result = await self.db.execute(query)
         return list(result.scalars().all())
@@ -206,9 +204,7 @@ class MedicalScreeningService:
         await self.db.flush()
         return record
 
-    async def delete_record(
-        self, record_id: str, organization_id: str
-    ) -> bool:
+    async def delete_record(self, record_id: str, organization_id: str) -> bool:
         """Delete a screening record."""
         record = await self.get_record(record_id, organization_id)
         if not record:
@@ -230,9 +226,7 @@ class MedicalScreeningService:
         active screening requirements.
         """
         # Get active requirements
-        requirements = await self.list_requirements(
-            organization_id, is_active=True
-        )
+        requirements = await self.list_requirements(organization_id, is_active=True)
 
         # Get records for this subject
         records = await self.list_records(
@@ -252,7 +246,8 @@ class MedicalScreeningService:
                 r
                 for r in records
                 if r.screening_type == req.screening_type
-                and r.status in (
+                and r.status
+                in (
                     ScreeningStatus.PASSED.value,
                     ScreeningStatus.COMPLETED.value,
                     ScreeningStatus.WAIVED.value,
@@ -285,12 +280,8 @@ class MedicalScreeningService:
                     requirement_name=req.name,
                     screening_type=req.screening_type,
                     is_compliant=is_compliant,
-                    last_screening_date=(
-                        latest.completed_date if latest else None
-                    ),
-                    expiration_date=(
-                        latest.expiration_date if latest else None
-                    ),
+                    last_screening_date=(latest.completed_date if latest else None),
+                    expiration_date=(latest.expiration_date if latest else None),
                     days_until_expiration=days_until_exp,
                     status=latest.status if latest else None,
                 )
@@ -329,10 +320,12 @@ class MedicalScreeningService:
                     ScreeningRecord.expiration_date.isnot(None),
                     ScreeningRecord.expiration_date >= today,
                     ScreeningRecord.expiration_date <= cutoff,
-                    ScreeningRecord.status.in_([
-                        ScreeningStatus.PASSED.value,
-                        ScreeningStatus.COMPLETED.value,
-                    ]),
+                    ScreeningRecord.status.in_(
+                        [
+                            ScreeningStatus.PASSED.value,
+                            ScreeningStatus.COMPLETED.value,
+                        ]
+                    ),
                 )
             )
             .order_by(ScreeningRecord.expiration_date.asc())
@@ -343,9 +336,7 @@ class MedicalScreeningService:
         expiring: List[ExpiringScreening] = []
         for record in records:
             days_left = (
-                (record.expiration_date - today).days
-                if record.expiration_date
-                else 0
+                (record.expiration_date - today).days if record.expiration_date else 0
             )
             expiring.append(
                 ExpiringScreening(

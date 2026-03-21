@@ -27,8 +27,15 @@ _INACTIVE_STATUSES = {
 
 # All shift position values for reference.
 _ALL_POSITIONS = [
-    "officer", "driver", "firefighter", "ems",
-    "captain", "lieutenant", "probationary", "volunteer", "other",
+    "officer",
+    "driver",
+    "firefighter",
+    "ems",
+    "captain",
+    "lieutenant",
+    "probationary",
+    "volunteer",
+    "other",
 ]
 
 # Default ranks seeded for new organizations.
@@ -37,16 +44,21 @@ DEFAULT_RANKS = [
     ("fire_chief", "Fire Chief", 0, _ALL_POSITIONS),
     ("deputy_chief", "Deputy Chief", 1, _ALL_POSITIONS),
     ("assistant_chief", "Assistant Chief", 2, _ALL_POSITIONS),
-    ("captain", "Captain", 3,
-     ["captain", "officer", "driver", "firefighter", "ems", "lieutenant"]),
-    ("lieutenant", "Lieutenant", 4,
-     ["lieutenant", "officer", "driver", "firefighter", "ems"]),
-    ("engineer", "Engineer", 5,
-     ["driver", "firefighter", "ems"]),
-    ("firefighter", "Firefighter", 6,
-     ["firefighter", "ems"]),
-    ("emt", "EMT", 7,
-     ["ems", "firefighter"]),
+    (
+        "captain",
+        "Captain",
+        3,
+        ["captain", "officer", "driver", "firefighter", "ems", "lieutenant"],
+    ),
+    (
+        "lieutenant",
+        "Lieutenant",
+        4,
+        ["lieutenant", "officer", "driver", "firefighter", "ems"],
+    ),
+    ("engineer", "Engineer", 5, ["driver", "firefighter", "ems"]),
+    ("firefighter", "Firefighter", 6, ["firefighter", "ems"]),
+    ("emt", "EMT", 7, ["ems", "firefighter"]),
 ]
 
 

@@ -1468,9 +1468,7 @@ async def send_ballot_emails(
                 skipped_details=skipped_details,
             )
         except Exception as e:
-            logger.warning(
-                f"Failed to send eligibility summary email: {e}"
-            )
+            logger.warning(f"Failed to send eligibility summary email: {e}")
 
     parts = [f"Ballot emails sent to {recipients_count} recipient(s)"]
     if failed_count > 0:
@@ -1734,7 +1732,11 @@ async def check_in_attendee(
     )
 
 
-@router.delete("/{election_id}/attendees/{user_id}", response_model=SuccessResponse, status_code=status.HTTP_200_OK)
+@router.delete(
+    "/{election_id}/attendees/{user_id}",
+    response_model=SuccessResponse,
+    status_code=status.HTTP_200_OK,
+)
 async def remove_attendee(
     election_id: UUID,
     user_id: UUID,
@@ -1776,7 +1778,11 @@ class VoterOverrideRequest(BaseModel):
     )
 
 
-@router.post("/{election_id}/voter-overrides", response_model=VoterOverrideRecord, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{election_id}/voter-overrides",
+    response_model=VoterOverrideRecord,
+    status_code=status.HTTP_201_CREATED,
+)
 async def add_voter_override(
     election_id: UUID,
     body: VoterOverrideRequest,
@@ -1894,7 +1900,9 @@ async def list_voter_overrides(
 
 
 @router.delete(
-    "/{election_id}/voter-overrides/{user_id}", response_model=SuccessResponse, status_code=status.HTTP_200_OK
+    "/{election_id}/voter-overrides/{user_id}",
+    response_model=SuccessResponse,
+    status_code=status.HTTP_200_OK,
 )
 async def remove_voter_override(
     election_id: UUID,
@@ -1959,7 +1967,11 @@ class BulkVoterOverrideRequest(BaseModel):
     )
 
 
-@router.post("/{election_id}/voter-overrides/bulk", response_model=BulkVoterOverrideResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{election_id}/voter-overrides/bulk",
+    response_model=BulkVoterOverrideResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def bulk_add_voter_overrides(
     election_id: UUID,
     body: BulkVoterOverrideRequest,
@@ -2062,7 +2074,11 @@ async def bulk_add_voter_overrides(
 # ==================== Proxy Voting ====================
 
 
-@router.post("/{election_id}/proxy-authorizations", response_model=ProxyAuthorizationResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{election_id}/proxy-authorizations",
+    response_model=ProxyAuthorizationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def add_proxy_authorization(
     election_id: UUID,
     body: ProxyAuthorizationCreate,

@@ -31,8 +31,8 @@ const AllEntriesTab: React.FC = () => {
   // Fetch entries when filters or page change
   useEffect(() => {
     void fetchAllEntries({
-      status: allStatusFilter ?? undefined,
-      categoryId: allCategoryFilter ?? undefined,
+      status: allStatusFilter || undefined,
+      categoryId: allCategoryFilter || undefined,
       skip: allPage * DEFAULT_PAGE_SIZE,
       limit: DEFAULT_PAGE_SIZE,
     });
@@ -40,8 +40,8 @@ const AllEntriesTab: React.FC = () => {
 
   const handleExportCSV = () => {
     const url = adminHoursEntryService.getExportUrl({
-      status: allStatusFilter ?? undefined,
-      categoryId: allCategoryFilter ?? undefined,
+      status: allStatusFilter || undefined,
+      categoryId: allCategoryFilter || undefined,
     });
     // Fetch with httpOnly cookie auth (credentials: 'include')
     const a = document.createElement('a');

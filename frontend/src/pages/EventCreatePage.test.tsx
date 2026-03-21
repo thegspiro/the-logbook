@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import EventCreatePage from './EventCreatePage';
@@ -95,12 +95,10 @@ describe('EventCreatePage', () => {
       await user.type(screen.getByLabelText(/title/i), 'New Event');
 
       const startInput = screen.getByLabelText(/start date & time/i);
-      await user.clear(startInput);
-      await user.type(startInput, '2026-04-01T18:00');
+      fireEvent.change(startInput, { target: { value: '2026-04-01' } });
 
       const endInput = screen.getByLabelText(/end date & time/i);
-      await user.clear(endInput);
-      await user.type(endInput, '2026-04-01T20:00');
+      fireEvent.change(endInput, { target: { value: '2026-04-02' } });
 
       // Submit
       await user.click(screen.getByRole('button', { name: /create event/i }));
@@ -122,12 +120,10 @@ describe('EventCreatePage', () => {
       await user.type(screen.getByLabelText(/title/i), 'Duplicate Event');
 
       const startInput = screen.getByLabelText(/start date & time/i);
-      await user.clear(startInput);
-      await user.type(startInput, '2026-04-01T18:00');
+      fireEvent.change(startInput, { target: { value: '2026-04-01' } });
 
       const endInput = screen.getByLabelText(/end date & time/i);
-      await user.clear(endInput);
-      await user.type(endInput, '2026-04-01T20:00');
+      fireEvent.change(endInput, { target: { value: '2026-04-02' } });
 
       // Submit
       await user.click(screen.getByRole('button', { name: /create event/i }));

@@ -1095,7 +1095,7 @@ export const ActiveSkillTestPage: React.FC = () => {
   if (testLoading || !currentTest) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-red-500" />
+        <div role="status" className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-red-500" />
       </div>
     );
   }

@@ -218,7 +218,12 @@ async def get_my_notifications(
         skip=pagination.skip,
         limit=pagination.limit,
     )
-    return {"logs": logs, "total": total, "skip": pagination.skip, "limit": pagination.limit}
+    return {
+        "logs": logs,
+        "total": total,
+        "skip": pagination.skip,
+        "limit": pagination.limit,
+    }
 
 
 @router.get("/my/unread-count")

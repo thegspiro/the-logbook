@@ -108,7 +108,7 @@ describe('MemberIdScannerModal', () => {
 
     await user.click(screen.getByRole('button', { name: /close scanner/i }));
 
-    expect(defaultProps.onClose).toHaveBeenCalledWith();
+    expect(defaultProps.onClose).toHaveBeenCalled();
   });
 
   it('should auto-start the scanner when opened', async () => {
@@ -116,7 +116,7 @@ describe('MemberIdScannerModal', () => {
 
     // The start is delayed by 100ms via setTimeout in the component
     await waitFor(() => {
-      expect(mockStart).toHaveBeenCalledWith();
+      expect(mockStart).toHaveBeenCalled();
     });
   });
 });

@@ -390,9 +390,7 @@ class ReportsService:
         if end_date:
             events_query = events_query.where(
                 Event.start_datetime
-                <= datetime.combine(
-                    end_date, datetime.max.time(), tzinfo=timezone.utc
-                )
+                <= datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc)
             )
 
         events_query = events_query.order_by(Event.start_datetime.desc())
@@ -1697,9 +1695,7 @@ class ReportsService:
         if end_date:
             prospect_conditions.append(
                 ProspectiveMember.created_at
-                <= datetime.combine(
-                    end_date, datetime.max.time(), tzinfo=timezone.utc
-                )
+                <= datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc)
             )
 
         prospects_query = select(ProspectiveMember).where(*prospect_conditions)
@@ -1762,22 +1758,20 @@ class ReportsService:
         groups_data = []
 
         for group in stage_groups:
-            group_name = group.get("name", "Unnamed Group") if isinstance(
-                group, dict
-            ) else group.name
-            group_step_ids = (
-                group.get("step_ids", [])
+            group_name = (
+                group.get("name", "Unnamed Group")
                 if isinstance(group, dict)
-                else group.step_ids
+                else group.name
+            )
+            group_step_ids = (
+                group.get("step_ids", []) if isinstance(group, dict) else group.step_ids
             )
             grouped_step_ids.update(group_step_ids)
 
             # Count prospects currently in any of the group's steps
             group_count = 0
             for p in prospects:
-                status_val = (
-                    p.status.value if hasattr(p.status, "value") else p.status
-                )
+                status_val = p.status.value if hasattr(p.status, "value") else p.status
                 if status_val == "active" and p.current_step_id in group_step_ids:
                     group_count += 1
 
@@ -1799,9 +1793,7 @@ class ReportsService:
                         ):
                             last_completion = prog["completed_at"]
                 if first_entry and last_completion:
-                    days_in_group_list.append(
-                        (last_completion - first_entry).days
-                    )
+                    days_in_group_list.append((last_completion - first_entry).days)
 
             avg_days_in_group = (
                 round(sum(days_in_group_list) / len(days_in_group_list), 1)
@@ -1842,17 +1834,11 @@ class ReportsService:
                 count = sum(
                     1
                     for p in prospects
-                    if (
-                        p.status.value
-                        if hasattr(p.status, "value")
-                        else p.status
-                    )
+                    if (p.status.value if hasattr(p.status, "value") else p.status)
                     == "active"
                     and p.current_step_id == sid
                 )
-                stage_breakdown.append(
-                    {"stage_name": step_name, "count": count}
-                )
+                stage_breakdown.append({"stage_name": step_name, "count": count})
 
             groups_data.append(
                 {
@@ -1870,11 +1856,7 @@ class ReportsService:
                 count = sum(
                     1
                     for p in prospects
-                    if (
-                        p.status.value
-                        if hasattr(p.status, "value")
-                        else p.status
-                    )
+                    if (p.status.value if hasattr(p.status, "value") else p.status)
                     == "active"
                     and p.current_step_id == step.id
                 )
@@ -1887,9 +1869,7 @@ class ReportsService:
                             (prog["completed_at"] - prog["created_at"]).days
                         )
                 avg_step_days = (
-                    round(sum(days_list) / len(days_list), 1)
-                    if days_list
-                    else 0
+                    round(sum(days_list) / len(days_list), 1) if days_list else 0
                 )
 
                 # Completion rate
@@ -1900,15 +1880,9 @@ class ReportsService:
                     == StepProgressStatus.COMPLETED.value
                 )
                 reached = sum(
-                    1
-                    for p in prospects
-                    if f"{p.id}:{step.id}" in progress_map
+                    1 for p in prospects if f"{p.id}:{step.id}" in progress_map
                 )
-                rate = (
-                    round(completed / reached * 100, 1)
-                    if reached > 0
-                    else 0
-                )
+                rate = round(completed / reached * 100, 1) if reached > 0 else 0
 
                 groups_data.append(
                     {
@@ -1916,18 +1890,14 @@ class ReportsService:
                         "prospect_count": count,
                         "avg_days_in_group": avg_step_days,
                         "completion_rate": rate,
-                        "stages": [
-                            {"stage_name": step.name, "count": count}
-                        ],
+                        "stages": [{"stage_name": step.name, "count": count}],
                     }
                 )
 
         # Per-prospect detail rows
         prospect_rows = []
         for p in prospects:
-            status_val = (
-                p.status.value if hasattr(p.status, "value") else p.status
-            )
+            status_val = p.status.value if hasattr(p.status, "value") else p.status
             current_step = step_map.get(p.current_step_id)
             current_step_name = current_step.name if current_step else "—"
 
@@ -1941,17 +1911,15 @@ class ReportsService:
                         else group.step_ids
                     )
                     g_name = (
-                        group.get("name", "")
-                        if isinstance(group, dict)
-                        else group.name
+                        group.get("name", "") if isinstance(group, dict) else group.name
                     )
                     if p.current_step_id in g_step_ids:
                         current_group = g_name
                         break
 
             days_in_pipeline = (
-                datetime.now(timezone.utc) - p.created_at
-            ).days if p.created_at else 0
+                (datetime.now(timezone.utc) - p.created_at).days if p.created_at else 0
+            )
 
             prospect_rows.append(
                 {

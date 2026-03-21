@@ -792,7 +792,7 @@ const ForecastSection: React.FC = () => {
 // ============================================
 
 const LoadingSpinner: React.FC = () => (
-  <div className="flex justify-center items-center h-64">
+  <div role="status" className="flex justify-center items-center h-64">
     <Loader2 className="h-8 w-8 text-theme-text-muted animate-spin" />
   </div>
 );

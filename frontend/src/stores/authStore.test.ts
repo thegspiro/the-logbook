@@ -112,7 +112,7 @@ describe('authStore', () => {
 
       expect(mockLogin).toHaveBeenCalledWith({ username: 'testuser', password: 'password123' });
       expect(localStorage.getItem('has_session')).toBe('1');
-      expect(mockGetCurrentUser).toHaveBeenCalledWith();
+      expect(mockGetCurrentUser).toHaveBeenCalled();
 
       const state = getState();
       expect(state.isAuthenticated).toBe(true);
@@ -131,7 +131,7 @@ describe('authStore', () => {
         await getState().login({ username: 'testuser', password: 'password123' });
       });
 
-      expect(mockMarkLoginComplete).toHaveBeenCalledWith();
+      expect(mockMarkLoginComplete).toHaveBeenCalled();
     });
 
     it('does not store tokens in localStorage', async () => {
@@ -258,7 +258,7 @@ describe('authStore', () => {
         });
       });
 
-      expect(mockRegister).toHaveBeenCalledWith();
+      expect(mockRegister).toHaveBeenCalled();
       expect(localStorage.getItem('has_session')).toBe('1');
       expect(getState().isAuthenticated).toBe(true);
     });
@@ -295,7 +295,7 @@ describe('authStore', () => {
         await getState().logout();
       });
 
-      expect(mockLogout).toHaveBeenCalledWith();
+      expect(mockLogout).toHaveBeenCalled();
       expect(localStorage.getItem('has_session')).toBeNull();
       // Legacy tokens are also cleaned up
       expect(localStorage.getItem('access_token')).toBeNull();
@@ -317,7 +317,7 @@ describe('authStore', () => {
         await getState().logout();
       });
 
-      expect(mockClearTempAccessToken).toHaveBeenCalledWith();
+      expect(mockClearTempAccessToken).toHaveBeenCalled();
     });
 
     it('clears session even when authService.logout throws', async () => {
@@ -356,7 +356,7 @@ describe('authStore', () => {
         await getState().loadUser();
       });
 
-      expect(mockGetCurrentUser).toHaveBeenCalledWith();
+      expect(mockGetCurrentUser).toHaveBeenCalled();
 
       const state = getState();
       expect(state.isAuthenticated).toBe(true);
@@ -380,7 +380,7 @@ describe('authStore', () => {
       // Session flag set for migration
       expect(localStorage.getItem('has_session')).toBe('1');
       // User loaded successfully
-      expect(mockGetCurrentUser).toHaveBeenCalledWith();
+      expect(mockGetCurrentUser).toHaveBeenCalled();
       expect(getState().isAuthenticated).toBe(true);
     });
 

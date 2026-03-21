@@ -131,7 +131,8 @@ class ElectionBase(BaseModel):
         default=None, description="Optional link to a formal meeting record"
     )
     event_id: Optional[UUID] = Field(
-        default=None, description="Optional link to a calendar event (e.g. business meeting)"
+        default=None,
+        description="Optional link to a calendar event (e.g. business meeting)",
     )
     attendees: Optional[List[Dict[str, Any]]] = Field(
         default=None, description="Meeting attendees checked in for voting"

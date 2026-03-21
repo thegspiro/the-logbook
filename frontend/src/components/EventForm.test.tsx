@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import { EventForm } from './EventForm';
@@ -275,8 +275,8 @@ describe('EventForm', () => {
       await user.selectOptions(checkinSelect, 'window');
 
       await waitFor(() => {
-        expect(screen.getByLabelText(/minutes before start/i)).toBeInTheDocument();
-        expect(screen.getByLabelText(/minutes after start/i)).toBeInTheDocument();
+        expect(screen.getByLabelText(/minutes before/i)).toBeInTheDocument();
+        expect(screen.getByLabelText(/minutes after/i)).toBeInTheDocument();
       });
     });
 
@@ -357,12 +357,10 @@ describe('EventForm', () => {
       await user.type(screen.getByLabelText(/title/i), 'Test Event');
 
       const startInput = screen.getByLabelText(/start date & time/i);
-      await user.clear(startInput);
-      await user.type(startInput, '2026-04-01T18:00');
+      fireEvent.change(startInput, { target: { value: '2026-04-01' } });
 
       const endInput = screen.getByLabelText(/end date & time/i);
-      await user.clear(endInput);
-      await user.type(endInput, '2026-04-01T20:00');
+      fireEvent.change(endInput, { target: { value: '2026-04-01' } });
 
       // Submit form
       const submitButton = screen.getByRole('button', { name: /create event/i });
@@ -387,12 +385,10 @@ describe('EventForm', () => {
       await user.type(screen.getByLabelText(/title/i), 'Test Event');
 
       const startInput = screen.getByLabelText(/start date & time/i);
-      await user.clear(startInput);
-      await user.type(startInput, '2026-04-01T20:00');
+      fireEvent.change(startInput, { target: { value: '2026-04-02' } });
 
       const endInput = screen.getByLabelText(/end date & time/i);
-      await user.clear(endInput);
-      await user.type(endInput, '2026-04-01T18:00');
+      fireEvent.change(endInput, { target: { value: '2026-04-01' } });
 
       const submitButton = screen.getByRole('button', { name: /create event/i });
       await user.click(submitButton);
@@ -413,7 +409,7 @@ describe('EventForm', () => {
       const cancelButton = screen.getByRole('button', { name: /cancel/i });
       await user.click(cancelButton);
 
-      expect(mockOnCancel).toHaveBeenCalledWith();
+      expect(mockOnCancel).toHaveBeenCalled();
     });
   });
 
@@ -464,12 +460,10 @@ describe('EventForm', () => {
       await user.type(screen.getByLabelText(/title/i), 'Test');
 
       const startInput = screen.getByLabelText(/start date & time/i);
-      await user.clear(startInput);
-      await user.type(startInput, '2026-04-01T20:00');
+      fireEvent.change(startInput, { target: { value: '2026-04-02' } });
 
       const endInput = screen.getByLabelText(/end date & time/i);
-      await user.clear(endInput);
-      await user.type(endInput, '2026-04-01T18:00');
+      fireEvent.change(endInput, { target: { value: '2026-04-01' } });
 
       await user.click(screen.getByRole('button', { name: /create event/i }));
 

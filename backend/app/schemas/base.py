@@ -32,7 +32,5 @@ class UTCResponseBase(BaseModel):
         for name in self.model_fields:
             val = getattr(self, name)
             if isinstance(val, datetime) and val.tzinfo is None:
-                object.__setattr__(
-                    self, name, val.replace(tzinfo=timezone.utc)
-                )
+                object.__setattr__(self, name, val.replace(tzinfo=timezone.utc))
         return self

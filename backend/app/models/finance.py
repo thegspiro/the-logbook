@@ -27,7 +27,6 @@ from sqlalchemy.orm import relationship
 from app.core.database import Base
 from app.core.utils import generate_uuid
 
-
 # ============================================
 # Enums
 # ============================================
@@ -273,9 +272,7 @@ class BudgetCategory(Base):
         back_populates="parent",
     )
 
-    __table_args__ = (
-        Index("ix_budget_categories_org_id", "organization_id"),
-    )
+    __table_args__ = (Index("ix_budget_categories_org_id", "organization_id"),)
 
 
 class Budget(Base):
@@ -384,9 +381,7 @@ class ApprovalChain(Base):
 
     # Relationships
     organization = relationship("Organization", foreign_keys=[organization_id])
-    budget_category = relationship(
-        "BudgetCategory", foreign_keys=[budget_category_id]
-    )
+    budget_category = relationship("BudgetCategory", foreign_keys=[budget_category_id])
     creator = relationship("User", foreign_keys=[created_by])
     steps = relationship(
         "ApprovalChainStep",
@@ -449,13 +444,9 @@ class ApprovalChainStep(Base):
 
     # Relationships
     chain = relationship("ApprovalChain", back_populates="steps")
-    email_template = relationship(
-        "EmailTemplate", foreign_keys=[email_template_id]
-    )
+    email_template = relationship("EmailTemplate", foreign_keys=[email_template_id])
 
-    __table_args__ = (
-        Index("ix_approval_chain_steps_chain", "chain_id", "step_order"),
-    )
+    __table_args__ = (Index("ix_approval_chain_steps_chain", "chain_id", "step_order"),)
 
 
 class ApprovalStepRecord(Base):
@@ -548,9 +539,7 @@ class PurchaseRequest(Base):
         ForeignKey("budgets.id", ondelete="SET NULL"),
         nullable=True,
     )
-    requested_by = Column(
-        String(36), ForeignKey("users.id"), nullable=False
-    )
+    requested_by = Column(String(36), ForeignKey("users.id"), nullable=False)
     title = Column(String(300), nullable=False)
     description = Column(Text, nullable=True)
     vendor = Column(String(300), nullable=True)
@@ -645,9 +634,7 @@ class ExpenseReport(Base):
         nullable=False,
     )
     report_number = Column(String(20), nullable=False, unique=True)
-    submitted_by = Column(
-        String(36), ForeignKey("users.id"), nullable=False
-    )
+    submitted_by = Column(String(36), ForeignKey("users.id"), nullable=False)
     fiscal_year_id = Column(
         String(36),
         ForeignKey("fiscal_years.id", ondelete="CASCADE"),
@@ -739,14 +726,10 @@ class ExpenseLineItem(Base):
     )
 
     # Relationships
-    expense_report = relationship(
-        "ExpenseReport", back_populates="line_items"
-    )
+    expense_report = relationship("ExpenseReport", back_populates="line_items")
     budget = relationship("Budget", foreign_keys=[budget_id])
 
-    __table_args__ = (
-        Index("ix_expense_line_items_report", "expense_report_id"),
-    )
+    __table_args__ = (Index("ix_expense_line_items_report", "expense_report_id"),)
 
 
 class CheckRequest(Base):
@@ -761,9 +744,7 @@ class CheckRequest(Base):
         nullable=False,
     )
     request_number = Column(String(20), nullable=False, unique=True)
-    requested_by = Column(
-        String(36), ForeignKey("users.id"), nullable=False
-    )
+    requested_by = Column(String(36), ForeignKey("users.id"), nullable=False)
     fiscal_year_id = Column(
         String(36),
         ForeignKey("fiscal_years.id", ondelete="CASCADE"),
@@ -881,9 +862,7 @@ class DuesSchedule(Base):
         cascade="all, delete-orphan",
     )
 
-    __table_args__ = (
-        Index("ix_dues_schedules_org_id", "organization_id"),
-    )
+    __table_args__ = (Index("ix_dues_schedules_org_id", "organization_id"),)
 
 
 class MemberDues(Base):
@@ -990,9 +969,7 @@ class ExportMapping(Base):
     # Relationships
     organization = relationship("Organization", foreign_keys=[organization_id])
 
-    __table_args__ = (
-        Index("ix_export_mappings_org_id", "organization_id"),
-    )
+    __table_args__ = (Index("ix_export_mappings_org_id", "organization_id"),)
 
 
 class ExportLog(Base):
@@ -1017,9 +994,7 @@ class ExportLog(Base):
         ),
         nullable=False,
     )
-    exported_by = Column(
-        String(36), ForeignKey("users.id"), nullable=False
-    )
+    exported_by = Column(String(36), ForeignKey("users.id"), nullable=False)
     exported_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -1028,6 +1003,4 @@ class ExportLog(Base):
     organization = relationship("Organization", foreign_keys=[organization_id])
     exporter = relationship("User", foreign_keys=[exported_by])
 
-    __table_args__ = (
-        Index("ix_export_logs_org_id", "organization_id"),
-    )
+    __table_args__ = (Index("ix_export_logs_org_id", "organization_id"),)

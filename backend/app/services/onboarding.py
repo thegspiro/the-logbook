@@ -224,9 +224,7 @@ class OnboardingService:
 
         # Check SECRET_KEY
         _insecure = ("INSECURE_DEFAULT", "CHANGE_ME", "change_me")
-        if not settings.SECRET_KEY or any(
-            p in settings.SECRET_KEY for p in _insecure
-        ):
+        if not settings.SECRET_KEY or any(p in settings.SECRET_KEY for p in _insecure):
             issues.append(
                 {
                     "field": "SECRET_KEY",

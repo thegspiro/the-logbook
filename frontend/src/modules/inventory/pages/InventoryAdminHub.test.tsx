@@ -116,10 +116,11 @@ describe('InventoryAdminHub', () => {
     await waitFor(() => {
       expect(screen.getByText('Total Items')).toBeInTheDocument();
     });
-    const itemsLink = screen.getByRole('link', { name: /Items/ });
-    expect(itemsLink).toHaveAttribute('href', '/inventory/admin/items');
-    const poolLink = screen.getByRole('link', { name: /Pool Items/ });
-    expect(poolLink).toHaveAttribute('href', '/inventory/admin/pool');
+    const allLinks = screen.getAllByRole('link');
+    const itemsLink = allLinks.find((l) => l.getAttribute('href') === '/inventory/admin/items');
+    expect(itemsLink).toBeDefined();
+    const poolLink = allLinks.find((l) => l.getAttribute('href') === '/inventory/admin/pool');
+    expect(poolLink).toBeDefined();
   });
 
   it('refreshes summary when refresh button is clicked', async () => {

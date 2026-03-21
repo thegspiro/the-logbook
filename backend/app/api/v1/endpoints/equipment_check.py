@@ -106,9 +106,7 @@ async def get_template(
 ):
     """Get a specific template with all compartments and items."""
     service = EquipmentCheckService(db)
-    template = await service.get_template(
-        template_id, current_user.organization_id
-    )
+    template = await service.get_template(template_id, current_user.organization_id)
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
     return template
@@ -144,9 +142,7 @@ async def delete_template(
 ):
     """Delete a template and all its compartments/items."""
     service = EquipmentCheckService(db)
-    deleted = await service.delete_template(
-        template_id, current_user.organization_id
-    )
+    deleted = await service.delete_template(template_id, current_user.organization_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Template not found")
 
@@ -172,9 +168,7 @@ async def clone_template(
             str(current_user.id),
         )
         if not template:
-            raise HTTPException(
-                status_code=404, detail="Template not found"
-            )
+            raise HTTPException(status_code=404, detail="Template not found")
         return template
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -245,9 +239,7 @@ async def delete_compartment(
         raise HTTPException(status_code=404, detail="Compartment not found")
 
 
-@router.put(
-    "/templates/{template_id}/compartments/reorder", status_code=200
-)
+@router.put("/templates/{template_id}/compartments/reorder", status_code=200)
 async def reorder_compartments(
     template_id: str,
     data: ReorderRequest,
@@ -322,9 +314,7 @@ async def delete_item(
 ):
     """Delete a check template item."""
     service = EquipmentCheckService(db)
-    deleted = await service.delete_item(
-        item_id, current_user.organization_id
-    )
+    deleted = await service.delete_item(item_id, current_user.organization_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Item not found")
 
@@ -407,9 +397,7 @@ async def get_check(
 ):
     """Get a single completed equipment check with item details."""
     service = EquipmentCheckService(db)
-    check = await service.get_check(
-        check_id, current_user.organization_id
-    )
+    check = await service.get_check(check_id, current_user.organization_id)
     if not check:
         raise HTTPException(status_code=404, detail="Check not found")
     return check
@@ -508,21 +496,17 @@ async def upload_check_item_photos(
         select(ShiftEquipmentCheckItem)
         .join(
             ShiftEquipmentCheck,
-            ShiftEquipmentCheck.id
-            == ShiftEquipmentCheckItem.check_id,
+            ShiftEquipmentCheck.id == ShiftEquipmentCheckItem.check_id,
         )
         .where(
             ShiftEquipmentCheckItem.id == item_id,
             ShiftEquipmentCheckItem.check_id == check_id,
-            ShiftEquipmentCheck.organization_id
-            == current_user.organization_id,
+            ShiftEquipmentCheck.organization_id == current_user.organization_id,
         )
     )
     check_item = result.scalars().first()
     if not check_item:
-        raise HTTPException(
-            status_code=404, detail="Check item not found"
-        )
+        raise HTTPException(status_code=404, detail="Check item not found")
 
     existing_urls: list = check_item.photo_urls or []
     if len(existing_urls) + len(files) > MAX_PHOTOS_PER_ITEM:
@@ -537,6 +521,7 @@ async def upload_check_item_photos(
     # Detect magic library availability once
     try:
         import magic
+
         has_magic = True
     except ImportError:
         has_magic = False
@@ -547,24 +532,17 @@ async def upload_check_item_photos(
         if len(contents) > MAX_PHOTO_SIZE:
             raise HTTPException(
                 status_code=400,
-                detail=(
-                    f"File {upload.filename} exceeds 5MB"
-                ),
+                detail=(f"File {upload.filename} exceeds 5MB"),
             )
 
         # MIME validation via magic bytes
         if has_magic:
-            detected_mime = magic.from_buffer(
-                contents, mime=True
-            )
+            detected_mime = magic.from_buffer(contents, mime=True)
         elif contents[:8] == b"\x89PNG\r\n\x1a\n":
             detected_mime = "image/png"
         elif contents[:2] == b"\xff\xd8":
             detected_mime = "image/jpeg"
-        elif (
-            contents[:4] == b"RIFF"
-            and contents[8:12] == b"WEBP"
-        ):
+        elif contents[:4] == b"RIFF" and contents[8:12] == b"WEBP":
             detected_mime = "image/webp"
         else:
             detected_mime = "unknown"
@@ -586,10 +564,7 @@ async def upload_check_item_photos(
             quality=80,
             output_format="WEBP",
         )
-        data_uri = (
-            f"data:image/webp;base64,"
-            f"{base64.b64encode(optimized).decode()}"
-        )
+        data_uri = f"data:image/webp;base64," f"{base64.b64encode(optimized).decode()}"
         new_urls.append(data_uri)
 
     # Shallow copy suffices — strings are immutable
@@ -617,9 +592,7 @@ async def get_compliance_report(
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("equipment_check.view")
-    ),
+    current_user: User = Depends(require_permission("equipment_check.view")),
 ):
     """Aggregated compliance stats by apparatus + date range."""
     service = EquipmentCheckService(db)
@@ -642,9 +615,7 @@ async def get_failure_log(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("equipment_check.view")
-    ),
+    current_user: User = Depends(require_permission("equipment_check.view")),
 ):
     """Paginated failure log with filters."""
     service = EquipmentCheckService(db)
@@ -669,9 +640,7 @@ async def get_item_trends(
     date_to: date | None = Query(None),
     interval: str = Query("weekly"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("equipment_check.view")
-    ),
+    current_user: User = Depends(require_permission("equipment_check.view")),
 ):
     """Per-item pass/fail trend over time."""
     service = EquipmentCheckService(db)
@@ -692,9 +661,7 @@ async def export_csv(
     apparatus_id: str | None = Query(None),
     template_item_id: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("equipment_check.view")
-    ),
+    current_user: User = Depends(require_permission("equipment_check.view")),
 ):
     """Export report data as CSV."""
     import csv
@@ -770,10 +737,7 @@ async def export_csv(
                 ]
             )
 
-    elif (
-        report_type == "item-trends"
-        and template_item_id
-    ):
+    elif report_type == "item-trends" and template_item_id:
         data = await service.get_item_trends(
             current_user.organization_id,
             template_item_id=template_item_id,
@@ -808,11 +772,7 @@ async def export_csv(
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={
-            "Content-Disposition": (
-                f"attachment; filename={filename}"
-            )
-        },
+        headers={"Content-Disposition": (f"attachment; filename={filename}")},
     )
 
 
@@ -824,9 +784,7 @@ async def export_pdf(
     apparatus_id: str | None = Query(None),
     check_id: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("equipment_check.view")
-    ),
+    current_user: User = Depends(require_permission("equipment_check.view")),
 ):
     """Export report data as PDF."""
     from starlette.responses import Response
@@ -870,9 +828,7 @@ async def export_pdf(
         filename = "equipment_check_failures.pdf"
 
     elif report_type == "check-detail" and check_id:
-        check = await service.get_check(
-            check_id, current_user.organization_id
-        )
+        check = await service.get_check(check_id, current_user.organization_id)
         if not check:
             raise HTTPException(
                 status_code=404,
@@ -882,11 +838,7 @@ async def export_pdf(
         check_dict = {
             "overall_status": check.overall_status,
             "checked_by_name": None,
-            "checked_at": (
-                check.checked_at.isoformat()
-                if check.checked_at
-                else ""
-            ),
+            "checked_at": (check.checked_at.isoformat() if check.checked_at else ""),
             "check_timing": check.check_timing,
             "total_items": check.total_items,
             "completed_items": check.completed_items,
@@ -908,17 +860,13 @@ async def export_pdf(
             from app.models.user import User as UserModel
 
             u_result = await db.execute(
-                select(UserModel).where(
-                    UserModel.id == str(check.checked_by)
-                )
+                select(UserModel).where(UserModel.id == str(check.checked_by))
             )
             u = u_result.scalar_one_or_none()
             if u:
                 first = u.first_name or ""
                 last = u.last_name or ""
-                check_dict["checked_by_name"] = (
-                    f"{first} {last}".strip() or "Unknown"
-                )
+                check_dict["checked_by_name"] = f"{first} {last}".strip() or "Unknown"
         pdf_bytes = generate_check_detail_pdf(check_dict)
         filename = f"equipment_check_{check_id[:8]}.pdf"
 
@@ -931,9 +879,5 @@ async def export_pdf(
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": (
-                f"attachment; filename={filename}"
-            )
-        },
+        headers={"Content-Disposition": (f"attachment; filename={filename}")},
     )

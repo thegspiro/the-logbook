@@ -21,7 +21,6 @@ from app.models.training import (
 )
 from app.models.user import Organization, User
 
-
 # Mapping from training program target_position values to the shift
 # position they unlock upon completion.
 TRAINING_POSITION_MAP = {
@@ -119,9 +118,7 @@ class ShiftEligibilityService:
         eligible: Set[str] = set()
 
         # 3a: Rank-based
-        rank_positions = await self._get_rank_positions(
-            user.rank, organization_id
-        )
+        rank_positions = await self._get_rank_positions(user.rank, organization_id)
         eligible.update(rank_positions)
 
         # 3b: Training-completion-based
@@ -145,9 +142,7 @@ class ShiftEligibilityService:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    async def _get_shift(
-        self, shift_id: str, organization_id: str
-    ) -> Optional[Shift]:
+    async def _get_shift(self, shift_id: str, organization_id: str) -> Optional[Shift]:
         result = await self.db.execute(
             select(Shift).where(
                 Shift.id == shift_id,

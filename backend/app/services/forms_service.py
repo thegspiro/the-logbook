@@ -1274,9 +1274,7 @@ class FormsService:
         # Auto-advance pipeline steps linked to this form
         await self._auto_advance_pipeline_step(form)
 
-    async def _auto_advance_pipeline_step(
-        self, form: Form
-    ) -> None:
+    async def _auto_advance_pipeline_step(self, form: Form) -> None:
         """Auto-complete pipeline steps linked to this form.
 
         When a form_submission pipeline step has ``auto_advance``
@@ -1326,10 +1324,8 @@ class FormsService:
                 # Find prospects on this step
                 prospect_result = await self.db.execute(
                     select(ProspectiveMember).where(
-                        ProspectiveMember.current_step_id
-                        == step.id,
-                        ProspectiveMember.status
-                        == ProspectStatus.ACTIVE,
+                        ProspectiveMember.current_step_id == step.id,
+                        ProspectiveMember.status == ProspectStatus.ACTIVE,
                     )
                 )
                 prospects = prospect_result.scalars().all()
@@ -1337,9 +1333,7 @@ class FormsService:
                     try:
                         await pipeline_svc.complete_step(
                             prospect_id=str(prospect.id),
-                            organization_id=str(
-                                prospect.organization_id
-                            ),
+                            organization_id=str(prospect.organization_id),
                             step_id=str(step.id),
                             completed_by="system",
                             notes="Auto-advanced on form submission",
@@ -1356,13 +1350,10 @@ class FormsService:
                         )
                     except Exception as e:
                         logger.error(
-                            f"Failed to auto-advance "
-                            f"prospect {prospect.id}: {e}"
+                            f"Failed to auto-advance " f"prospect {prospect.id}: {e}"
                         )
         except Exception as e:
-            logger.error(
-                f"Pipeline auto-advance check failed: {e}"
-            )
+            logger.error(f"Pipeline auto-advance check failed: {e}")
 
     def _apply_label_fallback(
         self,

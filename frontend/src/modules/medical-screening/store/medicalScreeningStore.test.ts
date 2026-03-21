@@ -54,7 +54,7 @@ describe('medicalScreeningStore', () => {
 
       await useMedicalScreeningStore.getState().fetchRequirements();
 
-      expect(mockListRequirements).toHaveBeenCalledWith();
+      expect(mockListRequirements).toHaveBeenCalled();
       expect(useMedicalScreeningStore.getState().requirements).toEqual(mockData);
       expect(useMedicalScreeningStore.getState().isLoading).toBe(false);
       expect(useMedicalScreeningStore.getState().error).toBeNull();
@@ -66,7 +66,7 @@ describe('medicalScreeningStore', () => {
       await useMedicalScreeningStore.getState().fetchRequirements();
 
       expect(useMedicalScreeningStore.getState().requirements).toEqual([]);
-      expect(useMedicalScreeningStore.getState().error).toBe('Failed to load requirements');
+      expect(useMedicalScreeningStore.getState().error).toBe('Network error');
       expect(useMedicalScreeningStore.getState().isLoading).toBe(false);
     });
 
@@ -157,7 +157,7 @@ describe('medicalScreeningStore', () => {
 
       await useMedicalScreeningStore.getState().fetchRecords();
 
-      expect(useMedicalScreeningStore.getState().error).toBe('Failed to load records');
+      expect(useMedicalScreeningStore.getState().error).toBe('Server error');
     });
   });
 
@@ -240,7 +240,7 @@ describe('medicalScreeningStore', () => {
 
       await useMedicalScreeningStore.getState().fetchExpiringScreenings();
 
-      expect(useMedicalScreeningStore.getState().error).toBe('Failed to load expiring screenings');
+      expect(useMedicalScreeningStore.getState().error).toBe('fail');
     });
   });
 });

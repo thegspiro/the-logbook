@@ -295,19 +295,13 @@ class TrainingSessionService:
                 event_id=event.id,
                 course_id=course_id,
                 category_id=(
-                    str(session_data.category_id)
-                    if session_data.category_id
-                    else None
+                    str(session_data.category_id) if session_data.category_id else None
                 ),
                 program_id=(
-                    str(session_data.program_id)
-                    if session_data.program_id
-                    else None
+                    str(session_data.program_id) if session_data.program_id else None
                 ),
                 phase_id=(
-                    str(session_data.phase_id)
-                    if session_data.phase_id
-                    else None
+                    str(session_data.phase_id) if session_data.phase_id else None
                 ),
                 requirement_id=(
                     str(session_data.requirement_id)
@@ -552,9 +546,7 @@ class TrainingSessionService:
             from app.models.user import Organization
 
             org_result = await self.db.execute(
-                select(Organization).where(
-                    Organization.id == str(organization_id)
-                )
+                select(Organization).where(Organization.id == str(organization_id))
             )
             org = org_result.scalar_one_or_none()
 

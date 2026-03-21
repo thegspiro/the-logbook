@@ -576,9 +576,7 @@ async def export_report(
         if data.format == "pdf":
             if data.report_type == "individual":
                 if not data.user_id:
-                    raise ValueError(
-                        "user_id is required for individual reports"
-                    )
+                    raise ValueError("user_id is required for individual reports")
                 pdf_buf = await service.generate_individual_pdf(
                     str(data.user_id),
                     current_user.organization_id,
@@ -595,9 +593,7 @@ async def export_report(
             return StreamingResponse(
                 pdf_buf,
                 media_type="application/pdf",
-                headers={
-                    "Content-Disposition": f"attachment; filename={filename}"
-                },
+                headers={"Content-Disposition": f"attachment; filename={filename}"},
             )
 
         # CSV format (default)

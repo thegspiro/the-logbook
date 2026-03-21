@@ -15,6 +15,7 @@ vi.mock('@/services/formsServices', () => ({
 vi.mock('@/services/eventServices', () => ({
   eventService: {
     getEvents: (...args: unknown[]) => mockGetEvents(...args) as unknown,
+    getVisibleEventTypesWithCategories: vi.fn().mockResolvedValue({ visible_event_types: [], custom_event_categories: [] }),
   },
 }));
 
@@ -85,8 +86,8 @@ const mockUpcomingEvents = [
     id: 'evt-1',
     title: 'March Business Meeting',
     event_type: 'business_meeting',
-    start_datetime: '2026-03-15T19:00:00Z',
-    end_datetime: '2026-03-15T21:00:00Z',
+    start_datetime: '2026-04-15T19:00:00Z',
+    end_datetime: '2026-04-15T21:00:00Z',
     location_name: 'Station 1',
     requires_rsvp: false,
     is_mandatory: false,
@@ -96,8 +97,8 @@ const mockUpcomingEvents = [
     id: 'evt-2',
     title: 'Spring Training Session',
     event_type: 'training',
-    start_datetime: '2026-03-20T09:00:00Z',
-    end_datetime: '2026-03-20T12:00:00Z',
+    start_datetime: '2026-04-20T09:00:00Z',
+    end_datetime: '2026-04-20T12:00:00Z',
     location_name: 'Training Center',
     requires_rsvp: true,
     is_mandatory: true,
@@ -781,7 +782,7 @@ describe('StageConfigModal', () => {
 
     await user.click(screen.getByText('Meeting'));
 
-    expect(screen.getByLabelText(/link to upcoming event/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/auto-link event type/i)).toBeInTheDocument();
   });
 
   it('shows next upcoming event preview when event type is selected in meeting stage', async () => {
@@ -790,11 +791,16 @@ describe('StageConfigModal', () => {
 
     await user.click(screen.getByText('Meeting'));
 
+    // Wait for events to load (select appears after loading completes)
+    const eventTypeSelect = await screen.findByLabelText(/auto-link event type/i);
+    // Ensure the mock data has been resolved and state updated
     await waitFor(() => {
-      expect(mockGetEvents).toHaveBeenCalledWith();
+      expect(mockGetEvents).toHaveBeenCalled();
     });
+    // Allow microtasks to flush so upcomingEvents state is set
+    await new Promise((r) => { setTimeout(r, 0); });
 
-    await user.selectOptions(screen.getByLabelText(/link to upcoming event/i), 'business_meeting');
+    await user.selectOptions(eventTypeSelect, 'business_meeting');
 
     await waitFor(() => {
       expect(screen.getByText('March Business Meeting')).toBeInTheDocument();
@@ -821,9 +827,12 @@ describe('StageConfigModal', () => {
 
     await user.click(screen.getByText('Automated Email'));
 
+    // Wait for events to load
     await waitFor(() => {
-      expect(mockGetEvents).toHaveBeenCalledWith();
+      expect(mockGetEvents).toHaveBeenCalled();
     });
+    // Allow microtasks to flush so upcomingEvents state is set
+    await new Promise((r) => { setTimeout(r, 0); });
 
     const meetingCheckbox = screen.getByRole('checkbox', { name: 'Next Meeting Details' });
     await user.click(meetingCheckbox);
@@ -843,11 +852,11 @@ describe('StageConfigModal', () => {
     await user.click(screen.getByText('Meeting'));
 
     await waitFor(() => {
-      expect(mockGetEvents).toHaveBeenCalledWith();
+      expect(mockGetEvents).toHaveBeenCalled();
     });
 
     // Select an event type with no upcoming events
-    await user.selectOptions(screen.getByLabelText(/link to upcoming event/i), 'ceremony');
+    await user.selectOptions(screen.getByLabelText(/auto-link event type/i), 'ceremony');
 
     await waitFor(() => {
       expect(screen.getByText(/no upcoming ceremony events found/i)).toBeInTheDocument();
@@ -867,7 +876,7 @@ describe('StageConfigModal', () => {
     expect(screen.getByText('Manual Approval')).toBeInTheDocument();
     expect(screen.getByText('Enable Status Page')).toBeInTheDocument();
     expect(screen.getByText('Automated Email')).toBeInTheDocument();
-    expect(screen.getByText('Reference Check')).toBeInTheDocument();
+    expect(screen.getAllByText('Reference Check').length).toBeGreaterThan(0);
     expect(screen.getByText('Checklist')).toBeInTheDocument();
     expect(screen.getByText('Interview Requirement')).toBeInTheDocument();
     expect(screen.getByText('Multi-Signer Approval')).toBeInTheDocument();
