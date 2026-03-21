@@ -53,6 +53,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const { user, checkPermission } = useAuthStore();
   const tz = useTimezone();
   const canManage = checkPermission('scheduling.manage');
+  const canAssign = checkPermission('scheduling.assign');
   const { apparatus: apparatusList, loadApparatus } = useSchedulingStore();
 
   const [shift, setShift] = useState(initialShift);
@@ -466,7 +467,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
             <p className="text-sm font-medium text-theme-text-primary truncate">
               {assignment.user_name || 'Unknown'} {isCurrentUser && <span className="text-xs text-violet-500">(You)</span>}
             </p>
-            {canManage && !isPast && editingPositionId === assignment.id ? (
+            {canAssign && !isPast && editingPositionId === assignment.id ? (
               <select
                 value={assignment.position}
                 onChange={e => { void handlePositionChange(assignment.id, e.target.value, assignment.position); }}
@@ -482,13 +483,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
             ) : (
               <button
                 type="button"
-                className={`text-xs capitalize ${canManage && !isPast ? 'text-theme-text-muted hover:text-violet-500 transition-colors inline-flex items-center gap-0.5' : 'text-theme-text-muted'}`}
-                onClick={canManage && !isPast ? () => setEditingPositionId(assignment.id) : undefined}
-                disabled={!canManage || isPast}
-                title={canManage && !isPast ? 'Click to change position' : undefined}
+                className={`text-xs capitalize ${canAssign && !isPast ? 'text-theme-text-muted hover:text-violet-500 transition-colors inline-flex items-center gap-0.5' : 'text-theme-text-muted'}`}
+                onClick={canAssign && !isPast ? () => setEditingPositionId(assignment.id) : undefined}
+                disabled={!canAssign || isPast}
+                title={canAssign && !isPast ? 'Click to change position' : undefined}
               >
                 {POSITION_LABELS[assignment.position] || assignment.position}
-                {canManage && !isPast && <Pencil className="w-2.5 h-2.5 ml-0.5 opacity-50" />}
+                {canAssign && !isPast && <Pencil className="w-2.5 h-2.5 ml-0.5 opacity-50" />}
               </button>
             )}
           </div>
@@ -522,7 +523,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               >No</button>
             </div>
           )}
-          {canManage && !isCurrentUser && confirmingRemove !== assignment.id && (
+          {canAssign && !isCurrentUser && confirmingRemove !== assignment.id && (
             <button onClick={() => setConfirmingRemove(assignment.id)}
               className="p-1.5 text-theme-text-muted hover:text-red-500 rounded-sm transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Remove assignment"
             >
@@ -540,7 +541,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               >No</button>
             </div>
           )}
-          {canManage && !isPast && editingNotesId !== assignment.id && (
+          {canAssign && !isPast && editingNotesId !== assignment.id && (
             <button
               onClick={() => { setEditingNotesId(assignment.id); setEditingNotesValue(assignment.notes || ''); }}
               className={`p-1.5 rounded-sm transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center ${assignment.notes ? 'text-violet-500 hover:bg-violet-500/10' : 'text-theme-text-muted hover:text-violet-500 hover:bg-violet-500/10'}`}
@@ -823,7 +824,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                               {assignment.user_name || 'Unknown'}
                               {assignment.user_id === user?.id && <span className="text-xs text-violet-500 ml-1">(You)</span>}
                             </p>
-                            {canManage && !isPast && editingPositionId === assignment.id ? (
+                            {canAssign && !isPast && editingPositionId === assignment.id ? (
                               <select
                                 value={assignment.position}
                                 onChange={e => { void handlePositionChange(assignment.id, e.target.value, assignment.position); }}
@@ -839,13 +840,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                             ) : (
                               <button
                                 type="button"
-                                className={`text-xs capitalize ${canManage && !isPast ? 'text-theme-text-muted hover:text-violet-500 transition-colors inline-flex items-center gap-0.5' : 'text-theme-text-muted'}`}
-                                onClick={canManage && !isPast ? () => setEditingPositionId(assignment.id) : undefined}
-                                disabled={!canManage || isPast}
-                                title={canManage && !isPast ? 'Click to change position' : undefined}
+                                className={`text-xs capitalize ${canAssign && !isPast ? 'text-theme-text-muted hover:text-violet-500 transition-colors inline-flex items-center gap-0.5' : 'text-theme-text-muted'}`}
+                                onClick={canAssign && !isPast ? () => setEditingPositionId(assignment.id) : undefined}
+                                disabled={!canAssign || isPast}
+                                title={canAssign && !isPast ? 'Click to change position' : undefined}
                               >
                                 {POSITION_LABELS[position] || position}
-                                {canManage && !isPast && <Pencil className="w-2.5 h-2.5 ml-0.5 opacity-50" />}
+                                {canAssign && !isPast && <Pencil className="w-2.5 h-2.5 ml-0.5 opacity-50" />}
                               </button>
                             )}
                           </div>
@@ -896,7 +897,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                               >No</button>
                             </div>
                           )}
-                          {canManage && assignment.user_id !== user?.id && confirmingRemove !== assignment.id && (
+                          {canAssign && assignment.user_id !== user?.id && confirmingRemove !== assignment.id && (
                             <button onClick={() => setConfirmingRemove(assignment.id)}
                               className="p-1.5 text-theme-text-muted hover:text-red-500 rounded-sm transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Remove assignment"
                             >
@@ -951,7 +952,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                 <h3 className="text-base font-semibold text-theme-text-primary flex items-center gap-2">
                   <Users className="w-4 h-4" /> Crew Roster
                 </h3>
-                {canManage && !isPast && (
+                {canAssign && !isPast && (
                   <button onClick={() => setShowAssignForm(!showAssignForm)}
                     className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 rounded-lg transition-colors"
                   >
@@ -969,7 +970,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                   <Users className="w-8 h-8 text-theme-text-muted mx-auto mb-2" />
                   <p className="text-sm text-theme-text-muted">No crew assigned yet</p>
                   <p className="text-xs text-theme-text-muted mt-1">
-                    {canManage ? 'Use the Assign button above to add members.' : 'Sign up below to join this shift.'}
+                    {canAssign ? 'Use the Assign button above to add members.' : 'Sign up below to join this shift.'}
                   </p>
                 </div>
               ) : (
@@ -981,7 +982,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           )}
 
           {/* Admin Assign Form — with member search dropdown */}
-          {(showAssignForm || (hasApparatusPositions && canManage && !isPast)) && canManage && (
+          {(showAssignForm || (hasApparatusPositions && canAssign && !isPast)) && canAssign && (
             <>
               {!showAssignForm && hasApparatusPositions && (
                 <button onClick={() => setShowAssignForm(true)}
@@ -1039,7 +1040,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           )}
 
           {/* Sign Up (for members not yet assigned — non-apparatus mode) */}
-          {!hasApparatusPositions && !isPast && !isUserAssigned && !canManage && (
+          {!hasApparatusPositions && !isPast && !isUserAssigned && (
             <div className="p-4 border border-dashed border-violet-500/30 rounded-lg bg-violet-500/5">
               <h3 className="text-sm font-semibold text-theme-text-primary mb-2 flex items-center gap-2">
                 <UserPlus className="w-4 h-4 text-violet-500" /> Sign Up for This Shift
@@ -1071,7 +1072,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           )}
 
           {/* Declined / Removed Members (admin visibility) */}
-          {canManage && inactiveAssignments.length > 0 && (
+          {canAssign && inactiveAssignments.length > 0 && (
             <div className="opacity-60">
               <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wide mb-2">
                 Declined / Removed ({inactiveAssignments.length})

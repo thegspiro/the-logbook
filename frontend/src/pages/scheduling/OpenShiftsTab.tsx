@@ -25,7 +25,8 @@ interface OpenShiftsTabProps {
 }
 
 export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => {
-  const { user } = useAuthStore();
+  const { user, checkPermission } = useAuthStore();
+  const canAssign = checkPermission('scheduling.assign');
   const tz = useTimezone();
 
   const [shifts, setShifts] = useState<ShiftRecord[]>([]);
@@ -77,19 +78,23 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
       toast.success('Signed up for shift — a manager will confirm your assignment');
       setSignupShiftId(null);
       void loadShifts();
-    } catch {
-      // Fallback: try direct assignment
-      try {
-        await schedulingService.createAssignment(shiftId, {
-          user_id: user?.id ?? '',
-          position: signupPosition,
-        });
-        toast.success('Signed up for shift — a manager will confirm your assignment');
-        setSignupShiftId(null);
-        void loadShifts();
-      } catch (err) {
-        toast.error(getErrorMessage(err, 'Failed to sign up for shift'));
+    } catch (signupErr) {
+      if (canAssign) {
+        // Fallback: try direct assignment for users with assign permission
+        try {
+          await schedulingService.createAssignment(shiftId, {
+            user_id: user?.id ?? '',
+            position: signupPosition,
+          });
+          toast.success('Signed up for shift — a manager will confirm your assignment');
+          setSignupShiftId(null);
+          void loadShifts();
+          return;
+        } catch {
+          // Both paths failed — fall through to show original error
+        }
       }
+      toast.error(getErrorMessage(signupErr, 'Failed to sign up for shift'));
     } finally {
       setSigningUp(false);
     }
