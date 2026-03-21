@@ -125,22 +125,6 @@ export interface BasicApparatus {
   is_active: boolean;
 }
 
-/** A call/incident responded to during a shift. */
-export interface ShiftCall {
-  id: string;
-  shift_id: string;
-  incident_number?: string;
-  incident_type: string;
-  dispatched_at?: string;
-  on_scene_at?: string;
-  cleared_at?: string;
-  cancelled_en_route: boolean;
-  medical_refusal: boolean;
-  responding_members?: string[];
-  notes?: string;
-  created_at: string;
-}
-
 /** Shift completion report filed by an officer about a trainee. */
 export interface ShiftCompletionReport {
   id: string;
