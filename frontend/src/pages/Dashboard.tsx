@@ -29,6 +29,8 @@ import {
   UserPlus,
   Loader2,
   CreditCard,
+  X,
+  CheckCheck,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -429,6 +431,22 @@ const Dashboard: React.FC = () => {
     } catch {
       toast.error("Failed to mark notification as read");
     }
+  };
+
+  const markAllNotificationsRead = async () => {
+    try {
+      await notificationsService.markAllMyNotificationsRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      setUnreadCount(0);
+      toast.success("All notifications marked as read");
+    } catch {
+      toast.error("Failed to clear notifications");
+    }
+  };
+
+  const clearNotification = async (e: React.MouseEvent, logId: string) => {
+    e.stopPropagation();
+    await markNotificationRead(logId);
   };
 
   const formatShiftDate = (dateStr: string) => {
@@ -914,13 +932,25 @@ const Dashboard: React.FC = () => {
                   </span>
                 )}
               </h3>
-              <button
-                onClick={() => navigate("/notifications")}
-                className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1"
-              >
-                <span>View All</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
+              <div className="flex items-center space-x-2">
+                {unreadCount > 0 && (
+                  <button
+                    onClick={() => void markAllNotificationsRead()}
+                    className="text-theme-text-muted hover:text-theme-text-primary text-xs flex items-center space-x-1 transition-colors"
+                    title="Mark all as read"
+                  >
+                    <CheckCheck className="w-3.5 h-3.5" />
+                    <span>Clear All</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => navigate("/notifications")}
+                  className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1"
+                >
+                  <span>View All</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {loadingNotifications ? (
@@ -970,9 +1000,17 @@ const Dashboard: React.FC = () => {
                         >
                           {formatRelativeTime(notification.sent_at)}
                         </span>
-                        {notification.action_url && (
+                        {!notification.read ? (
+                          <button
+                            onClick={(e) => void clearNotification(e, notification.id)}
+                            className="ml-1.5 p-0.5 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+                            title="Dismiss"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        ) : notification.action_url ? (
                           <ChevronRight className="w-3.5 h-3.5 text-theme-text-muted ml-1 hidden sm:block" />
-                        )}
+                        ) : null}
                       </div>
                     </div>
                   </button>

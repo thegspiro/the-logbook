@@ -235,6 +235,20 @@ async def get_my_unread_count(
     return {"unread_count": count}
 
 
+@router.post("/my/read-all")
+async def mark_all_my_notifications_read(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Mark all of the current user's unread in-app notifications as read."""
+    service = NotificationsService(db)
+    count = await service.mark_all_user_notifications_read(
+        organization_id=current_user.organization_id,
+        user_id=current_user.id,
+    )
+    return {"marked_read": count}
+
+
 @router.post("/my/{log_id}/read", response_model=NotificationLogResponse)
 async def mark_my_notification_read(
     log_id: UUID,

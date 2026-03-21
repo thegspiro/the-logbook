@@ -250,6 +250,28 @@ class NotificationsService:
         )
         return result.scalar() or 0
 
+    async def mark_all_user_notifications_read(
+        self, organization_id: UUID, user_id: UUID
+    ) -> int:
+        """Mark all unread in-app notifications as read for a user.
+
+        Returns the number of notifications marked as read.
+        """
+        now = datetime.now(timezone.utc)
+        result = await self.db.execute(
+            select(NotificationLog)
+            .where(NotificationLog.organization_id == str(organization_id))
+            .where(NotificationLog.recipient_id == str(user_id))
+            .where(NotificationLog.channel == NotificationChannel.IN_APP)
+            .where(NotificationLog.read == False)  # noqa: E712
+        )
+        logs = list(result.scalars().all())
+        for log in logs:
+            log.read = True
+            log.read_at = now
+        await self.db.commit()
+        return len(logs)
+
     async def mark_as_read(
         self, log_id: UUID, organization_id: UUID
     ) -> Tuple[Optional[NotificationLog], Optional[str]]:
