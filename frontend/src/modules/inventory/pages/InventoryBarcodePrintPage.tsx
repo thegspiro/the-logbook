@@ -32,6 +32,8 @@ interface LabelPreset {
   height: string;
   barcodeHeight: number;
   barcodeWidth: number;
+  /** Font size for the human-readable text beneath the barcode (px) */
+  barcodeFontSize: number;
   nameFontSize: string;
   subtitleFontSize: string;
   padding: string;
@@ -49,7 +51,7 @@ const LABEL_PRESETS: LabelPreset[] = [
     name: 'Dymo 30252',
     description: '1.125" x 3.5" — Standard address label',
     width: '3.5in', height: '1.125in',
-    barcodeHeight: 40, barcodeWidth: 1.5,
+    barcodeHeight: 40, barcodeWidth: 1.5, barcodeFontSize: 10,
     nameFontSize: '9pt', subtitleFontSize: '7pt',
     padding: '0.06in 0.1in',
     pageWidth: '3.5in', pageHeight: '1.125in', columns: 1,
@@ -59,7 +61,7 @@ const LABEL_PRESETS: LabelPreset[] = [
     name: 'Dymo 30256',
     description: '2.3125" x 4" — Shipping label',
     width: '4in', height: '2.3125in',
-    barcodeHeight: 50, barcodeWidth: 1.8,
+    barcodeHeight: 50, barcodeWidth: 1.8, barcodeFontSize: 14,
     nameFontSize: '11pt', subtitleFontSize: '8pt',
     padding: '0.08in 0.12in',
     pageWidth: '4in', pageHeight: '2.3125in', columns: 1,
@@ -69,7 +71,7 @@ const LABEL_PRESETS: LabelPreset[] = [
     name: 'Dymo 30334',
     description: '2.25" x 1.25" — Multi-purpose label',
     width: '2.25in', height: '1.25in',
-    barcodeHeight: 35, barcodeWidth: 1.1,
+    barcodeHeight: 35, barcodeWidth: 1.1, barcodeFontSize: 9,
     nameFontSize: '8pt', subtitleFontSize: '6.5pt',
     padding: '0.05in 0.08in',
     pageWidth: '2.25in', pageHeight: '1.25in', columns: 1,
@@ -79,7 +81,7 @@ const LABEL_PRESETS: LabelPreset[] = [
     name: 'Dymo 30336',
     description: '1" x 2.125" — Small multipurpose label',
     width: '2.125in', height: '1in',
-    barcodeHeight: 30, barcodeWidth: 1,
+    barcodeHeight: 30, barcodeWidth: 1, barcodeFontSize: 8,
     nameFontSize: '7pt', subtitleFontSize: '6pt',
     padding: '0.04in 0.08in',
     pageWidth: '2.125in', pageHeight: '1in', columns: 1,
@@ -89,7 +91,7 @@ const LABEL_PRESETS: LabelPreset[] = [
     name: 'Rollo 4" x 6"',
     description: '4" x 6" — Shipping label',
     width: '4in', height: '6in',
-    barcodeHeight: 60, barcodeWidth: 2,
+    barcodeHeight: 60, barcodeWidth: 2, barcodeFontSize: 16,
     nameFontSize: '14pt', subtitleFontSize: '10pt',
     padding: '0.12in 0.2in',
     pageWidth: '4in', pageHeight: '6in', columns: 1,
@@ -99,7 +101,7 @@ const LABEL_PRESETS: LabelPreset[] = [
     name: 'Rollo / Thermal 2" x 1"',
     description: '2" x 1" — Small thermal label',
     width: '2in', height: '1in',
-    barcodeHeight: 32, barcodeWidth: 1,
+    barcodeHeight: 32, barcodeWidth: 1, barcodeFontSize: 8,
     nameFontSize: '7pt', subtitleFontSize: '6pt',
     padding: '0.04in 0.08in',
     pageWidth: '2in', pageHeight: '1in', columns: 1,
@@ -109,7 +111,7 @@ const LABEL_PRESETS: LabelPreset[] = [
     name: 'Thermal 1" x 1"',
     description: '1" x 1" — Square asset tag',
     width: '1in', height: '1in',
-    barcodeHeight: 24, barcodeWidth: 0.8,
+    barcodeHeight: 24, barcodeWidth: 0.8, barcodeFontSize: 6,
     nameFontSize: '6pt', subtitleFontSize: '5pt',
     padding: '0.03in',
     pageWidth: '1in', pageHeight: '1in', columns: 1,
@@ -119,7 +121,7 @@ const LABEL_PRESETS: LabelPreset[] = [
     name: 'Letter Paper (Grid)',
     description: '8.5" x 11" — 30 labels per page (Avery 5160)',
     width: '2.625in', height: '1in',
-    barcodeHeight: 35, barcodeWidth: 1.2,
+    barcodeHeight: 35, barcodeWidth: 1.2, barcodeFontSize: 8,
     nameFontSize: '8pt', subtitleFontSize: '6.5pt',
     padding: '0.05in 0.1in',
     pageWidth: '8.5in', pageHeight: '11in', columns: 3,
@@ -128,11 +130,18 @@ const LABEL_PRESETS: LabelPreset[] = [
 
 const DEFAULT_PRESET_ID = 'dymo_30252';
 
+/** Code128 supports ASCII 0-127. Strip anything outside that range. */
+function sanitizeForCode128(raw: string): string {
+  // eslint-disable-next-line no-control-regex
+  return raw.replace(/[^\x00-\x7F]/g, '');
+}
+
 /** Gets a printable barcode value for an item, using the same fallback chain as the backend */
 function getBarcodeValue(item: InventoryItem): string | null {
   const value = item.barcode || item.asset_tag || item.serial_number || item.id?.slice(0, 12);
   if (!value || value.trim().length === 0) return null;
-  return value.trim();
+  const sanitized = sanitizeForCode128(value.trim());
+  return sanitized.length > 0 ? sanitized : null;
 }
 
 // ── Single barcode label ────────────────────────────────────────
@@ -153,13 +162,19 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, onRendered })
       return;
     }
     try {
+      // ISO/IEC 15417 requires a quiet zone of at least 10x the module
+      // (bar) width on each side of a Code128 barcode for reliable scanning.
+      const quietZone = Math.ceil(preset.barcodeWidth * 10);
       JsBarcode(svgRef.current, barcodeValue, {
         format: 'CODE128',
         width: preset.barcodeWidth,
         height: preset.barcodeHeight,
         displayValue: true,
-        fontSize: 10,
-        margin: 0,
+        fontSize: preset.barcodeFontSize,
+        marginTop: 0,
+        marginBottom: 1,
+        marginLeft: quietZone,
+        marginRight: quietZone,
         textMargin: 1,
         font: 'monospace',
       });
@@ -544,6 +559,23 @@ const InventoryBarcodePrintPage: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* Print scaling warning — scaling barcodes makes them unscannable */}
+          <div className="mb-4 bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                Set scaling to 100% in the print dialog
+              </p>
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                Barcodes must print at exact size to scan correctly.
+                In the print dialog, set <strong>Scale</strong> to <strong>100%</strong> (or disable &quot;Fit to page&quot; / &quot;Shrink to fit&quot;).
+                Set margins to <strong>{isThermal ? 'None' : '0.5" top/bottom, 0.19" sides'}</strong> and
+                paper size to <strong>{preset.pageWidth} x {preset.pageHeight}</strong>.
+                For thermal printers, the <strong>PDF</strong> download often produces better results than browser printing.
+              </p>
+            </div>
+          </div>
 
           {/* Settings panel */}
           {showSettings && (

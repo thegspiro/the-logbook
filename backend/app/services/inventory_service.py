@@ -60,6 +60,17 @@ _FORCED_CONDITION: dict[ItemStatus, ItemCondition] = {
 # Statuses that require assigned_to_user_id to be set
 _REQUIRES_ASSIGNED_USER = {ItemStatus.ASSIGNED}
 
+# ISO/IEC 15417 minimum module (bar) width for Code128: 0.191 mm ≈ 0.0075 in.
+# At 203 DPI (standard thermal printers) this is ~1.5 dots — the minimum for
+# reliable scanning.  The scaling loops in label generators must not go below
+# this floor.
+_MIN_BAR_WIDTH_INCH = 0.0075
+
+
+def _sanitize_barcode_value(raw: str) -> str:
+    """Strip non-ASCII characters that Code128 cannot encode."""
+    return "".join(ch for ch in raw if ord(ch) < 128)
+
 
 class InventoryService:
     """Service for inventory management"""
@@ -2578,7 +2589,7 @@ class InventoryService:
         for item in items:
             if not item.barcode:
                 effective = item.asset_tag or item.serial_number or item.id[:12]
-                item.barcode = effective
+                item.barcode = _sanitize_barcode_value(effective)
                 auto_populated += 1
         if auto_populated > 0:
             await self.db.commit()
@@ -2640,7 +2651,7 @@ class InventoryService:
             x = margin_x + col * label_w
             y = page_h - margin_y - (row + 1) * label_h
 
-            barcode_value = (
+            barcode_value = _sanitize_barcode_value(
                 item.barcode or item.asset_tag or item.serial_number or item.id[:12]
             )
 
@@ -2661,13 +2672,15 @@ class InventoryService:
                 c.drawString(x + 6, y + label_h - 20, "  |  ".join(info_parts))
 
             # Barcode — fit within the 1" label height
+            # ISO/IEC 15417 quiet zone: leave space on each side of the barcode
+            quiet_zone = 10 * _MIN_BAR_WIDTH_INCH * inch
             bar_height = 0.35 * inch
             bar_width_unit = 0.008 * inch
             barcode_obj = code128.Code128(
                 barcode_value, barWidth=bar_width_unit, barHeight=bar_height
             )
-            max_barcode_width = label_w - 12
-            while barcode_obj.width > max_barcode_width and bar_width_unit > 0.005 * inch:
+            max_barcode_width = label_w - 12 - 2 * quiet_zone
+            while barcode_obj.width > max_barcode_width and bar_width_unit > _MIN_BAR_WIDTH_INCH * inch:
                 bar_width_unit -= 0.001 * inch
                 barcode_obj = code128.Code128(
                     barcode_value, barWidth=bar_width_unit, barHeight=bar_height
@@ -2710,9 +2723,13 @@ class InventoryService:
             if idx > 0:
                 c.showPage()
 
-            barcode_value = (
+            barcode_value = _sanitize_barcode_value(
                 item.barcode or item.asset_tag or item.serial_number or item.id[:12]
             )
+
+            # ISO/IEC 15417 quiet zone for Code128
+            quiet_zone = 10 * _MIN_BAR_WIDTH_INCH * inch
+            min_bar = _MIN_BAR_WIDTH_INCH * inch
 
             if is_landscape:
                 # Landscape: text on left, barcode on right or text top barcode bottom
@@ -2724,18 +2741,17 @@ class InventoryService:
                 info_font_size = max(4, name_font_size - 2)
                 barcode_text_size = max(4, info_font_size)
 
-                # Barcode sizing — fit within label
-                max_barcode_width = self_w * 0.85
+                # Barcode sizing — fit within label, reserving quiet zones
+                max_barcode_width = self_w * 0.85 - 2 * quiet_zone
                 bar_height = min(0.4 * inch, self_h * 0.4)
                 bar_width_unit = 0.01 * inch
 
                 barcode_obj = code128.Code128(
                     barcode_value, barWidth=bar_width_unit, barHeight=bar_height
                 )
-                # Scale down barWidth if barcode doesn't fit
                 while (
                     barcode_obj.width > max_barcode_width
-                    and bar_width_unit > 0.005 * inch
+                    and bar_width_unit > min_bar
                 ):
                     bar_width_unit -= 0.001 * inch
                     barcode_obj = code128.Code128(
@@ -2783,8 +2799,8 @@ class InventoryService:
                 info_font_size = max(5, name_font_size - 2)
                 barcode_text_size = max(5, info_font_size)
 
-                # Barcode sizing
-                max_barcode_width = self_w * 0.9
+                # Barcode sizing — reserve quiet zones
+                max_barcode_width = self_w * 0.9 - 2 * quiet_zone
                 bar_height = min(0.8 * inch, self_h * 0.3)
                 bar_width_unit = 0.012 * inch
 
@@ -2793,7 +2809,7 @@ class InventoryService:
                 )
                 while (
                     barcode_obj.width > max_barcode_width
-                    and bar_width_unit > 0.005 * inch
+                    and bar_width_unit > min_bar
                 ):
                     bar_width_unit -= 0.001 * inch
                     barcode_obj = code128.Code128(
