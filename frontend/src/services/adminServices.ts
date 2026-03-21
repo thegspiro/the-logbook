@@ -493,6 +493,7 @@ export interface DepartmentMessageRecord {
   target_member_ids?: string[];
   is_pinned: boolean;
   is_active: boolean;
+  is_persistent: boolean;
   requires_acknowledgment: boolean;
   posted_by?: string;
   expires_at?: string;
@@ -507,6 +508,7 @@ export interface InboxMessage {
   priority: 'normal' | 'important' | 'urgent';
   target_type: string;
   is_pinned: boolean;
+  is_persistent: boolean;
   requires_acknowledgment: boolean;
   posted_by?: string;
   author_name?: string;

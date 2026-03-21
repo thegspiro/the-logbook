@@ -266,6 +266,7 @@ class DepartmentMessage(Base):
     # Display
     is_pinned = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
+    is_persistent = Column(Boolean, default=False)
     requires_acknowledgment = Column(Boolean, default=False)
 
     # Lifecycle

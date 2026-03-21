@@ -44,6 +44,7 @@ class MessagingService:
         target_statuses: Optional[List[str]] = None,
         target_member_ids: Optional[List[str]] = None,
         is_pinned: bool = False,
+        is_persistent: bool = False,
         requires_acknowledgment: bool = False,
         expires_at: Optional[datetime] = None,
     ) -> Tuple[Optional[DepartmentMessage], Optional[str]]:
@@ -61,6 +62,7 @@ class MessagingService:
                 target_member_ids=target_member_ids,
                 is_pinned=is_pinned,
                 is_active=True,
+                is_persistent=is_persistent,
                 requires_acknowledgment=requires_acknowledgment,
                 posted_by=posted_by,
                 expires_at=expires_at,
@@ -138,6 +140,7 @@ class MessagingService:
                 "target_member_ids",
                 "is_pinned",
                 "is_active",
+                "is_persistent",
                 "requires_acknowledgment",
                 "expires_at",
             }
@@ -264,6 +267,7 @@ class MessagingService:
                         else str(msg.target_type)
                     ),
                     "is_pinned": msg.is_pinned,
+                    "is_persistent": msg.is_persistent,
                     "requires_acknowledgment": msg.requires_acknowledgment,
                     "posted_by": msg.posted_by,
                     "author_name": None,  # Filled below

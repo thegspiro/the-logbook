@@ -358,6 +358,7 @@ export const messagesService = {
     target_statuses?: string[];
     target_member_ids?: string[];
     is_pinned?: boolean;
+    is_persistent?: boolean;
     requires_acknowledgment?: boolean;
     expires_at?: string;
   }): Promise<DepartmentMessageRecord> {
