@@ -327,6 +327,7 @@ class EquipmentCheckService:
         )
         self.db.add(item)
         await self.db.commit()
+        await self.db.refresh(item)
         return item
 
     async def update_item(
@@ -345,6 +346,7 @@ class EquipmentCheckService:
                 setattr(item, key, value)
 
         await self.db.commit()
+        await self.db.refresh(item)
         return item
 
     async def delete_item(

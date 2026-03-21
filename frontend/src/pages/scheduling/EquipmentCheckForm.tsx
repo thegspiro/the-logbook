@@ -50,6 +50,7 @@ interface EquipmentCheckFormProps {
   template: EquipmentCheckTemplate;
   onComplete?: () => void;
   onBack?: () => void;
+  previewMode?: boolean;
 }
 
 interface ItemResult {
@@ -138,6 +139,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   template,
   onComplete,
   onBack,
+  previewMode,
 }) => {
   const [results, setResults] = useState<Record<string, ItemResult>>({});
   const [activeCompartment, setActiveCompartment] = useState<number | null>(
@@ -899,47 +901,49 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         })}
       </div>
 
-      {/* Overall notes + submit */}
-      <div className="space-y-3 pt-2">
-        <div>
-          <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-            Overall Notes
-          </label>
-          <textarea
-            rows={3}
-            className="w-full rounded-lg border border-theme-surface-border px-3 py-2 text-sm bg-theme-surface text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Any overall notes or observations..."
-            value={overallNotes}
-            onChange={(e) => setOverallNotes(e.target.value)}
-          />
-        </div>
+      {/* Overall notes + submit (hidden in preview mode) */}
+      {!previewMode && (
+        <div className="space-y-3 pt-2">
+          <div>
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+              Overall Notes
+            </label>
+            <textarea
+              rows={3}
+              className="w-full rounded-lg border border-theme-surface-border px-3 py-2 text-sm bg-theme-surface text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Any overall notes or observations..."
+              value={overallNotes}
+              onChange={(e) => setOverallNotes(e.target.value)}
+            />
+          </div>
 
-        <button
-          type="button"
-          onClick={() => void handleSubmit()}
-          disabled={submitting || !allRequiredChecked}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[52px]"
-        >
-          {submitting ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Submitting...
-            </>
-          ) : (
-            <>
-              <CheckCircle className="h-4 w-4" />
-              Submit Equipment Check
-            </>
+          <button
+            type="button"
+            onClick={() => void handleSubmit()}
+            disabled={submitting || !allRequiredChecked}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[52px]"
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Submitting...
+              </>
+            ) : (
+              <>
+                <CheckCircle className="h-4 w-4" />
+                Submit Equipment Check
+              </>
+            )}
+          </button>
+
+          {!allRequiredChecked && (
+            <p className="text-xs text-center text-theme-text-muted">
+              <AlertTriangle className="inline h-3 w-3 mr-1" />
+              All required items must be checked before submitting.
+            </p>
           )}
-        </button>
-
-        {!allRequiredChecked && (
-          <p className="text-xs text-center text-theme-text-muted">
-            <AlertTriangle className="inline h-3 w-3 mr-1" />
-            All required items must be checked before submitting.
-          </p>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 

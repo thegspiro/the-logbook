@@ -21,6 +21,8 @@ import {
   AlertTriangle,
   Loader2,
   Truck,
+  Eye,
+  X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -41,11 +43,13 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { schedulingService } from '@/modules/scheduling';
+import { EquipmentCheckForm } from '@/pages/scheduling/EquipmentCheckForm';
 import type {
   EquipmentCheckTemplate,
   EquipmentCheckTemplateCreate,
   CheckTemplateCompartmentCreate,
   CheckTemplateItemCreate,
+  CheckTemplateItem,
   CheckType,
   TemplateType,
 } from '@/modules/scheduling/types/equipmentCheck';
@@ -843,11 +847,17 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             })),
           })),
         };
-        await schedulingService.createEquipmentCheckTemplate(createPayload);
+        const created = await schedulingService.createEquipmentCheckTemplate(createPayload);
         toast.success('Template created');
+        // Navigate to edit mode so subsequent saves work as updates
+        navigate(`/scheduling/equipment-check-templates/${created.id}`, { replace: true });
+        return;
       }
 
-      navigate(-1);
+      // Re-fetch the template to sync local state with server
+      if (isEditing && templateId) {
+        void loadTemplate(templateId);
+      }
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to save template'));
     } finally {
@@ -860,6 +870,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   const [showPresetPicker, setShowPresetPicker] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   const loadVehiclePreset = (presetKey: string) => {
     const preset = VEHICLE_PRESETS[presetKey];
@@ -896,6 +907,54 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     setExpandedCompartments(expanded);
     toast.success(`Loaded ${preset.label} vehicle check preset`);
   };
+
+  // ---------------------------------------------------------------------------
+  // Preview: build a mock EquipmentCheckTemplate from current form state
+  // ---------------------------------------------------------------------------
+
+  const buildPreviewTemplate = useCallback((): EquipmentCheckTemplate => {
+    return {
+      id: templateId ?? 'preview',
+      organizationId: '',
+      name: form.name || 'Untitled Template',
+      ...(form.description ? { description: form.description } : {}),
+      checkTiming: form.checkTiming,
+      templateType: form.templateType,
+      ...(form.assignedPositions.length > 0 ? { assignedPositions: form.assignedPositions } : {}),
+      ...(form.apparatusType ? { apparatusType: form.apparatusType } : {}),
+      ...(form.apparatusId ? { apparatusId: form.apparatusId } : {}),
+      isActive: form.isActive,
+      sortOrder: 0,
+      compartments: compartments.map((c, cIdx) => ({
+        id: c.id ?? `preview-comp-${cIdx}`,
+        templateId: templateId ?? 'preview',
+        name: c.name || 'Untitled Compartment',
+        ...(c.description ? { description: c.description } : {}),
+        sortOrder: cIdx,
+        ...(c.imageUrl ? { imageUrl: c.imageUrl } : {}),
+        ...(c.parentCompartmentId ? { parentCompartmentId: c.parentCompartmentId } : {}),
+        items: c.items.map((item, iIdx): CheckTemplateItem => ({
+          id: item.id ?? `preview-item-${cIdx}-${iIdx}`,
+          compartmentId: c.id ?? `preview-comp-${cIdx}`,
+          name: item.name || 'Untitled Item',
+          ...(item.description ? { description: item.description } : {}),
+          sortOrder: iIdx,
+          checkType: item.checkType,
+          isRequired: item.isRequired,
+          ...(item.requiredQuantity ? { requiredQuantity: Number(item.requiredQuantity) } : {}),
+          ...(item.expectedQuantity ? { expectedQuantity: Number(item.expectedQuantity) } : {}),
+          ...(item.minLevel ? { minLevel: Number(item.minLevel) } : {}),
+          ...(item.levelUnit ? { levelUnit: item.levelUnit } : {}),
+          ...(item.serialNumber ? { serialNumber: item.serialNumber } : {}),
+          ...(item.lotNumber ? { lotNumber: item.lotNumber } : {}),
+          ...(item.imageUrl ? { imageUrl: item.imageUrl } : {}),
+          hasExpiration: item.hasExpiration,
+          ...(item.expirationDate ? { expirationDate: item.expirationDate } : {}),
+          expirationWarningDays: item.expirationWarningDays ? Number(item.expirationWarningDays) : 30,
+        })),
+      })),
+    };
+  }, [form, compartments, templateId]);
 
   // ---------------------------------------------------------------------------
   // Drag & Drop
@@ -1428,19 +1487,30 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             {isEditing ? `Edit: ${form.name || 'Template'}` : 'New Equipment Check Template'}
           </h1>
         </div>
-        <button
-          type="button"
-          onClick={() => void handleSave()}
-          disabled={saving}
-          className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
-        >
-          {saving ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="h-4 w-4" />
-          )}
-          {saving ? 'Saving...' : 'Save Template'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowPreview(true)}
+            disabled={compartments.length === 0}
+            className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-4 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary disabled:opacity-50 transition-colors"
+          >
+            <Eye className="h-4 w-4" />
+            Preview
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleSave()}
+            disabled={saving}
+            className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            {saving ? 'Saving...' : 'Save Template'}
+          </button>
+        </div>
       </div>
 
       {/* Template Metadata Card */}
@@ -1664,6 +1734,41 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           </SortableContext>
         </DndContext>
       </div>
+
+      {/* Preview Modal */}
+      {showPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="relative mx-4 flex max-h-[90vh] w-full max-w-lg flex-col rounded-xl bg-theme-surface shadow-xl">
+            {/* Modal header */}
+            <div className="flex items-center justify-between border-b border-theme-surface-border px-4 py-3">
+              <h2 className="text-lg font-semibold text-theme-text-primary">
+                Check Preview
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowPreview(false)}
+                className="rounded-lg p-1.5 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {/* Modal body — scrollable */}
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="mb-3 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
+                <p className="text-xs text-blue-700 dark:text-blue-400">
+                  This is a preview of how the check will appear to members during their shift.
+                  Inputs are interactive for demonstration but nothing will be submitted.
+                </p>
+              </div>
+              <EquipmentCheckForm
+                shiftId="preview"
+                template={buildPreviewTemplate()}
+                previewMode
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
