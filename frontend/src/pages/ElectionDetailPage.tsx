@@ -505,6 +505,43 @@ export const ElectionDetailPage: React.FC = () => {
   const isDraft = election.status === ElectionStatus.DRAFT;
   const isActiveOrCompleted = election.status === ElectionStatus.OPEN || election.status === ElectionStatus.CLOSED;
 
+  const getTimeRemaining = (): string | null => {
+    const now = new Date();
+    const end = new Date(election.end_date);
+    const diffMs = end.getTime() - now.getTime();
+    if (diffMs <= 0) return null;
+
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffDays > 0) {
+      return `${diffDays}d ${diffHours % 24}h remaining`;
+    }
+    if (diffHours > 0) {
+      const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+      return `${diffHours}h ${diffMinutes}m remaining`;
+    }
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    return `${diffMinutes}m remaining`;
+  };
+
+  const lifecycleSteps = [
+    { key: 'draft', label: 'Draft', description: 'Configure ballot & candidates' },
+    { key: 'open', label: 'Voting Open', description: 'Members can cast votes' },
+    { key: 'closed', label: 'Closed', description: 'Results finalized' },
+  ] as const;
+
+  const getStepStatus = (stepKey: string): 'completed' | 'current' | 'upcoming' => {
+    const order = ['draft', 'open', 'closed'];
+    const currentIdx = election.status === ElectionStatus.CANCELLED
+      ? -1
+      : order.indexOf(election.status);
+    const stepIdx = order.indexOf(stepKey);
+    if (stepIdx < currentIdx) return 'completed';
+    if (stepIdx === currentIdx) return 'current';
+    return 'upcoming';
+  };
+
   return (
     <div className="min-h-screen">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -546,6 +583,68 @@ export const ElectionDetailPage: React.FC = () => {
           </span>
         </div>
       </div>
+
+      {/* Election Lifecycle Stepper */}
+      {election.status !== ElectionStatus.CANCELLED && (
+        <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-4 mb-6">
+          <div className="flex items-center justify-between">
+            {lifecycleSteps.map((step, idx) => {
+              const status = getStepStatus(step.key);
+              return (
+                <React.Fragment key={step.key}>
+                  {idx > 0 && (
+                    <div className={`flex-1 h-0.5 mx-2 ${
+                      status === 'upcoming'
+                        ? 'bg-theme-surface-border'
+                        : 'bg-blue-500'
+                    }`} />
+                  )}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className={`flex items-center justify-center h-8 w-8 rounded-full text-sm font-semibold ${
+                      status === 'completed'
+                        ? 'bg-blue-600 text-white'
+                        : status === 'current'
+                          ? 'bg-blue-600 text-white ring-4 ring-blue-600/20'
+                          : 'bg-theme-surface-secondary text-theme-text-muted border border-theme-surface-border'
+                    }`}>
+                      {status === 'completed' ? (
+                        <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      ) : (
+                        idx + 1
+                      )}
+                    </div>
+                    <div className="hidden sm:block">
+                      <div className={`text-sm font-medium ${
+                        status === 'upcoming'
+                          ? 'text-theme-text-muted'
+                          : 'text-theme-text-primary'
+                      }`}>
+                        {step.label}
+                      </div>
+                      <div className="text-xs text-theme-text-muted">{step.description}</div>
+                    </div>
+                  </div>
+                </React.Fragment>
+              );
+            })}
+          </div>
+          {/* Time remaining for open elections */}
+          {election.status === ElectionStatus.OPEN && (
+            <div className="mt-3 pt-3 border-t border-theme-surface-border flex items-center justify-center gap-2 text-sm">
+              <svg className="h-4 w-4 text-theme-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {getTimeRemaining() ? (
+                <span className="font-medium text-green-700 dark:text-green-400">{getTimeRemaining()}</span>
+              ) : (
+                <span className="font-medium text-red-700 dark:text-red-400">Voting period has ended</span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Integrity Alert Banner */}
       {integrityResult && integrityResult.integrity_status !== 'PASS' && (
@@ -669,34 +768,92 @@ export const ElectionDetailPage: React.FC = () => {
 
         {/* Secretary Controls */}
         {canManage && (
-          <div className="mt-6 pt-6 border-t border-theme-surface-border">
-            <div className="flex flex-wrap gap-3">
-              {/* Preview Ballot */}
-              {election.ballot_items && election.ballot_items.length > 0 && (
-                <button
-                  onClick={() => { void handleOpenPreview(); }}
-                  disabled={loadingPreview}
-                  className="px-4 py-2 bg-cyan-600 text-white rounded-md hover:bg-cyan-700 disabled:opacity-50"
-                >
-                  {loadingPreview ? 'Loading Preview...' : 'Preview Ballot'}
-                </button>
-              )}
+          <div className="mt-6 pt-6 border-t border-theme-surface-border space-y-4">
+            {/* Lifecycle Actions */}
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-theme-text-muted mb-2">
+                Lifecycle
+              </h4>
+              <div className="flex flex-wrap gap-2">
+                {election.ballot_items && election.ballot_items.length > 0 && (
+                  <button
+                    onClick={() => { void handleOpenPreview(); }}
+                    disabled={loadingPreview}
+                    className="px-4 py-2 bg-cyan-600 text-white rounded-md hover:bg-cyan-700 disabled:opacity-50 text-sm"
+                  >
+                    {loadingPreview ? 'Loading Preview...' : 'Preview Ballot'}
+                  </button>
+                )}
 
-              {election.status === ElectionStatus.DRAFT && (
-                <button
-                  onClick={() => { void handleOpenElection(); }}
-                  className="btn-success rounded-md"
-                >
-                  Open Election
-                </button>
-              )}
+                {election.status === ElectionStatus.DRAFT && (
+                  <button
+                    onClick={() => { void handleOpenElection(); }}
+                    className="btn-success rounded-md text-sm"
+                  >
+                    Open Election
+                  </button>
+                )}
 
-              {election.status === ElectionStatus.OPEN && (
-                <>
+                {election.status === ElectionStatus.OPEN && (
+                  <>
+                    <button
+                      onClick={() => {
+                        setNewEndDate(formatForDateTimeInput(new Date(election.end_date), tz));
+                        setShowExtendModal(true);
+                      }}
+                      className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-sm"
+                    >
+                      Extend Time
+                    </button>
+                    <button
+                      onClick={() => { void handleCloseElection(); }}
+                      className="btn-primary rounded-md text-sm"
+                    >
+                      Close Election
+                    </button>
+                  </>
+                )}
+
+                {(election.status === ElectionStatus.OPEN || election.status === ElectionStatus.CLOSED) && (
+                  <button
+                    onClick={() => setShowRollbackModal(true)}
+                    className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 text-sm"
+                  >
+                    Rollback
+                  </button>
+                )}
+
+                {election.status !== ElectionStatus.OPEN && (
+                  <button
+                    onClick={() => { void handleToggleResultsVisibility(); }}
+                    disabled={updatingVisibility}
+                    className={`px-4 py-2 rounded-md text-sm ${
+                      election.results_visible_immediately
+                        ? 'btn-warning'
+                        : 'btn-info'
+                    } disabled:opacity-50`}
+                  >
+                    {updatingVisibility
+                      ? 'Updating...'
+                      : election.results_visible_immediately
+                      ? 'Hide Results'
+                      : 'Show Results'}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Communication Actions */}
+            {election.status === ElectionStatus.OPEN && (
+              <div>
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-theme-text-muted mb-2">
+                  Communication
+                </h4>
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={() => setShowSendEmailModal(true)}
                     disabled={!election.ballot_items || election.ballot_items.length === 0}
-                    className="btn-primary"
+                    className="btn-primary text-sm"
                     title={
                       !election.ballot_items || election.ballot_items.length === 0
                         ? 'Add ballot items before sending emails'
@@ -709,62 +866,33 @@ export const ElectionDetailPage: React.FC = () => {
                     <button
                       onClick={() => { void handleOpenRemindModal(); }}
                       disabled={isLoadingNonVoters}
-                      className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 disabled:opacity-50"
+                      className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 disabled:opacity-50 text-sm"
                     >
                       {isLoadingNonVoters ? 'Loading...' : 'Remind Non-Voters'}
                     </button>
                   )}
-                  <button
-                    onClick={() => {
-                      setNewEndDate(formatForDateTimeInput(new Date(election.end_date), tz));
-                      setShowExtendModal(true);
-                    }}
-                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
-                  >
-                    Extend Time
-                  </button>
-                  <button
-                    onClick={() => { void handleCloseElection(); }}
-                    className="btn-primary rounded-md"
-                  >
-                    Close Election
-                  </button>
-                </>
-              )}
+                  {election.email_sent && (
+                    <span className="inline-flex items-center text-xs text-theme-text-muted gap-1">
+                      <svg className="h-4 w-4 text-green-600" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                        <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+                        <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+                      </svg>
+                      Sent {election.email_sent_at ? formatDateTime(election.email_sent_at, tz) : 'N/A'}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
 
-              {(election.status === ElectionStatus.OPEN || election.status === ElectionStatus.CLOSED) && (
-                <button
-                  onClick={() => setShowRollbackModal(true)}
-                  className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700"
-                >
-                  Rollback Election
-                </button>
-              )}
-
-              {/* Results visibility toggle — blocked for open elections to prevent strategic voting */}
-              {election.status !== ElectionStatus.OPEN && (
-                <button
-                  onClick={() => { void handleToggleResultsVisibility(); }}
-                  disabled={updatingVisibility}
-                  className={`px-4 py-2 rounded-md ${
-                    election.results_visible_immediately
-                      ? 'btn-warning'
-                      : 'btn-info'
-                  } disabled:opacity-50`}
-                >
-                  {updatingVisibility
-                    ? 'Updating...'
-                    : election.results_visible_immediately
-                    ? 'Hide Results from Voters'
-                    : 'Show Results to Voters'}
-                </button>
-              )}
-
-              {/* Delete Election */}
-              {election.status !== ElectionStatus.CANCELLED && (
+            {/* Danger Zone */}
+            {election.status !== ElectionStatus.CANCELLED && (
+              <div>
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-red-500 dark:text-red-400 mb-2">
+                  Danger Zone
+                </h4>
                 <button
                   onClick={() => setShowDeleteModal(true)}
-                  className={`px-4 py-2 rounded-md ${
+                  className={`px-4 py-2 rounded-md text-sm ${
                     isDraft
                       ? 'bg-theme-surface-hover text-theme-text-primary hover:bg-theme-surface-secondary'
                       : 'bg-red-800 text-white hover:bg-red-900'
@@ -772,18 +900,8 @@ export const ElectionDetailPage: React.FC = () => {
                 >
                   Delete Election
                 </button>
-              )}
-
-              {election.email_sent && (
-                <div className="flex items-center text-sm text-theme-text-secondary">
-                  <svg className="h-5 w-5 mr-1 text-green-600" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                    <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
-                    <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
-                  </svg>
-                  Emails sent on {election.email_sent_at ? formatDateTime(election.email_sent_at, tz) : 'N/A'}
-                </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
       </div>
