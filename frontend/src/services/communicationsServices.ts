@@ -69,6 +69,11 @@ export const notificationsService = {
     const response = await api.post<NotificationLogRecord>(`/notifications/my/${logId}/read`);
     return response.data;
   },
+
+  async markAllMyNotificationsRead(): Promise<{ marked_read: number }> {
+    const response = await api.post<{ marked_read: number }>('/notifications/my/read-all');
+    return response.data;
+  },
 };
 
 export interface DashboardStats {
@@ -353,6 +358,7 @@ export const messagesService = {
     target_statuses?: string[];
     target_member_ids?: string[];
     is_pinned?: boolean;
+    is_persistent?: boolean;
     requires_acknowledgment?: boolean;
     expires_at?: string;
   }): Promise<DepartmentMessageRecord> {

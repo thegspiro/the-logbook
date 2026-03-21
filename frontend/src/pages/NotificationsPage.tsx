@@ -119,6 +119,7 @@ const NotificationsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'rules' | 'templates' | 'log'>('rules');
+  const [logChannelFilter, setLogChannelFilter] = useState<'all' | 'email' | 'in_app'>('all');
 
   // Create form states
   const [createName, setCreateName] = useState('');
@@ -252,9 +253,9 @@ const NotificationsPage: React.FC = () => {
               <Bell className="w-6 h-6 text-white" aria-hidden="true" />
             </div>
             <div>
-              <h1 className="text-theme-text-primary text-2xl font-bold">Email Notifications</h1>
+              <h1 className="text-theme-text-primary text-2xl font-bold">Notification Rules & Logs</h1>
               <p className="text-theme-text-muted text-sm">
-                Automated email notifications for events, reminders, and important updates
+                Manage automated notification rules and review send history across all channels
               </p>
             </div>
           </div>
@@ -293,8 +294,8 @@ const NotificationsPage: React.FC = () => {
             <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">{summary?.active_rules ?? rules.filter(r => r.enabled).length}</p>
           </div>
           <div className="card p-4">
-            <p className="text-theme-text-muted text-xs font-medium uppercase">Emails Sent (This Month)</p>
-            <p className="text-orange-700 dark:text-orange-400 text-2xl font-bold mt-1">{summary?.emails_sent_this_month ?? 0}</p>
+            <p className="text-theme-text-muted text-xs font-medium uppercase">Sent This Month</p>
+            <p className="text-orange-700 dark:text-orange-400 text-2xl font-bold mt-1">{(summary?.emails_sent_this_month ?? 0) + (summary?.notifications_sent_this_month ?? 0)}</p>
           </div>
         </div>
 
@@ -445,11 +446,29 @@ const NotificationsPage: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'log' && (
+        {activeTab === 'log' && (() => {
+          const filteredLogs = logChannelFilter === 'all'
+            ? logs
+            : logs.filter((l) => l.channel === logChannelFilter);
+          return (
           <>
-            {/* Batch management (#76) */}
-            {logs.some((l) => !l.read) && (
-              <div className="flex items-center justify-end mb-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-1 bg-theme-surface-secondary rounded-lg p-1">
+                {([['all', 'All'], ['email', 'Email'], ['in_app', 'In-App']] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    onClick={() => setLogChannelFilter(value)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                      logChannelFilter === value
+                        ? 'bg-orange-600 text-white'
+                        : 'text-theme-text-muted hover:text-theme-text-primary'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {filteredLogs.some((l) => !l.read) && (
                 <button
                   onClick={() => { void handleMarkAllRead(); }}
                   className="inline-flex items-center gap-2 px-3 py-1.5 text-sm text-theme-text-muted hover:text-theme-text-primary border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors"
@@ -457,14 +476,16 @@ const NotificationsPage: React.FC = () => {
                   <CheckCheck className="w-4 h-4" />
                   Mark all as read
                 </button>
-              </div>
-            )}
-            {logs.length === 0 ? (
+              )}
+            </div>
+            {filteredLogs.length === 0 ? (
               <div className="card p-12 text-center">
                 <Clock className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
-                <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Notifications Sent</h3>
+                <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Notifications Found</h3>
                 <p className="text-theme-text-secondary mb-6">
-                  The notification send log will show all sent emails with delivery status and timestamps.
+                  {logChannelFilter === 'all'
+                    ? 'The send log will show all sent notifications with delivery status and timestamps.'
+                    : `No ${logChannelFilter === 'email' ? 'email' : 'in-app'} notifications found.`}
                 </p>
               </div>
             ) : (
@@ -479,7 +500,7 @@ const NotificationsPage: React.FC = () => {
                     <div className="col-span-1">Status</div>
                   </div>
                   {/* Table Rows */}
-                  {logs.map((log) => (
+                  {filteredLogs.map((log) => (
                     <div
                       key={log.id}
                       className="grid grid-cols-12 gap-4 px-5 py-4 border-b border-theme-surface-border last:border-b-0 hover:bg-theme-surface-hover transition-colors"
@@ -528,7 +549,8 @@ const NotificationsPage: React.FC = () => {
               </div>
             )}
           </>
-        )}
+          );
+        })()}
 
         {/* Create Rule Modal */}
         {showCreateModal && (

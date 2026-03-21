@@ -29,6 +29,8 @@ import {
   UserPlus,
   Loader2,
   CreditCard,
+  X,
+  CheckCheck,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -88,6 +90,7 @@ const Dashboard: React.FC = () => {
 
   // Admin summary (only loaded for users with settings.manage)
   const isAdmin = checkPermission("settings.manage");
+  const canManageMessages = isAdmin || checkPermission("notifications.manage");
   const isInventoryAdmin =
     isAdmin || checkPermission("inventory.manage");
   const [adminSummary, setAdminSummary] = useState<AdminSummary | null>(null);
@@ -291,6 +294,16 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const clearPersistentMessage = async (msgId: string) => {
+    try {
+      await messagesService.updateMessage(msgId, { is_active: false });
+      setDeptMessages((prev) => prev.filter((m) => m.id !== msgId));
+      toast.success("Persistent message cleared");
+    } catch {
+      toast.error("Failed to clear message");
+    }
+  };
+
   const loadMyShifts = async () => {
     try {
       const today = getTodayLocalDate(tz);
@@ -429,6 +442,22 @@ const Dashboard: React.FC = () => {
     } catch {
       toast.error("Failed to mark notification as read");
     }
+  };
+
+  const markAllNotificationsRead = async () => {
+    try {
+      await notificationsService.markAllMyNotificationsRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      setUnreadCount(0);
+      toast.success("All notifications marked as read");
+    } catch {
+      toast.error("Failed to clear notifications");
+    }
+  };
+
+  const clearNotification = async (e: React.MouseEvent, logId: string) => {
+    e.stopPropagation();
+    await markNotificationRead(logId);
   };
 
   const formatShiftDate = (dateStr: string) => {
@@ -825,7 +854,8 @@ const Dashboard: React.FC = () => {
                       !msg.is_read ? "ring-1 ring-amber-400/30" : ""
                     }`}
                     onClick={() => {
-                      if (!msg.is_read) void markMessageRead(msg.id);
+                      if (!msg.is_read && !msg.is_persistent)
+                        void markMessageRead(msg.id);
                     }}
                   >
                     <div>
@@ -842,6 +872,12 @@ const Dashboard: React.FC = () => {
                               className={`text-[10px] px-1.5 py-0.5 rounded-sm font-medium uppercase ${priorityBadge[msg.priority]}`}
                             >
                               {msg.priority}
+                            </span>
+                          )}
+                          {msg.is_persistent && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-sm font-medium uppercase bg-theme-surface-hover text-theme-text-muted flex items-center gap-0.5">
+                              <Shield className="w-2.5 h-2.5" />
+                              Persistent
                             </span>
                           )}
                           {!msg.is_read && (
@@ -861,7 +897,7 @@ const Dashboard: React.FC = () => {
                             )}
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
-                            {!msg.is_read && (
+                            {!msg.is_read && !msg.is_persistent && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -871,6 +907,19 @@ const Dashboard: React.FC = () => {
                                 title="Mark as read"
                               >
                                 <Eye className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {msg.is_persistent && canManageMessages && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void clearPersistentMessage(msg.id);
+                                }}
+                                className="text-xs px-2 py-1 text-theme-text-muted hover:text-red-400 hover:bg-red-500/10 rounded-sm flex items-center gap-1 transition-colors"
+                                title="Clear persistent message"
+                              >
+                                <X className="w-3 h-3" />
+                                Clear
                               </button>
                             )}
                             {msg.requires_acknowledgment &&
@@ -914,13 +963,25 @@ const Dashboard: React.FC = () => {
                   </span>
                 )}
               </h3>
-              <button
-                onClick={() => navigate("/notifications")}
-                className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1"
-              >
-                <span>View All</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
+              <div className="flex items-center space-x-2">
+                {unreadCount > 0 && (
+                  <button
+                    onClick={() => void markAllNotificationsRead()}
+                    className="text-theme-text-muted hover:text-theme-text-primary text-xs flex items-center space-x-1 transition-colors"
+                    title="Mark all as read"
+                  >
+                    <CheckCheck className="w-3.5 h-3.5" />
+                    <span>Clear All</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => navigate("/notifications")}
+                  className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1"
+                >
+                  <span>View All</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {loadingNotifications ? (
@@ -970,9 +1031,17 @@ const Dashboard: React.FC = () => {
                         >
                           {formatRelativeTime(notification.sent_at)}
                         </span>
-                        {notification.action_url && (
+                        {!notification.read ? (
+                          <button
+                            onClick={(e) => void clearNotification(e, notification.id)}
+                            className="ml-1.5 p-0.5 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+                            title="Dismiss"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        ) : notification.action_url ? (
                           <ChevronRight className="w-3.5 h-3.5 text-theme-text-muted ml-1 hidden sm:block" />
-                        )}
+                        ) : null}
                       </div>
                     </div>
                   </button>

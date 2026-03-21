@@ -34,6 +34,7 @@ class MessageCreate(BaseModel):
     target_statuses: list[str] | None = None
     target_member_ids: list[str] | None = None
     is_pinned: bool = False
+    is_persistent: bool = False
     requires_acknowledgment: bool = False
     expires_at: datetime | None = None
 
@@ -48,6 +49,7 @@ class MessageUpdate(BaseModel):
     target_member_ids: list[str] | None = None
     is_pinned: bool | None = None
     is_active: bool | None = None
+    is_persistent: bool | None = None
     requires_acknowledgment: bool | None = None
     expires_at: datetime | None = None
 
@@ -64,6 +66,7 @@ class MessageResponse(BaseModel):
     target_member_ids: list[str] | None = None
     is_pinned: bool
     is_active: bool
+    is_persistent: bool
     requires_acknowledgment: bool
     posted_by: str | None = None
     expires_at: str | None = None
@@ -81,6 +84,7 @@ class InboxMessage(BaseModel):
     priority: str
     target_type: str
     is_pinned: bool
+    is_persistent: bool
     requires_acknowledgment: bool
     posted_by: str | None = None
     author_name: str | None = None
@@ -123,6 +127,7 @@ def _serialize_message(msg) -> dict:
         "target_member_ids": msg.target_member_ids,
         "is_pinned": msg.is_pinned,
         "is_active": msg.is_active,
+        "is_persistent": msg.is_persistent,
         "requires_acknowledgment": msg.requires_acknowledgment,
         "posted_by": msg.posted_by,
         "expires_at": msg.expires_at.isoformat() if msg.expires_at else None,
@@ -176,6 +181,7 @@ async def create_message(
         target_statuses=data.target_statuses,
         target_member_ids=data.target_member_ids,
         is_pinned=data.is_pinned,
+        is_persistent=data.is_persistent,
         requires_acknowledgment=data.requires_acknowledgment,
         expires_at=data.expires_at,
     )
