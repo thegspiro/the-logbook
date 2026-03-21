@@ -923,7 +923,8 @@ class LabelGenerateRequest(BaseModel):
     """Schema for generating barcode label PDFs"""
 
     item_ids: List[UUID] = Field(
-        ..., min_length=1, description="Item UUIDs to generate labels for"
+        ..., min_length=1, max_length=500,
+        description="Item UUIDs to generate labels for (max 500)",
     )
     label_format: str = Field(
         default="letter",

@@ -902,13 +902,14 @@ class TestBarcodeLabels:
             )
             items.append(item)
 
-        pdf_buf = await svc.generate_barcode_labels(
+        pdf_buf, auto_pop = await svc.generate_barcode_labels(
             item_ids=[uuid.UUID(i.id) for i in items],
             organization_id=uuid.UUID(org_id),
             label_format="letter",
         )
 
         assert isinstance(pdf_buf, BytesIO)
+        assert auto_pop == 0
         content = pdf_buf.read()
         assert len(content) > 0
         assert content[:5] == b"%PDF-"
@@ -932,13 +933,14 @@ class TestBarcodeLabels:
             created_by=uuid.UUID(user_id),
         )
 
-        pdf_buf = await svc.generate_barcode_labels(
+        pdf_buf, auto_pop = await svc.generate_barcode_labels(
             item_ids=[uuid.UUID(item.id)],
             organization_id=uuid.UUID(org_id),
             label_format="dymo_30252",
         )
 
         assert isinstance(pdf_buf, BytesIO)
+        assert auto_pop == 0
         content = pdf_buf.read()
         assert len(content) > 0
         assert content[:5] == b"%PDF-"
@@ -960,7 +962,7 @@ class TestBarcodeLabels:
             created_by=uuid.UUID(user_id),
         )
 
-        pdf_buf = await svc.generate_barcode_labels(
+        pdf_buf, _ = await svc.generate_barcode_labels(
             item_ids=[uuid.UUID(item.id)],
             organization_id=uuid.UUID(org_id),
             label_format="custom",
@@ -1050,11 +1052,12 @@ class TestBarcodeLabels:
         )
 
         # Should not raise - should use asset_tag as barcode value
-        pdf_buf = await svc.generate_barcode_labels(
+        pdf_buf, auto_pop = await svc.generate_barcode_labels(
             item_ids=[uuid.UUID(item.id)],
             organization_id=uuid.UUID(org_id),
         )
         assert isinstance(pdf_buf, BytesIO)
+        assert auto_pop == 1
 
     @pytest.mark.asyncio
     async def test_generate_all_thermal_formats(self, db_session, setup_org_and_user):
@@ -1073,14 +1076,115 @@ class TestBarcodeLabels:
             created_by=uuid.UUID(user_id),
         )
 
-        for fmt in ["dymo_30252", "dymo_30256", "dymo_30334", "rollo_4x6"]:
-            pdf_buf = await svc.generate_barcode_labels(
+        all_formats = [
+            "dymo_30252", "dymo_30256", "dymo_30334", "dymo_30336",
+            "rollo_4x6", "rollo_2x1", "thermal_1x1",
+        ]
+        for fmt in all_formats:
+            pdf_buf, _ = await svc.generate_barcode_labels(
                 item_ids=[uuid.UUID(item.id)],
                 organization_id=uuid.UUID(org_id),
                 label_format=fmt,
             )
             content = pdf_buf.read()
             assert content[:5] == b"%PDF-", f"Format {fmt} did not produce valid PDF"
+
+    @pytest.mark.asyncio
+    async def test_auto_rotate_override(self, db_session, setup_org_and_user):
+        """auto_rotate parameter overrides format default."""
+        org_id, user_id, _ = await setup_org_and_user
+        svc = InventoryService(db_session)
+
+        item, _ = await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={
+                "name": "Rotate Test",
+                "barcode": "ROT-0001",
+                "condition": "good",
+                "status": "available",
+            },
+            created_by=uuid.UUID(user_id),
+        )
+        item_ids = [uuid.UUID(item.id)]
+
+        # rollo_2x1 defaults to auto_rotate=True; override to False
+        pdf_no_rotate, _ = await svc.generate_barcode_labels(
+            item_ids=item_ids,
+            organization_id=uuid.UUID(org_id),
+            label_format="rollo_2x1",
+            auto_rotate=False,
+        )
+        assert pdf_no_rotate.read()[:5] == b"%PDF-"
+
+        # dymo_30252 defaults to auto_rotate=False; override to True
+        pdf_rotated, _ = await svc.generate_barcode_labels(
+            item_ids=item_ids,
+            organization_id=uuid.UUID(org_id),
+            label_format="dymo_30252",
+            auto_rotate=True,
+        )
+        assert pdf_rotated.read()[:5] == b"%PDF-"
+
+    @pytest.mark.asyncio
+    async def test_auto_rotate_default_from_format(self, db_session, setup_org_and_user):
+        """Formats use their own auto_rotate default when not overridden."""
+        org_id, user_id, _ = await setup_org_and_user
+        svc = InventoryService(db_session)
+
+        item, _ = await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={
+                "name": "Default Rotate",
+                "barcode": "DEFROT-001",
+                "condition": "good",
+                "status": "available",
+            },
+            created_by=uuid.UUID(user_id),
+        )
+        item_ids = [uuid.UUID(item.id)]
+
+        # Dymo default (auto_rotate=None should use False)
+        pdf_dymo, _ = await svc.generate_barcode_labels(
+            item_ids=item_ids,
+            organization_id=uuid.UUID(org_id),
+            label_format="dymo_30252",
+        )
+        assert pdf_dymo.read()[:5] == b"%PDF-"
+
+        # Rollo default (auto_rotate=None should use True)
+        pdf_rollo, _ = await svc.generate_barcode_labels(
+            item_ids=item_ids,
+            organization_id=uuid.UUID(org_id),
+            label_format="rollo_2x1",
+        )
+        assert pdf_rollo.read()[:5] == b"%PDF-"
+
+    @pytest.mark.asyncio
+    async def test_auto_rotate_portrait_label_no_rotation(self, db_session, setup_org_and_user):
+        """Portrait labels are not rotated even when auto_rotate=True."""
+        org_id, user_id, _ = await setup_org_and_user
+        svc = InventoryService(db_session)
+
+        item, _ = await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={
+                "name": "Portrait Rotate",
+                "barcode": "PORT-001",
+                "condition": "good",
+                "status": "available",
+            },
+            created_by=uuid.UUID(user_id),
+        )
+
+        # rollo_4x6 is portrait (4 < 6) — auto_rotate should have no
+        # visible effect since rotation only applies to landscape labels.
+        pdf_buf, _ = await svc.generate_barcode_labels(
+            item_ids=[uuid.UUID(item.id)],
+            organization_id=uuid.UUID(org_id),
+            label_format="rollo_4x6",
+            auto_rotate=True,
+        )
+        assert pdf_buf.read()[:5] == b"%PDF-"
 
 
 # ── Additional Batch Checkout Tests ────────────────────────────────
