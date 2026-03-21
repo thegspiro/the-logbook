@@ -256,6 +256,7 @@ class EventResponse(EventBase, UTCResponseBase):
     recurrence_week_ordinal: Optional[int] = None
     recurrence_month: Optional[int] = None
     recurrence_exceptions: Optional[List[str]] = None
+    rolling_recurrence: bool = False
     recurrence_parent_id: Optional[UUID] = None
     template_id: Optional[UUID] = None
 
@@ -659,7 +660,11 @@ class RecurringEventCreate(BaseModel):
             "annually, annually_weekday, custom"
         ),
     )
-    recurrence_end_date: datetime  # When the series ends
+    recurrence_end_date: Optional[datetime] = None  # When the series ends (auto-set for rolling)
+    rolling_recurrence: bool = Field(
+        default=False,
+        description="Auto-extend series on a rolling 12-month window",
+    )
     recurrence_custom_days: Optional[List[int]] = Field(
         None, description="For custom: weekday numbers (0=Mon, 6=Sun)"
     )
@@ -709,6 +714,10 @@ class RecurringEventCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_recurrence_fields(self):
+        if not self.rolling_recurrence and not self.recurrence_end_date:
+            raise ValueError(
+                "recurrence_end_date is required unless rolling_recurrence is true"
+            )
         if self.recurrence_pattern == "custom" and not self.recurrence_custom_days:
             raise ValueError(
                 "recurrence_custom_days is required when recurrence_pattern is 'custom'"
