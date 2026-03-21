@@ -1577,9 +1577,7 @@ class InventoryService:
             .where(CheckOutRecord.is_returned == False)  # noqa: E712
         )
         checkout_item_ids_result = await self.db.execute(checkout_items_q)
-        checkout_item_ids = {
-            row[0] for row in checkout_item_ids_result.all()
-        }
+        checkout_item_ids = {row[0] for row in checkout_item_ids_result.all()}
 
         # Item IDs permanently assigned to the user
         assignment_items_q = (
@@ -1589,9 +1587,7 @@ class InventoryService:
             .where(ItemAssignment.is_active == True)  # noqa: E712
         )
         assignment_item_ids_result = await self.db.execute(assignment_items_q)
-        assignment_item_ids = {
-            row[0] for row in assignment_item_ids_result.all()
-        }
+        assignment_item_ids = {row[0] for row in assignment_item_ids_result.all()}
 
         user_item_ids = checkout_item_ids | assignment_item_ids
 
@@ -1624,9 +1620,7 @@ class InventoryService:
             .where(InventoryItem.active == True)  # noqa: E712
             .group_by(InventoryItem.status)
         )
-        items_by_status = {
-            row.status.value: row.count for row in status_result.all()
-        }
+        items_by_status = {row.status.value: row.count for row in status_result.all()}
 
         # Items by condition
         condition_result = await self.db.execute(
@@ -1639,17 +1633,14 @@ class InventoryService:
             .group_by(InventoryItem.condition)
         )
         items_by_condition = {
-            row.condition.value: row.count
-            for row in condition_result.all()
+            row.condition.value: row.count for row in condition_result.all()
         }
 
         # Total value
         value_result = await self.db.execute(
             select(
                 func.coalesce(
-                    func.sum(
-                        InventoryItem.current_value * InventoryItem.quantity
-                    ),
+                    func.sum(InventoryItem.current_value * InventoryItem.quantity),
                     0,
                 )
             )
@@ -1690,8 +1681,7 @@ class InventoryService:
             "total_value": float(total_value),
             "active_checkouts": active_checkouts,
             "overdue_checkouts": overdue_checkouts,
-            "maintenance_due_count": maintenance_due_count
-            + items_in_maintenance,
+            "maintenance_due_count": maintenance_due_count + items_in_maintenance,
         }
 
     async def get_summary_by_location(
@@ -1705,9 +1695,9 @@ class InventoryService:
                 Location.id,
                 Location.name,
                 func.count(InventoryItem.id).label("item_count"),
-                func.coalesce(
-                    func.sum(InventoryItem.quantity), 0
-                ).label("total_quantity"),
+                func.coalesce(func.sum(InventoryItem.quantity), 0).label(
+                    "total_quantity"
+                ),
                 func.coalesce(
                     func.sum(InventoryItem.current_value * InventoryItem.quantity), 0
                 ).label("total_value"),
@@ -1730,14 +1720,13 @@ class InventoryService:
         unassigned_result = await self.db.execute(
             select(
                 func.count(InventoryItem.id).label("item_count"),
-                func.coalesce(
-                    func.sum(InventoryItem.quantity), 0
-                ).label("total_quantity"),
+                func.coalesce(func.sum(InventoryItem.quantity), 0).label(
+                    "total_quantity"
+                ),
                 func.coalesce(
                     func.sum(InventoryItem.current_value * InventoryItem.quantity), 0
                 ).label("total_value"),
-            )
-            .where(
+            ).where(
                 InventoryItem.organization_id == str(organization_id),
                 InventoryItem.active == True,  # noqa: E712
                 InventoryItem.location_id.is_(None),
@@ -2626,7 +2615,11 @@ class InventoryService:
         if fmt["type"] == "sheet":
             pdf_buf = self._generate_sheet_labels(items)
         else:
-            rotate = auto_rotate if auto_rotate is not None else fmt.get("auto_rotate", False)
+            rotate = (
+                auto_rotate
+                if auto_rotate is not None
+                else fmt.get("auto_rotate", False)
+            )
             pdf_buf = self._generate_thermal_labels(
                 items, fmt["width"], fmt["height"], rotate
             )
@@ -3521,9 +3514,7 @@ class InventoryService:
                 organization_id=str(organization_id),
                 name=base_name,
                 category_id=(
-                    str(kwargs["category_id"])
-                    if kwargs.get("category_id")
-                    else None
+                    str(kwargs["category_id"]) if kwargs.get("category_id") else None
                 ),
                 base_price=kwargs.get("purchase_price"),
                 base_replacement_cost=kwargs.get("replacement_cost"),
@@ -3576,17 +3567,13 @@ class InventoryService:
                 condition=ItemCondition.GOOD,
                 status=ItemStatus.AVAILABLE,
                 category_id=(
-                    str(kwargs["category_id"])
-                    if kwargs.get("category_id")
-                    else None
+                    str(kwargs["category_id"]) if kwargs.get("category_id") else None
                 ),
                 replacement_cost=kwargs.get("replacement_cost"),
                 purchase_price=kwargs.get("purchase_price"),
                 unit_of_measure=kwargs.get("unit_of_measure"),
                 location_id=(
-                    str(kwargs["location_id"])
-                    if kwargs.get("location_id")
-                    else None
+                    str(kwargs["location_id"]) if kwargs.get("location_id") else None
                 ),
                 storage_area_id=(
                     str(kwargs["storage_area_id"])
@@ -4137,7 +4124,9 @@ class InventoryService:
                 organization_id=str(organization_id),
                 name=data["name"],
                 description=data.get("description"),
-                category_id=str(data["category_id"]) if data.get("category_id") else None,
+                category_id=(
+                    str(data["category_id"]) if data.get("category_id") else None
+                ),
                 base_price=data.get("base_price"),
                 base_replacement_cost=data.get("base_replacement_cost"),
                 unit_of_measure=data.get("unit_of_measure"),
@@ -4223,8 +4212,14 @@ class InventoryService:
             for idx, item_data in enumerate(line_items_data):
                 kit_item = EquipmentKitItem(
                     kit_id=kit.id,
-                    item_id=str(item_data["item_id"]) if item_data.get("item_id") else None,
-                    category_id=str(item_data["category_id"]) if item_data.get("category_id") else None,
+                    item_id=(
+                        str(item_data["item_id"]) if item_data.get("item_id") else None
+                    ),
+                    category_id=(
+                        str(item_data["category_id"])
+                        if item_data.get("category_id")
+                        else None
+                    ),
                     item_name=item_data["item_name"],
                     quantity=item_data.get("quantity", 1),
                     size_selectable=item_data.get("size_selectable", False),
@@ -4305,7 +4300,10 @@ class InventoryService:
                     )
                     if not item:
                         if not kit_item.optional:
-                            return None, f"Required kit item not found: {kit_item.item_id}"
+                            return (
+                                None,
+                                f"Required kit item not found: {kit_item.item_id}",
+                            )
                         continue
 
                     if item.tracking_type == TrackingType.POOL:

@@ -584,10 +584,14 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                     location_name = event.location
 
                 raw_event_type = (
-                    event.event_type.value
-                    if hasattr(event.event_type, "value")
-                    else event.event_type
-                ) if event.event_type else None
+                    (
+                        event.event_type.value
+                        if hasattr(event.event_type, "value")
+                        else event.event_type
+                    )
+                    if event.event_type
+                    else None
+                )
                 event_type_label = (
                     raw_event_type.replace("_", " ").title()
                     if raw_event_type
@@ -1214,9 +1218,7 @@ async def run_scheduled_emails(db: AsyncSession) -> Dict[str, Any]:
             logger.info("Scheduled emails: skipped (another instance is running)")
             return {"sent": 0, "failed": 0, "total_processed": 0, "skipped": True}
     else:
-        logger.warning(
-            "Scheduled emails: Redis unavailable, running without lock"
-        )
+        logger.warning("Scheduled emails: Redis unavailable, running without lock")
 
     try:
         return await _run_scheduled_emails_inner(db)
@@ -1262,9 +1264,7 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
             org = item.organization
             if not org:
                 item.status = ScheduledEmailStatus.FAILED
-                item.error_message = (
-                    "Organization no longer exists"
-                )
+                item.error_message = "Organization no longer exists"
                 failed += 1
                 continue
             email_svc = EmailService(org)
@@ -1308,12 +1308,9 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
             # Check if email is actually enabled before attempting send
             from app.core.config import settings as _settings
 
-            org_email_enabled = (
-                org
-                and (org.settings or {})
-                .get("email_service", {})
-                .get("enabled")
-            )
+            org_email_enabled = org and (org.settings or {}).get(
+                "email_service", {}
+            ).get("enabled")
             if not _settings.EMAIL_ENABLED and not org_email_enabled:
                 logger.warning(
                     f"Scheduled email {item.id} skipped: email sending "
@@ -1335,9 +1332,9 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
                 cc_emails=cc,
                 bcc_emails=bcc,
                 db=db,
-                template_type=item.template_type.value
-                if item.template_type
-                else "scheduled",
+                template_type=(
+                    item.template_type.value if item.template_type else "scheduled"
+                ),
             )
 
             if success_count > 0:
@@ -1408,9 +1405,7 @@ async def run_message_history_cleanup(db: AsyncSession) -> Dict[str, Any]:
         if not batch_ids:
             break
 
-        await db.execute(
-            delete(MessageHistory).where(MessageHistory.id.in_(batch_ids))
-        )
+        await db.execute(delete(MessageHistory).where(MessageHistory.id.in_(batch_ids)))
         await db.commit()
         deleted += len(batch_ids)
 
@@ -1519,16 +1514,22 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
 
                 sms_svc = SMSService()
                 if sms_svc.enabled:
-                    admin_phones = [a.phone for a in admins if getattr(a, "phone", None)]
+                    admin_phones = [
+                        a.phone for a in admins if getattr(a, "phone", None)
+                    ]
                     if admin_phones:
                         sms_body = (
                             f"Low Stock Alert: {len(low_stock)} inventory item(s) "
                             f"below reorder point. Check the inventory dashboard."
                         )
                         sms_sent = await sms_svc.send_bulk_sms(admin_phones, sms_body)
-                        logger.info(f"Low stock SMS sent to {sms_sent}/{len(admin_phones)} admins for org {org.id}")
+                        logger.info(
+                            f"Low stock SMS sent to {sms_sent}/{len(admin_phones)} admins for org {org.id}"
+                        )
             except Exception as sms_err:
-                logger.warning(f"SMS low stock alerts failed for org {org.id}: {sms_err}")
+                logger.warning(
+                    f"SMS low stock alerts failed for org {org.id}: {sms_err}"
+                )
 
             results.append({"org_id": str(org.id), "alerts": len(low_stock)})
 
@@ -1767,9 +1768,7 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
     total_generated = 0
 
     configs = await db.execute(
-        select(ComplianceConfig).where(
-            ComplianceConfig.auto_report_frequency != "none"
-        )
+        select(ComplianceConfig).where(ComplianceConfig.auto_report_frequency != "none")
     )
     all_configs = list(configs.scalars().all())
 
@@ -1780,17 +1779,14 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
             org_id = str(config.organization_id)
 
             should_generate_monthly = (
-                freq in ("monthly", "quarterly")
-                and today.day == report_day
+                freq in ("monthly", "quarterly") and today.day == report_day
             )
             # For quarterly, only generate on quarter months
             if freq == "quarterly" and today.month not in (1, 4, 7, 10):
                 should_generate_monthly = False
 
             should_generate_yearly = (
-                freq == "yearly"
-                and today.month == 1
-                and today.day == report_day
+                freq == "yearly" and today.month == 1 and today.day == report_day
             )
 
             service = ComplianceReportService(db)
@@ -1807,11 +1803,13 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
                     send_email=True,
                 )
                 total_generated += 1
-                results.append({
-                    "org_id": org_id,
-                    "type": "monthly",
-                    "period": f"{prev_year}-{prev_month:02d}",
-                })
+                results.append(
+                    {
+                        "org_id": org_id,
+                        "type": "monthly",
+                        "period": f"{prev_year}-{prev_month:02d}",
+                    }
+                )
 
             if should_generate_yearly:
                 prev_year = today.year - 1
@@ -1822,20 +1820,24 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
                     send_email=True,
                 )
                 total_generated += 1
-                results.append({
-                    "org_id": org_id,
-                    "type": "yearly",
-                    "period": str(prev_year),
-                })
+                results.append(
+                    {
+                        "org_id": org_id,
+                        "type": "yearly",
+                        "period": str(prev_year),
+                    }
+                )
 
         except Exception as e:
             logger.error(
                 f"Compliance auto-report failed for org {config.organization_id}: {e}"
             )
-            results.append({
-                "org_id": str(config.organization_id),
-                "error": str(e),
-            })
+            results.append(
+                {
+                    "org_id": str(config.organization_id),
+                    "error": str(e),
+                }
+            )
 
     await db.commit()
 
@@ -1934,7 +1936,8 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
 
                 # Count remaining future occurrences
                 remaining = sum(
-                    1 for child in (event.recurrence_children or [])
+                    1
+                    for child in (event.recurrence_children or [])
                     if not child.is_cancelled
                     and child.start_datetime
                     and child.start_datetime > now
@@ -1948,13 +1951,15 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
                     remaining += 1
 
                 recurrence_pattern_val = (
-                    event.recurrence_pattern.value
-                    if hasattr(event.recurrence_pattern, "value")
-                    else event.recurrence_pattern
-                ) if event.recurrence_pattern else "unknown"
-                pattern_label = recurrence_pattern_val.replace(
-                    "_", " "
-                ).title()
+                    (
+                        event.recurrence_pattern.value
+                        if hasattr(event.recurrence_pattern, "value")
+                        else event.recurrence_pattern
+                    )
+                    if event.recurrence_pattern
+                    else "unknown"
+                )
+                pattern_label = recurrence_pattern_val.replace("_", " ").title()
 
                 end_date_local = event.recurrence_end_date.astimezone(org_tz)
                 series_end_str = end_date_local.strftime("%B %d, %Y")
@@ -1968,9 +1973,7 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
                 )
 
                 prefs = creator.notification_preferences or {}
-                user_name = (
-                    f"{creator.first_name} {creator.last_name}"
-                )
+                user_name = f"{creator.first_name} {creator.last_name}"
 
                 # In-app notification
                 try:
@@ -1980,9 +1983,7 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
                         recipient_id=str(creator.id),
                         channel=NotificationChannel.IN_APP,
                         category="series_end_reminder",
-                        subject=(
-                            f"Recurring series ending soon: {event.title}"
-                        ),
+                        subject=(f"Recurring series ending soon: {event.title}"),
                         message=(
                             f'The recurring event series "{event.title}" '
                             f"({pattern_label}) ends on {series_end_str} "
@@ -2012,10 +2013,8 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
                         }
 
                         if template:
-                            subject, html_body, text_body = (
-                                template_service.render(
-                                    template, context, org
-                                )
+                            subject, html_body, text_body = template_service.render(
+                                template, context, org
                             )
                         else:
                             from app.services.email_template_service import (
@@ -2029,15 +2028,9 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
                             text_body = DEFAULT_SERIES_END_REMINDER_TEXT
                             for key, val in context.items():
                                 placeholder = "{{" + key + "}}"
-                                subject = subject.replace(
-                                    placeholder, val
-                                )
-                                html_body = html_body.replace(
-                                    placeholder, val
-                                )
-                                text_body = text_body.replace(
-                                    placeholder, val
-                                )
+                                subject = subject.replace(placeholder, val)
+                                html_body = html_body.replace(placeholder, val)
+                                text_body = text_body.replace(placeholder, val)
 
                         success, _ = await email_service.send_email(
                             to_emails=[creator.email],
@@ -2064,9 +2057,7 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
             await db.commit()
 
         except Exception as e:
-            logger.error(
-                f"Series end reminders failed for org {org.id}: {e}"
-            )
+            logger.error(f"Series end reminders failed for org {org.id}: {e}")
             results.append({"org_id": str(org.id), "error": str(e)})
             continue
 
@@ -2130,8 +2121,7 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
             latest_result = await db.execute(
                 select(Event.start_datetime, Event.end_datetime)
                 .where(
-                    (Event.id == parent.id)
-                    | (Event.recurrence_parent_id == parent.id),
+                    (Event.id == parent.id) | (Event.recurrence_parent_id == parent.id),
                     Event.is_cancelled.is_(False),
                 )
                 .order_by(Event.start_datetime.desc())
@@ -2150,7 +2140,9 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
 
             # Generate new occurrences from the day after the latest
             # through 12 months from now
-            pattern = parent.recurrence_pattern.value if parent.recurrence_pattern else None
+            pattern = (
+                parent.recurrence_pattern.value if parent.recurrence_pattern else None
+            )
             if not pattern:
                 continue
 
@@ -2169,9 +2161,7 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
 
             # Filter out the first one (it's the latest existing occurrence)
             # and any that already exist
-            new_occurrences = [
-                (s, e) for s, e in new_occurrences if s > latest_start
-            ]
+            new_occurrences = [(s, e) for s, e in new_occurrences if s > latest_start]
 
             if not new_occurrences:
                 continue
@@ -2179,13 +2169,25 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
             # Build a set of field values from the parent for child events
             child_fields = {}
             for field in (
-                "title", "description", "event_type", "custom_category",
-                "location_id", "location", "location_details",
-                "requires_rsvp", "max_attendees", "is_mandatory",
-                "allow_guests", "send_reminders", "reminder_schedule",
-                "check_in_window_type", "check_in_minutes_before",
-                "check_in_minutes_after", "require_checkout",
-                "allowed_rsvp_statuses", "is_draft",
+                "title",
+                "description",
+                "event_type",
+                "custom_category",
+                "location_id",
+                "location",
+                "location_details",
+                "requires_rsvp",
+                "max_attendees",
+                "is_mandatory",
+                "allow_guests",
+                "send_reminders",
+                "reminder_schedule",
+                "check_in_window_type",
+                "check_in_minutes_before",
+                "check_in_minutes_after",
+                "require_checkout",
+                "allowed_rsvp_statuses",
+                "is_draft",
             ):
                 val = getattr(parent, field, None)
                 if val is not None:
@@ -2211,9 +2213,7 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
             series_extended += 1
 
         except Exception as e:
-            logger.error(
-                f"Failed to extend rolling series {parent.id}: {e}"
-            )
+            logger.error(f"Failed to extend rolling series {parent.id}: {e}")
             errors.append({"event_id": parent.id, "error": str(e)})
 
     if total_created > 0:

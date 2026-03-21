@@ -660,7 +660,9 @@ class RecurringEventCreate(BaseModel):
             "annually, annually_weekday, custom"
         ),
     )
-    recurrence_end_date: Optional[datetime] = None  # When the series ends (auto-set for rolling)
+    recurrence_end_date: Optional[datetime] = (
+        None  # When the series ends (auto-set for rolling)
+    )
     rolling_recurrence: bool = Field(
         default=False,
         description="Auto-extend series on a rolling 12-month window",

@@ -1117,9 +1117,7 @@ class ReportExportService:
             records = records_result.scalars().all()
             total_hours = sum(r.hours_completed or 0 for r in records)
 
-            c.drawString(
-                col_x[0], y, f"{user.first_name} {user.last_name}"[:25]
-            )
+            c.drawString(col_x[0], y, f"{user.first_name} {user.last_name}"[:25])
             c.drawString(col_x[1], y, (user.email or "")[:20])
             c.drawString(col_x[2], y, f"{total_hours:.1f}")
             c.drawString(col_x[3], y, str(len(records)))
@@ -1163,13 +1161,9 @@ class ReportExportService:
             start_date = date(end_date.year - 1, 1, 1)
 
         # Get user info
-        user_result = await self.db.execute(
-            select(User).where(User.id == user_id)
-        )
+        user_result = await self.db.execute(select(User).where(User.id == user_id))
         user = user_result.scalar_one_or_none()
-        user_name = (
-            f"{user.first_name} {user.last_name}" if user else "Unknown"
-        )
+        user_name = f"{user.first_name} {user.last_name}" if user else "Unknown"
 
         records_result = await self.db.execute(
             select(TrainingRecord)
@@ -1195,8 +1189,7 @@ class ReportExportService:
         c.drawString(
             margin,
             page_h - margin - 32,
-            f"Period: {start_date} to {end_date}  |  "
-            f"Total Records: {len(records)}",
+            f"Period: {start_date} to {end_date}  |  " f"Total Records: {len(records)}",
         )
 
         # Table header

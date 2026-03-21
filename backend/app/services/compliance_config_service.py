@@ -216,20 +216,14 @@ class ComplianceReportService:
             # Build summary
             exec_summary = report_data.get("executive_summary", {})
             summary = {
-                "overall_compliance_pct": exec_summary.get(
-                    "overall_compliance_pct", 0
-                ),
+                "overall_compliance_pct": exec_summary.get("overall_compliance_pct", 0),
                 "fully_compliant_members": exec_summary.get(
                     "fully_compliant_members", 0
                 ),
                 "total_members": exec_summary.get("total_members", 0),
                 "at_risk_members": exec_summary.get("at_risk_members", 0),
-                "non_compliant_members": exec_summary.get(
-                    "non_compliant_members", 0
-                ),
-                "total_training_hours": exec_summary.get(
-                    "total_training_hours", 0
-                ),
+                "non_compliant_members": exec_summary.get("non_compliant_members", 0),
+                "total_training_hours": exec_summary.get("total_training_hours", 0),
             }
 
             report.report_data = report_data
@@ -241,9 +235,7 @@ class ComplianceReportService:
 
             # Email the report if requested
             if send_email:
-                await self._email_report(
-                    report, organization_id, additional_recipients
-                )
+                await self._email_report(report, organization_id, additional_recipients)
 
             await self.db.refresh(report)
             return report
@@ -378,9 +370,8 @@ class ComplianceReportService:
         offset: int = 0,
     ) -> Dict[str, Any]:
         """List stored compliance reports."""
-        query = (
-            select(ComplianceReport)
-            .where(ComplianceReport.organization_id == organization_id)
+        query = select(ComplianceReport).where(
+            ComplianceReport.organization_id == organization_id
         )
 
         if report_type:
@@ -399,13 +390,9 @@ class ComplianceReportService:
             .where(ComplianceReport.organization_id == organization_id)
         )
         if report_type:
-            count_query = count_query.where(
-                ComplianceReport.report_type == report_type
-            )
+            count_query = count_query.where(ComplianceReport.report_type == report_type)
         if year:
-            count_query = count_query.where(
-                ComplianceReport.period_year == year
-            )
+            count_query = count_query.where(ComplianceReport.period_year == year)
         total_result = await self.db.execute(count_query)
         total = total_result.scalar() or 0
 

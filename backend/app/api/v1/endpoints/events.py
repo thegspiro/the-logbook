@@ -82,10 +82,14 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         title=event.title,
         description=event.description,
         event_type=(
-            event.event_type.value
-            if hasattr(event.event_type, "value")
-            else event.event_type
-        ) if event.event_type else "other",
+            (
+                event.event_type.value
+                if hasattr(event.event_type, "value")
+                else event.event_type
+            )
+            if event.event_type
+            else "other"
+        ),
         custom_category=event.custom_category,
         location_id=event.location_id,
         location=event.location,
@@ -104,10 +108,14 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         send_reminders=event.send_reminders,
         reminder_schedule=event.reminder_schedule or [24],
         check_in_window_type=(
-            event.check_in_window_type.value
-            if hasattr(event.check_in_window_type, "value")
-            else event.check_in_window_type
-        ) if event.check_in_window_type else "flexible",
+            (
+                event.check_in_window_type.value
+                if hasattr(event.check_in_window_type, "value")
+                else event.check_in_window_type
+            )
+            if event.check_in_window_type
+            else "flexible"
+        ),
         check_in_minutes_before=event.check_in_minutes_before,
         check_in_minutes_after=event.check_in_minutes_after,
         require_checkout=event.require_checkout,
@@ -208,10 +216,14 @@ async def list_events(
             for rsvp in event.rsvps:
                 if str(rsvp.user_id) == str(current_user.id):
                     user_rsvp_status = (
-                        rsvp.status.value
-                        if hasattr(rsvp.status, "value")
-                        else rsvp.status
-                    ) if rsvp.status else None
+                        (
+                            rsvp.status.value
+                            if hasattr(rsvp.status, "value")
+                            else rsvp.status
+                        )
+                        if rsvp.status
+                        else None
+                    )
                     break
 
         event_list.append(
@@ -219,10 +231,14 @@ async def list_events(
                 id=event.id,
                 title=event.title,
                 event_type=(
-                    event.event_type.value
-                    if hasattr(event.event_type, "value")
-                    else event.event_type
-                ) if event.event_type else "other",
+                    (
+                        event.event_type.value
+                        if hasattr(event.event_type, "value")
+                        else event.event_type
+                    )
+                    if event.event_type
+                    else "other"
+                ),
                 custom_category=event.custom_category,
                 start_datetime=event.start_datetime,
                 end_datetime=event.end_datetime,
@@ -444,9 +460,7 @@ async def get_analytics_summary(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("analytics.view", "events.manage")
-    ),
+    current_user: User = Depends(require_permission("analytics.view", "events.manage")),
 ):
     """
     Get aggregated event analytics for the attendance trends dashboard.
@@ -466,13 +480,9 @@ async def get_analytics_summary(
         )
         return AnalyticsSummary(**result)
     except ValueError as e:
-        raise HTTPException(
-            status_code=400, detail=safe_error_detail(e)
-        )
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=safe_error_detail(e)
-        )
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
 @router.get("/settings")
@@ -740,10 +750,14 @@ async def get_event(
         not_going_count=not_going_count,
         maybe_count=maybe_count,
         user_rsvp_status=(
-            user_rsvp.status.value
-            if hasattr(user_rsvp.status, "value")
-            else user_rsvp.status
-        ) if user_rsvp else None,
+            (
+                user_rsvp.status.value
+                if hasattr(user_rsvp.status, "value")
+                else user_rsvp.status
+            )
+            if user_rsvp
+            else None
+        ),
     )
 
 
@@ -766,7 +780,10 @@ async def update_event(
         # Capture old values for significant field change detection
         update_fields = event_data.model_dump(exclude_unset=True)
         significant_fields = {
-            "title", "start_datetime", "end_datetime", "location",
+            "title",
+            "start_datetime",
+            "end_datetime",
+            "location",
         }
         changed_significant = significant_fields & set(update_fields.keys())
 
@@ -783,7 +800,8 @@ async def update_event(
                 for field in changed_significant:
                     old_values[field] = getattr(old_event_obj, field, None)
                 rsvps_to_notify = [
-                    rsvp for rsvp in old_event_obj.rsvps
+                    rsvp
+                    for rsvp in old_event_obj.rsvps
                     if rsvp.status in (RSVPStatus.GOING, RSVPStatus.MAYBE)
                 ]
 
@@ -822,9 +840,7 @@ async def update_event(
                     actually_changed.append(field)
 
             if actually_changed:
-                changes_desc = ", ".join(
-                    f.replace("_", " ") for f in actually_changed
-                )
+                changes_desc = ", ".join(f.replace("_", " ") for f in actually_changed)
                 try:
                     notifications_service = NotificationsService(db)
                     for rsvp in rsvps_to_notify:
@@ -842,9 +858,7 @@ async def update_event(
                             },
                         )
                 except Exception as notif_err:
-                    logger.error(
-                        f"Failed to send update notifications: {notif_err}"
-                    )
+                    logger.error(f"Failed to send update notifications: {notif_err}")
 
         return _build_event_response(event)
     except ValueError as e:
@@ -1228,9 +1242,7 @@ async def rsvp_to_series(
     service = EventService(db)
 
     # Resolve the parent event id — if this is a child, use its parent
-    event_result = await db.execute(
-        select(Event).where(Event.id == str(event_id))
-    )
+    event_result = await db.execute(select(Event).where(Event.id == str(event_id)))
     event = event_result.scalar_one_or_none()
     if not event:
         raise HTTPException(
@@ -1257,7 +1269,10 @@ async def rsvp_to_series(
             detail=safe_error_detail(e),
         )
 
-    return {"message": f"RSVP applied to {rsvp_count} events in the series", "rsvp_count": rsvp_count}
+    return {
+        "message": f"RSVP applied to {rsvp_count} events in the series",
+        "rsvp_count": rsvp_count,
+    }
 
 
 @router.get("/{event_id}/rsvps", response_model=list[RSVPResponse])
@@ -1707,9 +1722,7 @@ async def promote_from_waitlist(
         )
 
     # Get user info for response
-    user_result = await db.execute(
-        select(User).where(User.id == rsvp.user_id)
-    )
+    user_result = await db.execute(select(User).where(User.id == rsvp.user_id))
     user = user_result.scalar_one_or_none()
 
     await log_audit_event(
@@ -2704,6 +2717,7 @@ async def remove_external_attendee(
 
 class SendRemindersRequest(BaseModel):
     """Request body for sending event reminders."""
+
     reminder_type: str  # "non_respondents" or "all"
 
 

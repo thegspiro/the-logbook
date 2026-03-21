@@ -226,20 +226,11 @@ async def get_open_shifts(
         my_assignment_result = await service.db.execute(
             select(ShiftAssignment.shift_id)
             .where(ShiftAssignment.user_id == str(current_user.id))
-            .where(
-                ShiftAssignment.shift_id.in_([s.id for s in shifts_list])
-            )
-            .where(
-                ShiftAssignment.assignment_status.in_(_active_statuses)
-            )
+            .where(ShiftAssignment.shift_id.in_([s.id for s in shifts_list]))
+            .where(ShiftAssignment.assignment_status.in_(_active_statuses))
         )
-        my_assigned_shift_ids = {
-            str(row[0]) for row in my_assignment_result.all()
-        }
-        shifts_list = [
-            s for s in shifts_list
-            if str(s.id) not in my_assigned_shift_ids
-        ]
+        my_assigned_shift_ids = {str(row[0]) for row in my_assignment_result.all()}
+        shifts_list = [s for s in shifts_list if str(s.id) not in my_assigned_shift_ids]
 
     return await _enrich_shifts(service, current_user.organization_id, shifts_list)
 
@@ -599,9 +590,7 @@ async def get_template(
     """Get a shift template by ID"""
     service = SchedulingService(db)
     template = ensure_found(
-        await service.get_template_by_id(
-            template_id, current_user.organization_id
-        ),
+        await service.get_template_by_id(template_id, current_user.organization_id),
         "Template",
     )
     return template
@@ -932,9 +921,7 @@ async def get_swap_request(
     """Get a specific swap request"""
     service = SchedulingService(db)
     swap_request = ensure_found(
-        await service.get_swap_request_by_id(
-            request_id, current_user.organization_id
-        ),
+        await service.get_swap_request_by_id(request_id, current_user.organization_id),
         "Swap request",
     )
     enriched = await service.enrich_swap_requests([swap_request])
@@ -1057,9 +1044,7 @@ async def get_time_off_request(
     """Get a specific time-off request"""
     service = SchedulingService(db)
     time_off = ensure_found(
-        await service.get_time_off_by_id(
-            time_off_id, current_user.organization_id
-        ),
+        await service.get_time_off_by_id(time_off_id, current_user.organization_id),
         "Time-off request",
     )
     enriched = await service.enrich_time_off_requests([time_off])
@@ -1608,7 +1593,9 @@ async def delete_basic_apparatus(
     response_model=EligiblePositionsResponse,
 )
 async def get_eligible_positions(
-    shift_id: str | None = Query(None, description="Optional shift ID to check against"),
+    shift_id: str | None = Query(
+        None, description="Optional shift ID to check against"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

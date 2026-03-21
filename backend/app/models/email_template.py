@@ -289,9 +289,7 @@ class MessageHistory(Base):
     recipient_count = Column(Integer, nullable=False, default=1)
 
     # Audit
-    sent_at = Column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    sent_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     sent_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -305,4 +303,6 @@ class MessageHistory(Base):
     )
 
     def __repr__(self):
-        return f"<MessageHistory {self.id} to={self.to_email} status={self.status.value}>"
+        return (
+            f"<MessageHistory {self.id} to={self.to_email} status={self.status.value}>"
+        )

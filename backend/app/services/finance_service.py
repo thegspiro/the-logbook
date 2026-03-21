@@ -63,9 +63,7 @@ class FinanceService:
         )
         return list(result.scalars().all())
 
-    async def get_fiscal_year(
-        self, fy_id: str, org_id: str
-    ) -> Optional[FiscalYear]:
+    async def get_fiscal_year(self, fy_id: str, org_id: str) -> Optional[FiscalYear]:
         result = await self.db.execute(
             select(FiscalYear).where(
                 FiscalYear.id == fy_id,
@@ -77,18 +75,14 @@ class FinanceService:
     async def create_fiscal_year(
         self, org_id: str, created_by: str, **kwargs
     ) -> FiscalYear:
-        fy = FiscalYear(
-            organization_id=org_id, created_by=created_by, **kwargs
-        )
+        fy = FiscalYear(organization_id=org_id, created_by=created_by, **kwargs)
         self.db.add(fy)
         await self.db.flush()
         await self.db.refresh(fy, ["created_at", "updated_at"])
         logger.info("Created fiscal year %s for org %s", fy.id, org_id)
         return fy
 
-    async def update_fiscal_year(
-        self, fy_id: str, org_id: str, **kwargs
-    ) -> FiscalYear:
+    async def update_fiscal_year(self, fy_id: str, org_id: str, **kwargs) -> FiscalYear:
         fy = await self.get_fiscal_year(fy_id, org_id)
         if not fy:
             raise ValueError("Fiscal year not found")
@@ -101,9 +95,7 @@ class FinanceService:
         await self.db.refresh(fy, ["updated_at"])
         return fy
 
-    async def activate_fiscal_year(
-        self, fy_id: str, org_id: str
-    ) -> FiscalYear:
+    async def activate_fiscal_year(self, fy_id: str, org_id: str) -> FiscalYear:
         fy = await self.get_fiscal_year(fy_id, org_id)
         if not fy:
             raise ValueError("Fiscal year not found")
@@ -125,9 +117,7 @@ class FinanceService:
         logger.info("Activated fiscal year %s for org %s", fy_id, org_id)
         return fy
 
-    async def lock_fiscal_year(
-        self, fy_id: str, org_id: str
-    ) -> FiscalYear:
+    async def lock_fiscal_year(self, fy_id: str, org_id: str) -> FiscalYear:
         fy = await self.get_fiscal_year(fy_id, org_id)
         if not fy:
             raise ValueError("Fiscal year not found")
@@ -151,9 +141,7 @@ class FinanceService:
     # Budget Categories
     # ========================================
 
-    async def list_budget_categories(
-        self, org_id: str
-    ) -> list[BudgetCategory]:
+    async def list_budget_categories(self, org_id: str) -> list[BudgetCategory]:
         result = await self.db.execute(
             select(BudgetCategory)
             .where(BudgetCategory.organization_id == org_id)
@@ -172,9 +160,7 @@ class FinanceService:
         )
         return result.scalar_one_or_none()
 
-    async def create_budget_category(
-        self, org_id: str, **kwargs
-    ) -> BudgetCategory:
+    async def create_budget_category(self, org_id: str, **kwargs) -> BudgetCategory:
         cat = BudgetCategory(organization_id=org_id, **kwargs)
         self.db.add(cat)
         await self.db.flush()
@@ -194,9 +180,7 @@ class FinanceService:
         await self.db.refresh(cat, ["updated_at"])
         return cat
 
-    async def delete_budget_category(
-        self, cat_id: str, org_id: str
-    ) -> None:
+    async def delete_budget_category(self, cat_id: str, org_id: str) -> None:
         cat = await self.get_budget_category(cat_id, org_id)
         if not cat:
             raise ValueError("Budget category not found")
@@ -221,9 +205,7 @@ class FinanceService:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
-    async def get_budget(
-        self, budget_id: str, org_id: str
-    ) -> Optional[Budget]:
+    async def get_budget(self, budget_id: str, org_id: str) -> Optional[Budget]:
         result = await self.db.execute(
             select(Budget).where(
                 Budget.id == budget_id,
@@ -232,20 +214,14 @@ class FinanceService:
         )
         return result.scalar_one_or_none()
 
-    async def create_budget(
-        self, org_id: str, created_by: str, **kwargs
-    ) -> Budget:
-        budget = Budget(
-            organization_id=org_id, created_by=created_by, **kwargs
-        )
+    async def create_budget(self, org_id: str, created_by: str, **kwargs) -> Budget:
+        budget = Budget(organization_id=org_id, created_by=created_by, **kwargs)
         self.db.add(budget)
         await self.db.flush()
         await self.db.refresh(budget, ["created_at", "updated_at"])
         return budget
 
-    async def update_budget(
-        self, budget_id: str, org_id: str, **kwargs
-    ) -> Budget:
+    async def update_budget(self, budget_id: str, org_id: str, **kwargs) -> Budget:
         budget = await self.get_budget(budget_id, org_id)
         if not budget:
             raise ValueError("Budget not found")
@@ -256,17 +232,13 @@ class FinanceService:
         await self.db.refresh(budget, ["updated_at"])
         return budget
 
-    async def get_budget_summary(
-        self, org_id: str, fiscal_year_id: str
-    ) -> dict:
+    async def get_budget_summary(self, org_id: str, fiscal_year_id: str) -> dict:
         result = await self.db.execute(
             select(
                 func.coalesce(func.sum(Budget.amount_budgeted), 0).label(
                     "total_budgeted"
                 ),
-                func.coalesce(func.sum(Budget.amount_spent), 0).label(
-                    "total_spent"
-                ),
+                func.coalesce(func.sum(Budget.amount_spent), 0).label("total_spent"),
                 func.coalesce(func.sum(Budget.amount_encumbered), 0).label(
                     "total_encumbered"
                 ),
@@ -280,9 +252,7 @@ class FinanceService:
         total_spent = float(row.total_spent)
         total_encumbered = float(row.total_encumbered)
         total_remaining = total_budgeted - total_spent - total_encumbered
-        percent_used = (
-            (total_spent / total_budgeted * 100) if total_budgeted > 0 else 0
-        )
+        percent_used = (total_spent / total_budgeted * 100) if total_budgeted > 0 else 0
         return {
             "total_budgeted": total_budgeted,
             "total_spent": total_spent,
@@ -296,9 +266,7 @@ class FinanceService:
     # Approval Chains
     # ========================================
 
-    async def list_approval_chains(
-        self, org_id: str
-    ) -> list[ApprovalChain]:
+    async def list_approval_chains(self, org_id: str) -> list[ApprovalChain]:
         result = await self.db.execute(
             select(ApprovalChain)
             .options(selectinload(ApprovalChain.steps))
@@ -323,9 +291,7 @@ class FinanceService:
     async def create_approval_chain(
         self, org_id: str, created_by: str, steps: Optional[list] = None, **kwargs
     ) -> ApprovalChain:
-        chain = ApprovalChain(
-            organization_id=org_id, created_by=created_by, **kwargs
-        )
+        chain = ApprovalChain(organization_id=org_id, created_by=created_by, **kwargs)
         self.db.add(chain)
         await self.db.flush()
 
@@ -352,9 +318,7 @@ class FinanceService:
         await self.db.refresh(chain, ["updated_at"])
         return chain
 
-    async def delete_approval_chain(
-        self, chain_id: str, org_id: str
-    ) -> None:
+    async def delete_approval_chain(self, chain_id: str, org_id: str) -> None:
         chain = await self.get_approval_chain(chain_id, org_id)
         if not chain:
             raise ValueError("Approval chain not found")
@@ -394,9 +358,7 @@ class FinanceService:
         await self.db.flush()
         return step
 
-    async def delete_chain_step(
-        self, step_id: str, chain_id: str, org_id: str
-    ) -> None:
+    async def delete_chain_step(self, step_id: str, chain_id: str, org_id: str) -> None:
         chain = await self.get_approval_chain(chain_id, org_id)
         if not chain:
             raise ValueError("Approval chain not found")
@@ -458,9 +420,15 @@ class FinanceService:
                 continue
 
             # Score by specificity
-            if chain.budget_category_id and chain.budget_category_id == budget_category_id:
+            if (
+                chain.budget_category_id
+                and chain.budget_category_id == budget_category_id
+            ):
                 score += 4
-            elif chain.budget_category_id and chain.budget_category_id != budget_category_id:
+            elif (
+                chain.budget_category_id
+                and chain.budget_category_id != budget_category_id
+            ):
                 continue  # Category mismatch
 
             if chain.min_amount is not None or chain.max_amount is not None:
@@ -515,9 +483,7 @@ class FinanceService:
                 and step.approver_type.value == "email"
             ):
                 record.approval_token = secrets.token_urlsafe(32)
-                record.token_expires_at = datetime.now(timezone.utc) + timedelta(
-                    days=7
-                )
+                record.token_expires_at = datetime.now(timezone.utc) + timedelta(days=7)
 
             self.db.add(record)
             records.append(record)
@@ -572,9 +538,7 @@ class FinanceService:
         await self.db.flush()
 
         # Process next steps (advance notification steps automatically)
-        await self._advance_notification_steps(
-            record.entity_type, record.entity_id
-        )
+        await self._advance_notification_steps(record.entity_type, record.entity_id)
 
         # Check if all steps are complete
         all_complete = await self._check_all_steps_complete(
@@ -585,9 +549,7 @@ class FinanceService:
                 record.entity_type, record.entity_id, approver_id
             )
 
-        logger.info(
-            "Approval step %s approved by %s", step_record_id, approver_id
-        )
+        logger.info("Approval step %s approved by %s", step_record_id, approver_id)
         return record
 
     async def deny_step(
@@ -616,9 +578,7 @@ class FinanceService:
         )
 
         await self.db.flush()
-        logger.info(
-            "Approval step %s denied by %s", step_record_id, denier_id
-        )
+        logger.info("Approval step %s denied by %s", step_record_id, denier_id)
         return record
 
     async def approve_by_token(
@@ -626,18 +586,15 @@ class FinanceService:
     ) -> ApprovalStepRecord:
         """Approve a step via email token (for external approvers)"""
         result = await self.db.execute(
-            select(ApprovalStepRecord).where(
-                ApprovalStepRecord.approval_token == token
-            )
+            select(ApprovalStepRecord).where(ApprovalStepRecord.approval_token == token)
         )
         record = result.scalar_one_or_none()
         if not record:
             raise ValueError("Invalid approval token")
         if record.status != ApprovalStepStatus.PENDING:
             raise ValueError("This step has already been acted on")
-        if (
-            record.token_expires_at
-            and record.token_expires_at < datetime.now(timezone.utc)
+        if record.token_expires_at and record.token_expires_at < datetime.now(
+            timezone.utc
         ):
             raise ValueError("Approval token has expired")
 
@@ -647,16 +604,12 @@ class FinanceService:
         record.notes = notes
 
         await self.db.flush()
-        await self._advance_notification_steps(
-            record.entity_type, record.entity_id
-        )
+        await self._advance_notification_steps(record.entity_type, record.entity_id)
         all_complete = await self._check_all_steps_complete(
             record.entity_type, record.entity_id
         )
         if all_complete:
-            await self._finalize_approval(
-                record.entity_type, record.entity_id, None
-            )
+            await self._finalize_approval(record.entity_type, record.entity_id, None)
 
         return record
 
@@ -665,18 +618,15 @@ class FinanceService:
     ) -> ApprovalStepRecord:
         """Deny a step via email token (for external approvers)"""
         result = await self.db.execute(
-            select(ApprovalStepRecord).where(
-                ApprovalStepRecord.approval_token == token
-            )
+            select(ApprovalStepRecord).where(ApprovalStepRecord.approval_token == token)
         )
         record = result.scalar_one_or_none()
         if not record:
             raise ValueError("Invalid approval token")
         if record.status != ApprovalStepStatus.PENDING:
             raise ValueError("This step has already been acted on")
-        if (
-            record.token_expires_at
-            and record.token_expires_at < datetime.now(timezone.utc)
+        if record.token_expires_at and record.token_expires_at < datetime.now(
+            timezone.utc
         ):
             raise ValueError("Approval token has expired")
 
@@ -684,15 +634,11 @@ class FinanceService:
         record.acted_at = datetime.now(timezone.utc)
         record.notes = notes
 
-        await self._finalize_denial(
-            record.entity_type, record.entity_id, None, notes
-        )
+        await self._finalize_denial(record.entity_type, record.entity_id, None, notes)
         await self.db.flush()
         return record
 
-    async def get_pending_approvals(
-        self, user_id: str, org_id: str
-    ) -> list[dict]:
+    async def get_pending_approvals(self, user_id: str, org_id: str) -> list[dict]:
         """Get all pending approval steps for the current user"""
         result = await self.db.execute(
             select(ApprovalStepRecord)
@@ -720,17 +666,19 @@ class FinanceService:
             step_name = record.step.name if record.step else "Unknown"
             step_order = record.step.step_order if record.step else 0
 
-            approvals.append({
-                "step_record_id": record.id,
-                "entity_type": record.entity_type.value,
-                "entity_id": record.entity_id,
-                "entity_title": entity_info.get("title", ""),
-                "entity_amount": entity_info.get("amount", 0),
-                "requester_name": entity_info.get("requester_name", ""),
-                "step_name": step_name,
-                "step_order": step_order,
-                "submitted_at": entity_info.get("submitted_at", record.created_at),
-            })
+            approvals.append(
+                {
+                    "step_record_id": record.id,
+                    "entity_type": record.entity_type.value,
+                    "entity_id": record.entity_id,
+                    "entity_title": entity_info.get("title", ""),
+                    "entity_amount": entity_info.get("amount", 0),
+                    "requester_name": entity_info.get("requester_name", ""),
+                    "step_name": step_name,
+                    "step_order": step_order,
+                    "submitted_at": entity_info.get("submitted_at", record.created_at),
+                }
+            )
 
         return approvals
 
@@ -746,9 +694,7 @@ class FinanceService:
             et = ApprovalEntityType(entity_type)
         except ValueError:
             raise ValueError(f"Invalid entity type: {entity_type}")
-        return await self.resolve_approval_chain(
-            org_id, et, amount, category_id
-        )
+        return await self.resolve_approval_chain(org_id, et, amount, category_id)
 
     async def _advance_notification_steps(
         self,
@@ -767,9 +713,7 @@ class FinanceService:
                 prior_complete = True
                 for prior in records:
                     if prior.step and prior.step.step_order < record.step.step_order:
-                        if prior.status in (
-                            ApprovalStepStatus.PENDING,
-                        ):
+                        if prior.status in (ApprovalStepStatus.PENDING,):
                             prior_complete = False
                             break
                 if prior_complete:
@@ -964,9 +908,11 @@ class FinanceService:
             .select_from(model)
             .where(
                 model.organization_id == org_id,
-                model.request_number.like(like_pattern)
-                if hasattr(model, "request_number")
-                else model.report_number.like(like_pattern),
+                (
+                    model.request_number.like(like_pattern)
+                    if hasattr(model, "request_number")
+                    else model.report_number.like(like_pattern)
+                ),
             )
         )
         count = result.scalar() or 0
@@ -978,15 +924,11 @@ class FinanceService:
         status: Optional[str] = None,
         fiscal_year_id: Optional[str] = None,
     ) -> list[PurchaseRequest]:
-        query = select(PurchaseRequest).where(
-            PurchaseRequest.organization_id == org_id
-        )
+        query = select(PurchaseRequest).where(PurchaseRequest.organization_id == org_id)
         if status:
             query = query.where(PurchaseRequest.status == status)
         if fiscal_year_id:
-            query = query.where(
-                PurchaseRequest.fiscal_year_id == fiscal_year_id
-            )
+            query = query.where(PurchaseRequest.fiscal_year_id == fiscal_year_id)
         query = query.order_by(PurchaseRequest.created_at.desc())
         result = await self.db.execute(query)
         return list(result.scalars().all())
@@ -1039,9 +981,7 @@ class FinanceService:
         await self.db.refresh(pr, ["updated_at"])
         return pr
 
-    async def submit_purchase_request(
-        self, pr_id: str, org_id: str
-    ) -> PurchaseRequest:
+    async def submit_purchase_request(self, pr_id: str, org_id: str) -> PurchaseRequest:
         pr = await self.get_purchase_request(pr_id, org_id)
         if not pr:
             raise ValueError("Purchase request not found")
@@ -1090,9 +1030,7 @@ class FinanceService:
         logger.info("Submitted purchase request %s", pr.request_number)
         return pr
 
-    async def mark_pr_ordered(
-        self, pr_id: str, org_id: str
-    ) -> PurchaseRequest:
+    async def mark_pr_ordered(self, pr_id: str, org_id: str) -> PurchaseRequest:
         pr = await self.get_purchase_request(pr_id, org_id)
         if not pr:
             raise ValueError("Purchase request not found")
@@ -1104,9 +1042,7 @@ class FinanceService:
         await self.db.refresh(pr, ["updated_at"])
         return pr
 
-    async def mark_pr_received(
-        self, pr_id: str, org_id: str
-    ) -> PurchaseRequest:
+    async def mark_pr_received(self, pr_id: str, org_id: str) -> PurchaseRequest:
         pr = await self.get_purchase_request(pr_id, org_id)
         if not pr:
             raise ValueError("Purchase request not found")
@@ -1139,18 +1075,14 @@ class FinanceService:
         # Move from encumbered to spent
         if pr.budget_id:
             amount = float(pr.actual_amount or pr.estimated_amount)
-            await self._release_encumbrance(
-                pr.budget_id, float(pr.estimated_amount)
-            )
+            await self._release_encumbrance(pr.budget_id, float(pr.estimated_amount))
             await self._add_to_spent(pr.budget_id, amount)
 
         await self.db.flush()
         await self.db.refresh(pr, ["updated_at"])
         return pr
 
-    async def cancel_purchase_request(
-        self, pr_id: str, org_id: str
-    ) -> PurchaseRequest:
+    async def cancel_purchase_request(self, pr_id: str, org_id: str) -> PurchaseRequest:
         pr = await self.get_purchase_request(pr_id, org_id)
         if not pr:
             raise ValueError("Purchase request not found")
@@ -1163,9 +1095,7 @@ class FinanceService:
             PurchaseRequestStatus.ORDERED,
             PurchaseRequestStatus.RECEIVED,
         ):
-            await self._release_encumbrance(
-                pr.budget_id, float(pr.estimated_amount)
-            )
+            await self._release_encumbrance(pr.budget_id, float(pr.estimated_amount))
 
         pr.status = PurchaseRequestStatus.CANCELLED
         await self.db.flush()
@@ -1228,9 +1158,7 @@ class FinanceService:
         total = Decimal("0")
         if line_items:
             for item_data in line_items:
-                item = ExpenseLineItem(
-                    expense_report_id=er.id, **item_data
-                )
+                item = ExpenseLineItem(expense_report_id=er.id, **item_data)
                 self.db.add(item)
                 total += Decimal(str(item_data.get("amount", 0)))
             await self.db.flush()
@@ -1271,16 +1199,12 @@ class FinanceService:
         await self.db.flush()
 
         # Recalculate total
-        er.total_amount = sum(
-            li.amount for li in er.line_items
-        ) + item.amount
+        er.total_amount = sum(li.amount for li in er.line_items) + item.amount
         await self.db.flush()
         await self.db.refresh(item, ["created_at"])
         return item
 
-    async def submit_expense_report(
-        self, er_id: str, org_id: str
-    ) -> ExpenseReport:
+    async def submit_expense_report(self, er_id: str, org_id: str) -> ExpenseReport:
         er = await self.get_expense_report(er_id, org_id)
         if not er:
             raise ValueError("Expense report not found")
@@ -1351,9 +1275,7 @@ class FinanceService:
         org_id: str,
         status: Optional[str] = None,
     ) -> list[CheckRequest]:
-        query = select(CheckRequest).where(
-            CheckRequest.organization_id == org_id
-        )
+        query = select(CheckRequest).where(CheckRequest.organization_id == org_id)
         if status:
             query = query.where(CheckRequest.status == status)
         query = query.order_by(CheckRequest.created_at.desc())
@@ -1407,9 +1329,7 @@ class FinanceService:
         await self.db.refresh(cr, ["updated_at"])
         return cr
 
-    async def submit_check_request(
-        self, cr_id: str, org_id: str
-    ) -> CheckRequest:
+    async def submit_check_request(self, cr_id: str, org_id: str) -> CheckRequest:
         cr = await self.get_check_request(cr_id, org_id)
         if not cr:
             raise ValueError("Check request not found")
@@ -1478,9 +1398,7 @@ class FinanceService:
         await self.db.refresh(cr, ["updated_at"])
         return cr
 
-    async def void_check(
-        self, cr_id: str, org_id: str
-    ) -> CheckRequest:
+    async def void_check(self, cr_id: str, org_id: str) -> CheckRequest:
         cr = await self.get_check_request(cr_id, org_id)
         if not cr:
             raise ValueError("Check request not found")
@@ -1506,9 +1424,7 @@ class FinanceService:
     # Dues & Assessments
     # ========================================
 
-    async def list_dues_schedules(
-        self, org_id: str
-    ) -> list[DuesSchedule]:
+    async def list_dues_schedules(self, org_id: str) -> list[DuesSchedule]:
         result = await self.db.execute(
             select(DuesSchedule)
             .where(DuesSchedule.organization_id == org_id)
@@ -1532,9 +1448,7 @@ class FinanceService:
     async def create_dues_schedule(
         self, org_id: str, created_by: str, **kwargs
     ) -> DuesSchedule:
-        schedule = DuesSchedule(
-            organization_id=org_id, created_by=created_by, **kwargs
-        )
+        schedule = DuesSchedule(organization_id=org_id, created_by=created_by, **kwargs)
         self.db.add(schedule)
         await self.db.flush()
         await self.db.refresh(schedule, ["created_at", "updated_at"])
@@ -1553,9 +1467,7 @@ class FinanceService:
         await self.db.refresh(schedule, ["updated_at"])
         return schedule
 
-    async def generate_member_dues(
-        self, schedule_id: str, org_id: str
-    ) -> int:
+    async def generate_member_dues(self, schedule_id: str, org_id: str) -> int:
         """Bulk-create member_dues records for all eligible members"""
         schedule = await self.get_dues_schedule(schedule_id, org_id)
         if not schedule:
@@ -1592,9 +1504,7 @@ class FinanceService:
             count += 1
 
         await self.db.flush()
-        logger.info(
-            "Generated %d member dues for schedule %s", count, schedule_id
-        )
+        logger.info("Generated %d member dues for schedule %s", count, schedule_id)
         return count
 
     async def list_member_dues(
@@ -1604,9 +1514,7 @@ class FinanceService:
         user_id: Optional[str] = None,
         status: Optional[str] = None,
     ) -> list[MemberDues]:
-        query = select(MemberDues).where(
-            MemberDues.organization_id == org_id
-        )
+        query = select(MemberDues).where(MemberDues.organization_id == org_id)
         if schedule_id:
             query = query.where(MemberDues.dues_schedule_id == schedule_id)
         if user_id:
@@ -1674,9 +1582,7 @@ class FinanceService:
     async def get_dues_summary(
         self, org_id: str, schedule_id: Optional[str] = None
     ) -> dict:
-        query = select(MemberDues).where(
-            MemberDues.organization_id == org_id
-        )
+        query = select(MemberDues).where(MemberDues.organization_id == org_id)
         if schedule_id:
             query = query.where(MemberDues.dues_schedule_id == schedule_id)
         result = await self.db.execute(query)
@@ -1698,34 +1604,24 @@ class FinanceService:
             "total_outstanding": total_outstanding,
             "total_waived": total_waived,
             "collection_rate": round(collection_rate, 2),
-            "members_paid": sum(
-                1 for d in all_dues if d.status == DuesStatus.PAID
-            ),
+            "members_paid": sum(1 for d in all_dues if d.status == DuesStatus.PAID),
             "members_overdue": sum(
                 1 for d in all_dues if d.status == DuesStatus.OVERDUE
             ),
-            "members_waived": sum(
-                1 for d in all_dues if d.status == DuesStatus.WAIVED
-            ),
+            "members_waived": sum(1 for d in all_dues if d.status == DuesStatus.WAIVED),
         }
 
     # ========================================
     # Export
     # ========================================
 
-    async def list_export_mappings(
-        self, org_id: str
-    ) -> list[ExportMapping]:
+    async def list_export_mappings(self, org_id: str) -> list[ExportMapping]:
         result = await self.db.execute(
-            select(ExportMapping).where(
-                ExportMapping.organization_id == org_id
-            )
+            select(ExportMapping).where(ExportMapping.organization_id == org_id)
         )
         return list(result.scalars().all())
 
-    async def create_export_mapping(
-        self, org_id: str, **kwargs
-    ) -> ExportMapping:
+    async def create_export_mapping(self, org_id: str, **kwargs) -> ExportMapping:
         mapping = ExportMapping(organization_id=org_id, **kwargs)
         self.db.add(mapping)
         await self.db.flush()
@@ -1796,50 +1692,56 @@ class FinanceService:
         # Build CSV
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow([
-            "Date", "Type", "Num", "Name", "Memo", "Account", "Debit", "Credit"
-        ])
+        writer.writerow(
+            ["Date", "Type", "Num", "Name", "Memo", "Account", "Debit", "Credit"]
+        )
 
         record_count = 0
 
         for pr in prs:
-            writer.writerow([
-                pr.paid_at.strftime("%m/%d/%Y") if pr.paid_at else "",
-                "Bill Pmt",
-                pr.request_number,
-                pr.vendor or "",
-                pr.title,
-                "",
-                str(pr.actual_amount or pr.estimated_amount),
-                "",
-            ])
+            writer.writerow(
+                [
+                    pr.paid_at.strftime("%m/%d/%Y") if pr.paid_at else "",
+                    "Bill Pmt",
+                    pr.request_number,
+                    pr.vendor or "",
+                    pr.title,
+                    "",
+                    str(pr.actual_amount or pr.estimated_amount),
+                    "",
+                ]
+            )
             record_count += 1
 
         for cr in crs:
-            writer.writerow([
-                cr.check_date.strftime("%m/%d/%Y") if cr.check_date else "",
-                "Check",
-                cr.check_number or cr.request_number,
-                cr.payee_name,
-                cr.memo or cr.purpose or "",
-                "",
-                str(cr.amount),
-                "",
-            ])
+            writer.writerow(
+                [
+                    cr.check_date.strftime("%m/%d/%Y") if cr.check_date else "",
+                    "Check",
+                    cr.check_number or cr.request_number,
+                    cr.payee_name,
+                    cr.memo or cr.purpose or "",
+                    "",
+                    str(cr.amount),
+                    "",
+                ]
+            )
             record_count += 1
 
         for er in ers:
             for item in er.line_items:
-                writer.writerow([
-                    er.paid_at.strftime("%m/%d/%Y") if er.paid_at else "",
-                    "Expense",
-                    er.report_number,
-                    item.merchant or "",
-                    item.description,
-                    "",
-                    str(item.amount),
-                    "",
-                ])
+                writer.writerow(
+                    [
+                        er.paid_at.strftime("%m/%d/%Y") if er.paid_at else "",
+                        "Expense",
+                        er.report_number,
+                        item.merchant or "",
+                        item.description,
+                        "",
+                        str(item.amount),
+                        "",
+                    ]
+                )
                 record_count += 1
 
         # Log the export
@@ -1930,25 +1832,15 @@ class FinanceService:
     # Budget Helpers
     # ========================================
 
-    async def _encumber_budget(
-        self, budget_id: str, amount: float
-    ) -> None:
-        result = await self.db.execute(
-            select(Budget).where(Budget.id == budget_id)
-        )
+    async def _encumber_budget(self, budget_id: str, amount: float) -> None:
+        result = await self.db.execute(select(Budget).where(Budget.id == budget_id))
         budget = result.scalar_one_or_none()
         if budget:
-            budget.amount_encumbered = budget.amount_encumbered + Decimal(
-                str(amount)
-            )
+            budget.amount_encumbered = budget.amount_encumbered + Decimal(str(amount))
             await self.db.flush()
 
-    async def _release_encumbrance(
-        self, budget_id: str, amount: float
-    ) -> None:
-        result = await self.db.execute(
-            select(Budget).where(Budget.id == budget_id)
-        )
+    async def _release_encumbrance(self, budget_id: str, amount: float) -> None:
+        result = await self.db.execute(select(Budget).where(Budget.id == budget_id))
         budget = result.scalar_one_or_none()
         if budget:
             budget.amount_encumbered = max(
@@ -1957,12 +1849,8 @@ class FinanceService:
             )
             await self.db.flush()
 
-    async def _add_to_spent(
-        self, budget_id: str, amount: float
-    ) -> None:
-        result = await self.db.execute(
-            select(Budget).where(Budget.id == budget_id)
-        )
+    async def _add_to_spent(self, budget_id: str, amount: float) -> None:
+        result = await self.db.execute(select(Budget).where(Budget.id == budget_id))
         budget = result.scalar_one_or_none()
         if budget:
             budget.amount_spent = budget.amount_spent + Decimal(str(amount))

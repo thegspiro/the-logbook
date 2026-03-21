@@ -59,9 +59,7 @@ class CacheManager:
                     import ssl as _ssl
 
                     ssl_ctx = _ssl.create_default_context(
-                        cafile=settings.REDIS_SSL_CA
-                        if settings.REDIS_SSL_CA
-                        else None,
+                        cafile=settings.REDIS_SSL_CA if settings.REDIS_SSL_CA else None,
                     )
                     if not settings.REDIS_SSL_CA:
                         ssl_ctx.check_hostname = False

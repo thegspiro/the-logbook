@@ -61,9 +61,7 @@ class SMSService:
             logger.error(f"Failed to send SMS to {to_number}: {e}")
             return False
 
-    async def send_bulk_sms(
-        self, phone_numbers: List[str], body: str
-    ) -> int:
+    async def send_bulk_sms(self, phone_numbers: List[str], body: str) -> int:
         """Send the same SMS to multiple numbers. Returns count of successful sends."""
         sent = 0
         for number in phone_numbers:

@@ -148,7 +148,9 @@ class ScheduledEmailResponse(UTCResponseBase):
 
     model_config = {"from_attributes": True}
 
-    @field_validator("scheduled_at", "sent_at", "created_at", "updated_at", mode="before")
+    @field_validator(
+        "scheduled_at", "sent_at", "created_at", "updated_at", mode="before"
+    )
     @classmethod
     def ensure_utc_timezone(cls, v: datetime | None) -> datetime | None:
         """Attach UTC tzinfo to naive datetimes returned by MySQL."""

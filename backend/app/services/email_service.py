@@ -76,20 +76,22 @@ def inline_email_css(html: str) -> str:
             return tag
         return _add_style_to_tag(tag, class_styles[cls_m.group(1)])
 
-    html = re.sub(r"<[a-zA-Z]\w*\b[^>]*\bclass=\"[\w-]+\"[^>]*/?>", _replace_class, html)
+    html = re.sub(
+        r"<[a-zA-Z]\w*\b[^>]*\bclass=\"[\w-]+\"[^>]*/?>", _replace_class, html
+    )
 
     # --- inline compound (parent > child) styles ----------------------
     for parent_cls, child_tag, styles in child_styles:
         # Find content inside elements with parent_cls and style child tags
         pattern = (
-            r"(<[a-zA-Z]\w*\b[^>]*\bclass=\""
-            + re.escape(parent_cls)
-            + r"\"[^>]*>)"
+            r"(<[a-zA-Z]\w*\b[^>]*\bclass=\"" + re.escape(parent_cls) + r"\"[^>]*>)"
             r"(.*?)"
             r"(</[a-zA-Z]\w*>)"
         )
 
-        def _replace_children(outer: re.Match, ctag: str = child_tag, cstyles: str = styles) -> str:
+        def _replace_children(
+            outer: re.Match, ctag: str = child_tag, cstyles: str = styles
+        ) -> str:
             open_tag = outer.group(1)
             inner = outer.group(2)
             close_tag = outer.group(3)
@@ -117,10 +119,12 @@ def _merge_body_style(html: str, styles: str) -> str:
     existing = re.search(r'style="([^"]*)"', attrs)
     if existing:
         merged = f"{styles} {existing.group(1)}".strip()
-        new_attrs = attrs[: existing.start()] + f'style="{merged}"' + attrs[existing.end():]
+        new_attrs = (
+            attrs[: existing.start()] + f'style="{merged}"' + attrs[existing.end() :]
+        )
     else:
         new_attrs = f'{attrs} style="{styles}"'
-    return html[: body_m.start()] + f"<body{new_attrs}>" + html[body_m.end():]
+    return html[: body_m.start()] + f"<body{new_attrs}>" + html[body_m.end() :]
 
 
 def _add_style_to_tag(tag: str, new_styles: str) -> str:
@@ -132,7 +136,7 @@ def _add_style_to_tag(tag: str, new_styles: str) -> str:
     existing_m = re.search(r'style="([^"]*)"', tag)
     if existing_m:
         merged = f"{new_styles} {existing_m.group(1)}".strip()
-        return tag[: existing_m.start()] + f'style="{merged}"' + tag[existing_m.end():]
+        return tag[: existing_m.start()] + f'style="{merged}"' + tag[existing_m.end() :]
     # Insert style before the closing > (or />)
     if tag.endswith("/>"):
         return tag[:-2] + f' style="{new_styles}" />'
@@ -301,16 +305,23 @@ class EmailService:
 
         if encryption == "ssl":
             server = smtplib.SMTP_SSL(
-                host, port, local_hostname=ehlo_hostname,
-                context=context, timeout=timeout,
+                host,
+                port,
+                local_hostname=ehlo_hostname,
+                context=context,
+                timeout=timeout,
             )
         elif encryption in ("tls", "starttls"):
-            server = smtplib.SMTP(host, port, local_hostname=ehlo_hostname, timeout=timeout)
+            server = smtplib.SMTP(
+                host, port, local_hostname=ehlo_hostname, timeout=timeout
+            )
             server.ehlo()
             server.starttls(context=context)
             server.ehlo()
         else:
-            server = smtplib.SMTP(host, port, local_hostname=ehlo_hostname, timeout=timeout)
+            server = smtplib.SMTP(
+                host, port, local_hostname=ehlo_hostname, timeout=timeout
+            )
             server.ehlo()
 
         if self._smtp_config["user"] and self._smtp_config["password"]:
@@ -332,9 +343,7 @@ class EmailService:
         finally:
             server.quit()
 
-    def _smtp_send_batch(
-        self, messages: List[Tuple[List[str], str]]
-    ) -> List[bool]:
+    def _smtp_send_batch(self, messages: List[Tuple[List[str], str]]) -> List[bool]:
         """Send multiple emails through a single SMTP connection.
 
         Includes rate-limit mitigation:
@@ -427,9 +436,7 @@ class EmailService:
         )
         msg["To"] = to_email
         msg["Subject"] = subject
-        msg["Date"] = datetime.now(timezone.utc).strftime(
-            "%a, %d %b %Y %H:%M:%S +0000"
-        )
+        msg["Date"] = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
         msg["Message-ID"] = self._make_message_id()
         if reply_to:
             msg["Reply-To"] = reply_to
@@ -446,9 +453,7 @@ class EmailService:
 
         return all_recipients, msg.as_string()
 
-    async def send_batch(
-        self, messages: List[Tuple[List[str], str]]
-    ) -> List[bool]:
+    async def send_batch(self, messages: List[Tuple[List[str], str]]) -> List[bool]:
         """Send pre-built messages through a single SMTP connection.
 
         Each item is ``(all_recipients, mime_message_string)`` as returned
@@ -462,9 +467,7 @@ class EmailService:
             .get("email_service", {})
             .get("enabled")
         ):
-            logger.info(
-                f"Email disabled. Would batch-send {len(messages)} messages."
-            )
+            logger.info(f"Email disabled. Would batch-send {len(messages)} messages.")
             return [False] * len(messages)
         return await asyncio.to_thread(self._smtp_send_batch, messages)
 

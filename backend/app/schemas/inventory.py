@@ -112,21 +112,60 @@ NFPARecommendationLiteral = Literal["pass", "repair", "advanced_cleaning", "reti
 
 ClearanceSourceTypeLiteral = Literal["assignment", "checkout", "issuance"]
 
-DepartureTypeLiteral = Literal[
-    "dropped_voluntary", "dropped_involuntary", "retired"
-]
+DepartureTypeLiteral = Literal["dropped_voluntary", "dropped_involuntary", "retired"]
 
 StandardSizeLiteral = Literal[
-    "xxs", "xs", "s", "m", "l", "xl", "xxl", "xxxl", "xxxxl",
-    "6", "6.5", "7", "7.5", "8", "8.5", "9", "9.5", "10", "10.5",
-    "11", "11.5", "12", "12.5", "13", "14", "15",
-    "28", "30", "32", "34", "36", "38", "40", "42", "44", "46",
-    "one_size", "custom",
+    "xxs",
+    "xs",
+    "s",
+    "m",
+    "l",
+    "xl",
+    "xxl",
+    "xxxl",
+    "xxxxl",
+    "6",
+    "6.5",
+    "7",
+    "7.5",
+    "8",
+    "8.5",
+    "9",
+    "9.5",
+    "10",
+    "10.5",
+    "11",
+    "11.5",
+    "12",
+    "12.5",
+    "13",
+    "14",
+    "15",
+    "28",
+    "30",
+    "32",
+    "34",
+    "36",
+    "38",
+    "40",
+    "42",
+    "44",
+    "46",
+    "one_size",
+    "custom",
 ]
 
 GarmentStyleLiteral = Literal[
-    "short_sleeve", "long_sleeve", "mens", "womens", "unisex",
-    "v_neck", "crew_neck", "polo", "button_down", "quarter_zip",
+    "short_sleeve",
+    "long_sleeve",
+    "mens",
+    "womens",
+    "unisex",
+    "v_neck",
+    "crew_neck",
+    "polo",
+    "button_down",
+    "quarter_zip",
 ]
 
 # ============================================

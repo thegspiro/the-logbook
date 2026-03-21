@@ -496,7 +496,9 @@ class TrainingProgramService:
         # Verify requirement exists
         req_result = await self.db.execute(
             select(TrainingRequirement)
-            .where(TrainingRequirement.id == str(program_requirement_data.requirement_id))
+            .where(
+                TrainingRequirement.id == str(program_requirement_data.requirement_id)
+            )
             .where(TrainingRequirement.organization_id == str(organization_id))
         )
         requirement = req_result.scalar_one_or_none()

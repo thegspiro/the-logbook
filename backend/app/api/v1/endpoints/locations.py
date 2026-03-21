@@ -45,9 +45,7 @@ def _location_to_list_item(loc) -> LocationListItem:
         capacity=loc.capacity,
         is_active=loc.is_active,
         facility_id=UUID(loc.facility_id) if loc.facility_id else None,
-        facility_room_id=(
-            UUID(loc.facility_room_id) if loc.facility_room_id else None
-        ),
+        facility_room_id=(UUID(loc.facility_room_id) if loc.facility_room_id else None),
         display_code=loc.display_code,
         created_at=loc.created_at,
         updated_at=loc.updated_at,

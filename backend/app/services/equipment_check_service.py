@@ -110,17 +110,11 @@ class EquipmentCheckService:
         )
 
         if apparatus_id is not None:
-            query = query.where(
-                EquipmentCheckTemplate.apparatus_id == apparatus_id
-            )
+            query = query.where(EquipmentCheckTemplate.apparatus_id == apparatus_id)
         if apparatus_type is not None:
-            query = query.where(
-                EquipmentCheckTemplate.apparatus_type == apparatus_type
-            )
+            query = query.where(EquipmentCheckTemplate.apparatus_type == apparatus_type)
         if check_timing is not None:
-            query = query.where(
-                EquipmentCheckTemplate.check_timing == check_timing
-            )
+            query = query.where(EquipmentCheckTemplate.check_timing == check_timing)
 
         result = await self.db.execute(query)
         return list(result.scalars().all())
@@ -143,9 +137,7 @@ class EquipmentCheckService:
         await self.db.commit()
         return await self.get_template(template_id, organization_id)
 
-    async def delete_template(
-        self, template_id: str, organization_id: str
-    ) -> bool:
+    async def delete_template(self, template_id: str, organization_id: str) -> bool:
         """Delete a template and all its compartments/items."""
         template = await self.get_template(template_id, organization_id)
         if not template:
@@ -175,9 +167,7 @@ class EquipmentCheckService:
         apparatus_name = apparatus.name if apparatus else ""
 
         clone_name = (
-            f"{apparatus_name} - {source.name}"
-            if apparatus_name
-            else source.name
+            f"{apparatus_name} - {source.name}" if apparatus_name else source.name
         )
         new_template = EquipmentCheckTemplate(
             id=generate_uuid(),
@@ -197,9 +187,7 @@ class EquipmentCheckService:
         await self.db.flush()
 
         for compartment in source.compartments:
-            await self._clone_compartment(
-                new_template.id, compartment, parent_id=None
-            )
+            await self._clone_compartment(new_template.id, compartment, parent_id=None)
 
         await self.db.commit()
         return await self.get_template(new_template.id, organization_id)
@@ -249,9 +237,7 @@ class EquipmentCheckService:
         data: Dict[str, Any],
     ) -> Optional[CheckTemplateCompartment]:
         """Update a compartment."""
-        compartment = await self._get_compartment(
-            compartment_id, organization_id
-        )
+        compartment = await self._get_compartment(compartment_id, organization_id)
         if not compartment:
             return None
 
@@ -273,9 +259,7 @@ class EquipmentCheckService:
         self, compartment_id: str, organization_id: str
     ) -> bool:
         """Delete a compartment and all its items."""
-        compartment = await self._get_compartment(
-            compartment_id, organization_id
-        )
+        compartment = await self._get_compartment(compartment_id, organization_id)
         if not compartment:
             return False
 
@@ -314,9 +298,7 @@ class EquipmentCheckService:
         data: Dict[str, Any],
     ) -> Optional[CheckTemplateItem]:
         """Add an item to a compartment."""
-        compartment = await self._get_compartment(
-            compartment_id, organization_id
-        )
+        compartment = await self._get_compartment(compartment_id, organization_id)
         if not compartment:
             return None
 
@@ -349,9 +331,7 @@ class EquipmentCheckService:
         await self.db.refresh(item)
         return item
 
-    async def delete_item(
-        self, item_id: str, organization_id: str
-    ) -> bool:
+    async def delete_item(self, item_id: str, organization_id: str) -> bool:
         """Delete a check template item."""
         item = await self._get_item(item_id, organization_id)
         if not item:
@@ -368,9 +348,7 @@ class EquipmentCheckService:
         ordered_ids: List[str],
     ) -> bool:
         """Reorder items within a compartment."""
-        compartment = await self._get_compartment(
-            compartment_id, organization_id
-        )
+        compartment = await self._get_compartment(compartment_id, organization_id)
         if not compartment:
             return False
 
@@ -423,9 +401,7 @@ class EquipmentCheckService:
         user_position = assignment.position if assignment else None
 
         # Find applicable templates
-        templates = await self._resolve_templates(
-            shift, organization_id, user_position
-        )
+        templates = await self._resolve_templates(shift, organization_id, user_position)
 
         # Get existing checks for this shift
         result = await self.db.execute(
@@ -434,9 +410,7 @@ class EquipmentCheckService:
                 ShiftEquipmentCheck.organization_id == organization_id,
             )
         )
-        existing_checks = {
-            c.template_id: c for c in result.scalars().all()
-        }
+        existing_checks = {c.template_id: c for c in result.scalars().all()}
 
         checklists = []
         for tmpl in templates:
@@ -481,17 +455,13 @@ class EquipmentCheckService:
         checks = {c.template_id: c for c in result.scalars().all()}
 
         # Build user name map
-        user_ids = [
-            c.checked_by for c in checks.values() if c.checked_by
-        ]
+        user_ids = [c.checked_by for c in checks.values() if c.checked_by]
         user_map = await self._get_user_name_map(user_ids)
 
         summaries = []
         for tmpl in templates:
             check = checks.get(tmpl.id)
-            item_count = sum(
-                len(comp.items) for comp in tmpl.compartments
-            )
+            item_count = sum(len(comp.items) for comp in tmpl.compartments)
             summaries.append(
                 {
                     "template_id": tmpl.id,
@@ -500,11 +470,11 @@ class EquipmentCheckService:
                     "assigned_positions": tmpl.assigned_positions,
                     "is_completed": check is not None,
                     "overall_status": check.overall_status if check else None,
-                    "checked_by_name": user_map.get(
-                        check.checked_by, ""
-                    )
-                    if check and check.checked_by
-                    else None,
+                    "checked_by_name": (
+                        user_map.get(check.checked_by, "")
+                        if check and check.checked_by
+                        else None
+                    ),
                     "checked_at": check.checked_at if check else None,
                     "total_items": check.total_items if check else item_count,
                     "completed_items": check.completed_items if check else 0,
@@ -542,9 +512,7 @@ class EquipmentCheckService:
 
         # Compute aggregate counts
         total = len(items_data)
-        completed = sum(
-            1 for i in items_data if i.get("status") != "not_checked"
-        )
+        completed = sum(1 for i in items_data if i.get("status") != "not_checked")
         failed = sum(1 for i in items_data if i.get("status") == "fail")
 
         # Auto-fail expired items and under-quantity items
@@ -553,11 +521,7 @@ class EquipmentCheckService:
                 item["status"] = "fail"
             req_qty = item.get("required_quantity")
             found_qty = item.get("quantity_found")
-            if (
-                req_qty is not None
-                and found_qty is not None
-                and found_qty < req_qty
-            ):
+            if req_qty is not None and found_qty is not None and found_qty < req_qty:
                 item["status"] = "fail"
 
         # Recount after auto-fail
@@ -590,8 +554,7 @@ class EquipmentCheckService:
 
         # Collect template item IDs for serial update lookups
         template_item_ids = [
-            i.get("template_item_id") for i in items_data
-            if i.get("template_item_id")
+            i.get("template_item_id") for i in items_data if i.get("template_item_id")
         ]
         template_items_map: Dict[str, CheckTemplateItem] = {}
         if template_item_ids:
@@ -613,13 +576,11 @@ class EquipmentCheckService:
             if tmpl_item_id and (serial_found or lot_found):
                 tmpl_item = template_items_map.get(tmpl_item_id)
                 if tmpl_item:
-                    serial_changed = (
-                        serial_found
-                        and serial_found != (tmpl_item.serial_number or "")
+                    serial_changed = serial_found and serial_found != (
+                        tmpl_item.serial_number or ""
                     )
-                    lot_changed = (
-                        lot_found
-                        and lot_found != (tmpl_item.lot_number or "")
+                    lot_changed = lot_found and lot_found != (
+                        tmpl_item.lot_number or ""
                     )
                     if serial_changed or lot_changed:
                         updated_serial = True
@@ -632,40 +593,22 @@ class EquipmentCheckService:
                 id=generate_uuid(),
                 check_id=check.id,
                 template_item_id=tmpl_item_id,
-                compartment_name=item_data.get(
-                    "compartment_name", ""
-                ),
-                item_name=item_data.get(
-                    "item_name", ""
-                ),
+                compartment_name=item_data.get("compartment_name", ""),
+                item_name=item_data.get("item_name", ""),
                 check_type=item_data.get("check_type"),
-                status=item_data.get(
-                    "status", "not_checked"
-                ),
-                quantity_found=item_data.get(
-                    "quantity_found"
-                ),
-                required_quantity=item_data.get(
-                    "required_quantity"
-                ),
-                level_reading=item_data.get(
-                    "level_reading"
-                ),
+                status=item_data.get("status", "not_checked"),
+                quantity_found=item_data.get("quantity_found"),
+                required_quantity=item_data.get("required_quantity"),
+                level_reading=item_data.get("level_reading"),
                 level_unit=item_data.get("level_unit"),
-                serial_number=item_data.get(
-                    "serial_number"
-                ),
+                serial_number=item_data.get("serial_number"),
                 lot_number=item_data.get("lot_number"),
                 serial_found=serial_found,
                 lot_found=lot_found,
                 updated_serial=updated_serial,
                 photo_urls=item_data.get("photo_urls"),
-                is_expired=item_data.get(
-                    "is_expired", False
-                ),
-                expiration_date=item_data.get(
-                    "expiration_date"
-                ),
+                is_expired=item_data.get("is_expired", False),
+                expiration_date=item_data.get("expiration_date"),
                 notes=item_data.get("notes"),
             )
             self.db.add(check_item)
@@ -673,18 +616,14 @@ class EquipmentCheckService:
         # Update apparatus deficiency flag
         if shift.apparatus_id:
             apparatus_result = await self.db.execute(
-                select(Apparatus).where(
-                    Apparatus.id == shift.apparatus_id
-                )
+                select(Apparatus).where(Apparatus.id == shift.apparatus_id)
             )
             apparatus = apparatus_result.scalars().first()
             if apparatus:
                 if overall_status == "fail":
                     if not apparatus.has_deficiency:
                         apparatus.has_deficiency = True
-                        apparatus.deficiency_since = (
-                            datetime.now(timezone.utc)
-                        )
+                        apparatus.deficiency_since = datetime.now(timezone.utc)
                 elif overall_status == "pass":
                     apparatus.has_deficiency = False
                     apparatus.deficiency_since = None
@@ -721,9 +660,7 @@ class EquipmentCheckService:
         )
 
         if check_timing:
-            query = query.where(
-                ShiftEquipmentCheck.check_timing == check_timing
-            )
+            query = query.where(ShiftEquipmentCheck.check_timing == check_timing)
 
         result = await self.db.execute(query)
         return list(result.scalars().all())
@@ -801,15 +738,17 @@ class EquipmentCheckService:
 
         if start_date:
             query = query.where(
-                ShiftEquipmentCheck.checked_at >= datetime.combine(
-                    start_date, datetime.min.time()
-                ).replace(tzinfo=timezone.utc)
+                ShiftEquipmentCheck.checked_at
+                >= datetime.combine(start_date, datetime.min.time()).replace(
+                    tzinfo=timezone.utc
+                )
             )
         if end_date:
             query = query.where(
-                ShiftEquipmentCheck.checked_at <= datetime.combine(
-                    end_date, datetime.max.time()
-                ).replace(tzinfo=timezone.utc)
+                ShiftEquipmentCheck.checked_at
+                <= datetime.combine(end_date, datetime.max.time()).replace(
+                    tzinfo=timezone.utc
+                )
             )
 
         result = await self.db.execute(query)
@@ -847,22 +786,16 @@ class EquipmentCheckService:
             return []
 
         result = await self.db.execute(
-            select(ShiftEquipmentCheck).where(
-                ShiftEquipmentCheck.id.in_(check_ids)
-            )
+            select(ShiftEquipmentCheck).where(ShiftEquipmentCheck.id.in_(check_ids))
         )
         checks = {c.id: c for c in result.scalars().all()}
 
-        user_ids = [
-            c.checked_by for c in checks.values() if c.checked_by
-        ]
+        user_ids = [c.checked_by for c in checks.values() if c.checked_by]
         user_map = await self._get_user_name_map(user_ids)
 
         # Get shift dates
         shift_ids = [c.shift_id for c in checks.values()]
-        result = await self.db.execute(
-            select(Shift).where(Shift.id.in_(shift_ids))
-        )
+        result = await self.db.execute(select(Shift).where(Shift.id.in_(shift_ids)))
         shift_map = {s.id: s for s in result.scalars().all()}
 
         history = []
@@ -872,14 +805,8 @@ class EquipmentCheckService:
             history.append(
                 {
                     "check_id": item.check_id,
-                    "shift_id": (
-                        check.shift_id if check else None
-                    ),
-                    "shift_date": (
-                        shift.shift_date
-                        if shift
-                        else None
-                    ),
+                    "shift_id": (check.shift_id if check else None),
+                    "shift_date": (shift.shift_date if shift else None),
                     "status": item.status,
                     "quantity_found": item.quantity_found,
                     "level_reading": item.level_reading,
@@ -887,16 +814,12 @@ class EquipmentCheckService:
                     "lot_number": item.lot_number,
                     "is_expired": item.is_expired,
                     "notes": item.notes,
-                    "checked_by_name": user_map.get(
-                        check.checked_by, ""
-                    )
-                    if check and check.checked_by
-                    else None,
-                    "checked_at": (
-                        check.checked_at
-                        if check
+                    "checked_by_name": (
+                        user_map.get(check.checked_by, "")
+                        if check and check.checked_by
                         else None
                     ),
+                    "checked_at": (check.checked_at if check else None),
                 }
             )
 
@@ -914,13 +837,11 @@ class EquipmentCheckService:
             select(CheckTemplateItem)
             .join(
                 CheckTemplateCompartment,
-                CheckTemplateCompartment.id
-                == CheckTemplateItem.compartment_id,
+                CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
             )
             .join(
                 EquipmentCheckTemplate,
-                EquipmentCheckTemplate.id
-                == CheckTemplateCompartment.template_id,
+                EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
             )
             .where(
                 EquipmentCheckTemplate.organization_id == organization_id,
@@ -958,16 +879,17 @@ class EquipmentCheckService:
             else:
                 # Fall back to apparatus-type templates
                 result = await self.db.execute(
-                    select(Apparatus).where(
-                        Apparatus.id == shift.apparatus_id
-                    )
+                    select(Apparatus).where(Apparatus.id == shift.apparatus_id)
                 )
                 apparatus = result.scalars().first()
                 if apparatus and apparatus.type:
                     templates = await self.list_templates(
-                        organization_id, apparatus_type=apparatus.type.value
-                        if hasattr(apparatus.type, "value")
-                        else str(apparatus.type)
+                        organization_id,
+                        apparatus_type=(
+                            apparatus.type.value
+                            if hasattr(apparatus.type, "value")
+                            else str(apparatus.type)
+                        ),
                     )
 
         # Filter by active status
@@ -1052,17 +974,13 @@ class EquipmentCheckService:
                 image_url=item.image_url,
                 has_expiration=item.has_expiration,
                 expiration_date=item.expiration_date,
-                expiration_warning_days=(
-                    item.expiration_warning_days
-                ),
+                expiration_warning_days=(item.expiration_warning_days),
             )
             self.db.add(new_item)
 
         # Clone children
         for child in getattr(source, "children", []) or []:
-            await self._clone_compartment(
-                template_id, child, compartment.id
-            )
+            await self._clone_compartment(template_id, child, compartment.id)
 
         return compartment
 
@@ -1074,8 +992,7 @@ class EquipmentCheckService:
             select(CheckTemplateCompartment)
             .join(
                 EquipmentCheckTemplate,
-                EquipmentCheckTemplate.id
-                == CheckTemplateCompartment.template_id,
+                EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
             )
             .where(
                 CheckTemplateCompartment.id == compartment_id,
@@ -1093,13 +1010,11 @@ class EquipmentCheckService:
             select(CheckTemplateItem)
             .join(
                 CheckTemplateCompartment,
-                CheckTemplateCompartment.id
-                == CheckTemplateItem.compartment_id,
+                CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
             )
             .join(
                 EquipmentCheckTemplate,
-                EquipmentCheckTemplate.id
-                == CheckTemplateCompartment.template_id,
+                EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
             )
             .where(
                 CheckTemplateItem.id == item_id,
@@ -1108,21 +1023,14 @@ class EquipmentCheckService:
         )
         return result.scalars().first()
 
-    async def _get_user_name_map(
-        self, user_ids: List[str]
-    ) -> Dict[str, str]:
+    async def _get_user_name_map(self, user_ids: List[str]) -> Dict[str, str]:
         """Build a user_id → display name map."""
         if not user_ids:
             return {}
 
-        result = await self.db.execute(
-            select(User).where(User.id.in_(user_ids))
-        )
+        result = await self.db.execute(select(User).where(User.id.in_(user_ids)))
         users = result.scalars().all()
-        return {
-            str(u.id): f"{u.first_name} {u.last_name}".strip()
-            for u in users
-        }
+        return {str(u.id): f"{u.first_name} {u.last_name}".strip() for u in users}
 
     # ============================================
     # Failure Notifications
@@ -1148,17 +1056,13 @@ class EquipmentCheckService:
 
         try:
             org_result = await self.db.execute(
-                select(Organization).where(
-                    Organization.id == str(organization_id)
-                )
+                select(Organization).where(Organization.id == str(organization_id))
             )
             org = org_result.scalar_one_or_none()
             if not org:
                 return
 
-            cfg = (org.settings or {}).get(
-                "equipment_check_alerts", {}
-            )
+            cfg = (org.settings or {}).get("equipment_check_alerts", {})
             if not cfg.get("notify_on_failure", True):
                 return
 
@@ -1201,9 +1105,7 @@ class EquipmentCheckService:
             # Shift officer
             if cfg.get("notify_shift_officer", True):
                 if shift.shift_officer_id:
-                    recipient_ids.add(
-                        str(shift.shift_officer_id)
-                    )
+                    recipient_ids.add(str(shift.shift_officer_id))
 
             # Users with matching roles
             notify_roles = cfg.get("notify_roles", [])
@@ -1217,9 +1119,7 @@ class EquipmentCheckService:
                         Role.id == user_positions.c.position_id,
                     )
                     .where(
-                        Role.organization_id == str(
-                            organization_id
-                        ),
+                        Role.organization_id == str(organization_id),
                         Role.slug.in_(notify_roles),
                     )
                 )
@@ -1234,15 +1134,11 @@ class EquipmentCheckService:
             from app.models.notification import NotificationLog
 
             shift_date_str = (
-                shift.shift_date.isoformat()
-                if shift.shift_date
-                else "unknown date"
+                shift.shift_date.isoformat() if shift.shift_date else "unknown date"
             )
-            apparatus_label = (
-                f" on {apparatus_name}" if apparatus_name else ""
-            )
+            apparatus_label = f" on {apparatus_name}" if apparatus_name else ""
             message = (
-                f"Equipment check \"{template_name}\""
+                f'Equipment check "{template_name}"'
                 f"{apparatus_label} failed with "
                 f"{failed_count} of {total_count} items. "
                 f"Checked by {checker_name} "
@@ -1258,9 +1154,7 @@ class EquipmentCheckService:
                     category="equipment_check",
                     subject="Equipment Check Failed",
                     message=message,
-                    action_url=(
-                        f"/scheduling/shifts/{shift.id}"
-                    ),
+                    action_url=(f"/scheduling/shifts/{shift.id}"),
                 )
                 self.db.add(notif)
             await self.db.flush()
@@ -1278,16 +1172,10 @@ class EquipmentCheckService:
                             User.email.isnot(None),
                         )
                     )
-                    to_emails = [
-                        r[0]
-                        for r in recip_result.all()
-                        if r[0]
-                    ]
+                    to_emails = [r[0] for r in recip_result.all() if r[0]]
                     cc_emails = cfg.get("cc_emails", [])
                     if to_emails:
-                        email_svc = EmailService(
-                            organization=org
-                        )
+                        email_svc = EmailService(organization=org)
                         subject = (
                             "Equipment Check Failed"
                             f" \u2014 {template_name}"
@@ -1305,21 +1193,15 @@ class EquipmentCheckService:
                             html_body=html_body,
                             cc_emails=cc_emails or None,
                             db=self.db,
-                            template_type=(
-                                "equipment_check_failure"
-                            ),
+                            template_type=("equipment_check_failure"),
                         )
                 except Exception as email_err:
                     logger.warning(
-                        "Equipment check failure email "
-                        f"failed: {email_err}"
+                        "Equipment check failure email " f"failed: {email_err}"
                     )
 
         except Exception as e:
-            logger.warning(
-                "Equipment check failure notification "
-                f"failed: {e}"
-            )
+            logger.warning("Equipment check failure notification " f"failed: {e}")
 
     # ============================================
     # Report Queries
@@ -1339,38 +1221,29 @@ class EquipmentCheckService:
         if not date_to:
             date_to = date.today()
 
-        date_to_end = datetime.combine(
-            date_to, datetime.max.time()
-        ).replace(tzinfo=timezone.utc)
-        date_from_start = datetime.combine(
-            date_from, datetime.min.time()
-        ).replace(tzinfo=timezone.utc)
+        date_to_end = datetime.combine(date_to, datetime.max.time()).replace(
+            tzinfo=timezone.utc
+        )
+        date_from_start = datetime.combine(date_from, datetime.min.time()).replace(
+            tzinfo=timezone.utc
+        )
 
         # All checks in the date range
         checks_q = await self.db.execute(
             select(ShiftEquipmentCheck).where(
-                ShiftEquipmentCheck.organization_id
-                == organization_id,
-                ShiftEquipmentCheck.checked_at
-                >= date_from_start,
-                ShiftEquipmentCheck.checked_at
-                <= date_to_end,
+                ShiftEquipmentCheck.organization_id == organization_id,
+                ShiftEquipmentCheck.checked_at >= date_from_start,
+                ShiftEquipmentCheck.checked_at <= date_to_end,
             )
         )
         checks = checks_q.scalars().all()
 
         # Build apparatus map
-        apparatus_ids = {
-            c.apparatus_id
-            for c in checks
-            if c.apparatus_id
-        }
+        apparatus_ids = {c.apparatus_id for c in checks if c.apparatus_id}
         apparatus_map: Dict[str, Any] = {}
         if apparatus_ids:
             app_q = await self.db.execute(
-                select(Apparatus).where(
-                    Apparatus.id.in_(list(apparatus_ids))
-                )
+                select(Apparatus).where(Apparatus.id.in_(list(apparatus_ids)))
             )
             for a in app_q.scalars().all():
                 apparatus_map[str(a.id)] = a
@@ -1412,13 +1285,8 @@ class EquipmentCheckService:
                     stats["pass_count"] += 1
                 elif c.overall_status == "fail":
                     stats["fail_count"] += 1
-                if (
-                    stats["last_check_date"] is None
-                    or (
-                        c.checked_at
-                        and c.checked_at
-                        > stats["last_check_date"]
-                    )
+                if stats["last_check_date"] is None or (
+                    c.checked_at and c.checked_at > stats["last_check_date"]
                 ):
                     stats["last_check_date"] = c.checked_at
                     stats["last_checked_by"] = c.checked_by
@@ -1428,9 +1296,7 @@ class EquipmentCheckService:
                 user_ids.add(str(c.checked_by))
 
         # Resolve user names for last_checked_by
-        user_name_map = await self._get_user_name_map(
-            list(user_ids)
-        )
+        user_name_map = await self._get_user_name_map(list(user_ids))
         for stats in app_stats.values():
             uid = stats.get("last_checked_by")
             if uid and uid in user_name_map:
@@ -1445,9 +1311,7 @@ class EquipmentCheckService:
             if uid not in member_stats:
                 member_stats[uid] = {
                     "user_id": uid,
-                    "user_name": user_name_map.get(
-                        uid, "Unknown"
-                    ),
+                    "user_name": user_name_map.get(uid, "Unknown"),
                     "checks_completed": 0,
                     "pass_count": 0,
                     "fail_count": 0,
@@ -1459,20 +1323,12 @@ class EquipmentCheckService:
                 member_stats[uid]["fail_count"] += 1
 
         total_checks = len(checks)
-        pass_count = sum(
-            1
-            for c in checks
-            if c.overall_status == "pass"
-        )
+        pass_count = sum(1 for c in checks if c.overall_status == "pass")
         pass_rate = (
-            round(pass_count / total_checks * 100, 1)
-            if total_checks > 0
-            else 0.0
+            round(pass_count / total_checks * 100, 1) if total_checks > 0 else 0.0
         )
         avg_items = (
-            round(total_items_sum / total_checks, 1)
-            if total_checks > 0
-            else 0.0
+            round(total_items_sum / total_checks, 1) if total_checks > 0 else 0.0
         )
 
         return {
@@ -1502,56 +1358,45 @@ class EquipmentCheckService:
         if not date_to:
             date_to = date.today()
 
-        date_to_end = datetime.combine(
-            date_to, datetime.max.time()
-        ).replace(tzinfo=timezone.utc)
-        date_from_start = datetime.combine(
-            date_from, datetime.min.time()
-        ).replace(tzinfo=timezone.utc)
+        date_to_end = datetime.combine(date_to, datetime.max.time()).replace(
+            tzinfo=timezone.utc
+        )
+        date_from_start = datetime.combine(date_from, datetime.min.time()).replace(
+            tzinfo=timezone.utc
+        )
 
         base_q = (
             select(ShiftEquipmentCheckItem)
             .join(
                 ShiftEquipmentCheck,
-                ShiftEquipmentCheck.id
-                == ShiftEquipmentCheckItem.check_id,
+                ShiftEquipmentCheck.id == ShiftEquipmentCheckItem.check_id,
             )
             .where(
-                ShiftEquipmentCheck.organization_id
-                == organization_id,
+                ShiftEquipmentCheck.organization_id == organization_id,
                 ShiftEquipmentCheckItem.status == "fail",
-                ShiftEquipmentCheck.checked_at
-                >= date_from_start,
-                ShiftEquipmentCheck.checked_at
-                <= date_to_end,
+                ShiftEquipmentCheck.checked_at >= date_from_start,
+                ShiftEquipmentCheck.checked_at <= date_to_end,
             )
         )
         if apparatus_id:
-            base_q = base_q.where(
-                ShiftEquipmentCheck.apparatus_id
-                == apparatus_id
-            )
+            base_q = base_q.where(ShiftEquipmentCheck.apparatus_id == apparatus_id)
         if item_name:
             base_q = base_q.where(
-                ShiftEquipmentCheckItem.item_name.ilike(
-                    f"%{item_name}%"
-                )
+                ShiftEquipmentCheckItem.item_name.ilike(f"%{item_name}%")
             )
 
         # Count
         from sqlalchemy import func as sa_func
 
-        count_q = select(
-            sa_func.count(ShiftEquipmentCheckItem.id)
-        ).select_from(base_q.subquery())
+        count_q = select(sa_func.count(ShiftEquipmentCheckItem.id)).select_from(
+            base_q.subquery()
+        )
         total_result = await self.db.execute(count_q)
         total = total_result.scalar() or 0
 
         # Fetch page
         items_q = (
-            base_q.order_by(
-                ShiftEquipmentCheck.checked_at.desc()
-            )
+            base_q.order_by(ShiftEquipmentCheck.checked_at.desc())
             .limit(limit)
             .offset(offset)
         )
@@ -1559,16 +1404,12 @@ class EquipmentCheckService:
         failed_items = items_result.scalars().all()
 
         # Resolve check + apparatus data
-        check_ids = {
-            str(fi.check_id) for fi in failed_items
-        }
+        check_ids = {str(fi.check_id) for fi in failed_items}
         checks_map: Dict[str, ShiftEquipmentCheck] = {}
         if check_ids:
             cq = await self.db.execute(
                 select(ShiftEquipmentCheck).where(
-                    ShiftEquipmentCheck.id.in_(
-                        list(check_ids)
-                    )
+                    ShiftEquipmentCheck.id.in_(list(check_ids))
                 )
             )
             for c in cq.scalars().all():
@@ -1582,18 +1423,12 @@ class EquipmentCheckService:
             if c.apparatus_id:
                 apparatus_ids_set.add(str(c.apparatus_id))
 
-        user_map = await self._get_user_name_map(
-            list(user_ids_set)
-        )
+        user_map = await self._get_user_name_map(list(user_ids_set))
         app_name_map: Dict[str, str] = {}
         if apparatus_ids_set:
             aq = await self.db.execute(
-                select(
-                    Apparatus.id, Apparatus.unit_number
-                ).where(
-                    Apparatus.id.in_(
-                        list(apparatus_ids_set)
-                    )
+                select(Apparatus.id, Apparatus.unit_number).where(
+                    Apparatus.id.in_(list(apparatus_ids_set))
                 )
             )
             for row in aq.all():
@@ -1606,18 +1441,14 @@ class EquipmentCheckService:
                 {
                     "id": str(fi.id),
                     "check_id": str(fi.check_id),
-                    "checked_at": (
-                        check.checked_at if check else None
-                    ),
+                    "checked_at": (check.checked_at if check else None),
                     "apparatus_id": (
                         str(check.apparatus_id)
                         if check and check.apparatus_id
                         else None
                     ),
                     "apparatus_name": (
-                        app_name_map.get(
-                            str(check.apparatus_id), ""
-                        )
+                        app_name_map.get(str(check.apparatus_id), "")
                         if check and check.apparatus_id
                         else None
                     ),
@@ -1627,9 +1458,7 @@ class EquipmentCheckService:
                     "status": fi.status,
                     "notes": fi.notes,
                     "checked_by_name": (
-                        user_map.get(
-                            str(check.checked_by), "Unknown"
-                        )
+                        user_map.get(str(check.checked_by), "Unknown")
                         if check and check.checked_by
                         else None
                     ),
@@ -1654,30 +1483,25 @@ class EquipmentCheckService:
         if not date_to:
             date_to = date.today()
 
-        date_to_end = datetime.combine(
-            date_to, datetime.max.time()
-        ).replace(tzinfo=timezone.utc)
-        date_from_start = datetime.combine(
-            date_from, datetime.min.time()
-        ).replace(tzinfo=timezone.utc)
+        date_to_end = datetime.combine(date_to, datetime.max.time()).replace(
+            tzinfo=timezone.utc
+        )
+        date_from_start = datetime.combine(date_from, datetime.min.time()).replace(
+            tzinfo=timezone.utc
+        )
 
         # Get all check items for this template item
         q = await self.db.execute(
             select(ShiftEquipmentCheckItem)
             .join(
                 ShiftEquipmentCheck,
-                ShiftEquipmentCheck.id
-                == ShiftEquipmentCheckItem.check_id,
+                ShiftEquipmentCheck.id == ShiftEquipmentCheckItem.check_id,
             )
             .where(
-                ShiftEquipmentCheck.organization_id
-                == organization_id,
-                ShiftEquipmentCheckItem.template_item_id
-                == template_item_id,
-                ShiftEquipmentCheck.checked_at
-                >= date_from_start,
-                ShiftEquipmentCheck.checked_at
-                <= date_to_end,
+                ShiftEquipmentCheck.organization_id == organization_id,
+                ShiftEquipmentCheckItem.template_item_id == template_item_id,
+                ShiftEquipmentCheck.checked_at >= date_from_start,
+                ShiftEquipmentCheck.checked_at <= date_to_end,
             )
             .order_by(ShiftEquipmentCheck.checked_at.asc())
         )
@@ -1689,9 +1513,7 @@ class EquipmentCheckService:
         if check_ids:
             cq = await self.db.execute(
                 select(ShiftEquipmentCheck).where(
-                    ShiftEquipmentCheck.id.in_(
-                        list(check_ids)
-                    )
+                    ShiftEquipmentCheck.id.in_(list(check_ids))
                 )
             )
             for c in cq.scalars().all():
@@ -1701,9 +1523,7 @@ class EquipmentCheckService:
         for c in checks_map.values():
             if c.checked_by:
                 user_ids_set.add(str(c.checked_by))
-        user_map = await self._get_user_name_map(
-            list(user_ids_set)
-        )
+        user_map = await self._get_user_name_map(list(user_ids_set))
 
         # Build trend buckets
         from collections import defaultdict
@@ -1715,9 +1535,7 @@ class EquipmentCheckService:
         else:
             fmt = "%Y-W%W"
 
-        buckets: Dict[
-            str, Dict[str, int]
-        ] = defaultdict(
+        buckets: Dict[str, Dict[str, int]] = defaultdict(
             lambda: {
                 "pass_count": 0,
                 "fail_count": 0,
@@ -1735,18 +1553,14 @@ class EquipmentCheckService:
             elif item.status == "fail":
                 buckets[period_key]["fail_count"] += 1
             else:
-                buckets[period_key][
-                    "not_checked_count"
-                ] += 1
+                buckets[period_key]["not_checked_count"] += 1
 
         trends = [
             {
                 "period": k,
                 "pass_count": v["pass_count"],
                 "fail_count": v["fail_count"],
-                "not_checked_count": v[
-                    "not_checked_count"
-                ],
+                "not_checked_count": v["not_checked_count"],
             }
             for k, v in sorted(buckets.items())
         ]
@@ -1758,9 +1572,7 @@ class EquipmentCheckService:
             shift_date_val = None
             if check and check.shift_id:
                 sq = await self.db.execute(
-                    select(Shift.shift_date).where(
-                        Shift.id == check.shift_id
-                    )
+                    select(Shift.shift_date).where(Shift.id == check.shift_id)
                 )
                 sd = sq.scalar_one_or_none()
                 if sd:
@@ -1768,11 +1580,7 @@ class EquipmentCheckService:
             history.append(
                 {
                     "check_id": str(item.check_id),
-                    "shift_id": (
-                        str(check.shift_id)
-                        if check
-                        else ""
-                    ),
+                    "shift_id": (str(check.shift_id) if check else ""),
                     "shift_date": shift_date_val,
                     "status": item.status,
                     "quantity_found": item.quantity_found,
@@ -1789,11 +1597,7 @@ class EquipmentCheckService:
                         if check and check.checked_by
                         else None
                     ),
-                    "checked_at": (
-                        check.checked_at
-                        if check
-                        else None
-                    ),
+                    "checked_at": (check.checked_at if check else None),
                 }
             )
 

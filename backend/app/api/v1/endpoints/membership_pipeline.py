@@ -900,9 +900,7 @@ async def complete_step(
             action_result=data.action_result,
         )
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     if not prospect:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
@@ -938,17 +936,13 @@ async def advance_prospect(
     return prospect
 
 
-@router.post(
-    "/prospects/{prospect_id}/regress", response_model=ProspectResponse
-)
+@router.post("/prospects/{prospect_id}/regress", response_model=ProspectResponse)
 async def regress_prospect(
     prospect_id: UUID,
     data: AdvanceProspectRequest = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission(
-            "members.manage", "prospective_members.manage"
-        )
+        require_permission("members.manage", "prospective_members.manage")
     ),
 ):
     """

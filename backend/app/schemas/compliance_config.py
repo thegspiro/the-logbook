@@ -12,7 +12,6 @@ from pydantic.alias_generators import to_camel
 
 from app.schemas.base import UTCResponseBase
 
-
 # =============================================================================
 # Admin Hours Requirement (embedded in ComplianceProfile)
 # =============================================================================
@@ -42,10 +41,14 @@ class ComplianceProfileBase(BaseModel):
     membership_types: Optional[List[str]] = None
     role_ids: Optional[List[str]] = None
     compliant_threshold_override: Optional[float] = Field(
-        None, ge=0, le=100,
+        None,
+        ge=0,
+        le=100,
     )
     at_risk_threshold_override: Optional[float] = Field(
-        None, ge=0, le=100,
+        None,
+        ge=0,
+        le=100,
     )
     required_requirement_ids: Optional[List[str]] = None
     optional_requirement_ids: Optional[List[str]] = None
@@ -68,10 +71,14 @@ class ComplianceProfileUpdate(BaseModel):
     membership_types: Optional[List[str]] = None
     role_ids: Optional[List[str]] = None
     compliant_threshold_override: Optional[float] = Field(
-        None, ge=0, le=100,
+        None,
+        ge=0,
+        le=100,
     )
     at_risk_threshold_override: Optional[float] = Field(
-        None, ge=0, le=100,
+        None,
+        ge=0,
+        le=100,
     )
     required_requirement_ids: Optional[List[str]] = None
     optional_requirement_ids: Optional[List[str]] = None
@@ -166,12 +173,14 @@ class ComplianceReportGenerate(BaseModel):
     """Request schema for generating a report."""
 
     report_type: str = Field(
-        ..., description="monthly or yearly",
+        ...,
+        description="monthly or yearly",
     )
     year: int = Field(..., ge=2020, le=2100)
     month: Optional[int] = Field(None, ge=1, le=12)
     send_email: bool = Field(
-        False, description="Email the report to configured recipients",
+        False,
+        description="Email the report to configured recipients",
     )
     additional_recipients: Optional[List[str]] = None
 

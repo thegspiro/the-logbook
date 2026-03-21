@@ -135,9 +135,7 @@ class RecurringTrainingSessionCreate(TrainingSessionCreate):
     def validate_recurrence_fields(self) -> "RecurringTrainingSessionCreate":
         pattern = self.recurrence_pattern
         if pattern == "custom" and not self.recurrence_custom_days:
-            raise ValueError(
-                "recurrence_custom_days is required for custom pattern"
-            )
+            raise ValueError("recurrence_custom_days is required for custom pattern")
         if pattern in ("monthly_weekday", "annually_weekday"):
             if self.recurrence_weekday is None:
                 raise ValueError(

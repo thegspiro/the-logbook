@@ -13,7 +13,6 @@ from pydantic.alias_generators import to_camel
 
 from app.schemas.base import UTCResponseBase
 
-
 # ============================================
 # Check Template Item Schemas
 # ============================================

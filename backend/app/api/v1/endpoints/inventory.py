@@ -1908,9 +1908,9 @@ async def get_inventory_summary(
     service = InventoryService(db)
 
     user_perms = _collect_user_permissions(current_user)
-    is_admin = _has_permission(
-        "inventory.manage", user_perms
-    ) or _has_permission("settings.manage", user_perms)
+    is_admin = _has_permission("inventory.manage", user_perms) or _has_permission(
+        "settings.manage", user_perms
+    )
 
     if is_admin:
         summary = await service.get_inventory_summary(
@@ -1956,9 +1956,9 @@ async def get_low_stock_alerts(
     **Requires permission: inventory.view**
     """
     user_perms = _collect_user_permissions(current_user)
-    is_admin = _has_permission(
-        "inventory.manage", user_perms
-    ) or _has_permission("settings.manage", user_perms)
+    is_admin = _has_permission("inventory.manage", user_perms) or _has_permission(
+        "settings.manage", user_perms
+    )
 
     if not is_admin:
         return []
@@ -3658,6 +3658,7 @@ async def inventory_websocket(
         token = websocket.cookies.get("access_token")
     if not token:
         from loguru import logger
+
         logger.warning("Inventory WS rejected: no access_token cookie or query param")
         await websocket.close(code=4001, reason="Missing token")
         return
@@ -4323,9 +4324,13 @@ async def get_reorder_request(
         raise HTTPException(status_code=404, detail="Reorder request not found")
     resp = ReorderRequestResponse.model_validate(req)
     if req.requester:
-        resp.requester_name = f"{req.requester.first_name or ''} {req.requester.last_name or ''}".strip()
+        resp.requester_name = (
+            f"{req.requester.first_name or ''} {req.requester.last_name or ''}".strip()
+        )
     if req.approver:
-        resp.approver_name = f"{req.approver.first_name or ''} {req.approver.last_name or ''}".strip()
+        resp.approver_name = (
+            f"{req.approver.first_name or ''} {req.approver.last_name or ''}".strip()
+        )
     return resp
 
 
@@ -4405,7 +4410,11 @@ async def update_reorder_request(
         event_data={
             "resource_type": "reorder_request",
             "resource_id": str(reorder.id),
-            "status": reorder.status.value if hasattr(reorder.status, 'value') else reorder.status,
+            "status": (
+                reorder.status.value
+                if hasattr(reorder.status, "value")
+                else reorder.status
+            ),
         },
         user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),
@@ -4432,7 +4441,9 @@ async def delete_reorder_request(
     **Requires permission: inventory.manage**
     """
     service = InventoryService(db)
-    error = await service.delete_reorder_request(request_id, current_user.organization_id)
+    error = await service.delete_reorder_request(
+        request_id, current_user.organization_id
+    )
     if error:
         raise HTTPException(status_code=400, detail=sanitize_error_message(error))
     await db.commit()
@@ -4498,9 +4509,7 @@ async def create_variant_group(
         created_by=UUID(current_user.id),
     )
     if error:
-        raise HTTPException(
-            status_code=400, detail=sanitize_error_message(error)
-        )
+        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
     await db.commit()
     await db.refresh(group)
     return ItemVariantGroupResponse.model_validate(group)
@@ -4553,9 +4562,7 @@ async def update_variant_group(
         data.model_dump(exclude_unset=True),
     )
     if error:
-        raise HTTPException(
-            status_code=400, detail=sanitize_error_message(error)
-        )
+        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
     await db.commit()
     await db.refresh(group)
     return ItemVariantGroupResponse.model_validate(group)
@@ -4608,9 +4615,7 @@ async def create_equipment_kit(
         created_by=UUID(current_user.id),
     )
     if error:
-        raise HTTPException(
-            status_code=400, detail=sanitize_error_message(error)
-        )
+        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
     await db.commit()
     # Re-fetch with relationships
     kit = await service.get_equipment_kit_by_id(
@@ -4632,9 +4637,7 @@ async def get_equipment_kit(
     **Requires permission: inventory.view**
     """
     service = InventoryService(db)
-    kit = await service.get_equipment_kit_by_id(
-        kit_id, current_user.organization_id
-    )
+    kit = await service.get_equipment_kit_by_id(kit_id, current_user.organization_id)
     if not kit:
         raise HTTPException(status_code=404, detail="Equipment kit not found")
     return EquipmentKitDetailResponse.model_validate(kit)
@@ -4660,9 +4663,7 @@ async def update_equipment_kit(
         data.model_dump(exclude_unset=True),
     )
     if error:
-        raise HTTPException(
-            status_code=400, detail=sanitize_error_message(error)
-        )
+        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
     await db.commit()
     await db.refresh(kit)
     return EquipmentKitResponse.model_validate(kit)
@@ -4689,9 +4690,7 @@ async def issue_kit_to_member(
         issued_by=UUID(current_user.id),
     )
     if error:
-        raise HTTPException(
-            status_code=400, detail=sanitize_error_message(error)
-        )
+        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
     await db.commit()
 
     await log_audit_event(
@@ -4766,9 +4765,7 @@ async def upsert_member_size_preferences(
         data=data.model_dump(exclude_unset=True),
     )
     if error:
-        raise HTTPException(
-            status_code=400, detail=sanitize_error_message(error)
-        )
+        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
     await db.commit()
     await db.refresh(prefs)
     return MemberSizePreferencesResponse.model_validate(prefs)
@@ -4793,9 +4790,7 @@ async def get_my_size_preferences(
         UUID(current_user.id), current_user.organization_id
     )
     if not prefs:
-        raise HTTPException(
-            status_code=404, detail="Size preferences not set"
-        )
+        raise HTTPException(status_code=404, detail="Size preferences not set")
     return MemberSizePreferencesResponse.model_validate(prefs)
 
 
@@ -4821,9 +4816,7 @@ async def upsert_my_size_preferences(
         data=data.model_dump(exclude_unset=True),
     )
     if error:
-        raise HTTPException(
-            status_code=400, detail=sanitize_error_message(error)
-        )
+        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
     await db.commit()
     await db.refresh(prefs)
     return MemberSizePreferencesResponse.model_validate(prefs)

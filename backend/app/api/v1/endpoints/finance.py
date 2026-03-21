@@ -80,9 +80,7 @@ async def list_fiscal_years(
     return await service.list_fiscal_years(str(current_user.organization_id))
 
 
-@router.post(
-    "/fiscal-years", response_model=FiscalYearResponse, status_code=201
-)
+@router.post("/fiscal-years", response_model=FiscalYearResponse, status_code=201)
 async def create_fiscal_year(
     data: FiscalYearCreate,
     db: AsyncSession = Depends(get_db),
@@ -144,9 +142,7 @@ async def update_fiscal_year(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
-@router.post(
-    "/fiscal-years/{fy_id}/activate", response_model=FiscalYearResponse
-)
+@router.post("/fiscal-years/{fy_id}/activate", response_model=FiscalYearResponse)
 async def activate_fiscal_year(
     fy_id: str,
     db: AsyncSession = Depends(get_db),
@@ -181,9 +177,7 @@ async def lock_fiscal_year(
 ):
     service = FinanceService(db)
     try:
-        return await service.lock_fiscal_year(
-            fy_id, str(current_user.organization_id)
-        )
+        return await service.lock_fiscal_year(fy_id, str(current_user.organization_id))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -195,17 +189,13 @@ async def lock_fiscal_year(
 # ============================================
 
 
-@router.get(
-    "/budget-categories", response_model=list[BudgetCategoryResponse]
-)
+@router.get("/budget-categories", response_model=list[BudgetCategoryResponse])
 async def list_budget_categories(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.view")),
 ):
     service = FinanceService(db)
-    return await service.list_budget_categories(
-        str(current_user.organization_id)
-    )
+    return await service.list_budget_categories(str(current_user.organization_id))
 
 
 @router.post(
@@ -230,9 +220,7 @@ async def create_budget_category(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
-@router.put(
-    "/budget-categories/{cat_id}", response_model=BudgetCategoryResponse
-)
+@router.put("/budget-categories/{cat_id}", response_model=BudgetCategoryResponse)
 async def update_budget_category(
     cat_id: str,
     data: BudgetCategoryUpdate,
@@ -260,9 +248,7 @@ async def delete_budget_category(
 ):
     service = FinanceService(db)
     try:
-        await service.delete_budget_category(
-            cat_id, str(current_user.organization_id)
-        )
+        await service.delete_budget_category(cat_id, str(current_user.organization_id))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -313,9 +299,7 @@ async def get_budget(
     current_user: User = Depends(require_permission("finance.view")),
 ):
     service = FinanceService(db)
-    budget = await service.get_budget(
-        budget_id, str(current_user.organization_id)
-    )
+    budget = await service.get_budget(budget_id, str(current_user.organization_id))
     if not budget:
         raise HTTPException(status_code=404, detail="Budget not found")
     return budget
@@ -363,17 +347,13 @@ async def get_budget_summary(
 # ============================================
 
 
-@router.get(
-    "/approval-chains", response_model=list[ApprovalChainResponse]
-)
+@router.get("/approval-chains", response_model=list[ApprovalChainResponse])
 async def list_approval_chains(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.view")),
 ):
     service = FinanceService(db)
-    return await service.list_approval_chains(
-        str(current_user.organization_id)
-    )
+    return await service.list_approval_chains(str(current_user.organization_id))
 
 
 @router.post(
@@ -384,9 +364,7 @@ async def list_approval_chains(
 async def create_approval_chain(
     data: ApprovalChainCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("finance.configure_approvals")
-    ),
+    current_user: User = Depends(require_permission("finance.configure_approvals")),
 ):
     service = FinanceService(db)
     try:
@@ -416,9 +394,7 @@ async def create_approval_chain(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
-@router.get(
-    "/approval-chains/{chain_id}", response_model=ApprovalChainResponse
-)
+@router.get("/approval-chains/{chain_id}", response_model=ApprovalChainResponse)
 async def get_approval_chain(
     chain_id: str,
     db: AsyncSession = Depends(get_db),
@@ -429,22 +405,16 @@ async def get_approval_chain(
         chain_id, str(current_user.organization_id)
     )
     if not chain:
-        raise HTTPException(
-            status_code=404, detail="Approval chain not found"
-        )
+        raise HTTPException(status_code=404, detail="Approval chain not found")
     return chain
 
 
-@router.put(
-    "/approval-chains/{chain_id}", response_model=ApprovalChainResponse
-)
+@router.put("/approval-chains/{chain_id}", response_model=ApprovalChainResponse)
 async def update_approval_chain(
     chain_id: str,
     data: ApprovalChainUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("finance.configure_approvals")
-    ),
+    current_user: User = Depends(require_permission("finance.configure_approvals")),
 ):
     service = FinanceService(db)
     try:
@@ -463,15 +433,11 @@ async def update_approval_chain(
 async def delete_approval_chain(
     chain_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("finance.configure_approvals")
-    ),
+    current_user: User = Depends(require_permission("finance.configure_approvals")),
 ):
     service = FinanceService(db)
     try:
-        await service.delete_approval_chain(
-            chain_id, str(current_user.organization_id)
-        )
+        await service.delete_approval_chain(chain_id, str(current_user.organization_id))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -487,9 +453,7 @@ async def add_chain_step(
     chain_id: str,
     data: ApprovalChainStepCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("finance.configure_approvals")
-    ),
+    current_user: User = Depends(require_permission("finance.configure_approvals")),
 ):
     service = FinanceService(db)
     try:
@@ -513,9 +477,7 @@ async def update_chain_step(
     step_id: str,
     data: ApprovalChainStepUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("finance.configure_approvals")
-    ),
+    current_user: User = Depends(require_permission("finance.configure_approvals")),
 ):
     service = FinanceService(db)
     try:
@@ -531,16 +493,12 @@ async def update_chain_step(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
-@router.delete(
-    "/approval-chains/{chain_id}/steps/{step_id}", status_code=204
-)
+@router.delete("/approval-chains/{chain_id}/steps/{step_id}", status_code=204)
 async def delete_chain_step(
     chain_id: str,
     step_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("finance.configure_approvals")
-    ),
+    current_user: User = Depends(require_permission("finance.configure_approvals")),
 ):
     service = FinanceService(db)
     try:
@@ -586,9 +544,7 @@ async def preview_approval_chain(
 # ============================================
 
 
-@router.get(
-    "/approvals/pending", response_model=list[PendingApprovalResponse]
-)
+@router.get("/approvals/pending", response_model=list[PendingApprovalResponse])
 async def get_pending_approvals(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.approve")),
@@ -666,9 +622,7 @@ async def deny_step(
 # ============================================
 
 
-@router.get(
-    "/purchase-requests", response_model=list[PurchaseRequestResponse]
-)
+@router.get("/purchase-requests", response_model=list[PurchaseRequestResponse])
 async def list_purchase_requests(
     status: Optional[str] = Query(None),
     fiscal_year_id: Optional[str] = Query(None),
@@ -717,28 +671,20 @@ async def create_purchase_request(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
-@router.get(
-    "/purchase-requests/{pr_id}", response_model=PurchaseRequestResponse
-)
+@router.get("/purchase-requests/{pr_id}", response_model=PurchaseRequestResponse)
 async def get_purchase_request(
     pr_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.view")),
 ):
     service = FinanceService(db)
-    pr = await service.get_purchase_request(
-        pr_id, str(current_user.organization_id)
-    )
+    pr = await service.get_purchase_request(pr_id, str(current_user.organization_id))
     if not pr:
-        raise HTTPException(
-            status_code=404, detail="Purchase request not found"
-        )
+        raise HTTPException(status_code=404, detail="Purchase request not found")
     return pr
 
 
-@router.put(
-    "/purchase-requests/{pr_id}", response_model=PurchaseRequestResponse
-)
+@router.put("/purchase-requests/{pr_id}", response_model=PurchaseRequestResponse)
 async def update_purchase_request(
     pr_id: str,
     data: PurchaseRequestUpdate,
@@ -799,9 +745,7 @@ async def mark_pr_ordered(
 ):
     service = FinanceService(db)
     try:
-        return await service.mark_pr_ordered(
-            pr_id, str(current_user.organization_id)
-        )
+        return await service.mark_pr_ordered(pr_id, str(current_user.organization_id))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -819,9 +763,7 @@ async def mark_pr_received(
 ):
     service = FinanceService(db)
     try:
-        return await service.mark_pr_received(
-            pr_id, str(current_user.organization_id)
-        )
+        return await service.mark_pr_received(pr_id, str(current_user.organization_id))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -874,18 +816,14 @@ async def cancel_purchase_request(
 # ============================================
 
 
-@router.get(
-    "/expense-reports", response_model=list[ExpenseReportResponse]
-)
+@router.get("/expense-reports", response_model=list[ExpenseReportResponse])
 async def list_expense_reports(
     status: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.view")),
 ):
     service = FinanceService(db)
-    return await service.list_expense_reports(
-        str(current_user.organization_id), status
-    )
+    return await service.list_expense_reports(str(current_user.organization_id), status)
 
 
 @router.post(
@@ -917,28 +855,20 @@ async def create_expense_report(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
-@router.get(
-    "/expense-reports/{er_id}", response_model=ExpenseReportResponse
-)
+@router.get("/expense-reports/{er_id}", response_model=ExpenseReportResponse)
 async def get_expense_report(
     er_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.view")),
 ):
     service = FinanceService(db)
-    er = await service.get_expense_report(
-        er_id, str(current_user.organization_id)
-    )
+    er = await service.get_expense_report(er_id, str(current_user.organization_id))
     if not er:
-        raise HTTPException(
-            status_code=404, detail="Expense report not found"
-        )
+        raise HTTPException(status_code=404, detail="Expense report not found")
     return er
 
 
-@router.put(
-    "/expense-reports/{er_id}", response_model=ExpenseReportResponse
-)
+@router.put("/expense-reports/{er_id}", response_model=ExpenseReportResponse)
 async def update_expense_report(
     er_id: str,
     data: ExpenseReportUpdate,
@@ -1028,18 +958,14 @@ async def mark_expense_paid(
 # ============================================
 
 
-@router.get(
-    "/check-requests", response_model=list[CheckRequestResponse]
-)
+@router.get("/check-requests", response_model=list[CheckRequestResponse])
 async def list_check_requests(
     status: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.view")),
 ):
     service = FinanceService(db)
-    return await service.list_check_requests(
-        str(current_user.organization_id), status
-    )
+    return await service.list_check_requests(str(current_user.organization_id), status)
 
 
 @router.post(
@@ -1065,28 +991,20 @@ async def create_check_request(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
-@router.get(
-    "/check-requests/{cr_id}", response_model=CheckRequestResponse
-)
+@router.get("/check-requests/{cr_id}", response_model=CheckRequestResponse)
 async def get_check_request(
     cr_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.view")),
 ):
     service = FinanceService(db)
-    cr = await service.get_check_request(
-        cr_id, str(current_user.organization_id)
-    )
+    cr = await service.get_check_request(cr_id, str(current_user.organization_id))
     if not cr:
-        raise HTTPException(
-            status_code=404, detail="Check request not found"
-        )
+        raise HTTPException(status_code=404, detail="Check request not found")
     return cr
 
 
-@router.put(
-    "/check-requests/{cr_id}", response_model=CheckRequestResponse
-)
+@router.put("/check-requests/{cr_id}", response_model=CheckRequestResponse)
 async def update_check_request(
     cr_id: str,
     data: CheckRequestUpdate,
@@ -1158,9 +1076,7 @@ async def void_check(
 ):
     service = FinanceService(db)
     try:
-        return await service.void_check(
-            cr_id, str(current_user.organization_id)
-        )
+        return await service.void_check(cr_id, str(current_user.organization_id))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -1172,17 +1088,13 @@ async def void_check(
 # ============================================
 
 
-@router.get(
-    "/dues-schedules", response_model=list[DuesScheduleResponse]
-)
+@router.get("/dues-schedules", response_model=list[DuesScheduleResponse])
 async def list_dues_schedules(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.view")),
 ):
     service = FinanceService(db)
-    return await service.list_dues_schedules(
-        str(current_user.organization_id)
-    )
+    return await service.list_dues_schedules(str(current_user.organization_id))
 
 
 @router.post(
@@ -1208,9 +1120,7 @@ async def create_dues_schedule(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
-@router.put(
-    "/dues-schedules/{schedule_id}", response_model=DuesScheduleResponse
-)
+@router.put("/dues-schedules/{schedule_id}", response_model=DuesScheduleResponse)
 async def update_dues_schedule(
     schedule_id: str,
     data: DuesScheduleUpdate,
@@ -1323,17 +1233,13 @@ async def get_dues_summary(
 # ============================================
 
 
-@router.get(
-    "/export/mappings", response_model=list[ExportMappingResponse]
-)
+@router.get("/export/mappings", response_model=list[ExportMappingResponse])
 async def list_export_mappings(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.manage")),
 ):
     service = FinanceService(db)
-    return await service.list_export_mappings(
-        str(current_user.organization_id)
-    )
+    return await service.list_export_mappings(str(current_user.organization_id))
 
 
 @router.post(
@@ -1358,9 +1264,7 @@ async def create_export_mapping(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
-@router.put(
-    "/export/mappings/{mapping_id}", response_model=ExportMappingResponse
-)
+@router.put("/export/mappings/{mapping_id}", response_model=ExportMappingResponse)
 async def update_export_mapping(
     mapping_id: str,
     data: ExportMappingUpdate,
@@ -1398,9 +1302,7 @@ async def generate_export(
         return PlainTextResponse(
             content=csv_content,
             media_type="text/csv",
-            headers={
-                "Content-Disposition": "attachment; filename=finance_export.csv"
-            },
+            headers={"Content-Disposition": "attachment; filename=finance_export.csv"},
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -1414,9 +1316,7 @@ async def list_export_logs(
     current_user: User = Depends(require_permission("finance.manage")),
 ):
     service = FinanceService(db)
-    return await service.list_export_logs(
-        str(current_user.organization_id)
-    )
+    return await service.list_export_logs(str(current_user.organization_id))
 
 
 # ============================================
@@ -1431,8 +1331,6 @@ async def get_dashboard(
 ):
     service = FinanceService(db)
     try:
-        return await service.get_dashboard(
-            str(current_user.organization_id)
-        )
+        return await service.get_dashboard(str(current_user.organization_id))
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))

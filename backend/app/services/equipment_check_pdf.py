@@ -23,7 +23,6 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-
 _styles = getSampleStyleSheet()
 
 TITLE_STYLE = ParagraphStyle(
@@ -77,7 +76,12 @@ _BASE_TABLE_STYLE = TableStyle(
         ("TOPPADDING", (0, 1), (-1, -1), 4),
         ("BOTTOMPADDING", (0, 1), (-1, -1), 4),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.Color(0.8, 0.8, 0.8)),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.Color(0.96, 0.96, 0.96)]),
+        (
+            "ROWBACKGROUNDS",
+            (0, 1),
+            (-1, -1),
+            [colors.white, colors.Color(0.96, 0.96, 0.96)],
+        ),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
     ]
 )
@@ -173,7 +177,14 @@ def generate_compliance_pdf(
                     "Yes" if a.get("has_deficiency") else "No",
                 ]
             )
-        col_widths = [2 * inch, 0.8 * inch, 0.7 * inch, 0.7 * inch, 1.2 * inch, 1 * inch]
+        col_widths = [
+            2 * inch,
+            0.8 * inch,
+            0.7 * inch,
+            0.7 * inch,
+            1.2 * inch,
+            1 * inch,
+        ]
         t = Table(rows, colWidths=col_widths)
         t.setStyle(_BASE_TABLE_STYLE)
         elements.append(t)
@@ -188,11 +199,7 @@ def generate_compliance_pdf(
         for m in members:
             done = m.get("checks_completed", 0)
             p = m.get("pass_count", 0)
-            rate_val = (
-                f"{round(p / done * 100)}%"
-                if done > 0
-                else "-"
-            )
+            rate_val = f"{round(p / done * 100)}%" if done > 0 else "-"
             rows.append(
                 [
                     str(m.get("user_name", "")),
@@ -346,9 +353,7 @@ def generate_check_detail_pdf(
         compartments.setdefault(comp, []).append(item)
 
     for comp_name, comp_items in compartments.items():
-        elements.append(
-            Paragraph(comp_name, SECTION_STYLE)
-        )
+        elements.append(Paragraph(comp_name, SECTION_STYLE))
         header = ["Item", "Type", "Status", "Notes"]
         rows = [header]
         for it in comp_items:
@@ -387,12 +392,8 @@ def generate_check_detail_pdf(
 
     # Notes
     if check.get("notes"):
-        elements.append(
-            Paragraph("Overall Notes", SECTION_STYLE)
-        )
-        elements.append(
-            Paragraph(str(check["notes"]), BODY_STYLE)
-        )
+        elements.append(Paragraph("Overall Notes", SECTION_STYLE))
+        elements.append(Paragraph(str(check["notes"]), BODY_STYLE))
 
     doc.build(elements)
     return buf.getvalue()

@@ -69,9 +69,7 @@ def _set_auth_cookies(
             if isinstance(settings.ALLOWED_ORIGINS, list)
             else [settings.ALLOWED_ORIGINS]
         )
-        has_http_origin = any(
-            origin.startswith("http://") for origin in origins
-        )
+        has_http_origin = any(origin.startswith("http://") for origin in origins)
         use_secure = not has_http_origin
 
     response.set_cookie(

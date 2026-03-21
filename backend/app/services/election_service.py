@@ -76,9 +76,7 @@ class ElectionService:
         status_filter: Optional[str] = None,
     ) -> List[Election]:
         """List elections for an organization, optionally filtered by status."""
-        query = select(Election).where(
-            Election.organization_id == str(organization_id)
-        )
+        query = select(Election).where(Election.organization_id == str(organization_id))
 
         if status_filter:
             status_enum = ElectionStatus(status_filter)
@@ -3308,17 +3306,14 @@ Best regards,
                 )
                 if not eligible_items:
                     skipped_count += 1
-                    reason = (
-                        await self._get_ineligibility_reason_for_user(
-                            user=recipient,
-                            election=election,
-                            organization_id=str(organization_id),
-                            organization=organization,
-                        )
-                        or (
-                            "No eligible ballot items — role type and "
-                            "attendance did not match any item requirements"
-                        )
+                    reason = await self._get_ineligibility_reason_for_user(
+                        user=recipient,
+                        election=election,
+                        organization_id=str(organization_id),
+                        organization=organization,
+                    ) or (
+                        "No eligible ballot items — role type and "
+                        "attendance did not match any item requirements"
                     )
                     skipped_details.append(
                         {
@@ -3387,22 +3382,20 @@ Best regards,
             rid = params.pop("recipient_id")
             cc_emails = params.pop("cc_emails", None)
             try:
-                subj, html_body, text_body = (
-                    email_service.render_ballot_notification(
-                        recipient_name=params["recipient_name"],
-                        election_title=params["election_title"],
-                        ballot_url=params["ballot_url"],
-                        meeting_date=params["meeting_date"],
-                        custom_message=params["custom_message"],
-                        start_date=params["start_date"],
-                        end_date=params["end_date"],
-                        positions=params["positions"],
-                        ballot_items_html=params["ballot_items_html"],
-                        ballot_items_text=params["ballot_items_text"],
-                        admin_contact_name=params["admin_contact_name"],
-                        admin_contact_email=params["admin_contact_email"],
-                        template=ballot_template,
-                    )
+                subj, html_body, text_body = email_service.render_ballot_notification(
+                    recipient_name=params["recipient_name"],
+                    election_title=params["election_title"],
+                    ballot_url=params["ballot_url"],
+                    meeting_date=params["meeting_date"],
+                    custom_message=params["custom_message"],
+                    start_date=params["start_date"],
+                    end_date=params["end_date"],
+                    positions=params["positions"],
+                    ballot_items_html=params["ballot_items_html"],
+                    ballot_items_text=params["ballot_items_text"],
+                    admin_contact_name=params["admin_contact_name"],
+                    admin_contact_email=params["admin_contact_email"],
+                    template=ballot_template,
                 )
                 recipients, msg_str = email_service.build_message(
                     to_email=params["to_email"],
@@ -3412,9 +3405,7 @@ Best regards,
                     cc_emails=cc_emails,
                     reply_to=admin_contact_email or None,
                     list_unsubscribe=(
-                        f"mailto:{admin_contact_email}"
-                        if admin_contact_email
-                        else None
+                        f"mailto:{admin_contact_email}" if admin_contact_email else None
                     ),
                 )
                 mime_messages.append((recipients, msg_str))
@@ -3678,9 +3669,7 @@ Best regards,
                 )
             )
             recipient_users = users_result.scalars().all()
-            recipient_names = [
-                u.full_name or u.username for u in recipient_users
-            ]
+            recipient_names = [u.full_name or u.username for u in recipient_users]
 
         # Build the recipients list (who got ballots)
         recipients_html_parts = ["<ul>"]
@@ -3691,9 +3680,7 @@ Best regards,
             recipients_text_parts.append(f"  - {name}")
         recipients_html_parts.append("</ul>")
         if not recipient_names:
-            recipients_html_parts = [
-                "<p><em>No members received ballots.</em></p>"
-            ]
+            recipients_html_parts = ["<p><em>No members received ballots.</em></p>"]
             recipients_text_parts = ["  (none)"]
 
         recipients_html = "\n".join(recipients_html_parts)
@@ -3721,9 +3708,7 @@ Best regards,
                     f'<td style="padding:8px;border-bottom:1px solid '
                     f'#e5e7eb;">{safe_reason}</td></tr>'
                 )
-                skipped_text_parts.append(
-                    f"  - {detail['name']}: {detail['reason']}"
-                )
+                skipped_text_parts.append(f"  - {detail['name']}: {detail['reason']}")
             skipped_html_parts.append("</table>")
             skipped_html = "\n".join(skipped_html_parts)
             skipped_text = "\n".join(skipped_text_parts)
@@ -3738,27 +3723,24 @@ Best regards,
         total_checked_in = len(election.attendees or [])
 
         email_service = EmailService(organization)
-        success_count, failure_count = (
-            await email_service.send_eligibility_summary(
-                to_emails=to_emails,
-                recipient_name=secretary_name,
-                election_title=election.title,
-                sent_count=sent_count,
-                skipped_count=skipped_count,
-                total_checked_in=total_checked_in,
-                recipients_html=recipients_html,
-                recipients_text=recipients_text,
-                skipped_voters_html=skipped_html,
-                skipped_voters_text=skipped_text,
-                db=self.db,
-                organization_id=str(organization_id),
-            )
+        success_count, failure_count = await email_service.send_eligibility_summary(
+            to_emails=to_emails,
+            recipient_name=secretary_name,
+            election_title=election.title,
+            sent_count=sent_count,
+            skipped_count=skipped_count,
+            total_checked_in=total_checked_in,
+            recipients_html=recipients_html,
+            recipients_text=recipients_text,
+            skipped_voters_html=skipped_html,
+            skipped_voters_text=skipped_text,
+            db=self.db,
+            organization_id=str(organization_id),
         )
 
         if success_count > 0:
             logger.info(
-                f"Eligibility summary sent | election={election_id} "
-                f"to={to_emails}"
+                f"Eligibility summary sent | election={election_id} " f"to={to_emails}"
             )
             return True, f"Eligibility summary sent to {', '.join(to_emails)}"
         else:

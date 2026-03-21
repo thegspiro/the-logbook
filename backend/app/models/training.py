@@ -2147,8 +2147,9 @@ class Shift(Base):
 
     # When True, all members (including non-operational types) can self-signup.
     # Copied from ShiftTemplate when a shift is created from a template.
-    open_to_all_members = Column(Boolean, default=False, nullable=False,
-                                 server_default="0")
+    open_to_all_members = Column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -2369,8 +2370,9 @@ class ShiftTemplate(Base):
 
     # When True, all members (including non-operational membership types)
     # can self-signup for positions defined on this template/shift.
-    open_to_all_members = Column(Boolean, default=False, nullable=False,
-                                 server_default="0")
+    open_to_all_members = Column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -3492,12 +3494,8 @@ class ShiftEquipmentCheck(Base):
         nullable=True,
     )
     checked_at = Column(DateTime(timezone=True), server_default=func.now())
-    check_timing = Column(
-        String(30), nullable=False
-    )  # start_of_shift, end_of_shift
-    overall_status = Column(
-        String(30), nullable=False
-    )  # pass, fail, incomplete
+    check_timing = Column(String(30), nullable=False)  # start_of_shift, end_of_shift
+    overall_status = Column(String(30), nullable=False)  # pass, fail, incomplete
     total_items = Column(Integer, nullable=False, default=0)
     completed_items = Column(Integer, nullable=False, default=0)
     failed_items = Column(Integer, nullable=False, default=0)

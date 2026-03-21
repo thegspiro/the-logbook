@@ -40,20 +40,18 @@ class AttestationCreate(BaseModel):
     period_type: str = Field(
         ..., description="Period type, e.g. 'annual' or 'quarterly'"
     )
-    period_year: int = Field(
-        ..., description="Year of the attestation period"
-    )
+    period_year: int = Field(..., description="Year of the attestation period")
     period_quarter: Optional[int] = Field(
         None,
         description="Quarter number (1-4) if period_type is quarterly",
     )
     compliance_percentage: float = Field(
-        ..., ge=0, le=100,
+        ...,
+        ge=0,
+        le=100,
         description="Overall compliance percentage",
     )
-    notes: str = Field(
-        "", description="Additional notes or observations"
-    )
+    notes: str = Field("", description="Additional notes or observations")
     areas_reviewed: List[str] = Field(
         default_factory=list,
         description="List of compliance areas reviewed",
@@ -81,16 +79,12 @@ class AnnualReportExportRequest(BaseModel):
 
 @router.get("/iso-readiness")
 async def get_iso_readiness(
-    year: Optional[int] = Query(
-        None, description="Assessment year"
-    ),
+    year: Optional[int] = Query(None, description="Assessment year"),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(require_permission("training.manage")),
 ):
     """Get ISO readiness assessment for the organization."""
-    async with handle_service_errors(
-        "Failed to fetch ISO readiness"
-    ):
+    async with handle_service_errors("Failed to fetch ISO readiness"):
         service = ISOReadinessService(db)
         result = await service.get_iso_readiness(
             current_user.organization_id, year=year
@@ -110,9 +104,7 @@ async def create_attestation(
     current_user=Depends(require_permission("training.manage")),
 ):
     """Create a formal compliance attestation record."""
-    async with handle_service_errors(
-        "Failed to create attestation"
-    ):
+    async with handle_service_errors("Failed to create attestation"):
         service = ComplianceAttestationService(db)
         result = await service.create_attestation(
             organization_id=current_user.organization_id,
@@ -125,16 +117,16 @@ async def create_attestation(
 @router.get("/attestations")
 async def get_attestations(
     limit: int = Query(
-        20, ge=1, le=100,
+        20,
+        ge=1,
+        le=100,
         description="Maximum number of results",
     ),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(require_permission("training.manage")),
 ):
     """Get list of past compliance attestations."""
-    async with handle_service_errors(
-        "Failed to fetch attestations"
-    ):
+    async with handle_service_errors("Failed to fetch attestations"):
         service = ComplianceAttestationService(db)
         result = await service.get_attestation_history(
             current_user.organization_id, limit=limit
@@ -154,9 +146,7 @@ async def get_annual_report(
     current_user=Depends(require_permission("training.manage")),
 ):
     """Get comprehensive annual compliance report."""
-    async with handle_service_errors(
-        "Failed to fetch annual report"
-    ):
+    async with handle_service_errors("Failed to fetch annual report"):
         service = AnnualComplianceReportService(db)
         result = await service.generate_annual_report(
             current_user.organization_id, year=year
@@ -171,9 +161,7 @@ async def export_annual_report(
     current_user=Depends(require_permission("training.manage")),
 ):
     """Export annual compliance report as CSV."""
-    async with handle_service_errors(
-        "Failed to export annual report"
-    ):
+    async with handle_service_errors("Failed to export annual report"):
         service = AnnualComplianceReportService(db)
         report = await service.generate_annual_report(
             current_user.organization_id, year=data.year
@@ -212,8 +200,7 @@ async def export_annual_report(
             media_type="text/csv",
             headers={
                 "Content-Disposition": (
-                    "attachment; "
-                    f"filename=annual_compliance_{data.year}.csv"
+                    "attachment; " f"filename=annual_compliance_{data.year}.csv"
                 )
             },
         )
@@ -226,19 +213,13 @@ async def export_annual_report(
 
 @router.get("/record-completeness")
 async def get_record_completeness(
-    start_date: Optional[date] = Query(
-        None, description="Filter start date"
-    ),
-    end_date: Optional[date] = Query(
-        None, description="Filter end date"
-    ),
+    start_date: Optional[date] = Query(None, description="Filter start date"),
+    end_date: Optional[date] = Query(None, description="Filter end date"),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(require_permission("training.manage")),
 ):
     """Get record completeness evaluation per NFPA 1401 standards."""
-    async with handle_service_errors(
-        "Failed to fetch record completeness"
-    ):
+    async with handle_service_errors("Failed to fetch record completeness"):
         service = RecordCompletenessService(db)
         result = await service.evaluate_record_completeness(
             current_user.organization_id,
@@ -251,16 +232,16 @@ async def get_record_completeness(
 @router.get("/incomplete-records")
 async def get_incomplete_records(
     limit: int = Query(
-        50, ge=1, le=200,
+        50,
+        ge=1,
+        le=200,
         description="Maximum number of results",
     ),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(require_permission("training.manage")),
 ):
     """Get list of records with missing required fields."""
-    async with handle_service_errors(
-        "Failed to fetch incomplete records"
-    ):
+    async with handle_service_errors("Failed to fetch incomplete records"):
         service = RecordCompletenessService(db)
         result = await service.get_incomplete_records(
             current_user.organization_id, limit=limit

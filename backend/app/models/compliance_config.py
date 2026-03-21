@@ -75,17 +75,23 @@ class ComplianceConfig(Base):
         default=ComplianceThresholdType.PERCENTAGE.value,
     )
     compliant_threshold = Column(
-        Float, nullable=False, default=100.0,
+        Float,
+        nullable=False,
+        default=100.0,
         comment="Min % of requirements met to be compliant",
     )
     at_risk_threshold = Column(
-        Float, nullable=False, default=75.0,
+        Float,
+        nullable=False,
+        default=75.0,
         comment="Min % to be at-risk (below = non-compliant)",
     )
 
     # -- Grace period --
     grace_period_days = Column(
-        Integer, nullable=False, default=0,
+        Integer,
+        nullable=False,
+        default=0,
         comment="Days after deadline before marking non-compliant",
     )
 
@@ -96,26 +102,35 @@ class ComplianceConfig(Base):
         default=ReportFrequency.NONE.value,
     )
     report_email_recipients = Column(
-        JSON, nullable=True,
+        JSON,
+        nullable=True,
         comment="List of email addresses to receive reports",
     )
     report_day_of_month = Column(
-        Integer, nullable=True, default=1,
+        Integer,
+        nullable=True,
+        default=1,
         comment="Day of month to generate monthly/quarterly reports",
     )
 
     # -- Notification settings --
     notify_non_compliant_members = Column(
-        Boolean, nullable=False, default=False,
+        Boolean,
+        nullable=False,
+        default=False,
     )
     notify_days_before_deadline = Column(
-        JSON, nullable=True, default=lambda: [30, 14, 7],
+        JSON,
+        nullable=True,
+        default=lambda: [30, 14, 7],
         comment="Days before deadline to send reminders",
     )
 
     # -- Metadata --
     created_at = Column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False,
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
     )
     updated_at = Column(
         DateTime(timezone=True),
@@ -159,11 +174,13 @@ class ComplianceProfile(Base):
 
     # -- Applicability --
     membership_types = Column(
-        JSON, nullable=True,
+        JSON,
+        nullable=True,
         comment="Membership types this profile applies to",
     )
     role_ids = Column(
-        JSON, nullable=True,
+        JSON,
+        nullable=True,
         comment="Role IDs this profile applies to",
     )
 
@@ -173,17 +190,20 @@ class ComplianceProfile(Base):
 
     # -- Required training requirements --
     required_requirement_ids = Column(
-        JSON, nullable=True,
+        JSON,
+        nullable=True,
         comment="Training requirement IDs that MUST be met",
     )
     optional_requirement_ids = Column(
-        JSON, nullable=True,
+        JSON,
+        nullable=True,
         comment="Training requirement IDs that are tracked but optional",
     )
 
     # -- Admin hours requirements --
     admin_hours_requirements = Column(
-        JSON, nullable=True,
+        JSON,
+        nullable=True,
         comment=(
             "List of {category_id, required_hours, frequency} objects. "
             "Defines yearly/quarterly admin hours targets per category."
@@ -192,12 +212,16 @@ class ComplianceProfile(Base):
 
     is_active = Column(Boolean, nullable=False, default=True)
     priority = Column(
-        Integer, nullable=False, default=0,
+        Integer,
+        nullable=False,
+        default=0,
         comment="Higher = evaluated first when member matches multiple",
     )
 
     created_at = Column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False,
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
     )
     updated_at = Column(
         DateTime(timezone=True),
@@ -227,11 +251,13 @@ class ComplianceReport(Base):
 
     # -- Report metadata --
     report_type = Column(
-        String(20), nullable=False,
+        String(20),
+        nullable=False,
         comment="monthly or yearly",
     )
     period_label = Column(
-        String(50), nullable=False,
+        String(50),
+        nullable=False,
         comment="e.g., 'March 2026' or '2025'",
     )
     period_year = Column(Integer, nullable=False)
@@ -239,23 +265,27 @@ class ComplianceReport(Base):
 
     # -- Status --
     status = Column(
-        String(20), nullable=False,
+        String(20),
+        nullable=False,
         default=ReportStatus.PENDING.value,
     )
 
     # -- Report data (JSON snapshot) --
     report_data = Column(
-        JSON, nullable=True,
+        JSON,
+        nullable=True,
         comment="Full report snapshot",
     )
     summary = Column(
-        JSON, nullable=True,
+        JSON,
+        nullable=True,
         comment="Executive summary metrics",
     )
 
     # -- Distribution --
     emailed_to = Column(
-        JSON, nullable=True,
+        JSON,
+        nullable=True,
         comment="Email addresses report was sent to",
     )
     emailed_at = Column(DateTime(timezone=True), nullable=True)
@@ -268,7 +298,9 @@ class ComplianceReport(Base):
         comment="User ID or null for auto-generated",
     )
     generated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False,
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
     )
     generation_duration_ms = Column(Integer, nullable=True)
 

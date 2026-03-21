@@ -93,26 +93,16 @@ class SchedulingService:
         if isinstance(positions, dict):
             flat = positions.get("flat_positions")
             if isinstance(flat, list) and flat:
-                return [
-                    {"position": p, "required": True} for p in flat
-                ]
+                return [{"position": p, "required": True} for p in flat]
             resources = positions.get("resources")
             if isinstance(resources, list):
                 result: List[Dict[str, Any]] = []
                 for r in resources:
-                    qty = (
-                        r.get("quantity", 1) if isinstance(r, dict) else 1
-                    )
-                    pos_list = (
-                        r.get("positions", [])
-                        if isinstance(r, dict)
-                        else []
-                    )
+                    qty = r.get("quantity", 1) if isinstance(r, dict) else 1
+                    pos_list = r.get("positions", []) if isinstance(r, dict) else []
                     for _ in range(qty):
                         for name in pos_list:
-                            result.append(
-                                {"position": name, "required": True}
-                            )
+                            result.append({"position": name, "required": True})
                 return result
         return []
 
@@ -170,18 +160,14 @@ class SchedulingService:
         name to a shift dict."""
         aid = shift_dict.get("apparatus_id")
         # Normalize positions to structured format
-        shift_slots = self.normalize_positions(
-            shift_dict.get("positions")
-        )
+        shift_slots = self.normalize_positions(shift_dict.get("positions"))
         shift_dict["positions"] = shift_slots or None
         if aid and aid in apparatus_map:
             a = apparatus_map[aid]
             shift_dict["apparatus_name"] = a.name
             shift_dict["apparatus_unit_number"] = a.unit_number
             app_slots = self.normalize_positions(a.positions)
-            shift_dict["apparatus_positions"] = (
-                app_slots or shift_slots or None
-            )
+            shift_dict["apparatus_positions"] = app_slots or shift_slots or None
             if shift_dict.get("min_staffing") is None:
                 shift_dict["min_staffing"] = a.min_staffing
         else:
@@ -194,9 +180,7 @@ class SchedulingService:
         # Resolve shift officer name
         officer_id = shift_dict.get("shift_officer_id")
         if officer_id and user_name_map:
-            shift_dict["shift_officer_name"] = user_name_map.get(
-                str(officer_id)
-            )
+            shift_dict["shift_officer_name"] = user_name_map.get(str(officer_id))
         elif "shift_officer_name" not in shift_dict:
             shift_dict["shift_officer_name"] = None
 
@@ -1004,9 +988,7 @@ class SchedulingService:
             # Fetch the organization timezone so template local times
             # are stored as proper UTC datetimes.
             org_result = await self.db.execute(
-                select(Organization).where(
-                    Organization.id == str(organization_id)
-                )
+                select(Organization).where(Organization.id == str(organization_id))
             )
             org = org_result.scalar_one_or_none()
             org_tz = (
@@ -1140,9 +1122,7 @@ class SchedulingService:
                     sh, sm, _eh, _em, _c = _resolve_times(shift_type_map.get(d, "on"))
                     # Convert local template time to UTC for comparison
                     # with existing DB records (stored as UTC).
-                    local_dt = datetime(
-                        d.year, d.month, d.day, sh, sm, tzinfo=org_tz
-                    )
+                    local_dt = datetime(d.year, d.month, d.day, sh, sm, tzinfo=org_tz)
                     utc_dt = local_dt.astimezone(timezone.utc)
                     if (d, utc_dt.hour, utc_dt.minute) not in existing_shifts:
                         filtered_dates.append(d)
@@ -1252,10 +1232,12 @@ class SchedulingService:
                     .where(ShiftAssignment.shift_id == str(shift_id))
                     .where(ShiftAssignment.user_id == str(user_id))
                     .where(
-                        ShiftAssignment.assignment_status.notin_([
-                            AssignmentStatus.DECLINED,
-                            AssignmentStatus.CANCELLED,
-                        ])
+                        ShiftAssignment.assignment_status.notin_(
+                            [
+                                AssignmentStatus.DECLINED,
+                                AssignmentStatus.CANCELLED,
+                            ]
+                        )
                     )
                 )
                 if dup_result.scalar_one_or_none():
@@ -1272,10 +1254,12 @@ class SchedulingService:
                     .join(ShiftAssignment, ShiftAssignment.shift_id == Shift.id)
                     .where(ShiftAssignment.user_id == str(user_id))
                     .where(
-                        ShiftAssignment.assignment_status.notin_([
-                            AssignmentStatus.DECLINED,
-                            AssignmentStatus.CANCELLED,
-                        ])
+                        ShiftAssignment.assignment_status.notin_(
+                            [
+                                AssignmentStatus.DECLINED,
+                                AssignmentStatus.CANCELLED,
+                            ]
+                        )
                     )
                     .where(Shift.id != str(shift_id))
                     .where(Shift.organization_id == str(organization_id))
@@ -1531,9 +1515,7 @@ class SchedulingService:
         try:
             # Load org + settings
             org_result = await self.db.execute(
-                select(Organization).where(
-                    Organization.id == str(organization_id)
-                )
+                select(Organization).where(Organization.id == str(organization_id))
             )
             org = org_result.scalar_one_or_none()
             if not org:
@@ -1598,9 +1580,7 @@ class SchedulingService:
             from app.models.notification import NotificationLog
 
             shift_date_str = (
-                shift.shift_date.isoformat()
-                if shift.shift_date
-                else "unknown date"
+                shift.shift_date.isoformat() if shift.shift_date else "unknown date"
             )
             message = (
                 f"{user_name} {action} the {position} position "
@@ -1632,9 +1612,7 @@ class SchedulingService:
                             User.email.isnot(None),
                         )
                     )
-                    to_emails = [
-                        r[0] for r in recipient_result.all() if r[0]
-                    ]
+                    to_emails = [r[0] for r in recipient_result.all() if r[0]]
                     cc_emails = sched_cfg.get("cc_emails", [])
                     if to_emails:
                         email_svc = EmailService(organization=org)
@@ -1656,9 +1634,7 @@ class SchedulingService:
                             template_type="shift_decline",
                         )
                 except Exception as email_err:
-                    logger.warning(
-                        f"Shift decline email failed: {email_err}"
-                    )
+                    logger.warning(f"Shift decline email failed: {email_err}")
 
         except Exception as e:
             logger.warning(f"Shift decline notification failed: {e}")
@@ -2130,15 +2106,15 @@ class SchedulingService:
                 # Check staffing: use required positions when available,
                 # otherwise fall back to min_staffing headcount.
                 slots = self.normalize_positions(shift.positions)
-                required_slots = [
-                    s for s in slots if s.get("required", True)
-                ]
+                required_slots = [s for s in slots if s.get("required", True)]
                 if required_slots:
                     # Count how many required positions are filled
                     active_pos = [
-                        a.position.value
-                        if hasattr(a.position, "value")
-                        else str(a.position)
+                        (
+                            a.position.value
+                            if hasattr(a.position, "value")
+                            else str(a.position)
+                        )
                         for a in active
                     ]
                     unfilled = 0
@@ -2156,9 +2132,7 @@ class SchedulingService:
                     is_understaffed = unfilled > 0
                 else:
                     min_staff = (
-                        apparatus_min_staffing.get(
-                            shift.apparatus_id, 1
-                        )
+                        apparatus_min_staffing.get(shift.apparatus_id, 1)
                         if shift.apparatus_id
                         else 1
                     )
@@ -2344,9 +2318,7 @@ class SchedulingService:
             # Resolve apparatus details
             apparatus_name = None
             apparatus_unit_number = None
-            shift_positions = self._resolve_template_positions(
-                shift.positions
-            ) or []
+            shift_positions = self._resolve_template_positions(shift.positions) or []
             apparatus_positions = shift_positions
             if shift.apparatus_id and shift.apparatus_id in apparatus_map:
                 app = apparatus_map[shift.apparatus_id]
@@ -2504,23 +2476,15 @@ class SchedulingService:
             if end_month:
                 start_day = requirement.period_start_day or 1
                 if not end_day:
-                    end_day = calendar.monthrange(
-                        reference_date.year, end_month
-                    )[1]
+                    end_day = calendar.monthrange(reference_date.year, end_month)[1]
                 if start_month > end_month:
                     # Cross-year window (e.g. Nov -> Jan)
-                    cycle_end_a = date(
-                        reference_date.year, end_month, end_day
-                    )
+                    cycle_end_a = date(reference_date.year, end_month, end_day)
                     cycle_start_a = date(
                         reference_date.year - 1, start_month, start_day
                     )
-                    cycle_start_b = date(
-                        reference_date.year, start_month, start_day
-                    )
-                    cycle_end_b = date(
-                        reference_date.year + 1, end_month, end_day
-                    )
+                    cycle_start_b = date(reference_date.year, start_month, start_day)
+                    cycle_end_b = date(reference_date.year + 1, end_month, end_day)
                     if cycle_start_a <= reference_date <= cycle_end_a:
                         period_start = cycle_start_a
                         period_end = cycle_end_a
@@ -2531,9 +2495,7 @@ class SchedulingService:
                         # Gap between cycles — extend to cover
                         # late completions for the current year
                         period_start = cycle_start_a
-                        period_end = (
-                            cycle_start_b - timedelta(days=1)
-                        )
+                        period_end = cycle_start_b - timedelta(days=1)
                 else:
                     yr = reference_date.year
                     period_start = date(yr, start_month, start_day)
@@ -2544,13 +2506,9 @@ class SchedulingService:
                     period_start = date(reference_date.year, start_month, 1)
                     end_year = reference_date.year + 1
                 else:
-                    period_start = date(
-                        reference_date.year - 1, start_month, 1
-                    )
+                    period_start = date(reference_date.year - 1, start_month, 1)
                     end_year = reference_date.year
-                period_end = date(end_year, start_month, 1) - timedelta(
-                    days=1
-                )
+                period_end = date(end_year, start_month, 1) - timedelta(days=1)
 
         else:
             # ONE_TIME or fallback: use requirement
