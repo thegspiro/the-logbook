@@ -167,6 +167,11 @@ export const eventService = {
     return response.data;
   },
 
+  async endEvent(eventId: string): Promise<{ checked_out_count: number; actual_end_time: string }> {
+    const response = await api.post<{ checked_out_count: number; actual_end_time: string }>(`/events/${eventId}/end-event`);
+    return response.data;
+  },
+
   /**
    * Get QR code check-in data for an event
    */

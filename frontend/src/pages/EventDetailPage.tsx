@@ -19,7 +19,7 @@ import { formatDateTime, formatShortDateTime, formatTime, formatForDateTimeInput
 import { useTimezone } from '../hooks/useTimezone';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum } from '../constants/enums';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
-import { Bell, Repeat, CalendarPlus, Clock, ChevronDown, MapPin } from 'lucide-react';
+import { Bell, Repeat, CalendarPlus, Clock, ChevronDown, MapPin, StopCircle } from 'lucide-react';
 import { renderSimpleMarkdown } from '../utils/simpleMarkdown';
 import { EventAttachmentsList } from '../components/event-detail/EventAttachmentsList';
 import { EventRecurrenceInfo } from '../components/event-detail/EventRecurrenceInfo';
@@ -49,6 +49,7 @@ export const EventDetailPage: React.FC = () => {
   const [showCancelSeriesModal, setShowCancelSeriesModal] = useState(false);
   const [cancelSeriesFutureOnly, setCancelSeriesFutureOnly] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showEndEventConfirm, setShowEndEventConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [eligibleMembers, setEligibleMembers] = useState<Array<{ id: string; first_name: string; last_name: string; email: string }>>([]);
@@ -469,6 +470,31 @@ export const EventDetailPage: React.FC = () => {
     }
   };
 
+  const handleEndEvent = async () => {
+    if (!eventId) return;
+
+    try {
+      setSubmitting(true);
+      const result = await eventService.endEvent(eventId);
+      const count = result.checked_out_count;
+      toast.success(
+        count > 0
+          ? `Event ended — ${count} member${count !== 1 ? 's' : ''} checked out`
+          : 'Event ended'
+      );
+      setShowEndEventConfirm(false);
+      await fetchEvent();
+      if (canManage) {
+        await fetchRSVPs();
+        await fetchStats();
+      }
+    } catch (err) {
+      toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to end event');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const openRecordTimesModal = () => {
     if (event) {
       // Pre-fill with existing actual times if they exist
@@ -584,6 +610,8 @@ export const EventDetailPage: React.FC = () => {
   }
 
   const isPastEvent = new Date(event.end_datetime) < new Date();
+  const hasStarted = new Date(event.start_datetime) <= new Date();
+  const isOngoing = hasStarted && !isPastEvent && !event.is_cancelled && !event.actual_end_time;
   const canRSVP = event.requires_rsvp && !event.is_cancelled && !isPastEvent &&
     (!event.rsvp_deadline || new Date(event.rsvp_deadline) > new Date());
 
@@ -811,6 +839,18 @@ export const EventDetailPage: React.FC = () => {
                         </div>
                       )}
                     </div>
+                  )}
+
+                  {/* End Event button — visible when event is in progress */}
+                  {isOngoing && (
+                    <button
+                      onClick={() => setShowEndEventConfirm(true)}
+                      disabled={submitting}
+                      className="inline-flex items-center px-4 py-2 border border-red-300 dark:border-red-700 rounded-md shadow-xs text-sm font-medium text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 disabled:opacity-50"
+                    >
+                      <StopCircle className="mr-2 h-4 w-4" />
+                      End Event
+                    </button>
                   )}
 
                   {/* "More" dropdown for secondary actions */}
@@ -2000,6 +2040,61 @@ export const EventDetailPage: React.FC = () => {
       )}
 
       {/* Delete Confirmation Modal */}
+      {/* End Event Confirmation Modal */}
+      {showEndEventConfirm && (
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="end-event-modal-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowEndEventConfirm(false); }}
+        >
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true" onClick={() => setShowEndEventConfirm(false)}>
+              <div className="absolute inset-0 bg-black/75"></div>
+            </div>
+
+            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full relative z-10">
+              <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="sm:flex sm:items-start">
+                  <div className="mx-auto shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-500/20 sm:mx-0 sm:h-10 sm:w-10">
+                    <StopCircle className="h-6 w-6 text-red-600" />
+                  </div>
+                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                    <h3 id="end-event-modal-title" className="text-lg leading-6 font-medium text-theme-text-primary">
+                      End Event Early
+                    </h3>
+                    <div className="mt-2">
+                      <p className="text-sm text-theme-text-muted">
+                        This will end &ldquo;{event.title}&rdquo; now and check out all currently checked-in members. Attendance durations will be calculated based on the current time.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-theme-surface-secondary px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => { void handleEndEvent(); }}
+                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-xs px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+                >
+                  {submitting ? 'Ending...' : 'End Event Now'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowEndEventConfirm(false)}
+                  className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-xs px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                >
+                  Go Back
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showDeleteConfirm && (
         <div
           className="fixed inset-0 z-50 overflow-y-auto"
