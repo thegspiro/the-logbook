@@ -21,6 +21,7 @@ import {
   FileText,
   ExternalLink,
   ClipboardList,
+  Clock,
   Mail,
   Tag,
 } from 'lucide-react';
@@ -32,6 +33,7 @@ import {
   VisibilitySection,
   CategoriesSection,
   OutreachSection,
+  HourTrackingSection,
   PipelineSection,
   EmailSection,
   FormSection,
@@ -48,12 +50,13 @@ const DEFAULT_CATEGORY_COLOR = 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 da
 
 // ─── Section Definitions ───────────────────────────────────────────────────────
 
-type SectionKey = 'visibility' | 'categories' | 'outreach' | 'pipeline' | 'email' | 'form';
+type SectionKey = 'visibility' | 'categories' | 'outreach' | 'hour_tracking' | 'pipeline' | 'email' | 'form';
 
 const SECTIONS: { key: SectionKey; label: string; icon: React.ElementType; description: string }[] = [
   { key: 'visibility', label: 'Visibility', icon: Settings, description: 'Primary filter categories' },
   { key: 'categories', label: 'Categories', icon: Tag, description: 'Custom event categories' },
   { key: 'outreach', label: 'Outreach Types', icon: FileText, description: 'Public outreach event types' },
+  { key: 'hour_tracking', label: 'Hour Tracking', icon: Clock, description: 'Map events to admin hours' },
   { key: 'pipeline', label: 'Pipeline', icon: ClipboardList, description: 'Request processing config' },
   { key: 'email', label: 'Email', icon: Mail, description: 'Triggers and email templates' },
   { key: 'form', label: 'Public Form', icon: ExternalLink, description: 'Public event request form' },
@@ -495,6 +498,10 @@ const EventsSettingsTab: React.FC = () => {
             newTypeLabel={newTypeLabel}
             onNewTypeLabelChange={setNewTypeLabel}
           />
+        );
+      case 'hour_tracking':
+        return (
+          <HourTrackingSection settings={settings} />
         );
       case 'pipeline':
         return (

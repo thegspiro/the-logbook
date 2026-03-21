@@ -23,7 +23,8 @@ import {
   inventoryService,
   memberStatusService,
 } from "../services/api";
-import { adminHoursEntryService } from "../modules/admin-hours/services/api";
+import { adminHoursEntryService, adminHoursComplianceService } from "../modules/admin-hours/services/api";
+import type { AdminHoursComplianceItem } from "../modules/admin-hours/types";
 import type { AdminHoursSummary } from "../modules/admin-hours/types";
 import type { LeaveOfAbsenceResponse } from "../services/api";
 import { CreditCard, Pencil } from "lucide-react";
@@ -122,6 +123,7 @@ export const MemberProfilePage: React.FC = () => {
   const [adminHoursSummary, setAdminHoursSummary] =
     useState<AdminHoursSummary | null>(null);
   const [adminHoursLoading, setAdminHoursLoading] = useState(false);
+  const [adminHoursCompliance, setAdminHoursCompliance] = useState<AdminHoursComplianceItem[]>([]);
 
   // Status change modal state
   const [statusModalOpen, setStatusModalOpen] = useState(false);
@@ -224,8 +226,12 @@ export const MemberProfilePage: React.FC = () => {
   const fetchAdminHours = React.useCallback(async (uid: string) => {
     try {
       setAdminHoursLoading(true);
-      const summary = await adminHoursEntryService.getSummary({ userId: uid });
+      const [summary, compliance] = await Promise.all([
+        adminHoursEntryService.getSummary({ userId: uid }),
+        adminHoursComplianceService.getUserCompliance(uid).catch(() => [] as AdminHoursComplianceItem[]),
+      ]);
       setAdminHoursSummary(summary);
+      setAdminHoursCompliance(compliance);
     } catch {
       // Don't set error - admin hours section is optional
     } finally {
@@ -984,6 +990,64 @@ export const MemberProfilePage: React.FC = () => {
                         </span>
                       </div>
                     ))}
+                  </div>
+                )}
+                {adminHoursCompliance.length > 0 && (
+                  <div className="space-y-3 mt-4 pt-4 border-t border-theme-surface-border">
+                    <p className="text-xs text-theme-text-muted uppercase font-medium">
+                      Yearly Requirements
+                    </p>
+                    {adminHoursCompliance.map((req) => {
+                      const pct = req.requiredHours > 0
+                        ? Math.min(100, (req.loggedHours / req.requiredHours) * 100)
+                        : 0;
+                      const barColor =
+                        req.status === 'compliant'
+                          ? 'bg-green-500'
+                          : req.status === 'at_risk'
+                            ? 'bg-yellow-500'
+                            : 'bg-red-500';
+                      return (
+                        <div key={req.categoryId} className="space-y-1">
+                          <div className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2">
+                              {req.categoryColor && (
+                                <span
+                                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                                  style={{ backgroundColor: req.categoryColor }}
+                                />
+                              )}
+                              <span className="text-theme-text-secondary">
+                                {req.categoryName}
+                              </span>
+                            </div>
+                            <span className="font-medium text-theme-text-primary">
+                              {req.loggedHours} / {req.requiredHours} hrs
+                            </span>
+                          </div>
+                          <div className="w-full h-2 bg-theme-surface-secondary rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all ${barColor}`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-theme-text-muted capitalize">
+                              {req.frequency}
+                            </span>
+                            <span className={`text-xs font-medium ${
+                              req.status === 'compliant'
+                                ? 'text-green-500'
+                                : req.status === 'at_risk'
+                                  ? 'text-yellow-500'
+                                  : 'text-red-500'
+                            }`}>
+                              {req.status === 'compliant' ? 'Complete' : req.status === 'at_risk' ? 'At Risk' : 'Incomplete'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

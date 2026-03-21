@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAdminHoursStore } from '../store/adminHoursStore';
 import { adminHoursEntryService } from '../services/api';
@@ -142,7 +143,18 @@ const AllEntriesTab: React.FC = () => {
                     </td>
                     <td className="px-4 py-3 text-sm text-theme-text-secondary">{formatDate(entry.clockInAt, tz)}</td>
                     <td className="px-4 py-3 text-sm text-theme-text-secondary">{formatDuration(entry.durationMinutes)}</td>
-                    <td className="px-4 py-3 text-sm text-theme-text-secondary capitalize">{entry.entryMethod.replace('_', ' ')}</td>
+                    <td className="px-4 py-3 text-sm text-theme-text-secondary">
+                      <span className="capitalize">{entry.entryMethod.replace(/_/g, ' ')}</span>
+                      {entry.entryMethod === 'event_attendance' && entry.sourceEventId && (
+                        <Link
+                          to={`/events/${entry.sourceEventId}`}
+                          className="block text-xs text-theme-accent-blue hover:underline mt-0.5 truncate max-w-[160px]"
+                          title={entry.sourceEventName ?? 'View event'}
+                        >
+                          {entry.sourceEventName ?? 'View event'}
+                        </Link>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-sm">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                         entry.status === 'approved' ? 'bg-green-500/20 text-green-400' :

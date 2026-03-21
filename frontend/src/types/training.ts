@@ -1962,6 +1962,24 @@ export interface AnnualComplianceReport {
 // Compliance Requirements Configuration
 // =============================================================================
 
+export interface AdminHoursRequirementItem {
+  category_id: string;
+  required_hours: number;
+  frequency: string;
+}
+
+export interface AdminHoursComplianceItem {
+  categoryId: string;
+  categoryName: string;
+  categoryColor: string | null;
+  requiredHours: number;
+  loggedHours: number;
+  frequency: string;
+  status: string;
+  periodStart: string;
+  periodEnd: string;
+}
+
 export interface ComplianceProfile {
   id: string;
   configId: string;
@@ -1973,6 +1991,7 @@ export interface ComplianceProfile {
   atRiskThresholdOverride?: number;
   requiredRequirementIds?: string[];
   optionalRequirementIds?: string[];
+  adminHoursRequirements?: AdminHoursRequirementItem[];
   isActive: boolean;
   priority: number;
   createdAt: string;
@@ -1988,6 +2007,7 @@ export interface ComplianceProfileCreate {
   at_risk_threshold_override?: number | undefined;
   required_requirement_ids?: string[] | undefined;
   optional_requirement_ids?: string[] | undefined;
+  admin_hours_requirements?: AdminHoursRequirementItem[] | undefined;
   is_active?: boolean | undefined;
   priority?: number | undefined;
 }
@@ -2001,6 +2021,7 @@ export interface ComplianceProfileUpdate {
   at_risk_threshold_override?: number | undefined;
   required_requirement_ids?: string[] | undefined;
   optional_requirement_ids?: string[] | undefined;
+  admin_hours_requirements?: AdminHoursRequirementItem[] | undefined;
   is_active?: boolean | undefined;
   priority?: number | undefined;
 }

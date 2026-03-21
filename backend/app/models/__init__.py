@@ -9,6 +9,7 @@ from app.models.admin_hours import (
     AdminHoursEntry,
     AdminHoursEntryMethod,
     AdminHoursEntryStatus,
+    EventHourMapping,
 )
 from app.models.analytics import AnalyticsEvent
 from app.models.apparatus import (

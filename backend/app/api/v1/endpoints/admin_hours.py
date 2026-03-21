@@ -30,12 +30,16 @@ from app.schemas.admin_hours import (
     AdminHoursClockInResponse,
     AdminHoursClockOutResponse,
     AdminHoursClosedStaleResponse,
+    AdminHoursComplianceItem,
     AdminHoursEntryCreate,
     AdminHoursEntryEdit,
     AdminHoursEntryResponse,
     AdminHoursPaginatedEntries,
     AdminHoursQRData,
     AdminHoursSummary,
+    EventHourMappingCreate,
+    EventHourMappingResponse,
+    EventHourMappingUpdate,
 )
 from app.services.admin_hours_service import AdminHoursService
 
@@ -794,3 +798,198 @@ async def get_summary(
         end_date=parsed_end,
     )
     return summary
+
+
+# =============================================================================
+# Event Hour Mappings
+# =============================================================================
+
+
+@router.get(
+    "/event-mappings",
+    response_model=list[EventHourMappingResponse],
+)
+async def list_event_hour_mappings(
+    include_inactive: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List all event-to-admin-hours mappings for the organization."""
+    service = AdminHoursService(db)
+    mappings = await service.list_event_hour_mappings(
+        str(current_user.organization_id),
+        include_inactive=include_inactive,
+    )
+    return mappings
+
+
+@router.post(
+    "/event-mappings",
+    response_model=EventHourMappingResponse,
+    status_code=201,
+)
+async def create_event_hour_mapping(
+    data: EventHourMappingCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("admin_hours.manage")),
+):
+    """Create a mapping from an event type to an admin hours category."""
+    service = AdminHoursService(db)
+    try:
+        mapping = await service.create_event_hour_mapping(
+            organization_id=str(current_user.organization_id),
+            created_by=str(current_user.id),
+            event_type=data.event_type,
+            custom_category=data.custom_category,
+            admin_hours_category_id=data.admin_hours_category_id,
+            percentage=data.percentage,
+        )
+        cat = await service.get_category(
+            mapping.admin_hours_category_id,
+            str(current_user.organization_id),
+        )
+        await log_audit_event(
+            db=db,
+            event_type="admin_hours.event_mapping_created",
+            event_category="administration",
+            severity="info",
+            event_data={
+                "event_type": data.event_type,
+                "custom_category": data.custom_category,
+                "category_name": cat.name if cat else None,
+                "percentage": data.percentage,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return {
+            "id": mapping.id,
+            "organization_id": mapping.organization_id,
+            "event_type": mapping.event_type,
+            "custom_category": mapping.custom_category,
+            "admin_hours_category_id": mapping.admin_hours_category_id,
+            "admin_hours_category_name": cat.name if cat else None,
+            "admin_hours_category_color": cat.color if cat else None,
+            "percentage": mapping.percentage,
+            "is_active": mapping.is_active,
+            "created_at": mapping.created_at,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.patch(
+    "/event-mappings/{mapping_id}",
+    response_model=EventHourMappingResponse,
+)
+async def update_event_hour_mapping(
+    mapping_id: str,
+    data: EventHourMappingUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("admin_hours.manage")),
+):
+    """Update an event hour mapping's percentage or active status."""
+    service = AdminHoursService(db)
+    try:
+        mapping = await service.update_event_hour_mapping(
+            mapping_id=mapping_id,
+            organization_id=str(current_user.organization_id),
+            **data.model_dump(exclude_unset=True),
+        )
+        cat = await service.get_category(
+            mapping.admin_hours_category_id,
+            str(current_user.organization_id),
+        )
+        return {
+            "id": mapping.id,
+            "organization_id": mapping.organization_id,
+            "event_type": mapping.event_type,
+            "custom_category": mapping.custom_category,
+            "admin_hours_category_id": mapping.admin_hours_category_id,
+            "admin_hours_category_name": cat.name if cat else None,
+            "admin_hours_category_color": cat.color if cat else None,
+            "percentage": mapping.percentage,
+            "is_active": mapping.is_active,
+            "created_at": mapping.created_at,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.delete("/event-mappings/{mapping_id}", status_code=204)
+async def delete_event_hour_mapping(
+    mapping_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("admin_hours.manage")),
+):
+    """Delete an event hour mapping."""
+    service = AdminHoursService(db)
+    try:
+        await service.delete_event_hour_mapping(
+            mapping_id=mapping_id,
+            organization_id=str(current_user.organization_id),
+        )
+        await log_audit_event(
+            db=db,
+            event_type="admin_hours.event_mapping_deleted",
+            event_category="administration",
+            severity="info",
+            event_data={"mapping_id": mapping_id},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+# =============================================================================
+# Admin Hours Compliance
+# =============================================================================
+
+
+@router.get(
+    "/compliance/{user_id}",
+    response_model=list[AdminHoursComplianceItem],
+)
+async def get_user_hours_compliance(
+    user_id: str,
+    year: int = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get a user's admin hours compliance progress.
+
+    Returns progress against admin hours requirements defined in
+    compliance profiles. Non-admins can only view their own compliance.
+    """
+    from datetime import date
+
+    # Non-admins can only see their own compliance
+    effective_user_id = user_id
+    if user_id != str(current_user.id):
+        has_perm = any(
+            p in ("admin_hours.manage", "compliance.view", "*")
+            for role in current_user.positions
+            for p in (role.permissions or [])
+        )
+        if not has_perm:
+            effective_user_id = str(current_user.id)
+
+    effective_year = year if year else date.today().year
+
+    service = AdminHoursService(db)
+    try:
+        results = await service.get_user_hours_compliance(
+            organization_id=str(current_user.organization_id),
+            user_id=effective_user_id,
+            year=effective_year,
+        )
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))

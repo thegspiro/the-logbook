@@ -181,6 +181,15 @@ class ComplianceProfile(Base):
         comment="Training requirement IDs that are tracked but optional",
     )
 
+    # -- Admin hours requirements --
+    admin_hours_requirements = Column(
+        JSON, nullable=True,
+        comment=(
+            "List of {category_id, required_hours, frequency} objects. "
+            "Defines yearly/quarterly admin hours targets per category."
+        ),
+    )
+
     is_active = Column(Boolean, nullable=False, default=True)
     priority = Column(
         Integer, nullable=False, default=0,
