@@ -935,6 +935,11 @@ class LabelGenerateRequest(BaseModel):
     custom_height: Optional[float] = Field(
         None, gt=0, description="Height in inches (required for custom format)"
     )
+    auto_rotate: Optional[bool] = Field(
+        None,
+        description="Rotate landscape labels to match roll-fed printer feed direction. "
+        "None uses the format's default (True for Rollo/generic, False for Dymo).",
+    )
 
 
 # ============================================

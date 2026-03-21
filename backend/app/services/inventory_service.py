@@ -60,6 +60,17 @@ _FORCED_CONDITION: dict[ItemStatus, ItemCondition] = {
 # Statuses that require assigned_to_user_id to be set
 _REQUIRES_ASSIGNED_USER = {ItemStatus.ASSIGNED}
 
+# ISO/IEC 15417 minimum module (bar) width for Code128: 0.191 mm ≈ 0.0075 in.
+# At 203 DPI (standard thermal printers) this is ~1.5 dots — the minimum for
+# reliable scanning.  The scaling loops in label generators must not go below
+# this floor.
+_MIN_BAR_WIDTH_INCH = 0.0075
+
+
+def _sanitize_barcode_value(raw: str) -> str:
+    """Strip non-ASCII characters that Code128 cannot encode."""
+    return "".join(ch for ch in raw if ord(ch) < 128)
+
 
 class InventoryService:
     """Service for inventory management"""
@@ -2475,53 +2486,68 @@ class InventoryService:
     # Barcode Label Generation
     # ============================================
 
-    # Predefined label formats: (width_inches, height_inches, description)
+    # Predefined label formats.
+    # `auto_rotate`:
+    #   False = Dymo printers whose driver handles rotation automatically.
+    #           The PDF page matches the label's visual orientation.
+    #   True  = Generic thermal / Rollo printers that feed narrow-edge-first
+    #           without driver rotation.  For landscape labels the PDF page
+    #           is created in portrait (narrow edge = page width) and content
+    #           is rotated 90° so the label reads correctly after printing.
     LABEL_FORMATS: Dict[str, Dict[str, Any]] = {
         "letter": {
             "description": "Standard letter (8.5x11) - Avery 5160, 3x10 grid",
             "type": "sheet",
+            "auto_rotate": False,
         },
         "dymo_30252": {
             "description": "Dymo 30252 Address Label (1.125 x 3.5 in)",
             "width": 3.5,
             "height": 1.125,
             "type": "thermal",
+            "auto_rotate": False,
         },
         "dymo_30256": {
             "description": "Dymo 30256 Shipping Label (2.3125 x 4 in)",
             "width": 4.0,
             "height": 2.3125,
             "type": "thermal",
+            "auto_rotate": False,
         },
         "dymo_30334": {
             "description": "Dymo 30334 Multi-Purpose Label (2.25 x 1.25 in)",
             "width": 2.25,
             "height": 1.25,
             "type": "thermal",
+            "auto_rotate": False,
         },
         "dymo_30336": {
             "description": "Dymo 30336 Small Multipurpose Label (2.125 x 1 in)",
             "width": 2.125,
             "height": 1.0,
             "type": "thermal",
+            "auto_rotate": False,
         },
         "rollo_4x6": {
             "description": "Rollo 4x6 Shipping Label (4 x 6 in)",
             "width": 4.0,
             "height": 6.0,
             "type": "thermal",
+            "auto_rotate": True,
         },
         "rollo_2x1": {
             "description": "Rollo / Thermal 2x1 Label (2 x 1 in)",
             "width": 2.0,
             "height": 1.0,
             "type": "thermal",
+            "auto_rotate": True,
         },
         "thermal_1x1": {
             "description": "Thermal 1x1 Square Label (1 x 1 in)",
             "width": 1.0,
             "height": 1.0,
             "type": "thermal",
+            "auto_rotate": True,
         },
     }
 
@@ -2532,20 +2558,17 @@ class InventoryService:
         label_format: str = "letter",
         custom_width: Optional[float] = None,
         custom_height: Optional[float] = None,
+        auto_rotate: Optional[bool] = None,
     ) -> Tuple[BytesIO, int]:
         """
         Generate a PDF containing barcode labels for the given items.
 
-        Supports multiple label formats:
-        - "letter": Standard 8.5x11 sheet with 2x5 grid (for standard printers)
-        - "dymo_30252": Dymo 30252 address labels (1.125 x 3.5 in)
-        - "dymo_30256": Dymo 30256 shipping labels (2.3125 x 4 in)
-        - "dymo_30334": Dymo 30334 multi-purpose labels (2.25 x 1.25 in)
-        - "dymo_30336": Dymo 30336 small multipurpose labels (2.125 x 1 in)
-        - "rollo_4x6": Rollo 4x6 shipping labels
-        - "custom": Custom dimensions via custom_width/custom_height (in inches)
-
+        Supports multiple label formats (see LABEL_FORMATS for the full list).
         Thermal formats produce one label per page, sized exactly to the label.
+
+        `auto_rotate` controls whether landscape labels are rotated to match
+        roll-fed printer feed direction (narrow edge first).  When None, the
+        format's default is used (True for Rollo/generic, False for Dymo).
 
         Returns a tuple of (pdf_buffer, auto_populated_count).
         """
@@ -2578,7 +2601,7 @@ class InventoryService:
         for item in items:
             if not item.barcode:
                 effective = item.asset_tag or item.serial_number or item.id[:12]
-                item.barcode = effective
+                item.barcode = _sanitize_barcode_value(effective)
                 auto_populated += 1
         if auto_populated > 0:
             await self.db.commit()
@@ -2588,8 +2611,9 @@ class InventoryService:
                 raise ValueError(
                     "custom_width and custom_height are required for custom label format"
                 )
+            rotate = auto_rotate if auto_rotate is not None else True
             pdf_buf = self._generate_thermal_labels(
-                items, custom_width, custom_height
+                items, custom_width, custom_height, rotate
             )
             return pdf_buf, auto_populated
 
@@ -2602,8 +2626,9 @@ class InventoryService:
         if fmt["type"] == "sheet":
             pdf_buf = self._generate_sheet_labels(items)
         else:
+            rotate = auto_rotate if auto_rotate is not None else fmt.get("auto_rotate", False)
             pdf_buf = self._generate_thermal_labels(
-                items, fmt["width"], fmt["height"]
+                items, fmt["width"], fmt["height"], rotate
             )
         return pdf_buf, auto_populated
 
@@ -2640,7 +2665,7 @@ class InventoryService:
             x = margin_x + col * label_w
             y = page_h - margin_y - (row + 1) * label_h
 
-            barcode_value = (
+            barcode_value = _sanitize_barcode_value(
                 item.barcode or item.asset_tag or item.serial_number or item.id[:12]
             )
 
@@ -2661,13 +2686,15 @@ class InventoryService:
                 c.drawString(x + 6, y + label_h - 20, "  |  ".join(info_parts))
 
             # Barcode — fit within the 1" label height
+            # ISO/IEC 15417 quiet zone: leave space on each side of the barcode
+            quiet_zone = 10 * _MIN_BAR_WIDTH_INCH * inch
             bar_height = 0.35 * inch
             bar_width_unit = 0.008 * inch
             barcode_obj = code128.Code128(
                 barcode_value, barWidth=bar_width_unit, barHeight=bar_height
             )
-            max_barcode_width = label_w - 12
-            while barcode_obj.width > max_barcode_width and bar_width_unit > 0.005 * inch:
+            max_barcode_width = label_w - 12 - 2 * quiet_zone
+            while barcode_obj.width > max_barcode_width and bar_width_unit > _MIN_BAR_WIDTH_INCH * inch:
                 bar_width_unit -= 0.001 * inch
                 barcode_obj = code128.Code128(
                     barcode_value, barWidth=bar_width_unit, barHeight=bar_height
@@ -2685,67 +2712,92 @@ class InventoryService:
 
     @staticmethod
     def _generate_thermal_labels(
-        items: list, width_in: float, height_in: float
+        items: list,
+        width_in: float,
+        height_in: float,
+        auto_rotate: bool = False,
     ) -> BytesIO:
         """
         Generate labels sized for thermal printers (Dymo, Rollo, etc).
         Each item gets its own page at the exact label dimensions.
+
+        When `auto_rotate` is True and the label is landscape (wider than
+        tall), the PDF page is created in portrait orientation — matching
+        how roll-fed printers physically feed labels (narrow edge first) —
+        and the content is rotated 90° clockwise so it reads correctly
+        after printing.  This prevents the common problem of landscape
+        content printing sideways on roll-fed printers whose drivers do
+        not auto-rotate.
         """
         from reportlab.graphics.barcode import code128
         from reportlab.lib.units import inch
         from reportlab.pdfgen import canvas
 
-        label_w = width_in * inch
-        label_h = height_in * inch
-        page_size = (label_w, label_h)
+        # Content dimensions (the logical label you design for)
+        content_w = width_in * inch
+        content_h = height_in * inch
+
+        is_landscape = width_in > height_in
+        # When auto-rotating a landscape label, the PDF page is portrait
+        # (height > width) so the narrow edge is the page width — matching
+        # roll-fed printer feed direction.
+        needs_rotation = auto_rotate and is_landscape
+        if needs_rotation:
+            page_size = (content_h, content_w)  # swapped to portrait
+        else:
+            page_size = (content_w, content_h)
 
         buf = BytesIO()
         c = canvas.Canvas(buf, pagesize=page_size)
 
-        # Determine layout based on label aspect ratio
-        is_landscape = width_in > height_in  # wider than tall (e.g., Dymo 30252)
-        padding = 0.08 * inch  # tight padding for small labels
+        padding = 0.08 * inch
 
         for idx, item in enumerate(items):
             if idx > 0:
                 c.showPage()
 
-            barcode_value = (
+            barcode_value = _sanitize_barcode_value(
                 item.barcode or item.asset_tag or item.serial_number or item.id[:12]
             )
 
-            if is_landscape:
-                # Landscape: text on left, barcode on right or text top barcode bottom
-                self_w = label_w - 2 * padding
-                self_h = label_h - 2 * padding
+            # When rotating, shift the canvas origin and rotate so all
+            # subsequent drawing commands use normal (content_w x content_h)
+            # coordinates while the PDF page is in portrait.
+            if needs_rotation:
+                c.saveState()
+                c.translate(content_h, 0)
+                c.rotate(90)
 
-                # Scale fonts based on label height
+            # ISO/IEC 15417 quiet zone for Code128
+            quiet_zone = 10 * _MIN_BAR_WIDTH_INCH * inch
+            min_bar = _MIN_BAR_WIDTH_INCH * inch
+
+            if is_landscape:
+                self_w = content_w - 2 * padding
+                self_h = content_h - 2 * padding
+
                 name_font_size = min(8, max(5, self_h / (0.2 * inch)))
                 info_font_size = max(4, name_font_size - 2)
                 barcode_text_size = max(4, info_font_size)
 
-                # Barcode sizing — fit within label
-                max_barcode_width = self_w * 0.85
+                max_barcode_width = self_w * 0.85 - 2 * quiet_zone
                 bar_height = min(0.4 * inch, self_h * 0.4)
                 bar_width_unit = 0.01 * inch
 
                 barcode_obj = code128.Code128(
                     barcode_value, barWidth=bar_width_unit, barHeight=bar_height
                 )
-                # Scale down barWidth if barcode doesn't fit
                 while (
                     barcode_obj.width > max_barcode_width
-                    and bar_width_unit > 0.005 * inch
+                    and bar_width_unit > min_bar
                 ):
                     bar_width_unit -= 0.001 * inch
                     barcode_obj = code128.Code128(
                         barcode_value, barWidth=bar_width_unit, barHeight=bar_height
                     )
 
-                # Layout: name at top, info line, barcode centered, text below
-                y_cursor = label_h - padding
+                y_cursor = content_h - padding
 
-                # Item name
                 c.setFont("Helvetica-Bold", name_font_size)
                 name_max_chars = int(self_w / (name_font_size * 0.5))
                 name = item.name[:name_max_chars] + (
@@ -2754,7 +2806,6 @@ class InventoryService:
                 y_cursor -= name_font_size
                 c.drawString(padding, y_cursor, name)
 
-                # Secondary info (skip fields already shown as the barcode value)
                 info_parts = []
                 if item.asset_tag and item.asset_tag != barcode_value:
                     info_parts.append(f"Asset: {item.asset_tag}")
@@ -2765,26 +2816,22 @@ class InventoryService:
                     c.setFont("Helvetica", info_font_size)
                     c.drawString(padding, y_cursor, " | ".join(info_parts))
 
-                # Barcode — centered horizontally
                 barcode_x = padding + (self_w - barcode_obj.width) / 2
                 barcode_y = padding + barcode_text_size + 4
                 barcode_obj.drawOn(c, barcode_x, barcode_y)
 
-                # Barcode text below barcode
                 c.setFont("Courier", barcode_text_size)
-                c.drawCentredString(label_w / 2, padding + 1, barcode_value)
+                c.drawCentredString(content_w / 2, padding + 1, barcode_value)
 
             else:
-                # Portrait / square: text at top, barcode in middle, text at bottom
-                self_w = label_w - 2 * padding
-                self_h = label_h - 2 * padding
+                self_w = content_w - 2 * padding
+                self_h = content_h - 2 * padding
 
                 name_font_size = min(10, max(6, self_w / (0.4 * inch)))
                 info_font_size = max(5, name_font_size - 2)
                 barcode_text_size = max(5, info_font_size)
 
-                # Barcode sizing
-                max_barcode_width = self_w * 0.9
+                max_barcode_width = self_w * 0.9 - 2 * quiet_zone
                 bar_height = min(0.8 * inch, self_h * 0.3)
                 bar_width_unit = 0.012 * inch
 
@@ -2793,23 +2840,21 @@ class InventoryService:
                 )
                 while (
                     barcode_obj.width > max_barcode_width
-                    and bar_width_unit > 0.005 * inch
+                    and bar_width_unit > min_bar
                 ):
                     bar_width_unit -= 0.001 * inch
                     barcode_obj = code128.Code128(
                         barcode_value, barWidth=bar_width_unit, barHeight=bar_height
                     )
 
-                # Item name at top
                 c.setFont("Helvetica-Bold", name_font_size)
                 name_max_chars = int(self_w / (name_font_size * 0.52))
                 name = item.name[:name_max_chars] + (
                     "..." if len(item.name) > name_max_chars else ""
                 )
-                y_cursor = label_h - padding - name_font_size
-                c.drawCentredString(label_w / 2, y_cursor, name)
+                y_cursor = content_h - padding - name_font_size
+                c.drawCentredString(content_w / 2, y_cursor, name)
 
-                # Secondary info (skip fields already shown as the barcode value)
                 info_parts = []
                 if item.asset_tag and item.asset_tag != barcode_value:
                     info_parts.append(f"Asset: {item.asset_tag}")
@@ -2818,16 +2863,17 @@ class InventoryService:
                 if info_parts:
                     y_cursor -= info_font_size + 4
                     c.setFont("Helvetica", info_font_size)
-                    c.drawCentredString(label_w / 2, y_cursor, " | ".join(info_parts))
+                    c.drawCentredString(content_w / 2, y_cursor, " | ".join(info_parts))
 
-                # Barcode — centered
                 barcode_x = padding + (self_w - barcode_obj.width) / 2
                 barcode_y = padding + barcode_text_size + 8
                 barcode_obj.drawOn(c, barcode_x, barcode_y)
 
-                # Barcode text
                 c.setFont("Courier", barcode_text_size)
-                c.drawCentredString(label_w / 2, padding + 2, barcode_value)
+                c.drawCentredString(content_w / 2, padding + 2, barcode_value)
+
+            if needs_rotation:
+                c.restoreState()
 
         c.save()
         buf.seek(0)
