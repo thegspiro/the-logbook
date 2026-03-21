@@ -1725,18 +1725,9 @@ class EventService:
         if event.organization_id != organization_id:
             return None, "Event not found in your organization"
 
-        # Calculate check-in window — ensure datetimes are timezone-aware
+        # Use the same check-in window logic as the QR self-check-in page
         now = datetime.now(dt_timezone.utc)
-        start_dt = (
-            event.start_datetime.replace(tzinfo=dt_timezone.utc)
-            if event.start_datetime.tzinfo is None
-            else event.start_datetime
-        )
-        check_in_start = start_dt - timedelta(hours=1)
-        end_dt = event.actual_end_time if event.actual_end_time else event.end_datetime
-        check_in_end = (
-            end_dt.replace(tzinfo=dt_timezone.utc) if end_dt.tzinfo is None else end_dt
-        )
+        check_in_start, check_in_end = self._get_check_in_window(event)
         is_check_in_active = check_in_start <= now <= check_in_end
 
         # Get all RSVPs with user details
