@@ -65,6 +65,9 @@ const WriteOffsPage = lazyWithRetry(
 const ReorderRequestsPage = lazyWithRetry(
   () => import('./pages/ReorderRequestsPage'),
 );
+const EquipmentKitsPage = lazyWithRetry(
+  () => import('./pages/EquipmentKitsPage'),
+);
 
 export const getInventoryRoutes = () => {
   return (
@@ -207,6 +210,17 @@ export const getInventoryRoutes = () => {
           <ProtectedRoute requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <ReorderRequestsPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/inventory/admin/kits"
+        element={
+          <ProtectedRoute requiredPermission="inventory.manage">
+            <Suspense fallback={null}>
+              <EquipmentKitsPage />
             </Suspense>
           </ProtectedRoute>
         }
