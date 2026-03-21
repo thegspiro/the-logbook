@@ -25,14 +25,18 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatDateTime, formatForDateTimeInput, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
 import { getEventTypeLabel } from '../utils/eventHelpers';
+import { getTimeRemaining, getStatusBadgeClass } from '../utils/electionHelpers';
 
 export const ElectionDetailPage: React.FC = () => {
   const { electionId } = useParams<{ electionId: string }>();
   const navigate = useNavigate();
+  // Core election state
   const [election, setElection] = useState<Election | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showResults, setShowResults] = useState(false);
+
+  // Lifecycle modal state (extend, rollback, visibility)
   const [updatingVisibility, setUpdatingVisibility] = useState(false);
   const [showExtendModal, setShowExtendModal] = useState(false);
   const [newEndDate, setNewEndDate] = useState('');
@@ -131,6 +135,8 @@ export const ElectionDetailPage: React.FC = () => {
       // Non-critical — section will just be empty
     }
   };
+
+  // ── Election lifecycle handlers ──────────────────────────────────
 
   const handleToggleResultsVisibility = async () => {
     if (!electionId || !election) return;
@@ -237,7 +243,9 @@ export const ElectionDetailPage: React.FC = () => {
     }
   };
 
-  // --- Send Ballot Emails ---
+  // ── Communication handlers ──────────────────────────────────────
+
+  /** Sends ballot emails to all eligible voters. Tracks skipped members for UI banner. */
   const handleSendBallotEmails = async () => {
     if (!electionId) return;
 
@@ -293,7 +301,7 @@ export const ElectionDetailPage: React.FC = () => {
     }
   };
 
-  // --- Remind Non-Voters ---
+  /** Loads the list of non-voters and opens the reminder modal. */
   const handleOpenRemindModal = async () => {
     if (!electionId) return;
 
@@ -356,7 +364,9 @@ export const ElectionDetailPage: React.FC = () => {
     }
   };
 
-  // --- Delete Election ---
+  // ── Destructive action handlers ─────────────────────────────────
+
+  /** Deletes the election. Requires a reason (10+ chars) for non-draft elections. */
   const handleDeleteElection = async () => {
     if (!electionId || !election) return;
 
@@ -386,7 +396,9 @@ export const ElectionDetailPage: React.FC = () => {
     }
   };
 
-  // --- Integrity Check ---
+  // ── Forensics & integrity handlers ──────────────────────────────
+
+  /** Verifies vote signatures and chain integrity. Results shown in forensics panel. */
   const handleRunIntegrityCheck = async () => {
     if (!electionId) return;
 
@@ -401,7 +413,7 @@ export const ElectionDetailPage: React.FC = () => {
     }
   };
 
-  // --- Forensics Report ---
+  /** Loads the full forensics report (deleted votes, anomalies, timeline, tokens). */
   const handleLoadForensics = async () => {
     if (!electionId) return;
 
@@ -416,7 +428,7 @@ export const ElectionDetailPage: React.FC = () => {
     }
   };
 
-  // --- Soft-delete Vote ---
+  /** Soft-deletes a vote by ID. The vote is preserved but excluded from results. */
   const handleVoidVote = async () => {
     if (!electionId || !voidVoteId.trim() || !voidVoteReason.trim()) return;
 
@@ -462,21 +474,6 @@ export const ElectionDetailPage: React.FC = () => {
     );
   };
 
-  const getStatusBadgeClass = (status: string) => {
-    switch (status) {
-      case ElectionStatus.OPEN:
-        return 'bg-green-500/10 text-green-700 dark:text-green-400';
-      case ElectionStatus.CLOSED:
-        return 'bg-theme-surface-secondary text-theme-text-muted';
-      case ElectionStatus.DRAFT:
-        return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400';
-      case ElectionStatus.CANCELLED:
-        return 'bg-red-500/10 text-red-700 dark:text-red-400';
-      default:
-        return 'bg-theme-surface-secondary text-theme-text-muted';
-    }
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen">
@@ -505,32 +502,14 @@ export const ElectionDetailPage: React.FC = () => {
   const isDraft = election.status === ElectionStatus.DRAFT;
   const isActiveOrCompleted = election.status === ElectionStatus.OPEN || election.status === ElectionStatus.CLOSED;
 
-  const getTimeRemaining = (): string | null => {
-    const now = new Date();
-    const end = new Date(election.end_date);
-    const diffMs = end.getTime() - now.getTime();
-    if (diffMs <= 0) return null;
-
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffDays > 0) {
-      return `${diffDays}d ${diffHours % 24}h remaining`;
-    }
-    if (diffHours > 0) {
-      const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-      return `${diffHours}h ${diffMinutes}m remaining`;
-    }
-    const diffMinutes = Math.floor(diffMs / (1000 * 60));
-    return `${diffMinutes}m remaining`;
-  };
-
+  // ── Lifecycle stepper config ────────────────────────────────────
   const lifecycleSteps = [
     { key: 'draft', label: 'Draft', description: 'Configure ballot & candidates' },
     { key: 'open', label: 'Voting Open', description: 'Members can cast votes' },
     { key: 'closed', label: 'Closed', description: 'Results finalized' },
   ] as const;
 
+  /** Determines whether a lifecycle step is completed, current, or upcoming based on election status. */
   const getStepStatus = (stepKey: string): 'completed' | 'current' | 'upcoming' => {
     const order = ['draft', 'open', 'closed'];
     const currentIdx = election.status === ElectionStatus.CANCELLED
@@ -636,8 +615,8 @@ export const ElectionDetailPage: React.FC = () => {
               <svg className="h-4 w-4 text-theme-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              {getTimeRemaining() ? (
-                <span className="font-medium text-green-700 dark:text-green-400">{getTimeRemaining()}</span>
+              {getTimeRemaining(election.end_date) ? (
+                <span className="font-medium text-green-700 dark:text-green-400">{getTimeRemaining(election.end_date)}</span>
               ) : (
                 <span className="font-medium text-red-700 dark:text-red-400">Voting period has ended</span>
               )}

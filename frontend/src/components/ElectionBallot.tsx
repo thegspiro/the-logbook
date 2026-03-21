@@ -67,6 +67,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
     }
   };
 
+  /** Returns the list of positions to vote on, or ['_default'] for single-position elections. */
   const getPositions = (): string[] => {
     if (election.positions && election.positions.length > 0) {
       return election.positions;
@@ -121,6 +122,12 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
     });
   };
 
+  /**
+   * Submits a vote for a single position. Handles three voting methods:
+   * - ranked_choice: submits ordered rankings with rank numbers
+   * - approval: submits one vote per approved candidate
+   * - simple/supermajority: submits a single selected candidate
+   */
   const handleSubmitVote = async (position: string) => {
     try {
       setSubmitting(true);

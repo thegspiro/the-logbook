@@ -17,6 +17,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatForDateTimeInput, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
 import { HelpLink } from '../components/HelpLink';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
+import { getTimeRemaining, getStatusBadgeClass } from '../utils/electionHelpers';
 
 export const ElectionsPage: React.FC = () => {
   const [elections, setElections] = useState<ElectionListItem[]>([]);
@@ -221,41 +222,6 @@ export const ElectionsPage: React.FC = () => {
       ...formData,
       positions: formData.positions?.filter(p => p !== position) || [],
     });
-  };
-
-  const getStatusBadgeClass = (status: string) => {
-    switch (status) {
-      case ElectionStatus.OPEN:
-        return 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400';
-      case ElectionStatus.CLOSED:
-        return 'bg-theme-surface-secondary text-theme-text-primary';
-      case ElectionStatus.DRAFT:
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400';
-      case ElectionStatus.CANCELLED:
-        return 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400';
-      default:
-        return 'bg-theme-surface-secondary text-theme-text-primary';
-    }
-  };
-
-  const getTimeRemaining = (endDate: string): string | null => {
-    const now = new Date();
-    const end = new Date(endDate);
-    const diffMs = end.getTime() - now.getTime();
-    if (diffMs <= 0) return null;
-
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffDays > 0) {
-      return `${diffDays}d ${diffHours % 24}h remaining`;
-    }
-    if (diffHours > 0) {
-      const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-      return `${diffHours}h ${diffMinutes}m remaining`;
-    }
-    const diffMinutes = Math.floor(diffMs / (1000 * 60));
-    return `${diffMinutes}m remaining`;
   };
 
   const getStatusCount = (status: string): number => {

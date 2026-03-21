@@ -96,11 +96,16 @@ const inputClass = 'form-input';
 const selectClass = inputClass;
 const labelClass = 'form-label';
 
+/** Generates a unique ID for new ballot items using timestamp + random suffix. */
 const generateId = () =>
   `item_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 // ─── Helpers ────────────────────────────────────────────────────
 
+/**
+ * Converts an array of voter type codes (e.g. ['regular', 'life']) into
+ * a human-readable label by looking up each code in VOTER_TYPE_OPTIONS.
+ */
 const getVoterTypeLabel = (types: string[]) => {
   if (types.includes('all')) return 'All Members';
   return types
@@ -111,6 +116,10 @@ const getVoterTypeLabel = (types: string[]) => {
     .join(', ');
 };
 
+/**
+ * Returns a human-readable label for a ballot item's per-item victory condition
+ * override, or null if the item uses the election default.
+ */
 const getVictoryLabel = (item: BallotItem) => {
   if (!item.victory_condition) return null;
   switch (item.victory_condition) {

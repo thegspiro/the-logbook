@@ -2,17 +2,88 @@
  * Election Results Component
  *
  * Displays election results in a simple, anonymous manner.
+ * Shows summary statistics, quorum status, and per-position/overall
+ * candidate results with visual progress bars.
  */
 
 import React, { useEffect, useState } from 'react';
 import { electionService } from '../services/api';
-import type { ElectionResults as ElectionResultsType, Election } from '../types/election';
+import type { ElectionResults as ElectionResultsType, CandidateResult, Election } from '../types/election';
 import { getErrorMessage } from '../utils/errorHandling';
+import { getVictoryDescription } from '../utils/electionHelpers';
 
 interface ElectionResultsProps {
   electionId: string;
   election: Election;
 }
+
+/** Renders a single candidate's result row with vote count, percentage, and progress bar. */
+const CandidateResultCard: React.FC<{ candidate: CandidateResult }> = ({ candidate }) => (
+  <div
+    className={`p-4 rounded-lg border-2 ${
+      candidate.is_winner
+        ? 'border-green-500 bg-green-500/10'
+        : 'border-theme-surface-border bg-theme-surface-secondary'
+    }`}
+    aria-label={`${candidate.candidate_name}: ${candidate.vote_count} votes, ${candidate.percentage}%${candidate.is_winner ? ', winner' : ''}`}
+  >
+    <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center space-x-3">
+        {candidate.is_winner && (
+          <svg
+            className="h-6 w-6 text-green-700 dark:text-green-400"
+            fill="currentColor"
+            viewBox="0 0 20 20"
+            aria-hidden="true"
+          >
+            <path
+              fillRule="evenodd"
+              d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+              clipRule="evenodd"
+            />
+          </svg>
+        )}
+        <div>
+          <div className="font-medium text-theme-text-primary">
+            {candidate.candidate_name}
+          </div>
+          {candidate.is_winner && (
+            <div className="text-sm text-green-700 dark:text-green-400 font-medium">Winner</div>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center space-x-4">
+        <div className="text-right">
+          <span className="text-lg font-semibold text-theme-text-primary">
+            {candidate.vote_count}
+          </span>
+          <span className="text-sm text-theme-text-muted ml-1">
+            {candidate.vote_count === 1 ? 'vote' : 'votes'}
+          </span>
+        </div>
+        <div className="text-right">
+          <span className="text-lg font-bold text-theme-text-primary">
+            {candidate.percentage}%
+          </span>
+        </div>
+      </div>
+    </div>
+    {/* Vote percentage progress bar */}
+    <div className="w-full bg-theme-surface rounded-full h-2.5 overflow-hidden">
+      <div
+        className={`h-2.5 rounded-full transition-all duration-500 ${
+          candidate.is_winner ? 'bg-green-500' : 'bg-blue-500'
+        }`}
+        style={{ width: `${Math.min(100, candidate.percentage)}%` }}
+        role="progressbar"
+        aria-valuenow={candidate.percentage}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      />
+    </div>
+  </div>
+);
 
 export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, election }) => {
   const [results, setResults] = useState<ElectionResultsType | null>(null);
@@ -60,29 +131,6 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
     );
   }
 
-  const getVictoryInfo = () => {
-    const { victory_condition, victory_threshold, victory_percentage } = election;
-
-    switch (victory_condition) {
-      case 'most_votes':
-        return 'Most Votes (Plurality)';
-      case 'majority':
-        return 'Majority (>50% of votes)';
-      case 'supermajority':
-        return `Supermajority (${victory_percentage || 67}% of votes)`;
-      case 'threshold':
-        if (victory_threshold) {
-          return `Threshold (${victory_threshold} votes required)`;
-        }
-        if (victory_percentage) {
-          return `Threshold (${victory_percentage}% of votes required)`;
-        }
-        return 'Threshold';
-      default:
-        return 'Simple Majority';
-    }
-  };
-
   return (
     <div className="space-y-6">
       {/* Overall Stats */}
@@ -113,7 +161,7 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
           <div className="bg-theme-surface-secondary rounded-lg p-4">
             <div className="text-sm font-medium text-theme-text-muted">Victory Condition</div>
             <div className="mt-1 text-sm font-semibold text-theme-text-primary">
-              {getVictoryInfo()}
+              {getVictoryDescription(election)}
             </div>
           </div>
         </div>
@@ -178,73 +226,7 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
 
               <div className="space-y-3">
                 {(positionResult.candidates || []).map((candidate) => (
-                  <div
-                    key={candidate.candidate_id}
-                    className={`p-4 rounded-lg border-2 ${
-                      candidate.is_winner
-                        ? 'border-green-500 bg-green-500/10'
-                        : 'border-theme-surface-border bg-theme-surface-secondary'
-                    }`}
-                    aria-label={`${candidate.candidate_name}: ${candidate.vote_count} votes, ${candidate.percentage}%${candidate.is_winner ? ', winner' : ''}`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center space-x-3">
-                        {candidate.is_winner && (
-                          <svg
-                            className="h-6 w-6 text-green-700 dark:text-green-400"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                            aria-hidden="true"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        )}
-                        <div>
-                          <div className="font-medium text-theme-text-primary">
-                            {candidate.candidate_name}
-                          </div>
-                          {candidate.is_winner && (
-                            <div className="text-sm text-green-700 dark:text-green-400 font-medium">Winner</div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center space-x-4">
-                        <div className="text-right">
-                          <span className="text-lg font-semibold text-theme-text-primary">
-                            {candidate.vote_count}
-                          </span>
-                          <span className="text-sm text-theme-text-muted ml-1">
-                            {candidate.vote_count === 1 ? 'vote' : 'votes'}
-                          </span>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-lg font-bold text-theme-text-primary">
-                            {candidate.percentage}%
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    {/* Vote percentage progress bar */}
-                    <div className="w-full bg-theme-surface rounded-full h-2.5 overflow-hidden">
-                      <div
-                        className={`h-2.5 rounded-full transition-all duration-500 ${
-                          candidate.is_winner
-                            ? 'bg-green-500'
-                            : 'bg-blue-500'
-                        }`}
-                        style={{ width: `${Math.min(100, candidate.percentage)}%` }}
-                        role="progressbar"
-                        aria-valuenow={candidate.percentage}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                      />
-                    </div>
-                  </div>
+                  <CandidateResultCard key={candidate.candidate_id} candidate={candidate} />
                 ))}
               </div>
             </div>
@@ -259,73 +241,7 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
             <h3 className="text-lg font-medium text-theme-text-primary mb-4">Results</h3>
             <div className="space-y-3">
               {results.overall_results.map((candidate) => (
-                <div
-                  key={candidate.candidate_id}
-                  className={`p-4 rounded-lg border-2 ${
-                    candidate.is_winner
-                      ? 'border-green-500 bg-green-500/10'
-                      : 'border-theme-surface-border bg-theme-surface-secondary'
-                  }`}
-                  aria-label={`${candidate.candidate_name}: ${candidate.vote_count} votes, ${candidate.percentage}%${candidate.is_winner ? ', winner' : ''}`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center space-x-3">
-                      {candidate.is_winner && (
-                        <svg
-                          className="h-6 w-6 text-green-700 dark:text-green-400"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                          aria-hidden="true"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      )}
-                      <div>
-                        <div className="font-medium text-theme-text-primary">
-                          {candidate.candidate_name}
-                        </div>
-                        {candidate.is_winner && (
-                          <div className="text-sm text-green-700 dark:text-green-400 font-medium">Winner</div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center space-x-4">
-                      <div className="text-right">
-                        <span className="text-lg font-semibold text-theme-text-primary">
-                          {candidate.vote_count}
-                        </span>
-                        <span className="text-sm text-theme-text-muted ml-1">
-                          {candidate.vote_count === 1 ? 'vote' : 'votes'}
-                        </span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-lg font-bold text-theme-text-primary">
-                          {candidate.percentage}%
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  {/* Vote percentage progress bar */}
-                  <div className="w-full bg-theme-surface rounded-full h-2.5 overflow-hidden">
-                    <div
-                      className={`h-2.5 rounded-full transition-all duration-500 ${
-                        candidate.is_winner
-                          ? 'bg-green-500'
-                          : 'bg-blue-500'
-                      }`}
-                      style={{ width: `${Math.min(100, candidate.percentage)}%` }}
-                      role="progressbar"
-                      aria-valuenow={candidate.percentage}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                    />
-                  </div>
-                </div>
+                <CandidateResultCard key={candidate.candidate_id} candidate={candidate} />
               ))}
             </div>
           </div>
