@@ -995,6 +995,62 @@ async def delete_event(
     )
 
 
+@router.delete("/{event_id}/series", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_event_series(
+    event_id: UUID,
+    delete_future_only: bool = False,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Delete all events in a recurring series.
+
+    If delete_future_only is True, only deletes future occurrences.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+
+    try:
+        deleted_count = await service.delete_event_series(
+            parent_event_id=event_id,
+            organization_id=current_user.organization_id,
+            delete_future_only=delete_future_only,
+        )
+
+        if deleted_count == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No events found in this series",
+            )
+
+        await log_audit_event(
+            db=db,
+            event_type="event.series_deleted",
+            event_category="events",
+            severity="warning",
+            event_data={
+                "parent_event_id": str(event_id),
+                "deleted_count": deleted_count,
+                "future_only": delete_future_only,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
+
+
 @router.post("/{event_id}/cancel", response_model=EventResponse)
 async def cancel_event(
     event_id: UUID,

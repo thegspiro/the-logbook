@@ -75,6 +75,13 @@ export const eventService = {
   },
 
   /**
+   * Delete all events in a recurring series
+   */
+  async deleteEventSeries(parentEventId: string, deleteFutureOnly = false): Promise<void> {
+    await api.delete(`/events/${parentEventId}/series?delete_future_only=${deleteFutureOnly}`);
+  },
+
+  /**
    * Duplicate an event (copies all settings, no RSVPs)
    */
   async duplicateEvent(eventId: string): Promise<Event> {

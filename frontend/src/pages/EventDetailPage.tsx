@@ -49,6 +49,7 @@ export const EventDetailPage: React.FC = () => {
   const [showCancelSeriesModal, setShowCancelSeriesModal] = useState(false);
   const [cancelSeriesFutureOnly, setCancelSeriesFutureOnly] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteScope, setDeleteScope] = useState<'single' | 'series'>('single');
   const [showEndEventConfirm, setShowEndEventConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -435,18 +436,25 @@ export const EventDetailPage: React.FC = () => {
   };
 
   const handleDeleteEvent = async () => {
-    if (!eventId) return;
+    if (!eventId || !event) return;
 
     try {
       setSubmitting(true);
-      await eventService.deleteEvent(eventId);
-      toast.success('Event deleted successfully');
+      if (deleteScope === 'series' && (event.is_recurring || event.recurrence_parent_id)) {
+        const parentId = event.recurrence_parent_id || eventId;
+        await eventService.deleteEventSeries(parentId);
+        toast.success('All events in the series deleted');
+      } else {
+        await eventService.deleteEvent(eventId);
+        toast.success('Event deleted successfully');
+      }
       navigate('/events');
     } catch (err) {
       toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to delete event');
     } finally {
       setSubmitting(false);
       setShowDeleteConfirm(false);
+      setDeleteScope('single');
     }
   };
 
@@ -937,7 +945,7 @@ export const EventDetailPage: React.FC = () => {
                             </button>
                           )}
                           <button
-                            onClick={() => { setShowActionsMenu(false); setShowDeleteConfirm(true); }}
+                            onClick={() => { setShowActionsMenu(false); setDeleteScope('single'); setShowDeleteConfirm(true); }}
                             className="w-full text-left px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-theme-surface-hover"
                           >
                             Delete Event
@@ -2124,6 +2132,32 @@ export const EventDetailPage: React.FC = () => {
                       <p className="text-sm text-theme-text-muted">
                         Are you sure you want to permanently delete &ldquo;{event.title}&rdquo;? This will remove all RSVPs and attendance records. This action cannot be undone.
                       </p>
+                      {(event.is_recurring || event.recurrence_parent_id) && (
+                        <div className="mt-4 space-y-2">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="deleteScope"
+                              value="single"
+                              checked={deleteScope === 'single'}
+                              onChange={() => setDeleteScope('single')}
+                              className="text-theme-primary focus:ring-theme-focus-ring"
+                            />
+                            <span className="text-sm text-theme-text-primary">Delete only this event</span>
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="deleteScope"
+                              value="series"
+                              checked={deleteScope === 'series'}
+                              onChange={() => setDeleteScope('series')}
+                              className="text-theme-primary focus:ring-theme-focus-ring"
+                            />
+                            <span className="text-sm text-theme-text-primary">Delete all events in this series</span>
+                          </label>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2136,7 +2170,7 @@ export const EventDetailPage: React.FC = () => {
                   onClick={() => { void handleDeleteEvent(); }}
                   className="btn-primary font-medium inline-flex justify-center rounded-md sm:ml-3 sm:text-sm sm:w-auto text-base w-full"
                 >
-                  {submitting ? 'Deleting...' : 'Delete Permanently'}
+                  {submitting ? 'Deleting...' : deleteScope === 'series' ? 'Delete Entire Series' : 'Delete Permanently'}
                 </button>
                 <button
                   type="button"
