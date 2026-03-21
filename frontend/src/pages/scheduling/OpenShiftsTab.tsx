@@ -26,7 +26,7 @@ interface OpenShiftsTabProps {
 
 export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => {
   const { user, checkPermission } = useAuthStore();
-  const canAssign = checkPermission('scheduling.assign');
+  const canAssign = checkPermission('scheduling.assign') || checkPermission('scheduling.manage');
   const tz = useTimezone();
 
   const [shifts, setShifts] = useState<ShiftRecord[]>([]);

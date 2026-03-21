@@ -53,7 +53,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const { user, checkPermission } = useAuthStore();
   const tz = useTimezone();
   const canManage = checkPermission('scheduling.manage');
-  const canAssign = checkPermission('scheduling.assign');
+  const canAssign = checkPermission('scheduling.assign') || canManage;
   const { apparatus: apparatusList, loadApparatus } = useSchedulingStore();
 
   const [shift, setShift] = useState(initialShift);
