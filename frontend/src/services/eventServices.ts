@@ -1135,6 +1135,7 @@ export interface LabelFormat {
   type: 'sheet' | 'thermal';
   width?: number;
   height?: number;
+  auto_rotate?: boolean;
 }
 
 // NFPA 1851/1852 Compliance Types

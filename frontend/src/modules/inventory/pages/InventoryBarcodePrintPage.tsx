@@ -14,7 +14,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import JsBarcode from 'jsbarcode';
-import { ArrowLeft, Printer, Loader2, AlertCircle, Settings2, Download, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Printer, Loader2, AlertCircle, Settings2, Download, AlertTriangle, RotateCw, TestTube2 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import type { InventoryItem } from '../types';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -40,6 +40,10 @@ interface LabelPreset {
   pageWidth: string;
   pageHeight: string;
   columns: number;
+  /** Whether to auto-rotate landscape labels for roll-fed printers.
+   *  Dymo drivers handle rotation themselves (false), while generic
+   *  thermal / Rollo printers need the PDF pre-rotated (true). */
+  autoRotate: boolean;
 }
 
 // Each preset uses a `backendFormat` key that maps directly to a backend
@@ -55,6 +59,7 @@ const LABEL_PRESETS: LabelPreset[] = [
     nameFontSize: '9pt', subtitleFontSize: '7pt',
     padding: '0.06in 0.1in',
     pageWidth: '3.5in', pageHeight: '1.125in', columns: 1,
+    autoRotate: false,
   },
   {
     id: 'dymo_30256',
@@ -65,6 +70,7 @@ const LABEL_PRESETS: LabelPreset[] = [
     nameFontSize: '11pt', subtitleFontSize: '8pt',
     padding: '0.08in 0.12in',
     pageWidth: '4in', pageHeight: '2.3125in', columns: 1,
+    autoRotate: false,
   },
   {
     id: 'dymo_30334',
@@ -75,6 +81,7 @@ const LABEL_PRESETS: LabelPreset[] = [
     nameFontSize: '8pt', subtitleFontSize: '6.5pt',
     padding: '0.05in 0.08in',
     pageWidth: '2.25in', pageHeight: '1.25in', columns: 1,
+    autoRotate: false,
   },
   {
     id: 'dymo_30336',
@@ -85,6 +92,7 @@ const LABEL_PRESETS: LabelPreset[] = [
     nameFontSize: '7pt', subtitleFontSize: '6pt',
     padding: '0.04in 0.08in',
     pageWidth: '2.125in', pageHeight: '1in', columns: 1,
+    autoRotate: false,
   },
   {
     id: 'rollo_4x6',
@@ -95,6 +103,7 @@ const LABEL_PRESETS: LabelPreset[] = [
     nameFontSize: '14pt', subtitleFontSize: '10pt',
     padding: '0.12in 0.2in',
     pageWidth: '4in', pageHeight: '6in', columns: 1,
+    autoRotate: true,
   },
   {
     id: 'rollo_2x1',
@@ -105,6 +114,7 @@ const LABEL_PRESETS: LabelPreset[] = [
     nameFontSize: '7pt', subtitleFontSize: '6pt',
     padding: '0.04in 0.08in',
     pageWidth: '2in', pageHeight: '1in', columns: 1,
+    autoRotate: true,
   },
   {
     id: 'thermal_1x1',
@@ -115,6 +125,7 @@ const LABEL_PRESETS: LabelPreset[] = [
     nameFontSize: '6pt', subtitleFontSize: '5pt',
     padding: '0.03in',
     pageWidth: '1in', pageHeight: '1in', columns: 1,
+    autoRotate: true,
   },
   {
     id: 'letter',
@@ -125,6 +136,7 @@ const LABEL_PRESETS: LabelPreset[] = [
     nameFontSize: '8pt', subtitleFontSize: '6.5pt',
     padding: '0.05in 0.1in',
     pageWidth: '8.5in', pageHeight: '11in', columns: 3,
+    autoRotate: false,
   },
 ];
 
@@ -262,12 +274,15 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [barcodesReady, setBarcodesReady] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [autoRotateOverride, setAutoRotateOverride] = useState<boolean | null>(null);
   const renderedCountRef = useRef(0);
   const totalLabelsRef = useRef(0);
 
   // LABEL_PRESETS is a compile-time constant with known length, so index 0 is always valid
   const defaultPreset = LABEL_PRESETS[0] as LabelPreset;
   const preset = LABEL_PRESETS.find((p) => p.id === presetId) ?? defaultPreset;
+  const effectiveAutoRotate = autoRotateOverride ?? preset.autoRotate;
+  const isLandscape = parseFloat(preset.width) > parseFloat(preset.height);
   const isThermal = preset.columns === 1;
 
   const fetchItems = useCallback(async () => {
@@ -317,6 +332,11 @@ const InventoryBarcodePrintPage: React.FC = () => {
     prevItemsRef.current = items;
     prevCopiesRef.current = copies;
     prevPresetRef.current = presetId;
+    // Reset rotation override when switching presets so each preset
+    // uses its own default until the user explicitly overrides it.
+    if (prevPresetRef.current !== presetId) {
+      setAutoRotateOverride(null);
+    }
   }
 
   const handleLabelRendered = useCallback(() => {
@@ -352,6 +372,9 @@ const InventoryBarcodePrintPage: React.FC = () => {
       const { blob, autoPopulated } = await inventoryService.generateBarcodeLabels(
         items.map(i => i.id),
         preset.id,
+        undefined,
+        undefined,
+        effectiveAutoRotate,
       );
       if (autoPopulated > 0) {
         toast.success(`${autoPopulated} item${autoPopulated !== 1 ? 's' : ''} had barcode values auto-generated`);
@@ -365,6 +388,33 @@ const InventoryBarcodePrintPage: React.FC = () => {
       toast.success('PDF downloaded');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to generate PDF'));
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
+  const handleTestPrint = async () => {
+    if (items.length === 0) return;
+    setDownloadingPdf(true);
+    try {
+      const firstItem = items[0];
+      if (!firstItem) return;
+      const { blob } = await inventoryService.generateBarcodeLabels(
+        [firstItem.id],
+        preset.id,
+        undefined,
+        undefined,
+        effectiveAutoRotate,
+      );
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `test-label-${preset.id}.pdf`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      toast.success('Test label PDF downloaded — print it to verify alignment and orientation');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to generate test label'));
     } finally {
       setDownloadingPdf(false);
     }
@@ -618,6 +668,82 @@ const InventoryBarcodePrintPage: React.FC = () => {
                   className="form-input w-24"
                 />
               </div>
+
+              {/* Rotation control — only relevant for thermal presets with landscape labels */}
+              {isThermal && (
+                <div>
+                  <label className="block text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-2">
+                    Label Orientation (PDF only)
+                  </label>
+                  <div className="flex items-start gap-3">
+                    <button
+                      onClick={() => setAutoRotateOverride(effectiveAutoRotate ? false : true)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors ${
+                        effectiveAutoRotate
+                          ? 'border-emerald-500 bg-emerald-500/5 ring-1 ring-emerald-500 text-theme-text-primary'
+                          : 'border-theme-surface-border text-theme-text-muted hover:bg-theme-surface-secondary'
+                      }`}
+                    >
+                      <RotateCw className="h-4 w-4" />
+                      Auto-rotate for roll-fed
+                    </button>
+                    <div className="flex-1 text-xs text-theme-text-muted">
+                      {effectiveAutoRotate ? (
+                        <p>
+                          <strong className="text-theme-text-primary">On:</strong> PDF content is rotated to match how roll-fed printers
+                          (Rollo, Brother, generic thermal) feed labels narrow-edge first.
+                          {isLandscape && ' The landscape content will be rotated 90° in the PDF.'}
+                        </p>
+                      ) : (
+                        <p>
+                          <strong className="text-theme-text-primary">Off:</strong> PDF matches the visual layout.
+                          Use this for Dymo printers whose driver handles rotation automatically.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {/* Feed direction diagram */}
+                  {isLandscape && (
+                    <div className="mt-2 flex items-center gap-3 bg-theme-surface-secondary rounded-lg p-2.5">
+                      <div
+                        className="border border-theme-surface-border bg-white rounded flex items-center justify-center shrink-0"
+                        style={{
+                          width: effectiveAutoRotate ? '24px' : '60px',
+                          height: effectiveAutoRotate ? '60px' : '24px',
+                        }}
+                      >
+                        <span className="text-[6px] text-gray-400 font-mono">ABC</span>
+                      </div>
+                      <div className="text-xs text-theme-text-muted">
+                        <span className="font-medium text-theme-text-primary">
+                          {effectiveAutoRotate ? 'Portrait page' : 'Landscape page'}
+                        </span>
+                        {' — '}
+                        {effectiveAutoRotate
+                          ? 'Narrow edge feeds first into the printer. Content is pre-rotated so barcode reads correctly after printing.'
+                          : 'Wide edge is the page width. The printer driver must rotate the content to match label orientation.'}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Test print */}
+              {isThermal && items.length > 0 && (
+                <div>
+                  <button
+                    onClick={() => { void handleTestPrint(); }}
+                    disabled={downloadingPdf}
+                    className="flex items-center gap-2 px-3 py-2 border border-theme-surface-border rounded-lg text-sm text-theme-text-primary hover:bg-theme-surface-secondary transition-colors disabled:opacity-50"
+                  >
+                    {downloadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <TestTube2 className="h-4 w-4" />}
+                    Download Test Label
+                  </button>
+                  <p className="text-xs text-theme-text-muted mt-1">
+                    Downloads a single-label PDF to verify orientation and alignment before printing the full batch.
+                  </p>
+                </div>
+              )}
 
               <div className="bg-theme-surface-secondary rounded-lg p-3">
                 <p className="text-xs font-medium text-theme-text-primary mb-1">Printer Tips</p>

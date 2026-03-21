@@ -2192,7 +2192,12 @@ async def get_label_formats(
     """
     formats = []
     for key, fmt in InventoryService.LABEL_FORMATS.items():
-        entry = {"id": key, "description": fmt["description"], "type": fmt["type"]}
+        entry = {
+            "id": key,
+            "description": fmt["description"],
+            "type": fmt["type"],
+            "auto_rotate": fmt.get("auto_rotate", False),
+        }
         if fmt["type"] == "thermal":
             entry["width"] = fmt["width"]
             entry["height"] = fmt["height"]
@@ -2231,6 +2236,7 @@ async def generate_barcode_labels(
             label_format=request.label_format,
             custom_width=request.custom_width,
             custom_height=request.custom_height,
+            auto_rotate=request.auto_rotate,
         )
     except ValueError as e:
         raise HTTPException(
