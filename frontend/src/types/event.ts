@@ -39,6 +39,7 @@ export interface Event {
   is_recurring?: boolean;
   recurrence_pattern?: RecurrencePattern;
   recurrence_end_date?: string;
+  rolling_recurrence?: boolean;
   recurrence_custom_days?: number[];
   recurrence_weekday?: number;
   recurrence_week_ordinal?: number;
@@ -336,7 +337,8 @@ export interface RecurringEventCreate {
   start_datetime: string;
   end_datetime: string;
   recurrence_pattern: RecurrencePattern;
-  recurrence_end_date: string;
+  recurrence_end_date?: string | undefined;
+  rolling_recurrence?: boolean | undefined;
   recurrence_custom_days?: number[] | undefined;
   recurrence_weekday?: number | undefined;
   recurrence_week_ordinal?: number | undefined;

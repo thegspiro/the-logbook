@@ -54,6 +54,9 @@ Recommended crontab (add to host or container cron):
 
 # Daily at 7:00 AM — recurring event series end reminders (6 months prior)
 0 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=series_end_reminders
+
+# Daily at 2:30 AM — extend rolling recurring event series (12-month horizon)
+30 2 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=rolling_recurrence_extend
 -----------------------------------------------------
 """
 
@@ -170,6 +173,12 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "07:00",
         "cron": "0 7 * * *",
+    },
+    "rolling_recurrence_extend": {
+        "description": "Extend rolling recurring event series to maintain a 12-month horizon",
+        "frequency": "daily",
+        "recommended_time": "02:30",
+        "cron": "30 2 * * *",
     },
 }
 
@@ -2084,6 +2093,145 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
     }
 
 
+async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Extend rolling recurring event series to maintain a 12-month horizon.
+
+    For each parent event with rolling_recurrence=True, check the latest
+    child occurrence. If the horizon is less than 12 months away, generate
+    new occurrences to fill the gap.
+    """
+    from app.models.event import Event, RecurrencePattern
+    from app.services.event_service import EventService
+
+    now = datetime.now()
+    twelve_months = now.replace(year=now.year + 1)
+
+    # Find all rolling parent events (not cancelled)
+    result = await db.execute(
+        select(Event).where(
+            Event.rolling_recurrence.is_(True),
+            Event.is_recurring.is_(True),
+            Event.recurrence_parent_id.is_(None),
+            Event.is_cancelled.is_(False),
+        )
+    )
+    parents = list(result.scalars().all())
+
+    total_created = 0
+    series_extended = 0
+    errors = []
+
+    service = EventService(db)
+
+    for parent in parents:
+        try:
+            # Find the latest occurrence in this series
+            latest_result = await db.execute(
+                select(Event.start_datetime, Event.end_datetime)
+                .where(
+                    (Event.id == parent.id)
+                    | (Event.recurrence_parent_id == parent.id),
+                    Event.is_cancelled.is_(False),
+                )
+                .order_by(Event.start_datetime.desc())
+                .limit(1)
+            )
+            latest = latest_result.first()
+            if not latest:
+                continue
+
+            latest_start = latest[0]
+            latest_end = latest[1]
+
+            # If the latest occurrence is already 12+ months out, skip
+            if latest_start >= twelve_months:
+                continue
+
+            # Generate new occurrences from the day after the latest
+            # through 12 months from now
+            pattern = parent.recurrence_pattern.value if parent.recurrence_pattern else None
+            if not pattern:
+                continue
+
+            # Calculate next occurrence after the latest one
+            new_occurrences = service._generate_recurrence_dates(
+                start_datetime=latest_start,
+                end_datetime=latest_end,
+                pattern=pattern,
+                recurrence_end_date=twelve_months,
+                custom_days=parent.recurrence_custom_days,
+                weekday=parent.recurrence_weekday,
+                week_ordinal=parent.recurrence_week_ordinal,
+                month=parent.recurrence_month,
+                exceptions=parent.recurrence_exceptions,
+            )
+
+            # Filter out the first one (it's the latest existing occurrence)
+            # and any that already exist
+            new_occurrences = [
+                (s, e) for s, e in new_occurrences if s > latest_start
+            ]
+
+            if not new_occurrences:
+                continue
+
+            # Build a set of field values from the parent for child events
+            child_fields = {}
+            for field in (
+                "title", "description", "event_type", "custom_category",
+                "location_id", "location", "location_details",
+                "requires_rsvp", "max_attendees", "is_mandatory",
+                "allow_guests", "send_reminders", "reminder_schedule",
+                "check_in_window_type", "check_in_minutes_before",
+                "check_in_minutes_after", "require_checkout",
+                "allowed_rsvp_statuses", "is_draft",
+            ):
+                val = getattr(parent, field, None)
+                if val is not None:
+                    child_fields[field] = val
+
+            for start, end in new_occurrences:
+                child = Event(
+                    organization_id=parent.organization_id,
+                    created_by=parent.created_by,
+                    is_recurring=True,
+                    recurrence_parent_id=parent.id,
+                    recurrence_pattern=RecurrencePattern(pattern),
+                    start_datetime=start,
+                    end_datetime=end,
+                    **child_fields,
+                )
+                db.add(child)
+                total_created += 1
+
+            # Update the parent's recurrence_end_date to the new horizon
+            parent.recurrence_end_date = twelve_months
+
+            series_extended += 1
+
+        except Exception as e:
+            logger.error(
+                f"Failed to extend rolling series {parent.id}: {e}"
+            )
+            errors.append({"event_id": parent.id, "error": str(e)})
+
+    if total_created > 0:
+        await db.commit()
+
+    logger.info(
+        f"Rolling recurrence extend: {series_extended} series extended, "
+        f"{total_created} new occurrences created"
+    )
+
+    return {
+        "task": "rolling_recurrence_extend",
+        "series_extended": series_extended,
+        "total_created": total_created,
+        "errors": errors,
+    }
+
+
 # Task runner map
 TASK_RUNNERS = {
     "cert_expiration_alerts": run_cert_expiration_alerts,
@@ -2103,4 +2251,5 @@ TASK_RUNNERS = {
     "compliance_auto_reports": run_compliance_auto_reports,
     "message_history_cleanup": run_message_history_cleanup,
     "series_end_reminders": run_series_end_reminders,
+    "rolling_recurrence_extend": run_rolling_recurrence_extend,
 }

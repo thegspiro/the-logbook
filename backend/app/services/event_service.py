@@ -2070,12 +2070,18 @@ class EventService:
         Creates a parent event and individual occurrences.
         """
         recurrence_pattern = event_data.pop("recurrence_pattern")
-        recurrence_end_date = event_data.pop("recurrence_end_date")
+        recurrence_end_date = event_data.pop("recurrence_end_date", None)
+        rolling_recurrence = event_data.pop("rolling_recurrence", False)
         recurrence_custom_days = event_data.pop("recurrence_custom_days", None)
         recurrence_weekday = event_data.pop("recurrence_weekday", None)
         recurrence_week_ordinal = event_data.pop("recurrence_week_ordinal", None)
         recurrence_month = event_data.pop("recurrence_month", None)
         recurrence_exceptions = event_data.pop("recurrence_exceptions", None)
+
+        # Rolling recurrence: auto-set end date to 12 months from start
+        if rolling_recurrence and not recurrence_end_date:
+            start = event_data["start_datetime"]
+            recurrence_end_date = start.replace(year=start.year + 1)
 
         # Generate occurrence dates
         occurrences = self._generate_recurrence_dates(
@@ -2103,6 +2109,7 @@ class EventService:
             is_recurring=True,
             recurrence_pattern=RecurrencePattern(recurrence_pattern),
             recurrence_end_date=recurrence_end_date,
+            rolling_recurrence=rolling_recurrence,
             recurrence_custom_days=recurrence_custom_days,
             recurrence_weekday=recurrence_weekday,
             recurrence_week_ordinal=recurrence_week_ordinal,

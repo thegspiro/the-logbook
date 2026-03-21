@@ -164,6 +164,9 @@ class Event(Base):
     recurrence_exceptions = Column(
         JSON, nullable=True
     )  # List of ISO date strings to skip in a recurring series
+    rolling_recurrence = Column(
+        Boolean, nullable=False, default=False
+    )  # Auto-extend series on a rolling 12-month window
     recurrence_parent_id = Column(
         String(36), ForeignKey("events.id"), nullable=True
     )  # Links instances to their parent

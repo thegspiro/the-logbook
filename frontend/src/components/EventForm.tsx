@@ -46,6 +46,7 @@ export interface InitialRecurrence {
   is_recurring: boolean;
   recurrence_pattern?: RecurrencePattern | undefined;
   recurrence_end_date?: string | undefined;
+  rolling_recurrence?: boolean | undefined;
   recurrence_custom_days?: number[] | undefined;
   recurrence_weekday?: number | undefined;
   recurrence_week_ordinal?: number | undefined;
@@ -196,6 +197,7 @@ export const EventForm: React.FC<EventFormProps> = ({
   const [isRecurring, setIsRecurring] = useState(initialRecurrence?.is_recurring || false);
   const [recurrencePattern, setRecurrencePattern] = useState<RecurrencePattern>(initialRecurrence?.recurrence_pattern || 'weekly');
   const [recurrenceEndDate, setRecurrenceEndDate] = useState(initialRecurrence?.recurrence_end_date || '');
+  const [isRolling, setIsRolling] = useState(initialRecurrence?.rolling_recurrence || false);
   const [recurrenceCustomDays, setRecurrenceCustomDays] = useState<number[]>(initialRecurrence?.recurrence_custom_days || []);
   const [recurrenceWeekday, setRecurrenceWeekday] = useState(initialRecurrence?.recurrence_weekday ?? 0);
   const [recurrenceWeekOrdinal, setRecurrenceWeekOrdinal] = useState(initialRecurrence?.recurrence_week_ordinal ?? 1);
@@ -422,7 +424,7 @@ export const EventForm: React.FC<EventFormProps> = ({
 
     try {
       if (isRecurring && onSubmitRecurring) {
-        if (!recurrenceEndDate) {
+        if (!isRolling && !recurrenceEndDate) {
           setError('Recurrence end date is required');
           return;
         }
@@ -434,7 +436,8 @@ export const EventForm: React.FC<EventFormProps> = ({
         const recurringData: RecurringEventCreate = {
           ...submitData,
           recurrence_pattern: recurrencePattern,
-          recurrence_end_date: localToUTC(recurrenceEndDate + 'T23:59', tz),
+          recurrence_end_date: isRolling ? undefined : localToUTC(recurrenceEndDate + 'T23:59', tz),
+          rolling_recurrence: isRolling || undefined,
           recurrence_custom_days: recurrencePattern === 'custom' ? recurrenceCustomDays : undefined,
           recurrence_weekday: needsWeekday ? recurrenceWeekday : undefined,
           recurrence_week_ordinal: needsWeekday ? recurrenceWeekOrdinal : undefined,
@@ -722,16 +725,35 @@ export const EventForm: React.FC<EventFormProps> = ({
                     </select>
                   </div>
                   <div>
-                    <label htmlFor="recurrence-end-date" className={labelClass}>
-                      Repeat Until <span className="text-red-700 dark:text-red-500">*</span>
+                    <label className={labelClass}>
+                      Duration {!isRolling && <span className="text-red-700 dark:text-red-500">*</span>}
                     </label>
-                    <input
-                      type="date"
-                      id="recurrence-end-date"
-                      value={recurrenceEndDate}
-                      onChange={(e) => setRecurrenceEndDate(e.target.value)}
-                      className={inputClass}
-                    />
+                    <div className="space-y-3">
+                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isRolling}
+                          onChange={(e) => setIsRolling(e.target.checked)}
+                          className={checkboxClass}
+                        />
+                        <span className="text-theme-text-secondary">
+                          Rolling 12-month cycle
+                        </span>
+                      </label>
+                      {isRolling ? (
+                        <p className="text-xs text-theme-text-muted">
+                          New occurrences are created automatically to maintain a 12-month horizon.
+                        </p>
+                      ) : (
+                        <input
+                          type="date"
+                          id="recurrence-end-date"
+                          value={recurrenceEndDate}
+                          onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                          className={inputClass}
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
 
