@@ -1,7 +1,21 @@
+/**
+ * Shift Detail Panel
+ *
+ * Slide-out panel showing full details of a shift: crew roster,
+ * open positions, attendance, and notes.
+ *
+ * When a shift is assigned to an apparatus with defined positions,
+ * a "crew board" shows each position as a slot (filled or open)
+ * so members can sign up for specific seats on the vehicle.
+ *
+ * Admins can edit shift details, delete shifts, and assign members
+ * via a searchable member dropdown.
+ */
+
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   X, Users, Clock, MapPin, Truck, UserPlus, Check, XCircle,
-  Loader2, Phone, ChevronDown, ChevronUp, Pencil, Trash2, Save, Palette, FileText,
+  Loader2, ChevronDown, ChevronUp, Pencil, Trash2, Save, Palette, FileText,
   ClipboardCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -9,7 +23,7 @@ import { userService } from '../../services/api';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ShiftRecord } from '../../modules/scheduling/services/api';
 import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
-import type { Assignment, ShiftCall } from '../../types/scheduling';
+import type { Assignment } from '../../types/scheduling';
 import type { ShiftCheckSummary } from '../../modules/scheduling/types/equipmentCheck';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
@@ -44,9 +58,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
 
   const [shift, setShift] = useState(initialShift);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [calls, setCalls] = useState<ShiftCall[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showCalls, setShowCalls] = useState(false);
   const [showEquipmentChecks, setShowEquipmentChecks] = useState(false);
   const [equipmentCheckSummaries, setEquipmentCheckSummaries] = useState<ShiftCheckSummary[]>([]);
 
@@ -151,14 +163,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     const load = async () => {
       setLoading(true);
       try {
-        const [assignData, callData, checkData] = await Promise.all([
+        const [assignData, checkData] = await Promise.all([
           schedulingService.getShiftAssignments(shift.id),
-          schedulingService.getShiftCalls(shift.id),
           schedulingService.getShiftChecklists(shift.id).catch(() => [] as ShiftCheckSummary[]),
         ]);
         if (!cancelled) {
           setAssignments(assignData);
-          setCalls(callData);
           setEquipmentCheckSummaries(checkData);
         }
       } catch (err) {
@@ -1075,45 +1085,6 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               </div>
             </div>
           )}
-
-          {/* Calls / Incidents */}
-          <div>
-            <button onClick={() => setShowCalls(!showCalls)}
-              className="flex items-center justify-between w-full text-left py-2"
-            >
-              <h3 className="text-base font-semibold text-theme-text-primary flex items-center gap-2">
-                <Phone className="w-4 h-4" /> Calls / Incidents ({calls.length})
-              </h3>
-              {showCalls ? <ChevronUp className="w-4 h-4 text-theme-text-muted" /> : <ChevronDown className="w-4 h-4 text-theme-text-muted" />}
-            </button>
-            {showCalls && (
-              calls.length === 0 ? (
-                <p className="text-sm text-theme-text-muted py-3">
-                  {isPast ? 'No calls were recorded for this shift.' : 'Calls will appear here once the shift is underway.'}
-                </p>
-              ) : (
-                <div className="space-y-2 mt-2">
-                  {calls.map((call) => (
-                    <div key={call.id} className="p-3 bg-theme-surface-hover/30 rounded-lg border border-theme-surface-border">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-theme-text-primary capitalize">
-                          {call.incident_type ?? 'Unknown'}
-                        </p>
-                        {call.incident_number && (
-                          <span className="text-xs text-theme-text-muted">#{call.incident_number}</span>
-                        )}
-                      </div>
-                      {call.dispatched_at && (
-                        <p className="text-xs text-theme-text-muted mt-1">
-                          Dispatched: {formatTime(call.dispatched_at, tz)}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )
-            )}
-          </div>
 
           {/* Equipment Checks */}
           {equipmentCheckSummaries.length > 0 && (

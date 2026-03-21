@@ -7,7 +7,6 @@
 import { createApiClient } from '../../../utils/createApiClient';
 import type {
   Assignment,
-  ShiftCall,
   SwapRequest as SchedulingSwapRequest,
   TimeOffRequest as SchedulingTimeOffRequest,
   ShiftPattern as SchedulingShiftPattern,
@@ -17,8 +16,6 @@ import type {
   ShiftUpdate,
   AttendanceCreate,
   AttendanceUpdate,
-  ShiftCallCreate,
-  ShiftCallUpdate,
   AssignmentCreate,
   AssignmentUpdate,
   SwapRequestCreate,
@@ -322,27 +319,6 @@ export const schedulingService = {
       ...a,
       status: a.assignment_status ?? a.status,
     }));
-  },
-
-  // Shift Calls
-  async getShiftCalls(shiftId: string): Promise<ShiftCall[]> {
-    const response = await api.get<ShiftCall[]>(`/scheduling/shifts/${shiftId}/calls`);
-    return response.data;
-  },
-  async getCall(callId: string): Promise<ShiftCall> {
-    const response = await api.get<ShiftCall>(`/scheduling/calls/${callId}`);
-    return response.data;
-  },
-  async createCall(shiftId: string, data: ShiftCallCreate): Promise<ShiftCall> {
-    const response = await api.post<ShiftCall>(`/scheduling/shifts/${shiftId}/calls`, data);
-    return response.data;
-  },
-  async updateCall(callId: string, data: ShiftCallUpdate): Promise<ShiftCall> {
-    const response = await api.patch<ShiftCall>(`/scheduling/calls/${callId}`, data);
-    return response.data;
-  },
-  async deleteCall(callId: string): Promise<void> {
-    await api.delete(`/scheduling/calls/${callId}`);
   },
 
   // Shift Assignments

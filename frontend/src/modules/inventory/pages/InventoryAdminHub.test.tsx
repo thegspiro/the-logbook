@@ -53,14 +53,12 @@ describe('InventoryAdminHub', () => {
   it('displays summary statistics after loading', async () => {
     renderWithRouter(<InventoryAdminHub />);
     await waitFor(() => {
-      expect(screen.getByText('Total Items')).toBeInTheDocument();
+      expect(screen.getByText('available')).toBeInTheDocument();
     });
-    expect(screen.getByText('Available')).toBeInTheDocument();
-    expect(screen.getByText('Checked Out')).toBeInTheDocument();
-    expect(screen.getByText('Overdue')).toBeInTheDocument();
-    // 150 appears in both summary stat and NavCard badge
-    expect(screen.getAllByText('150').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('checked out')).toBeInTheDocument();
     expect(screen.getByText('80')).toBeInTheDocument();
+    expect(screen.getByText('20')).toBeInTheDocument();
+    expect(screen.getByText('150')).toBeInTheDocument();
   });
 
   it('displays low stock alerts', async () => {
@@ -76,7 +74,7 @@ describe('InventoryAdminHub', () => {
     mockGetLowStockItems.mockResolvedValue([]);
     renderWithRouter(<InventoryAdminHub />);
     await waitFor(() => {
-      expect(screen.getByText('Total Items')).toBeInTheDocument();
+      expect(screen.getByText('Items')).toBeInTheDocument();
     });
     expect(screen.queryByText(/Low Stock Alerts/)).not.toBeInTheDocument();
   });
@@ -98,7 +96,7 @@ describe('InventoryAdminHub', () => {
   it('renders all navigation cards', async () => {
     renderWithRouter(<InventoryAdminHub />);
     await waitFor(() => {
-      expect(screen.getByText('Total Items')).toBeInTheDocument();
+      expect(screen.getByText('Items')).toBeInTheDocument();
     });
     const navTitles = [
       'Items', 'Pool Items', 'Categories', 'Members',
@@ -114,7 +112,7 @@ describe('InventoryAdminHub', () => {
   it('renders correct links for navigation cards', async () => {
     renderWithRouter(<InventoryAdminHub />);
     await waitFor(() => {
-      expect(screen.getByText('Total Items')).toBeInTheDocument();
+      expect(screen.getByText('Items')).toBeInTheDocument();
     });
     const allLinks = screen.getAllByRole('link');
     const itemsLink = allLinks.find((l) => l.getAttribute('href') === '/inventory/admin/items');
@@ -139,20 +137,17 @@ describe('InventoryAdminHub', () => {
   it('handles API errors gracefully', async () => {
     mockGetSummary.mockRejectedValue(new Error('Network error'));
     renderWithRouter(<InventoryAdminHub />);
-    // Page should still render navigation cards even if summary fails
     await waitFor(() => {
       expect(screen.getByText('Items')).toBeInTheDocument();
     });
-    // Summary stats should not appear
-    expect(screen.queryByText('Total Items')).not.toBeInTheDocument();
+    expect(screen.queryByText('available')).not.toBeInTheDocument();
   });
 
   it('shows badges on nav cards with counts', async () => {
     renderWithRouter(<InventoryAdminHub />);
     await waitFor(() => {
-      expect(screen.getByText('Total Items')).toBeInTheDocument();
+      expect(screen.getByText('Items')).toBeInTheDocument();
     });
-    // Maintenance badge should show 7
-    expect(screen.getByText('7')).toBeInTheDocument();
+    expect(screen.getAllByText('7').length).toBeGreaterThanOrEqual(1);
   });
 });

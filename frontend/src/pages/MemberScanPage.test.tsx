@@ -5,12 +5,11 @@ import { renderWithRouter } from "../test/utils";
 import { MemberScanPage } from "./MemberScanPage";
 
 // Mock html5-qrcode
+const mockStart = vi.fn().mockResolvedValue(undefined);
+const mockStop = vi.fn().mockResolvedValue(undefined);
 vi.mock("html5-qrcode", () => ({
   Html5Qrcode: vi.fn().mockImplementation(function () {
-    return {
-      start: vi.fn().mockResolvedValue(undefined),
-      stop: vi.fn().mockResolvedValue(undefined),
-    };
+    return { start: mockStart, stop: mockStop };
   }),
 }));
 
@@ -93,5 +92,37 @@ describe("MemberScanPage", () => {
     expect(
       await screen.findByRole("button", { name: /stop scanning/i }),
     ).toBeInTheDocument();
+  });
+
+  it("should fall back to user-facing camera when environment camera fails", async () => {
+    mockStart
+      .mockRejectedValueOnce(new Error("No environment camera"))
+      .mockResolvedValueOnce(undefined);
+
+    const user = userEvent.setup();
+    renderWithRouter(<MemberScanPage />);
+
+    await user.click(
+      screen.getByRole("button", { name: /start scanning/i }),
+    );
+
+    expect(
+      await screen.findByRole("button", { name: /stop scanning/i }),
+    ).toBeInTheDocument();
+    expect(mockStart).toHaveBeenCalledTimes(2);
+    expect(mockStart).toHaveBeenNthCalledWith(
+      1,
+      { facingMode: "environment" },
+      expect.any(Object),
+      expect.any(Function),
+      expect.any(Function),
+    );
+    expect(mockStart).toHaveBeenNthCalledWith(
+      2,
+      { facingMode: "user" },
+      expect.any(Object),
+      expect.any(Function),
+      expect.any(Function),
+    );
   });
 });
