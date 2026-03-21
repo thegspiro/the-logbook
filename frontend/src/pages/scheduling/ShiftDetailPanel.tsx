@@ -1,17 +1,3 @@
-/**
- * Shift Detail Panel
- *
- * Slide-out panel showing full details of a shift: crew roster,
- * open positions, attendance, calls, and notes.
- *
- * When a shift is assigned to an apparatus with defined positions,
- * a "crew board" shows each position as a slot (filled or open)
- * so members can sign up for specific seats on the vehicle.
- *
- * Admins can edit shift details, delete shifts, and assign members
- * via a searchable member dropdown.
- */
-
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   X, Users, Clock, MapPin, Truck, UserPlus, Check, XCircle,
@@ -982,7 +968,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           )}
 
           {/* Admin Assign Form — with member search dropdown */}
-          {(showAssignForm || (hasApparatusPositions && canAssign && !isPast)) && canAssign && (
+          {canAssign && (showAssignForm || (hasApparatusPositions && !isPast)) && (
             <>
               {!showAssignForm && hasApparatusPositions && (
                 <button onClick={() => setShowAssignForm(true)}

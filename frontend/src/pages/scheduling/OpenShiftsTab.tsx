@@ -16,7 +16,7 @@ import type { ShiftRecord } from '../../modules/scheduling/services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatTime, getTodayLocalDate, toLocalDateString, formatDateCustom } from '../../utils/dateFormatting';
-import { getErrorMessage } from '../../utils/errorHandling';
+import { getErrorMessage, toAppError } from '../../utils/errorHandling';
 import { POSITION_LABELS } from '../../constants/enums';
 import { useEligiblePositions } from '../../hooks/useEligiblePositions';
 
@@ -79,8 +79,8 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
       setSignupShiftId(null);
       void loadShifts();
     } catch (signupErr) {
-      if (canAssign) {
-        // Fallback: try direct assignment for users with assign permission
+      const appError = toAppError(signupErr);
+      if (canAssign && (appError.status === 403 || appError.status === 404)) {
         try {
           await schedulingService.createAssignment(shiftId, {
             user_id: user?.id ?? '',
