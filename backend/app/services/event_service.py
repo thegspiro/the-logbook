@@ -508,7 +508,14 @@ class EventService:
             return False
 
         await self.db.delete(event)
-        await self.db.commit()
+        try:
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise ValueError(
+                "Cannot delete event because it has linked records "
+                "(e.g. meeting minutes). Remove or unlink them first."
+            )
 
         return True
 
