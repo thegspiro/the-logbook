@@ -1314,6 +1314,67 @@ class EventService:
 
         return updated_count, None
 
+    async def end_event(
+        self,
+        event_id: UUID,
+        organization_id: UUID,
+    ) -> Tuple[Optional[Event], int, Optional[str]]:
+        """
+        End an in-progress event: record actual_end_time as now,
+        bulk-checkout all checked-in members, and finalize attendance.
+
+        Returns:
+            Tuple of (event, checked_out_count, error_message)
+        """
+        now = datetime.now(dt_timezone.utc)
+
+        event_result = await self.db.execute(
+            select(Event)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
+            .options(selectinload(Event.location_obj))
+        )
+        event = event_result.scalar_one_or_none()
+
+        if not event:
+            return None, 0, "Event not found"
+
+        if event.is_cancelled:
+            return None, 0, "Cannot end a cancelled event"
+
+        if event.actual_end_time:
+            return None, 0, "Event has already ended"
+
+        # Record actual start time if not already set
+        if not event.actual_start_time:
+            event.actual_start_time = event.start_datetime
+
+        event.actual_end_time = now
+        event.updated_at = now
+
+        # Bulk-checkout all checked-in members who haven't checked out
+        rsvp_result = await self.db.execute(
+            select(EventRSVP).where(
+                EventRSVP.event_id == str(event_id),
+                EventRSVP.checked_in.is_(True),
+                EventRSVP.checked_out_at.is_(None),
+            )
+        )
+        rsvps = list(rsvp_result.scalars().all())
+
+        for rsvp in rsvps:
+            rsvp.checked_out_at = now
+
+        await self.db.commit()
+        await self.db.refresh(event)
+
+        # Finalize attendance durations
+        updated_count, _ = await self.finalize_event_attendance(
+            event_id, organization_id
+        )
+
+        return event, len(rsvps), None
+
     async def get_qr_check_in_data(
         self, event_id: UUID, organization_id: UUID
     ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:

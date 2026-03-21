@@ -1772,6 +1772,46 @@ async def finalize_attendance(
     return {"updated_count": updated_count}
 
 
+@router.post("/{event_id}/end-event")
+async def end_event(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    End an in-progress event early.
+
+    Records the actual end time as now, bulk-checks-out all checked-in
+    members, and finalizes attendance durations.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+    event, checked_out_count, error = await service.end_event(
+        event_id=event_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+
+    await log_audit_event(
+        db=db,
+        user_id=current_user.id,
+        action="event.ended",
+        resource_type="event",
+        resource_id=str(event_id),
+        organization_id=current_user.organization_id,
+        details={"checked_out_count": checked_out_count},
+    )
+
+    return {
+        "checked_out_count": checked_out_count,
+        "actual_end_time": event.actual_end_time.isoformat() if event else None,
+    }
+
+
 # ============================================
 # QR Code Self Check-In Endpoints
 # ============================================

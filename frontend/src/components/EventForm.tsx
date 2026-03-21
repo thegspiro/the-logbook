@@ -978,53 +978,51 @@ export const EventForm: React.FC<EventFormProps> = ({
 
       <hr className="border-theme-surface-border" />
 
-      {/* === Attendance === */}
-      <section className="space-y-6">
-        <h2 className="text-xl font-bold text-theme-text-primary flex items-center space-x-2">
-          <Users className="w-5 h-5 text-red-700" />
-          <span>Attendance</span>
-        </h2>
+      {/* === Attendance & RSVP Settings (side-by-side) === */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Attendance */}
+        <section className="space-y-4">
+          <h2 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
+            <Users className="w-5 h-5 text-red-700" />
+            <span>Attendance</span>
+          </h2>
 
-        <div className="flex items-center space-x-3">
-          <input
-            type="checkbox"
-            id="is-mandatory"
-            checked={formData.is_mandatory}
-            onChange={(e) => update({ is_mandatory: e.target.checked })}
-            className={checkboxClass}
-          />
-          <label htmlFor="is-mandatory" className="text-sm text-theme-text-secondary">
-            Mandatory attendance
-          </label>
-        </div>
+          <div className="flex items-center space-x-3">
+            <input
+              type="checkbox"
+              id="is-mandatory"
+              checked={formData.is_mandatory}
+              onChange={(e) => update({ is_mandatory: e.target.checked })}
+              className={checkboxClass}
+            />
+            <label htmlFor="is-mandatory" className="text-sm text-theme-text-secondary">
+              Mandatory attendance
+            </label>
+          </div>
+        </section>
 
-      </section>
+        {/* RSVP Settings */}
+        <section className="space-y-4">
+          <h2 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
+            <Mail className="w-5 h-5 text-red-700" />
+            <span>RSVP Settings</span>
+          </h2>
 
-      <hr className="border-theme-surface-border" />
+          <div className="flex items-center space-x-3">
+            <input
+              type="checkbox"
+              id="requires-rsvp"
+              checked={formData.requires_rsvp}
+              onChange={(e) => update({ requires_rsvp: e.target.checked })}
+              className={checkboxClass}
+            />
+            <label htmlFor="requires-rsvp" className="text-sm text-theme-text-secondary">
+              Require RSVP
+            </label>
+          </div>
 
-      {/* === RSVP Settings === */}
-      <section className="space-y-6">
-        <h2 className="text-xl font-bold text-theme-text-primary flex items-center space-x-2">
-          <Mail className="w-5 h-5 text-red-700" />
-          <span>RSVP Settings</span>
-        </h2>
-
-        <div className="flex items-center space-x-3">
-          <input
-            type="checkbox"
-            id="requires-rsvp"
-            checked={formData.requires_rsvp}
-            onChange={(e) => update({ requires_rsvp: e.target.checked })}
-            className={checkboxClass}
-          />
-          <label htmlFor="requires-rsvp" className="text-sm text-theme-text-secondary">
-            Require RSVP
-          </label>
-        </div>
-
-        {formData.requires_rsvp && (
-          <div className="space-y-4 pl-6 border-l-2 border-red-500/30">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {formData.requires_rsvp && (
+            <div className="space-y-4 pl-4 border-l-2 border-red-500/30">
               <div>
                 <label htmlFor="rsvp-deadline" className={labelClass}>
                   RSVP Deadline
@@ -1050,209 +1048,208 @@ export const EventForm: React.FC<EventFormProps> = ({
                   placeholder="Unlimited"
                 />
               </div>
-            </div>
 
-            <div className="flex items-center space-x-3">
-              <input
-                type="checkbox"
-                id="allow-guests"
-                checked={formData.allow_guests}
-                onChange={(e) => update({ allow_guests: e.target.checked })}
-                className={checkboxClass}
-              />
-              <label htmlFor="allow-guests" className="text-sm text-theme-text-secondary">
-                Allow guests
-              </label>
-            </div>
-
-            <fieldset>
-              <legend className={labelClass}>RSVP Status Options</legend>
-              <div className="flex gap-4">
-                {([RSVPStatusEnum.GOING, RSVPStatusEnum.NOT_GOING, RSVPStatusEnum.MAYBE] as RSVPStatus[]).map((status) => (
-                  <label key={status} className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formData.allowed_rsvp_statuses?.includes(status) || false}
-                      onChange={(e) => toggleRsvpStatus(status, e.target.checked)}
-                      className={checkboxClass}
-                    />
-                    <span className="text-theme-text-secondary">
-                      {status === RSVPStatusEnum.GOING ? 'Going' : status === RSVPStatusEnum.NOT_GOING ? 'Not Going' : 'Maybe'}
-                    </span>
-                  </label>
-                ))}
+              <div className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  id="allow-guests"
+                  checked={formData.allow_guests}
+                  onChange={(e) => update({ allow_guests: e.target.checked })}
+                  className={checkboxClass}
+                />
+                <label htmlFor="allow-guests" className="text-sm text-theme-text-secondary">
+                  Allow guests
+                </label>
               </div>
-            </fieldset>
-          </div>
-        )}
-      </section>
 
-      <hr className="border-theme-surface-border" />
-
-      {/* === Check-In Settings === */}
-      <section className="space-y-6">
-        <h2 className="text-xl font-bold text-theme-text-primary flex items-center space-x-2">
-          <QrCode className="w-5 h-5 text-red-700" />
-          <span>Check-In Settings</span>
-        </h2>
-
-        <div>
-          <label htmlFor="checkin-window" className={labelClass}>
-            Check-In Window
-          </label>
-          <select
-            id="checkin-window"
-            value={formData.check_in_window_type || 'flexible'}
-            onChange={(e) => update({ check_in_window_type: e.target.value as 'flexible' | 'strict' | 'window' })}
-            className={selectClass}
-          >
-            <option value="flexible">Flexible - Anytime before event ends</option>
-            <option value="strict">Strict - Only during actual event time</option>
-            <option value="window">Window - Custom minutes before/after start</option>
-          </select>
-        </div>
-
-        {formData.check_in_window_type === CheckInWindowType.WINDOW && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pl-6 border-l-2 border-red-500/30">
-            <div>
-              <label htmlFor="checkin-before" className={labelClass}>
-                Minutes before start
-              </label>
-              <input
-                type="number"
-                id="checkin-before"
-                min="0"
-                max="120"
-                value={formData.check_in_minutes_before || 15}
-                onChange={(e) => update({ check_in_minutes_before: parseInt(e.target.value) || 15 })}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label htmlFor="checkin-after" className={labelClass}>
-                Minutes after start
-              </label>
-              <input
-                type="number"
-                id="checkin-after"
-                min="0"
-                max="120"
-                value={formData.check_in_minutes_after || 15}
-                onChange={(e) => update({ check_in_minutes_after: parseInt(e.target.value) || 15 })}
-                className={inputClass}
-              />
-            </div>
-          </div>
-        )}
-
-        <div className="flex items-center space-x-3">
-          <input
-            type="checkbox"
-            id="require-checkout"
-            checked={formData.require_checkout}
-            onChange={(e) => update({ require_checkout: e.target.checked })}
-            className={checkboxClass}
-          />
-          <label htmlFor="require-checkout" className="text-sm text-theme-text-secondary">
-            Require manual check-out
-          </label>
-        </div>
-      </section>
-
-      <hr className="border-theme-surface-border" />
-
-      {/* === Notifications === */}
-      <section className="space-y-6">
-        <h2 className="text-xl font-bold text-theme-text-primary flex items-center space-x-2">
-          <Bell className="w-5 h-5 text-red-700" />
-          <span>Notifications</span>
-        </h2>
-
-        <div className="flex items-center space-x-3">
-          <input
-            type="checkbox"
-            id="send-reminders"
-            checked={formData.send_reminders}
-            onChange={(e) => update({ send_reminders: e.target.checked })}
-            className={checkboxClass}
-          />
-          <label htmlFor="send-reminders" className="text-sm text-theme-text-secondary">
-            Send event reminders
-          </label>
-        </div>
-
-        {formData.send_reminders && (
-          <div className="pl-6 border-l-2 border-red-500/30 space-y-3">
-            <label className={labelClass}>Reminder Schedule</label>
-
-            {/* Selected reminders as tags */}
-            {(formData.reminder_schedule || [24]).length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {[...(formData.reminder_schedule || [24])]
-                  .sort((a, b) => b - a)
-                  .map((hours) => (
-                    <span
-                      key={hours}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full bg-red-500/10 text-red-700 dark:text-red-300 border border-red-500/30"
-                    >
-                      {hours >= 168
-                        ? `${Math.floor(hours / 168)} week${hours >= 336 ? 's' : ''}`
-                        : hours >= 24
-                          ? `${Math.floor(hours / 24)} day${hours >= 48 ? 's' : ''}`
-                          : `${hours} hour${hours !== 1 ? 's' : ''}`}{' '}
-                      before
-                      <button
-                        type="button"
-                        onClick={() =>
-                          update({
-                            reminder_schedule: (formData.reminder_schedule || [24]).filter(
-                              (h) => h !== hours
-                            ),
-                          })
-                        }
-                        className="ml-0.5 hover:text-red-900 dark:hover:text-red-100"
-                        aria-label={`Remove ${hours}-hour reminder`}
-                      >
-                        &times;
-                      </button>
-                    </span>
+              <fieldset>
+                <legend className={labelClass}>RSVP Status Options</legend>
+                <div className="flex flex-wrap gap-3">
+                  {([RSVPStatusEnum.GOING, RSVPStatusEnum.NOT_GOING, RSVPStatusEnum.MAYBE] as RSVPStatus[]).map((status) => (
+                    <label key={status} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.allowed_rsvp_statuses?.includes(status) || false}
+                        onChange={(e) => toggleRsvpStatus(status, e.target.checked)}
+                        className={checkboxClass}
+                      />
+                      <span className="text-theme-text-secondary">
+                        {status === RSVPStatusEnum.GOING ? 'Going' : status === RSVPStatusEnum.NOT_GOING ? 'Not Going' : 'Maybe'}
+                      </span>
+                    </label>
                   ))}
-              </div>
-            )}
+                </div>
+              </fieldset>
+            </div>
+          )}
+        </section>
+      </div>
 
-            {/* Add reminder dropdown */}
+      <hr className="border-theme-surface-border" />
+
+      {/* === Check-In Settings & Notifications (side-by-side) === */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Check-In Settings */}
+        <section className="space-y-4">
+          <h2 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
+            <QrCode className="w-5 h-5 text-red-700" />
+            <span>Check-In Settings</span>
+          </h2>
+
+          <div>
+            <label htmlFor="checkin-window" className={labelClass}>
+              Check-In Window
+            </label>
             <select
-              id="add-reminder"
-              value=""
-              onChange={(e) => {
-                const val = parseInt(e.target.value);
-                if (val && !(formData.reminder_schedule || []).includes(val)) {
-                  update({ reminder_schedule: [...(formData.reminder_schedule || []), val] });
-                }
-              }}
-              className="form-input max-w-xs py-3"
+              id="checkin-window"
+              value={formData.check_in_window_type || 'flexible'}
+              onChange={(e) => update({ check_in_window_type: e.target.value as 'flexible' | 'strict' | 'window' })}
+              className={selectClass}
             >
-              <option value="">+ Add a reminder...</option>
-              {[
-                { value: 1, label: '1 hour before' },
-                { value: 2, label: '2 hours before' },
-                { value: 4, label: '4 hours before' },
-                { value: 12, label: '12 hours before' },
-                { value: 24, label: '1 day before' },
-                { value: 48, label: '2 days before' },
-                { value: 72, label: '3 days before' },
-                { value: 168, label: '1 week before' },
-              ]
-                .filter(({ value }) => !(formData.reminder_schedule || []).includes(value))
-                .map(({ value, label }) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
+              <option value="flexible">Flexible - Anytime before event ends</option>
+              <option value="strict">Strict - Only during actual event time</option>
+              <option value="window">Window - Custom before/after start</option>
             </select>
           </div>
-        )}
-      </section>
+
+          {formData.check_in_window_type === CheckInWindowType.WINDOW && (
+            <div className="grid grid-cols-2 gap-3 pl-4 border-l-2 border-red-500/30">
+              <div>
+                <label htmlFor="checkin-before" className={labelClass}>
+                  Minutes before
+                </label>
+                <input
+                  type="number"
+                  id="checkin-before"
+                  min="0"
+                  max="120"
+                  value={formData.check_in_minutes_before || 15}
+                  onChange={(e) => update({ check_in_minutes_before: parseInt(e.target.value) || 15 })}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label htmlFor="checkin-after" className={labelClass}>
+                  Minutes after
+                </label>
+                <input
+                  type="number"
+                  id="checkin-after"
+                  min="0"
+                  max="120"
+                  value={formData.check_in_minutes_after || 15}
+                  onChange={(e) => update({ check_in_minutes_after: parseInt(e.target.value) || 15 })}
+                  className={inputClass}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center space-x-3">
+            <input
+              type="checkbox"
+              id="require-checkout"
+              checked={formData.require_checkout}
+              onChange={(e) => update({ require_checkout: e.target.checked })}
+              className={checkboxClass}
+            />
+            <label htmlFor="require-checkout" className="text-sm text-theme-text-secondary">
+              Require manual check-out
+            </label>
+          </div>
+        </section>
+
+        {/* Notifications */}
+        <section className="space-y-4">
+          <h2 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
+            <Bell className="w-5 h-5 text-red-700" />
+            <span>Notifications</span>
+          </h2>
+
+          <div className="flex items-center space-x-3">
+            <input
+              type="checkbox"
+              id="send-reminders"
+              checked={formData.send_reminders}
+              onChange={(e) => update({ send_reminders: e.target.checked })}
+              className={checkboxClass}
+            />
+            <label htmlFor="send-reminders" className="text-sm text-theme-text-secondary">
+              Send event reminders
+            </label>
+          </div>
+
+          {formData.send_reminders && (
+            <div className="pl-4 border-l-2 border-red-500/30 space-y-3">
+              <label className={labelClass}>Reminder Schedule</label>
+
+              {(formData.reminder_schedule || [24]).length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {[...(formData.reminder_schedule || [24])]
+                    .sort((a, b) => b - a)
+                    .map((hours) => (
+                      <span
+                        key={hours}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full bg-red-500/10 text-red-700 dark:text-red-300 border border-red-500/30"
+                      >
+                        {hours >= 168
+                          ? `${Math.floor(hours / 168)} week${hours >= 336 ? 's' : ''}`
+                          : hours >= 24
+                            ? `${Math.floor(hours / 24)} day${hours >= 48 ? 's' : ''}`
+                            : `${hours} hour${hours !== 1 ? 's' : ''}`}{' '}
+                        before
+                        <button
+                          type="button"
+                          onClick={() =>
+                            update({
+                              reminder_schedule: (formData.reminder_schedule || [24]).filter(
+                                (h) => h !== hours
+                              ),
+                            })
+                          }
+                          className="ml-0.5 hover:text-red-900 dark:hover:text-red-100"
+                          aria-label={`Remove ${hours}-hour reminder`}
+                        >
+                          &times;
+                        </button>
+                      </span>
+                    ))}
+                </div>
+              )}
+
+              <select
+                id="add-reminder"
+                value=""
+                onChange={(e) => {
+                  const val = parseInt(e.target.value);
+                  if (val && !(formData.reminder_schedule || []).includes(val)) {
+                    update({ reminder_schedule: [...(formData.reminder_schedule || []), val] });
+                  }
+                }}
+                className="form-input w-full py-2"
+              >
+                <option value="">+ Add a reminder...</option>
+                {[
+                  { value: 1, label: '1 hour before' },
+                  { value: 2, label: '2 hours before' },
+                  { value: 4, label: '4 hours before' },
+                  { value: 12, label: '12 hours before' },
+                  { value: 24, label: '1 day before' },
+                  { value: 48, label: '2 days before' },
+                  { value: 72, label: '3 days before' },
+                  { value: 168, label: '1 week before' },
+                ]
+                  .filter(({ value }) => !(formData.reminder_schedule || []).includes(value))
+                  .map(({ value, label }) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          )}
+        </section>
+      </div>
 
       <hr className="border-theme-surface-border" />
 
