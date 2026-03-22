@@ -711,6 +711,60 @@ Two timezone display issues were corrected:
 | Equipment check photo won't upload | Photos must be JPEG, PNG, or WebP and under 10 MB. Max 3 photos per item. |
 | Equipment check reports showing no data | Ensure at least one equipment check has been submitted. Check the date range filter. |
 | Shift times showing in wrong timezone | Fixed 2026-03-19 — shift creation now converts local times to UTC using org timezone. Template-generated shifts also inherit correct timezone. |
+| Cannot assign members to shifts | Fixed 2026-03-22 — assignment UI was gated by `scheduling.manage_assignments`; now works with `scheduling.manage`. |
+| Sign Up button not appearing despite eligible rank | Fixed 2026-03-22 — Open Shifts tab fallback permission and self-signup visibility corrected. |
+| Dashboard shows cancelled/declined shifts | Fixed 2026-03-22 — "My Upcoming Shifts" now filters out declined and cancelled assignments. |
+| Barcode/QR scan not working on desktop | Fixed 2026-03-22 — scanning now falls back to user-facing camera on desktop browsers. |
+
+---
+
+## Permission Fixes & Shift Signup Improvements (2026-03-22)
+
+### Shift Assignment Permission Update
+
+The shift assignment UI previously required the `scheduling.manage_assignments` permission, which was more restrictive than intended. As of 2026-03-22, users with the broader `scheduling.manage` permission can assign members to shifts.
+
+> **Screenshot needed:**
+> _[Screenshot of the ShiftDetailPanel showing the "Add Assignment" button visible for a user with `scheduling.manage` permission, with the member dropdown and position selector]_
+
+### Open Shifts Self-Signup Fix
+
+The self-signup button visibility on the Open Shifts tab had a fallback permission issue where non-admin members couldn't see the Sign Up button even when their rank was eligible. This has been corrected.
+
+> **Screenshot needed:**
+> _[Screenshot of the Open Shifts tab showing shift cards with visible "Sign Up" buttons for an eligible non-admin member]_
+
+### Dashboard Shift Display
+
+The "My Upcoming Shifts" section on the dashboard now correctly filters out:
+- Declined assignments (shifts you said "no" to)
+- Cancelled assignments (shifts that were cancelled after you were assigned)
+
+Only pending and confirmed assignments appear.
+
+> **Screenshot needed:**
+> _[Screenshot of the Dashboard "My Upcoming Shifts" section showing only pending (yellow badge) and confirmed (green badge) shifts, with no declined or cancelled entries]_
+
+### Desktop Camera Scanning
+
+Camera-based scanning (QR codes, barcodes, member IDs) now works on desktop browsers. The system automatically detects available cameras and falls back to a user-facing camera when no environment-facing camera is detected.
+
+This affects:
+- **MemberIdScannerModal** — scanning member ID cards during inventory checkout
+- **InventoryScanModal** — scanning item barcodes for check-in/check-out
+- **MemberScanPage** — scanning member QR codes for attendance
+
+> **Screenshot needed:**
+> _[Screenshot of the MemberIdScannerModal running on a desktop browser, showing the user-facing camera feed in the scanner viewport with a QR code being detected]_
+
+### Edge Cases (2026-03-22)
+
+| Scenario | Behavior |
+|----------|----------|
+| Desktop with no camera | Scanner shows error message; manual entry still available |
+| Desktop with only webcam | Falls back to user-facing camera automatically |
+| Multiple cameras on desktop | Prefers environment-facing, then user-facing |
+| Shift detail panel Calls/Incidents section | Removed — feature not yet implemented |
 
 ---
 

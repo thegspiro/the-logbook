@@ -803,4 +803,85 @@ All API response schemas now inherit from `UTCResponseBase`, which automatically
 
 ---
 
+## Notification Enhancements (2026-03-22)
+
+### Dashboard Notification Management
+
+Dashboard notification cards now include **clear** and **dismiss** buttons directly on each card:
+
+- **Dismiss**: Hides the notification from the user's dashboard (personal action)
+- **Clear**: Marks the notification as read
+
+> **Screenshot needed:**
+> _[Screenshot of the Dashboard notifications area showing notification cards with dismiss (X) and clear (checkmark) buttons visible on each card]_
+
+### Persistent Department Messages
+
+Administrators can create department-wide persistent messages:
+
+1. Navigate to **Notifications** (admin view)
+2. Click **Create Department Message**
+3. Enter the message content and mark as **Persistent**
+4. All department members see the message until an admin clears it
+
+> **Screenshot needed:**
+> _[Screenshot of a persistent department message banner on the Dashboard with the admin-only "Clear for All" button visible]_
+
+> **Edge case:** Non-admin users cannot dismiss persistent messages. The dismiss button is hidden for regular members; only admins see the "Clear for All" action.
+
+### Notification Channel Filter
+
+The Notifications page now includes a **channel filter** to view notifications by delivery method:
+
+| Filter | Shows |
+|--------|-------|
+| All | All notifications regardless of delivery channel |
+| Email | Only email-delivered notifications |
+| In-App | Only in-app notifications (bell icon) |
+| SMS | Only SMS-delivered notifications (when Twilio enabled) |
+
+> **Screenshot needed:**
+> _[Screenshot of the Notifications page showing channel filter tabs (All, Email, In-App, SMS) at the top with the In-App filter active]_
+
+## Email Deliverability (2026-03-22)
+
+Email delivery has been improved for compatibility with Gmail, Microsoft, and other major providers:
+
+- **Message-ID header**: Satisfies DKIM/SPF authentication requirements
+- **Batch rate limiting**: Prevents bulk-send throttle triggers
+- **Inline CSS**: Gmail strips `<style>` tags; styles are now inlined on elements
+- **SMTP connection reuse**: Better performance for large recipient batches
+- **Logo hosting**: Hosted URLs instead of base64 data URIs prevent Gmail message clipping
+
+For DNS and SMTP configuration, see the [Email Deliverability Guide](../EMAIL_DELIVERABILITY.md).
+
+## Equipment Check Template Builder UX (2026-03-22)
+
+The equipment check template builder received UX improvements:
+
+- **Redesigned layout**: Better visual hierarchy and workflow organization
+- **Preview mode**: See how the check form will appear to members before saving
+- **Save redirect**: Correctly redirects to template list after saving
+- **Input stability**: Fixed inputs losing focus after each keystroke
+
+> **Screenshot needed:**
+> _[Screenshot of the equipment check template builder showing the redesigned layout with a preview panel on the right showing how the check form will appear to members on mobile]_
+
+## Time Picker Redesign (2026-03-22)
+
+The `TimeQuarterHour` component has been redesigned with three separate dropdown selects:
+
+| Dropdown | Options |
+|----------|---------|
+| **Hour** | 1 through 12 |
+| **Minute** | 00, 15, 30, 45 |
+| **AM/PM** | AM, PM |
+
+This replaces the previous single text input that was harder to use on mobile and didn't enforce quarter-hour increments visually.
+
+> **Screenshot needed:**
+> _[Screenshot of the redesigned TimeQuarterHour component showing three separate dropdown selectors (Hour: "2", Minute: "30", AM/PM: "PM") in a compact horizontal layout]_
+
+---
+
 **Previous:** [Documents & Forms](./07-documents-forms.md) | **Next:** [Skills Testing & Psychomotor Evaluations](./09-skills-testing.md)

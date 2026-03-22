@@ -63,6 +63,8 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 | `/inventory/admin/reorder` | Reorder Requests | `inventory.manage` |
 | `/inventory/checkouts` | Active Checkouts | `inventory.manage` |
 | `/inventory/import` | CSV Import | `inventory.manage` |
+| `/inventory/admin/kits` | Equipment Kits Management | `inventory.manage` |
+| `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage` |
 | `/inventory/print-labels` | Barcode Label Printing | Authenticated |
 
 ---
@@ -327,6 +329,35 @@ Frontend tests in `src/pages/InventoryMembersTab.test.tsx` and `src/constants/en
 - Sort by name, total items, overdue, and assigned
 - Search filtering with debounce
 - Condition constant consistency
+
+---
+
+## Recent Changes (2026-03-22)
+
+### Admin Hub Redesign, Kits & Variant Groups Pages, Barcode Printing
+
+- **Inventory admin hub redesign**: Dashboard redesigned with grouped card sections and prominent navigation cards replacing the flat list layout
+- **Equipment Kits admin page**: New dedicated page at `/inventory/admin/kits` for managing equipment kit bundles
+- **Variant Groups admin page**: New dedicated page at `/inventory/admin/variant-groups` for managing size/style variant groups
+- **Barcode printing ISO compliance**: Label generation aligned with ISO/IEC 15417 — correct quiet zones, minimum bar widths, and aspect ratios
+- **Auto-rotation for thermal printers**: Roll-fed labels auto-rotate to maximize print area when orientation doesn't match
+- **Test print capability**: Sample label generation for verifying printer alignment before full batch
+- **Unified label format catalog**: Frontend and backend share label format definitions to prevent size mismatches
+- **Batch label limit**: Maximum batch size enforced to prevent browser memory issues
+- **Inventory dashboard scoping**: Non-admin users see only their own assigned equipment
+- **Mobile FAB fix**: FAB changed from "Export CSV" to "Assign Items" for non-admin users
+- **Desktop camera scanning**: InventoryScanModal and MemberIdScannerModal now work on desktop via shared `useHtml5Scanner` hook with user-facing camera fallback
+- **Mobile responsiveness**: Card layouts, touch-friendly controls, and responsive admin hub across all inventory pages
+
+### Edge Cases (2026-03-22)
+
+| Scenario | Behavior |
+|----------|----------|
+| Barcode with insufficient quiet zone | ISO-compliant quiet zones enforced |
+| Thermal printer landscape label | Auto-rotated to correct orientation |
+| Label batch > limit | Capped with user warning |
+| Non-admin on inventory dashboard | Sees only personally assigned equipment |
+| Desktop barcode scanning | Falls back to user-facing camera if no environment camera |
 
 ---
 

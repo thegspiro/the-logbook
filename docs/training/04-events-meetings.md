@@ -917,4 +917,167 @@ The election detail page now shows a section listing **upcoming business meeting
 
 ---
 
+## Recurring Event Enhancements (2026-03-22)
+
+### Rolling 12-Month Recurrence
+
+Recurring events can now use a **rolling 12-month window** that automatically extends the series forward. Instead of defining a fixed end date, the system continuously generates occurrences up to 12 months ahead, ensuring future events are always available for RSVP and scheduling.
+
+To enable rolling recurrence:
+1. Create or edit a recurring event
+2. Select "Rolling (12 months)" as the recurrence end option
+3. The system generates occurrences up to 12 months from today and auto-refreshes the window
+
+> **Screenshot needed:**
+> _[Screenshot of the recurring event form showing the "Rolling (12 months)" option selected in the recurrence end date area, with a note explaining that the system will auto-generate future occurrences]_
+
+> **Edge case:** Rolling recurrence with a monthly-by-weekday pattern (e.g., "2nd Tuesday") generates all occurrences correctly, including months where the weekday pattern falls on the last week.
+
+### Delete Series
+
+Officers can now delete an entire recurring event series at once:
+1. Navigate to any event in the series
+2. Click **More > Delete Series**
+3. A confirmation dialog shows the total number of events that will be removed
+4. Confirm to delete all events in the series (past and future)
+
+> **Screenshot needed:**
+> _[Screenshot of the delete series confirmation dialog showing "This will permanently delete 24 events in this series. This action cannot be undone." with Cancel and Delete buttons]_
+
+> **Edge case:** Deleting a series removes all events including past ones. If you need to keep historical records, use "Delete Future Events" instead to preserve past occurrences.
+
+### "End Event" — Bulk Checkout
+
+The new **End Event** button on the event detail page checks out all currently checked-in attendees at once. This is useful for events where individual checkout tracking isn't needed (e.g., meetings, training sessions).
+
+1. Navigate to the event detail page during or after an event
+2. Click **End Event** in the actions area
+3. Confirm the bulk checkout
+4. All checked-in attendees are marked as checked out with the current timestamp
+
+> **Screenshot needed:**
+> _[Screenshot of the event detail page showing the "End Event" button in the action area, with a tooltip explaining "Check out all attendees at once"]_
+
+> **Edge case:** If no attendees are currently checked in, the button shows an informational message ("No attendees to check out") and performs no action.
+
+### Compact Event Create Form
+
+The event creation form has been redesigned with a **2-column grid layout**:
+- Left column: Title, type, category, description
+- Right column: Date, time, location, settings
+- Settings and recurrence sections pair side-by-side
+
+This reduces scrolling significantly on desktop while remaining single-column on mobile.
+
+> **Screenshot needed:**
+> _[Screenshot of the redesigned event creation form showing the 2-column layout with the title and type fields on the left, date/time fields on the right, and the recurrence section below spanning both columns]_
+
+### Event-to-Admin-Hours Integration
+
+Events can now be linked to administrative hour tracking categories, automatically crediting attendance hours toward compliance requirements.
+
+**Setting up the integration:**
+1. Navigate to **Events Settings > Hour Tracking**
+2. Map event types to admin hour categories (e.g., "Business Meeting" → "Administrative Hours")
+3. Set compliance requirements (e.g., "4 hours per quarter")
+
+When members attend events with configured mappings, their attendance hours are automatically credited.
+
+> **Screenshot needed:**
+> _[Screenshot of the Events Settings > Hour Tracking section showing a mapping table with event types on the left, admin hour categories on the right, and a "Requirements" section below with compliance thresholds]_
+
+> **Edge case:** If no mapping is configured for an event type, attendance is not credited to admin hours. The mapping must be explicitly set up in Events Settings.
+
+---
+
+## Notification Enhancements (2026-03-22)
+
+### Dashboard Notification Management
+
+Dashboard notification cards now include **clear** and **dismiss** buttons, allowing you to manage notifications without navigating to the full Notifications page.
+
+- **Dismiss**: Hides the notification from your dashboard (personal action, doesn't affect others)
+- **Clear**: Marks the notification as read
+
+> **Screenshot needed:**
+> _[Screenshot of the Dashboard notifications section showing notification cards with dismiss (X) and clear (checkmark) buttons on each card]_
+
+### Persistent Department Messages
+
+Administrators can create department-wide messages that persist for all members until explicitly cleared by an admin:
+
+1. Navigate to **Notifications** (admin)
+2. Click **Create Department Message**
+3. Enter the message content and mark it as **Persistent**
+4. The message appears for all department members until an admin clears it
+
+> **Screenshot needed:**
+> _[Screenshot of a persistent department message on the Dashboard showing the message content with an admin-only "Clear for All" button, and no dismiss button for regular members]_
+
+> **Edge case:** Non-admin users cannot dismiss persistent messages — the dismiss button is not shown. Only users with admin permissions see the "Clear for All" action.
+
+### Notification Channel Filter
+
+The Notifications page now includes a **channel filter** to view notifications by delivery method:
+- **All** — Shows all notifications
+- **Email** — Only email-delivered notifications
+- **In-App** — Only in-app notifications
+- **SMS** — Only SMS notifications (when Twilio is enabled)
+
+> **Screenshot needed:**
+> _[Screenshot of the Notifications page showing the channel filter tabs (All, Email, In-App, SMS) at the top, with the In-App filter active showing only in-app notification entries]_
+
+---
+
+## Email Deliverability Improvements (2026-03-22)
+
+Email delivery has been significantly improved for compatibility with Gmail, Microsoft Outlook, and other major providers:
+
+- **Message-ID header**: All outgoing emails include proper Message-ID headers, satisfying DKIM/SPF authentication
+- **Batch rate limiting**: Large recipient lists are rate-limited to avoid bulk-send throttles
+- **Inline CSS**: All styles are inlined directly on HTML elements (Gmail strips `<style>` tags)
+- **SMTP connection reuse**: Connections reused within batches for better performance
+- **Logo hosting**: Organization logos use hosted URLs instead of base64 data URIs, preventing Gmail from clipping emails
+
+> **Edge case:** If the logo image URL is not accessible (e.g., server behind VPN), emails fall back to a text-only header with the organization name.
+
+---
+
+## Elections — Eligibility & Email (2026-03-22)
+
+### Voter Eligibility Correction
+
+Voter eligibility now correctly uses `User.membership_type` instead of role slugs. This means:
+
+- A member with role "EMT" but membership_type "administrative" is **not** eligible for "operational" ballot items
+- A member with membership_type "active" **is** eligible for operational items regardless of their assigned roles
+- See the [Elections Voter Eligibility](#elections-and-voting) section above for the full eligibility matrix
+
+> **Screenshot needed:**
+> _[Screenshot of the election detail page showing voter eligibility breakdown — listing eligible membership types and the count of members in each type]_
+
+### Ballot Email Improvements
+
+- **Per-recipient error handling**: If one ballot email fails, remaining recipients still receive their ballots
+- **Eligibility summary email**: The secretary who dispatched ballots receives a summary listing all sent and skipped voters with reasons (no email address, ineligible, already voted)
+- **Election report email**: New "Send Report Email" button emails formatted round-by-round results
+
+> **Screenshot needed:**
+> _[Screenshot of the eligibility summary showing "Sent: 45 ballots, Skipped: 3 voters" with expandable reasons — "John Smith: no email address", "Jane Doe: membership type not eligible"]_
+
+### Election Meeting Integration
+
+The election detail page now shows **upcoming business meetings** in a dedicated section, making it easy to link elections to meeting records for procedural compliance.
+
+> **Screenshot needed:**
+> _[Screenshot of the election detail page "Upcoming Business Meetings" section showing a list of upcoming meetings with dates and "Link to Election" buttons]_
+
+| Troubleshooting | Solution |
+|-----------------|----------|
+| Ballot emails sent but 0 recipients | Fixed 2026-03-22 — eligibility now uses `membership_type`. Check that members have the correct membership type and email addresses. |
+| Election error messages are generic | Fixed 2026-03-22 — errors now include specific guidance. |
+| Can't find report email button | Look for "Send Report Email" in the election detail page actions area. |
+
+---
+
 **Previous:** [Shifts & Scheduling](./03-scheduling.md) | **Next:** [Inventory Management](./05-inventory.md)

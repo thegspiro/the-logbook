@@ -597,4 +597,53 @@ Two timezone display bugs were fixed:
 
 ---
 
-*Last Updated: March 15, 2026*
+## Position Eligibility, Admin Sub-Pages & Equipment Checks (2026-03-19)
+
+See the [CHANGELOG](../CHANGELOG.md) and [Wiki Scheduling Module](../wiki/Module-Scheduling.md) for full details on:
+- Shift position eligibility system
+- Rank eligible positions UI redesign
+- Scheduling admin sub-pages (`/scheduling/templates`, `/scheduling/patterns`, `/scheduling/reports`, `/scheduling/settings`)
+- Structured position slots with decline handling
+- Dashboard shift display fixes
+- Equipment check template builder, phone-first check form, and reports
+
+---
+
+## Permission Fixes & Shift Signup Improvements (2026-03-22)
+
+### Permission Changes
+
+- **Shift assignment broadened**: Assignment UI now works with `scheduling.manage` permission (previously required `scheduling.manage_assignments`)
+- **Open Shifts visibility fix**: Self-signup button and Open Shifts tab fallback permission corrected for non-admin members
+- **Redundant permission checks removed**: OpenShiftsTab and ShiftDetailPanel no longer perform redundant permission checks
+
+### UI Changes
+
+- **Calls/Incidents section removed**: Placeholder removed from shift detail panel (feature not yet implemented)
+- **Dashboard shift filtering**: "My Upcoming Shifts" hides declined and cancelled assignments
+- **Position editing**: Officers edit position assignments directly from the shift detail edit form
+
+### Desktop Camera Scanning
+
+Camera-based scanning now works on desktop browsers:
+
+| Module | File | Description |
+|--------|------|-------------|
+| Shared | `hooks/useHtml5Scanner.ts` | Reusable scanner hook with camera fallback |
+| Shared | `types/scanner.ts` | Scanner configuration types |
+| Shared | `constants/camera.ts` | Camera resolution presets and error messages |
+
+All scanner consumers (InventoryScanModal, MemberIdScannerModal, MemberScanPage) share the same camera initialization, error handling, and resolution logic.
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Desktop with no camera | Error message displayed; manual entry available |
+| Desktop with only webcam | Falls back to user-facing camera |
+| Declined shift on dashboard | Filtered from "My Upcoming Shifts" |
+| Cancelled shift on dashboard | Filtered from "My Upcoming Shifts" |
+
+---
+
+*Last Updated: March 22, 2026*
