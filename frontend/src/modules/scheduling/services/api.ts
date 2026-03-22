@@ -584,6 +584,9 @@ export const schedulingService = {
   async deleteCheckItem(itemId: string): Promise<void> {
     await api.delete(`/equipment-checks/items/${itemId}`);
   },
+  async reorderItems(compartmentId: string, orderedIds: string[]): Promise<void> {
+    await api.put(`/equipment-checks/compartments/${compartmentId}/items/reorder`, { ordered_ids: orderedIds });
+  },
 
   // =====================================================================
   // Shift Equipment Checks

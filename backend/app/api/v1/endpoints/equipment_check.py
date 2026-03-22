@@ -319,6 +319,25 @@ async def delete_item(
         raise HTTPException(status_code=404, detail="Item not found")
 
 
+@router.put(
+    "/compartments/{compartment_id}/items/reorder", status_code=200
+)
+async def reorder_items(
+    compartment_id: str,
+    data: ReorderRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("equipment_check.manage")),
+):
+    """Reorder items within a compartment."""
+    service = EquipmentCheckService(db)
+    success = await service.reorder_items(
+        compartment_id, current_user.organization_id, data.ordered_ids
+    )
+    if not success:
+        raise HTTPException(status_code=404, detail="Compartment not found")
+    return {"ok": True}
+
+
 # =====================================================================
 # Shift Check Endpoints
 # =====================================================================

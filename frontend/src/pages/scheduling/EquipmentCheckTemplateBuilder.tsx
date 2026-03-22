@@ -31,6 +31,8 @@ import {
   CheckCircle2,
   Circle,
   Hash,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -497,6 +499,17 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(!isEditing);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
+  // Bulk selection: per-compartment set of selected item indices
+  const [selectedItems, setSelectedItems] = useState<Record<string, Set<number>>>({});
+
+  // Inline editing: which item key is being renamed inline
+  const [inlineEditKey, setInlineEditKey] = useState<string | null>(null);
+  const [inlineEditValue, setInlineEditValue] = useState('');
+  const inlineInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-save debounce timer for item edits
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // ---------------------------------------------------------------------------
   // Load existing template
   // ---------------------------------------------------------------------------
@@ -784,6 +797,218 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     updatedItems.splice(itemIdx + 1, 0, copy);
     updateCompartmentField(compartmentIdx, { items: updatedItems });
     toast.success('Item duplicated');
+  };
+
+  // ---------------------------------------------------------------------------
+  // Move item up/down within a compartment
+  // ---------------------------------------------------------------------------
+
+  const moveItem = (compartmentIdx: number, itemIdx: number, direction: 'up' | 'down') => {
+    const comp = compartments[compartmentIdx];
+    if (!comp) return;
+    const newIdx = direction === 'up' ? itemIdx - 1 : itemIdx + 1;
+    if (newIdx < 0 || newIdx >= comp.items.length) return;
+
+    setCompartments((prev) => {
+      const next = [...prev];
+      const c = next[compartmentIdx];
+      if (!c) return prev;
+      const items = [...c.items];
+      const [moved] = items.splice(itemIdx, 1);
+      if (!moved) return prev;
+      items.splice(newIdx, 0, moved);
+      next[compartmentIdx] = { ...c, items };
+      return next;
+    });
+
+    if (isEditing && comp.id) {
+      const reorderedItems = [...comp.items];
+      const [movedItem] = reorderedItems.splice(itemIdx, 1);
+      if (movedItem) reorderedItems.splice(newIdx, 0, movedItem);
+      const savedIds = reorderedItems.map((item) => item.id).filter((id): id is string => Boolean(id));
+      if (savedIds.length > 0) {
+        void schedulingService
+          .reorderItems(comp.id, savedIds)
+          .catch(() => toast.error('Failed to save item order'));
+      }
+    }
+    markDirty();
+  };
+
+  // ---------------------------------------------------------------------------
+  // Move compartment up/down
+  // ---------------------------------------------------------------------------
+
+  const moveCompartment = (idx: number, direction: 'up' | 'down') => {
+    const newIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (newIdx < 0 || newIdx >= compartments.length) return;
+
+    setCompartments((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(idx, 1);
+      if (!moved) return prev;
+      next.splice(newIdx, 0, moved);
+      return next;
+    });
+
+    if (isEditing && templateId) {
+      const ids = compartments.map((c, i) => c.id ?? `comp-${i}`);
+      const [movedId] = ids.splice(idx, 1);
+      if (movedId) ids.splice(newIdx, 0, movedId);
+      const savedIds = ids.filter((id) => !id.startsWith('comp-'));
+      if (savedIds.length > 0) {
+        void schedulingService
+          .reorderCompartments(templateId, savedIds)
+          .catch(() => toast.error('Failed to save compartment order'));
+      }
+    }
+    markDirty();
+  };
+
+  // ---------------------------------------------------------------------------
+  // Bulk selection helpers
+  // ---------------------------------------------------------------------------
+
+  const getCompKey = (idx: number) => compartments[idx]?.id ?? `comp-${idx}`;
+
+  const toggleItemSelection = (compartmentIdx: number, itemIdx: number) => {
+    const key = getCompKey(compartmentIdx);
+    setSelectedItems((prev) => {
+      const current = new Set(prev[key] ?? []);
+      if (current.has(itemIdx)) {
+        current.delete(itemIdx);
+      } else {
+        current.add(itemIdx);
+      }
+      return { ...prev, [key]: current };
+    });
+  };
+
+  const selectAllItems = (compartmentIdx: number) => {
+    const comp = compartments[compartmentIdx];
+    if (!comp) return;
+    const key = getCompKey(compartmentIdx);
+    const allIndices = new Set(comp.items.map((_, i) => i));
+    setSelectedItems((prev) => ({ ...prev, [key]: allIndices }));
+  };
+
+  const deselectAllItems = (compartmentIdx: number) => {
+    const key = getCompKey(compartmentIdx);
+    setSelectedItems((prev) => ({ ...prev, [key]: new Set<number>() }));
+  };
+
+  const getSelectedCount = (compartmentIdx: number): number => {
+    const key = getCompKey(compartmentIdx);
+    return selectedItems[key]?.size ?? 0;
+  };
+
+  const deleteSelectedItems = async (compartmentIdx: number) => {
+    const comp = compartments[compartmentIdx];
+    if (!comp) return;
+    const key = getCompKey(compartmentIdx);
+    const selected = selectedItems[key];
+    if (!selected || selected.size === 0) return;
+
+    const count = selected.size;
+    if (!window.confirm(`Delete ${count} selected item${count !== 1 ? 's' : ''}? This cannot be undone.`)) return;
+
+    const toDelete = [...selected].sort((a, b) => b - a);
+    const deletePromises: Promise<void>[] = [];
+    for (const itemIdx of toDelete) {
+      const item = comp.items[itemIdx];
+      if (item?.id) {
+        deletePromises.push(
+          schedulingService.deleteCheckItem(item.id).catch((err: unknown) => {
+            toast.error(getErrorMessage(err, `Failed to delete ${item.name || 'item'}`));
+          }),
+        );
+      }
+    }
+    await Promise.all(deletePromises);
+
+    const remaining = comp.items.filter((_, i) => !selected.has(i));
+    updateCompartmentField(compartmentIdx, { items: remaining });
+    setSelectedItems((prev) => ({ ...prev, [key]: new Set<number>() }));
+    toast.success(`Deleted ${count} item${count !== 1 ? 's' : ''}`);
+  };
+
+  // ---------------------------------------------------------------------------
+  // Inline rename helpers
+  // ---------------------------------------------------------------------------
+
+  const startInlineEdit = (itemKey: string, currentName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setInlineEditKey(itemKey);
+    setInlineEditValue(currentName);
+    setTimeout(() => inlineInputRef.current?.select(), 0);
+  };
+
+  const commitInlineEdit = (compartmentIdx: number, itemIdx: number) => {
+    if (inlineEditKey === null) return;
+    const trimmed = inlineEditValue.trim();
+    if (trimmed) {
+      updateItemField(compartmentIdx, itemIdx, { name: trimmed });
+    }
+    setInlineEditKey(null);
+    setInlineEditValue('');
+  };
+
+  const cancelInlineEdit = () => {
+    setInlineEditKey(null);
+    setInlineEditValue('');
+  };
+
+  // ---------------------------------------------------------------------------
+  // Auto-save: debounced save of a single item when in edit mode
+  // ---------------------------------------------------------------------------
+
+  const scheduleAutoSaveItem = useCallback(
+    (itemId: string, patch: Record<string, unknown>) => {
+      if (!isEditing || !itemId) return;
+
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+      autoSaveTimerRef.current = setTimeout(() => {
+        void schedulingService.updateCheckItem(itemId, patch).catch(() => {
+          // Silent — user can still manually save
+        });
+      }, 1500);
+    },
+    [isEditing],
+  );
+
+  // Enhanced updateItemField that triggers auto-save for persisted items
+  const updateItemFieldWithAutoSave = (
+    compartmentIdx: number,
+    itemIdx: number,
+    patch: Partial<ItemFormState>,
+  ) => {
+    updateItemField(compartmentIdx, itemIdx, patch);
+
+    const comp = compartments[compartmentIdx];
+    const item = comp?.items[itemIdx];
+    if (item?.id) {
+      const apiPatch: Record<string, unknown> = {};
+      if (patch.name !== undefined) apiPatch.name = patch.name || undefined;
+      if (patch.description !== undefined) apiPatch.description = patch.description.trim() || undefined;
+      if (patch.checkType !== undefined) apiPatch.check_type = patch.checkType;
+      if (patch.isRequired !== undefined) apiPatch.is_required = patch.isRequired;
+      if (patch.requiredQuantity !== undefined) apiPatch.required_quantity = patch.requiredQuantity ? Number(patch.requiredQuantity) : undefined;
+      if (patch.expectedQuantity !== undefined) apiPatch.expected_quantity = patch.expectedQuantity ? Number(patch.expectedQuantity) : undefined;
+      if (patch.minLevel !== undefined) apiPatch.min_level = patch.minLevel ? Number(patch.minLevel) : undefined;
+      if (patch.levelUnit !== undefined) apiPatch.level_unit = patch.levelUnit.trim() || undefined;
+      if (patch.serialNumber !== undefined) apiPatch.serial_number = patch.serialNumber.trim() || undefined;
+      if (patch.lotNumber !== undefined) apiPatch.lot_number = patch.lotNumber.trim() || undefined;
+      if (patch.hasExpiration !== undefined) apiPatch.has_expiration = patch.hasExpiration;
+      if (patch.expirationDate !== undefined) apiPatch.expiration_date = patch.expirationDate.trim() || undefined;
+      if (patch.expirationWarningDays !== undefined) apiPatch.expiration_warning_days = patch.expirationWarningDays ? Number(patch.expirationWarningDays) : undefined;
+      if (patch.imageUrl !== undefined) apiPatch.image_url = patch.imageUrl.trim() || undefined;
+
+      if (Object.keys(apiPatch).length > 0) {
+        scheduleAutoSaveItem(item.id, apiPatch);
+      }
+    }
   };
 
   // ---------------------------------------------------------------------------
@@ -1212,7 +1437,18 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       return next;
     });
 
-    // No item reorder API endpoint exists yet — sort_order is saved on template save
+    // Persist item order if compartment is saved
+    if (isEditing && comp.id) {
+      const reorderedItems = [...comp.items];
+      const [movedItem] = reorderedItems.splice(oldIndex, 1);
+      if (movedItem) reorderedItems.splice(newIndex, 0, movedItem);
+      const savedIds = reorderedItems.map((item) => item.id).filter((id): id is string => Boolean(id));
+      if (savedIds.length > 0) {
+        void schedulingService
+          .reorderItems(comp.id, savedIds)
+          .catch(() => toast.error('Failed to save item order'));
+      }
+    }
   };
 
   // ---------------------------------------------------------------------------
@@ -1236,28 +1472,52 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     itemIdx: number,
     item: ItemFormState,
     dragHandleProps?: Record<string, unknown>,
+    totalItems?: number,
   ) => {
     const itemKey = item.id ?? `item-${compIdx}-${itemIdx}`;
     const isItemExpanded = expandedItems.has(itemKey);
     const checkTypeLabel = CHECK_TYPES.find((ct) => ct.value === item.checkType)?.label ?? item.checkType;
+    const compKey = getCompKey(compIdx);
+    const isSelected = selectedItems[compKey]?.has(itemIdx) ?? false;
+    const isInlineEditing = inlineEditKey === itemKey;
+    const itemCount = totalItems ?? compartments[compIdx]?.items.length ?? 0;
 
     return (
       <div
         key={itemKey}
-        className="rounded-md border border-theme-surface-border bg-theme-surface overflow-hidden"
+        className={`rounded-md border overflow-hidden transition-colors ${
+          isSelected
+            ? 'border-blue-400 dark:border-blue-500 bg-blue-50/50 dark:bg-blue-900/10'
+            : 'border-theme-surface-border bg-theme-surface'
+        }`}
       >
         {/* Compact row — always visible */}
         <div
-          className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-theme-surface-secondary/50 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2 cursor-pointer hover:bg-theme-surface-secondary/50 transition-colors"
           onClick={() => toggleItemExpanded(itemKey)}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleItemExpanded(itemKey); }}
         >
+          {/* Bulk selection checkbox */}
+          <button
+            type="button"
+            className="p-0.5 flex-shrink-0"
+            onClick={(e) => { e.stopPropagation(); toggleItemSelection(compIdx, itemIdx); }}
+            title={isSelected ? 'Deselect item' : 'Select item'}
+          >
+            {isSelected ? (
+              <CheckSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            ) : (
+              <Square className="h-4 w-4 text-theme-text-muted hover:text-theme-text-secondary" />
+            )}
+          </button>
+
           <button
             type="button"
             className="p-0.5 text-theme-text-muted cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
             onClick={(e) => e.stopPropagation()}
+            aria-label="Drag to reorder"
             {...(dragHandleProps ?? {})}
           >
             <GripVertical className="h-4 w-4" />
@@ -1269,9 +1529,32 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <ChevronRight className="h-3.5 w-3.5 text-theme-text-muted flex-shrink-0" />
           )}
 
-          <span className={`flex-1 text-sm truncate ${item.name.trim() ? 'text-theme-text-primary font-medium' : 'text-theme-text-muted italic'}`}>
-            {item.name.trim() || 'Untitled Item'}
-          </span>
+          {/* Inline editable name */}
+          {isInlineEditing ? (
+            <input
+              ref={inlineInputRef}
+              type="text"
+              className="flex-1 text-sm font-medium text-theme-text-primary bg-transparent border-b border-blue-400 outline-none min-w-0 px-1"
+              value={inlineEditValue}
+              onChange={(e) => setInlineEditValue(e.target.value)}
+              onBlur={() => commitInlineEdit(compIdx, itemIdx)}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === 'Enter') commitInlineEdit(compIdx, itemIdx);
+                if (e.key === 'Escape') cancelInlineEdit();
+              }}
+              onClick={(e) => e.stopPropagation()}
+              autoFocus
+            />
+          ) : (
+            <span
+              className={`flex-1 text-sm truncate ${item.name.trim() ? 'text-theme-text-primary font-medium' : 'text-theme-text-muted italic'}`}
+              onDoubleClick={(e) => startInlineEdit(itemKey, item.name, e)}
+              title="Double-click to rename"
+            >
+              {item.name.trim() || 'Untitled Item'}
+            </span>
+          )}
 
           {/* Badges */}
           <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -1290,6 +1573,27 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
           {/* Actions — stop propagation so clicking them doesn't toggle expansion */}
           <div className="flex items-center gap-0.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+            {/* Move up/down buttons */}
+            <button
+              type="button"
+              onClick={() => moveItem(compIdx, itemIdx, 'up')}
+              disabled={itemIdx === 0}
+              className="p-1 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              title="Move up"
+              aria-label="Move item up"
+            >
+              <ChevronUp className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => moveItem(compIdx, itemIdx, 'down')}
+              disabled={itemIdx === itemCount - 1}
+              className="p-1 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              title="Move down"
+              aria-label="Move item down"
+            >
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
             <button
               type="button"
               onClick={() => duplicateItem(compIdx, itemIdx)}
@@ -1321,7 +1625,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   className={inputClass}
                   placeholder="Item name"
                   value={item.name}
-                  onChange={(e) => updateItemField(compIdx, itemIdx, { name: e.target.value })}
+                  onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { name: e.target.value })}
                 />
               </div>
               <div>
@@ -1331,7 +1635,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   className={inputClass}
                   placeholder="Optional description"
                   value={item.description}
-                  onChange={(e) => updateItemField(compIdx, itemIdx, { description: e.target.value })}
+                  onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { description: e.target.value })}
                 />
               </div>
             </div>
@@ -1344,7 +1648,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   className={selectClass}
                   value={item.checkType}
                   onChange={(e) =>
-                    updateItemField(compIdx, itemIdx, {
+                    updateItemFieldWithAutoSave(compIdx, itemIdx, {
                       checkType: e.target.value as ItemFormState['checkType'],
                     })
                   }
@@ -1369,7 +1673,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     type="checkbox"
                     className={checkboxClass}
                     checked={item.isRequired}
-                    onChange={(e) => updateItemField(compIdx, itemIdx, { isRequired: e.target.checked })}
+                    onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { isRequired: e.target.checked })}
                   />
                   Required
                 </label>
@@ -1380,11 +1684,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <>
                   <div>
                     <label className={labelClass}>Required Qty</label>
-                    <input type="number" className={inputClass} min="0" placeholder="0" value={item.requiredQuantity} onChange={(e) => updateItemField(compIdx, itemIdx, { requiredQuantity: e.target.value })} />
+                    <input type="number" className={inputClass} min="0" placeholder="0" value={item.requiredQuantity} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { requiredQuantity: e.target.value })} />
                   </div>
                   <div>
                     <label className={labelClass}>Expected Qty</label>
-                    <input type="number" className={inputClass} min="0" placeholder="0" value={item.expectedQuantity} onChange={(e) => updateItemField(compIdx, itemIdx, { expectedQuantity: e.target.value })} />
+                    <input type="number" className={inputClass} min="0" placeholder="0" value={item.expectedQuantity} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { expectedQuantity: e.target.value })} />
                   </div>
                 </>
               )}
@@ -1394,11 +1698,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <>
                   <div>
                     <label className={labelClass}>Min Level</label>
-                    <input type="number" className={inputClass} min="0" step="0.1" placeholder="0" value={item.minLevel} onChange={(e) => updateItemField(compIdx, itemIdx, { minLevel: e.target.value })} />
+                    <input type="number" className={inputClass} min="0" step="0.1" placeholder="0" value={item.minLevel} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { minLevel: e.target.value })} />
                   </div>
                   <div>
                     <label className={labelClass}>Unit</label>
-                    <input type="text" className={inputClass} placeholder="psi, %, gallons..." value={item.levelUnit} onChange={(e) => updateItemField(compIdx, itemIdx, { levelUnit: e.target.value })} />
+                    <input type="text" className={inputClass} placeholder="psi, %, gallons..." value={item.levelUnit} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { levelUnit: e.target.value })} />
                   </div>
                 </>
               )}
@@ -1408,11 +1712,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <>
                   <div>
                     <label className={labelClass}>Serial #</label>
-                    <input type="text" className={inputClass} placeholder="Serial number" value={item.serialNumber} onChange={(e) => updateItemField(compIdx, itemIdx, { serialNumber: e.target.value })} />
+                    <input type="text" className={inputClass} placeholder="Serial number" value={item.serialNumber} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { serialNumber: e.target.value })} />
                   </div>
                   <div>
                     <label className={labelClass}>Lot #</label>
-                    <input type="text" className={inputClass} placeholder="Lot number" value={item.lotNumber} onChange={(e) => updateItemField(compIdx, itemIdx, { lotNumber: e.target.value })} />
+                    <input type="text" className={inputClass} placeholder="Lot number" value={item.lotNumber} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { lotNumber: e.target.value })} />
                   </div>
                 </>
               )}
@@ -1423,14 +1727,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   <Image className="inline h-3.5 w-3.5 mr-1" />
                   Image URL
                 </label>
-                <input type="text" className={inputClass} placeholder="https://..." value={item.imageUrl} onChange={(e) => updateItemField(compIdx, itemIdx, { imageUrl: e.target.value })} />
+                <input type="text" className={inputClass} placeholder="https://..." value={item.imageUrl} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { imageUrl: e.target.value })} />
               </div>
             </div>
 
             {/* Expiration row */}
             <div className="flex flex-wrap items-end gap-3">
               <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
-                <input type="checkbox" className={checkboxClass} checked={item.hasExpiration} onChange={(e) => updateItemField(compIdx, itemIdx, { hasExpiration: e.target.checked })} />
+                <input type="checkbox" className={checkboxClass} checked={item.hasExpiration} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { hasExpiration: e.target.checked })} />
                 <AlertTriangle className="h-3.5 w-3.5" />
                 Has Expiration
               </label>
@@ -1438,11 +1742,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <>
                   <div>
                     <label className={labelClass}>Expiration Date</label>
-                    <input type="date" className={inputClass} value={item.expirationDate} onChange={(e) => updateItemField(compIdx, itemIdx, { expirationDate: e.target.value })} />
+                    <input type="date" className={inputClass} value={item.expirationDate} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { expirationDate: e.target.value })} />
                   </div>
                   <div>
                     <label className={labelClass}>Warning Days</label>
-                    <input type="number" className={inputClass} min="0" placeholder="30" value={item.expirationWarningDays} onChange={(e) => updateItemField(compIdx, itemIdx, { expirationWarningDays: e.target.value })} />
+                    <input type="number" className={inputClass} min="0" placeholder="30" value={item.expirationWarningDays} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { expirationWarningDays: e.target.value })} />
                   </div>
                 </>
               )}
@@ -1489,6 +1793,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           <button
             type="button"
             className="p-0.5 text-theme-text-muted cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
+            aria-label="Drag to reorder compartment"
             {...(dragHandleProps ?? {})}
           >
             <GripVertical className="h-5 w-5" />
@@ -1537,14 +1842,37 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             })()}
           </div>
 
-          <button
-            type="button"
-            onClick={() => void deleteCompartment(idx)}
-            className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors flex-shrink-0"
-            title="Delete compartment"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+          {/* Move up/down + delete */}
+          <div className="flex items-center gap-0.5 flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => moveCompartment(idx, 'up')}
+              disabled={idx === 0}
+              className="p-1 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              title="Move compartment up"
+              aria-label="Move compartment up"
+            >
+              <ChevronUp className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => moveCompartment(idx, 'down')}
+              disabled={idx === compartments.length - 1}
+              className="p-1 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              title="Move compartment down"
+              aria-label="Move compartment down"
+            >
+              <ChevronDown className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => void deleteCompartment(idx)}
+              className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+              title="Delete compartment"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         {/* Compartment body */}
@@ -1614,16 +1942,56 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
             {/* Items */}
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <h4 className="text-sm font-semibold text-theme-text-primary">Check Items</h4>
-                <button
-                  type="button"
-                  onClick={() => void addItem(idx)}
-                  className="flex items-center gap-1 rounded-md border border-theme-surface-border px-3 py-1.5 text-xs font-medium text-theme-text-secondary hover:border-blue-500 hover:text-blue-600 transition-colors"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Add Item
-                </button>
+                <div className="flex items-center gap-2">
+                  {/* Bulk selection controls */}
+                  {comp.items.length > 0 && (
+                    <div className="flex items-center gap-1">
+                      {getSelectedCount(idx) > 0 ? (
+                        <>
+                          <span className="text-xs text-blue-600 dark:text-blue-400 font-medium mr-1">
+                            {getSelectedCount(idx)} selected
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => void deleteSelectedItems(idx)}
+                            className="flex items-center gap-1 rounded-md border border-red-300 dark:border-red-700 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                            title="Delete selected items"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            Delete
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deselectAllItems(idx)}
+                            className="rounded-md px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                          >
+                            Clear
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => selectAllItems(idx)}
+                          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                          title="Select all items"
+                        >
+                          <CheckSquare className="h-3 w-3" />
+                          Select all
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void addItem(idx)}
+                    className="flex items-center gap-1 rounded-md border border-theme-surface-border px-3 py-1.5 text-xs font-medium text-theme-text-secondary hover:border-blue-500 hover:text-blue-600 transition-colors"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add Item
+                  </button>
+                </div>
               </div>
 
               {comp.items.length === 0 && (
@@ -1649,7 +2017,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       id={item.id ?? `item-${idx}-${itemIdx}`}
                     >
                       {({ listeners: itemListeners }) =>
-                        renderItem(idx, itemIdx, item, itemListeners)
+                        renderItem(idx, itemIdx, item, itemListeners, comp.items.length)
                       }
                     </SortableItemWrapper>
                   ))}
