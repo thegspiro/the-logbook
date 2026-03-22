@@ -390,6 +390,19 @@ The following security measures are enforced:
 
 > **Edge case:** If your deployment uses a reverse proxy (nginx, Caddy), the `DB_SSL` and `REDIS_SSL` settings refer to the connection between the backend container and the database/Redis container — not the browser-to-server connection. Browser-to-server TLS is handled by the reverse proxy.
 
+### Authentication & Session Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Admin changes a member's roles while they are logged in | Server enforces new permissions immediately (re-queried from DB on every request). However, the frontend UI may show stale permission-based elements (buttons, menu items) until the page is reloaded or the session refreshes via `/auth/me`. |
+| Password reset requested twice within 30 minutes | The second request returns the same success message but no email is sent. This is intentional anti-enumeration — there is no indication to the user that a cooldown is active. Reset tokens expire after 30 minutes. |
+| Admin resets member password with "force change" | `password_changed_at` is intentionally NOT updated, so the user may see a password-expiry warning on their next login before they reach the change-password form. This resolves after they complete the forced password change. |
+| Multiple browser tabs open when access token expires | A shared refresh promise prevents races within one tab, but multiple tabs can trigger simultaneous refresh requests. If two tabs refresh at the same time, the second may see the rotated token as invalid, triggering a full session revocation across all tabs. Closing extra tabs before the session timeout avoids this. |
+| Member soft-deleted by admin | The user's next API request returns 401 (deleted users are filtered out of token validation). However, sessions are not proactively revoked — the session record stays in the database as an orphan until it expires naturally. |
+| Server restarts or deploys during active sessions | In-memory rate limiters reset (Redis-backed limiters are persistent). Encryption ciphers are re-initialized from the current `ENCRYPTION_KEY`. If the key was rotated without restart, data encrypted with the old key cannot be decrypted. |
+| Brief database outage during page refresh | If `GET /auth/me` returns 503 or a network error, the frontend clears `has_session` and logs the user out. The user must log in again when the database recovers. |
+| Concurrent session count | There is no enforced limit on simultaneous sessions. A monitoring threshold of 3 concurrent sessions triggers an anomaly alert but does not block additional logins. |
+
 ---
 
 ## Realistic Example: Generating the Annual Training Summary Report
