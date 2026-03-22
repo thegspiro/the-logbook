@@ -501,6 +501,11 @@ const Dashboard: React.FC = () => {
         refreshing={refreshing}
         pullDistance={pullDistance}
       />
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {loadingNotifications || loadingMyShifts || loadingHours || loadingTraining
+          ? "Loading dashboard content..."
+          : "Dashboard content loaded."}
+      </div>
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex-1 w-full">
         {/* Welcome Header */}
         <div className="mb-6 sm:mb-8">
@@ -521,7 +526,7 @@ const Dashboard: React.FC = () => {
         {canInstall && !dismissedInstall && (
           <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 flex items-center justify-between mb-6 sm:mb-8">
             <div className="flex items-center gap-3">
-              <Smartphone className="w-5 h-5 text-blue-500" />
+              <Smartphone className="w-5 h-5 text-blue-500" aria-hidden="true" />
               <div>
                 <p className="text-sm font-medium text-theme-text-primary">
                   Install The Logbook
@@ -534,7 +539,7 @@ const Dashboard: React.FC = () => {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setDismissedInstall(true)}
-                className="text-xs text-theme-text-muted hover:text-theme-text-primary px-2 py-1"
+                className="text-sm text-theme-text-muted hover:text-theme-text-primary px-3 py-2 rounded"
               >
                 Dismiss
               </button>
@@ -542,7 +547,7 @@ const Dashboard: React.FC = () => {
                 onClick={() => {
                   void install();
                 }}
-                className="btn-info font-medium px-3 py-1.5 rounded-md text-xs"
+                className="btn-info font-medium px-4 py-2 rounded-md text-sm"
               >
                 Install
               </button>
@@ -571,7 +576,14 @@ const Dashboard: React.FC = () => {
                     complete
                   </p>
                   {/* Progress bar — mobile inline, desktop in separate column */}
-                  <div className="mt-2 sm:hidden w-full bg-theme-surface-secondary rounded-full h-2">
+                  <div
+                    className="mt-2 sm:hidden w-full bg-theme-surface-secondary rounded-full h-2"
+                    role="progressbar"
+                    aria-valuenow={setupProgress.completed}
+                    aria-valuemin={0}
+                    aria-valuemax={setupProgress.total}
+                    aria-label={`Setup progress: ${setupProgress.completed} of ${setupProgress.total} steps complete`}
+                  >
                     <div
                       className="h-2 rounded-full bg-red-500 transition-all"
                       style={{
@@ -581,7 +593,14 @@ const Dashboard: React.FC = () => {
                   </div>
                 </div>
                 <div className="hidden sm:flex items-center gap-3 shrink-0">
-                  <div className="w-24 bg-theme-surface-secondary rounded-full h-2">
+                  <div
+                    className="w-24 bg-theme-surface-secondary rounded-full h-2"
+                    role="progressbar"
+                    aria-valuenow={setupProgress.completed}
+                    aria-valuemin={0}
+                    aria-valuemax={setupProgress.total}
+                    aria-label={`Setup progress: ${setupProgress.completed} of ${setupProgress.total} steps complete`}
+                  >
                     <div
                       className="h-2 rounded-full bg-red-500 transition-all"
                       style={{
@@ -599,7 +618,7 @@ const Dashboard: React.FC = () => {
         {isAdmin && (
           <div className="mb-8">
             <h3 className="text-lg font-semibold text-theme-text-primary mb-4 flex items-center gap-2">
-              <Shield className="w-5 h-5 text-red-500" />
+              <Shield className="w-5 h-5 text-red-500" aria-hidden="true" />
               Department Overview
             </h3>
             <div
@@ -621,7 +640,7 @@ const Dashboard: React.FC = () => {
                       </p>
                     )}
                   </div>
-                  <Users className="w-8 h-8 text-blue-400" />
+                  <Users className="w-8 h-8 text-blue-400" aria-hidden="true" />
                 </div>
                 <p className="text-theme-text-muted text-xs mt-2">
                   {adminSummary?.total_members ?? 0} total
@@ -642,7 +661,7 @@ const Dashboard: React.FC = () => {
                       </p>
                     )}
                   </div>
-                  <GraduationCap className="w-8 h-8 text-green-400" />
+                  <GraduationCap className="w-8 h-8 text-green-400" aria-hidden="true" />
                 </div>
                 <p className="text-theme-text-muted text-xs mt-2">
                   {adminSummary?.recent_training_hours ?? 0} hrs last 30 days
@@ -663,7 +682,7 @@ const Dashboard: React.FC = () => {
                       </p>
                     )}
                   </div>
-                  <Calendar className="w-8 h-8 text-purple-400" />
+                  <Calendar className="w-8 h-8 text-purple-400" aria-hidden="true" />
                 </div>
                 <p className="text-theme-text-muted text-xs mt-2">Scheduled</p>
               </div>
@@ -671,6 +690,12 @@ const Dashboard: React.FC = () => {
               <div
                 className="card cursor-pointer hover:border-red-500/50 p-3 sm:p-5 transition-colors"
                 onClick={() => navigate("/action-items")}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") navigate("/action-items");
+                }}
+                aria-label={`Action Items: ${adminSummary?.open_action_items ?? 0} open${(adminSummary?.overdue_action_items ?? 0) > 0 ? `, ${adminSummary?.overdue_action_items} overdue` : ""}`}
               >
                 <div className="flex items-center justify-between">
                   <div>
@@ -686,9 +711,9 @@ const Dashboard: React.FC = () => {
                     )}
                   </div>
                   {(adminSummary?.overdue_action_items ?? 0) > 0 ? (
-                    <AlertTriangle className="w-8 h-8 text-red-400" />
+                    <AlertTriangle className="w-8 h-8 text-red-400" aria-hidden="true" />
                   ) : (
-                    <ClipboardList className="w-8 h-8 text-yellow-400" />
+                    <ClipboardList className="w-8 h-8 text-yellow-400" aria-hidden="true" />
                   )}
                 </div>
                 <p className="text-theme-text-muted text-xs mt-2">
@@ -701,6 +726,12 @@ const Dashboard: React.FC = () => {
               <div
                 className="card cursor-pointer hover:border-red-500/50 p-3 sm:p-5 transition-colors"
                 onClick={() => navigate("/admin-hours/manage")}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") navigate("/admin-hours/manage");
+                }}
+                aria-label={`Admin Hours: ${adminSummary?.recent_admin_hours ?? 0}${(adminSummary?.pending_admin_hours_approvals ?? 0) > 0 ? `, ${adminSummary?.pending_admin_hours_approvals} pending approval` : ""}`}
               >
                 <div className="flex items-center justify-between">
                   <div>
@@ -715,7 +746,7 @@ const Dashboard: React.FC = () => {
                       </p>
                     )}
                   </div>
-                  <ClipboardCheck className="w-8 h-8 text-indigo-400" />
+                  <ClipboardCheck className="w-8 h-8 text-indigo-400" aria-hidden="true" />
                 </div>
                 <p className="text-theme-text-muted text-xs mt-2">
                   {(adminSummary?.pending_admin_hours_approvals ?? 0) > 0
@@ -826,10 +857,10 @@ const Dashboard: React.FC = () => {
           <div className="mb-8">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-                <Megaphone className="w-5 h-5 text-amber-400" />
+                <Megaphone className="w-5 h-5 text-amber-400" aria-hidden="true" />
                 <span>Department Messages</span>
                 {deptMsgUnread > 0 && (
-                  <span className="bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full">
+                  <span className="bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full" aria-label={`${deptMsgUnread} new messages`}>
                     {deptMsgUnread} new
                   </span>
                 )}
@@ -857,6 +888,12 @@ const Dashboard: React.FC = () => {
                       if (!msg.is_read && !msg.is_persistent)
                         void markMessageRead(msg.id);
                     }}
+                    role={!msg.is_read && !msg.is_persistent ? "button" : undefined}
+                    tabIndex={!msg.is_read && !msg.is_persistent ? 0 : undefined}
+                    onKeyDown={!msg.is_read && !msg.is_persistent ? (e) => {
+                      if (e.key === "Enter" || e.key === " ") void markMessageRead(msg.id);
+                    } : undefined}
+                    aria-label={!msg.is_read ? `${msg.title} — unread, ${msg.priority} priority` : undefined}
                   >
                     <div>
                       <div className="flex-1 min-w-0">
@@ -881,13 +918,13 @@ const Dashboard: React.FC = () => {
                             </span>
                           )}
                           {!msg.is_read && (
-                            <span className="w-2 h-2 bg-amber-400 rounded-full shrink-0" />
+                            <span className="w-2 h-2 bg-amber-400 rounded-full shrink-0" aria-hidden="true" />
                           )}
                         </div>
                         <p className="text-theme-text-secondary text-sm whitespace-pre-line line-clamp-3">
                           {msg.body}
                         </p>
-                        <div className="flex items-center justify-between gap-3 mt-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-2">
                           <div className="flex items-center gap-3 text-xs text-theme-text-muted">
                             {msg.author_name && (
                               <span>From: {msg.author_name}</span>
@@ -903,10 +940,10 @@ const Dashboard: React.FC = () => {
                                   e.stopPropagation();
                                   void markMessageRead(msg.id);
                                 }}
-                                className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1"
+                                className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 p-2 -m-1 rounded"
                                 title="Mark as read"
                               >
-                                <Eye className="w-3.5 h-3.5" />
+                                <Eye className="w-4 h-4" />
                               </button>
                             )}
                             {msg.is_persistent && canManageMessages && (
@@ -915,7 +952,7 @@ const Dashboard: React.FC = () => {
                                   e.stopPropagation();
                                   void clearPersistentMessage(msg.id);
                                 }}
-                                className="text-xs px-2 py-1 text-theme-text-muted hover:text-red-400 hover:bg-red-500/10 rounded-sm flex items-center gap-1 transition-colors"
+                                className="text-xs px-3 py-2 text-theme-text-muted hover:text-red-400 hover:bg-red-500/10 rounded flex items-center gap-1 transition-colors"
                                 title="Clear persistent message"
                               >
                                 <X className="w-3 h-3" />
@@ -929,7 +966,7 @@ const Dashboard: React.FC = () => {
                                     e.stopPropagation();
                                     void acknowledgeMessage(msg.id);
                                   }}
-                                  className="text-xs px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-sm font-medium"
+                                  className="text-xs px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded font-medium"
                                 >
                                   Acknowledge
                                 </button>
@@ -955,10 +992,10 @@ const Dashboard: React.FC = () => {
           <div className="card p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-                <Bell className="w-5 h-5 text-red-400" />
+                <Bell className="w-5 h-5 text-red-400" aria-hidden="true" />
                 <span>Notifications</span>
                 {unreadCount > 0 && (
-                  <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
+                  <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full" aria-label={`${unreadCount} unread`}>
                     {unreadCount}
                   </span>
                 )}
@@ -967,7 +1004,7 @@ const Dashboard: React.FC = () => {
                 {unreadCount > 0 && (
                   <button
                     onClick={() => void markAllNotificationsRead()}
-                    className="text-theme-text-muted hover:text-theme-text-primary text-xs flex items-center space-x-1 transition-colors"
+                    className="text-theme-text-muted hover:text-theme-text-primary text-xs flex items-center space-x-1 transition-colors py-2 px-2 -mr-1 rounded"
                     title="Mark all as read"
                   >
                     <CheckCheck className="w-3.5 h-3.5" />
@@ -976,7 +1013,7 @@ const Dashboard: React.FC = () => {
                 )}
                 <button
                   onClick={() => navigate("/notifications")}
-                  className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1"
+                  className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1 py-2 pl-2"
                 >
                   <span>View All</span>
                   <ChevronRight className="w-4 h-4" />
@@ -1034,10 +1071,10 @@ const Dashboard: React.FC = () => {
                         {!notification.read ? (
                           <button
                             onClick={(e) => void clearNotification(e, notification.id)}
-                            className="ml-1.5 p-0.5 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+                            className="ml-1 p-2 -mr-1 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
                             title="Dismiss"
                           >
-                            <X className="w-3.5 h-3.5" />
+                            <X className="w-4 h-4" />
                           </button>
                         ) : notification.action_url ? (
                           <ChevronRight className="w-3.5 h-3.5 text-theme-text-muted ml-1 hidden sm:block" />
@@ -1054,12 +1091,12 @@ const Dashboard: React.FC = () => {
           <div className="card p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-                <Calendar className="w-5 h-5 text-blue-400" />
+                <Calendar className="w-5 h-5 text-blue-400" aria-hidden="true" />
                 <span>My Upcoming Shifts</span>
               </h3>
               <button
                 onClick={() => navigate("/scheduling")}
-                className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1"
+                className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1 py-2 pl-2"
               >
                 <span>View Schedule</span>
                 <ChevronRight className="w-4 h-4" />
@@ -1121,12 +1158,12 @@ const Dashboard: React.FC = () => {
         <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-              <CalendarPlus className="w-5 h-5 text-green-400" />
+              <CalendarPlus className="w-5 h-5 text-green-400" aria-hidden="true" />
               <span>Open Shifts</span>
             </h3>
             <button
               onClick={() => navigate("/scheduling")}
-              className="text-green-400 hover:text-green-300 text-sm flex items-center space-x-1"
+              className="text-green-400 hover:text-green-300 text-sm flex items-center space-x-1 py-2 pl-2"
             >
               <span>View Schedule</span>
               <ChevronRight className="w-4 h-4" />
@@ -1177,7 +1214,7 @@ const Dashboard: React.FC = () => {
                       {signupExpandedId !== shift.id && (
                         <button
                           onClick={() => void handleExpandSignup(shift.id)}
-                          className="btn-success flex font-medium items-center px-3 py-1.5 space-x-1 text-xs"
+                          className="btn-success flex font-medium items-center px-3 py-2 space-x-1 text-sm"
                         >
                           <UserPlus className="w-3.5 h-3.5" />
                           <span>Sign Up</span>
@@ -1203,11 +1240,11 @@ const Dashboard: React.FC = () => {
                           </button>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                           <select
                             value={dashboardSignupPosition}
                             onChange={(e) => setDashboardSignupPosition(e.target.value)}
-                            className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-md px-2 py-1.5 text-xs text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500"
+                            className="w-full sm:flex-1 bg-theme-input-bg border border-theme-input-border rounded-md px-2 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500"
                           >
                             {dashboardEligiblePositions.map((pos) => (
                               <option key={pos} value={pos}>
@@ -1215,24 +1252,26 @@ const Dashboard: React.FC = () => {
                               </option>
                             ))}
                           </select>
-                          <button
-                            onClick={() => void handleSignup(shift.id)}
-                            disabled={signingUpShiftId === shift.id}
-                            className="btn-success disabled:cursor-not-allowed flex font-medium items-center px-3 py-1.5 space-x-1 text-xs shrink-0"
-                          >
-                            {signingUpShiftId === shift.id ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                            )}
-                            <span>Confirm</span>
-                          </button>
-                          <button
-                            onClick={() => setSignupExpandedId(null)}
-                            className="text-xs text-theme-text-muted hover:text-theme-text-primary px-2 py-1.5"
-                          >
-                            Cancel
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => void handleSignup(shift.id)}
+                              disabled={signingUpShiftId === shift.id}
+                              className="btn-success disabled:cursor-not-allowed flex font-medium items-center px-3 py-2 space-x-1 text-sm shrink-0"
+                            >
+                              {signingUpShiftId === shift.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                              )}
+                              <span>Confirm</span>
+                            </button>
+                            <button
+                              onClick={() => setSignupExpandedId(null)}
+                              className="text-sm text-theme-text-muted hover:text-theme-text-primary px-3 py-2"
+                            >
+                              Cancel
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1247,12 +1286,12 @@ const Dashboard: React.FC = () => {
         <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-              <Calendar className="w-5 h-5 text-purple-400" />
+              <Calendar className="w-5 h-5 text-purple-400" aria-hidden="true" />
               <span>Upcoming Events</span>
             </h3>
             <button
               onClick={() => navigate("/events")}
-              className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1"
+              className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1 py-2 pl-2"
             >
               <span>View All</span>
               <ChevronRight className="w-4 h-4" />
@@ -1315,12 +1354,12 @@ const Dashboard: React.FC = () => {
         <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-4 sm:p-6 mb-6 sm:mb-8">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-theme-text-primary flex items-center gap-2">
-              <Activity className="w-5 h-5" />
+              <Activity className="w-5 h-5" aria-hidden="true" />
               Recent Activity
             </h3>
             <button
               onClick={() => navigate("/notifications")}
-              className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1"
+              className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 py-2 pl-2"
             >
               View All <ChevronRight className="w-3 h-3" />
             </button>
@@ -1364,12 +1403,12 @@ const Dashboard: React.FC = () => {
           <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-                <CreditCard className="w-5 h-5 text-blue-500" />
+                <CreditCard className="w-5 h-5 text-blue-500" aria-hidden="true" />
                 <span>My ID Card</span>
               </h3>
               <button
                 onClick={() => navigate(`/members/${currentUser.id}/id-card`)}
-                className="text-blue-400 hover:text-blue-300 text-sm flex items-center space-x-1"
+                className="text-blue-400 hover:text-blue-300 text-sm flex items-center space-x-1 py-2 pl-2"
               >
                 <span>View</span>
                 <ChevronRight className="w-4 h-4" />
@@ -1393,12 +1432,12 @@ const Dashboard: React.FC = () => {
           <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-                <ClipboardList className="w-5 h-5 text-cyan-500" />
+                <ClipboardList className="w-5 h-5 text-cyan-500" aria-hidden="true" />
                 <span>Meeting Minutes</span>
               </h3>
               <button
                 onClick={() => navigate("/minutes")}
-                className="text-cyan-400 hover:text-cyan-300 text-sm flex items-center space-x-1"
+                className="text-cyan-400 hover:text-cyan-300 text-sm flex items-center space-x-1 py-2 pl-2"
               >
                 <span>View All</span>
                 <ChevronRight className="w-4 h-4" />
@@ -1430,12 +1469,12 @@ const Dashboard: React.FC = () => {
           <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-                <GraduationCap className="w-5 h-5 text-red-500" />
+                <GraduationCap className="w-5 h-5 text-red-500" aria-hidden="true" />
                 <span>My Training Progress</span>
               </h3>
               <button
                 onClick={() => navigate("/training/my-training")}
-                className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1"
+                className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1 py-2 pl-2"
               >
                 <span>View All</span>
                 <ChevronRight className="w-4 h-4" />
@@ -1464,31 +1503,38 @@ const Dashboard: React.FC = () => {
                     className="w-full bg-theme-surface-secondary rounded-lg p-4 hover:bg-theme-surface-hover cursor-pointer transition-colors text-left"
                     aria-label={`${enrollment.program?.name || "Program"}: ${Math.round(enrollment.progress_percentage)}% complete`}
                   >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <h4 className="text-theme-text-primary font-semibold">
+                    <div className="flex items-start justify-between mb-3 gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
+                          <h4 className="text-theme-text-primary font-semibold truncate">
                             {enrollment.program?.name || "Program"}
                           </h4>
                           {upcomingDeadline && (
-                            <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded-sm flex items-center space-x-1">
+                            <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded-sm flex items-center space-x-1 shrink-0">
                               <AlertTriangle className="w-3 h-3" />
                               <span>Deadline Soon</span>
                             </span>
                           )}
                         </div>
                         {enrollment.program?.description && (
-                          <p className="text-theme-text-secondary text-sm">
+                          <p className="text-theme-text-secondary text-sm line-clamp-2">
                             {enrollment.program.description}
                           </p>
                         )}
                       </div>
-                      <span className="text-2xl font-bold text-theme-text-primary ml-4">
+                      <span className="text-2xl font-bold text-theme-text-primary shrink-0">
                         {Math.round(enrollment.progress_percentage)}%
                       </span>
                     </div>
 
-                    <div className="w-full bg-theme-surface-secondary rounded-full h-2 mb-3">
+                    <div
+                      className="w-full bg-theme-surface-secondary rounded-full h-2 mb-3"
+                      role="progressbar"
+                      aria-valuenow={Math.round(enrollment.progress_percentage)}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label={`${enrollment.program?.name ?? "Program"} progress: ${Math.round(enrollment.progress_percentage)}%`}
+                    >
                       <div
                         className={`h-2 rounded-full transition-all ${getProgressBarColor(enrollment.progress_percentage)}`}
                         style={{ width: `${enrollment.progress_percentage}%` }}
@@ -1568,7 +1614,7 @@ const Dashboard: React.FC = () => {
             <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-                  <Package className="w-5 h-5 text-emerald-500" />
+                  <Package className="w-5 h-5 text-emerald-500" aria-hidden="true" />
                   <span>
                     {isInventoryAdmin
                       ? "Equipment & Inventory"
@@ -1577,7 +1623,7 @@ const Dashboard: React.FC = () => {
                 </h3>
                 <button
                   onClick={() => navigate("/inventory")}
-                  className="text-emerald-400 hover:text-emerald-300 text-sm flex items-center space-x-1"
+                  className="text-emerald-400 hover:text-emerald-300 text-sm flex items-center space-x-1 py-2 pl-2"
                 >
                   <span>View All</span>
                   <ChevronRight className="w-4 h-4" />
