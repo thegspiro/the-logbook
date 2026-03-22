@@ -95,7 +95,9 @@ export const getSchedulingRoutes = () => {
         path="/scheduling/equipment-check-templates/new"
         element={
           <Suspense fallback={null}>
-            <EquipmentCheckTemplateBuilder />
+            <ProtectedRoute requiredPermission="scheduling.manage">
+              <EquipmentCheckTemplateBuilder />
+            </ProtectedRoute>
           </Suspense>
         }
       />
@@ -103,7 +105,9 @@ export const getSchedulingRoutes = () => {
         path="/scheduling/equipment-check-templates/:templateId"
         element={
           <Suspense fallback={null}>
-            <EquipmentCheckTemplateBuilder />
+            <ProtectedRoute requiredPermission="scheduling.manage">
+              <EquipmentCheckTemplateBuilder />
+            </ProtectedRoute>
           </Suspense>
         }
       />
@@ -111,7 +115,9 @@ export const getSchedulingRoutes = () => {
         path="/scheduling/equipment-check-reports"
         element={
           <Suspense fallback={null}>
-            <EquipmentCheckReportsPage />
+            <ProtectedRoute requiredPermission="scheduling.manage">
+              <EquipmentCheckReportsPage />
+            </ProtectedRoute>
           </Suspense>
         }
       />

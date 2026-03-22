@@ -37,6 +37,8 @@ interface ActiveChecklist {
   templateName: string;
   checkTiming: string;
   status: string;
+  totalItems?: number;
+  completedItems?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,6 +91,7 @@ export const MyChecklistsPage: React.FC = () => {
   // Active checklists
   const [loading, setLoading] = useState(true);
   const [activeChecklists, setActiveChecklists] = useState<ActiveChecklist[]>([]);
+  const [timingFilter, setTimingFilter] = useState<'all' | 'start_of_shift' | 'end_of_shift'>('all');
 
   // History
   const [history, setHistory] = useState<ShiftEquipmentCheckRecord[]>([]);
@@ -317,7 +320,26 @@ export const MyChecklistsPage: React.FC = () => {
       {/* Active Checklists Section                                      */}
       {/* ============================================================= */}
       <section>
-        <h2 className="mb-3 text-base font-semibold text-theme-text-primary">Active Checklists</h2>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-base font-semibold text-theme-text-primary">Active Checklists</h2>
+          {activeChecklists.length > 1 && (
+            <div className="flex items-center gap-1 rounded-lg border border-theme-surface-border bg-theme-surface p-0.5">
+              {([['all', 'All'], ['start_of_shift', 'Start'], ['end_of_shift', 'End']] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  onClick={() => setTimingFilter(value)}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                    timingFilter === value
+                      ? 'bg-blue-600 text-white'
+                      : 'text-theme-text-muted hover:text-theme-text-primary'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-8">
@@ -334,41 +356,82 @@ export const MyChecklistsPage: React.FC = () => {
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {activeChecklists.map((checklist) => (
-              <div
-                key={`${checklist.shiftId}-${checklist.templateId}`}
-                className="rounded-lg border border-theme-surface-border bg-theme-surface p-4"
-              >
-                <div className="mb-2 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Truck className="h-4 w-4 text-theme-text-muted" />
-                    <span className="text-sm font-medium text-theme-text-primary">
-                      {checklist.apparatusName}
-                    </span>
-                  </div>
-                  <span className="text-xs text-theme-text-muted">
-                    {checklist.checkTiming === 'start_of_shift' ? 'Start of Shift' : 'End of Shift'}
-                  </span>
-                </div>
+            {activeChecklists
+              .filter((c) => timingFilter === 'all' || c.checkTiming === timingFilter)
+              .map((checklist) => {
+                const total = checklist.totalItems ?? 0;
+                const completed = checklist.completedItems ?? 0;
+                const progressPct = total > 0 ? Math.round((completed / total) * 100) : 0;
+                const isStarted = checklist.status === 'in_progress' || checklist.status === 'incomplete';
 
-                <div className="mb-1 flex items-center gap-1.5 text-xs text-theme-text-muted">
-                  <Calendar className="h-3 w-3" />
-                  <span>{formatDate(checklist.shiftDate, timezone)}</span>
-                </div>
-
-                <p className="text-sm font-medium text-theme-text-primary">{checklist.templateName}</p>
-
-                <div className="mt-3 flex items-center justify-between">
-                  {statusBadge(checklist.status)}
-                  <button
-                    onClick={() => void handleStartCheck(checklist)}
-                    className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                return (
+                  <div
+                    key={`${checklist.shiftId}-${checklist.templateId}`}
+                    className="rounded-lg border border-theme-surface-border bg-theme-surface p-4"
                   >
-                    Start Check &rarr;
-                  </button>
-                </div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Truck className="h-4 w-4 text-theme-text-muted" />
+                        <span className="text-sm font-medium text-theme-text-primary">
+                          {checklist.apparatusName}
+                        </span>
+                      </div>
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                          checklist.checkTiming === 'start_of_shift'
+                            ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20'
+                            : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20'
+                        }`}
+                      >
+                        {checklist.checkTiming === 'start_of_shift' ? 'Start' : 'End'}
+                      </span>
+                    </div>
+
+                    <div className="mb-1 flex items-center gap-1.5 text-xs text-theme-text-muted">
+                      <Calendar className="h-3 w-3" />
+                      <span>{formatDate(checklist.shiftDate, timezone)}</span>
+                    </div>
+
+                    <p className="text-sm font-medium text-theme-text-primary">{checklist.templateName}</p>
+
+                    {/* Progress bar and count */}
+                    {total > 0 && (
+                      <div className="mt-2">
+                        <div className="mb-1 flex items-center justify-between text-xs text-theme-text-muted">
+                          <span>{completed}/{total} items</span>
+                          {isStarted && <span>{progressPct}%</span>}
+                        </div>
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-theme-surface-border">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              progressPct === 100 ? 'bg-green-500' : 'bg-blue-500'
+                            }`}
+                            style={{ width: `${progressPct}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="mt-3 flex items-center justify-between">
+                      {statusBadge(checklist.status)}
+                      <button
+                        onClick={() => void handleStartCheck(checklist)}
+                        className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors"
+                      >
+                        {isStarted ? 'Continue' : 'Start Check'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            {activeChecklists.length > 0 &&
+              activeChecklists.filter((c) => timingFilter === 'all' || c.checkTiming === timingFilter).length === 0 && (
+              <div className="col-span-full rounded-lg border border-theme-surface-border bg-theme-surface p-6 text-center">
+                <p className="text-sm text-theme-text-muted">
+                  No {timingFilter === 'start_of_shift' ? 'start of shift' : 'end of shift'} checklists.
+                </p>
               </div>
-            ))}
+            )}
           </div>
         )}
       </section>

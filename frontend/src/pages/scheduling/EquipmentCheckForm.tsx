@@ -1101,9 +1101,23 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
-            <span className="text-xs text-theme-text-muted px-2">
-              {idx + 1}/{compartments.length}
-            </span>
+            {/* Quick-jump dropdown */}
+            <select
+              value={idx}
+              onChange={(e) => setActiveCompartment(Number(e.target.value))}
+              className="rounded-lg border border-theme-surface-border bg-theme-surface px-2 py-1 text-xs text-theme-text-muted focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[36px] max-w-[140px] truncate"
+              aria-label="Jump to compartment"
+            >
+              {compartments.map((c, i) => {
+                const st = getCompartmentStatus(c, results);
+                const prefix = st === 'complete' ? '\u2713 ' : st === 'has_failures' ? '\u2717 ' : '';
+                return (
+                  <option key={c.id} value={i}>
+                    {prefix}{c.name}
+                  </option>
+                );
+              })}
+            </select>
             <button
               type="button"
               onClick={() =>
