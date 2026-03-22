@@ -65,7 +65,7 @@ def test_smtp_connection(config: dict[str, Any]) -> tuple[bool, str, dict[str, A
             with smtplib.SMTP_SSL(
                 smtp_host, smtp_port, context=context, timeout=10
             ) as server:
-                logger.info(f"Connected to {smtp_host}:{smtp_port} with SSL")
+                logger.info("Connected to %s:%s with SSL", smtp_host, smtp_port)
                 details["connected"] = True
 
                 # Authenticate if credentials provided
@@ -81,7 +81,7 @@ def test_smtp_connection(config: dict[str, Any]) -> tuple[bool, str, dict[str, A
             with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
                 server.ehlo()  # Identify ourselves
                 details["connected"] = True
-                logger.info(f"Connected to {smtp_host}:{smtp_port}")
+                logger.info("Connected to %s:%s", smtp_host, smtp_port)
 
                 # Start TLS encryption
                 context = ssl.create_default_context()
@@ -105,7 +105,9 @@ def test_smtp_connection(config: dict[str, Any]) -> tuple[bool, str, dict[str, A
                 details["connected"] = True
                 details["encrypted"] = False
                 logger.warning(
-                    f"Connected to {smtp_host}:{smtp_port} without encryption (not recommended)"
+                    "Connected to %s:%s without encryption (not recommended)",
+                    smtp_host,
+                    smtp_port,
                 )
 
                 # Authenticate if credentials provided
@@ -118,7 +120,7 @@ def test_smtp_connection(config: dict[str, Any]) -> tuple[bool, str, dict[str, A
         return True, "SMTP connection successful", details
 
     except smtplib.SMTPAuthenticationError as e:
-        logger.error(f"SMTP authentication failed: {e}")
+        logger.error("SMTP authentication failed: %s", e)
         error_str = str(e).lower()
 
         # Provide user-friendly authentication error messages
@@ -134,7 +136,7 @@ def test_smtp_connection(config: dict[str, Any]) -> tuple[bool, str, dict[str, A
         return False, message, details
 
     except smtplib.SMTPConnectError as e:
-        logger.error(f"SMTP connection error: {e}")
+        logger.error("SMTP connection error: %s", e)
         return (
             False,
             f"Connection error: Unable to connect to {smtp_host}:{smtp_port}",
@@ -142,11 +144,11 @@ def test_smtp_connection(config: dict[str, Any]) -> tuple[bool, str, dict[str, A
         )
 
     except smtplib.SMTPServerDisconnected as e:
-        logger.error(f"SMTP server disconnected: {e}")
+        logger.error("SMTP server disconnected: %s", e)
         return False, "Server disconnected unexpectedly", details
 
     except smtplib.SMTPException as e:
-        logger.error(f"SMTP error: {e}")
+        logger.error("SMTP error: %s", e)
         error_str = str(e).lower()
 
         # Provide specific messages based on error content
@@ -165,7 +167,7 @@ def test_smtp_connection(config: dict[str, Any]) -> tuple[bool, str, dict[str, A
         return False, message, details
 
     except ssl.SSLError as e:
-        logger.error(f"SSL error: {e}")
+        logger.error("SSL error: %s", e)
         error_str = str(e).lower()
 
         # Provide helpful SSL/TLS error messages
@@ -181,7 +183,7 @@ def test_smtp_connection(config: dict[str, Any]) -> tuple[bool, str, dict[str, A
         return False, message, details
 
     except TimeoutError:
-        logger.error(f"Connection timeout to {smtp_host}:{smtp_port}")
+        logger.error("Connection timeout to %s:%s", smtp_host, smtp_port)
         return (
             False,
             f"Connection to {smtp_host}:{smtp_port} timed out. The server is unreachable or responding slowly. Verify the server address and check your network connection.",
@@ -189,7 +191,7 @@ def test_smtp_connection(config: dict[str, Any]) -> tuple[bool, str, dict[str, A
         )
 
     except Exception as e:
-        logger.error(f"Unexpected error testing SMTP: {e}")
+        logger.error("Unexpected error testing SMTP: %s", e)
         error_str = str(e).lower()
 
         # Try to provide helpful context for common errors
@@ -280,7 +282,7 @@ def test_gmail_oauth(config: dict[str, Any]) -> tuple[bool, str, dict[str, Any]]
             return test_smtp_connection(config_copy)
 
     except Exception as e:
-        logger.error(f"Error testing Gmail configuration: {e}")
+        logger.error("Error testing Gmail configuration: %s", e)
         return False, f"Error: {str(e)}", details
 
 
@@ -363,16 +365,16 @@ def _validate_google_oauth_token(
         except json.JSONDecodeError:
             error_msg = str(e)
 
-        logger.error(f"Google OAuth token validation failed: {error_msg}")
+        logger.error("Google OAuth token validation failed: %s", error_msg)
         details["error"] = error_msg
         return False, f"OAuth validation failed: {error_msg}", details
 
     except urllib.error.URLError as e:
-        logger.error(f"Network error during Google OAuth validation: {e}")
+        logger.error("Network error during Google OAuth validation: %s", e)
         return False, "Network error: Unable to reach Google OAuth servers", details
 
     except Exception as e:
-        logger.error(f"Error validating Google OAuth token: {e}")
+        logger.error("Error validating Google OAuth token: %s", e)
         return False, f"Validation error: {str(e)}", details
 
 
@@ -425,7 +427,7 @@ def test_microsoft_oauth(config: dict[str, Any]) -> tuple[bool, str, dict[str, A
             return False, message, details
 
     except Exception as e:
-        logger.error(f"Error testing Microsoft configuration: {e}")
+        logger.error("Error testing Microsoft configuration: %s", e)
         return False, f"Error: {str(e)}", details
 
 
@@ -515,7 +517,7 @@ def _validate_microsoft_oauth_token(
             error_msg = str(e)
             error_code = ""
 
-        logger.error(f"Microsoft OAuth token validation failed: {error_msg}")
+        logger.error("Microsoft OAuth token validation failed: %s", error_msg)
         details["error"] = error_msg
         details["error_code"] = error_code
 
@@ -534,7 +536,7 @@ def _validate_microsoft_oauth_token(
             return False, f"OAuth validation failed: {error_msg}", details
 
     except urllib.error.URLError as e:
-        logger.error(f"Network error during Microsoft OAuth validation: {e}")
+        logger.error("Network error during Microsoft OAuth validation: %s", e)
         return (
             False,
             "Network error: Unable to reach Microsoft identity servers",
@@ -542,7 +544,7 @@ def _validate_microsoft_oauth_token(
         )
 
     except Exception as e:
-        logger.error(f"Error validating Microsoft OAuth token: {e}")
+        logger.error("Error validating Microsoft OAuth token: %s", e)
         return False, f"Validation error: {str(e)}", details
 
 

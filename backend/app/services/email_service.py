@@ -387,16 +387,16 @@ class EmailService:
                         server.sendmail(from_email, recipients, msg_str)
                         results.append(True)
                     except Exception as e2:
-                        logger.error(f"Batch email retry failed: {e2}")
+                        logger.error("Batch email retry failed: %s", e2)
                         results.append(False)
                 except smtplib.SMTPResponseException as e:
                     logger.error(
-                        f"Batch email rejected (code={e.smtp_code}): {e.smtp_error}"
+                        "Batch email rejected (code=%s): %s", e.smtp_code, e.smtp_error
                     )
                     results.append(False)
                     # 421/451/452 = rate limit / too many connections
                     if e.smtp_code in (421, 451, 452):
-                        logger.info("Rate limit detected, reconnecting after 2 s")
+                        logger.warning("Rate limit detected, reconnecting after 2 s")
                         time.sleep(2)
                         try:
                             server.quit()
@@ -404,7 +404,7 @@ class EmailService:
                             pass
                         server = self._smtp_connect()
                 except Exception as e:
-                    logger.error(f"Batch email send failed: {e}")
+                    logger.error("Batch email send failed: %s", e)
                     results.append(False)
 
                 # Brief pause between messages to avoid rate limiting
@@ -489,7 +489,7 @@ class EmailService:
             .get("email_service", {})
             .get("enabled")
         ):
-            logger.info(f"Email disabled. Would batch-send {len(messages)} messages.")
+            logger.info("Email disabled. Would batch-send %d messages.", len(messages))
             return [False] * len(messages)
         return await asyncio.to_thread(self._smtp_send_batch, messages)
 
@@ -533,7 +533,9 @@ class EmailService:
             .get("enabled")
         ):
             logger.info(
-                f"Email disabled. Would send to {len(to_emails)} recipients: {subject}"
+                "Email disabled. Would send to %d recipients: %s",
+                len(to_emails),
+                subject,
             )
             return 0, len(to_emails)
 
@@ -619,7 +621,7 @@ class EmailService:
 
             except Exception as e:
                 logger.error(
-                    f"Failed to send email to {_redact_email(to_email)}: {e}"
+                    "Failed to send email to %s: %s", _redact_email(to_email), e
                 )
                 failure_count += 1
 
@@ -638,7 +640,7 @@ class EmailService:
                     failure_count=failure_count,
                 )
             except Exception as e:
-                logger.warning(f"Failed to log message history: {e}")
+                logger.warning("Failed to log message history: %s", e)
 
         return success_count, failure_count
 
@@ -832,7 +834,7 @@ class EmailService:
                 )
             except Exception as e:
                 logger.warning(
-                    f"Failed to load ballot notification template, using default: {e}"
+                    "Failed to load ballot notification template, using default: %s", e
                 )
 
         subject, html_body, text_body = self.render_ballot_notification(
@@ -936,7 +938,7 @@ class EmailService:
                     )
             except Exception as e:
                 logger.warning(
-                    f"Failed to load election report template, using default: {e}"
+                    "Failed to load election report template, using default: %s", e
                 )
 
         # Fall back to inline default if no template loaded
@@ -1052,8 +1054,7 @@ class EmailService:
                     )
             except Exception as e:
                 logger.warning(
-                    "Failed to load eligibility summary template, "
-                    f"using default: {e}"
+                    "Failed to load eligibility summary template, using default: %s", e
                 )
 
         # Fall back to inline default if no template loaded
@@ -1166,7 +1167,7 @@ class EmailService:
                     )
             except Exception as e:
                 logger.warning(
-                    f"Failed to load training approval template, using default: {e}"
+                    "Failed to load training approval template, using default: %s", e
                 )
 
         # Fall back to inline default if no template loaded
@@ -1278,7 +1279,7 @@ class EmailService:
                             attachment_paths = stored_paths
             except Exception as e:
                 logger.warning(
-                    f"Failed to load welcome email template, using default: {e}"
+                    "Failed to load welcome email template, using default: %s", e
                 )
 
         # Fall back to inline default if no template loaded
@@ -1382,7 +1383,7 @@ class EmailService:
                     )
             except Exception as e:
                 logger.warning(
-                    f"Failed to load password reset template, using default: {e}"
+                    "Failed to load password reset template, using default: %s", e
                 )
 
         # Fall back to inline default
@@ -1480,7 +1481,7 @@ class EmailService:
                     )
             except Exception as e:
                 logger.warning(
-                    f"Failed to load IT password notification template, using default: {e}"
+                    "Failed to load IT password notification template, using default: %s", e
                 )
 
         # Fall back to inline default if no template loaded
@@ -1582,7 +1583,7 @@ class EmailService:
                     )
             except Exception as e:
                 logger.warning(
-                    f"Failed to load event reminder template, using default: {e}"
+                    "Failed to load event reminder template, using default: %s", e
                 )
 
         # Fall back to inline default if no template loaded
@@ -1677,7 +1678,7 @@ class EmailService:
                     )
             except Exception as e:
                 logger.warning(
-                    f"Failed to load inactivity warning template, using default: {e}"
+                    "Failed to load inactivity warning template, using default: %s", e
                 )
 
         # Fall back to inline default if no template loaded
@@ -1763,7 +1764,7 @@ class EmailService:
                     )
             except Exception as e:
                 logger.warning(
-                    f"Failed to load duplicate application template, using default: {e}"
+                    "Failed to load duplicate application template, using default: %s", e
                 )
 
         if not subject:

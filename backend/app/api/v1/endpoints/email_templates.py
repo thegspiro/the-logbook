@@ -61,7 +61,7 @@ async def list_email_templates(
         )
         await db.commit()
     except DataError as e:
-        logger.error(f"Failed to create default email templates: {e}")
+        logger.error("Failed to create default email templates: %s", e)
         await db.rollback()
 
     templates = await service.list_templates(current_user.organization_id)
@@ -152,6 +152,14 @@ async def update_email_template(
             status_code=status.HTTP_404_NOT_FOUND, detail="Email template not found"
         )
     await db.commit()
+
+    logger.info(
+        "Email template updated id=%s type=%s org=%s by=%s",
+        template_id,
+        template.template_type,
+        current_user.organization_id,
+        current_user.id,
+    )
     return template
 
 
@@ -360,8 +368,11 @@ async def upload_attachment(
         detected_mime = magic.from_buffer(contents[:2048], mime=True)
         if detected_mime not in ALLOWED_EMAIL_MIME_TYPES:
             logger.warning(
-                f"Email attachment rejected: detected MIME '{detected_mime}' "
-                f"(claimed: '{file.content_type}') for file '{file.filename}'"
+                "Email attachment rejected: detected MIME '%s' "
+                "(claimed: '%s') for file '%s'",
+                detected_mime,
+                file.content_type,
+                file.filename,
             )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -405,7 +416,7 @@ async def upload_attachment(
     await db.commit()
     await db.refresh(attachment)
 
-    logger.info(f"Attachment uploaded: {file.filename} for template {template_id}")
+    logger.info("Attachment uploaded: %s for template %s", file.filename, template_id)
     return attachment
 
 
@@ -445,7 +456,7 @@ async def delete_attachment(
     await db.delete(attachment)
     await db.commit()
     logger.info(
-        f"Attachment deleted: {attachment.filename} from template {template_id}"
+        "Attachment deleted: %s from template %s", attachment.filename, template_id
     )
 
 
@@ -507,8 +518,10 @@ async def schedule_email(
     await db.refresh(scheduled)
 
     logger.info(
-        f"Scheduled email created id={scheduled.id} "
-        f"type={body.template_type} at={body.scheduled_at}"
+        "Scheduled email created id=%s type=%s at=%s",
+        scheduled.id,
+        body.template_type,
+        body.scheduled_at,
     )
     return scheduled
 
@@ -544,6 +557,7 @@ async def update_scheduled_email(
             detail="Only pending emails can be updated",
         )
 
+    changes: list[str] = []
     if body.scheduled_at is not None:
         if body.scheduled_at.tzinfo is None:
             raise HTTPException(
@@ -559,11 +573,21 @@ async def update_scheduled_email(
                 detail="scheduled_at must be in the future",
             )
         scheduled.scheduled_at = body.scheduled_at
+        changes.append("rescheduled")
     if body.status == "cancelled":
         scheduled.status = ScheduledEmailStatus.CANCELLED
+        changes.append("cancelled")
 
     await db.commit()
     await db.refresh(scheduled)
+
+    logger.info(
+        "Scheduled email updated id=%s actions=[%s] org=%s by=%s",
+        scheduled_id,
+        ",".join(changes),
+        current_user.organization_id,
+        current_user.id,
+    )
     return scheduled
 
 
@@ -597,5 +621,11 @@ async def cancel_scheduled_email(
             detail="Cannot delete an already-sent email",
         )
 
+    logger.info(
+        "Scheduled email cancelled id=%s org=%s by=%s",
+        scheduled_id,
+        current_user.organization_id,
+        current_user.id,
+    )
     await db.delete(scheduled)
     await db.commit()
