@@ -526,6 +526,9 @@ class ElectionPackageResponse(UTCResponseBase):
     pipeline_id: Optional[UUID] = None
     step_id: Optional[UUID] = None
     election_id: Optional[UUID] = None
+    election_title: Optional[str] = None
+    election_end_date: Optional[datetime] = None
+    election_status: Optional[str] = None
     status: str
     applicant_snapshot: Optional[Dict[str, Any]] = None
     coordinator_notes: Optional[str] = None

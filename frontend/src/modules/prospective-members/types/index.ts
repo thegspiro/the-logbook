@@ -690,6 +690,9 @@ export interface ElectionPackage {
   // Status tracking
   status: ElectionPackageStatus;
   election_id?: string | undefined;
+  election_title?: string | undefined;
+  election_end_date?: string | undefined;
+  election_status?: string | undefined;
   candidate_id?: string | undefined;
 
   created_at: string;

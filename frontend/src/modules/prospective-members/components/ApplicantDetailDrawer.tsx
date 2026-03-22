@@ -1093,7 +1093,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         </div>
                       )}
 
-                      {/* Added to ballot info */}
+                      {/* Added to ballot / election outcome info */}
                       {(currentElectionPackage.status === 'added_to_ballot' ||
                         currentElectionPackage.status === 'elected' ||
                         currentElectionPackage.status === 'not_elected') && (
@@ -1118,6 +1118,17 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                             {currentElectionPackage.status === 'not_elected' &&
                               'This applicant was not elected by the membership vote.'}
                           </p>
+                          {currentElectionPackage.election_id && currentElectionPackage.election_title && (
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/elections/${currentElectionPackage.election_id}`)}
+                              className="mt-1.5 text-xs text-theme-primary hover:underline"
+                            >
+                              {currentElectionPackage.election_title}
+                              {currentElectionPackage.election_status === 'open' && ' — Voting in progress'}
+                              {currentElectionPackage.election_status === 'closed' && ' — Closed'}
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
