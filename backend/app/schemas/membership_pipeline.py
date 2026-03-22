@@ -510,6 +510,14 @@ class ElectionPackageUpdate(BaseModel):
     applicant_snapshot: Optional[Dict[str, Any]] = None
 
 
+class AssignPackageToElectionRequest(BaseModel):
+    """Schema for assigning a ready election package to a draft election"""
+
+    election_id: UUID = Field(
+        ..., description="The ID of the draft election to add this package to"
+    )
+
+
 class ElectionPackageResponse(UTCResponseBase):
     """Schema for an election package"""
 
@@ -518,6 +526,9 @@ class ElectionPackageResponse(UTCResponseBase):
     pipeline_id: Optional[UUID] = None
     step_id: Optional[UUID] = None
     election_id: Optional[UUID] = None
+    election_title: Optional[str] = None
+    election_end_date: Optional[datetime] = None
+    election_status: Optional[str] = None
     status: str
     applicant_snapshot: Optional[Dict[str, Any]] = None
     coordinator_notes: Optional[str] = None

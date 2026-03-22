@@ -20,6 +20,7 @@ export interface BallotItem {
   victory_condition?: VictoryCondition | undefined;
   victory_percentage?: number | undefined;
   voting_method?: VotingMethod | undefined;
+  prospect_package_id?: string | undefined;
 }
 
 export interface PositionEligibility {

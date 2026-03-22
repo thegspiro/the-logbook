@@ -17,6 +17,7 @@ from app.models.user import User
 from app.schemas.membership_pipeline import (
     ActivityLogResponse,
     AdvanceProspectRequest,
+    AssignPackageToElectionRequest,
     CompleteStepRequest,
     ElectionPackageCreate,
     ElectionPackageResponse,
@@ -1284,6 +1285,42 @@ async def list_election_packages(
         status_filter=status_filter,
     )
     return packages
+
+
+@router.post(
+    "/prospects/{prospect_id}/election-package/assign",
+    response_model=ElectionPackageResponse,
+)
+async def assign_package_to_election(
+    prospect_id: UUID,
+    data: AssignPackageToElectionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("elections.manage", "prospective_members.manage")
+    ),
+):
+    """
+    Assign a ready election package to a draft election.
+
+    Creates a membership_approval ballot item on the election from
+    the package's applicant snapshot and links the package to the
+    election.
+
+    **Requires permission: elections.manage**
+    """
+    service = MembershipPipelineService(db)
+    try:
+        pkg = await service.assign_package_to_election(
+            prospect_id=str(prospect_id),
+            organization_id=current_user.organization_id,
+            election_id=str(data.election_id),
+            assigned_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        )
+    return pkg
 
 
 # ============================================

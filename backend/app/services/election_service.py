@@ -26,6 +26,7 @@ from app.core.constants import (
     LEADERSHIP_ROLE_SLUGS,
 )
 from app.models.election import Candidate, Election, ElectionStatus, Vote, VotingToken
+from app.models.membership_pipeline import ProspectElectionPackage
 from app.models.user import Organization, User
 from app.schemas.election import (
     CandidateResult,
@@ -2166,6 +2167,15 @@ class ElectionService:
                     },
                 )
 
+        # Sync linked membership pipeline packages with vote outcomes
+        try:
+            await self._sync_package_statuses(election, organization_id)
+        except Exception as e:
+            logger.error(
+                f"Failed to sync package statuses (non-blocking) | "
+                f"election={election_id} error={e}"
+            )
+
         # Fire-and-forget: send election report to secretary
         try:
             await self.generate_and_send_election_report(
@@ -2179,6 +2189,84 @@ class ElectionService:
             )
 
         return election, None
+
+    async def _sync_package_statuses(
+        self, election: Election, organization_id: UUID
+    ) -> None:
+        """Update ProspectElectionPackage statuses based on vote outcomes.
+
+        For each membership_approval ballot item that references a
+        prospect_package_id, tallies the Approve vs Deny votes and sets the
+        package status to 'elected' or 'not_elected'.
+        """
+        ballot_items = election.ballot_items or []
+        pkg_items = [
+            item for item in ballot_items
+            if item.get("type") == "membership_approval"
+            and item.get("prospect_package_id")
+        ]
+        if not pkg_items:
+            return
+
+        pkg_ids = [item["prospect_package_id"] for item in pkg_items]
+        pkgs_result = await self.db.execute(
+            select(ProspectElectionPackage).where(
+                ProspectElectionPackage.id.in_(pkg_ids)
+            )
+        )
+        pkgs_by_id = {p.id: p for p in pkgs_result.scalars().all()}
+
+        votes_result = await self.db.execute(
+            select(Vote)
+            .where(Vote.election_id == election.id)
+            .where(Vote.deleted_at.is_(None))
+            .where(Vote.is_test == False)  # noqa: E712
+        )
+        all_votes = votes_result.scalars().all()
+
+        for item in pkg_items:
+            pkg = pkgs_by_id.get(item["prospect_package_id"])
+            if not pkg:
+                continue
+
+            position = item.get("position") or item["id"]
+            item_votes = [v for v in all_votes if v.position == position]
+
+            approve_count = 0
+            deny_count = 0
+            for vote in item_votes:
+                candidate_result = await self.db.execute(
+                    select(Candidate.name).where(
+                        Candidate.id == vote.candidate_id
+                    )
+                )
+                name = candidate_result.scalar_one_or_none()
+                if name == "Approve":
+                    approve_count += 1
+                elif name == "Deny":
+                    deny_count += 1
+
+            new_status = "elected" if approve_count > deny_count else "not_elected"
+            pkg.status = new_status
+
+            logger.info(
+                f"Package status synced | package={pkg.id} "
+                f"prospect={pkg.prospect_id} approve={approve_count} "
+                f"deny={deny_count} status={new_status}"
+            )
+            await self._audit(
+                "election_package_result_synced",
+                {
+                    "election_id": election.id,
+                    "package_id": pkg.id,
+                    "prospect_id": pkg.prospect_id,
+                    "approve_count": approve_count,
+                    "deny_count": deny_count,
+                    "new_status": new_status,
+                },
+            )
+
+        await self.db.commit()
 
     async def open_election(
         self, election_id: UUID, organization_id: UUID
