@@ -861,6 +861,19 @@ export interface BackendElectionPackageResponse {
     last_name?: string;
     email?: string;
     phone?: string;
+    mobile?: string;
+    date_of_birth?: string;
+    address_street?: string;
+    address_city?: string;
+    address_state?: string;
+    address_zip?: string;
+    interest_reason?: string;
+    referral_source?: string;
+    desired_membership_type?: string;
+    notes?: string;
+    created_at?: string;
+    documents?: { name: string; document_type: string }[];
+    stage_history?: { stage_name: string; completed_at?: string }[];
   } | null;
   coordinator_notes: string | null;
   package_config: {

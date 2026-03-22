@@ -6,6 +6,7 @@ pipeline configuration, prospect tracking, step progression, and
 transfer to full membership.
 """
 
+import copy
 import secrets
 import string
 from datetime import datetime, timezone
@@ -2865,10 +2866,30 @@ class MembershipPipelineService:
         if not prospect:
             return None
 
+        # Eagerly load documents so the snapshot captures attached files
+        doc_query = (
+            select(ProspectDocument)
+            .where(ProspectDocument.prospect_id == prospect_id)
+            .order_by(ProspectDocument.created_at)
+        )
+        doc_result = await self.db.execute(doc_query)
+        documents = list(doc_result.scalars().all())
+
+        # Build stage history from completed step progress
+        stage_history: List[Dict[str, Any]] = []
+        for sp in prospect.step_progress or []:
+            if sp.status == StepProgressStatus.COMPLETED and sp.step:
+                stage_history.append({
+                    "stage_name": sp.step.name,
+                    "completed_at": (
+                        str(sp.completed_at) if sp.completed_at else None
+                    ),
+                })
+
         # Build applicant snapshot — capture all relevant prospect data
         # so the election package is self-contained even if the prospect
         # record is later modified.
-        snapshot = {
+        snapshot: Dict[str, Any] = {
             "first_name": prospect.first_name,
             "last_name": prospect.last_name,
             "email": prospect.email,
@@ -2883,8 +2904,17 @@ class MembershipPipelineService:
             "address_zip": prospect.address_zip,
             "interest_reason": prospect.interest_reason,
             "referral_source": prospect.referral_source,
+            "desired_membership_type": prospect.desired_membership_type,
             "notes": prospect.notes,
             "created_at": str(prospect.created_at) if prospect.created_at else None,
+            "documents": [
+                {
+                    "name": doc.file_name,
+                    "document_type": doc.document_type,
+                }
+                for doc in documents
+            ],
+            "stage_history": stage_history,
         }
 
         pkg = ProspectElectionPackage(
@@ -2938,7 +2968,15 @@ class MembershipPipelineService:
         for key, value in updates.items():
             if key in self._ELECTION_PKG_PROTECTED_FIELDS:
                 continue
-            if hasattr(pkg, key) and value is not None:
+            if not hasattr(pkg, key) or value is None:
+                continue
+            if key == "package_config":
+                # Merge into existing config to avoid wiping previously
+                # stored keys (documents, stage_summary, etc.).
+                merged = copy.deepcopy(pkg.package_config or {})
+                merged.update(value)
+                pkg.package_config = merged
+            else:
                 setattr(pkg, key, value)
 
         await self._log_activity(
