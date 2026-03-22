@@ -37,10 +37,21 @@ const mockAnnualReport = {
     fully_compliant_members: 18,
     total_members: 20,
     total_training_hours: 1200,
+    total_admin_hours: 350,
+    total_contributed_hours: 1550,
     iso_class_estimate: 3,
     total_certifications_active: 45,
     total_certifications_expired: 2,
     iso_readiness_pct: 82,
+  },
+  admin_hours_summary: {
+    total_approved_hours: 350,
+    total_pending_hours: 25,
+    total_entries: 120,
+    by_category: [
+      { category_id: 'cat-1', category_name: 'Board Meetings', approved_hours: 200, pending_hours: 10, total_entries: 60 },
+      { category_id: 'cat-2', category_name: 'Fundraising', approved_hours: 150, pending_hours: 15, total_entries: 60 },
+    ],
   },
   recertification_summary: {
     active_pathways: 5,
@@ -163,6 +174,28 @@ describe('ComplianceOfficerDashboard', () => {
     });
 
     expect(mockGetAttestations).toHaveBeenCalled();
+  });
+
+  it('displays admin hours and total contributed hours in annual report', async () => {
+    renderWithRouter(<ComplianceOfficerDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Annual Compliance Report/)).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Admin Hours')).toBeInTheDocument();
+    expect(screen.getByText('Total Contributed')).toBeInTheDocument();
+  });
+
+  it('shows admin hours by category breakdown', async () => {
+    renderWithRouter(<ComplianceOfficerDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Admin Hours by Category')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Board Meetings')).toBeInTheDocument();
+    expect(screen.getByText('Fundraising')).toBeInTheDocument();
   });
 
   it('can switch to Forecast section', async () => {

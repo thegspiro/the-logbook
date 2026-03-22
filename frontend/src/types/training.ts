@@ -1891,6 +1891,9 @@ export interface AnnualReportMember {
   name: string;
   compliance_pct: number;
   hours_completed: number;
+  admin_hours_approved: number;
+  admin_hours_pending: number;
+  total_contributed_hours: number;
   requirements_met: number;
   requirements_total: number;
   expired_certifications: number;
@@ -1916,10 +1919,24 @@ export interface AnnualComplianceReport {
     total_members: number;
     fully_compliant_members: number;
     total_training_hours: number;
+    total_admin_hours: number;
+    total_contributed_hours: number;
     total_certifications_active: number;
     total_certifications_expired: number;
     iso_readiness_pct: number;
     iso_class_estimate: number;
+  };
+  admin_hours_summary: {
+    total_approved_hours: number;
+    total_pending_hours: number;
+    total_entries: number;
+    by_category: Array<{
+      category_id: string;
+      category_name: string;
+      approved_hours: number;
+      pending_hours: number;
+      total_entries: number;
+    }>;
   };
   member_compliance: AnnualReportMember[];
   requirement_analysis: AnnualReportRequirement[];
