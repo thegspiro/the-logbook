@@ -7,11 +7,15 @@ import { MemberScanPage } from "./MemberScanPage";
 // Mock html5-qrcode
 const mockStart = vi.fn().mockResolvedValue(undefined);
 const mockStop = vi.fn().mockResolvedValue(undefined);
-vi.mock("html5-qrcode", () => ({
-  Html5Qrcode: vi.fn().mockImplementation(function () {
-    return { start: mockStart, stop: mockStop };
-  }),
-}));
+vi.mock("html5-qrcode", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("html5-qrcode")>();
+  return {
+    ...actual,
+    Html5Qrcode: vi.fn().mockImplementation(function () {
+      return { start: mockStart, stop: mockStop };
+    }),
+  };
+});
 
 // Mock the API module
 vi.mock("../services/api", () => ({
