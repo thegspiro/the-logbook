@@ -2116,3 +2116,38 @@ export interface ComplianceReportSummary {
 export interface ComplianceReportDetail extends ComplianceReportSummary {
   reportData?: Record<string, unknown>;
 }
+
+// =============================================================================
+// Contributed Hours (combined training + admin hours for reporting)
+// =============================================================================
+
+export interface ContributedHoursMember {
+  user_id: string;
+  name: string;
+  training_hours: number;
+  admin_hours: number;
+  total_hours: number;
+}
+
+export interface ContributedHoursCategoryBreakdown {
+  category_id: string;
+  category_name: string;
+  hours: number;
+  entries: number;
+}
+
+export interface ContributedHoursResponse {
+  year: number;
+  total_training_hours: number;
+  total_admin_hours: number;
+  total_contributed_hours: number;
+  total_members: number;
+  members: ContributedHoursMember[];
+  admin_hours_by_category: ContributedHoursCategoryBreakdown[];
+}
+
+export interface SeedDefaultsResponse {
+  categories_count: number;
+  category_names: string[];
+  mappings_created: number;
+}
