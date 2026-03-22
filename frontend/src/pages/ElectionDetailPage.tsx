@@ -8,6 +8,8 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { electionService, eventService } from '../services/api';
+import { electionPackageService, applicantService } from '../modules/prospective-members/services/api';
+import type { ElectionPackage } from '../modules/prospective-members/types';
 import type { Election, ForensicsReport, VoteIntegrityResult, Candidate, BallotItem } from '../types/election';
 import type { EventListItem } from '../types/event';
 import { EventType } from '../constants/enums';
@@ -87,6 +89,12 @@ export const ElectionDetailPage: React.FC = () => {
   const [previewCandidates, setPreviewCandidates] = useState<Candidate[]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
 
+  // Pending election packages state
+  const [pendingPackages, setPendingPackages] = useState<ElectionPackage[]>([]);
+  const [isLoadingPackages, setIsLoadingPackages] = useState(false);
+  const [showPendingPackages, setShowPendingPackages] = useState(false);
+  const [assigningPackageId, setAssigningPackageId] = useState<string | null>(null);
+
   // Upcoming events state
   const [upcomingEvents, setUpcomingEvents] = useState<EventListItem[]>([]);
 
@@ -133,6 +141,33 @@ export const ElectionDetailPage: React.FC = () => {
       setUpcomingEvents(events);
     } catch {
       // Non-critical — section will just be empty
+    }
+  };
+
+  const fetchPendingPackages = async () => {
+    setIsLoadingPackages(true);
+    try {
+      const packages = await electionPackageService.getPendingPackages();
+      setPendingPackages(packages);
+    } catch {
+      // Non-critical
+    } finally {
+      setIsLoadingPackages(false);
+    }
+  };
+
+  const handleAssignPackage = async (pkg: ElectionPackage) => {
+    if (!electionId) return;
+    setAssigningPackageId(pkg.id);
+    try {
+      await applicantService.assignToElection(pkg.applicant_id, electionId);
+      toast.success(`Added "${pkg.applicant_name}" to ballot`);
+      setPendingPackages((prev) => prev.filter((p) => p.id !== pkg.id));
+      void fetchElection();
+    } catch {
+      toast.error('Failed to add application to ballot');
+    } finally {
+      setAssigningPackageId(null);
     }
   };
 
@@ -936,6 +971,64 @@ export const ElectionDetailPage: React.FC = () => {
             election={election}
             onUpdate={setElection}
           />
+        </div>
+      )}
+
+      {/* Pending Member Applications (Admin - draft elections only) */}
+      {canManage && electionId && election.status === ElectionStatus.DRAFT && (
+        <div className="mb-6 bg-theme-surface rounded-xl shadow-sm border border-theme-surface-border overflow-hidden">
+          <button
+            className="w-full flex items-center justify-between px-6 py-4 text-left"
+            onClick={() => {
+              const next = !showPendingPackages;
+              setShowPendingPackages(next);
+              if (next && pendingPackages.length === 0) void fetchPendingPackages();
+            }}
+          >
+            <h2 className="text-lg font-semibold text-theme-text-primary">
+              Pending Member Applications
+            </h2>
+            <span className="text-sm text-theme-text-muted">{showPendingPackages ? '▾' : '▸'}</span>
+          </button>
+
+          {showPendingPackages && (
+            <div className="px-6 pb-4">
+              {isLoadingPackages ? (
+                <p className="text-sm text-theme-text-muted py-2">Loading pending applications...</p>
+              ) : pendingPackages.length === 0 ? (
+                <p className="text-sm text-theme-text-muted py-2">
+                  No applications are ready for ballot assignment.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-theme-text-muted mb-2">
+                    {pendingPackages.length} application{pendingPackages.length !== 1 ? 's' : ''} ready to be added to this election.
+                  </p>
+                  {pendingPackages.map((pkg) => (
+                    <div
+                      key={pkg.id}
+                      className="flex items-center justify-between p-3 bg-theme-bg rounded-lg border border-theme-surface-border"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-theme-text-primary">{pkg.applicant_name}</p>
+                        <p className="text-xs text-theme-text-muted capitalize">
+                          {pkg.target_membership_type} membership
+                          {pkg.coordinator_notes && ` — ${pkg.coordinator_notes}`}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => { void handleAssignPackage(pkg); }}
+                        disabled={assigningPackageId === pkg.id}
+                        className="px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {assigningPackageId === pkg.id ? 'Adding...' : 'Add to Ballot'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

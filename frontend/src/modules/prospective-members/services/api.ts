@@ -993,6 +993,14 @@ export const applicantService = {
     );
     return mapElectionPackageResponse(response.data);
   },
+
+  async assignToElection(applicantId: string, electionId: string): Promise<ElectionPackage> {
+    const response = await api.post<BackendElectionPackageResponse>(
+      `/prospective-members/prospects/${applicantId}/election-package/assign`,
+      { election_id: electionId }
+    );
+    return mapElectionPackageResponse(response.data);
+  },
 };
 
 // =============================================================================

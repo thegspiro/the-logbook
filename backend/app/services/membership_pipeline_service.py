@@ -33,6 +33,7 @@ from app.models.membership_pipeline import (
     ProspectStepProgress,
     StepProgressStatus,
 )
+from app.models.election import Election, ElectionStatus
 from app.models.event import Event
 from app.models.user import Organization, User, UserStatus, generate_uuid
 from app.utils.prospect_fields import (
@@ -3013,6 +3014,121 @@ class MembershipPipelineService:
         query = query.order_by(ProspectElectionPackage.created_at.desc())
         result = await self.db.execute(query)
         return list(result.scalars().all())
+
+    async def assign_package_to_election(
+        self,
+        prospect_id: str,
+        organization_id: str,
+        election_id: str,
+        assigned_by: Optional[str] = None,
+    ) -> ProspectElectionPackage:
+        """Assign a ready election package to a draft election as a ballot item.
+
+        Creates a membership_approval ballot item from the package snapshot
+        and appends it to the election's ballot_items JSON. Updates the
+        package status to 'added_to_ballot' and links it to the election.
+
+        Raises ValueError if the package is not ready or the election is
+        not in DRAFT status.
+        """
+        pkg = await self.get_election_package(prospect_id, organization_id)
+        if not pkg:
+            raise ValueError("Election package not found")
+        if pkg.status != "ready":
+            raise ValueError(
+                f"Package must be in 'ready' status to assign "
+                f"(current: '{pkg.status}')"
+            )
+
+        election_result = await self.db.execute(
+            select(Election).where(
+                Election.id == election_id,
+                Election.organization_id == organization_id,
+            )
+        )
+        election = election_result.scalars().first()
+        if not election:
+            raise ValueError("Election not found")
+        if election.status != ElectionStatus.DRAFT:
+            raise ValueError(
+                "Election must be in DRAFT status to add ballot items"
+            )
+
+        snapshot = pkg.applicant_snapshot or {}
+        first_name = snapshot.get("first_name", "")
+        last_name = snapshot.get("last_name", "")
+        full_name = f"{first_name} {last_name}".strip() or "Applicant"
+        membership_type = snapshot.get(
+            "desired_membership_type", "regular"
+        ) or "regular"
+
+        # Build a ballot item title from the appropriate template
+        if membership_type == "administrative":
+            title = f"Accept {full_name} as Administrative Member"
+            description = (
+                f"Vote to accept {full_name} into the organization "
+                f"as an administrative member."
+            )
+            eligible_voter_types = ["all"]
+        else:
+            title = f"Approve {full_name} for Regular Membership"
+            description = (
+                f"Vote to approve the transition of {full_name} "
+                f"from probationary to regular member status."
+            )
+            eligible_voter_types = ["regular", "life"]
+
+        # Use stage config overrides if available
+        config = pkg.package_config or {}
+        recommended = config.get("recommended_ballot_item") or {}
+        ballot_item_id = f"pkg_{pkg.id[:8]}_{generate_uuid()[:8]}"
+
+        ballot_item = {
+            "id": ballot_item_id,
+            "type": "membership_approval",
+            "title": recommended.get("title") or title,
+            "description": recommended.get("description") or description,
+            "eligible_voter_types": (
+                recommended.get("eligible_voter_types") or eligible_voter_types
+            ),
+            "vote_type": "approval",
+            "require_attendance": recommended.get("require_attendance", True),
+            "victory_condition": recommended.get("victory_condition"),
+            "victory_percentage": recommended.get("victory_percentage"),
+            "voting_method": recommended.get("voting_method"),
+            "prospect_package_id": pkg.id,
+        }
+
+        # Append to election's ballot_items JSON (deep-copy to avoid
+        # SQLAlchemy change-tracking issues with shared references).
+        existing_items = copy.deepcopy(election.ballot_items or [])
+        existing_items.append(ballot_item)
+        election.ballot_items = existing_items
+
+        # Link the package to this election and advance status
+        pkg.election_id = election_id
+        pkg.status = "added_to_ballot"
+        updated_config = copy.deepcopy(pkg.package_config or {})
+        updated_config["ballot_item_id"] = ballot_item_id
+        updated_config["assigned_by"] = assigned_by
+        updated_config["assigned_at"] = datetime.now(timezone.utc).isoformat()
+        pkg.package_config = updated_config
+
+        await self._log_activity(
+            prospect_id=prospect_id,
+            action="election_package_assigned",
+            details={
+                "package_id": pkg.id,
+                "election_id": election_id,
+                "election_title": election.title,
+                "ballot_item_id": ballot_item_id,
+            },
+            performed_by=assigned_by,
+        )
+
+        await self.db.commit()
+        await self.db.refresh(pkg)
+        return pkg
 
     # =========================================================================
     # Public Status Check
