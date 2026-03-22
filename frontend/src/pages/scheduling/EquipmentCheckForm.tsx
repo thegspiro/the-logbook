@@ -712,7 +712,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             )}
 
             {/* Verify serial/lot inputs */}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
                 <label htmlFor={`serial-${item.id}`} className="text-xs text-theme-text-secondary mb-1 block">
                   Serial #
@@ -762,7 +762,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                   Enter the new serial/lot numbers. The template will be
                   automatically updated.
                 </p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
                     <label htmlFor={`new-serial-${item.id}`} className="text-xs text-theme-text-secondary mb-1 block">
                       New Serial #
@@ -949,7 +949,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                     <button
                       type="button"
                       onClick={() => removePhoto(item.id, idx)}
-                      className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-sm opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-red-500"
+                      className="absolute -top-2 -right-2 w-7 h-7 sm:w-6 sm:h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-sm opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-red-500"
                       aria-label={`Remove photo ${idx + 1}`}
                     >
                       &times;
@@ -996,7 +996,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
   const renderOverview = () => (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {compartments.map((comp, idx) => {
           const status = getCompartmentStatus(comp, results);
           const checked = comp.items.filter((i) => {
@@ -1118,7 +1118,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             <select
               value={idx}
               onChange={(e) => setActiveCompartment(Number(e.target.value))}
-              className="rounded-lg border border-theme-surface-border bg-theme-surface px-2 py-1 text-xs text-theme-text-muted focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[36px] max-w-[140px] truncate"
+              className="rounded-lg border border-theme-surface-border bg-theme-surface px-2 py-1 text-xs text-theme-text-muted focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[36px] max-w-[100px] sm:max-w-[140px] truncate"
               aria-label="Jump to compartment"
             >
               {compartments.map((c, i) => {

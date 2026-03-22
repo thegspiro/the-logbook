@@ -240,13 +240,13 @@ export const MyChecklistsPage: React.FC = () => {
           &larr; Back to checklists
         </button>
 
-        <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
+        <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-4 sm:p-6">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-theme-text-primary">Check Details</h2>
             {statusBadge(selectedCheck.overallStatus)}
           </div>
 
-          <div className="mb-4 grid grid-cols-2 gap-4 text-sm">
+          <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
             <div>
               <span className="text-theme-text-muted">Checked By</span>
               <p className="font-medium text-theme-text-primary">{selectedCheck.checkedByName ?? 'Unknown'}</p>
@@ -288,9 +288,9 @@ export const MyChecklistsPage: React.FC = () => {
                 {selectedCheck.items.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-center justify-between rounded border border-theme-surface-border px-3 py-2 text-sm"
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 rounded border border-theme-surface-border px-3 py-2 text-sm"
                   >
-                    <div>
+                    <div className="min-w-0">
                       <span className="font-medium text-theme-text-primary">{item.itemName}</span>
                       <span className="ml-2 text-theme-text-muted">{item.compartmentName}</span>
                     </div>
@@ -330,7 +330,7 @@ export const MyChecklistsPage: React.FC = () => {
                   key={value}
                   onClick={() => setTimingFilter(value)}
                   aria-pressed={timingFilter === value}
-                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  className={`rounded-md px-3 py-1.5 sm:px-2.5 sm:py-1 text-xs font-medium transition-colors ${
                     timingFilter === value
                       ? 'bg-blue-600 text-white'
                       : 'text-theme-text-muted hover:text-theme-text-primary'
@@ -487,7 +487,7 @@ export const MyChecklistsPage: React.FC = () => {
                   <button
                     key={record.id}
                     onClick={() => void handleViewCheckDetail(record.id)}
-                    className="flex w-full items-center justify-between rounded-lg border border-theme-surface-border bg-theme-surface px-4 py-3 text-left transition-colors hover:bg-theme-surface-hover"
+                    className="flex w-full flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-lg border border-theme-surface-border bg-theme-surface px-3 sm:px-4 py-3 text-left transition-colors hover:bg-theme-surface-hover"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">

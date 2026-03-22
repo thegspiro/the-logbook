@@ -232,7 +232,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
             return (
               <div
                 key={template.id}
-                className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
+                className={`flex items-start gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-lg border transition-colors ${
                   template.isActive
                     ? "bg-theme-surface-hover/30 border-theme-surface-border"
                     : "bg-theme-surface-hover/10 border-theme-surface-border/50 opacity-60"
@@ -269,14 +269,14 @@ export const EquipmentCheckTemplateList: React.FC = () => {
                     </p>
                     {timing && (
                       <span
-                        className={`px-1.5 py-0.5 text-[10px] font-medium rounded border ${timing.color}`}
+                        className={`px-1.5 py-0.5 text-xs sm:text-[10px] font-medium rounded border ${timing.color}`}
                       >
                         {timing.label}
                       </span>
                     )}
                     {template.templateType && template.templateType !== "equipment" && (
                       <span
-                        className={`px-1.5 py-0.5 text-[10px] font-medium rounded border ${TEMPLATE_TYPE_COLORS[template.templateType] ?? ""}`}
+                        className={`px-1.5 py-0.5 text-xs sm:text-[10px] font-medium rounded border ${TEMPLATE_TYPE_COLORS[template.templateType] ?? ""}`}
                       >
                         {TEMPLATE_TYPE_LABELS[template.templateType as TemplateType] ?? template.templateType}
                       </span>
@@ -314,32 +314,32 @@ export const EquipmentCheckTemplateList: React.FC = () => {
                 <div className="flex items-center gap-0.5 shrink-0">
                   <a
                     href={`/scheduling/equipment-check-templates/${template.id}`}
-                    className="p-1.5 text-theme-text-muted hover:text-violet-600 rounded-md hover:bg-violet-500/10 transition-colors"
+                    className="p-2 sm:p-1.5 text-theme-text-muted hover:text-violet-600 rounded-md hover:bg-violet-500/10 transition-colors min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
                     aria-label={`Edit ${template.name}`}
                   >
-                    <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
+                    <Pencil className="w-4 h-4 sm:w-3.5 sm:h-3.5" aria-hidden="true" />
                   </a>
                   <button
                     onClick={() => {
                       void handleClone(template);
                     }}
-                    className="p-1.5 text-theme-text-muted hover:text-blue-600 rounded-md hover:bg-blue-500/10 transition-colors"
+                    className="p-2 sm:p-1.5 text-theme-text-muted hover:text-blue-600 rounded-md hover:bg-blue-500/10 transition-colors min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
                     aria-label={`Clone ${template.name}`}
                   >
-                    <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                    <Copy className="w-4 h-4 sm:w-3.5 sm:h-3.5" aria-hidden="true" />
                   </button>
                   <button
                     onClick={() => {
                       void handleDelete(template);
                     }}
                     disabled={isDeleting}
-                    className="p-1.5 text-theme-text-muted hover:text-red-500 rounded-md hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                    className="p-2 sm:p-1.5 text-theme-text-muted hover:text-red-500 rounded-md hover:bg-red-500/10 transition-colors disabled:opacity-50 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
                     aria-label={`Delete ${template.name}`}
                   >
                     {isDeleting ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+                      <Loader2 className="w-4 h-4 sm:w-3.5 sm:h-3.5 animate-spin" aria-hidden="true" />
                     ) : (
-                      <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                      <Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" aria-hidden="true" />
                     )}
                   </button>
                 </div>

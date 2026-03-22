@@ -1523,7 +1523,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       >
         {/* Compact row — always visible */}
         <div
-          className="flex items-center gap-1.5 px-3 py-2 cursor-pointer hover:bg-theme-surface-secondary/50 transition-colors"
+          className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 px-2 sm:px-3 py-2 cursor-pointer hover:bg-theme-surface-secondary/50 transition-colors"
           onClick={() => toggleItemExpanded(itemKey)}
           role="button"
           tabIndex={0}
@@ -1587,7 +1587,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           )}
 
           {/* Badges */}
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+          <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0">
             <span className="rounded-full bg-theme-surface-secondary px-2 py-0.5 text-[10px] font-medium text-theme-text-muted">
               {checkTypeLabel}
             </span>
@@ -1602,7 +1602,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           </div>
 
           {/* Actions — stop propagation so clicking them doesn't toggle expansion */}
-          <div className="flex items-center gap-0.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+          <div className="hidden sm:flex items-center gap-0.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
             {/* Move up/down buttons */}
             <button
               type="button"
@@ -1668,7 +1668,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {/* Check Type */}
               <div>
                 <label className={labelClass}>Check Type</label>
@@ -1779,7 +1779,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             </div>
 
             {/* Expiration row */}
-            <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3">
               <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
                 <input type="checkbox" className={checkboxClass} checked={item.hasExpiration} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { hasExpiration: e.target.checked })} />
                 <AlertTriangle className="h-3.5 w-3.5" />
@@ -1836,7 +1836,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         className="rounded-lg border border-theme-surface-border bg-theme-surface overflow-hidden"
       >
         {/* Compartment header */}
-        <div className="flex items-center gap-2 px-4 py-3 bg-theme-surface">
+        <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-3 bg-theme-surface">
           <button
             type="button"
             className="p-0.5 text-theme-text-muted cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
@@ -1863,7 +1863,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           </button>
 
           {/* Status badges */}
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+          <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0">
             {(() => {
               const status = getCompartmentStatus(comp);
               return (
@@ -1891,7 +1891,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           </div>
 
           {/* Move up/down + delete */}
-          <div className="flex items-center gap-0.5 flex-shrink-0">
+          <div className="hidden sm:flex items-center gap-0.5 flex-shrink-0">
             <button
               type="button"
               onClick={() => moveCompartment(idx, 'up')}
@@ -2238,10 +2238,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       </div>
 
       {/* Sidebar + Main content */}
-      <div className="mx-auto max-w-7xl flex gap-6">
+      <div className="mx-auto max-w-7xl flex flex-col lg:flex-row gap-4 lg:gap-6">
         {/* Sidebar — Template details */}
-        <div className={`flex-shrink-0 transition-all duration-200 ${sidebarOpen ? 'w-72' : 'w-0'} overflow-hidden`}>
-          <div className="w-72 rounded-lg border border-theme-surface-border bg-theme-surface p-4 sticky top-4">
+        <div className={`flex-shrink-0 transition-all duration-200 ${sidebarOpen ? 'w-full lg:w-72' : 'w-0'} overflow-hidden`}>
+          <div className="w-full lg:w-72 rounded-lg border border-theme-surface-border bg-theme-surface p-4 lg:sticky lg:top-4">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-theme-text-primary uppercase tracking-wide">Template Details</h2>
               <button
@@ -2313,7 +2313,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <p className="text-sm font-medium text-theme-text-primary mb-3">
                 Choose a pre-built vehicle check template:
               </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                 {Object.entries(VEHICLE_PRESETS).map(([key, preset]) => (
                   <button
                     key={key}
@@ -2359,7 +2359,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {/* Sticky footer stats bar */}
       {stats.totalItems > 0 && (
         <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-theme-surface-border bg-theme-surface/95 backdrop-blur-sm">
-          <div className="mx-auto max-w-7xl flex items-center justify-between px-4 py-2">
+          <div className="mx-auto max-w-7xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 sm:gap-0 px-4 py-2">
             <div className="flex items-center gap-4 text-xs text-theme-text-muted">
               <span className="flex items-center gap-1">
                 <Hash className="h-3 w-3" />
