@@ -50,31 +50,31 @@ const statusBadge = (status: string) => {
     case 'passed':
     case 'pass':
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
-          <CheckCircle className="h-3 w-3" />
+        <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400" role="status">
+          <CheckCircle className="h-3 w-3" aria-hidden="true" />
           Passed
         </span>
       );
     case 'failed':
     case 'fail':
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
-          <XCircle className="h-3 w-3" />
+        <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400" role="status">
+          <XCircle className="h-3 w-3" aria-hidden="true" />
           Failed
         </span>
       );
     case 'in_progress':
     case 'incomplete':
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
-          <AlertCircle className="h-3 w-3" />
+        <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" role="status">
+          <AlertCircle className="h-3 w-3" aria-hidden="true" />
           In Progress
         </span>
       );
     default:
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-theme-surface-secondary px-2 py-0.5 text-xs font-medium text-theme-text-secondary">
-          <Clock className="h-3 w-3" />
+        <span className="inline-flex items-center gap-1 rounded-full bg-theme-surface-secondary px-2 py-0.5 text-xs font-medium text-theme-text-secondary" role="status">
+          <Clock className="h-3 w-3" aria-hidden="true" />
           Not Started
         </span>
       );
@@ -235,6 +235,7 @@ export const MyChecklistsPage: React.FC = () => {
         <button
           onClick={() => setSelectedCheck(null)}
           className="text-sm font-medium text-blue-600 hover:text-blue-700"
+          aria-label="Back to checklists"
         >
           &larr; Back to checklists
         </button>
@@ -328,6 +329,7 @@ export const MyChecklistsPage: React.FC = () => {
                 <button
                   key={value}
                   onClick={() => setTimingFilter(value)}
+                  aria-pressed={timingFilter === value}
                   className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                     timingFilter === value
                       ? 'bg-blue-600 text-white'
@@ -401,7 +403,7 @@ export const MyChecklistsPage: React.FC = () => {
                           <span>{completed}/{total} items</span>
                           {isStarted && <span>{progressPct}%</span>}
                         </div>
-                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-theme-surface-border">
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-theme-surface-border" role="progressbar" aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100} aria-label={`${completed} of ${total} items checked`}>
                           <div
                             className={`h-full rounded-full transition-all duration-300 ${
                               progressPct === 100 ? 'bg-green-500' : 'bg-blue-500'
@@ -443,21 +445,25 @@ export const MyChecklistsPage: React.FC = () => {
         <button
           onClick={() => setShowHistory((prev) => !prev)}
           className="flex w-full items-center justify-between rounded-lg border border-theme-surface-border bg-theme-surface px-4 py-3 text-left transition-colors hover:bg-theme-surface-hover"
+          aria-expanded={showHistory}
+          aria-controls="check-history-content"
         >
           <h2 className="text-base font-semibold text-theme-text-primary">Check History</h2>
           {showHistory ? (
-            <ChevronUp className="h-4 w-4 text-theme-text-muted" />
+            <ChevronUp className="h-4 w-4 text-theme-text-muted" aria-hidden="true" />
           ) : (
-            <ChevronDown className="h-4 w-4 text-theme-text-muted" />
+            <ChevronDown className="h-4 w-4 text-theme-text-muted" aria-hidden="true" />
           )}
         </button>
 
         {showHistory && (
-          <div className="mt-3 space-y-3">
+          <div id="check-history-content" className="mt-3 space-y-3">
             {/* Search bar */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-theme-text-muted" />
+              <label htmlFor="history-search" className="sr-only">Search history</label>
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-theme-text-muted" aria-hidden="true" />
               <input
+                id="history-search"
                 type="text"
                 placeholder="Search history..."
                 value={searchQuery}

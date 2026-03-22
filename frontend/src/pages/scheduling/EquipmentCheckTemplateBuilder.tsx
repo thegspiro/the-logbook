@@ -1609,36 +1609,34 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               onClick={() => moveItem(compIdx, itemIdx, 'up')}
               disabled={itemIdx === 0}
               className="p-1 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              title="Move up"
-              aria-label="Move item up"
+              aria-label={`Move ${item.name || 'item'} up`}
             >
-              <ChevronUp className="h-3.5 w-3.5" />
+              <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
             <button
               type="button"
               onClick={() => moveItem(compIdx, itemIdx, 'down')}
               disabled={itemIdx === itemCount - 1}
               className="p-1 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              title="Move down"
-              aria-label="Move item down"
+              aria-label={`Move ${item.name || 'item'} down`}
             >
-              <ChevronDown className="h-3.5 w-3.5" />
+              <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
             <button
               type="button"
               onClick={() => duplicateItem(compIdx, itemIdx)}
               className="p-1 text-theme-text-muted hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
-              title="Duplicate item"
+              aria-label={`Duplicate ${item.name || 'item'}`}
             >
-              <Copy className="h-3.5 w-3.5" />
+              <Copy className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
             <button
               type="button"
               onClick={() => void deleteItem(compIdx, itemIdx)}
               className="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-              title="Delete item"
+              aria-label={`Delete ${item.name || 'item'}`}
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -1852,11 +1850,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             type="button"
             onClick={() => toggleCompartmentExpanded(key)}
             className="flex items-center gap-2 flex-1 text-left min-w-0"
+            aria-expanded={isExpanded}
           >
             {isExpanded ? (
-              <ChevronUp className="h-4 w-4 text-theme-text-muted flex-shrink-0" />
+              <ChevronUp className="h-4 w-4 text-theme-text-muted flex-shrink-0" aria-hidden="true" />
             ) : (
-              <ChevronDown className="h-4 w-4 text-theme-text-muted flex-shrink-0" />
+              <ChevronDown className="h-4 w-4 text-theme-text-muted flex-shrink-0" aria-hidden="true" />
             )}
             <span className="font-medium text-theme-text-primary truncate">
               {comp.name || 'Untitled Compartment'}
@@ -1876,9 +1875,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                         ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
                         : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
                   }`}>
-                    {status === 'complete' && <CheckCircle2 className="h-2.5 w-2.5" />}
-                    {status === 'warning' && <AlertTriangle className="h-2.5 w-2.5" />}
-                    {status === 'empty' && <Circle className="h-2.5 w-2.5" />}
+                    {status === 'complete' && <CheckCircle2 className="h-2.5 w-2.5" aria-hidden="true" />}
+                    {status === 'warning' && <AlertTriangle className="h-2.5 w-2.5" aria-hidden="true" />}
+                    {status === 'empty' && <Circle className="h-2.5 w-2.5" aria-hidden="true" />}
                     {comp.items.length} item{comp.items.length !== 1 ? 's' : ''}
                   </span>
                   {comp.items.filter((i) => i.isRequired).length > 0 && (
@@ -1898,37 +1897,34 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               onClick={() => moveCompartment(idx, 'up')}
               disabled={idx === 0}
               className="p-1 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              title="Move compartment up"
-              aria-label="Move compartment up"
+              aria-label={`Move ${comp.name || 'compartment'} up`}
             >
-              <ChevronUp className="h-4 w-4" />
+              <ChevronUp className="h-4 w-4" aria-hidden="true" />
             </button>
             <button
               type="button"
               onClick={() => moveCompartment(idx, 'down')}
               disabled={idx === compartments.length - 1}
               className="p-1 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              title="Move compartment down"
-              aria-label="Move compartment down"
+              aria-label={`Move ${comp.name || 'compartment'} down`}
             >
-              <ChevronDown className="h-4 w-4" />
+              <ChevronDown className="h-4 w-4" aria-hidden="true" />
             </button>
             <button
               type="button"
               onClick={() => duplicateCompartment(idx)}
               className="p-1 text-theme-text-muted hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
-              title="Duplicate compartment"
-              aria-label="Duplicate compartment"
+              aria-label={`Duplicate ${comp.name || 'compartment'}`}
             >
-              <Copy className="h-4 w-4" />
+              <Copy className="h-4 w-4" aria-hidden="true" />
             </button>
             <button
               type="button"
               onClick={() => void deleteCompartment(idx)}
               className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-              title="Delete compartment"
+              aria-label={`Delete ${comp.name || 'compartment'}`}
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -1939,8 +1935,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             {/* Compartment fields */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className={labelClass}>Compartment Name</label>
+                <label htmlFor={`comp-name-${key}`} className={labelClass}>Compartment Name</label>
                 <input
+                  id={`comp-name-${key}`}
                   type="text"
                   className={inputClass}
                   placeholder="e.g. Driver Side, Cab, Hose Bed"
@@ -1949,8 +1946,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 />
               </div>
               <div>
-                <label className={labelClass}>Description</label>
+                <label htmlFor={`comp-desc-${key}`} className={labelClass}>Description</label>
                 <input
+                  id={`comp-desc-${key}`}
                   type="text"
                   className={inputClass}
                   placeholder="Optional description"
@@ -2015,9 +2013,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                             type="button"
                             onClick={() => void deleteSelectedItems(idx)}
                             className="flex items-center gap-1 rounded-md border border-red-300 dark:border-red-700 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                            title="Delete selected items"
+                            aria-label="Delete selected items"
                           >
-                            <Trash2 className="h-3 w-3" />
+                            <Trash2 className="h-3 w-3" aria-hidden="true" />
                             Delete
                           </button>
                           <button
