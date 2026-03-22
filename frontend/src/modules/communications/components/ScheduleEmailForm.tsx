@@ -21,6 +21,18 @@ interface ScheduleEmailFormProps {
 const inputClass = 'form-input';
 const labelClass = 'form-label';
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function validateEmailList(raw: string): string | null {
+  if (!raw.trim()) return null;
+  const entries = raw.split(',').map((e) => e.trim()).filter(Boolean);
+  const invalid = entries.filter((e) => !EMAIL_REGEX.test(e));
+  if (invalid.length > 0) {
+    return `Invalid email${invalid.length > 1 ? 's' : ''}: ${invalid.join(', ')}`;
+  }
+  return null;
+}
+
 const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({
   templates,
   onClose,
@@ -37,13 +49,31 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({
 
   const todayLocal = getTodayLocalDate(tz);
 
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!templateType || !toEmails.trim() || !scheduledDate || !scheduledTime) {
-      toast.error('Please fill in all required fields');
+    const errors: Record<string, string> = {};
+    if (!templateType) errors.templateType = 'Please select a template';
+    if (!toEmails.trim()) errors.toEmails = 'At least one recipient is required';
+    if (!scheduledDate) errors.scheduledDate = 'Date is required';
+    if (!scheduledTime) errors.scheduledTime = 'Time is required';
+
+    const toError = validateEmailList(toEmails);
+    if (toError) errors.toEmails = toError;
+    const ccError = validateEmailList(ccEmails);
+    if (ccError) errors.ccEmails = ccError;
+    const bccError = validateEmailList(bccEmails);
+    if (bccError) errors.bccEmails = bccError;
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      const first = Object.values(errors)[0] ?? 'Please fix the errors below';
+      toast.error(first);
       return;
     }
+    setFieldErrors({});
 
     // Validate scheduled time is in the future (compare in UTC)
     const selectedUTC = new Date(localToUTC(`${scheduledDate}T${scheduledTime}`, tz));
@@ -102,6 +132,7 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({
         <button
           onClick={onClose}
           className="rounded-sm p-1 text-theme-text-secondary hover:bg-theme-surface-hover"
+          aria-label="Close schedule form"
         >
           <X className="h-5 w-5" />
         </button>
@@ -115,12 +146,14 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({
 
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
         <div>
-          <label className={labelClass}>Template Type *</label>
+          <label htmlFor="schedule-template-type" className={labelClass}>Template Type *</label>
           <select
+            id="schedule-template-type"
             value={templateType}
-            onChange={(e) => setTemplateType(e.target.value)}
-            className={inputClass}
+            onChange={(e) => { setTemplateType(e.target.value); setFieldErrors((p) => { const { templateType: _, ...rest } = p; return rest; }); }}
+            className={`${inputClass} ${fieldErrors.templateType ? 'border-red-500' : ''}`}
             required
+            aria-invalid={!!fieldErrors.templateType}
           >
             <option value="">Select a template...</option>
             {templateTypes.map((type) => (
@@ -129,40 +162,58 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({
               </option>
             ))}
           </select>
+          {fieldErrors.templateType && (
+            <p className="mt-1 text-xs text-red-500">{fieldErrors.templateType}</p>
+          )}
         </div>
 
         <div>
-          <label className={labelClass}>To (comma-separated emails) *</label>
+          <label htmlFor="schedule-to-emails" className={labelClass}>To (comma-separated emails) *</label>
           <input
+            id="schedule-to-emails"
             type="text"
             value={toEmails}
-            onChange={(e) => setToEmails(e.target.value)}
-            className={inputClass}
+            onChange={(e) => { setToEmails(e.target.value); setFieldErrors((p) => { const { toEmails: _, ...rest } = p; return rest; }); }}
+            className={`${inputClass} ${fieldErrors.toEmails ? 'border-red-500' : ''}`}
             placeholder="user@example.com, user2@example.com"
             required
+            aria-invalid={!!fieldErrors.toEmails}
           />
+          {fieldErrors.toEmails && (
+            <p className="mt-1 text-xs text-red-500">{fieldErrors.toEmails}</p>
+          )}
         </div>
 
         <div>
-          <label className={labelClass}>CC (optional, comma-separated)</label>
+          <label htmlFor="schedule-cc-emails" className={labelClass}>CC (optional, comma-separated)</label>
           <input
+            id="schedule-cc-emails"
             type="text"
             value={ccEmails}
-            onChange={(e) => setCcEmails(e.target.value)}
-            className={inputClass}
+            onChange={(e) => { setCcEmails(e.target.value); setFieldErrors((p) => { const { ccEmails: _, ...rest } = p; return rest; }); }}
+            className={`${inputClass} ${fieldErrors.ccEmails ? 'border-red-500' : ''}`}
             placeholder="cc@example.com"
+            aria-invalid={!!fieldErrors.ccEmails}
           />
+          {fieldErrors.ccEmails && (
+            <p className="mt-1 text-xs text-red-500">{fieldErrors.ccEmails}</p>
+          )}
         </div>
 
         <div>
-          <label className={labelClass}>BCC (optional, comma-separated)</label>
+          <label htmlFor="schedule-bcc-emails" className={labelClass}>BCC (optional, comma-separated)</label>
           <input
+            id="schedule-bcc-emails"
             type="text"
             value={bccEmails}
-            onChange={(e) => setBccEmails(e.target.value)}
-            className={inputClass}
+            onChange={(e) => { setBccEmails(e.target.value); setFieldErrors((p) => { const { bccEmails: _, ...rest } = p; return rest; }); }}
+            className={`${inputClass} ${fieldErrors.bccEmails ? 'border-red-500' : ''}`}
             placeholder="bcc@example.com"
+            aria-invalid={!!fieldErrors.bccEmails}
           />
+          {fieldErrors.bccEmails && (
+            <p className="mt-1 text-xs text-red-500">{fieldErrors.bccEmails}</p>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-4">

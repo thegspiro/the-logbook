@@ -68,8 +68,8 @@ class EmailTemplateUpdate(BaseModel):
     description: Optional[str] = None
     is_active: Optional[bool] = None
     allow_attachments: Optional[bool] = None
-    default_cc: Optional[List[str]] = None
-    default_bcc: Optional[List[str]] = None
+    default_cc: Optional[List[EmailStr]] = None
+    default_bcc: Optional[List[EmailStr]] = None
 
 
 class EmailTemplatePreviewRequest(BaseModel):
