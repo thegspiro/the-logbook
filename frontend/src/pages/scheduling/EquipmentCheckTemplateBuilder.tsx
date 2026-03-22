@@ -52,6 +52,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
 import { schedulingService } from '@/modules/scheduling';
 import { EquipmentCheckForm } from '@/pages/scheduling/EquipmentCheckForm';
 import type {
@@ -104,6 +105,18 @@ const CHECK_TYPES = [
   { value: 'level', label: 'Level' },
   { value: 'date_lot', label: 'Date / Lot' },
   { value: 'reading', label: 'Reading' },
+] as const;
+
+const LEVEL_UNIT_PRESETS = [
+  'psi',
+  '%',
+  'gallons',
+  'liters',
+  'inches',
+  'feet',
+  'bar',
+  'mmHg',
+  'quarts',
 ] as const;
 
 const CHECK_TYPE_HELP: Record<string, string> = {
@@ -495,7 +508,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [cloning, setCloning] = useState(false);
-  const isDirty = useRef(false);
+  const [isDirty, setIsDirty] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(!isEditing);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
@@ -573,21 +586,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   }, [templateId, loadTemplate]);
 
   // ---------------------------------------------------------------------------
-  // Unsaved changes warning
+  // Unsaved changes warning (browser close + React Router navigation)
   // ---------------------------------------------------------------------------
 
-  useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      if (isDirty.current) {
-        e.preventDefault();
-      }
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, []);
+  useUnsavedChanges({
+    hasChanges: isDirty,
+    message: 'You have unsaved template changes. Are you sure you want to leave?',
+  });
 
   const markDirty = useCallback(() => {
-    isDirty.current = true;
+    setIsDirty(true);
   }, []);
 
   // ---------------------------------------------------------------------------
@@ -1163,7 +1171,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         }
         await Promise.all(updatePromises);
 
-        isDirty.current = false;
+        setIsDirty(false);
         toast.success('Template updated');
       } else {
         const createPayload: EquipmentCheckTemplateCreate = {
@@ -1203,7 +1211,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           })),
         };
         const created = await schedulingService.createEquipmentCheckTemplate(createPayload);
-        isDirty.current = false;
+        setIsDirty(false);
         toast.success('Template created');
         // Navigate to edit mode so subsequent saves work as updates
         navigate(`/scheduling/equipment-check-templates/${created.id}`, { replace: true });
@@ -1273,7 +1281,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     setCloning(true);
     try {
       const cloned = await schedulingService.cloneEquipmentCheckTemplate(templateId, '');
-      isDirty.current = false;
+      setIsDirty(false);
       toast.success('Template cloned');
       navigate(`/scheduling/equipment-check-templates/${cloned.id}`, { replace: true });
     } catch (err: unknown) {
@@ -1724,7 +1732,26 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   </div>
                   <div>
                     <label className={labelClass}>Unit</label>
-                    <input type="text" className={inputClass} placeholder="psi, %, gallons..." value={item.levelUnit} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { levelUnit: e.target.value })} />
+                    <div className="flex gap-1.5">
+                      <select
+                        className={selectClass}
+                        value={LEVEL_UNIT_PRESETS.includes(item.levelUnit as typeof LEVEL_UNIT_PRESETS[number]) ? item.levelUnit : '__custom__'}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val !== '__custom__') {
+                            updateItemFieldWithAutoSave(compIdx, itemIdx, { levelUnit: val });
+                          }
+                        }}
+                      >
+                        {LEVEL_UNIT_PRESETS.map((u) => (
+                          <option key={u} value={u}>{u}</option>
+                        ))}
+                        <option value="__custom__">Custom...</option>
+                      </select>
+                      {!LEVEL_UNIT_PRESETS.includes(item.levelUnit as typeof LEVEL_UNIT_PRESETS[number]) && (
+                        <input type="text" className={inputClass} placeholder="Custom unit" value={item.levelUnit} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { levelUnit: e.target.value })} />
+                      )}
+                    </div>
                   </div>
                 </>
               )}
@@ -2166,7 +2193,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           <button
             type="button"
             onClick={() => {
-              if (isDirty.current && !window.confirm('You have unsaved changes. Leave anyway?')) return;
+              if (isDirty && !window.confirm('You have unsaved changes. Leave anyway?')) return;
               navigate(-1);
             }}
             className="p-2 rounded-md text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface transition-colors flex-shrink-0"

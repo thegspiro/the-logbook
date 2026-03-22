@@ -66,6 +66,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
   const [search, setSearch] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [hideInactive, setHideInactive] = useState(false);
 
   const loadTemplates = useCallback(async () => {
     try {
@@ -123,10 +124,13 @@ export const EquipmentCheckTemplateList: React.FC = () => {
   };
 
   const handleClone = async (template: EquipmentCheckTemplate) => {
+    const defaultName = `${template.name} (Copy)`;
+    const newName = window.prompt("Name for the cloned template:", defaultName);
+    if (newName === null) return;
     try {
       const cloned = await schedulingService.cloneEquipmentCheckTemplate(
         template.id,
-        "",
+        newName.trim() || defaultName,
       );
       setTemplates((prev) => [...prev, cloned]);
       toast.success(`Cloned as "${cloned.name}"`);
@@ -135,11 +139,14 @@ export const EquipmentCheckTemplateList: React.FC = () => {
     }
   };
 
+  const hasInactive = templates.some((t) => !t.isActive);
+
   const filtered = templates.filter(
     (t) =>
-      !search ||
-      t.name.toLowerCase().includes(search.toLowerCase()) ||
-      (t.apparatusType ?? "").toLowerCase().includes(search.toLowerCase()),
+      (!hideInactive || t.isActive) &&
+      (!search ||
+        t.name.toLowerCase().includes(search.toLowerCase()) ||
+        (t.apparatusType ?? "").toLowerCase().includes(search.toLowerCase())),
   );
 
   return (
@@ -159,17 +166,30 @@ export const EquipmentCheckTemplateList: React.FC = () => {
         Define what gets checked on each apparatus at shift start or end.
       </p>
 
-      {/* Search */}
+      {/* Search + Filter */}
       {templates.length > 3 && (
-        <div className="relative mb-3">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-theme-text-muted" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filter templates..."
-            className="w-full pl-8 pr-3 py-1.5 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-1 focus:ring-violet-500"
-          />
+        <div className="mb-3 space-y-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-theme-text-muted" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Filter templates..."
+              className="w-full pl-8 pr-3 py-1.5 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-1 focus:ring-violet-500"
+            />
+          </div>
+          {hasInactive && (
+            <label className="flex items-center gap-2 text-xs text-theme-text-muted cursor-pointer">
+              <input
+                type="checkbox"
+                checked={hideInactive}
+                onChange={(e) => setHideInactive(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-theme-surface-border text-violet-600 focus:ring-violet-500"
+              />
+              Hide inactive templates
+            </label>
+          )}
         </div>
       )}
 
