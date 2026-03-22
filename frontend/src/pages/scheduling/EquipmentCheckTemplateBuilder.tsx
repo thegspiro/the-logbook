@@ -695,6 +695,28 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     markDirty();
   };
 
+  const duplicateCompartment = (idx: number) => {
+    const comp = compartments[idx];
+    if (!comp) return;
+
+    const copy: CompartmentFormState = {
+      name: `${comp.name} (copy)`,
+      description: comp.description,
+      imageUrl: comp.imageUrl,
+      parentCompartmentId: comp.parentCompartmentId,
+      items: comp.items.map(({ id: _discardId, ...rest }) => ({ ...rest })),
+    };
+    setCompartments((prev) => {
+      const next = [...prev];
+      next.splice(idx + 1, 0, copy);
+      return next;
+    });
+    const newKey = `comp-${Date.now()}`;
+    setExpandedCompartments((prev) => new Set(prev).add(newKey));
+    toast.success('Compartment duplicated');
+    markDirty();
+  };
+
   // ---------------------------------------------------------------------------
   // Item helpers
   // ---------------------------------------------------------------------------
@@ -1863,6 +1885,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               aria-label="Move compartment down"
             >
               <ChevronDown className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => duplicateCompartment(idx)}
+              className="p-1 text-theme-text-muted hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+              title="Duplicate compartment"
+              aria-label="Duplicate compartment"
+            >
+              <Copy className="h-4 w-4" />
             </button>
             <button
               type="button"
