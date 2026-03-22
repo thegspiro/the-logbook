@@ -50,31 +50,31 @@ const statusBadge = (status: string) => {
     case 'passed':
     case 'pass':
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
-          <CheckCircle className="h-3 w-3" />
+        <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400" role="status">
+          <CheckCircle className="h-3 w-3" aria-hidden="true" />
           Passed
         </span>
       );
     case 'failed':
     case 'fail':
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
-          <XCircle className="h-3 w-3" />
+        <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400" role="status">
+          <XCircle className="h-3 w-3" aria-hidden="true" />
           Failed
         </span>
       );
     case 'in_progress':
     case 'incomplete':
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
-          <AlertCircle className="h-3 w-3" />
+        <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" role="status">
+          <AlertCircle className="h-3 w-3" aria-hidden="true" />
           In Progress
         </span>
       );
     default:
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-theme-surface-secondary px-2 py-0.5 text-xs font-medium text-theme-text-secondary">
-          <Clock className="h-3 w-3" />
+        <span className="inline-flex items-center gap-1 rounded-full bg-theme-surface-secondary px-2 py-0.5 text-xs font-medium text-theme-text-secondary" role="status">
+          <Clock className="h-3 w-3" aria-hidden="true" />
           Not Started
         </span>
       );
@@ -235,17 +235,18 @@ export const MyChecklistsPage: React.FC = () => {
         <button
           onClick={() => setSelectedCheck(null)}
           className="text-sm font-medium text-blue-600 hover:text-blue-700"
+          aria-label="Back to checklists"
         >
           &larr; Back to checklists
         </button>
 
-        <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
+        <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-4 sm:p-6">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-theme-text-primary">Check Details</h2>
             {statusBadge(selectedCheck.overallStatus)}
           </div>
 
-          <div className="mb-4 grid grid-cols-2 gap-4 text-sm">
+          <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
             <div>
               <span className="text-theme-text-muted">Checked By</span>
               <p className="font-medium text-theme-text-primary">{selectedCheck.checkedByName ?? 'Unknown'}</p>
@@ -287,9 +288,9 @@ export const MyChecklistsPage: React.FC = () => {
                 {selectedCheck.items.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-center justify-between rounded border border-theme-surface-border px-3 py-2 text-sm"
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 rounded border border-theme-surface-border px-3 py-2 text-sm"
                   >
-                    <div>
+                    <div className="min-w-0">
                       <span className="font-medium text-theme-text-primary">{item.itemName}</span>
                       <span className="ml-2 text-theme-text-muted">{item.compartmentName}</span>
                     </div>
@@ -328,7 +329,8 @@ export const MyChecklistsPage: React.FC = () => {
                 <button
                   key={value}
                   onClick={() => setTimingFilter(value)}
-                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  aria-pressed={timingFilter === value}
+                  className={`rounded-md px-3 py-1.5 sm:px-2.5 sm:py-1 text-xs font-medium transition-colors ${
                     timingFilter === value
                       ? 'bg-blue-600 text-white'
                       : 'text-theme-text-muted hover:text-theme-text-primary'
@@ -401,7 +403,7 @@ export const MyChecklistsPage: React.FC = () => {
                           <span>{completed}/{total} items</span>
                           {isStarted && <span>{progressPct}%</span>}
                         </div>
-                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-theme-surface-border">
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-theme-surface-border" role="progressbar" aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100} aria-label={`${completed} of ${total} items checked`}>
                           <div
                             className={`h-full rounded-full transition-all duration-300 ${
                               progressPct === 100 ? 'bg-green-500' : 'bg-blue-500'
@@ -443,21 +445,25 @@ export const MyChecklistsPage: React.FC = () => {
         <button
           onClick={() => setShowHistory((prev) => !prev)}
           className="flex w-full items-center justify-between rounded-lg border border-theme-surface-border bg-theme-surface px-4 py-3 text-left transition-colors hover:bg-theme-surface-hover"
+          aria-expanded={showHistory}
+          aria-controls="check-history-content"
         >
           <h2 className="text-base font-semibold text-theme-text-primary">Check History</h2>
           {showHistory ? (
-            <ChevronUp className="h-4 w-4 text-theme-text-muted" />
+            <ChevronUp className="h-4 w-4 text-theme-text-muted" aria-hidden="true" />
           ) : (
-            <ChevronDown className="h-4 w-4 text-theme-text-muted" />
+            <ChevronDown className="h-4 w-4 text-theme-text-muted" aria-hidden="true" />
           )}
         </button>
 
         {showHistory && (
-          <div className="mt-3 space-y-3">
+          <div id="check-history-content" className="mt-3 space-y-3">
             {/* Search bar */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-theme-text-muted" />
+              <label htmlFor="history-search" className="sr-only">Search history</label>
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-theme-text-muted" aria-hidden="true" />
               <input
+                id="history-search"
                 type="text"
                 placeholder="Search history..."
                 value={searchQuery}
@@ -481,7 +487,7 @@ export const MyChecklistsPage: React.FC = () => {
                   <button
                     key={record.id}
                     onClick={() => void handleViewCheckDetail(record.id)}
-                    className="flex w-full items-center justify-between rounded-lg border border-theme-surface-border bg-theme-surface px-4 py-3 text-left transition-colors hover:bg-theme-surface-hover"
+                    className="flex w-full flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-lg border border-theme-surface-border bg-theme-surface px-3 sm:px-4 py-3 text-left transition-colors hover:bg-theme-surface-hover"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
