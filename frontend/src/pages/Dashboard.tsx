@@ -501,6 +501,11 @@ const Dashboard: React.FC = () => {
         refreshing={refreshing}
         pullDistance={pullDistance}
       />
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {loadingNotifications || loadingMyShifts || loadingHours || loadingTraining
+          ? "Loading dashboard content..."
+          : "Dashboard content loaded."}
+      </div>
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex-1 w-full">
         {/* Welcome Header */}
         <div className="mb-6 sm:mb-8">
@@ -521,7 +526,7 @@ const Dashboard: React.FC = () => {
         {canInstall && !dismissedInstall && (
           <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 flex items-center justify-between mb-6 sm:mb-8">
             <div className="flex items-center gap-3">
-              <Smartphone className="w-5 h-5 text-blue-500" />
+              <Smartphone className="w-5 h-5 text-blue-500" aria-hidden="true" />
               <div>
                 <p className="text-sm font-medium text-theme-text-primary">
                   Install The Logbook
@@ -571,7 +576,14 @@ const Dashboard: React.FC = () => {
                     complete
                   </p>
                   {/* Progress bar — mobile inline, desktop in separate column */}
-                  <div className="mt-2 sm:hidden w-full bg-theme-surface-secondary rounded-full h-2">
+                  <div
+                    className="mt-2 sm:hidden w-full bg-theme-surface-secondary rounded-full h-2"
+                    role="progressbar"
+                    aria-valuenow={setupProgress.completed}
+                    aria-valuemin={0}
+                    aria-valuemax={setupProgress.total}
+                    aria-label={`Setup progress: ${setupProgress.completed} of ${setupProgress.total} steps complete`}
+                  >
                     <div
                       className="h-2 rounded-full bg-red-500 transition-all"
                       style={{
@@ -581,7 +593,14 @@ const Dashboard: React.FC = () => {
                   </div>
                 </div>
                 <div className="hidden sm:flex items-center gap-3 shrink-0">
-                  <div className="w-24 bg-theme-surface-secondary rounded-full h-2">
+                  <div
+                    className="w-24 bg-theme-surface-secondary rounded-full h-2"
+                    role="progressbar"
+                    aria-valuenow={setupProgress.completed}
+                    aria-valuemin={0}
+                    aria-valuemax={setupProgress.total}
+                    aria-label={`Setup progress: ${setupProgress.completed} of ${setupProgress.total} steps complete`}
+                  >
                     <div
                       className="h-2 rounded-full bg-red-500 transition-all"
                       style={{
@@ -599,7 +618,7 @@ const Dashboard: React.FC = () => {
         {isAdmin && (
           <div className="mb-8">
             <h3 className="text-lg font-semibold text-theme-text-primary mb-4 flex items-center gap-2">
-              <Shield className="w-5 h-5 text-red-500" />
+              <Shield className="w-5 h-5 text-red-500" aria-hidden="true" />
               Department Overview
             </h3>
             <div
@@ -621,7 +640,7 @@ const Dashboard: React.FC = () => {
                       </p>
                     )}
                   </div>
-                  <Users className="w-8 h-8 text-blue-400" />
+                  <Users className="w-8 h-8 text-blue-400" aria-hidden="true" />
                 </div>
                 <p className="text-theme-text-muted text-xs mt-2">
                   {adminSummary?.total_members ?? 0} total
@@ -642,7 +661,7 @@ const Dashboard: React.FC = () => {
                       </p>
                     )}
                   </div>
-                  <GraduationCap className="w-8 h-8 text-green-400" />
+                  <GraduationCap className="w-8 h-8 text-green-400" aria-hidden="true" />
                 </div>
                 <p className="text-theme-text-muted text-xs mt-2">
                   {adminSummary?.recent_training_hours ?? 0} hrs last 30 days
@@ -663,7 +682,7 @@ const Dashboard: React.FC = () => {
                       </p>
                     )}
                   </div>
-                  <Calendar className="w-8 h-8 text-purple-400" />
+                  <Calendar className="w-8 h-8 text-purple-400" aria-hidden="true" />
                 </div>
                 <p className="text-theme-text-muted text-xs mt-2">Scheduled</p>
               </div>
@@ -671,6 +690,12 @@ const Dashboard: React.FC = () => {
               <div
                 className="card cursor-pointer hover:border-red-500/50 p-3 sm:p-5 transition-colors"
                 onClick={() => navigate("/action-items")}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") navigate("/action-items");
+                }}
+                aria-label={`Action Items: ${adminSummary?.open_action_items ?? 0} open${(adminSummary?.overdue_action_items ?? 0) > 0 ? `, ${adminSummary?.overdue_action_items} overdue` : ""}`}
               >
                 <div className="flex items-center justify-between">
                   <div>
@@ -686,9 +711,9 @@ const Dashboard: React.FC = () => {
                     )}
                   </div>
                   {(adminSummary?.overdue_action_items ?? 0) > 0 ? (
-                    <AlertTriangle className="w-8 h-8 text-red-400" />
+                    <AlertTriangle className="w-8 h-8 text-red-400" aria-hidden="true" />
                   ) : (
-                    <ClipboardList className="w-8 h-8 text-yellow-400" />
+                    <ClipboardList className="w-8 h-8 text-yellow-400" aria-hidden="true" />
                   )}
                 </div>
                 <p className="text-theme-text-muted text-xs mt-2">
@@ -701,6 +726,12 @@ const Dashboard: React.FC = () => {
               <div
                 className="card cursor-pointer hover:border-red-500/50 p-3 sm:p-5 transition-colors"
                 onClick={() => navigate("/admin-hours/manage")}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") navigate("/admin-hours/manage");
+                }}
+                aria-label={`Admin Hours: ${adminSummary?.recent_admin_hours ?? 0}${(adminSummary?.pending_admin_hours_approvals ?? 0) > 0 ? `, ${adminSummary?.pending_admin_hours_approvals} pending approval` : ""}`}
               >
                 <div className="flex items-center justify-between">
                   <div>
@@ -715,7 +746,7 @@ const Dashboard: React.FC = () => {
                       </p>
                     )}
                   </div>
-                  <ClipboardCheck className="w-8 h-8 text-indigo-400" />
+                  <ClipboardCheck className="w-8 h-8 text-indigo-400" aria-hidden="true" />
                 </div>
                 <p className="text-theme-text-muted text-xs mt-2">
                   {(adminSummary?.pending_admin_hours_approvals ?? 0) > 0
@@ -826,10 +857,10 @@ const Dashboard: React.FC = () => {
           <div className="mb-8">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-                <Megaphone className="w-5 h-5 text-amber-400" />
+                <Megaphone className="w-5 h-5 text-amber-400" aria-hidden="true" />
                 <span>Department Messages</span>
                 {deptMsgUnread > 0 && (
-                  <span className="bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full">
+                  <span className="bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full" aria-label={`${deptMsgUnread} new messages`}>
                     {deptMsgUnread} new
                   </span>
                 )}
@@ -857,6 +888,12 @@ const Dashboard: React.FC = () => {
                       if (!msg.is_read && !msg.is_persistent)
                         void markMessageRead(msg.id);
                     }}
+                    role={!msg.is_read && !msg.is_persistent ? "button" : undefined}
+                    tabIndex={!msg.is_read && !msg.is_persistent ? 0 : undefined}
+                    onKeyDown={!msg.is_read && !msg.is_persistent ? (e) => {
+                      if (e.key === "Enter" || e.key === " ") void markMessageRead(msg.id);
+                    } : undefined}
+                    aria-label={!msg.is_read ? `${msg.title} — unread, ${msg.priority} priority` : undefined}
                   >
                     <div>
                       <div className="flex-1 min-w-0">
@@ -881,7 +918,7 @@ const Dashboard: React.FC = () => {
                             </span>
                           )}
                           {!msg.is_read && (
-                            <span className="w-2 h-2 bg-amber-400 rounded-full shrink-0" />
+                            <span className="w-2 h-2 bg-amber-400 rounded-full shrink-0" aria-hidden="true" />
                           )}
                         </div>
                         <p className="text-theme-text-secondary text-sm whitespace-pre-line line-clamp-3">
@@ -955,10 +992,10 @@ const Dashboard: React.FC = () => {
           <div className="card p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-                <Bell className="w-5 h-5 text-red-400" />
+                <Bell className="w-5 h-5 text-red-400" aria-hidden="true" />
                 <span>Notifications</span>
                 {unreadCount > 0 && (
-                  <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
+                  <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full" aria-label={`${unreadCount} unread`}>
                     {unreadCount}
                   </span>
                 )}
@@ -1054,7 +1091,7 @@ const Dashboard: React.FC = () => {
           <div className="card p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-                <Calendar className="w-5 h-5 text-blue-400" />
+                <Calendar className="w-5 h-5 text-blue-400" aria-hidden="true" />
                 <span>My Upcoming Shifts</span>
               </h3>
               <button
@@ -1121,7 +1158,7 @@ const Dashboard: React.FC = () => {
         <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-              <CalendarPlus className="w-5 h-5 text-green-400" />
+              <CalendarPlus className="w-5 h-5 text-green-400" aria-hidden="true" />
               <span>Open Shifts</span>
             </h3>
             <button
@@ -1249,7 +1286,7 @@ const Dashboard: React.FC = () => {
         <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-              <Calendar className="w-5 h-5 text-purple-400" />
+              <Calendar className="w-5 h-5 text-purple-400" aria-hidden="true" />
               <span>Upcoming Events</span>
             </h3>
             <button
@@ -1317,7 +1354,7 @@ const Dashboard: React.FC = () => {
         <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-4 sm:p-6 mb-6 sm:mb-8">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-theme-text-primary flex items-center gap-2">
-              <Activity className="w-5 h-5" />
+              <Activity className="w-5 h-5" aria-hidden="true" />
               Recent Activity
             </h3>
             <button
@@ -1366,7 +1403,7 @@ const Dashboard: React.FC = () => {
           <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-                <CreditCard className="w-5 h-5 text-blue-500" />
+                <CreditCard className="w-5 h-5 text-blue-500" aria-hidden="true" />
                 <span>My ID Card</span>
               </h3>
               <button
@@ -1395,7 +1432,7 @@ const Dashboard: React.FC = () => {
           <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-                <ClipboardList className="w-5 h-5 text-cyan-500" />
+                <ClipboardList className="w-5 h-5 text-cyan-500" aria-hidden="true" />
                 <span>Meeting Minutes</span>
               </h3>
               <button
@@ -1432,7 +1469,7 @@ const Dashboard: React.FC = () => {
           <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-                <GraduationCap className="w-5 h-5 text-red-500" />
+                <GraduationCap className="w-5 h-5 text-red-500" aria-hidden="true" />
                 <span>My Training Progress</span>
               </h3>
               <button
@@ -1490,7 +1527,14 @@ const Dashboard: React.FC = () => {
                       </span>
                     </div>
 
-                    <div className="w-full bg-theme-surface-secondary rounded-full h-2 mb-3">
+                    <div
+                      className="w-full bg-theme-surface-secondary rounded-full h-2 mb-3"
+                      role="progressbar"
+                      aria-valuenow={Math.round(enrollment.progress_percentage)}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label={`${enrollment.program?.name ?? "Program"} progress: ${Math.round(enrollment.progress_percentage)}%`}
+                    >
                       <div
                         className={`h-2 rounded-full transition-all ${getProgressBarColor(enrollment.progress_percentage)}`}
                         style={{ width: `${enrollment.progress_percentage}%` }}
@@ -1570,7 +1614,7 @@ const Dashboard: React.FC = () => {
             <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-                  <Package className="w-5 h-5 text-emerald-500" />
+                  <Package className="w-5 h-5 text-emerald-500" aria-hidden="true" />
                   <span>
                     {isInventoryAdmin
                       ? "Equipment & Inventory"
