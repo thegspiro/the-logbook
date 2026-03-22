@@ -684,6 +684,49 @@ Two timezone display issues were corrected:
 
 ---
 
+## Shift Assignment & Scheduling Edge Cases
+
+These edge cases describe system behavior during shift assignment, time-off approval, pattern generation, and staffing calculations.
+
+### Shift Assignment Guards
+
+| Scenario | Behavior |
+|----------|----------|
+| Member already assigned to this shift | Returns "Member is already assigned to this shift." Declined and cancelled assignments are excluded from this check — members can re-sign up after cancellation. |
+| Overlapping shift on same day | System checks ±1 day for time conflicts. Returns "Member has a conflicting shift on [date]" with all conflict dates listed. |
+| Shift has no end time | Overlap detection falls back to same-day check only — any assignment on the same date is flagged. |
+| Member on active Leave of Absence | Returns "Member is on leave of absence for this date." Only the shift's date is checked, not the full time span. |
+| First officer-position member assigned | If no shift officer is set, assigning an Officer, Captain, or Lieutenant auto-sets them as shift officer. Silent — no notification. |
+| Shift officer changed to a different member | The previous officer-position assignment is automatically downgraded to `firefighter` position. No notification is sent for this displacement. |
+| Database integrity violation on duplicate | A secondary `UNIQUE` constraint catches race conditions, returning the same "already assigned" message. |
+
+### Time-Off Approval Side Effects
+
+| Scenario | Behavior |
+|----------|----------|
+| Time-off request approved | All conflicting shift assignments within the time-off date range are auto-cancelled. The count is appended to reviewer notes (e.g., "2 conflicting assignments auto-cancelled"). |
+| Time-off request for pending status only | Only pending requests can be reviewed. Attempting to review an already-approved/denied request returns "Time-off request is no longer pending." |
+| Auto-cancelled assignments | Only `assigned` and `confirmed` statuses are cancelled. Already-declined or cancelled assignments are not touched. |
+
+### Pattern Generation
+
+| Scenario | Behavior |
+|----------|----------|
+| Weekly patterns and weekday convention | Weekly patterns use JavaScript convention (0=Sunday). Pattern configuration must use this format — Python convention (0=Monday) will produce shifts on the wrong day. |
+| Overnight shifts (end before start) | If end time < start time after UTC conversion, end datetime is automatically pushed to the next day. |
+| Platoon pattern with day/night entries | Maps to separate day/night `ShiftTemplate` records. If `day_template_id` or `night_template_id` is missing from config, falls back to the main template silently. |
+| Duplicate shift detection | Compares against existing shifts by start time (UTC), not by date. Two templates with the same start time in different timezones could collide. |
+
+### Staffing Calculations
+
+| Scenario | Behavior |
+|----------|----------|
+| Shift has structured position slots | Understaffing is checked by matching filled positions against required slots (case-insensitive). |
+| No structured positions defined | Falls back to comparing total headcount against `min_staffing` threshold. |
+| Cancelled and no-show assignments | Excluded from attendee count. Only `assigned` and `confirmed` statuses count toward staffing. |
+
+---
+
 ## Troubleshooting
 
 | Issue | Solution |
@@ -711,6 +754,60 @@ Two timezone display issues were corrected:
 | Equipment check photo won't upload | Photos must be JPEG, PNG, or WebP and under 10 MB. Max 3 photos per item. |
 | Equipment check reports showing no data | Ensure at least one equipment check has been submitted. Check the date range filter. |
 | Shift times showing in wrong timezone | Fixed 2026-03-19 — shift creation now converts local times to UTC using org timezone. Template-generated shifts also inherit correct timezone. |
+| Cannot assign members to shifts | Fixed 2026-03-22 — assignment UI was gated by `scheduling.manage_assignments`; now works with `scheduling.manage`. |
+| Sign Up button not appearing despite eligible rank | Fixed 2026-03-22 — Open Shifts tab fallback permission and self-signup visibility corrected. |
+| Dashboard shows cancelled/declined shifts | Fixed 2026-03-22 — "My Upcoming Shifts" now filters out declined and cancelled assignments. |
+| Barcode/QR scan not working on desktop | Fixed 2026-03-22 — scanning now falls back to user-facing camera on desktop browsers. |
+
+---
+
+## Permission Fixes & Shift Signup Improvements (2026-03-22)
+
+### Shift Assignment Permission Update
+
+The shift assignment UI previously required the `scheduling.manage_assignments` permission, which was more restrictive than intended. As of 2026-03-22, users with the broader `scheduling.manage` permission can assign members to shifts.
+
+> **Screenshot needed:**
+> _[Screenshot of the ShiftDetailPanel showing the "Add Assignment" button visible for a user with `scheduling.manage` permission, with the member dropdown and position selector]_
+
+### Open Shifts Self-Signup Fix
+
+The self-signup button visibility on the Open Shifts tab had a fallback permission issue where non-admin members couldn't see the Sign Up button even when their rank was eligible. This has been corrected.
+
+> **Screenshot needed:**
+> _[Screenshot of the Open Shifts tab showing shift cards with visible "Sign Up" buttons for an eligible non-admin member]_
+
+### Dashboard Shift Display
+
+The "My Upcoming Shifts" section on the dashboard now correctly filters out:
+- Declined assignments (shifts you said "no" to)
+- Cancelled assignments (shifts that were cancelled after you were assigned)
+
+Only pending and confirmed assignments appear.
+
+> **Screenshot needed:**
+> _[Screenshot of the Dashboard "My Upcoming Shifts" section showing only pending (yellow badge) and confirmed (green badge) shifts, with no declined or cancelled entries]_
+
+### Desktop Camera Scanning
+
+Camera-based scanning (QR codes, barcodes, member IDs) now works on desktop browsers. The system automatically detects available cameras and falls back to a user-facing camera when no environment-facing camera is detected.
+
+This affects:
+- **MemberIdScannerModal** — scanning member ID cards during inventory checkout
+- **InventoryScanModal** — scanning item barcodes for check-in/check-out
+- **MemberScanPage** — scanning member QR codes for attendance
+
+> **Screenshot needed:**
+> _[Screenshot of the MemberIdScannerModal running on a desktop browser, showing the user-facing camera feed in the scanner viewport with a QR code being detected]_
+
+### Edge Cases (2026-03-22)
+
+| Scenario | Behavior |
+|----------|----------|
+| Desktop with no camera | Scanner shows error message; manual entry still available |
+| Desktop with only webcam | Falls back to user-facing camera automatically |
+| Multiple cameras on desktop | Prefers environment-facing, then user-facing |
+| Shift detail panel Calls/Incidents section | Removed — feature not yet implemented |
 
 ---
 

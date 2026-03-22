@@ -539,6 +539,32 @@ The Equipment Check system provides structured vehicle and equipment inspections
 | Passing check after deficiency | Clears flag only when ALL items pass |
 | Expired item (past expiration date) | Auto-fails regardless of submitted result |
 | Item below required quantity | Auto-fails |
+| Equipment check status: `incomplete` vs `fail` | If not all items are completed, overall status is `incomplete` (overrides `fail`). An incomplete check is distinct from a failed check in reports. |
+| Template resolution fallback | System first looks for templates tied to the specific apparatus ID, then falls back to templates matching the apparatus type. |
+
+---
+
+## Facilities System Edge Cases
+
+### System Defaults & Protected Records
+
+| Scenario | Behavior |
+|----------|----------|
+| Modify system facility type (e.g., "Fire Station") | Returns "Cannot modify system facility types." System-defined types are immutable. |
+| Delete system facility type | Returns "Cannot delete system facility types." |
+| Delete facility type in use | Returns "Cannot delete type. N facilities use this type." Remove or reassign facilities first. |
+| Modify system facility status (e.g., "Operational") | Returns "Cannot modify system facility statuses." |
+| Delete system facility status | Returns "Cannot delete system facility statuses." |
+| System defaults missing (partial migration) | `_ensure_system_defaults` runs on each Facilities module access and inserts missing system types/statuses at runtime as a recovery mechanism. |
+
+### Facility Lifecycle
+
+| Scenario | Behavior |
+|----------|----------|
+| Archive an already-archived facility | Returns "Facility is already archived." |
+| Unarchive a non-archived facility | Returns "Facility is not archived." |
+| Create historic maintenance entry without date | Returns "occurred_date is required for historic entries." Scheduled maintenance does not require this field. |
+| Facility type/status lookup with no records | Service first searches by name (e.g., "Fire Station"), then falls back to any active record. If none exist and auto-seeding fails, facility creation will fail. |
 
 ---
 

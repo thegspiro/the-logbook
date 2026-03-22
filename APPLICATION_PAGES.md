@@ -263,9 +263,11 @@ Requires `inventory.manage` permission. Dashboard with summary stats (total item
 | `/inventory/admin/reorder` | Reorder Requests | `inventory.manage` |
 | `/inventory/checkouts` | Active Checkouts | `inventory.manage` |
 | `/inventory/import` | CSV Import | `inventory.manage` |
+| `/inventory/admin/kits` | Equipment Kits | `inventory.manage` |
+| `/inventory/admin/variant-groups` | Variant Groups | `inventory.manage` |
 | `/inventory/print-labels` | Barcode Label Printing | Authenticated |
 
-> The admin dashboard provides summary statistics and quick-link navigation. Individual sub-pages handle items, pool items, categories, maintenance, members, charges, return/equipment/write-off/reorder requests. The Item Detail page (`/inventory/items/:id`) has a two-column layout with barcode sidebar and tabbed content (overview, history, maintenance, NFPA compliance).
+> The admin dashboard provides summary statistics and quick-link navigation with grouped card sections. Individual sub-pages handle items, pool items, categories, maintenance, members, charges, return/equipment/write-off/reorder requests, equipment kits, and variant groups. The Item Detail page (`/inventory/items/:id`) has a two-column layout with barcode sidebar and tabbed content (overview, history, maintenance, NFPA compliance). Non-admin users see only their own assigned equipment on the inventory dashboard.
 
 ---
 
@@ -372,6 +374,8 @@ Tab-based interface with the following views:
 |-----|------|------------|
 | `/notifications` | Notifications | Authenticated |
 
+> The Notifications page includes a **channel filter** (email, in-app, SMS) for filtering by delivery method. Dashboard notification cards include **clear/dismiss buttons**. Administrators can create **persistent department messages** that only admins can clear.
+
 ---
 
 ## Reports
@@ -420,4 +424,4 @@ Tab-based interface with the following views:
 
 ---
 
-**Total: ~104 direct routes + 25 admin hub tabs across 18 modules**
+**Total: ~108 direct routes + 25 admin hub tabs across 18 modules**

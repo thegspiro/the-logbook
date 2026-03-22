@@ -357,12 +357,18 @@ All significant actions are logged for compliance:
 
 ### Rate Limiting
 
-The system applies rate limiting to sensitive endpoints:
-- Login: 5 attempts per minute per IP
-- Password reset: 5 requests per minute per IP
-- Registration: 5 requests per minute per IP
+The system applies rate limiting to sensitive endpoints with specific thresholds and lockout durations:
 
-> **Hint:** If a member reports being locked out, check if they exceeded the login attempt limit. The lockout period is configurable in the system settings.
+| Endpoint | Max Requests | Window | Lockout Duration |
+|----------|-------------|--------|-----------------|
+| Login | 5 | 60 seconds | 30 minutes |
+| Registration | 3 | 60 seconds | 30 minutes |
+| Password reset | 3 | 5 minutes | 30 minutes |
+| Token refresh | 10 | 60 seconds | 10 minutes |
+
+When rate-limited, the system returns HTTP 429 with a `Retry-After` header indicating the lockout duration in seconds. Failed login attempts are also tracked per-user via the `failed_login_attempts` counter on the user record.
+
+> **Hint:** If a member reports being locked out, check if they exceeded the login attempt limit. The lockout expires automatically after the duration above. The `Retry-After` header tells the client exactly how long to wait.
 
 ### Security Hardening (2026-03-07)
 
@@ -383,6 +389,19 @@ The following security measures are enforced:
 > _[Screenshot of the security status in the Error Monitor or a dedicated Security Dashboard showing the list of security features with green checkmarks (JWT restriction, file validation, CORS strict, TLS enabled) and any warnings in yellow]_
 
 > **Edge case:** If your deployment uses a reverse proxy (nginx, Caddy), the `DB_SSL` and `REDIS_SSL` settings refer to the connection between the backend container and the database/Redis container — not the browser-to-server connection. Browser-to-server TLS is handled by the reverse proxy.
+
+### Authentication & Session Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Admin changes a member's roles while they are logged in | Server enforces new permissions immediately (re-queried from DB on every request). However, the frontend UI may show stale permission-based elements (buttons, menu items) until the page is reloaded or the session refreshes via `/auth/me`. |
+| Password reset requested twice within 30 minutes | The second request returns the same success message but no email is sent. This is intentional anti-enumeration — there is no indication to the user that a cooldown is active. Reset tokens expire after 30 minutes. |
+| Admin resets member password with "force change" | `password_changed_at` is intentionally NOT updated, so the user may see a password-expiry warning on their next login before they reach the change-password form. This resolves after they complete the forced password change. |
+| Multiple browser tabs open when access token expires | A shared refresh promise prevents races within one tab, but multiple tabs can trigger simultaneous refresh requests. If two tabs refresh at the same time, the second may see the rotated token as invalid, triggering a full session revocation across all tabs. Closing extra tabs before the session timeout avoids this. |
+| Member soft-deleted by admin | The user's next API request returns 401 (deleted users are filtered out of token validation). However, sessions are not proactively revoked — the session record stays in the database as an orphan until it expires naturally. |
+| Server restarts or deploys during active sessions | In-memory rate limiters reset (Redis-backed limiters are persistent). Encryption ciphers are re-initialized from the current `ENCRYPTION_KEY`. If the key was rotated without restart, data encrypted with the old key cannot be decrypted. |
+| Brief database outage during page refresh | If `GET /auth/me` returns 503 or a network error, the frontend clears `has_session` and logs the user out. The user must log in again when the database recovers. |
+| Concurrent session count | There is no enforced limit on simultaneous sessions. A monitoring threshold of 3 concurrent sessions triggers an anomaly alert but does not block additional logins. |
 
 ---
 
@@ -756,6 +775,11 @@ Profiles allow different compliance standards for different groups:
 | OrganizationSettings page crashes | Update to the latest version. A crash in the `redacted()` method and an auth secret leak have been fixed. |
 | Physical Address not visible in Organization Settings | As of 2026-03-04, Organization Settings > General includes a Physical Address section with a "Same as mailing address" toggle. Physical address data entered during onboarding is now displayed here. |
 | Admin hours summary categories showing "undefined" | Fixed in March 2026 — type mismatch between snake_case frontend types and camelCase API response. Pull latest and rebuild. |
+| Admin hours clock-in shows "already clocked in" | You have an active session in the same category. Clock out first, or check the dashboard for your active session. |
+| Admin hours clock-in fails with "active session" | You have an active session in a different category. The system allows only one active clock-in at a time across all categories. Clock out of the current session first. |
+| Admin hours category shows "no longer active" | The category has been deactivated by an administrator. You cannot clock into inactive categories. Contact your admin. |
+| Admin hours manual entry rejected | Manual entries are validated: clock-out must be after clock-in, clock-in cannot be in the future, and duration must be at least 1 minute. |
+| Admin hours pending entry rejected without reason | Rejection requires a reason. The reviewer must provide a rejection reason when denying a pending entry. |
 | Email templates return 500 error | Fixed in March 2026 — missing `duplicate_application` enum value in database. Run `alembic upgrade head` and restart. |
 | Email templates missing CC/BCC fields | As of 2026-03-04, each template supports default CC/BCC. BCC also available for scheduled emails. Run latest migration. |
 | Onboarding redirects to /login after Step 7 | Fixed in March 2026 — system owner creation now sets httpOnly auth cookies. Pull latest backend code and restart. |
@@ -800,6 +824,87 @@ All API response schemas now inherit from `UTCResponseBase`, which automatically
 - Combined with the existing SQLAlchemy `load` event listener (which stamps datetimes at ORM level), timezone consistency is enforced at both the database and API layers
 
 > **Edge case:** Response schemas with `Optional[datetime]` skip stamping when the value is `None`. The validator runs as `model_validator(mode="before")` so it processes raw dict data before Pydantic validation.
+
+---
+
+## Notification Enhancements (2026-03-22)
+
+### Dashboard Notification Management
+
+Dashboard notification cards now include **clear** and **dismiss** buttons directly on each card:
+
+- **Dismiss**: Hides the notification from the user's dashboard (personal action)
+- **Clear**: Marks the notification as read
+
+> **Screenshot needed:**
+> _[Screenshot of the Dashboard notifications area showing notification cards with dismiss (X) and clear (checkmark) buttons visible on each card]_
+
+### Persistent Department Messages
+
+Administrators can create department-wide persistent messages:
+
+1. Navigate to **Notifications** (admin view)
+2. Click **Create Department Message**
+3. Enter the message content and mark as **Persistent**
+4. All department members see the message until an admin clears it
+
+> **Screenshot needed:**
+> _[Screenshot of a persistent department message banner on the Dashboard with the admin-only "Clear for All" button visible]_
+
+> **Edge case:** Non-admin users cannot dismiss persistent messages. The dismiss button is hidden for regular members; only admins see the "Clear for All" action.
+
+### Notification Channel Filter
+
+The Notifications page now includes a **channel filter** to view notifications by delivery method:
+
+| Filter | Shows |
+|--------|-------|
+| All | All notifications regardless of delivery channel |
+| Email | Only email-delivered notifications |
+| In-App | Only in-app notifications (bell icon) |
+| SMS | Only SMS-delivered notifications (when Twilio enabled) |
+
+> **Screenshot needed:**
+> _[Screenshot of the Notifications page showing channel filter tabs (All, Email, In-App, SMS) at the top with the In-App filter active]_
+
+## Email Deliverability (2026-03-22)
+
+Email delivery has been improved for compatibility with Gmail, Microsoft, and other major providers:
+
+- **Message-ID header**: Satisfies DKIM/SPF authentication requirements
+- **Batch rate limiting**: Prevents bulk-send throttle triggers
+- **Inline CSS**: Gmail strips `<style>` tags; styles are now inlined on elements
+- **SMTP connection reuse**: Better performance for large recipient batches
+- **Logo hosting**: Hosted URLs instead of base64 data URIs prevent Gmail message clipping
+
+For DNS and SMTP configuration, see the [Email Deliverability Guide](../EMAIL_DELIVERABILITY.md).
+
+## Equipment Check Template Builder UX (2026-03-22)
+
+The equipment check template builder received UX improvements:
+
+- **Redesigned layout**: Better visual hierarchy and workflow organization
+- **Preview mode**: See how the check form will appear to members before saving
+- **Save redirect**: Correctly redirects to template list after saving
+- **Input stability**: Fixed inputs losing focus after each keystroke
+
+> **Screenshot needed:**
+> _[Screenshot of the equipment check template builder showing the redesigned layout with a preview panel on the right showing how the check form will appear to members on mobile]_
+
+## Time Picker Redesign (2026-03-22)
+
+The `TimeQuarterHour` component has been redesigned with three separate dropdown selects:
+
+| Dropdown | Options |
+|----------|---------|
+| **Hour** | 1 through 12 |
+| **Minute** | 00, 15, 30, 45 |
+| **AM/PM** | AM, PM |
+
+This replaces the previous single text input that was harder to use on mobile and didn't enforce quarter-hour increments visually.
+
+> **Screenshot needed:**
+> _[Screenshot of the redesigned TimeQuarterHour component showing three separate dropdown selectors (Hour: "2", Minute: "30", AM/PM: "PM") in a compact horizontal layout]_
 
 ---
 

@@ -940,6 +940,45 @@ Items that fail validation are skipped with error details. Successfully validate
 
 ---
 
+## Inventory System Edge Cases
+
+These edge cases cover automatic behaviors during item creation, assignment, return, and label generation.
+
+### Item Creation & Updates
+
+| Scenario | Behavior |
+|----------|----------|
+| Item created without a barcode | Auto-generated in the format `INV-XXXXXXXX` (first 8 hex chars of the item UUID, uppercased). |
+| Item created without `current_value` | Set equal to `purchase_price`. On updates, if `purchase_price` changes without an explicit `current_value`, the current value auto-syncs. Depreciated assets need explicit `current_value` entries to diverge. |
+| Item status set to `RETIRED` | Condition is automatically forced to `RETIRED` regardless of the submitted condition value. |
+| Concurrent updates to the same item | Row-level `SELECT FOR UPDATE` locks serialize assign, unassign, issue, and return operations. Long-running transactions can cause lock waits. |
+
+### Returns & Unassignment
+
+| Scenario | Behavior |
+|----------|----------|
+| Item returned in poor/damaged/out-of-service condition | Status automatically set to `IN_MAINTENANCE` instead of `AVAILABLE`. The item enters the maintenance queue without manual intervention. |
+| Partial pool return (less than issued quantity) | Issuance record stays open. `quantity_issued` is decremented and a note is appended. The issuance closes only when all units are returned. |
+| Pool item issuance cost snapshot | `replacement_cost` (falling back to `purchase_price`) is captured as `unit_cost_at_issuance` on the issuance record. Future price changes do not affect cost recovery calculations for existing issuances. |
+| Inventory return triggers membership auto-archive check | After both `unassign_item` and `return_to_pool`, the system checks if the member qualifies for auto-archiving. A notification queue failure during this check is non-fatal — the return still succeeds. |
+
+### Label Generation
+
+| Scenario | Behavior |
+|----------|----------|
+| No valid items selected for labels | Returns "No valid items found for label generation." Items must have a barcode or asset tag. |
+| Non-ASCII characters in barcode values | Silently stripped before Code128 encoding. Items imported with accented characters in serial numbers will have those characters removed on labels. |
+| Extremely small custom label size | Minimum bar width of 0.0075 inches is enforced for 203 DPI thermal printers. Labels below this threshold may produce barcodes that cannot be reliably scanned. |
+
+### Notification Behavior
+
+| Scenario | Behavior |
+|----------|----------|
+| Notification queue failure during inventory operation | All inventory state changes (assign, unassign, issue, return) catch notification failures silently. Inventory operations succeed even if notifications cannot be delivered. |
+| SMS low-stock alerts | Rate-limited to one per item per 24 hours. A new alert is sent only if stock was replenished and then dropped again. |
+
+---
+
 ## Troubleshooting
 
 | Issue | Solution |
@@ -974,6 +1013,90 @@ Items that fail validation are skipped with error details. Successfully validate
 | Location filter shows no results | Verify that storage areas are linked to facility rooms. The cascading filter requires Facility → Room → Storage Area hierarchy to be configured. |
 | Size/style variant generation creates too many items | The count is `sizes × colors × styles`. Remove unnecessary sizes or styles before generating. Preview shows the exact count before creation. |
 | Variant group not created after generation | Verify that `create_variant_group` is enabled (toggled on by default). Check that at least one size and one style are selected. |
+| Admin hub layout changed | Fixed 2026-03-22 — admin hub redesigned with grouped card sections. Pull latest. |
+| Barcode labels not ISO compliant | Fixed 2026-03-22 — labels now follow ISO/IEC 15417 with correct quiet zones and bar widths. |
+| Labels printing sideways on thermal printer | Fixed 2026-03-22 — auto-rotation detects roll-fed printers and rotates labels to maximize print area. |
+| Label format mismatch between preview and PDF | Fixed 2026-03-22 — frontend and backend now share unified label format definitions. |
+| Non-admin sees all equipment on dashboard | Fixed 2026-03-22 — non-admins now see only their own assigned equipment. |
+| Mobile FAB shows Export CSV for non-admin | Fixed 2026-03-22 — FAB now shows "Assign Items" for non-admin users. |
+| Barcode scan not working on desktop | Fixed 2026-03-22 — scanning now falls back to user-facing camera on desktop browsers. |
+
+---
+
+## Inventory Admin Hub Redesign (2026-03-22)
+
+The inventory admin dashboard has been redesigned with **grouped card sections** and prominent navigation cards, replacing the previous flat list layout.
+
+### New Layout
+
+The admin hub now organizes pages into logical groups:
+
+| Group | Pages |
+|-------|-------|
+| **Items & Stock** | Manage Items, Pool Items, Categories, Variant Groups |
+| **Equipment Kits** | Equipment Kits management |
+| **Member Equipment** | Members Inventory, Active Checkouts |
+| **Requests & Workflows** | Equipment Requests, Return Requests, Write-Off Requests, Reorder Requests |
+| **Maintenance & Reports** | Maintenance Records, Charges & Fees |
+| **Import & Labels** | CSV Import, Barcode Label Printing |
+
+> **Screenshot needed:**
+> _[Screenshot of the redesigned Inventory Admin Hub showing grouped card sections — "Items & Stock" group with Manage Items, Pool Items, Categories, and Variant Groups cards, each with an icon, title, and item count badge]_
+
+### New Admin Pages
+
+Two new dedicated admin pages have been added:
+
+**Equipment Kits** (`/inventory/admin/kits`):
+- Create, edit, and delete equipment kits
+- View kit components and their quantities
+- Issue kits to members with size preference auto-selection
+
+> **Screenshot needed:**
+> _[Screenshot of the Equipment Kits admin page showing a list of kits with name, component count, and actions (Edit, Issue, Delete)]_
+
+**Variant Groups** (`/inventory/admin/variant-groups`):
+- View and manage variant groups with aggregate stock across all sizes
+- Edit individual variants within a group
+- Link to auto-generation for new variant groups
+
+> **Screenshot needed:**
+> _[Screenshot of the Variant Groups admin page showing variant groups with base product name, total stock across sizes, and expandable variant details]_
+
+### Barcode Label Printing Improvements
+
+Label generation has been significantly improved:
+
+- **ISO/IEC 15417 compliance**: Correct quiet zones, minimum bar widths, and aspect ratios for reliable scanner readability
+- **Auto-rotation for thermal printers**: Roll-fed labels auto-rotate to maximize print area
+- **Test print**: New "Test Print" button generates a sample label for verifying printer alignment
+- **Unified formats**: Frontend and backend share the same label format catalog, preventing size mismatches
+- **Batch limit**: Maximum batch size enforced to prevent browser memory issues
+
+> **Screenshot needed:**
+> _[Screenshot of the label printing page showing the format dropdown (Letter, Dymo 30252, Dymo 30256, Dymo 30334, Rollo 4×6, Custom), the "Test Print" button, and a label preview with ISO-compliant barcode]_
+
+### Inventory Dashboard Scoping
+
+Non-admin users now see only their own assigned equipment on the inventory dashboard. This prevents information overload for regular members and aligns with role-based access principles.
+
+> **Screenshot needed:**
+> _[Screenshot comparison: left shows admin view with full department inventory summary, right shows member view with only "My Equipment" counts and items]_
+
+> **Edge case:** Users with `inventory.manage` permission continue to see the full department inventory. The scoping applies only to users without admin permissions.
+
+### Desktop Camera Scanning
+
+Camera-based scanning (QR codes, barcodes, member IDs) now works on desktop browsers:
+
+- **InventoryScanModal**: Barcode scanning for check-in/check-out works on all browsers via the shared `useHtml5Scanner` hook
+- **MemberIdScannerModal**: Member ID card scanning works on desktop with user-facing camera fallback
+- Both modals share the same camera initialization, resolution selection, and error handling logic
+
+> **Screenshot needed:**
+> _[Screenshot of the InventoryScanModal running on a desktop browser, showing the camera viewport with a barcode being detected and the item search results appearing below]_
+
+> **Edge case:** If no camera is available, the scanner shows an error message and the user can fall back to manual text entry (barcode/serial number input field).
 
 ---
 

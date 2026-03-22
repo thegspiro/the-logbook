@@ -141,6 +141,38 @@ POST   /api/v1/elections/{id}/send-report-email      # Email election results re
 
 ---
 
+## Recent Improvements (2026-03-22)
+
+### Eligibility, Email Reliability & Meeting Integration
+
+- **Eligibility uses membership_type**: Voter eligibility now correctly uses `User.membership_type` instead of role slugs. A member's role (e.g., EMT) does not make them eligible for operational ballot items — their membership type (e.g., "active") does
+- **Email recipient tracking accuracy**: `email_recipients` now tracks only successfully sent ballots, not attempted sends
+- **Linked meeting filter**: Meeting dropdown shows only upcoming business meetings, not past ones
+- **Concurrent ballot sending**: Email dispatch uses concurrent sending with per-recipient error isolation
+- **Eligibility summary email**: Secretary receives detailed summary after ballot dispatch (sent count, skipped voters with reasons)
+- **Secretary-facing error messages**: Actionable guidance in error messages (e.g., "No active members with email addresses found")
+- **Election report email**: New "Send Report Email" button on election detail page
+- **Business meetings section**: Election detail page displays upcoming business meetings for procedural linking
+- **Code quality sweep**: Module refactored — removed dead code, fixed unused state, standardized error handling
+
+### API Endpoints (2026-03-22)
+
+```
+POST   /api/v1/elections/{id}/send-report-email      # Email election results report
+```
+
+### Edge Cases (2026-03-22)
+
+| Scenario | Behavior |
+|----------|----------|
+| Member with role `emt` but membership_type `administrative` | Not eligible for `operational` ballot items |
+| Email fails for one recipient in batch | Loop continues; summary shows per-recipient status |
+| Election linked to past meeting | Past meetings filtered out of dropdown |
+| No eligible voters after filtering | Descriptive error with reasons instead of false success |
+| Membership type not set on member | Falls back to "all" eligibility only |
+
+---
+
 ## Recent Improvements (2026-03-12)
 
 - **Ballot email notifications**: Election creators can send ballot notification emails to eligible voters directly from the election detail page. Emails include election title, voting period, direct ballot link, and organization logo

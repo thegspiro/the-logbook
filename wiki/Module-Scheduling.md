@@ -182,4 +182,27 @@ GET    /api/v1/scheduling/apparatus          # List basic apparatus
 
 ---
 
+## Recent Improvements (2026-03-22)
+
+### Permission Fixes, Shift Signup & Camera Scanning
+
+- **Shift assignment permission fix**: Shift assignment UI was gated by `scheduling.manage_assignments` instead of the broader `scheduling.manage` — users with manage permission can now assign members
+- **Self-signup visibility fix**: Open Shifts tab fallback permission and self-signup button visibility corrected for non-admin members
+- **Calls/Incidents section removed**: Removed placeholder Calls/Incidents section from shift detail panel (not yet implemented)
+- **Dashboard shift cleanup**: "My Upcoming Shifts" hides declined and cancelled assignments
+- **Position editing in shift detail**: Officers edit position assignments directly from the shift detail edit form
+- **Desktop camera scanning**: Camera-based QR/barcode scanning now works on desktop via shared `useHtml5Scanner` hook with user-facing camera fallback
+- **Scheduling permission cleanup**: Removed redundant permission checks and narrowed fallback scope in OpenShiftsTab and ShiftDetailPanel
+
+### Edge Cases (2026-03-22)
+
+| Scenario | Behavior |
+|----------|----------|
+| User with `scheduling.manage` but not `scheduling.manage_assignments` | Can now assign members (permission broadened) |
+| Declined shift in "My Upcoming Shifts" | Filtered from dashboard display |
+| Desktop with only user-facing camera | Falls back automatically for scanning |
+| Member re-signing up after cancellation | Previous cancelled assignment cleaned up to avoid constraint violation |
+
+---
+
 **See also:** [Events Module](Module-Events) | [Apparatus Module](Module-Apparatus)

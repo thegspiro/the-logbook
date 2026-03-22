@@ -200,3 +200,26 @@ than Gmail in several areas:
 5. **Throttling is aggressive** — Microsoft may throttle to ~30 messages
    per connection. The app's batch sender handles this with automatic
    reconnection and backoff.
+
+## 8. Application-Level Improvements (2026-03-22)
+
+The following changes were made in the application code to improve email
+deliverability without requiring DNS or SMTP configuration changes:
+
+| Improvement | Description |
+|-------------|-------------|
+| **Message-ID header** | All outgoing emails include a proper RFC 5322 `Message-ID` header, satisfying Gmail and Microsoft authentication checks |
+| **Batch rate limiting** | Large recipient lists are rate-limited per batch to avoid triggering bulk-send throttles (Gmail: ~100/min, Microsoft: ~30/connection) |
+| **Inline CSS** | All email template styles are inlined directly on HTML elements. Gmail strips `<style>` tags from email bodies, so inline styles ensure consistent rendering |
+| **SMTP connection reuse** | SMTP connections are reused within a batch send operation, reducing connection overhead and improving throughput for large batches |
+| **Hosted logo images** | Organization logos use hosted image URLs instead of base64 data URIs. Gmail clips emails exceeding ~102 KB, and base64-encoded logos easily push emails past this limit |
+| **Admin email templates** | Administrators can send emails using saved templates directly from the admin interface |
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Logo image URL not accessible | Falls back to text-only header with organization name |
+| Batch > 50 recipients (Gmail) | Rate-limited with 1-second delays between sub-batches |
+| Email client without CSS support | Inline styles ensure basic formatting is preserved |
+| SMTP connection timeout mid-batch | Automatic reconnection and retry for remaining recipients |

@@ -486,6 +486,7 @@ She clicks **Export CSV** to download the data for the monthly operations report
 | Modal dialog buttons unresponsive (delete, confirm) | Fixed in March 2026 — backdrop overlay no longer intercepts button clicks. Pull latest and rebuild. |
 | Form submission does not auto-advance prospect | As of 2026-03-14, auto-advance must be explicitly enabled in the pipeline stage configuration. Open Pipeline Settings, edit the form_submission stage, and check "Auto-advance when form is submitted". |
 | Automated pipeline email not sent on form submission | The email is triggered when advancing to an `automated_email` stage, not when submitting a form. Verify the pipeline has an `automated_email` stage after the `form_submission` stage and that SMTP is configured. *(added 2026-03-14)* |
+| Public form submission by bot | The system uses a hidden honeypot field for bot detection. If filled, the submission returns HTTP 200 with no body (fake success) — no record is created. Legitimate users never see this field. |
 
 ---
 

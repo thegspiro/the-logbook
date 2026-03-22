@@ -242,8 +242,60 @@ Quick RSVP from the events list — tap **Going**, **Maybe**, or **Not Going** w
 | App icon disappeared from home screen | Some devices remove PWA icons after system updates or storage cleanups. Reinstall following the steps above. |
 | Dark mode not applying in PWA | Dark mode follows the app's theme setting (My Account > Appearance), not the device's system setting. Toggle it from within the app. |
 | "Update Available" notification not appearing | The version detection checks periodically. If you suspect you're on an old version, force refresh with Ctrl+Shift+R or close and reopen the app. |
-| Layout looks wrong on mobile | Mobile responsiveness has been significantly improved. Clear your browser cache to load the latest styles. Use landscape orientation for complex tables. |
+| Layout looks wrong on mobile | Mobile responsiveness has been significantly improved (major update 2026-03-22). Clear your browser cache to load the latest styles. Use landscape orientation for complex tables. |
 | Login page shows "Too many attempts" | Rate limiting is active. Wait for the countdown timer to expire before trying again. |
+
+---
+
+## Mobile Responsiveness Updates (2026-03-22)
+
+A comprehensive mobile responsiveness pass was applied across the entire application. The following areas received significant improvements:
+
+### Dashboard
+
+The main dashboard now adapts to phone and tablet screens:
+- Stacked card layout on small screens (single column)
+- Collapsible sections for shift, event, and notification widgets
+- Touch-friendly buttons and controls sized for finger taps
+- Notification cards include clear/dismiss buttons directly on the dashboard
+
+> **Screenshot needed:**
+> _[Screenshot of the Dashboard on a mobile phone (portrait) showing stacked widget cards — "My Upcoming Shifts", "Upcoming Events", and "Notifications" — with touch-friendly buttons and a compact layout]_
+
+### Inventory Module
+
+All inventory pages received responsive design improvements:
+- **Items list**: Card layout instead of table rows on mobile
+- **Admin hub**: Grouped card sections stack vertically on narrow screens
+- **Member equipment**: Collapsible member rows with equipment counts
+- **Floating Action Button (FAB)**: Quick-access button for common actions on mobile
+  - Non-admin users see "Assign Items" action
+  - Admin users see additional actions (Add Item, Scan Barcode, Import CSV)
+
+> **Screenshot needed:**
+> _[Screenshot of the Inventory Items List on a mobile phone showing item cards (instead of table rows) with name, category badge, condition indicator, and status. Show the floating action button in the bottom-right corner]_
+
+> **Screenshot needed:**
+> _[Screenshot of the Inventory Admin Hub on a mobile phone showing grouped card sections stacked vertically with prominent navigation cards for Items, Pool, Categories, Kits, and Variant Groups]_
+
+### Other Pages
+
+- **Scheduling**: Calendar and shift views optimized for mobile touch interaction
+- **Events**: Event cards and RSVP buttons sized for touch
+- **Members**: Directory uses card layout on mobile
+- **Settings**: All settings pages use responsive layouts
+
+### Desktop Camera Scanning
+
+Camera scanning (QR codes, barcodes, member IDs) now works on desktop browsers in addition to mobile:
+- Automatic fallback to user-facing camera when no environment-facing camera is available
+- Shared scanner infrastructure across all scanning features (inventory, member ID, event check-in)
+- Works in Chrome, Edge, Firefox, and Safari
+
+> **Screenshot needed:**
+> _[Screenshot of the MemberIdScannerModal on a desktop browser showing the webcam feed in the scanner viewport, with a QR code being detected and the member's name appearing in the result area below]_
+
+> **Edge case:** Desktop browsers require explicit camera permission. If the user denies camera access, the scanner shows a clear error message and the user can fall back to manual text entry.
 
 ---
 

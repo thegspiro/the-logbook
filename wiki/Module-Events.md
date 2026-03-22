@@ -201,6 +201,53 @@ DELETE /api/v1/event-requests/email-templates/{id}         # Delete template
 
 ---
 
+## Recent Changes (2026-03-22)
+
+### Recurring Series, End Event, Admin Hours & Notifications
+
+- **Rolling 12-month recurrence**: Recurring events can use a rolling 12-month window that automatically extends the series forward
+- **Delete series support**: Officers can delete an entire recurring event series with confirmation showing the count of events to be removed
+- **"End Event" button**: Bulk checkout of all currently checked-in attendees at once from the event detail page
+- **Compact event create form**: 2-column grid layout pairing related sections for reduced scrolling
+- **Event-to-admin-hours integration**: Events linked to admin hour tracking categories automatically credit attendance hours toward administrative compliance
+- **Event deletion FK fix**: Deleting events with linked meeting minutes no longer fails — cascade properly handles the FK constraint
+- **Check-in monitoring consistency**: Fixed monitoring page using different time window logic than QR self-check-in
+- **Event request form publish status**: Request forms show publish status badges on Events Settings page
+- **Dashboard notifications**: Clear/dismiss buttons on dashboard notification cards; persistent department messages only admins can clear
+- **Notification channel filter**: Notifications page includes channel filter (email, in-app, SMS)
+- **Email deliverability improvements**: Message-ID headers, batch rate limiting, inline CSS, SMTP reuse, Gmail clipping fix
+
+### Data Model Changes (2026-03-22)
+
+| Table | Change | Description |
+|-------|--------|-------------|
+| `events` | `rolling_recurrence` (Boolean) | Enables rolling 12-month recurrence window |
+| `event_hour_mappings` | New table | Maps event types to admin hour tracking categories |
+| `admin_hours_requirements` | New table | Compliance requirements for admin hour categories |
+| `meeting_minutes` | FK cascade update | `event_id` FK cascades on delete |
+| `department_messages` | `is_persistent` (Boolean) | Messages only admins can clear |
+
+### API Endpoints (2026-03-22)
+
+```
+DELETE /api/v1/events/{id}/series                # Delete entire recurring event series
+POST   /api/v1/events/{id}/end                   # Bulk checkout all checked-in attendees
+```
+
+### Edge Cases (2026-03-22)
+
+| Scenario | Behavior |
+|----------|----------|
+| Rolling recurrence with no end date | Generates 12 months ahead, auto-refreshed |
+| Delete series with past events | All events removed (past and future) |
+| "End Event" with no checked-in attendees | No-op with informational message |
+| Event linked to minutes then deleted | Minutes `event_id` set to null via cascade |
+| Admin hours with no mapping configured | Attendance not credited; mapping required |
+| Non-admin clearing persistent message | Clear button not shown |
+| Gmail with large email body | Hosted image URLs replace base64 logos to prevent clipping |
+
+---
+
 ## Recent Changes (2026-03-19)
 
 ### In-App Notifications, Time Picker & Check-In Fix
