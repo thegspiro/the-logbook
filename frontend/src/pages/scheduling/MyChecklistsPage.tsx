@@ -182,6 +182,7 @@ export const MyChecklistsPage: React.FC = () => {
   }, [fetchActiveChecklists, fetchHistory, showHistory, searchQuery]);
 
   const handleBack = useCallback(() => {
+    if (!window.confirm('Leave this check? Your progress is saved as a draft and will be restored when you return.')) return;
     setActiveTemplate(null);
     setActiveShiftId(null);
   }, []);

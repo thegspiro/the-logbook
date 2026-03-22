@@ -106,7 +106,9 @@ async def get_template(
 ):
     """Get a specific template with all compartments and items."""
     service = EquipmentCheckService(db)
-    template = await service.get_template(template_id, current_user.organization_id)
+    template = await service.get_template(
+        template_id, current_user.organization_id
+    )
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
     return template
@@ -142,7 +144,9 @@ async def delete_template(
 ):
     """Delete a template and all its compartments/items."""
     service = EquipmentCheckService(db)
-    deleted = await service.delete_template(template_id, current_user.organization_id)
+    deleted = await service.delete_template(
+        template_id, current_user.organization_id
+    )
     if not deleted:
         raise HTTPException(status_code=404, detail="Template not found")
 
@@ -317,6 +321,25 @@ async def delete_item(
     deleted = await service.delete_item(item_id, current_user.organization_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Item not found")
+
+
+@router.put(
+    "/compartments/{compartment_id}/items/reorder", status_code=200
+)
+async def reorder_items(
+    compartment_id: str,
+    data: ReorderRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("equipment_check.manage")),
+):
+    """Reorder items within a compartment."""
+    service = EquipmentCheckService(db)
+    success = await service.reorder_items(
+        compartment_id, current_user.organization_id, data.ordered_ids
+    )
+    if not success:
+        raise HTTPException(status_code=404, detail="Compartment not found")
+    return {"ok": True}
 
 
 # =====================================================================
@@ -501,7 +524,8 @@ async def upload_check_item_photos(
         .where(
             ShiftEquipmentCheckItem.id == item_id,
             ShiftEquipmentCheckItem.check_id == check_id,
-            ShiftEquipmentCheck.organization_id == current_user.organization_id,
+            ShiftEquipmentCheck.organization_id
+            == current_user.organization_id,
         )
     )
     check_item = result.scalars().first()
@@ -564,7 +588,8 @@ async def upload_check_item_photos(
             quality=80,
             output_format="WEBP",
         )
-        data_uri = f"data:image/webp;base64," f"{base64.b64encode(optimized).decode()}"
+        encoded = base64.b64encode(optimized).decode()
+        data_uri = f"data:image/webp;base64,{encoded}"
         new_urls.append(data_uri)
 
     # Shallow copy suffices — strings are immutable
@@ -838,7 +863,10 @@ async def export_pdf(
         check_dict = {
             "overall_status": check.overall_status,
             "checked_by_name": None,
-            "checked_at": (check.checked_at.isoformat() if check.checked_at else ""),
+            "checked_at": (
+                check.checked_at.isoformat()
+                if check.checked_at else ""
+            ),
             "check_timing": check.check_timing,
             "total_items": check.total_items,
             "completed_items": check.completed_items,
@@ -866,7 +894,10 @@ async def export_pdf(
             if u:
                 first = u.first_name or ""
                 last = u.last_name or ""
-                check_dict["checked_by_name"] = f"{first} {last}".strip() or "Unknown"
+                name = f"{first} {last}".strip()
+                check_dict["checked_by_name"] = (
+                    name or "Unknown"
+                )
         pdf_bytes = generate_check_detail_pdf(check_dict)
         filename = f"equipment_check_{check_id[:8]}.pdf"
 

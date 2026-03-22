@@ -9,9 +9,10 @@
  * 5. Return to overview and submit when all items are checked
  */
 
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   CheckCircle,
+  CheckCircle2,
   XCircle,
   ChevronLeft,
   ChevronRight,
@@ -272,6 +273,115 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   );
 
   // --------------------------------------------------------------------------
+  // Draft persistence — save progress to localStorage so it survives crashes
+  // --------------------------------------------------------------------------
+
+  const draftKey = `equipment-check-draft-${shiftId}-${template.id}`;
+
+  useEffect(() => {
+    if (previewMode) return;
+    try {
+      const saved = localStorage.getItem(draftKey);
+      if (!saved) return;
+      const parsed = JSON.parse(saved) as { results: Record<string, ItemResult>; overallNotes: string };
+      if (parsed.results && Object.keys(parsed.results).length > 0) {
+        setResults(parsed.results);
+      }
+      if (parsed.overallNotes) {
+        setOverallNotes(parsed.overallNotes);
+      }
+    } catch {
+      // Corrupted draft — ignore
+    }
+  }, [draftKey, previewMode]);
+
+  useEffect(() => {
+    if (previewMode) return;
+    if (Object.keys(results).length === 0 && !overallNotes) return;
+    try {
+      localStorage.setItem(
+        draftKey,
+        JSON.stringify({ results, overallNotes }),
+      );
+    } catch {
+      // Storage full — ignore
+    }
+  }, [results, overallNotes, draftKey, previewMode]);
+
+  // --------------------------------------------------------------------------
+  // Unsaved changes warning
+  // --------------------------------------------------------------------------
+
+  const hasProgress = checkedItems > 0;
+
+  useEffect(() => {
+    if (previewMode || !hasProgress) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [previewMode, hasProgress]);
+
+  // --------------------------------------------------------------------------
+  // Pass All — mark all items in a compartment as pass
+  // --------------------------------------------------------------------------
+
+  // --------------------------------------------------------------------------
+  // Keyboard navigation — auto-advance to next item after marking pass/fail
+  // --------------------------------------------------------------------------
+
+  const itemRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  const focusNextItem = useCallback(
+    (currentItemId: string) => {
+      if (activeCompartment === null) return;
+      const comp = compartments[activeCompartment];
+      if (!comp) return;
+      const currentIdx = comp.items.findIndex((i) => i.id === currentItemId);
+      if (currentIdx === -1 || currentIdx >= comp.items.length - 1) return;
+      const nextItem = comp.items[currentIdx + 1];
+      if (!nextItem) return;
+      const nextEl = itemRefs.current[nextItem.id];
+      if (nextEl) {
+        nextEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const passBtn = nextEl.querySelector<HTMLButtonElement>('[data-action="pass"]');
+        passBtn?.focus();
+      }
+    },
+    [activeCompartment, compartments],
+  );
+
+  const updateResultAndAdvance = useCallback(
+    (itemId: string, patch: Partial<ItemResult>) => {
+      updateResult(itemId, patch);
+      if (patch.status === 'pass' || patch.status === 'fail') {
+        setTimeout(() => focusNextItem(itemId), 150);
+      }
+    },
+    [updateResult, focusNextItem],
+  );
+
+  const passAllInCompartment = useCallback(
+    (compartment: CheckTemplateCompartment) => {
+      setResults((prev) => {
+        const next = { ...prev };
+        for (const item of compartment.items) {
+          const expStatus = getExpirationStatus(item);
+          if (expStatus === 'expired') continue;
+          const existing = next[item.id];
+          next[item.id] = {
+            ...existing,
+            status: 'pass',
+          };
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  // --------------------------------------------------------------------------
   // Submit
   // --------------------------------------------------------------------------
 
@@ -351,6 +461,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         );
       }
 
+      try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
       toast.success('Equipment check submitted successfully');
       onComplete?.();
     } catch {
@@ -410,7 +521,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={() => updateResult(item.id, { status: 'pass' })}
+          data-action="pass"
+          onClick={() => updateResultAndAdvance(item.id, { status: 'pass' })}
           disabled={isExpired}
           className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors min-h-[48px] ${
             effectiveStatus === 'pass'
@@ -423,7 +535,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         </button>
         <button
           type="button"
-          onClick={() => updateResult(item.id, { status: 'fail' })}
+          data-action="fail"
+          onClick={() => updateResultAndAdvance(item.id, { status: 'fail' })}
           className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors min-h-[48px] ${
             effectiveStatus === 'fail'
               ? 'bg-red-600 text-white'
@@ -446,7 +559,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => updateResult(item.id, { status: 'pass' })}
+              data-action="pass"
+              onClick={() => updateResultAndAdvance(item.id, { status: 'pass' })}
               className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors min-h-[48px] ${
                 effectiveStatus === 'pass'
                   ? 'bg-green-600 text-white'
@@ -458,7 +572,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => updateResult(item.id, { status: 'fail' })}
+              data-action="fail"
+              onClick={() => updateResultAndAdvance(item.id, { status: 'fail' })}
               className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors min-h-[48px] ${
                 effectiveStatus === 'fail'
                   ? 'bg-red-600 text-white'
@@ -729,6 +844,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     return (
       <div
         key={item.id}
+        ref={(el) => { itemRefs.current[item.id] = el; }}
         className={`rounded-lg border p-4 space-y-3 transition-colors ${
           effectiveStatus === 'pass'
             ? 'border-green-500/30 bg-green-500/5'
@@ -1003,18 +1119,32 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           </div>
         </div>
 
-        <div>
-          <h2 className="text-lg font-bold text-theme-text-primary">
-            {comp.name}
-          </h2>
-          {comp.description && (
-            <p className="text-sm text-theme-text-muted mt-0.5">
-              {comp.description}
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-theme-text-primary">
+              {comp.name}
+            </h2>
+            {comp.description && (
+              <p className="text-sm text-theme-text-muted mt-0.5">
+                {comp.description}
+              </p>
+            )}
+            <p className="text-xs text-theme-text-muted mt-1">
+              {checked}/{comp.items.length} items checked
             </p>
+          </div>
+
+          {/* Pass All button */}
+          {!previewMode && checked < comp.items.length && (
+            <button
+              type="button"
+              onClick={() => passAllInCompartment(comp)}
+              className="flex items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs font-medium text-green-700 dark:text-green-400 hover:bg-green-500/20 transition-colors whitespace-nowrap min-h-[40px]"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Pass All
+            </button>
           )}
-          <p className="text-xs text-theme-text-muted mt-1">
-            {checked}/{comp.items.length} items checked
-          </p>
         </div>
 
         {/* Items */}
