@@ -940,6 +940,45 @@ Items that fail validation are skipped with error details. Successfully validate
 
 ---
 
+## Inventory System Edge Cases
+
+These edge cases cover automatic behaviors during item creation, assignment, return, and label generation.
+
+### Item Creation & Updates
+
+| Scenario | Behavior |
+|----------|----------|
+| Item created without a barcode | Auto-generated in the format `INV-XXXXXXXX` (first 8 hex chars of the item UUID, uppercased). |
+| Item created without `current_value` | Set equal to `purchase_price`. On updates, if `purchase_price` changes without an explicit `current_value`, the current value auto-syncs. Depreciated assets need explicit `current_value` entries to diverge. |
+| Item status set to `RETIRED` | Condition is automatically forced to `RETIRED` regardless of the submitted condition value. |
+| Concurrent updates to the same item | Row-level `SELECT FOR UPDATE` locks serialize assign, unassign, issue, and return operations. Long-running transactions can cause lock waits. |
+
+### Returns & Unassignment
+
+| Scenario | Behavior |
+|----------|----------|
+| Item returned in poor/damaged/out-of-service condition | Status automatically set to `IN_MAINTENANCE` instead of `AVAILABLE`. The item enters the maintenance queue without manual intervention. |
+| Partial pool return (less than issued quantity) | Issuance record stays open. `quantity_issued` is decremented and a note is appended. The issuance closes only when all units are returned. |
+| Pool item issuance cost snapshot | `replacement_cost` (falling back to `purchase_price`) is captured as `unit_cost_at_issuance` on the issuance record. Future price changes do not affect cost recovery calculations for existing issuances. |
+| Inventory return triggers membership auto-archive check | After both `unassign_item` and `return_to_pool`, the system checks if the member qualifies for auto-archiving. A notification queue failure during this check is non-fatal — the return still succeeds. |
+
+### Label Generation
+
+| Scenario | Behavior |
+|----------|----------|
+| No valid items selected for labels | Returns "No valid items found for label generation." Items must have a barcode or asset tag. |
+| Non-ASCII characters in barcode values | Silently stripped before Code128 encoding. Items imported with accented characters in serial numbers will have those characters removed on labels. |
+| Extremely small custom label size | Minimum bar width of 0.0075 inches is enforced for 203 DPI thermal printers. Labels below this threshold may produce barcodes that cannot be reliably scanned. |
+
+### Notification Behavior
+
+| Scenario | Behavior |
+|----------|----------|
+| Notification queue failure during inventory operation | All inventory state changes (assign, unassign, issue, return) catch notification failures silently. Inventory operations succeed even if notifications cannot be delivered. |
+| SMS low-stock alerts | Rate-limited to one per item per 24 hours. A new alert is sent only if stock was replenished and then dropped again. |
+
+---
+
 ## Troubleshooting
 
 | Issue | Solution |

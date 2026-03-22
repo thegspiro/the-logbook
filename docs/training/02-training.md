@@ -642,6 +642,43 @@ Members and officers can attach supporting documents (certificates, transcripts,
 
 ---
 
+## Training Submission & Compliance Edge Cases
+
+The training module has several boundary behaviors that affect how submissions are processed, how compliance is calculated, and how waivers interact with requirements.
+
+### Self-Reported Submission Processing
+
+| Scenario | Behavior |
+|----------|----------|
+| Department disables approval requirement | Submissions are auto-approved immediately — no officer review. A training record is created on submit. |
+| Hours below `auto_approve_under_hours` threshold | Auto-approved even when approval is generally required. Officers configure this threshold in Training Settings. |
+| Hours exceed `max_hours_per_submission` | Submission rejected: "Hours exceed maximum of N per submission." Re-submit with corrected hours. |
+| Training type not in allowed types list | Submission rejected: "Training type 'X' is not allowed for self-reporting." Only types listed in the configuration are accepted. |
+| Submission already reviewed | Attempting to approve or reject a non-pending submission returns: "Submission has already been reviewed." |
+
+### Compliance Calculation
+
+| Scenario | Behavior |
+|----------|----------|
+| Membership tier marked `training_exempt` | Member is fully exempt from all training requirements — shows green compliance regardless of hours. |
+| Tier has `training_exempt_types` list | Member is exempt only from requirements matching those training types. Other requirements still apply. |
+| Tier lookup fails (corrupt config) | System fails open — member is treated as non-exempt and must meet all requirements. Officers may see unexpected non-compliance for senior-tier members. |
+| `COURSES` requirement with empty `required_courses` list | Auto-completes immediately (100% progress). Appears green in the compliance matrix. |
+| `CERTIFICATION` requirement matching | Matches records via three fallback strategies: (1) `training_type` match, (2) case-insensitive requirement name substring in course name, (3) `registry_code` substring in certification number. If none match, the member shows as non-compliant. |
+| Biannual requirement with expired certification | Even if the member has accumulated sufficient hours, an expired certification resets progress to 0 and blocks further activity. |
+| `BIANNUAL` or `ONE_TIME` frequency requirements | No date window applied — ALL historical training records count toward the requirement, not just recent ones. |
+
+### Waiver Behavior
+
+| Scenario | Behavior |
+|----------|----------|
+| Waiver covers fewer than 15 days of a month | That month is NOT counted as waived — the member must still meet the full requirement for that month. |
+| Waiver covers 15 or more days of a month | The entire month is waived and the requirement is pro-rated. |
+| Permanent waiver (no end date) | Stored with a sentinel end date of 9999-12-31 for calculation purposes. Displays as "Permanent" in the UI. |
+| LOA with unrecognized leave type | Auto-linked training waiver defaults to `OTHER` waiver type. The waiver still functions but the type classification may not match expectations. |
+
+---
+
 ## Troubleshooting
 
 | Issue | Solution |

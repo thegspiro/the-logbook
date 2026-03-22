@@ -357,12 +357,18 @@ All significant actions are logged for compliance:
 
 ### Rate Limiting
 
-The system applies rate limiting to sensitive endpoints:
-- Login: 5 attempts per minute per IP
-- Password reset: 5 requests per minute per IP
-- Registration: 5 requests per minute per IP
+The system applies rate limiting to sensitive endpoints with specific thresholds and lockout durations:
 
-> **Hint:** If a member reports being locked out, check if they exceeded the login attempt limit. The lockout period is configurable in the system settings.
+| Endpoint | Max Requests | Window | Lockout Duration |
+|----------|-------------|--------|-----------------|
+| Login | 5 | 60 seconds | 30 minutes |
+| Registration | 3 | 60 seconds | 30 minutes |
+| Password reset | 3 | 5 minutes | 30 minutes |
+| Token refresh | 10 | 60 seconds | 10 minutes |
+
+When rate-limited, the system returns HTTP 429 with a `Retry-After` header indicating the lockout duration in seconds. Failed login attempts are also tracked per-user via the `failed_login_attempts` counter on the user record.
+
+> **Hint:** If a member reports being locked out, check if they exceeded the login attempt limit. The lockout expires automatically after the duration above. The `Retry-After` header tells the client exactly how long to wait.
 
 ### Security Hardening (2026-03-07)
 
@@ -756,6 +762,11 @@ Profiles allow different compliance standards for different groups:
 | OrganizationSettings page crashes | Update to the latest version. A crash in the `redacted()` method and an auth secret leak have been fixed. |
 | Physical Address not visible in Organization Settings | As of 2026-03-04, Organization Settings > General includes a Physical Address section with a "Same as mailing address" toggle. Physical address data entered during onboarding is now displayed here. |
 | Admin hours summary categories showing "undefined" | Fixed in March 2026 — type mismatch between snake_case frontend types and camelCase API response. Pull latest and rebuild. |
+| Admin hours clock-in shows "already clocked in" | You have an active session in the same category. Clock out first, or check the dashboard for your active session. |
+| Admin hours clock-in fails with "active session" | You have an active session in a different category. The system allows only one active clock-in at a time across all categories. Clock out of the current session first. |
+| Admin hours category shows "no longer active" | The category has been deactivated by an administrator. You cannot clock into inactive categories. Contact your admin. |
+| Admin hours manual entry rejected | Manual entries are validated: clock-out must be after clock-in, clock-in cannot be in the future, and duration must be at least 1 minute. |
+| Admin hours pending entry rejected without reason | Rejection requires a reason. The reviewer must provide a rejection reason when denying a pending entry. |
 | Email templates return 500 error | Fixed in March 2026 — missing `duplicate_application` enum value in database. Run `alembic upgrade head` and restart. |
 | Email templates missing CC/BCC fields | As of 2026-03-04, each template supports default CC/BCC. BCC also available for scheduled emails. Run latest migration. |
 | Onboarding redirects to /login after Step 7 | Fixed in March 2026 — system owner creation now sets httpOnly auth cookies. Pull latest backend code and restart. |

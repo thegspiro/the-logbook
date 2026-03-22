@@ -804,6 +804,82 @@ Thank you for working with Riverside Fire-Rescue!
 
 ---
 
+## Event, Check-In & RSVP Edge Cases
+
+These edge cases cover system behavior during event management, QR check-in, RSVP processing, and event deletion.
+
+### Check-In Window Types
+
+Events support three check-in window modes that control when QR and manual check-in is accepted:
+
+| Window Type | Check-In Opens | Check-In Closes |
+|-------------|---------------|-----------------|
+| **Flexible** (default) | N minutes before event start (default 30) | When the event ends (uses actual end time if recorded, otherwise scheduled end) |
+| **Strict** | At exact event start time (uses actual start time if recorded) | At exact event end time (uses actual end time if recorded) |
+| **Window** | N minutes before start (default 15) | N minutes after end (default 15) |
+
+> **Hint:** If a member tries to check in before the window opens, the error message displays the opening time in the organization's local timezone (e.g., "Check-in opens at 06:30 PM EST"). After the window closes: "Check-in is no longer available. The event has ended."
+
+### Check-In Behavior
+
+| Scenario | Behavior |
+|----------|----------|
+| Check-in without prior RSVP | Auto-creates an RSVP with "going" status. Check-in works for non-RSVP events. |
+| Double check-in attempt | Returns "Already checked in." Use the monitoring view to adjust times if needed. |
+| Check-out without check-in | Returns "Cannot check out without checking in first." |
+| Double check-out attempt | Returns "You have already checked out of this event." |
+| Check-in to cancelled event | Returns "Event has been cancelled." |
+
+### RSVP Processing
+
+| Scenario | Behavior |
+|----------|----------|
+| RSVP to cancelled event | Returns "Cannot RSVP to cancelled event." |
+| RSVP after deadline | Returns "RSVP deadline has passed." Deadlines with missing timezone info are treated as UTC. |
+| RSVP status not in allowed list | Returns error listing allowed statuses. Events can restrict to specific statuses (e.g., only "going"/"not_going", no "maybe"). |
+| RSVP "Going" when event is at capacity | Status is silently changed to "Waitlisted." The frontend must check the returned RSVP status to detect this — no error is returned. |
+| Waitlist promotion trigger | Fires when a "Going" member changes to "Not Going" OR when a manager removes a "Going" attendee. Does NOT fire when `max_attendees` is increased. |
+| Series RSVP and capacity | Bulk RSVP to a recurring series skips per-event capacity checks. A member can exceed capacity on individual events without being waitlisted. |
+
+### Event Deletion
+
+| Scenario | Behavior |
+|----------|----------|
+| Delete event with linked meeting minutes | Returns "Cannot delete event because it has linked records (e.g. meeting minutes). Remove or unlink them first." |
+| Delete series with linked records | Any event in the series with linked records blocks the entire series deletion. |
+| Duplicate event copies | Duplicating a recurring event creates a standalone one-off event — recurrence settings are not copied. |
+| "Update all future" anchor boundary | Updates the selected event AND all future events in the series. Past siblings are never modified. |
+
+### Event Notifications
+
+| Scenario | Behavior |
+|----------|----------|
+| Send notification to cancelled event | Returns "Cannot send notifications for a cancelled event." |
+| Location double-booking | Shows up to 3 conflicting event titles in the error message. This is a hard block — the event cannot be created with an overlapping location and time. |
+
+---
+
+## Election Integrity & Voting Edge Cases
+
+### Vote Integrity
+
+| Scenario | Behavior |
+|----------|----------|
+| Vote integrity chain | Each vote computes `SHA256(previous_chain_hash + vote_signature)` and stores it as `last_chain_hash` on the election. An unbroken chain proves no votes were deleted or reordered. |
+| Voter receipt hash | Each vote generates a `receipt_hash = SHA256(vote_id + signature + nonce)` returned to the voter. Can be used for individual vote verification, though no frontend UI currently exposes this. |
+| Double-vote prevention | Enforced at two levels: application-level check first, then a database `UNIQUE` constraint on `vote_dedup_hash`. Race conditions are caught at the DB level and logged as `vote_double_attempt` audit events. |
+| Anonymous voter salt | A per-election `voter_anonymity_salt` generates voter hashes. The salt can theoretically be destroyed post-election to make de-anonymization permanently impossible, but this is not automated. |
+
+### Voting Eligibility
+
+| Scenario | Behavior |
+|----------|----------|
+| Tier requires meeting attendance for voting | System queries actual meeting attendance over `voting_attendance_period_months` and compares against `voting_min_attendance_pct`. Members below the threshold are denied voting rights. |
+| Secretary voter override | Overrides bypass ALL eligibility checks — tier, attendance, role restrictions. Only the secretary can add overrides. |
+| Ballot-item-only elections (no candidates) | Can be opened and voted on. `open_election` no longer requires candidates. |
+
+---
+
 ## Troubleshooting
 
 | Issue | Solution |
