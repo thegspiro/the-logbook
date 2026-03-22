@@ -22,6 +22,7 @@ from app.core.utils import handle_service_errors
 from app.services.compliance_officer_service import (
     AnnualComplianceReportService,
     ComplianceAttestationService,
+    ContributedHoursService,
     ISOReadinessService,
     RecordCompletenessService,
 )
@@ -173,7 +174,9 @@ async def export_annual_report(
             [
                 "Name",
                 "Compliance %",
-                "Hours",
+                "Training Hours",
+                "Admin Hours",
+                "Total Contributed Hours",
                 "Requirements Met",
                 "Requirements Total",
                 "Expired Certs",
@@ -188,6 +191,8 @@ async def export_annual_report(
                     member.get("name", ""),
                     member.get("compliance_pct", 0),
                     member.get("hours_completed", 0),
+                    member.get("admin_hours_approved", 0),
+                    member.get("total_contributed_hours", 0),
                     member.get("requirements_met", 0),
                     member.get("requirements_total", 0),
                     member.get("expired_certifications", 0),
@@ -204,6 +209,30 @@ async def export_annual_report(
                 )
             },
         )
+
+
+# =============================================================================
+# Contributed Hours (combined training + admin hours for reporting)
+# =============================================================================
+
+
+@router.get("/contributed-hours")
+async def get_contributed_hours(
+    year: int = Query(..., description="Report year"),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_permission("training.manage")),
+):
+    """Get total contributed hours combining training and admin hours.
+
+    Useful for end-of-year reporting and fundraising teams who need
+    total hours contributed by all members.
+    """
+    async with handle_service_errors("Failed to fetch contributed hours"):
+        service = ContributedHoursService(db)
+        result = await service.get_contributed_hours(
+            current_user.organization_id, year=year
+        )
+        return result
 
 
 # =============================================================================

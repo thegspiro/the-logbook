@@ -16,6 +16,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import log_audit_event
 from app.core.utils import generate_uuid
+from app.models.admin_hours import (
+    AdminHoursCategory,
+    AdminHoursEntry,
+    AdminHoursEntryStatus,
+)
 from app.models.audit import AuditLog
 from app.models.training import (
     InstructorQualification,
@@ -488,6 +493,157 @@ class RecordCompletenessService:
         return incomplete
 
 
+class ContributedHoursService:
+    """Provides a unified view of all hours (training + admin) for reporting.
+
+    Designed for end-of-year reporting and fundraising teams who need
+    total contributed hours across the organization.
+    """
+
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    async def get_contributed_hours(
+        self, organization_id: str, year: int
+    ) -> Dict[str, Any]:
+        """Get combined training and admin hours for the given year.
+
+        Returns per-member totals and organization-wide aggregates with
+        breakdowns by source (training vs admin) and admin category.
+        """
+        start_date = date(year, 1, 1)
+        end_date = date(year, 12, 31)
+
+        members_result = await self.db.execute(
+            select(User).where(
+                User.organization_id == organization_id,
+                User.status == UserStatus.ACTIVE,
+                User.deleted_at.is_(None),
+            )
+        )
+        members = members_result.scalars().all()
+        member_ids = [m.id for m in members]
+
+        if not member_ids:
+            return {
+                "year": year,
+                "total_training_hours": 0.0,
+                "total_admin_hours": 0.0,
+                "total_contributed_hours": 0.0,
+                "total_members": 0,
+                "members": [],
+                "admin_hours_by_category": [],
+            }
+
+        # Training hours
+        training_result = await self.db.execute(
+            select(
+                TrainingRecord.user_id,
+                func.coalesce(func.sum(TrainingRecord.hours_completed), 0),
+            )
+            .where(
+                TrainingRecord.organization_id == organization_id,
+                TrainingRecord.status == TrainingStatus.COMPLETED,
+                TrainingRecord.completion_date >= start_date,
+                TrainingRecord.completion_date <= end_date,
+                TrainingRecord.user_id.in_(member_ids),
+            )
+            .group_by(TrainingRecord.user_id)
+        )
+        training_by_user: Dict[str, float] = {}
+        for uid, hrs in training_result:
+            training_by_user[uid] = float(hrs)
+
+        # Admin hours (approved only for contributed totals)
+        start_dt = datetime(year, 1, 1, tzinfo=timezone.utc)
+        end_dt = datetime(year, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
+
+        admin_result = await self.db.execute(
+            select(
+                AdminHoursEntry.user_id,
+                func.coalesce(func.sum(AdminHoursEntry.duration_minutes), 0),
+            )
+            .where(
+                AdminHoursEntry.organization_id == organization_id,
+                AdminHoursEntry.status == AdminHoursEntryStatus.APPROVED,
+                AdminHoursEntry.duration_minutes.isnot(None),
+                AdminHoursEntry.clock_in_at >= start_dt,
+                AdminHoursEntry.clock_in_at <= end_dt,
+                AdminHoursEntry.user_id.in_(member_ids),
+            )
+            .group_by(AdminHoursEntry.user_id)
+        )
+        admin_by_user: Dict[str, float] = {}
+        for uid, mins in admin_result:
+            admin_by_user[uid] = round(float(mins) / 60.0, 1)
+
+        # Admin hours by category
+        cat_result = await self.db.execute(
+            select(
+                AdminHoursCategory.id,
+                AdminHoursCategory.name,
+                func.coalesce(func.sum(AdminHoursEntry.duration_minutes), 0),
+                func.count(AdminHoursEntry.id),
+            )
+            .join(
+                AdminHoursCategory,
+                AdminHoursEntry.category_id == AdminHoursCategory.id,
+            )
+            .where(
+                AdminHoursEntry.organization_id == organization_id,
+                AdminHoursEntry.status == AdminHoursEntryStatus.APPROVED,
+                AdminHoursEntry.duration_minutes.isnot(None),
+                AdminHoursEntry.clock_in_at >= start_dt,
+                AdminHoursEntry.clock_in_at <= end_dt,
+            )
+            .group_by(AdminHoursCategory.id, AdminHoursCategory.name)
+        )
+        admin_by_category: List[Dict[str, Any]] = []
+        for cat_id, cat_name, mins, count in cat_result:
+            admin_by_category.append({
+                "category_id": cat_id,
+                "category_name": cat_name,
+                "hours": round(float(mins) / 60.0, 1),
+                "entries": count,
+            })
+
+        # Build per-member list
+        total_training = 0.0
+        total_admin = 0.0
+        member_list: List[Dict[str, Any]] = []
+
+        for member in members:
+            t_hrs = round(training_by_user.get(member.id, 0.0), 1)
+            a_hrs = admin_by_user.get(member.id, 0.0)
+            combined = round(t_hrs + a_hrs, 1)
+            total_training += t_hrs
+            total_admin += a_hrs
+
+            name = (
+                f"{member.first_name or ''} {member.last_name or ''}".strip()
+                or "Unknown"
+            )
+            member_list.append({
+                "user_id": str(member.id),
+                "name": name,
+                "training_hours": t_hrs,
+                "admin_hours": a_hrs,
+                "total_hours": combined,
+            })
+
+        member_list.sort(key=lambda m: m["total_hours"], reverse=True)
+
+        return {
+            "year": year,
+            "total_training_hours": round(total_training, 1),
+            "total_admin_hours": round(total_admin, 1),
+            "total_contributed_hours": round(total_training + total_admin, 1),
+            "total_members": len(members),
+            "members": member_list,
+            "admin_hours_by_category": admin_by_category,
+        }
+
+
 class AnnualComplianceReportService:
     """Generates comprehensive annual compliance reports."""
 
@@ -698,10 +854,32 @@ class AnnualComplianceReportService:
         iso_service = ISOReadinessService(self.db)
         iso_data = await iso_service.get_iso_readiness(organization_id, year)
 
+        # Admin hours summary for the year
+        admin_hours_data = await self._get_admin_hours_summary(
+            organization_id, start_date, end_date, member_ids
+        )
+
         # Extract per-field counts for the record_completeness section
         field_lookup: Dict[str, int] = {}
         for f in record_completeness.get("fields", []):
             field_lookup[f["field_name"]] = f["records_with_value"]
+
+        # Merge admin hours into per-member compliance data
+        admin_by_user = admin_hours_data.get("by_user", {})
+        for mc in member_compliance:
+            user_admin = admin_by_user.get(mc["user_id"], {})
+            mc["admin_hours_approved"] = user_admin.get("approved_hours", 0.0)
+            mc["admin_hours_pending"] = user_admin.get("pending_hours", 0.0)
+            mc["total_contributed_hours"] = round(
+                mc["hours_completed"]
+                + user_admin.get("approved_hours", 0.0),
+                1,
+            )
+
+        total_admin_hours_approved = admin_hours_data.get(
+            "total_approved_hours", 0.0
+        )
+        total_contributed = round(total_hours + total_admin_hours_approved, 1)
 
         return {
             "report_type": "annual_compliance",
@@ -713,10 +891,13 @@ class AnnualComplianceReportService:
                 "total_members": total_members,
                 "fully_compliant_members": fully_compliant,
                 "total_training_hours": round(total_hours, 1),
+                "total_admin_hours": total_admin_hours_approved,
+                "total_contributed_hours": total_contributed,
                 "total_certifications_active": total_certs_active,
                 "total_certifications_expired": total_certs_expired,
                 "iso_readiness_pct": iso_data.get("overall_readiness_pct", 0.0),
             },
+            "admin_hours_summary": admin_hours_data,
             "member_compliance": member_compliance,
             "requirement_analysis": requirement_analysis,
             "recertification_summary": recert_summary,
@@ -731,6 +912,110 @@ class AnnualComplianceReportService:
                 "records_with_certification": field_lookup.get("course_name", 0),
                 "completeness_pct": record_completeness["overall_completeness_pct"],
             },
+        }
+
+    async def _get_admin_hours_summary(
+        self,
+        organization_id: str,
+        start_date: date,
+        end_date: date,
+        member_ids: List[str],
+    ) -> Dict[str, Any]:
+        """Get admin hours summary for the year, broken out by category and member.
+
+        Only counts approved and pending entries with a computed duration.
+        """
+        if not member_ids:
+            return {
+                "total_approved_hours": 0.0,
+                "total_pending_hours": 0.0,
+                "total_entries": 0,
+                "by_category": [],
+                "by_user": {},
+            }
+
+        start_dt = datetime(start_date.year, start_date.month, start_date.day,
+                            tzinfo=timezone.utc)
+        end_dt = datetime(end_date.year, end_date.month, end_date.day,
+                          23, 59, 59, tzinfo=timezone.utc)
+
+        entries_result = await self.db.execute(
+            select(AdminHoursEntry).where(
+                AdminHoursEntry.organization_id == organization_id,
+                AdminHoursEntry.status.in_([
+                    AdminHoursEntryStatus.APPROVED,
+                    AdminHoursEntryStatus.PENDING,
+                ]),
+                AdminHoursEntry.duration_minutes.isnot(None),
+                AdminHoursEntry.clock_in_at >= start_dt,
+                AdminHoursEntry.clock_in_at <= end_dt,
+                AdminHoursEntry.user_id.in_(member_ids),
+            )
+        )
+        entries = entries_result.scalars().all()
+
+        # Load categories for labeling
+        cats_result = await self.db.execute(
+            select(AdminHoursCategory).where(
+                AdminHoursCategory.organization_id == organization_id
+            )
+        )
+        categories = {c.id: c for c in cats_result.scalars().all()}
+
+        total_approved_mins = 0
+        total_pending_mins = 0
+        total_entries = len(entries)
+        cat_mins: Dict[str, Dict[str, int]] = defaultdict(
+            lambda: {"approved": 0, "pending": 0, "entries": 0}
+        )
+        user_mins: Dict[str, Dict[str, float]] = {}
+
+        for entry in entries:
+            mins = entry.duration_minutes or 0
+            cat_id = entry.category_id
+            uid = entry.user_id
+
+            cat_mins[cat_id]["entries"] += 1
+            if entry.status == AdminHoursEntryStatus.APPROVED:
+                total_approved_mins += mins
+                cat_mins[cat_id]["approved"] += mins
+            else:
+                total_pending_mins += mins
+                cat_mins[cat_id]["pending"] += mins
+
+            if uid not in user_mins:
+                user_mins[uid] = {"approved_hours": 0.0, "pending_hours": 0.0}
+            if entry.status == AdminHoursEntryStatus.APPROVED:
+                user_mins[uid]["approved_hours"] += mins / 60.0
+            else:
+                user_mins[uid]["pending_hours"] += mins / 60.0
+
+        # Round user-level values
+        for uid in user_mins:
+            user_mins[uid]["approved_hours"] = round(
+                user_mins[uid]["approved_hours"], 1
+            )
+            user_mins[uid]["pending_hours"] = round(
+                user_mins[uid]["pending_hours"], 1
+            )
+
+        by_category: List[Dict[str, Any]] = []
+        for cat_id, counts in cat_mins.items():
+            cat = categories.get(cat_id)
+            by_category.append({
+                "category_id": cat_id,
+                "category_name": cat.name if cat else "Unknown",
+                "approved_hours": round(counts["approved"] / 60.0, 1),
+                "pending_hours": round(counts["pending"] / 60.0, 1),
+                "total_entries": counts["entries"],
+            })
+
+        return {
+            "total_approved_hours": round(total_approved_mins / 60.0, 1),
+            "total_pending_hours": round(total_pending_mins / 60.0, 1),
+            "total_entries": total_entries,
+            "by_category": by_category,
+            "by_user": user_mins,
         }
 
     async def _get_recertification_summary(
