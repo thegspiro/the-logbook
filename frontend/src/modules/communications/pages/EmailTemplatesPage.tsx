@@ -22,7 +22,7 @@ import {
   Eye,
   History,
 } from 'lucide-react';
-import { Breadcrumbs, SkeletonPage } from '../../../components/ux';
+import { Breadcrumbs, ConfirmDialog, SkeletonPage } from '../../../components/ux';
 import { useEmailTemplatesStore } from '../store/emailTemplatesStore';
 import { emailTemplatesService, userService } from '../../../services/api';
 import { TemplateList } from '../components/TemplateList';
@@ -74,6 +74,7 @@ const EmailTemplatesPage: React.FC = () => {
   const [members, setMembers] = useState<PreviewMember[]>([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [previewMemberId, setPreviewMemberId] = useState<string | undefined>(undefined);
+  const [attachmentToDelete, setAttachmentToDelete] = useState<EmailAttachment | null>(null);
 
   useEffect(() => {
     void fetchTemplates();
@@ -186,6 +187,8 @@ const EmailTemplatesPage: React.FC = () => {
       toast.success('Attachment removed');
     } catch {
       toast.error('Failed to delete attachment');
+    } finally {
+      setAttachmentToDelete(null);
     }
   };
 
@@ -269,6 +272,7 @@ const EmailTemplatesPage: React.FC = () => {
             <button
               onClick={clearError}
               className="text-red-400 hover:text-red-300"
+              aria-label="Dismiss error"
             >
               <X className="w-4 h-4" />
             </button>
@@ -434,9 +438,9 @@ const EmailTemplatesPage: React.FC = () => {
                                     )}
                                   </div>
                                   <button
-                                    onClick={() => { void handleDeleteAttachment(att); }}
+                                    onClick={() => setAttachmentToDelete(att)}
                                     className="text-red-400 hover:text-red-300 shrink-0 ml-2"
-                                    title="Delete attachment"
+                                    aria-label={`Delete attachment ${att.filename}`}
                                   >
                                     <Trash2 className="w-4 h-4" />
                                   </button>
@@ -475,6 +479,17 @@ const EmailTemplatesPage: React.FC = () => {
             )}
           </div>
         </div>}
+        <ConfirmDialog
+          isOpen={attachmentToDelete !== null}
+          onClose={() => setAttachmentToDelete(null)}
+          onConfirm={() => {
+            if (attachmentToDelete) void handleDeleteAttachment(attachmentToDelete);
+          }}
+          title="Delete Attachment"
+          message={`Remove "${attachmentToDelete?.filename ?? ''}" from this template? This attachment will no longer be included in emails.`}
+          confirmLabel="Delete"
+          variant="danger"
+        />
       </main>
     </div>
   );

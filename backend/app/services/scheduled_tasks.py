@@ -69,6 +69,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import Organization, User
+from app.services.email_service import _redact_email
 
 # Schedule definitions (for documentation and frontend display)
 SCHEDULE = {
@@ -655,7 +656,9 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                                     org_emails += 1
                             except Exception as e:
                                 logger.error(
-                                    f"Failed to send reminder email to {user.email}: {e}"
+                                    "Failed to send reminder email to %s: %s",
+                                    _redact_email(user.email),
+                                    e,
                                 )
 
                 # Mark all due intervals as sent
@@ -835,8 +838,9 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                             org_emails += 1
                     except Exception as e:
                         logger.error(
-                            f"Failed to send post-event validation email "
-                            f"to {creator.email}: {e}"
+                            "Failed to send post-event validation email to %s: %s",
+                            _redact_email(creator.email),
+                            e,
                         )
 
                 # Mark as sent
@@ -1018,8 +1022,9 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                             org_emails += 1
                     except Exception as e:
                         logger.error(
-                            f"Failed to send post-shift validation email "
-                            f"to {officer.email}: {e}"
+                            "Failed to send post-shift validation email to %s: %s",
+                            _redact_email(officer.email),
+                            e,
                         )
 
                 # Mark as sent
@@ -1263,6 +1268,11 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
         try:
             org = item.organization
             if not org:
+                logger.warning(
+                    "Scheduled email %s skipped: org %s not found",
+                    item.id,
+                    item.organization_id,
+                )
                 item.status = ScheduledEmailStatus.FAILED
                 item.error_message = "Organization no longer exists"
                 failed += 1
@@ -1287,6 +1297,12 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
                 )
 
             if not template:
+                logger.warning(
+                    "Scheduled email %s skipped: no template for type %s in org %s",
+                    item.id,
+                    item.template_type,
+                    item.organization_id,
+                )
                 item.status = ScheduledEmailStatus.FAILED
                 item.error_message = (
                     f"No template found for type {item.template_type.value}"
@@ -1313,8 +1329,9 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
             ).get("enabled")
             if not _settings.EMAIL_ENABLED and not org_email_enabled:
                 logger.warning(
-                    f"Scheduled email {item.id} skipped: email sending "
-                    "is disabled (EMAIL_ENABLED=false and no org override)"
+                    "Scheduled email %s skipped: email sending "
+                    "is disabled (EMAIL_ENABLED=false and no org override)",
+                    item.id,
                 )
                 item.status = ScheduledEmailStatus.FAILED
                 item.error_message = (
@@ -1347,7 +1364,7 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
                 failed += 1
 
         except Exception as e:
-            logger.error(f"Failed to send scheduled email {item.id}: {e}")
+            logger.error("Failed to send scheduled email %s: %s", item.id, e)
             item.status = ScheduledEmailStatus.FAILED
             item.error_message = str(e)[:500]
             failed += 1
@@ -1355,7 +1372,12 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
     if pending:
         await db.commit()
 
-    logger.info(f"Scheduled emails processed: {sent} sent, {failed} failed")
+    logger.info(
+        "Scheduled emails processed: %d sent, %d failed, %d total",
+        sent,
+        failed,
+        len(pending),
+    )
     return {"sent": sent, "failed": failed, "total_processed": len(pending)}
 
 
@@ -2044,8 +2066,9 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
                             org_emails += 1
                     except Exception as e:
                         logger.error(
-                            f"Failed to send series-end email to "
-                            f"{creator.email}: {e}"
+                            "Failed to send series-end email to %s: %s",
+                            _redact_email(creator.email),
+                            e,
                         )
 
                 # Mark reminder as sent using deep copy to avoid

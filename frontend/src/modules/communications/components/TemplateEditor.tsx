@@ -16,6 +16,18 @@ import {
 } from 'lucide-react';
 import type { EmailTemplate, EmailTemplateUpdate, TemplateVariable } from '../types';
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function validateEmailList(raw: string): string | null {
+  if (!raw.trim()) return null;
+  const entries = raw.split(',').map((e) => e.trim()).filter(Boolean);
+  const invalid = entries.filter((e) => !EMAIL_REGEX.test(e));
+  if (invalid.length > 0) {
+    return `Invalid email${invalid.length > 1 ? 's' : ''}: ${invalid.join(', ')}`;
+  }
+  return null;
+}
+
 interface TemplateEditorProps {
   template: EmailTemplate;
   isSaving: boolean;
@@ -76,7 +88,12 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
     );
   }, [template.id, template.subject, template.html_body, template.text_body, template.css_styles, template.default_cc, template.default_bcc]);
 
+  const ccError = validateEmailList(defaultCc);
+  const bccError = validateEmailList(defaultBcc);
+  const hasValidationErrors = ccError !== null || bccError !== null;
+
   const handleSave = () => {
+    if (hasValidationErrors) return;
     const data: EmailTemplateUpdate = {};
     if (subject !== template.subject) data.subject = subject;
     if (htmlBody !== template.html_body) data.html_body = htmlBody;
@@ -120,7 +137,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
         </h3>
         <button
           onClick={handleSave}
-          disabled={!isDirty || isSaving}
+          disabled={!isDirty || isSaving || hasValidationErrors}
           className="flex items-center space-x-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isSaving ? (
@@ -134,9 +151,21 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
 
       {/* Subject */}
       <div>
-        <label htmlFor="template-subject" className={labelClass}>
-          Subject Line
-        </label>
+        <div className="flex items-center justify-between">
+          <label htmlFor="template-subject" className={labelClass}>
+            Subject Line
+          </label>
+          <span
+            className={`text-xs ${
+              subject.length > 60
+                ? 'text-yellow-500'
+                : 'text-theme-text-muted'
+            }`}
+            aria-live="polite"
+          >
+            {subject.length}/500{subject.length > 60 ? ' — may be truncated in some email clients' : ''}
+          </span>
+        </div>
         <input
           ref={subjectRef}
           id="template-subject"
@@ -145,6 +174,8 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
           onChange={(e) => setSubject(e.target.value)}
           className={inputClass.replace('font-mono', '')}
           placeholder="Email subject..."
+          maxLength={500}
+          aria-describedby="subject-hint"
         />
       </div>
 
@@ -172,12 +203,18 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
                 type="text"
                 value={defaultCc}
                 onChange={(e) => setDefaultCc(e.target.value)}
-                className={inputClass.replace('font-mono', '')}
+                className={`${inputClass.replace('font-mono', '')} ${ccError ? 'border-red-500' : ''}`}
                 placeholder="chief@dept.org, admin@dept.org"
+                aria-invalid={!!ccError}
+                aria-describedby="cc-hint"
               />
-              <p className="mt-1 text-xs text-theme-text-muted">
-                These addresses will be CC'd on every email sent with this template.
-              </p>
+              {ccError ? (
+                <p className="mt-1 text-xs text-red-500">{ccError}</p>
+              ) : (
+                <p id="cc-hint" className="mt-1 text-xs text-theme-text-muted">
+                  These addresses will be CC'd on every email sent with this template.
+                </p>
+              )}
             </div>
             <div>
               <label htmlFor="template-default-bcc" className={labelClass}>
@@ -188,12 +225,18 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
                 type="text"
                 value={defaultBcc}
                 onChange={(e) => setDefaultBcc(e.target.value)}
-                className={inputClass.replace('font-mono', '')}
+                className={`${inputClass.replace('font-mono', '')} ${bccError ? 'border-red-500' : ''}`}
                 placeholder="records@dept.org"
+                aria-invalid={!!bccError}
+                aria-describedby="bcc-hint"
               />
-              <p className="mt-1 text-xs text-theme-text-muted">
-                These addresses will be BCC'd (hidden from other recipients) on every email sent with this template.
-              </p>
+              {bccError ? (
+                <p className="mt-1 text-xs text-red-500">{bccError}</p>
+              ) : (
+                <p id="bcc-hint" className="mt-1 text-xs text-theme-text-muted">
+                  These addresses will be BCC'd (hidden from other recipients) on every email sent with this template.
+                </p>
+              )}
             </div>
           </div>
         )}

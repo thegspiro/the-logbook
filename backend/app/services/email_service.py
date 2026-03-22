@@ -25,6 +25,23 @@ from app.core.config import settings
 from app.models.user import Organization
 from app.schemas.organization import decrypt_settings_secrets
 
+# Header injection control characters that must never appear in
+# RFC 5322 unstructured fields (Subject, From display-name, etc.).
+_HEADER_INJECTION_RE = re.compile(r"[\r\n\x00]")
+
+
+def _sanitize_header(value: str) -> str:
+    """Strip CR/LF/NUL from an email header value to prevent injection."""
+    return _HEADER_INJECTION_RE.sub("", value)
+
+
+def _redact_email(address: str) -> str:
+    """Redact an email address for safe logging (HIPAA)."""
+    if "@" in address:
+        local, domain = address.rsplit("@", 1)
+        return f"{local[0]}***@{domain}" if local else f"***@{domain}"
+    return "***"
+
 
 def inline_email_css(html: str) -> str:
     """Inline ``<style>`` CSS into HTML element ``style=""`` attributes.
@@ -329,6 +346,13 @@ class EmailService:
                 self._smtp_config["user"],
                 self._smtp_config["password"],
             )
+        logger.info(
+            "SMTP connected host=%s port=%s encryption=%s auth=%s",
+            host,
+            port,
+            encryption,
+            bool(self._smtp_config["user"]),
+        )
         return server
 
     def _smtp_send(self, recipients: List[str], message: str) -> None:
@@ -370,16 +394,16 @@ class EmailService:
                         server.sendmail(from_email, recipients, msg_str)
                         results.append(True)
                     except Exception as e2:
-                        logger.error(f"Batch email retry failed: {e2}")
+                        logger.error("Batch email retry failed: %s", e2)
                         results.append(False)
                 except smtplib.SMTPResponseException as e:
                     logger.error(
-                        f"Batch email rejected (code={e.smtp_code}): {e.smtp_error}"
+                        "Batch email rejected (code=%s): %s", e.smtp_code, e.smtp_error
                     )
                     results.append(False)
                     # 421/451/452 = rate limit / too many connections
                     if e.smtp_code in (421, 451, 452):
-                        logger.info("Rate limit detected, reconnecting after 2 s")
+                        logger.warning("Rate limit detected, reconnecting after 2 s")
                         time.sleep(2)
                         try:
                             server.quit()
@@ -387,7 +411,7 @@ class EmailService:
                             pass
                         server = self._smtp_connect()
                 except Exception as e:
-                    logger.error(f"Batch email send failed: {e}")
+                    logger.error("Batch email send failed: %s", e)
                     results.append(False)
 
                 # Brief pause between messages to avoid rate limiting
@@ -402,6 +426,10 @@ class EmailService:
                 server.quit()
             except Exception:
                 pass
+        succeeded = sum(1 for r in results if r)
+        logger.info(
+            "Batch send complete: %d/%d succeeded", succeeded, len(results)
+        )
         return results
 
     def build_message(
@@ -428,16 +456,21 @@ class EmailService:
 
         msg = MIMEMultipart("alternative")
         if text_body:
-            msg.attach(MIMEText(text_body, "plain"))
-        msg.attach(MIMEText(html_body, "html"))
+            msg.attach(MIMEText(text_body, "plain", "utf-8"))
+        msg.attach(MIMEText(html_body, "html", "utf-8"))
 
-        msg["From"] = (
-            f"{self._smtp_config['from_name']} <{self._smtp_config['from_email']}>"
-        )
+        safe_from_name = _sanitize_header(self._smtp_config["from_name"])
+        safe_subject = _sanitize_header(subject)
+
+        msg["From"] = f"{safe_from_name} <{self._smtp_config['from_email']}>"
         msg["To"] = to_email
-        msg["Subject"] = subject
-        msg["Date"] = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
+        msg["Subject"] = safe_subject
+        msg["Date"] = datetime.now(timezone.utc).strftime(
+            "%a, %d %b %Y %H:%M:%S +0000"
+        )
         msg["Message-ID"] = self._make_message_id()
+        msg["MIME-Version"] = "1.0"
+        msg["X-Auto-Response-Suppress"] = "OOF, DR, RN, NRN, AutoReply"
         if reply_to:
             msg["Reply-To"] = reply_to
         if list_unsubscribe:
@@ -467,7 +500,7 @@ class EmailService:
             .get("email_service", {})
             .get("enabled")
         ):
-            logger.info(f"Email disabled. Would batch-send {len(messages)} messages.")
+            logger.info("Email disabled. Would batch-send %d messages.", len(messages))
             return [False] * len(messages)
         return await asyncio.to_thread(self._smtp_send_batch, messages)
 
@@ -511,13 +544,18 @@ class EmailService:
             .get("enabled")
         ):
             logger.info(
-                f"Email disabled. Would send to {len(to_emails)} recipients: {subject}"
+                "Email disabled. Would send to %d recipients: %s",
+                len(to_emails),
+                subject,
             )
             return 0, len(to_emails)
 
         # Inline CSS: convert <style> class rules to inline style=""
         # attributes so they survive Gmail's <style> stripping.
         html_body = inline_email_css(html_body)
+
+        safe_from_name = _sanitize_header(self._smtp_config["from_name"])
+        safe_subject = _sanitize_header(subject)
 
         success_count = 0
         failure_count = 0
@@ -530,41 +568,44 @@ class EmailService:
                     # Create alternative sub-part for text/html
                     alt_part = MIMEMultipart("alternative")
                     if text_body:
-                        alt_part.attach(MIMEText(text_body, "plain"))
-                    alt_part.attach(MIMEText(html_body, "html"))
+                        alt_part.attach(MIMEText(text_body, "plain", "utf-8"))
+                    alt_part.attach(MIMEText(html_body, "html", "utf-8"))
                     msg.attach(alt_part)
 
                     # Attach files
                     for filepath in attachment_paths:
-                        if not os.path.isfile(filepath):
-                            logger.warning(
-                                f"Attachment not found, skipping: {filepath}"
-                            )
+                        resolved = os.path.realpath(filepath)
+                        if not os.path.isfile(resolved):
+                            logger.warning("Attachment not found, skipping")
                             continue
-                        with open(filepath, "rb") as f:
+                        with open(resolved, "rb") as f:
                             part = MIMEBase("application", "octet-stream")
                             part.set_payload(f.read())
                         encoders.encode_base64(part)
-                        filename = os.path.basename(filepath)
+                        filename = _sanitize_header(os.path.basename(resolved))
                         part.add_header(
-                            "Content-Disposition", f'attachment; filename="{filename}"'
+                            "Content-Disposition",
+                            "attachment",
+                            filename=filename,
                         )
                         msg.attach(part)
                 else:
                     msg = MIMEMultipart("alternative")
                     if text_body:
-                        msg.attach(MIMEText(text_body, "plain"))
-                    msg.attach(MIMEText(html_body, "html"))
+                        msg.attach(MIMEText(text_body, "plain", "utf-8"))
+                    msg.attach(MIMEText(html_body, "html", "utf-8"))
 
                 msg["From"] = (
-                    f"{self._smtp_config['from_name']} <{self._smtp_config['from_email']}>"
+                    f"{safe_from_name} <{self._smtp_config['from_email']}>"
                 )
                 msg["To"] = to_email
-                msg["Subject"] = subject
+                msg["Subject"] = safe_subject
                 msg["Date"] = datetime.now(timezone.utc).strftime(
                     "%a, %d %b %Y %H:%M:%S +0000"
                 )
                 msg["Message-ID"] = self._make_message_id()
+                msg["MIME-Version"] = "1.0"
+                msg["X-Auto-Response-Suppress"] = "OOF, DR, RN, NRN, AutoReply"
                 if reply_to:
                     msg["Reply-To"] = reply_to
                 if list_unsubscribe:
@@ -590,8 +631,18 @@ class EmailService:
                 success_count += 1
 
             except Exception as e:
-                logger.error(f"Failed to send email to {to_email}: {e}")
+                logger.error(
+                    "Failed to send email to %s: %s", _redact_email(to_email), e
+                )
                 failure_count += 1
+
+        logger.info(
+            "Email send complete: %d succeeded, %d failed, subject=%r, template=%s",
+            success_count,
+            failure_count,
+            subject[:80],
+            template_type or "none",
+        )
 
         # Log to message_history when a db session is available
         if db:
@@ -608,7 +659,7 @@ class EmailService:
                     failure_count=failure_count,
                 )
             except Exception as e:
-                logger.warning(f"Failed to log message history: {e}")
+                logger.warning("Failed to log message history: %s", e)
 
         return success_count, failure_count
 
@@ -802,7 +853,7 @@ class EmailService:
                 )
             except Exception as e:
                 logger.warning(
-                    f"Failed to load ballot notification template, using default: {e}"
+                    "Failed to load ballot notification template, using default: %s", e
                 )
 
         subject, html_body, text_body = self.render_ballot_notification(
@@ -906,7 +957,7 @@ class EmailService:
                     )
             except Exception as e:
                 logger.warning(
-                    f"Failed to load election report template, using default: {e}"
+                    "Failed to load election report template, using default: %s", e
                 )
 
         # Fall back to inline default if no template loaded
@@ -1022,8 +1073,7 @@ class EmailService:
                     )
             except Exception as e:
                 logger.warning(
-                    "Failed to load eligibility summary template, "
-                    f"using default: {e}"
+                    "Failed to load eligibility summary template, using default: %s", e
                 )
 
         # Fall back to inline default if no template loaded
@@ -1136,7 +1186,7 @@ class EmailService:
                     )
             except Exception as e:
                 logger.warning(
-                    f"Failed to load training approval template, using default: {e}"
+                    "Failed to load training approval template, using default: %s", e
                 )
 
         # Fall back to inline default if no template loaded
@@ -1248,7 +1298,7 @@ class EmailService:
                             attachment_paths = stored_paths
             except Exception as e:
                 logger.warning(
-                    f"Failed to load welcome email template, using default: {e}"
+                    "Failed to load welcome email template, using default: %s", e
                 )
 
         # Fall back to inline default if no template loaded
@@ -1352,7 +1402,7 @@ class EmailService:
                     )
             except Exception as e:
                 logger.warning(
-                    f"Failed to load password reset template, using default: {e}"
+                    "Failed to load password reset template, using default: %s", e
                 )
 
         # Fall back to inline default
@@ -1450,7 +1500,7 @@ class EmailService:
                     )
             except Exception as e:
                 logger.warning(
-                    f"Failed to load IT password notification template, using default: {e}"
+                    "Failed to load IT password notification template, using default: %s", e
                 )
 
         # Fall back to inline default if no template loaded
@@ -1552,7 +1602,7 @@ class EmailService:
                     )
             except Exception as e:
                 logger.warning(
-                    f"Failed to load event reminder template, using default: {e}"
+                    "Failed to load event reminder template, using default: %s", e
                 )
 
         # Fall back to inline default if no template loaded
@@ -1647,7 +1697,7 @@ class EmailService:
                     )
             except Exception as e:
                 logger.warning(
-                    f"Failed to load inactivity warning template, using default: {e}"
+                    "Failed to load inactivity warning template, using default: %s", e
                 )
 
         # Fall back to inline default if no template loaded
@@ -1733,7 +1783,7 @@ class EmailService:
                     )
             except Exception as e:
                 logger.warning(
-                    f"Failed to load duplicate application template, using default: {e}"
+                    "Failed to load duplicate application template, using default: %s", e
                 )
 
         if not subject:
