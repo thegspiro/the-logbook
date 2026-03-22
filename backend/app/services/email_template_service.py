@@ -2124,6 +2124,13 @@ class EmailTemplateService:
         # Refresh server-computed timestamps (server_default / onupdate)
         # to prevent MissingGreenlet when serializing in async mode.
         await self.db.refresh(template, attribute_names=["created_at", "updated_at"])
+        logger.info(
+            "Template created id=%s type=%s org=%s by=%s",
+            template.id,
+            template_type,
+            organization_id,
+            created_by,
+        )
         return template
 
     async def update_template(
@@ -2167,6 +2174,13 @@ class EmailTemplateService:
         # Refresh server-computed updated_at to avoid MissingGreenlet on
         # async lazy-load when Pydantic serializes the response.
         await self.db.refresh(template, attribute_names=["updated_at"])
+        logger.info(
+            "Template updated id=%s fields=[%s] org=%s by=%s",
+            template_id,
+            ",".join(sorted(k for k, v in fields.items() if v is not None and k in allowed_fields)),
+            organization_id,
+            updated_by,
+        )
         return template
 
     async def delete_template(self, template_id: str, organization_id: str) -> bool:
@@ -2181,6 +2195,12 @@ class EmailTemplateService:
         if not template:
             return False
 
+        logger.info(
+            "Template deleted id=%s type=%s org=%s",
+            template_id,
+            template.template_type,
+            organization_id,
+        )
         await self.db.delete(template)
         await self.db.flush()
         return True
@@ -2405,9 +2425,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default welcome email template for org {organization_id}"
-            )
 
         # Check for password reset template
         existing = await self.get_template(
@@ -2426,9 +2443,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default password reset email template for org {organization_id}"
-            )
 
         # Check for event cancellation template
         existing = await self.get_template(
@@ -2452,9 +2466,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default event cancellation email template for org {organization_id}"
-            )
 
         # Check for event reminder template
         existing = await self.get_template(
@@ -2478,9 +2489,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default event reminder email template for org {organization_id}"
-            )
 
         # Check for series end reminder template
         existing = await self.get_template(
@@ -2505,9 +2513,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default series end reminder email template for org {organization_id}"
-            )
 
         # Check for training approval template
         existing = await self.get_template(
@@ -2531,9 +2536,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default training approval email template for org {organization_id}"
-            )
 
         # Check for ballot notification template
         existing = await self.get_template(
@@ -2557,9 +2559,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default ballot notification email template for org {organization_id}"
-            )
 
         # Check for election report template
         existing = await self.get_template(
@@ -2584,9 +2583,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default election report email template for org {organization_id}"
-            )
 
         # Check for member dropped template
         existing = await self.get_template(
@@ -2609,9 +2605,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default member dropped email template for org {organization_id}"
-            )
 
         # Check for inventory change template
         existing = await self.get_template(
@@ -2635,9 +2628,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default inventory change email template for org {organization_id}"
-            )
 
         # Check for cert expiration template
         existing = await self.get_template(
@@ -2659,9 +2649,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default cert expiration email template for org {organization_id}"
-            )
 
         # Check for post-event validation template
         existing = await self.get_template(
@@ -2685,9 +2672,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default post-event validation email template for org {organization_id}"
-            )
 
         # Check for post-shift validation template
         existing = await self.get_template(
@@ -2711,9 +2695,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default post-shift validation email template for org {organization_id}"
-            )
 
         # Check for property return reminder template
         existing = await self.get_template(
@@ -2737,9 +2718,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default property return reminder email template for org {organization_id}"
-            )
 
         # Check for inactivity warning template
         existing = await self.get_template(
@@ -2763,9 +2741,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default inactivity warning email template for org {organization_id}"
-            )
 
         # Check for election rollback template
         existing = await self.get_template(

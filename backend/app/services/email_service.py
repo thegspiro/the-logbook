@@ -346,6 +346,13 @@ class EmailService:
                 self._smtp_config["user"],
                 self._smtp_config["password"],
             )
+        logger.info(
+            "SMTP connected host=%s port=%s encryption=%s auth=%s",
+            host,
+            port,
+            encryption,
+            bool(self._smtp_config["user"]),
+        )
         return server
 
     def _smtp_send(self, recipients: List[str], message: str) -> None:
@@ -419,6 +426,10 @@ class EmailService:
                 server.quit()
             except Exception:
                 pass
+        succeeded = sum(1 for r in results if r)
+        logger.info(
+            "Batch send complete: %d/%d succeeded", succeeded, len(results)
+        )
         return results
 
     def build_message(
@@ -624,6 +635,14 @@ class EmailService:
                     "Failed to send email to %s: %s", _redact_email(to_email), e
                 )
                 failure_count += 1
+
+        logger.info(
+            "Email send complete: %d succeeded, %d failed, subject=%r, template=%s",
+            success_count,
+            failure_count,
+            subject[:80],
+            template_type or "none",
+        )
 
         # Log to message_history when a db session is available
         if db:
