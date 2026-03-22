@@ -534,7 +534,7 @@ const Dashboard: React.FC = () => {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setDismissedInstall(true)}
-                className="text-xs text-theme-text-muted hover:text-theme-text-primary px-2 py-1"
+                className="text-sm text-theme-text-muted hover:text-theme-text-primary px-3 py-2 rounded"
               >
                 Dismiss
               </button>
@@ -542,7 +542,7 @@ const Dashboard: React.FC = () => {
                 onClick={() => {
                   void install();
                 }}
-                className="btn-info font-medium px-3 py-1.5 rounded-md text-xs"
+                className="btn-info font-medium px-4 py-2 rounded-md text-sm"
               >
                 Install
               </button>
@@ -887,7 +887,7 @@ const Dashboard: React.FC = () => {
                         <p className="text-theme-text-secondary text-sm whitespace-pre-line line-clamp-3">
                           {msg.body}
                         </p>
-                        <div className="flex items-center justify-between gap-3 mt-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-2">
                           <div className="flex items-center gap-3 text-xs text-theme-text-muted">
                             {msg.author_name && (
                               <span>From: {msg.author_name}</span>
@@ -903,10 +903,10 @@ const Dashboard: React.FC = () => {
                                   e.stopPropagation();
                                   void markMessageRead(msg.id);
                                 }}
-                                className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1"
+                                className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 p-2 -m-1 rounded"
                                 title="Mark as read"
                               >
-                                <Eye className="w-3.5 h-3.5" />
+                                <Eye className="w-4 h-4" />
                               </button>
                             )}
                             {msg.is_persistent && canManageMessages && (
@@ -915,7 +915,7 @@ const Dashboard: React.FC = () => {
                                   e.stopPropagation();
                                   void clearPersistentMessage(msg.id);
                                 }}
-                                className="text-xs px-2 py-1 text-theme-text-muted hover:text-red-400 hover:bg-red-500/10 rounded-sm flex items-center gap-1 transition-colors"
+                                className="text-xs px-3 py-2 text-theme-text-muted hover:text-red-400 hover:bg-red-500/10 rounded flex items-center gap-1 transition-colors"
                                 title="Clear persistent message"
                               >
                                 <X className="w-3 h-3" />
@@ -929,7 +929,7 @@ const Dashboard: React.FC = () => {
                                     e.stopPropagation();
                                     void acknowledgeMessage(msg.id);
                                   }}
-                                  className="text-xs px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-sm font-medium"
+                                  className="text-xs px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded font-medium"
                                 >
                                   Acknowledge
                                 </button>
@@ -967,7 +967,7 @@ const Dashboard: React.FC = () => {
                 {unreadCount > 0 && (
                   <button
                     onClick={() => void markAllNotificationsRead()}
-                    className="text-theme-text-muted hover:text-theme-text-primary text-xs flex items-center space-x-1 transition-colors"
+                    className="text-theme-text-muted hover:text-theme-text-primary text-xs flex items-center space-x-1 transition-colors py-2 px-2 -mr-1 rounded"
                     title="Mark all as read"
                   >
                     <CheckCheck className="w-3.5 h-3.5" />
@@ -976,7 +976,7 @@ const Dashboard: React.FC = () => {
                 )}
                 <button
                   onClick={() => navigate("/notifications")}
-                  className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1"
+                  className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1 py-2 pl-2"
                 >
                   <span>View All</span>
                   <ChevronRight className="w-4 h-4" />
@@ -1034,10 +1034,10 @@ const Dashboard: React.FC = () => {
                         {!notification.read ? (
                           <button
                             onClick={(e) => void clearNotification(e, notification.id)}
-                            className="ml-1.5 p-0.5 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+                            className="ml-1 p-2 -mr-1 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
                             title="Dismiss"
                           >
-                            <X className="w-3.5 h-3.5" />
+                            <X className="w-4 h-4" />
                           </button>
                         ) : notification.action_url ? (
                           <ChevronRight className="w-3.5 h-3.5 text-theme-text-muted ml-1 hidden sm:block" />
@@ -1059,7 +1059,7 @@ const Dashboard: React.FC = () => {
               </h3>
               <button
                 onClick={() => navigate("/scheduling")}
-                className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1"
+                className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1 py-2 pl-2"
               >
                 <span>View Schedule</span>
                 <ChevronRight className="w-4 h-4" />
@@ -1126,7 +1126,7 @@ const Dashboard: React.FC = () => {
             </h3>
             <button
               onClick={() => navigate("/scheduling")}
-              className="text-green-400 hover:text-green-300 text-sm flex items-center space-x-1"
+              className="text-green-400 hover:text-green-300 text-sm flex items-center space-x-1 py-2 pl-2"
             >
               <span>View Schedule</span>
               <ChevronRight className="w-4 h-4" />
@@ -1177,7 +1177,7 @@ const Dashboard: React.FC = () => {
                       {signupExpandedId !== shift.id && (
                         <button
                           onClick={() => void handleExpandSignup(shift.id)}
-                          className="btn-success flex font-medium items-center px-3 py-1.5 space-x-1 text-xs"
+                          className="btn-success flex font-medium items-center px-3 py-2 space-x-1 text-sm"
                         >
                           <UserPlus className="w-3.5 h-3.5" />
                           <span>Sign Up</span>
@@ -1203,11 +1203,11 @@ const Dashboard: React.FC = () => {
                           </button>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                           <select
                             value={dashboardSignupPosition}
                             onChange={(e) => setDashboardSignupPosition(e.target.value)}
-                            className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-md px-2 py-1.5 text-xs text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500"
+                            className="w-full sm:flex-1 bg-theme-input-bg border border-theme-input-border rounded-md px-2 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500"
                           >
                             {dashboardEligiblePositions.map((pos) => (
                               <option key={pos} value={pos}>
@@ -1215,24 +1215,26 @@ const Dashboard: React.FC = () => {
                               </option>
                             ))}
                           </select>
-                          <button
-                            onClick={() => void handleSignup(shift.id)}
-                            disabled={signingUpShiftId === shift.id}
-                            className="btn-success disabled:cursor-not-allowed flex font-medium items-center px-3 py-1.5 space-x-1 text-xs shrink-0"
-                          >
-                            {signingUpShiftId === shift.id ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                            )}
-                            <span>Confirm</span>
-                          </button>
-                          <button
-                            onClick={() => setSignupExpandedId(null)}
-                            className="text-xs text-theme-text-muted hover:text-theme-text-primary px-2 py-1.5"
-                          >
-                            Cancel
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => void handleSignup(shift.id)}
+                              disabled={signingUpShiftId === shift.id}
+                              className="btn-success disabled:cursor-not-allowed flex font-medium items-center px-3 py-2 space-x-1 text-sm shrink-0"
+                            >
+                              {signingUpShiftId === shift.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                              )}
+                              <span>Confirm</span>
+                            </button>
+                            <button
+                              onClick={() => setSignupExpandedId(null)}
+                              className="text-sm text-theme-text-muted hover:text-theme-text-primary px-3 py-2"
+                            >
+                              Cancel
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1252,7 +1254,7 @@ const Dashboard: React.FC = () => {
             </h3>
             <button
               onClick={() => navigate("/events")}
-              className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1"
+              className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1 py-2 pl-2"
             >
               <span>View All</span>
               <ChevronRight className="w-4 h-4" />
@@ -1320,7 +1322,7 @@ const Dashboard: React.FC = () => {
             </h3>
             <button
               onClick={() => navigate("/notifications")}
-              className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1"
+              className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 py-2 pl-2"
             >
               View All <ChevronRight className="w-3 h-3" />
             </button>
@@ -1369,7 +1371,7 @@ const Dashboard: React.FC = () => {
               </h3>
               <button
                 onClick={() => navigate(`/members/${currentUser.id}/id-card`)}
-                className="text-blue-400 hover:text-blue-300 text-sm flex items-center space-x-1"
+                className="text-blue-400 hover:text-blue-300 text-sm flex items-center space-x-1 py-2 pl-2"
               >
                 <span>View</span>
                 <ChevronRight className="w-4 h-4" />
@@ -1398,7 +1400,7 @@ const Dashboard: React.FC = () => {
               </h3>
               <button
                 onClick={() => navigate("/minutes")}
-                className="text-cyan-400 hover:text-cyan-300 text-sm flex items-center space-x-1"
+                className="text-cyan-400 hover:text-cyan-300 text-sm flex items-center space-x-1 py-2 pl-2"
               >
                 <span>View All</span>
                 <ChevronRight className="w-4 h-4" />
@@ -1435,7 +1437,7 @@ const Dashboard: React.FC = () => {
               </h3>
               <button
                 onClick={() => navigate("/training/my-training")}
-                className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1"
+                className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1 py-2 pl-2"
               >
                 <span>View All</span>
                 <ChevronRight className="w-4 h-4" />
@@ -1464,26 +1466,26 @@ const Dashboard: React.FC = () => {
                     className="w-full bg-theme-surface-secondary rounded-lg p-4 hover:bg-theme-surface-hover cursor-pointer transition-colors text-left"
                     aria-label={`${enrollment.program?.name || "Program"}: ${Math.round(enrollment.progress_percentage)}% complete`}
                   >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <h4 className="text-theme-text-primary font-semibold">
+                    <div className="flex items-start justify-between mb-3 gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
+                          <h4 className="text-theme-text-primary font-semibold truncate">
                             {enrollment.program?.name || "Program"}
                           </h4>
                           {upcomingDeadline && (
-                            <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded-sm flex items-center space-x-1">
+                            <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded-sm flex items-center space-x-1 shrink-0">
                               <AlertTriangle className="w-3 h-3" />
                               <span>Deadline Soon</span>
                             </span>
                           )}
                         </div>
                         {enrollment.program?.description && (
-                          <p className="text-theme-text-secondary text-sm">
+                          <p className="text-theme-text-secondary text-sm line-clamp-2">
                             {enrollment.program.description}
                           </p>
                         )}
                       </div>
-                      <span className="text-2xl font-bold text-theme-text-primary ml-4">
+                      <span className="text-2xl font-bold text-theme-text-primary shrink-0">
                         {Math.round(enrollment.progress_percentage)}%
                       </span>
                     </div>
@@ -1577,7 +1579,7 @@ const Dashboard: React.FC = () => {
                 </h3>
                 <button
                   onClick={() => navigate("/inventory")}
-                  className="text-emerald-400 hover:text-emerald-300 text-sm flex items-center space-x-1"
+                  className="text-emerald-400 hover:text-emerald-300 text-sm flex items-center space-x-1 py-2 pl-2"
                 >
                   <span>View All</span>
                   <ChevronRight className="w-4 h-4" />
