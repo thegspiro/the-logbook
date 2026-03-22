@@ -25,6 +25,23 @@ from app.core.config import settings
 from app.models.user import Organization
 from app.schemas.organization import decrypt_settings_secrets
 
+# Header injection control characters that must never appear in
+# RFC 5322 unstructured fields (Subject, From display-name, etc.).
+_HEADER_INJECTION_RE = re.compile(r"[\r\n\x00]")
+
+
+def _sanitize_header(value: str) -> str:
+    """Strip CR/LF/NUL from an email header value to prevent injection."""
+    return _HEADER_INJECTION_RE.sub("", value)
+
+
+def _redact_email(address: str) -> str:
+    """Redact an email address for safe logging (HIPAA)."""
+    if "@" in address:
+        local, domain = address.rsplit("@", 1)
+        return f"{local[0]}***@{domain}" if local else f"***@{domain}"
+    return "***"
+
 
 def inline_email_css(html: str) -> str:
     """Inline ``<style>`` CSS into HTML element ``style=""`` attributes.
@@ -428,16 +445,21 @@ class EmailService:
 
         msg = MIMEMultipart("alternative")
         if text_body:
-            msg.attach(MIMEText(text_body, "plain"))
-        msg.attach(MIMEText(html_body, "html"))
+            msg.attach(MIMEText(text_body, "plain", "utf-8"))
+        msg.attach(MIMEText(html_body, "html", "utf-8"))
 
-        msg["From"] = (
-            f"{self._smtp_config['from_name']} <{self._smtp_config['from_email']}>"
-        )
+        safe_from_name = _sanitize_header(self._smtp_config["from_name"])
+        safe_subject = _sanitize_header(subject)
+
+        msg["From"] = f"{safe_from_name} <{self._smtp_config['from_email']}>"
         msg["To"] = to_email
-        msg["Subject"] = subject
-        msg["Date"] = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
+        msg["Subject"] = safe_subject
+        msg["Date"] = datetime.now(timezone.utc).strftime(
+            "%a, %d %b %Y %H:%M:%S +0000"
+        )
         msg["Message-ID"] = self._make_message_id()
+        msg["MIME-Version"] = "1.0"
+        msg["X-Auto-Response-Suppress"] = "OOF, DR, RN, NRN, AutoReply"
         if reply_to:
             msg["Reply-To"] = reply_to
         if list_unsubscribe:
@@ -519,6 +541,9 @@ class EmailService:
         # attributes so they survive Gmail's <style> stripping.
         html_body = inline_email_css(html_body)
 
+        safe_from_name = _sanitize_header(self._smtp_config["from_name"])
+        safe_subject = _sanitize_header(subject)
+
         success_count = 0
         failure_count = 0
 
@@ -530,41 +555,44 @@ class EmailService:
                     # Create alternative sub-part for text/html
                     alt_part = MIMEMultipart("alternative")
                     if text_body:
-                        alt_part.attach(MIMEText(text_body, "plain"))
-                    alt_part.attach(MIMEText(html_body, "html"))
+                        alt_part.attach(MIMEText(text_body, "plain", "utf-8"))
+                    alt_part.attach(MIMEText(html_body, "html", "utf-8"))
                     msg.attach(alt_part)
 
                     # Attach files
                     for filepath in attachment_paths:
-                        if not os.path.isfile(filepath):
-                            logger.warning(
-                                f"Attachment not found, skipping: {filepath}"
-                            )
+                        resolved = os.path.realpath(filepath)
+                        if not os.path.isfile(resolved):
+                            logger.warning("Attachment not found, skipping")
                             continue
-                        with open(filepath, "rb") as f:
+                        with open(resolved, "rb") as f:
                             part = MIMEBase("application", "octet-stream")
                             part.set_payload(f.read())
                         encoders.encode_base64(part)
-                        filename = os.path.basename(filepath)
+                        filename = _sanitize_header(os.path.basename(resolved))
                         part.add_header(
-                            "Content-Disposition", f'attachment; filename="{filename}"'
+                            "Content-Disposition",
+                            "attachment",
+                            filename=filename,
                         )
                         msg.attach(part)
                 else:
                     msg = MIMEMultipart("alternative")
                     if text_body:
-                        msg.attach(MIMEText(text_body, "plain"))
-                    msg.attach(MIMEText(html_body, "html"))
+                        msg.attach(MIMEText(text_body, "plain", "utf-8"))
+                    msg.attach(MIMEText(html_body, "html", "utf-8"))
 
                 msg["From"] = (
-                    f"{self._smtp_config['from_name']} <{self._smtp_config['from_email']}>"
+                    f"{safe_from_name} <{self._smtp_config['from_email']}>"
                 )
                 msg["To"] = to_email
-                msg["Subject"] = subject
+                msg["Subject"] = safe_subject
                 msg["Date"] = datetime.now(timezone.utc).strftime(
                     "%a, %d %b %Y %H:%M:%S +0000"
                 )
                 msg["Message-ID"] = self._make_message_id()
+                msg["MIME-Version"] = "1.0"
+                msg["X-Auto-Response-Suppress"] = "OOF, DR, RN, NRN, AutoReply"
                 if reply_to:
                     msg["Reply-To"] = reply_to
                 if list_unsubscribe:
@@ -590,7 +618,9 @@ class EmailService:
                 success_count += 1
 
             except Exception as e:
-                logger.error(f"Failed to send email to {to_email}: {e}")
+                logger.error(
+                    f"Failed to send email to {_redact_email(to_email)}: {e}"
+                )
                 failure_count += 1
 
         # Log to message_history when a db session is available
