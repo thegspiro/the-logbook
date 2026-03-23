@@ -12,7 +12,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { Bell, Loader2, Mail, AlertTriangle } from "lucide-react";
+import { Bell, Loader2, Mail, AlertTriangle, UserPlus } from "lucide-react";
 import toast from "react-hot-toast";
 import { notificationsService, organizationService } from "../../../services/api";
 import type { NotificationRuleRecord } from "../../../services/api";
@@ -66,6 +66,12 @@ interface DeclineSettings {
   cc_emails: string[];
 }
 
+interface AssignmentSettings {
+  notify_on_assignment: boolean;
+  send_email: boolean;
+  cc_emails: string[];
+}
+
 interface EquipmentCheckAlertSettings {
   notify_on_failure: boolean;
   notify_roles: string[];
@@ -78,6 +84,12 @@ const DEFAULT_DECLINE_SETTINGS: DeclineSettings = {
   notify_on_decline: true,
   notify_roles: ["chief", "deputy_chief", "captain"],
   notify_shift_officer: true,
+  send_email: false,
+  cc_emails: [],
+};
+
+const DEFAULT_ASSIGNMENT_SETTINGS: AssignmentSettings = {
+  notify_on_assignment: true,
   send_email: false,
   cc_emails: [],
 };
@@ -109,6 +121,14 @@ export const SchedulingNotificationsPanel: React.FC = () => {
   const [loadingDecline, setLoadingDecline] = useState(true);
   const [savingDecline, setSavingDecline] = useState(false);
   const [ccInput, setCcInput] = useState("");
+
+  // Shift assignment notification settings (stored in org settings)
+  const [assignmentSettings, setAssignmentSettings] = useState<AssignmentSettings>(
+    DEFAULT_ASSIGNMENT_SETTINGS,
+  );
+  const [loadingAssignment, setLoadingAssignment] = useState(true);
+  const [savingAssignment, setSavingAssignment] = useState(false);
+  const [assignCcInput, setAssignCcInput] = useState("");
 
   // Equipment check failure alert settings (stored in org settings)
   const [equipAlertSettings, setEquipAlertSettings] = useState<EquipmentCheckAlertSettings>(
@@ -144,6 +164,12 @@ export const SchedulingNotificationsPanel: React.FC = () => {
         if (sched) {
           setDeclineSettings({ ...DEFAULT_DECLINE_SETTINGS, ...sched });
         }
+        const assignCfg = settingsObj.scheduling_assignment as
+          | Partial<AssignmentSettings>
+          | undefined;
+        if (assignCfg) {
+          setAssignmentSettings({ ...DEFAULT_ASSIGNMENT_SETTINGS, ...assignCfg });
+        }
         const equipAlerts = settingsObj.equipment_check_alerts as
           | Partial<EquipmentCheckAlertSettings>
           | undefined;
@@ -154,6 +180,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
         // Settings may not exist yet — use defaults
       } finally {
         setLoadingDecline(false);
+        setLoadingAssignment(false);
         setLoadingEquipAlerts(false);
       }
     };
@@ -171,6 +198,35 @@ export const SchedulingNotificationsPanel: React.FC = () => {
     } finally {
       setSavingDecline(false);
     }
+  };
+
+  const saveAssignmentSettings = async (updated: AssignmentSettings) => {
+    setSavingAssignment(true);
+    try {
+      await organizationService.updateSettings({ scheduling_assignment: updated });
+      setAssignmentSettings(updated);
+      toast.success("Assignment notification settings saved");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Failed to save settings"));
+    } finally {
+      setSavingAssignment(false);
+    }
+  };
+
+  const addAssignCcEmail = () => {
+    const email = assignCcInput.trim();
+    if (!email || assignmentSettings.cc_emails.includes(email)) return;
+    const updated = { ...assignmentSettings, cc_emails: [...assignmentSettings.cc_emails, email] };
+    setAssignCcInput("");
+    void saveAssignmentSettings(updated);
+  };
+
+  const removeAssignCcEmail = (email: string) => {
+    const updated = {
+      ...assignmentSettings,
+      cc_emails: assignmentSettings.cc_emails.filter(e => e !== email),
+    };
+    void saveAssignmentSettings(updated);
   };
 
   const saveEquipAlertSettings = async (updated: EquipmentCheckAlertSettings) => {
@@ -458,6 +514,105 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                             {email}
                             <button
                               onClick={() => removeCcEmail(email)}
+                              className="text-theme-text-muted hover:text-red-500"
+                            >
+                              &times;
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Shift Assignment Notification Settings */}
+      <div className="mt-5 pt-5 border-t border-theme-surface-border">
+        <div className="flex items-center gap-2 mb-1">
+          <UserPlus className="w-4 h-4 text-blue-500" />
+          <h4 className="text-sm font-semibold text-theme-text-primary">
+            Shift Assignment Alerts
+          </h4>
+          {savingAssignment && <Loader2 className="w-3 h-3 animate-spin text-theme-text-muted" />}
+        </div>
+        <p className="text-xs text-theme-text-muted mb-3">
+          Notify members when they are assigned to a shift.
+        </p>
+
+        {loadingAssignment ? (
+          <div className="flex items-center gap-2 text-sm text-theme-text-muted py-2">
+            <Loader2 className="w-4 h-4 animate-spin" /> Loading settings...
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {/* Master toggle */}
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={assignmentSettings.notify_on_assignment}
+                onChange={(e) => {
+                  void saveAssignmentSettings({ ...assignmentSettings, notify_on_assignment: e.target.checked });
+                }}
+                className="w-4 h-4 rounded border-theme-surface-border text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-theme-text-primary">
+                Enable assignment notifications
+              </span>
+            </label>
+
+            {assignmentSettings.notify_on_assignment && (
+              <>
+                {/* Send email toggle */}
+                <label className="flex items-center gap-3 cursor-pointer ml-4">
+                  <input
+                    type="checkbox"
+                    checked={assignmentSettings.send_email}
+                    onChange={(e) => {
+                      void saveAssignmentSettings({ ...assignmentSettings, send_email: e.target.checked });
+                    }}
+                    className="w-4 h-4 rounded border-theme-surface-border text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-theme-text-secondary">
+                    Also send email notification
+                  </span>
+                </label>
+
+                {/* CC emails */}
+                {assignmentSettings.send_email && (
+                  <div className="ml-4">
+                    <p className="text-xs font-medium text-theme-text-secondary mb-1.5">
+                      CC additional email addresses:
+                    </p>
+                    <div className="flex items-center gap-2 mb-2">
+                      <input
+                        type="email"
+                        value={assignCcInput}
+                        onChange={(e) => setAssignCcInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addAssignCcEmail(); } }}
+                        placeholder="email@example.com"
+                        className="flex-1 px-2 py-1 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+                      />
+                      <button
+                        onClick={addAssignCcEmail}
+                        className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                      >
+                        Add
+                      </button>
+                    </div>
+                    {assignmentSettings.cc_emails.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {assignmentSettings.cc_emails.map(email => (
+                          <span
+                            key={email}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-theme-surface-hover rounded-full text-theme-text-secondary"
+                          >
+                            {email}
+                            <button
+                              onClick={() => removeAssignCcEmail(email)}
                               className="text-theme-text-muted hover:text-red-500"
                             >
                               &times;

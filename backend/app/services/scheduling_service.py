@@ -1333,6 +1333,16 @@ class SchedulingService:
 
             await self.db.commit()
             await self.db.refresh(assignment)
+
+            if user_id:
+                await self._notify_shift_assignment(
+                    shift_id=str(shift_id),
+                    user_id=str(user_id),
+                    position=assigned_position or "",
+                    organization_id=organization_id,
+                )
+                await self.db.commit()
+
             return assignment, None
         except IntegrityError:
             await self.db.rollback()
@@ -1638,6 +1648,110 @@ class SchedulingService:
 
         except Exception as e:
             logger.warning(f"Shift decline notification failed: {e}")
+
+    async def _notify_shift_assignment(
+        self,
+        shift_id: str,
+        user_id: str,
+        position: str,
+        organization_id: UUID,
+    ) -> None:
+        """Send in-app (and optionally email) notification when a
+        member is assigned to a shift.
+
+        Reads ``org.settings["scheduling_assignment"]`` to decide
+        whether to notify and whether to send email.  Failures are
+        logged but never propagated.
+        """
+        from loguru import logger
+
+        try:
+            org_result = await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+            org = org_result.scalar_one_or_none()
+            if not org:
+                return
+
+            assign_cfg = (org.settings or {}).get("scheduling_assignment", {})
+            if not assign_cfg.get("notify_on_assignment", True):
+                return
+
+            shift_result = await self.db.execute(
+                select(Shift).where(Shift.id == str(shift_id))
+            )
+            shift = shift_result.scalar_one_or_none()
+            if not shift:
+                return
+
+            shift_date_str = (
+                shift.shift_date.isoformat() if shift.shift_date else "unknown date"
+            )
+            position_label = position or "unspecified"
+
+            from app.core.utils import generate_uuid
+            from app.models.notification import NotificationLog
+
+            message = (
+                f"You have been assigned to the {position_label} position "
+                f"on the {shift_date_str} shift."
+            )
+            if shift.start_time:
+                message = (
+                    f"You have been assigned to the {position_label} position "
+                    f"on the {shift_date_str} shift "
+                    f"(starts {shift.start_time.strftime('%H:%M')})."
+                )
+
+            notif = NotificationLog(
+                id=generate_uuid(),
+                organization_id=str(organization_id),
+                user_id=str(user_id),
+                channel="in_app",
+                notification_type="shift_assignment",
+                subject="New Shift Assignment",
+                body=message,
+            )
+            self.db.add(notif)
+            await self.db.flush()
+
+            if assign_cfg.get("send_email", False):
+                try:
+                    from app.services.email_service import EmailService
+
+                    user_result = await self.db.execute(
+                        select(User.email).where(
+                            User.id == str(user_id),
+                            User.email.isnot(None),
+                        )
+                    )
+                    row = user_result.one_or_none()
+                    to_email = row[0] if row else None
+                    cc_emails = assign_cfg.get("cc_emails", [])
+                    if to_email:
+                        email_svc = EmailService(organization=org)
+                        subject = (
+                            f"Shift Assignment \u2014 "
+                            f"{position_label} on {shift_date_str}"
+                        )
+                        html_body = (
+                            f"<p>{message}</p>"
+                            f"<p>Please log in to the scheduling "
+                            f"module to confirm or decline this assignment.</p>"
+                        )
+                        await email_svc.send_email(
+                            to_emails=[to_email],
+                            subject=subject,
+                            html_body=html_body,
+                            cc_emails=cc_emails or None,
+                            db=self.db,
+                            template_type="shift_assignment",
+                        )
+                except Exception as email_err:
+                    logger.warning(f"Shift assignment email failed: {email_err}")
+
+        except Exception as e:
+            logger.warning(f"Shift assignment notification failed: {e}")
 
     # ============================================
     # Shift Swap Request Management
