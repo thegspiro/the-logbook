@@ -30,6 +30,7 @@ from app.api.dependencies import (
     require_permission,
 )
 from app.core.audit import log_audit_event
+from app.core.constants import ROLE_MEMBER
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.audit import AuditLog
@@ -250,6 +251,7 @@ async def create_member(
         email_verified=False,
         status=UserStatus.ACTIVE,
         must_change_password=True,
+        password_changed_at=datetime.now(timezone.utc),
     )
 
     db.add(new_user)
@@ -276,6 +278,25 @@ async def create_member(
                 user_roles.insert().values(
                     user_id=new_user.id,
                     position_id=role.id,
+                    assigned_by=current_user.id,
+                )
+            )
+
+    # Ensure the default "member" role is always assigned for baseline permissions
+    assigned_role_slugs = {r.slug for r in roles} if user_data.role_ids else set()
+    if ROLE_MEMBER not in assigned_role_slugs:
+        member_result = await db.execute(
+            select(Role).where(
+                Role.organization_id == str(current_user.organization_id),
+                Role.slug == ROLE_MEMBER,
+            )
+        )
+        member_role = member_result.scalar_one_or_none()
+        if member_role:
+            await db.execute(
+                user_roles.insert().values(
+                    user_id=new_user.id,
+                    position_id=member_role.id,
                     assigned_by=current_user.id,
                 )
             )

@@ -24,7 +24,8 @@ from app.core.security import (
     validate_password_strength,
     verify_password,
 )
-from app.models.user import Organization, PasswordHistory
+from app.core.constants import ROLE_MEMBER
+from app.models.user import Organization, PasswordHistory, Role
 from app.models.user import Session as UserSession
 from app.models.user import User, UserStatus
 
@@ -401,6 +402,7 @@ class AuthService:
             return None, _generic_conflict
 
         # Create user — use str() for id to match String(36) column
+        now = datetime.now(timezone.utc)
         user = User(
             id=str(uuid4()),
             organization_id=str(organization_id),
@@ -412,10 +414,26 @@ class AuthService:
             membership_number=membership_number,
             status=UserStatus.ACTIVE,
             email_verified=False,
+            must_change_password=True,
+            password_changed_at=now,
         )
 
         self.db.add(user)
         await self.db.flush()
+
+        # Assign default "member" role for baseline permissions
+        member_role_result = await self.db.execute(
+            select(Role).where(
+                Role.organization_id == str(organization_id),
+                Role.slug == ROLE_MEMBER,
+            )
+        )
+        member_role = member_role_result.scalar_one_or_none()
+        if member_role:
+            await self.db.refresh(user, ["positions"])
+            user.positions.append(member_role)
+            await self.db.flush()
+
         await self.db.refresh(user)
 
         logger.info(f"User registered: {username}")
