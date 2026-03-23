@@ -8,7 +8,6 @@ transfer to full membership.
 
 import copy
 import secrets
-import string
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -1255,7 +1254,26 @@ class MembershipPipelineService:
                 }
 
         if not username:
-            username = self._generate_username(prospect.first_name, prospect.last_name)
+            username = await self._generate_unique_username(
+                prospect.first_name,
+                prospect.last_name,
+                prospect.organization_id,
+            )
+        else:
+            # Validate manually-provided username is unique
+            existing = await self.db.execute(
+                select(func.count())
+                .select_from(User)
+                .where(
+                    User.organization_id == prospect.organization_id,
+                    User.username == username,
+                    User.deleted_at.is_(None),
+                )
+            )
+            if (existing.scalar() or 0) > 0:
+                raise ValueError(
+                    f"Username '{username}' is already taken"
+                )
 
         # Auto-assign membership ID if not manually provided
         if not membership_id:
@@ -1299,6 +1317,7 @@ class MembershipPipelineService:
             status=UserStatus.ACTIVE,
             membership_type=membership_type or "probationary",
             must_change_password=True,
+            password_changed_at=datetime.now(timezone.utc),
             # Preserve referral data from prospect
             referral_source=prospect.referral_source,
             interest_reason=prospect.interest_reason,
@@ -1319,14 +1338,22 @@ class MembershipPipelineService:
             if roles:
                 new_user.roles = roles
 
-        # Auto-assign membership number if enabled for this organization
-        from app.services.organization_service import OrganizationService
+        # Ensure default "member" role is always assigned
+        from app.core.constants import ROLE_MEMBER
+        from app.models.user import Role
 
-        org_service = OrganizationService(self.db)
-        membership_number = await org_service.assign_next_membership_number(
-            organization_id=prospect.organization_id,
-            user=new_user,
-        )
+        assigned_slugs = {r.slug for r in (new_user.roles or [])}
+        if ROLE_MEMBER not in assigned_slugs:
+            member_result = await self.db.execute(
+                select(Role).where(
+                    Role.organization_id == prospect.organization_id,
+                    Role.slug == ROLE_MEMBER,
+                )
+            )
+            member_role = member_result.scalar_one_or_none()
+            if member_role:
+                await self.db.refresh(new_user, ["positions"])
+                new_user.positions.append(member_role)
 
         # Update prospect record
         prospect.status = ProspectStatus.TRANSFERRED
@@ -1334,8 +1361,8 @@ class MembershipPipelineService:
         prospect.transferred_at = datetime.now(timezone.utc)
 
         transfer_details: Dict[str, Any] = {"user_id": user_id, "username": username}
-        if membership_number:
-            transfer_details["membership_number"] = membership_number
+        if membership_id:
+            transfer_details["membership_number"] = membership_id
 
         await self._log_activity(
             prospect_id=prospect.id,
@@ -1374,7 +1401,7 @@ class MembershipPipelineService:
             "success": True,
             "prospect_id": prospect.id,
             "user_id": user_id,
-            "membership_number": membership_number,
+            "membership_number": membership_id,
             "message": result_msg,
             "auto_enrollment": enrollment_result,
             "welcome_email_sent": welcome_email_sent,
@@ -1888,12 +1915,32 @@ class MembershipPipelineService:
             logger.error(f"Failed to send welcome email to {prospect.email}: {e}")
             return False
 
-    def _generate_username(self, first_name: str, last_name: str) -> str:
-        """Generate a username from first and last name"""
+    async def _generate_unique_username(
+        self, first_name: str, last_name: str, organization_id: str
+    ) -> str:
+        """Generate a username guaranteed unique within the organization.
+
+        Starts with 'flastname' (e.g. 'jsmith'), then tries 'jsmith1',
+        'jsmith2', etc. until an unused name is found.
+        """
         base = f"{first_name[0]}{last_name}".lower().replace(" ", "")
-        # Add random suffix to avoid collisions
-        suffix = "".join(secrets.choice(string.digits) for _ in range(3))
-        return f"{base}{suffix}"
+        candidate = base
+
+        suffix = 0
+        while True:
+            result = await self.db.execute(
+                select(func.count())
+                .select_from(User)
+                .where(
+                    User.organization_id == organization_id,
+                    User.username == candidate,
+                    User.deleted_at.is_(None),
+                )
+            )
+            if (result.scalar() or 0) == 0:
+                return candidate
+            suffix += 1
+            candidate = f"{base}{suffix}"
 
     # =========================================================================
     # Kanban Board
