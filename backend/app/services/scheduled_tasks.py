@@ -1893,6 +1893,8 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
     Send email alerts for overdue checkouts. Daily at 07:30.
     Notifies both the member who has the overdue item and admins.
     """
+    from zoneinfo import ZoneInfo
+
     from app.services.email_service import EmailService, build_email_logo_html
     from app.services.inventory_service import InventoryService
 
@@ -1909,6 +1911,10 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
             if not overdue:
                 results.append({"org_id": str(org.id), "overdue": 0})
                 continue
+
+            org_tz = ZoneInfo(
+                org.timezone if org.timezone else "America/New_York"
+            )
 
             # Group by member for individual notifications
             by_user: Dict[str, list] = {}
@@ -1930,7 +1936,8 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
                 for co in user_checkouts:
                     item_name = co.item.name if co.item else "Unknown"
                     due_date = (
-                        co.expected_return_at.strftime("%B %d, %Y")
+                        co.expected_return_at.astimezone(org_tz)
+                        .strftime("%B %d, %Y")
                         if co.expected_return_at
                         else "N/A"
                     )

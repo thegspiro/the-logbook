@@ -1689,18 +1689,25 @@ class SchedulingService:
             )
             position_label = position or "unspecified"
 
+            from zoneinfo import ZoneInfo
+
             from app.core.utils import generate_uuid
             from app.models.notification import NotificationLog
+
+            org_tz = ZoneInfo(
+                org.timezone if org.timezone else "America/New_York"
+            )
 
             message = (
                 f"You have been assigned to the {position_label} position "
                 f"on the {shift_date_str} shift."
             )
             if shift.start_time:
+                local_start = shift.start_time.astimezone(org_tz)
                 message = (
                     f"You have been assigned to the {position_label} position "
                     f"on the {shift_date_str} shift "
-                    f"(starts {shift.start_time.strftime('%H:%M')})."
+                    f"(starts {local_start.strftime('%H:%M')})."
                 )
 
             notif = NotificationLog(
