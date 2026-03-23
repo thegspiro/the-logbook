@@ -66,8 +66,9 @@ const CycleStrip: React.FC<{ config: Record<string, unknown> }> = ({
   const cp = config.cycle_pattern;
   if (!Array.isArray(cp) || cp.length === 0) return null;
   const entries = cp as string[];
+  const summary = entries.map((e, i) => `Day ${i + 1}: ${e}`).join(", ");
   return (
-    <div className="flex gap-px mt-1.5">
+    <div className="flex gap-px mt-1.5" role="img" aria-label={`Cycle pattern: ${summary}`}>
       {entries.map((entry, i) => {
         let bg = "bg-theme-surface-hover";
         if (entry === "on") bg = "bg-violet-500";
@@ -78,6 +79,7 @@ const CycleStrip: React.FC<{ config: Record<string, unknown> }> = ({
             key={i}
             className={`h-1.5 flex-1 rounded-xs ${bg}`}
             title={`Day ${i + 1}: ${entry}`}
+            aria-hidden="true"
           />
         );
       })}
@@ -359,8 +361,9 @@ export const PatternsTab: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" />
+      <div className="flex items-center justify-center py-20" role="status">
+        <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" aria-hidden="true" />
+        <span className="sr-only">Loading shift patterns…</span>
       </div>
     );
   }

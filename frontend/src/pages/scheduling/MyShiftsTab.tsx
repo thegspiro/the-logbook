@@ -180,8 +180,9 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" />
+      <div className="flex items-center justify-center py-20" role="status" aria-label="Loading shifts">
+        <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" aria-hidden="true" />
+        <span className="sr-only">Loading your shifts…</span>
       </div>
     );
   }
@@ -321,8 +322,8 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Swap Into (optional)</label>
-                <select value={swapForm.target_shift_id}
+                <label htmlFor="swap-target-shift" className="block text-sm font-medium text-theme-text-secondary mb-1">Swap Into (optional)</label>
+                <select id="swap-target-shift" value={swapForm.target_shift_id}
                   onChange={e => setSwapForm(p => ({...p, target_shift_id: e.target.value}))}
                   className={inputCls}
                 >
@@ -342,8 +343,8 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                 <p className="text-xs text-theme-text-muted mt-1">Leave blank to request an open swap that any member can accept.</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Reason</label>
-                <textarea value={swapForm.reason}
+                <label htmlFor="swap-reason" className="block text-sm font-medium text-theme-text-secondary mb-1">Reason</label>
+                <textarea id="swap-reason" value={swapForm.reason}
                   onChange={e => setSwapForm(p => ({...p, reason: e.target.value}))}
                   rows={3} placeholder="Reason for swap request" className={inputCls + ' resize-none'}
                 />
@@ -371,21 +372,21 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
             <div className="p-6 space-y-4">
               <div className="form-grid-2">
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Start Date *</label>
-                  <input type="date" value={timeOffForm.start_date}
+                  <label htmlFor="timeoff-start" className="block text-sm font-medium text-theme-text-secondary mb-1">Start Date *</label>
+                  <input id="timeoff-start" type="date" value={timeOffForm.start_date}
                     onChange={e => setTimeOffForm(p => ({...p, start_date: e.target.value}))} className={inputCls}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">End Date</label>
-                  <input type="date" value={timeOffForm.end_date}
+                  <label htmlFor="timeoff-end" className="block text-sm font-medium text-theme-text-secondary mb-1">End Date</label>
+                  <input id="timeoff-end" type="date" value={timeOffForm.end_date}
                     onChange={e => setTimeOffForm(p => ({...p, end_date: e.target.value}))} className={inputCls}
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Reason</label>
-                <textarea value={timeOffForm.reason}
+                <label htmlFor="timeoff-reason" className="block text-sm font-medium text-theme-text-secondary mb-1">Reason</label>
+                <textarea id="timeoff-reason" value={timeOffForm.reason}
                   onChange={e => setTimeOffForm(p => ({...p, reason: e.target.value}))}
                   rows={3} placeholder="Reason for time off" className={inputCls + ' resize-none'}
                 />

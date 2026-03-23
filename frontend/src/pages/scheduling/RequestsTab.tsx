@@ -142,6 +142,7 @@ export const RequestsTab: React.FC = () => {
         <div className="flex items-center gap-2">
           <Filter className="w-4 h-4 text-theme-text-muted shrink-0" />
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+            aria-label="Filter requests by status"
             className="flex-1 sm:flex-none bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500"
           >
             <option value="">All Statuses</option>
@@ -154,8 +155,9 @@ export const RequestsTab: React.FC = () => {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" />
+        <div className="flex items-center justify-center py-20" role="status">
+          <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" aria-hidden="true" />
+          <span className="sr-only">Loading requests…</span>
         </div>
       ) : activeView === 'swaps' ? (
         /* Swap Requests */
@@ -333,8 +335,8 @@ export const RequestsTab: React.FC = () => {
               <h2 className="text-lg font-bold text-theme-text-primary">Review Request</h2>
             </div>
             <div className="p-6">
-              <label className="block text-sm font-medium text-theme-text-secondary mb-1">Reviewer Notes (optional)</label>
-              <textarea value={reviewNotes} onChange={e => setReviewNotes(e.target.value)}
+              <label htmlFor="reviewer-notes" className="block text-sm font-medium text-theme-text-secondary mb-1">Reviewer Notes (optional)</label>
+              <textarea id="reviewer-notes" value={reviewNotes} onChange={e => setReviewNotes(e.target.value)}
                 rows={3} placeholder="Add reviewer notes"
                 className="form-input focus:ring-violet-500 placeholder-theme-text-muted py-2.5 resize-none"
               />

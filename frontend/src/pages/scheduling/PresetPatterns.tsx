@@ -17,29 +17,24 @@ const CyclePreview: React.FC<{ pattern: PresetPatternDef }> = ({ pattern }) => {
       i < (pattern.daysOn ?? 0) ? 'on' as const : 'off' as const
     );
 
+  const labels = entries.map((entry, i) => {
+    let label = 'Off';
+    if (entry === 'on') label = 'On duty';
+    else if (entry === 'day') label = 'Day shift';
+    else if (entry === 'night') label = 'Night shift';
+    return { bg: entry === 'on' ? 'bg-violet-500' : entry === 'day' ? 'bg-amber-400 dark:bg-amber-500' : entry === 'night' ? 'bg-indigo-500 dark:bg-indigo-400' : 'bg-theme-surface-hover', title: `Day ${i + 1}: ${label}`, label };
+  });
+  const summary = labels.map(l => l.title).join(', ');
   return (
-    <div className="flex gap-0.5 mt-2">
-      {entries.map((entry, i) => {
-        let bg = 'bg-theme-surface-hover';
-        let title = 'Off';
-        if (entry === 'on') {
-          bg = 'bg-violet-500';
-          title = 'On duty';
-        } else if (entry === 'day') {
-          bg = 'bg-amber-400 dark:bg-amber-500';
-          title = 'Day shift';
-        } else if (entry === 'night') {
-          bg = 'bg-indigo-500 dark:bg-indigo-400';
-          title = 'Night shift';
-        }
-        return (
-          <div
-            key={i}
-            className={`h-2 flex-1 rounded-xs ${bg}`}
-            title={`Day ${i + 1}: ${title}`}
-          />
-        );
-      })}
+    <div className="flex gap-0.5 mt-2" role="img" aria-label={`Cycle pattern: ${summary}`}>
+      {labels.map((item, i) => (
+        <div
+          key={i}
+          className={`h-2 flex-1 rounded-xs ${item.bg}`}
+          title={item.title}
+          aria-hidden="true"
+        />
+      ))}
     </div>
   );
 };
