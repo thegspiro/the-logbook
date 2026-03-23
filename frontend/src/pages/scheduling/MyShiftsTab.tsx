@@ -374,12 +374,12 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                       <>
                         <button onClick={() => { void handleConfirm(assignment.id); }}
                           disabled={confirmingId === assignment.id}
-                          className="p-2 text-green-600 hover:bg-green-500/10 rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" title="Confirm shift" aria-label="Confirm shift assignment"
+                          className="p-2 text-green-600 dark:text-green-400 hover:bg-green-500/10 dark:hover:bg-green-500/20 rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" title="Confirm shift" aria-label="Confirm shift assignment"
                         >
                           {confirmingId === assignment.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
                         </button>
                         <button onClick={() => setConfirmingDecline(assignment.id)}
-                          className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" title="Decline shift" aria-label="Decline shift assignment"
+                          className="p-2 text-red-500 dark:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20 rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" title="Decline shift" aria-label="Decline shift assignment"
                         >
                           <XCircle className="w-5 h-5" />
                         </button>
@@ -387,7 +387,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                     )}
                     {confirmingDecline === assignment.id && (
                       <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-red-500">Decline?</span>
+                        <span className="text-xs text-red-500 dark:text-red-400">Decline?</span>
                         <button onClick={() => { void handleDecline(assignment.id); }}
                           className="btn-primary px-2 py-1 rounded-md text-xs" aria-label="Confirm decline"
                         >Yes</button>

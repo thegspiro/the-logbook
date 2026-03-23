@@ -560,12 +560,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           {isCurrentUser && isAssigned && confirmingDecline !== assignment.id && (
             <>
               <button onClick={() => { void handleConfirm(assignment.id); }} disabled={confirming}
-                className="p-1.5 text-green-600 hover:bg-green-500/10 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center disabled:opacity-50" aria-label="Confirm assignment"
+                className="p-1.5 text-green-600 dark:text-green-400 hover:bg-green-500/10 dark:hover:bg-green-500/20 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center disabled:opacity-50" aria-label="Confirm assignment"
               >
                 {confirming ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
               </button>
               <button onClick={() => setConfirmingDecline(assignment.id)}
-                className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Decline assignment"
+                className="p-1.5 text-red-500 dark:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Decline assignment"
               >
                 <XCircle className="w-4 h-4" />
               </button>
@@ -573,7 +573,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           )}
           {confirmingDecline === assignment.id && (
             <div className="flex items-center gap-1.5">
-              <span className="text-xs text-red-500">Decline?</span>
+              <span className="text-xs text-red-500 dark:text-red-400">Decline?</span>
               <button onClick={() => { void handleDecline(assignment.id); }} disabled={declining}
                 className="btn-primary px-2 py-1 rounded-md text-xs" aria-label="Confirm decline"
               >{declining ? '...' : 'Yes'}</button>
@@ -584,14 +584,14 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           )}
           {canAssign && !isCurrentUser && confirmingRemove !== assignment.id && (
             <button onClick={() => setConfirmingRemove(assignment.id)}
-              className="p-1.5 text-theme-text-muted hover:text-red-500 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Remove assignment"
+              className="p-1.5 text-theme-text-muted hover:text-red-500 dark:hover:text-red-400 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Remove assignment"
             >
               <XCircle className="w-4 h-4" />
             </button>
           )}
           {confirmingRemove === assignment.id && (
             <div className="flex items-center gap-1.5">
-              <span className="text-xs text-red-500">Remove?</span>
+              <span className="text-xs text-red-500 dark:text-red-400">Remove?</span>
               <button onClick={() => { void handleRemove(assignment.id); }} disabled={removing}
                 className="btn-primary px-2 py-1 rounded-md text-xs" aria-label="Confirm removal"
               >{removing ? '...' : 'Yes'}</button>
@@ -957,12 +957,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                           {assignment.user_id === user?.id && assignment.status === AssignmentStatus.ASSIGNED && confirmingDecline !== assignment.id && (
                             <>
                               <button onClick={() => { void handleConfirm(assignment.id); }}
-                                className="p-1.5 text-green-600 hover:bg-green-500/10 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Confirm assignment"
+                                className="p-1.5 text-green-600 dark:text-green-400 hover:bg-green-500/10 dark:hover:bg-green-500/20 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Confirm assignment"
                               >
                                 <Check className="w-4 h-4" />
                               </button>
                               <button onClick={() => setConfirmingDecline(assignment.id)}
-                                className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Decline assignment"
+                                className="p-1.5 text-red-500 dark:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Decline assignment"
                               >
                                 <XCircle className="w-4 h-4" />
                               </button>
@@ -970,7 +970,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                           )}
                           {confirmingDecline === assignment.id && (
                             <div className="flex items-center gap-1.5">
-                              <span className="text-xs text-red-500">Decline?</span>
+                              <span className="text-xs text-red-500 dark:text-red-400">Decline?</span>
                               <button onClick={() => { void handleDecline(assignment.id); }}
                                 className="btn-primary px-2 py-1 rounded-md text-xs" aria-label="Confirm decline"
                               >Yes</button>
@@ -981,14 +981,14 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                           )}
                           {canAssign && assignment.user_id !== user?.id && confirmingRemove !== assignment.id && (
                             <button onClick={() => setConfirmingRemove(assignment.id)}
-                              className="p-1.5 text-theme-text-muted hover:text-red-500 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Remove assignment"
+                              className="p-1.5 text-theme-text-muted hover:text-red-500 dark:hover:text-red-400 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Remove assignment"
                             >
                               <XCircle className="w-4 h-4" />
                             </button>
                           )}
                           {confirmingRemove === assignment.id && (
                             <div className="flex items-center gap-1.5">
-                              <span className="text-xs text-red-500">Remove?</span>
+                              <span className="text-xs text-red-500 dark:text-red-400">Remove?</span>
                               <button onClick={() => { void handleRemove(assignment.id); }}
                                 className="btn-primary px-2 py-1 rounded-md text-xs" aria-label="Confirm removal"
                               >Yes</button>

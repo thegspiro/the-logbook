@@ -237,12 +237,12 @@ export const RequestsTab: React.FC = () => {
                       {canManage && req.status === RequestStatus.PENDING && (
                         <>
                           <button onClick={() => { void handleQuickReview('swap', req.id, 'approved'); }}
-                            className="px-2.5 py-1.5 text-xs font-medium text-green-700 dark:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors inline-flex items-center gap-1" aria-label="Approve swap"
+                            className="px-2.5 py-1.5 text-xs font-medium text-green-700 dark:text-green-400 hover:bg-green-500/10 dark:hover:bg-green-500/20 rounded-lg transition-colors inline-flex items-center gap-1" aria-label="Approve swap"
                           >
                             <Check className="w-3.5 h-3.5" /> Approve
                           </button>
                           <button onClick={() => { void handleQuickReview('swap', req.id, 'denied'); }}
-                            className="px-2.5 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors inline-flex items-center gap-1" aria-label="Deny swap"
+                            className="px-2.5 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20 rounded-lg transition-colors inline-flex items-center gap-1" aria-label="Deny swap"
                           >
                             <X className="w-3.5 h-3.5" /> Deny
                           </button>
@@ -256,14 +256,14 @@ export const RequestsTab: React.FC = () => {
                       )}
                       {req.status === RequestStatus.PENDING && (req.requesting_user_id ?? req.user_id) === currentUser?.id && confirmingCancel?.id !== req.id && (
                         <button onClick={() => setConfirmingCancel({ type: 'swap', id: req.id })}
-                          className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label="Cancel swap request"
+                          className="p-2 text-theme-text-muted hover:text-red-500 dark:hover:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label="Cancel swap request"
                         >
                           <X className="w-4 h-4" />
                         </button>
                       )}
                       {confirmingCancel?.id === req.id && confirmingCancel.type === 'swap' && (
                         <div className="flex items-center gap-1.5">
-                          <span className="text-xs text-red-500">Cancel?</span>
+                          <span className="text-xs text-red-500 dark:text-red-400">Cancel?</span>
                           <button onClick={() => { void handleCancel('swap', req.id); }}
                             className="btn-primary px-2 py-1 rounded-md text-xs" aria-label="Confirm cancellation"
                           >Yes</button>
@@ -324,12 +324,12 @@ export const RequestsTab: React.FC = () => {
                       {canManage && req.status === RequestStatus.PENDING && (
                         <>
                           <button onClick={() => { void handleQuickReview('timeoff', req.id, 'approved'); }}
-                            className="px-2.5 py-1.5 text-xs font-medium text-green-700 dark:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors inline-flex items-center gap-1" aria-label="Approve time off"
+                            className="px-2.5 py-1.5 text-xs font-medium text-green-700 dark:text-green-400 hover:bg-green-500/10 dark:hover:bg-green-500/20 rounded-lg transition-colors inline-flex items-center gap-1" aria-label="Approve time off"
                           >
                             <Check className="w-3.5 h-3.5" /> Approve
                           </button>
                           <button onClick={() => { void handleQuickReview('timeoff', req.id, 'denied'); }}
-                            className="px-2.5 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors inline-flex items-center gap-1" aria-label="Deny time off"
+                            className="px-2.5 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20 rounded-lg transition-colors inline-flex items-center gap-1" aria-label="Deny time off"
                           >
                             <X className="w-3.5 h-3.5" /> Deny
                           </button>
@@ -343,14 +343,14 @@ export const RequestsTab: React.FC = () => {
                       )}
                       {req.status === RequestStatus.PENDING && req.user_id === currentUser?.id && confirmingCancel?.id !== req.id && (
                         <button onClick={() => setConfirmingCancel({ type: 'timeoff', id: req.id })}
-                          className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label="Cancel time-off request"
+                          className="p-2 text-theme-text-muted hover:text-red-500 dark:hover:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label="Cancel time-off request"
                         >
                           <X className="w-4 h-4" />
                         </button>
                       )}
                       {confirmingCancel?.id === req.id && confirmingCancel.type === 'timeoff' && (
                         <div className="flex items-center gap-1.5">
-                          <span className="text-xs text-red-500">Cancel?</span>
+                          <span className="text-xs text-red-500 dark:text-red-400">Cancel?</span>
                           <button onClick={() => { void handleCancel('timeoff', req.id); }}
                             className="btn-primary px-2 py-1 rounded-md text-xs" aria-label="Confirm cancellation"
                           >Yes</button>
