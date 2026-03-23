@@ -29,6 +29,8 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
 import { useTimezone } from "../hooks/useTimezone";
+import { useTheme } from "../contexts/ThemeContext";
+import { colorCardStyle } from "../utils/colorContrast";
 import { formatTime, formatDateCustom, localToUTC } from "../utils/dateFormatting";
 import { schedulingService, useSchedulingStore } from "../modules/scheduling";
 import type {
@@ -123,13 +125,6 @@ const computeEndDate = (
   return formatDateISO(nextDay);
 };
 
-/** Map a hex color to Tailwind-compatible inline styles for shift cards. */
-const hexColorStyle = (hex: string): React.CSSProperties => ({
-  backgroundColor: `${hex}18`,
-  borderColor: `${hex}4D`,
-  color: hex,
-});
-
 const getShiftTemplateColor = (shift: ShiftRecord): string | undefined => {
   // If the shift carries a template color, use inline styles instead (via getShiftStyle)
   if (shift.color) return undefined;
@@ -140,9 +135,6 @@ const getShiftTemplateColor = (shift: ShiftRecord): string | undefined => {
     return "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30";
   return "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30";
 };
-
-const getShiftStyle = (shift: ShiftRecord): React.CSSProperties | undefined =>
-  shift.color ? hexColorStyle(shift.color) : undefined;
 
 const isUnderstaffed = (shift: ShiftRecord): boolean => {
   // Check required positions first — if a shift has structured positions,
@@ -197,6 +189,7 @@ const SchedulingPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const navigate = useNavigate();
   const tz = useTimezone();
+  const { resolvedTheme } = useTheme();
   const canManage = checkPermission("scheduling.manage");
 
   // Shared store — members, templates, apparatus loaded once and cached
@@ -681,7 +674,7 @@ const SchedulingPage: React.FC = () => {
                               key={shift.id}
                               onClick={() => handleShiftClick(shift)}
                               className={`mb-2 p-2 rounded-lg border text-xs w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift) ?? ""}`}
-                              style={getShiftStyle(shift)}
+                              style={shift.color ? colorCardStyle(shift.color, resolvedTheme) : undefined}
                             >
                               <p className="font-medium truncate">
                                 {formatTime(shift.start_time, tz)}
@@ -771,7 +764,7 @@ const SchedulingPage: React.FC = () => {
                                   key={shift.id}
                                   onClick={() => handleShiftClick(shift)}
                                   className={`p-3 rounded-lg border text-sm w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift) ?? ""}`}
-                                  style={getShiftStyle(shift)}
+                                  style={shift.color ? colorCardStyle(shift.color, resolvedTheme) : undefined}
                                 >
                                   <p className="font-medium">
                                     {formatTime(shift.start_time, tz)}
@@ -859,7 +852,7 @@ const SchedulingPage: React.FC = () => {
                               key={shift.id}
                               onClick={() => handleShiftClick(shift)}
                               className={`mb-1 px-1.5 py-1 rounded-sm border text-xs w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift) ?? ""}`}
-                              style={getShiftStyle(shift)}
+                              style={shift.color ? colorCardStyle(shift.color, resolvedTheme) : undefined}
                             >
                               <p className="font-medium truncate">
                                 {isUnderstaffed(shift) && (
@@ -1007,7 +1000,7 @@ const SchedulingPage: React.FC = () => {
                                     key={shift.id}
                                     onClick={() => handleShiftClick(shift)}
                                     className={`p-3 rounded-lg border text-sm w-full text-left cursor-pointer active:ring-2 active:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift) ?? ""}`}
-                                    style={getShiftStyle(shift)}
+                                    style={shift.color ? colorCardStyle(shift.color, resolvedTheme) : undefined}
                                   >
                                     <p className="font-medium">
                                       {formatTime(shift.start_time, tz)}
