@@ -1678,7 +1678,7 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
                 failed += 1
 
         except Exception as e:
-            logger.error("Failed to send scheduled email %s: %s", item.id, e)
+            logger.error("Failed to send scheduled email {}: {}", item.id, e)
             item.status = ScheduledEmailStatus.FAILED
             item.error_message = str(e)[:500]
             failed += 1
@@ -1687,7 +1687,7 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
         await db.commit()
 
     logger.info(
-        "Scheduled emails processed: %d sent, %d failed, %d total",
+        "Scheduled emails processed: {} sent, {} failed, {} total",
         sent,
         failed,
         len(pending),

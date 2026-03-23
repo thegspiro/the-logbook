@@ -772,6 +772,20 @@ async def list_shift_assignments(
     return await service.enrich_assignments(assignments)
 
 
+@router.get("/shifts/{shift_id}/unavailable-members")
+async def get_unavailable_members(
+    shift_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.assign")),
+):
+    """Return user IDs that cannot be assigned to a shift (on leave, time-off, or already assigned)."""
+    service = SchedulingService(db)
+    user_ids = await service.get_unavailable_user_ids(
+        current_user.organization_id, shift_id
+    )
+    return {"unavailable_user_ids": user_ids}
+
+
 @router.post(
     "/shifts/{shift_id}/assignments",
     response_model=ShiftAssignmentResponse,
@@ -1103,7 +1117,7 @@ async def get_member_availability(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("scheduling.assign")),
 ):
-    """Get member availability for a date range"""
+    """Get per-member availability summary for a date range"""
     service = SchedulingService(db)
     try:
         start = date.fromisoformat(start_date)
@@ -1112,10 +1126,9 @@ async def get_member_availability(
         raise HTTPException(
             status_code=400, detail="Invalid date format. Use YYYY-MM-DD."
         )
-    availability = await service.get_availability(
+    return await service.get_availability_summary(
         current_user.organization_id, start, end
     )
-    return availability
 
 
 # ============================================
@@ -1222,10 +1235,15 @@ async def get_member_hours_report(
     """Get member hours report for a date range"""
     start, end = _parse_and_validate_report_dates(start_date, end_date)
     service = SchedulingService(db)
-    report = await service.get_member_hours_report(
+    members = await service.get_member_hours_report(
         current_user.organization_id, start, end
     )
-    return report
+    return {
+        "members": members,
+        "period_start": start.isoformat(),
+        "period_end": end.isoformat(),
+        "total_members": len(members),
+    }
 
 
 @router.get("/reports/coverage")
