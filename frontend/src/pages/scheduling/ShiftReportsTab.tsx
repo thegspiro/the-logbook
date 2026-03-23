@@ -639,7 +639,7 @@ export const ShiftReportsTab: React.FC = () => {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
               <input
                 type="text"
-                placeholder="Search members..."
+                aria-label="Search members..." placeholder="Search members..."
                 value={memberSearch}
                 onChange={e => setMemberSearch(e.target.value)}
                 className="form-input focus:ring-violet-500 pl-9 pr-3 text-sm"

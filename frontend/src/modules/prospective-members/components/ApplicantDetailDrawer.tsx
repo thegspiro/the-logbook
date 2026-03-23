@@ -1168,7 +1168,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                           type="text"
                           value={eventSearchQuery}
                           onChange={(e) => setEventSearchQuery(e.target.value)}
-                          placeholder="Search upcoming events..."
+                          aria-label="Search upcoming events..." placeholder="Search upcoming events..."
                           className="flex-1 bg-transparent text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden"
                           autoFocus
                         />

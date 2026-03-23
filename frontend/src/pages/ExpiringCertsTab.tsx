@@ -113,10 +113,10 @@ const ExpiringCertsTab: React.FC = () => {
           <table className="min-w-full text-sm">
             <thead>
               <tr className="border-b border-theme-surface-border">
-                <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase">Member</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase">Certification</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase">Expiry Date</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase">Status</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase">Member</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase">Certification</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase">Expiry Date</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase">Status</th>
               </tr>
             </thead>
             <tbody>

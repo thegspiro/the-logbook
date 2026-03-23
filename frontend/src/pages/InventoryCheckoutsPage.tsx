@@ -213,7 +213,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
             <input
               id="checkout-search"
               type="text"
-              placeholder="Search by item or member name..."
+              aria-label="Search by item or member name..." placeholder="Search by item or member name..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="form-input pl-10 placeholder-theme-text-muted pr-4"
@@ -261,12 +261,12 @@ export const InventoryCheckoutsPage: React.FC = () => {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-theme-surface-border bg-theme-surface">
-                      <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Item Name</th>
-                      <th className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Member</th>
-                      <th className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Checkout Date</th>
-                      <th className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Due Date</th>
-                      <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Status</th>
-                      <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Action</th>
+                      <th scope="col" className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Item Name</th>
+                      <th scope="col" className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Member</th>
+                      <th scope="col" className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Checkout Date</th>
+                      <th scope="col" className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Due Date</th>
+                      <th scope="col" className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Status</th>
+                      <th scope="col" className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Action</th>
                     </tr>
                   </thead>
                   <tbody>

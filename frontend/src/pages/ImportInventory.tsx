@@ -281,13 +281,13 @@ const ImportInventory: React.FC = () => {
               <table className="w-full text-sm">
                 <thead className="bg-theme-input-bg border-b border-theme-surface-border">
                   <tr>
-                    <th className="px-4 py-2 text-left text-theme-text-secondary">Name</th>
-                    <th className="px-4 py-2 text-left text-theme-text-secondary">Category</th>
-                    <th className="px-4 py-2 text-left text-theme-text-secondary">Type</th>
-                    <th className="px-4 py-2 text-left text-theme-text-secondary">Serial #</th>
-                    <th className="px-4 py-2 text-left text-theme-text-secondary">Status</th>
-                    <th className="px-4 py-2 text-left text-theme-text-secondary">Qty</th>
-                    <th className="px-4 py-2 text-left text-theme-text-secondary">Tracking</th>
+                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Name</th>
+                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Category</th>
+                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Type</th>
+                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Serial #</th>
+                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Status</th>
+                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Qty</th>
+                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Tracking</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-theme-surface-border">

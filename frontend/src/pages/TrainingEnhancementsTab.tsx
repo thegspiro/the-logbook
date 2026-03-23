@@ -321,12 +321,12 @@ const InstructorsSection: React.FC = () => {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-theme-text-muted border-b border-theme-surface-border">
-                <th className="pb-2 pr-4">Instructor</th>
-                <th className="pb-2 pr-4">Type</th>
-                <th className="pb-2 pr-4">Level</th>
-                <th className="pb-2 pr-4">Cert #</th>
-                <th className="pb-2 pr-4">Expires</th>
-                <th className="pb-2">Status</th>
+                <th scope="col" className="pb-2 pr-4">Instructor</th>
+                <th scope="col" className="pb-2 pr-4">Type</th>
+                <th scope="col" className="pb-2 pr-4">Level</th>
+                <th scope="col" className="pb-2 pr-4">Cert #</th>
+                <th scope="col" className="pb-2 pr-4">Expires</th>
+                <th scope="col" className="pb-2">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -594,12 +594,12 @@ const ReportsSection: React.FC = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-theme-text-muted border-b border-theme-surface-border">
-                  <th className="pb-2 pr-4">Member</th>
-                  <th className="pb-2 pr-4">Current</th>
-                  <th className="pb-2 pr-4">30 Days</th>
-                  <th className="pb-2 pr-4">60 Days</th>
-                  <th className="pb-2 pr-4">90 Days</th>
-                  <th className="pb-2">At Risk</th>
+                  <th scope="col" className="pb-2 pr-4">Member</th>
+                  <th scope="col" className="pb-2 pr-4">Current</th>
+                  <th scope="col" className="pb-2 pr-4">30 Days</th>
+                  <th scope="col" className="pb-2 pr-4">60 Days</th>
+                  <th scope="col" className="pb-2 pr-4">90 Days</th>
+                  <th scope="col" className="pb-2">At Risk</th>
                 </tr>
               </thead>
               <tbody>

@@ -222,7 +222,7 @@ export default function FacilitiesPage() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search facilities..."
+                aria-label="Search facilities..." placeholder="Search facilities..."
                 className="form-input pl-10 placeholder-theme-text-muted pr-4 py-2.5"
               />
             </div>

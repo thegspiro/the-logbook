@@ -655,11 +655,11 @@ const MyTrainingPage: React.FC = () => {
                 <table className="w-full text-sm text-left">
                   <thead className="text-xs text-theme-text-muted uppercase bg-theme-surface-secondary">
                     <tr>
-                      <th className="px-4 py-2">Course</th>
-                      <th className="px-4 py-2">Type</th>
-                      <th className="px-4 py-2">Date</th>
-                      <th className="px-4 py-2">Hours</th>
-                      <th className="px-4 py-2">Status</th>
+                      <th scope="col" className="px-4 py-2">Course</th>
+                      <th scope="col" className="px-4 py-2">Type</th>
+                      <th scope="col" className="px-4 py-2">Date</th>
+                      <th scope="col" className="px-4 py-2">Hours</th>
+                      <th scope="col" className="px-4 py-2">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
@@ -732,11 +732,11 @@ const MyTrainingPage: React.FC = () => {
                 <table className="w-full text-sm text-left">
                   <thead className="text-xs text-theme-text-muted uppercase bg-theme-surface-secondary">
                     <tr>
-                      <th className="px-4 py-2">Course</th>
-                      <th className="px-4 py-2">Date</th>
-                      <th className="px-4 py-2">Hours</th>
-                      <th className="px-4 py-2">Status</th>
-                      <th className="px-4 py-2">Submitted</th>
+                      <th scope="col" className="px-4 py-2">Course</th>
+                      <th scope="col" className="px-4 py-2">Date</th>
+                      <th scope="col" className="px-4 py-2">Hours</th>
+                      <th scope="col" className="px-4 py-2">Status</th>
+                      <th scope="col" className="px-4 py-2">Submitted</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">

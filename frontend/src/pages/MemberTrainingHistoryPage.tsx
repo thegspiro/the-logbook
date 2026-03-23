@@ -227,7 +227,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
             <div className="flex-1 min-w-[200px]">
               <input
                 type="text"
-                placeholder="Search courses..."
+                aria-label="Search courses..." placeholder="Search courses..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="form-input placeholder-theme-text-muted"
@@ -290,22 +290,22 @@ export const MemberTrainingHistoryPage: React.FC = () => {
               <table className="min-w-full divide-y divide-theme-surface-border">
                 <thead className="bg-theme-surface-secondary">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                       Course
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                       Type
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                       Date
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                       Hours
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                       Expires
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                       Status
                     </th>
                   </tr>

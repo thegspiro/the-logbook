@@ -28,12 +28,12 @@ export const BlockedAttemptsTable: React.FC<BlockedAttemptsTableProps> = ({ atte
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-theme-surface-border text-left text-theme-text-muted">
-            <th className="py-3 px-4 font-medium">IP Address</th>
-            <th className="py-3 px-4 font-medium">Country</th>
-            <th className="py-3 px-4 font-medium">Reason</th>
-            <th className="py-3 px-4 font-medium">Path</th>
-            <th className="py-3 px-4 font-medium">Method</th>
-            <th className="py-3 px-4 font-medium">Blocked At</th>
+            <th scope="col" className="py-3 px-4 font-medium">IP Address</th>
+            <th scope="col" className="py-3 px-4 font-medium">Country</th>
+            <th scope="col" className="py-3 px-4 font-medium">Reason</th>
+            <th scope="col" className="py-3 px-4 font-medium">Path</th>
+            <th scope="col" className="py-3 px-4 font-medium">Method</th>
+            <th scope="col" className="py-3 px-4 font-medium">Blocked At</th>
           </tr>
         </thead>
         <tbody>

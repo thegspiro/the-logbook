@@ -309,7 +309,7 @@ export const EventTemplatesPage: React.FC = () => {
       {/* Template Form Modal */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto pt-8 pb-8" role="dialog" aria-modal="true">
-          <div className="fixed inset-0 bg-black/50" onClick={handleFormCancel} />
+          <div className="fixed inset-0 bg-black/50" onClick={handleFormCancel} aria-hidden="true" />
           <div className="relative bg-theme-surface-modal rounded-lg shadow-xl w-full max-w-3xl mx-4">
             <div className="px-6 py-4 border-b border-theme-surface-border">
               <h2 className="text-lg font-semibold text-theme-text-primary">

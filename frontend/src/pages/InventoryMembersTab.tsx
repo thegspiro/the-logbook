@@ -244,7 +244,7 @@ const InventoryMembersTab: React.FC = () => {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by name, username, or membership number..."
+              aria-label="Search by name, username, or membership number..." placeholder="Search by name, username, or membership number..."
               className="form-input focus:ring-emerald-500 pl-10 placeholder-theme-text-muted pr-4 text-sm"
             />
           </div>
@@ -294,13 +294,13 @@ const InventoryMembersTab: React.FC = () => {
           <table className="w-full sm:min-w-[480px]">
             <thead className="bg-theme-input-bg border-b border-theme-surface-border">
               <tr>
-                <th className="w-8 px-2 sm:px-4 py-3" />
-                <th className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Member</th>
-                <th className="hidden md:table-cell px-4 py-3 text-center text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Assigned</th>
-                <th className="hidden md:table-cell px-4 py-3 text-center text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Checked Out</th>
-                <th className="hidden lg:table-cell px-4 py-3 text-center text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Issued</th>
-                <th className="px-2 sm:px-4 py-3 text-center text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Total</th>
-                <th className="px-2 sm:px-4 py-3 text-right text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Actions</th>
+                <th scope="col" className="w-8 px-2 sm:px-4 py-3" />
+                <th scope="col" className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Member</th>
+                <th scope="col" className="hidden md:table-cell px-4 py-3 text-center text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Assigned</th>
+                <th scope="col" className="hidden md:table-cell px-4 py-3 text-center text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Checked Out</th>
+                <th scope="col" className="hidden lg:table-cell px-4 py-3 text-center text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Issued</th>
+                <th scope="col" className="px-2 sm:px-4 py-3 text-center text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Total</th>
+                <th scope="col" className="px-2 sm:px-4 py-3 text-right text-xs font-medium text-theme-text-secondary uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-theme-surface-border">

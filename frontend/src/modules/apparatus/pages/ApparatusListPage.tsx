@@ -189,7 +189,7 @@ export const ApparatusListPage: React.FC = () => {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" />
               <input
                 type="text"
-                placeholder="Search by unit number, name, or VIN..."
+                aria-label="Search by unit number, name, or VIN..." placeholder="Search by unit number, name, or VIN..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="form-input pl-10 placeholder-theme-text-muted pr-4"
@@ -321,31 +321,31 @@ export const ApparatusListPage: React.FC = () => {
                 <table className="w-full">
                   <thead className="bg-theme-input-bg border-b border-theme-surface-border">
                     <tr>
-                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
+                      <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                         Unit
                       </th>
-                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider table-col-secondary">
+                      <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider table-col-secondary">
                         Type
                       </th>
-                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider table-col-secondary">
+                      <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider table-col-secondary">
                         Vehicle
                       </th>
-                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
+                      <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                         Status
                       </th>
-                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider table-col-secondary">
+                      <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider table-col-secondary">
                         <Users className="w-4 h-4 inline mr-1" />
                         Min Crew
                       </th>
-                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider table-col-tertiary">
+                      <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider table-col-tertiary">
                         <Gauge className="w-4 h-4 inline mr-1" />
                         Mileage
                       </th>
-                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider table-col-tertiary">
+                      <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider table-col-tertiary">
                         <Clock className="w-4 h-4 inline mr-1" />
                         Hours
                       </th>
-                      <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
+                      <th scope="col" className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>

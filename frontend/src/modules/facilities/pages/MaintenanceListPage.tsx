@@ -192,7 +192,7 @@ export default function MaintenanceListPage() {
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
           <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search records..." className="form-input pl-10 placeholder-theme-text-muted pr-4 py-2.5" />
+            aria-label="Search records..." placeholder="Search records..." className="form-input pl-10 placeholder-theme-text-muted pr-4 py-2.5" />
         </div>
         <select value={facilityFilter} onChange={e => setFacilityFilter(e.target.value)}
           className={inputCls + ' max-w-xs'}>

@@ -499,7 +499,7 @@ export const ProspectiveMembersPage: React.FC = () => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search applicants..."
+            aria-label="Search applicants..." placeholder="Search applicants..."
             className="w-full bg-theme-surface border border-theme-surface-border rounded-lg pl-10 pr-4 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
           />
         </div>
@@ -796,7 +796,7 @@ export const ProspectiveMembersPage: React.FC = () => {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-theme-surface-border">
-                    <th className="w-10 p-3">
+                    <th scope="col" className="w-10 p-3">
                       <input
                         type="checkbox"
                         checked={selectedInactive.size === inactiveApplicants.length && inactiveApplicants.length > 0}
@@ -810,12 +810,12 @@ export const ProspectiveMembersPage: React.FC = () => {
                         className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                       />
                     </th>
-                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Name</th>
-                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-secondary">Email</th>
-                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-secondary">Last Stage</th>
-                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-tertiary">Inactive Since</th>
-                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Days Idle</th>
-                    <th className="w-28 p-3"></th>
+                    <th scope="col" className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Name</th>
+                    <th scope="col" className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-secondary">Email</th>
+                    <th scope="col" className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-secondary">Last Stage</th>
+                    <th scope="col" className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-tertiary">Inactive Since</th>
+                    <th scope="col" className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Days Idle</th>
+                    <th scope="col" className="w-28 p-3"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -945,12 +945,12 @@ export const ProspectiveMembersPage: React.FC = () => {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-theme-surface-border">
-                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Name</th>
-                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-secondary">Email</th>
-                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-secondary">Last Stage</th>
-                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-tertiary">Withdrawn Date</th>
-                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-tertiary">Reason</th>
-                    <th className="w-32 p-3"></th>
+                    <th scope="col" className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Name</th>
+                    <th scope="col" className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-secondary">Email</th>
+                    <th scope="col" className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-secondary">Last Stage</th>
+                    <th scope="col" className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-tertiary">Withdrawn Date</th>
+                    <th scope="col" className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-tertiary">Reason</th>
+                    <th scope="col" className="w-32 p-3"></th>
                   </tr>
                 </thead>
                 <tbody>

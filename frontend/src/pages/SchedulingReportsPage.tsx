@@ -481,11 +481,11 @@ export const SchedulingReportsPage: React.FC = () => {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-theme-surface-border">
-                        <th className="text-left py-3 px-4 text-theme-text-secondary font-medium">Member</th>
-                        <th className="text-right py-3 px-4 text-theme-text-secondary font-medium">Shifts</th>
-                        <th className="text-right py-3 px-4 text-theme-text-secondary font-medium">Total Minutes</th>
-                        <th className="text-right py-3 px-4 text-theme-text-secondary font-medium">Total Hours</th>
-                        <th className="text-right py-3 px-4 text-theme-text-secondary font-medium">Avg Per Shift</th>
+                        <th scope="col" className="text-left py-3 px-4 text-theme-text-secondary font-medium">Member</th>
+                        <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Shifts</th>
+                        <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Total Minutes</th>
+                        <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Total Hours</th>
+                        <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Avg Per Shift</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -580,11 +580,11 @@ export const SchedulingReportsPage: React.FC = () => {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-theme-surface-border">
-                      <th className="text-left py-3 px-4 text-theme-text-secondary font-medium">Date</th>
-                      <th className="text-right py-3 px-4 text-theme-text-secondary font-medium">Total Shifts</th>
-                      <th className="text-right py-3 px-4 text-theme-text-secondary font-medium">Assigned</th>
-                      <th className="text-right py-3 px-4 text-theme-text-secondary font-medium">Confirmed</th>
-                      <th className="text-right py-3 px-4 text-theme-text-secondary font-medium">Understaffed</th>
+                      <th scope="col" className="text-left py-3 px-4 text-theme-text-secondary font-medium">Date</th>
+                      <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Total Shifts</th>
+                      <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Assigned</th>
+                      <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Confirmed</th>
+                      <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Understaffed</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -694,10 +694,10 @@ export const SchedulingReportsPage: React.FC = () => {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-theme-surface-border">
-                      <th className="text-left py-3 px-4 text-theme-text-secondary font-medium">Period</th>
-                      <th className="text-right py-3 px-4 text-theme-text-secondary font-medium">Total Calls</th>
-                      <th className="text-left py-3 px-4 text-theme-text-secondary font-medium">By Type</th>
-                      <th className="text-right py-3 px-4 text-theme-text-secondary font-medium">Avg Response</th>
+                      <th scope="col" className="text-left py-3 px-4 text-theme-text-secondary font-medium">Period</th>
+                      <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Total Calls</th>
+                      <th scope="col" className="text-left py-3 px-4 text-theme-text-secondary font-medium">By Type</th>
+                      <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Avg Response</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -786,11 +786,11 @@ export const SchedulingReportsPage: React.FC = () => {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-theme-surface-border">
-                      <th className="text-left py-3 px-4 text-theme-text-secondary font-medium">Member</th>
-                      <th className="text-right py-3 px-4 text-theme-text-secondary font-medium">Shifts Assigned</th>
-                      <th className="text-right py-3 px-4 text-theme-text-secondary font-medium">Time Off Days</th>
-                      <th className="text-right py-3 px-4 text-theme-text-secondary font-medium">Available Days</th>
-                      <th className="text-right py-3 px-4 text-theme-text-secondary font-medium">Unavailable Days</th>
+                      <th scope="col" className="text-left py-3 px-4 text-theme-text-secondary font-medium">Member</th>
+                      <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Shifts Assigned</th>
+                      <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Time Off Days</th>
+                      <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Available Days</th>
+                      <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Unavailable Days</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1033,12 +1033,12 @@ export const SchedulingReportsPage: React.FC = () => {
                             <table className="w-full text-sm">
                               <thead>
                                 <tr className="border-b border-theme-surface-border bg-theme-surface-secondary">
-                                  <th className="text-left py-2 px-4 text-theme-text-secondary font-medium">Member</th>
-                                  <th className="text-left py-2 px-4 text-theme-text-secondary font-medium">Rank</th>
-                                  <th className="text-right py-2 px-4 text-theme-text-secondary font-medium">Shifts</th>
-                                  <th className="text-right py-2 px-4 text-theme-text-secondary font-medium">Hours</th>
-                                  <th className="text-right py-2 px-4 text-theme-text-secondary font-medium">Progress</th>
-                                  <th className="text-center py-2 px-4 text-theme-text-secondary font-medium">Status</th>
+                                  <th scope="col" className="text-left py-2 px-4 text-theme-text-secondary font-medium">Member</th>
+                                  <th scope="col" className="text-left py-2 px-4 text-theme-text-secondary font-medium">Rank</th>
+                                  <th scope="col" className="text-right py-2 px-4 text-theme-text-secondary font-medium">Shifts</th>
+                                  <th scope="col" className="text-right py-2 px-4 text-theme-text-secondary font-medium">Hours</th>
+                                  <th scope="col" className="text-right py-2 px-4 text-theme-text-secondary font-medium">Progress</th>
+                                  <th scope="col" className="text-center py-2 px-4 text-theme-text-secondary font-medium">Status</th>
                                 </tr>
                               </thead>
                               <tbody>

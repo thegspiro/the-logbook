@@ -465,7 +465,7 @@ export const MyChecklistsPage: React.FC = () => {
               <input
                 id="history-search"
                 type="text"
-                placeholder="Search history..."
+                aria-label="Search history..." placeholder="Search history..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full rounded-lg border border-theme-surface-border bg-theme-surface py-2 pl-9 pr-4 text-sm text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"

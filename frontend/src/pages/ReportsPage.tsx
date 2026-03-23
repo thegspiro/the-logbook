@@ -226,11 +226,11 @@ export const ReportsPage: React.FC = () => {
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-theme-text-muted uppercase bg-theme-surface-secondary sticky top-0">
                 <tr>
-                  <th className="px-4 py-2">Name</th>
-                  <th className="px-4 py-2">Email</th>
-                  <th className="px-4 py-2">Rank</th>
-                  <th className="px-4 py-2">Status</th>
-                  <th className="px-4 py-2">Role</th>
+                  <th scope="col" className="px-4 py-2"> Name</th>
+                  <th scope="col" className="px-4 py-2"> Email</th>
+                  <th scope="col" className="px-4 py-2"> Rank</th>
+                  <th scope="col" className="px-4 py-2"> Status</th>
+                  <th scope="col" className="px-4 py-2"> Role</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-theme-surface-border">
@@ -277,10 +277,10 @@ export const ReportsPage: React.FC = () => {
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-theme-text-muted uppercase bg-theme-surface-secondary sticky top-0">
                 <tr>
-                  <th className="px-4 py-2">Member</th>
-                  <th className="px-4 py-2">Course / Requirement</th>
-                  <th className="px-4 py-2">Status</th>
-                  <th className="px-4 py-2">Hours</th>
+                  <th scope="col" className="px-4 py-2"> Member</th>
+                  <th scope="col" className="px-4 py-2"> Course / Requirement</th>
+                  <th scope="col" className="px-4 py-2"> Status</th>
+                  <th scope="col" className="px-4 py-2"> Hours</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-theme-surface-border">
@@ -332,10 +332,10 @@ export const ReportsPage: React.FC = () => {
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-theme-text-muted uppercase bg-theme-surface-secondary sticky top-0">
                 <tr>
-                  <th className="px-4 py-2">Event</th>
-                  <th className="px-4 py-2">Date</th>
-                  <th className="px-4 py-2">Attendees</th>
-                  <th className="px-4 py-2">Attendance Rate</th>
+                  <th scope="col" className="px-4 py-2"> Event</th>
+                  <th scope="col" className="px-4 py-2"> Date</th>
+                  <th scope="col" className="px-4 py-2"> Attendees</th>
+                  <th scope="col" className="px-4 py-2"> Attendance Rate</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-theme-surface-border">
@@ -397,11 +397,11 @@ export const ReportsPage: React.FC = () => {
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-theme-text-muted uppercase bg-theme-surface-secondary sticky top-0">
                 <tr>
-                  <th className="px-4 py-2">Member</th>
-                  <th className="px-4 py-2">Program</th>
-                  <th className="px-4 py-2">Progress</th>
-                  <th className="px-4 py-2">Requirements</th>
-                  <th className="px-4 py-2">Status</th>
+                  <th scope="col" className="px-4 py-2"> Member</th>
+                  <th scope="col" className="px-4 py-2"> Program</th>
+                  <th scope="col" className="px-4 py-2"> Progress</th>
+                  <th scope="col" className="px-4 py-2"> Requirements</th>
+                  <th scope="col" className="px-4 py-2"> Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-theme-surface-border">
@@ -481,14 +481,14 @@ export const ReportsPage: React.FC = () => {
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-theme-text-muted uppercase bg-theme-surface-secondary sticky top-0">
                 <tr>
-                  <th className="px-4 py-2">Member</th>
-                  <th className="px-4 py-2">Rank</th>
-                  <th className="px-4 py-2">Training Hrs</th>
-                  <th className="px-4 py-2">Shift Hrs</th>
-                  <th className="px-4 py-2">Courses</th>
-                  <th className="px-4 py-2">Shifts</th>
-                  <th className="px-4 py-2">Calls</th>
-                  <th className="px-4 py-2">Rating</th>
+                  <th scope="col" className="px-4 py-2"> Member</th>
+                  <th scope="col" className="px-4 py-2"> Rank</th>
+                  <th scope="col" className="px-4 py-2"> Training Hrs</th>
+                  <th scope="col" className="px-4 py-2"> Shift Hrs</th>
+                  <th scope="col" className="px-4 py-2"> Courses</th>
+                  <th scope="col" className="px-4 py-2"> Shifts</th>
+                  <th scope="col" className="px-4 py-2"> Calls</th>
+                  <th scope="col" className="px-4 py-2"> Rating</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-theme-surface-border">
@@ -555,12 +555,12 @@ export const ReportsPage: React.FC = () => {
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-theme-text-muted uppercase bg-theme-surface-secondary sticky top-0">
                 <tr>
-                  <th className="px-4 py-2">Member</th>
-                  <th className="px-4 py-2">Category</th>
-                  <th className="px-4 py-2">Date</th>
-                  <th className="px-4 py-2">Hours</th>
-                  <th className="px-4 py-2">Method</th>
-                  <th className="px-4 py-2">Status</th>
+                  <th scope="col" className="px-4 py-2"> Member</th>
+                  <th scope="col" className="px-4 py-2"> Category</th>
+                  <th scope="col" className="px-4 py-2"> Date</th>
+                  <th scope="col" className="px-4 py-2"> Hours</th>
+                  <th scope="col" className="px-4 py-2"> Method</th>
+                  <th scope="col" className="px-4 py-2"> Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-theme-surface-border">
@@ -807,7 +807,7 @@ export const ReportsPage: React.FC = () => {
       {activeReport && reportData && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4">
-            <div className="fixed inset-0 bg-black/60" onClick={closeModal} />
+            <div className="fixed inset-0 bg-black/60" onClick={closeModal} aria-hidden="true" />
             <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-4xl w-full border border-theme-surface-border">
               <div className="px-6 pt-5 pb-4">
                 <div className="flex justify-between items-center mb-4">

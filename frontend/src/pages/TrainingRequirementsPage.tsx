@@ -243,7 +243,7 @@ const TrainingRequirementsPage: React.FC = () => {
                 <input
                   id="req-search"
                   type="text"
-                  placeholder="Search requirements..."
+                  aria-label="Search requirements..." placeholder="Search requirements..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="form-input focus:border-transparent pl-10 placeholder-theme-text-muted pr-4"

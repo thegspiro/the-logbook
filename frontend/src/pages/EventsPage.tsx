@@ -695,7 +695,7 @@ export const EventsPage: React.FC = () => {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-theme-text-muted" aria-hidden="true" />
           <input
             type="text"
-            placeholder="Search events..."
+            aria-label="Search events..." placeholder="Search events..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
@@ -1063,7 +1063,7 @@ export const EventsPage: React.FC = () => {
       {/* CSV Import Modal */}
       {showImportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Import Events from CSV">
-          <div className="fixed inset-0 bg-black/50" onClick={handleCloseImportModal} />
+          <div className="fixed inset-0 bg-black/50" onClick={handleCloseImportModal} aria-hidden="true" />
           <div className="relative bg-theme-surface-modal rounded-lg shadow-xl p-6 max-w-lg w-full mx-4">
             <h3 className="text-lg font-medium text-theme-text-primary mb-4">Import Events from CSV</h3>
 
@@ -1152,8 +1152,8 @@ export const EventsPage: React.FC = () => {
                         <table className="w-full text-xs">
                           <thead>
                             <tr className="bg-theme-surface-hover">
-                              <th className="px-3 py-2 text-left font-medium text-theme-text-secondary">Row</th>
-                              <th className="px-3 py-2 text-left font-medium text-theme-text-secondary">Error</th>
+                              <th scope="col" className="px-3 py-2 text-left font-medium text-theme-text-secondary"> Row</th>
+                              <th scope="col" className="px-3 py-2 text-left font-medium text-theme-text-secondary"> Error</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1187,7 +1187,7 @@ export const EventsPage: React.FC = () => {
       {/* Cancel Confirmation Modal */}
       {showCancelConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true">
-          <div className="fixed inset-0 bg-black/50" onClick={() => setShowCancelConfirm(false)} />
+          <div className="fixed inset-0 bg-black/50" onClick={() => setShowCancelConfirm(false)} aria-hidden="true" />
           <div className="relative bg-theme-surface-modal rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
             <h3 className="text-lg font-medium text-theme-text-primary mb-2">
               Cancel {selectedEvents.size} Event{selectedEvents.size !== 1 ? 's' : ''}?

@@ -505,10 +505,10 @@ const GrantsReportsPage: React.FC = () => {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-theme-surface-border text-left">
-                          <th className="pb-2 font-medium text-theme-text-secondary">
+                          <th scope="col" className="pb-2 font-medium text-theme-text-secondary">
                             Month
                           </th>
-                          <th className="pb-2 text-right font-medium text-theme-text-secondary">
+                          <th scope="col" className="pb-2 text-right font-medium text-theme-text-secondary">
                             Total
                           </th>
                         </tr>

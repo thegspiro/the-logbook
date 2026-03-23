@@ -454,11 +454,11 @@ const ImportMembers: React.FC = () => {
               <table className="w-full text-sm">
                 <thead className="bg-theme-input-bg border-b border-theme-surface-border">
                   <tr>
-                    <th className="px-4 py-2 text-left text-theme-text-secondary">Name</th>
-                    <th className="px-4 py-2 text-left text-theme-text-secondary">Dept ID</th>
-                    <th className="px-4 py-2 text-left text-theme-text-secondary">Email</th>
-                    <th className="px-4 py-2 text-left text-theme-text-secondary">Phone</th>
-                    <th className="px-4 py-2 text-left text-theme-text-secondary">Emergency Contact</th>
+                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Name</th>
+                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Dept ID</th>
+                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Email</th>
+                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Phone</th>
+                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Emergency Contact</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">

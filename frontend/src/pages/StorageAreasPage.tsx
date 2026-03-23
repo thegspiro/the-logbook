@@ -429,7 +429,7 @@ export const StorageAreasPage: React.FC = () => {
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" />
         <input
           type="text"
-          placeholder="Search storage areas..."
+          aria-label="Search storage areas..." placeholder="Search storage areas..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="form-input focus:ring-emerald-500 pl-10 pr-4 text-sm"

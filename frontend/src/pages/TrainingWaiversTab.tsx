@@ -230,7 +230,7 @@ const TrainingWaiversTab: React.FC = () => {
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search by name, rank, or reason..."
+          aria-label="Search by name, rank, or reason..." placeholder="Search by name, rank, or reason..."
           className="rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-1.5 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring w-72"
         />
         <div className="ml-auto text-xs text-theme-text-muted self-center">
@@ -248,13 +248,13 @@ const TrainingWaiversTab: React.FC = () => {
           <table className="min-w-full divide-y divide-theme-surface-border">
             <thead className="bg-theme-surface-hover">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Member</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Type</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Period</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Scope</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Reason</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Source</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Member</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Status</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Type</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Period</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Scope</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Reason</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Source</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-theme-surface-border">

@@ -242,7 +242,7 @@ const MinutesPage: React.FC = () => {
             <input
               id="minutes-search"
               type="text"
-              placeholder="Search meeting minutes..."
+              aria-label="Search meeting minutes..." placeholder="Search meeting minutes..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="form-input pl-10 placeholder-theme-text-muted pr-4"
@@ -509,7 +509,7 @@ const MinutesPage: React.FC = () => {
       {showCreateModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4">
-            <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateModal(false)} />
+            <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateModal(false)} aria-hidden="true" />
             <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-2xl w-full border border-theme-surface-border">
               <div className="px-6 pt-5 pb-4">
                 <div className="flex justify-between items-center mb-4">

@@ -87,7 +87,7 @@ const ComplianceMatrixTab: React.FC = () => {
         <table className="min-w-full text-sm">
           <thead>
             <tr className="border-b border-theme-surface-border">
-              <th className="sticky left-0 z-10 bg-theme-surface-modal px-4 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
+              <th scope="col" className="sticky left-0 z-10 bg-theme-surface-modal px-4 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                 Member
               </th>
               {requirements.map(req => (
@@ -99,7 +99,7 @@ const ComplianceMatrixTab: React.FC = () => {
                   {req.name.length > 15 ? req.name.slice(0, 15) + '...' : req.name}
                 </th>
               ))}
-              <th className="px-4 py-3 text-center text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
+              <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                 Overall
               </th>
             </tr>

@@ -762,22 +762,22 @@ export const GrantDetailPage: React.FC = () => {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-theme-surface-border">
-                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
                           Category
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
                           Description
                         </th>
-                        <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                        <th scope="col" className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
                           Budgeted
                         </th>
-                        <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                        <th scope="col" className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
                           Spent
                         </th>
-                        <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                        <th scope="col" className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
                           Remaining
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
                           Progress
                         </th>
                       </tr>
@@ -888,22 +888,22 @@ export const GrantDetailPage: React.FC = () => {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-theme-surface-border">
-                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
                           Date
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
                           Description
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
                           Vendor
                         </th>
-                        <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                        <th scope="col" className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
                           Amount
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
                           Budget Category
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
                           Receipt
                         </th>
                       </tr>

@@ -1759,7 +1759,7 @@ export const EventDetailPage: React.FC = () => {
                     id="member-search"
                     value={memberSearch}
                     onChange={(e) => setMemberSearch(e.target.value)}
-                    placeholder="Search by name or email..."
+                    aria-label="Search by name or email..." placeholder="Search by name or email..."
                     className="block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
                   />
                 </div>

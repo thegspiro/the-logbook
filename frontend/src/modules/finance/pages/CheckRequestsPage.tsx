@@ -144,7 +144,7 @@ const CheckRequestsPage: React.FC = () => {
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-theme-text-secondary" />
         <input
           type="text"
-          placeholder="Search by number, payee, or memo..."
+          aria-label="Search by number, payee, or memo..." placeholder="Search by number, payee, or memo..."
           value={searchText}
           onChange={(e) => setSearchText(e.target.value)}
           className="w-full rounded-lg border border-theme-surface-border bg-theme-surface py-2 pl-10 pr-10 text-sm text-theme-text-primary placeholder:text-theme-text-secondary focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
@@ -188,22 +188,22 @@ const CheckRequestsPage: React.FC = () => {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-theme-surface-border">
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
                     Request #
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
                     Payee
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                  <th scope="col" className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
                     Amount
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
                     Check #
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
                     Status
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
                     Date
                   </th>
                 </tr>

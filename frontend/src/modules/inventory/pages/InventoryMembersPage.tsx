@@ -219,7 +219,7 @@ const InventoryMembersPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-6">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
-          <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search by name, username, or membership number..." className="form-input pl-10 pr-4 text-sm placeholder-theme-text-muted" />
+          <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} aria-label="Search by name, username, or membership number..." placeholder="Search by name, username, or membership number..." className="form-input pl-10 pr-4 text-sm placeholder-theme-text-muted" />
         </div>
         <div className="flex items-center gap-1.5">
           <ArrowUpDown className="w-4 h-4 text-theme-text-muted shrink-0" />

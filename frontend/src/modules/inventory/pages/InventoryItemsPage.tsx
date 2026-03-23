@@ -288,7 +288,7 @@ const InventoryItemsPage: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
           <div className="relative lg:col-span-2">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
-            <input type="text" placeholder="Search items..." className="form-input pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input type="text" aria-label="Search items..." placeholder="Search items..." className="form-input pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <select className="form-input" value={fCat} onChange={(e) => setFCat(e.target.value)}>
             <option value="">All Categories</option>
@@ -368,7 +368,7 @@ const InventoryItemsPage: React.FC = () => {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-theme-surface-border">
-                <th className="px-3 py-3 text-left w-10">
+                <th scope="col" className="px-3 py-3 text-left w-10">
                   <input type="checkbox" checked={selIds.size === items.length && items.length > 0} onChange={toggleAll} className="form-checkbox" aria-label="Select all" />
                 </th>
                 {SORT_COLS.map((c) => (
@@ -378,12 +378,12 @@ const InventoryItemsPage: React.FC = () => {
                     </button>
                   </th>
                 ))}
-                <th className="px-3 py-3 text-left text-theme-text-secondary font-medium">Category</th>
-                <th className="px-3 py-3 text-left text-theme-text-secondary font-medium">Tracking</th>
-                <th className="px-3 py-3 text-left text-theme-text-secondary font-medium">Barcode / Serial / Tag</th>
-                <th className="px-3 py-3 text-left text-theme-text-secondary font-medium">Location</th>
-                <th className="px-3 py-3 text-right text-theme-text-secondary font-medium">Cost</th>
-                <th className="px-3 py-3 w-10" />
+                <th scope="col" className="px-3 py-3 text-left text-theme-text-secondary font-medium">Category</th>
+                <th scope="col" className="px-3 py-3 text-left text-theme-text-secondary font-medium">Tracking</th>
+                <th scope="col" className="px-3 py-3 text-left text-theme-text-secondary font-medium">Barcode / Serial / Tag</th>
+                <th scope="col" className="px-3 py-3 text-left text-theme-text-secondary font-medium">Location</th>
+                <th scope="col" className="px-3 py-3 text-right text-theme-text-secondary font-medium">Cost</th>
+                <th scope="col" className="px-3 py-3 w-10" />
               </tr>
             </thead>
             <tbody className="divide-y divide-theme-surface-border">

@@ -692,7 +692,7 @@ const FormsPage: React.FC = () => {
               <input
                 id="forms-search"
                 type="text"
-                placeholder="Search forms..."
+                aria-label="Search forms..." placeholder="Search forms..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="form-input pl-10 placeholder-theme-text-muted pr-4"

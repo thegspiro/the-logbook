@@ -415,7 +415,7 @@ const MapCoursesStep: React.FC<MapCoursesStepProps> = ({
                     <input
                       id={`course-search-${uc.csv_course_name}`}
                       type="text"
-                      placeholder="Search existing courses..."
+                      aria-label="Search existing courses..." placeholder="Search existing courses..."
                       value={searchVal}
                       onChange={(e) => setCourseSearch(prev => ({ ...prev, [uc.csv_course_name]: e.target.value }))}
                       className="form-input pl-10 placeholder-theme-text-muted pr-4 text-sm"

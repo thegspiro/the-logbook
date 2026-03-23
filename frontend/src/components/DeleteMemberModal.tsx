@@ -96,9 +96,13 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
     >
       {/* Tab Toggle */}
       <div className="mb-4">
-        <div className="inline-flex rounded-md shadow-xs w-full" role="group" aria-label="Delete mode">
+        <div className="inline-flex rounded-md shadow-xs w-full" role="tablist" aria-label="Delete mode">
           <button
             type="button"
+            role="tab"
+            id="tab-soft-delete"
+            aria-selected={activeTab === 'soft'}
+            aria-controls="tabpanel-soft-delete"
             onClick={() => setActiveTab('soft')}
             disabled={deleting}
             className={`flex-1 px-4 py-2 text-sm font-medium border ${
@@ -111,6 +115,10 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
           </button>
           <button
             type="button"
+            role="tab"
+            id="tab-hard-delete"
+            aria-selected={activeTab === 'hard'}
+            aria-controls="tabpanel-hard-delete"
             onClick={() => setActiveTab('hard')}
             disabled={deleting}
             className={`flex-1 px-4 py-2 text-sm font-medium border ${
@@ -154,7 +162,7 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
         <>
           {/* Soft Delete Tab */}
           {activeTab === 'soft' && (
-            <div className="space-y-4">
+            <div className="space-y-4" role="tabpanel" id="tabpanel-soft-delete" aria-labelledby="tab-soft-delete">
               {/* Member Info */}
               <div className="flex items-center gap-3 p-3 bg-theme-surface-secondary rounded-lg">
                 <UserX className="h-8 w-8 text-yellow-500 shrink-0" />
@@ -218,7 +226,7 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
 
           {/* Hard Delete Tab */}
           {activeTab === 'hard' && (
-            <div className="space-y-4">
+            <div className="space-y-4" role="tabpanel" id="tabpanel-hard-delete" aria-labelledby="tab-hard-delete">
               {/* Danger Warning */}
               <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
                 <div className="flex items-start gap-2">

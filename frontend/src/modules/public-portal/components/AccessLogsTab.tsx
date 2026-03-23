@@ -217,28 +217,28 @@ export const AccessLogsTab: React.FC = () => {
             <table className="min-w-full divide-y divide-theme-surface-border">
               <thead className="bg-theme-surface-secondary">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                     Timestamp
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                     Method
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                     Endpoint
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                     IP Address
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                     Time
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                     Flag
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>

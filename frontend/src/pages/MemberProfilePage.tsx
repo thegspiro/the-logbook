@@ -1078,19 +1078,19 @@ export const MemberProfilePage: React.FC = () => {
                     <table className="min-w-full divide-y divide-theme-surface-border">
                       <thead>
                         <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">
                             Item
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">
                             Item #
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">
                             Category
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">
                             Condition
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">
                             Assigned
                           </th>
                         </tr>

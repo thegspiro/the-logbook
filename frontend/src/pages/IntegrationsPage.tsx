@@ -507,7 +507,7 @@ const IntegrationsPage: React.FC = () => {
               <input
                 id="integrations-search"
                 type="text"
-                placeholder="Search integrations..."
+                aria-label="Search integrations..." placeholder="Search integrations..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="form-input pl-10 placeholder-theme-text-muted pr-4"
@@ -627,7 +627,7 @@ const IntegrationsPage: React.FC = () => {
           return (
             <div className="fixed inset-0 z-50 overflow-y-auto">
               <div className="flex items-center justify-center min-h-screen px-4">
-                <div className="fixed inset-0 bg-black/60" onClick={() => { setShowConnectModal(null); resetFormState(); }} />
+                <div className="fixed inset-0 bg-black/60" onClick={() => { setShowConnectModal(null); resetFormState(); }} aria-hidden="true" />
                 <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
                   <div className="px-6 pt-5 pb-4">
                     <div className="flex justify-between items-center mb-4">
