@@ -1525,16 +1525,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         <div
           className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 px-2 sm:px-3 py-2 cursor-pointer hover:bg-theme-surface-secondary/50 transition-colors"
           onClick={() => toggleItemExpanded(itemKey)}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleItemExpanded(itemKey); }}
         >
           {/* Bulk selection checkbox */}
           <button
             type="button"
             className="p-0.5 flex-shrink-0"
             onClick={(e) => { e.stopPropagation(); toggleItemSelection(compIdx, itemIdx); }}
-            title={isSelected ? 'Deselect item' : 'Select item'}
+            aria-label={isSelected ? 'Deselect item' : 'Select item'}
           >
             {isSelected ? (
               <CheckSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" />
@@ -1553,11 +1550,19 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <GripVertical className="h-4 w-4" />
           </button>
 
-          {isItemExpanded ? (
-            <ChevronDown className="h-3.5 w-3.5 text-theme-text-muted flex-shrink-0" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5 text-theme-text-muted flex-shrink-0" />
-          )}
+          <button
+            type="button"
+            className="p-0.5 flex-shrink-0 text-theme-text-muted hover:text-theme-text-primary"
+            onClick={(e) => { e.stopPropagation(); toggleItemExpanded(itemKey); }}
+            aria-expanded={isItemExpanded}
+            aria-label={`${isItemExpanded ? 'Collapse' : 'Expand'} ${item.name.trim() || 'item'}`}
+          >
+            {isItemExpanded ? (
+              <ChevronDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5" />
+            )}
+          </button>
 
           {/* Inline editable name */}
           {isInlineEditing ? (

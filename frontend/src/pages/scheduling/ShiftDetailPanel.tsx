@@ -559,7 +559,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               placeholder="Assignment notes..."
               className="flex-1 text-xs bg-theme-input-bg border border-theme-input-border rounded-sm px-2 py-1 text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-violet-500"
               autoFocus
-              onKeyDown={e => { if (e.key === 'Enter') void handleSaveAssignmentNotes(assignment.id); }}
+              aria-label="Assignment notes"
+              onKeyDown={e => { if (e.key === 'Enter') void handleSaveAssignmentNotes(assignment.id); else if (e.key === 'Escape') setEditingNotesId(null); }}
             />
             <button onClick={() => { void handleSaveAssignmentNotes(assignment.id); }} disabled={savingNotes}
               className="px-2 py-1 text-xs bg-violet-600 text-white rounded-sm hover:bg-violet-700 disabled:opacity-50"

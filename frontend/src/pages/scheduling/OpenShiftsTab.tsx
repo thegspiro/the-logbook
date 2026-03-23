@@ -118,6 +118,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
           <span className="text-sm text-theme-text-secondary shrink-0">From:</span>
           <input type="date" value={dateFilter}
             onChange={e => setDateFilter(e.target.value)}
+            aria-label="Filter open shifts from date"
             className="flex-1 sm:flex-none bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500"
           />
         </div>
@@ -137,8 +138,9 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" />
+        <div className="flex items-center justify-center py-20" role="status">
+          <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" aria-hidden="true" />
+          <span className="sr-only">Loading open shifts…</span>
         </div>
       ) : sortedDates.length === 0 ? (
         <div className="text-center py-16 border border-dashed border-theme-surface-border rounded-xl">
@@ -240,6 +242,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                           ) : (
                           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                             <select value={signupPosition} onChange={e => setSignupPosition(e.target.value)}
+                              aria-label="Position to sign up for"
                               className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500"
                             >
                               {eligiblePositions.map((pos) => (
