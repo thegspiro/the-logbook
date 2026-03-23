@@ -29,6 +29,7 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
 import { useTimezone } from "../hooks/useTimezone";
+import { useTheme } from "../contexts/ThemeContext";
 import { formatTime, formatDateCustom, localToUTC } from "../utils/dateFormatting";
 import { schedulingService, useSchedulingStore } from "../modules/scheduling";
 import type {
@@ -123,11 +124,97 @@ const computeEndDate = (
   return formatDateISO(nextDay);
 };
 
-/** Map a hex color to Tailwind-compatible inline styles for shift cards. */
-const hexColorStyle = (hex: string): React.CSSProperties => ({
+/**
+ * Parse a hex color to RGB components.
+ * Handles 3-char (#abc) and 6-char (#aabbcc) hex strings.
+ */
+const hexToRgb = (
+  hex: string,
+): { r: number; g: number; b: number } | undefined => {
+  const stripped = hex.replace("#", "");
+  if (stripped.length === 3) {
+    const r = parseInt((stripped[0] ?? "0") + (stripped[0] ?? "0"), 16);
+    const g = parseInt((stripped[1] ?? "0") + (stripped[1] ?? "0"), 16);
+    const b = parseInt((stripped[2] ?? "0") + (stripped[2] ?? "0"), 16);
+    return { r, g, b };
+  }
+  if (stripped.length === 6) {
+    return {
+      r: parseInt(stripped.slice(0, 2), 16),
+      g: parseInt(stripped.slice(2, 4), 16),
+      b: parseInt(stripped.slice(4, 6), 16),
+    };
+  }
+  return undefined;
+};
+
+/** Relative luminance per WCAG 2.x (0 = black, 1 = white). */
+const relativeLuminance = (r: number, g: number, b: number): number => {
+  const [rs, gs, bs] = [r / 255, g / 255, b / 255].map((c) =>
+    c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4),
+  ) as [number, number, number];
+  return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
+};
+
+/** WCAG contrast ratio between two relative-luminance values. */
+const contrastRatio = (l1: number, l2: number): number => {
+  const lighter = Math.max(l1, l2);
+  const darker = Math.min(l1, l2);
+  return (lighter + 0.05) / (darker + 0.05);
+};
+
+/**
+ * Derive an accessible text color from a base hex color.
+ *
+ * In dark mode the card background is nearly black, so we lighten the
+ * color until it reaches WCAG AA contrast (4.5:1) against a dark
+ * surface (#1f2937, typical dark-mode card bg).
+ *
+ * In light mode the card background is nearly white, so we darken
+ * the color until it passes the same threshold against #f9fafb.
+ */
+const accessibleTextColor = (hex: string, isDark: boolean): string => {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+
+  const bgLum = isDark
+    ? relativeLuminance(31, 41, 55) // #1f2937
+    : relativeLuminance(249, 250, 251); // #f9fafb
+  const minContrast = 4.5;
+
+  let { r, g, b } = rgb;
+  for (let i = 0; i < 20; i++) {
+    const lum = relativeLuminance(r, g, b);
+    if (contrastRatio(lum, bgLum) >= minContrast) break;
+    if (isDark) {
+      // Lighten: blend toward white
+      r = Math.min(255, r + Math.ceil((255 - r) * 0.2));
+      g = Math.min(255, g + Math.ceil((255 - g) * 0.2));
+      b = Math.min(255, b + Math.ceil((255 - b) * 0.2));
+    } else {
+      // Darken: blend toward black
+      r = Math.max(0, Math.floor(r * 0.8));
+      g = Math.max(0, Math.floor(g * 0.8));
+      b = Math.max(0, Math.floor(b * 0.8));
+    }
+  }
+
+  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+};
+
+/**
+ * Map a hex color to inline styles for shift cards.
+ *
+ * The text color is adjusted for WCAG AA contrast (4.5:1) against
+ * the effective card background in both light and dark mode.
+ */
+const hexColorStyle = (
+  hex: string,
+  isDark: boolean,
+): React.CSSProperties => ({
   backgroundColor: `${hex}18`,
   borderColor: `${hex}4D`,
-  color: hex,
+  color: accessibleTextColor(hex, isDark),
 });
 
 const getShiftTemplateColor = (shift: ShiftRecord): string | undefined => {
@@ -141,8 +228,11 @@ const getShiftTemplateColor = (shift: ShiftRecord): string | undefined => {
   return "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30";
 };
 
-const getShiftStyle = (shift: ShiftRecord): React.CSSProperties | undefined =>
-  shift.color ? hexColorStyle(shift.color) : undefined;
+const getShiftStyle = (
+  shift: ShiftRecord,
+  isDark: boolean,
+): React.CSSProperties | undefined =>
+  shift.color ? hexColorStyle(shift.color, isDark) : undefined;
 
 const isUnderstaffed = (shift: ShiftRecord): boolean => {
   // Check required positions first — if a shift has structured positions,
@@ -197,6 +287,8 @@ const SchedulingPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const navigate = useNavigate();
   const tz = useTimezone();
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark" || resolvedTheme === "high-contrast";
   const canManage = checkPermission("scheduling.manage");
 
   // Shared store — members, templates, apparatus loaded once and cached
@@ -681,7 +773,7 @@ const SchedulingPage: React.FC = () => {
                               key={shift.id}
                               onClick={() => handleShiftClick(shift)}
                               className={`mb-2 p-2 rounded-lg border text-xs w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift) ?? ""}`}
-                              style={getShiftStyle(shift)}
+                              style={getShiftStyle(shift, isDark)}
                             >
                               <p className="font-medium truncate">
                                 {formatTime(shift.start_time, tz)}
@@ -771,7 +863,7 @@ const SchedulingPage: React.FC = () => {
                                   key={shift.id}
                                   onClick={() => handleShiftClick(shift)}
                                   className={`p-3 rounded-lg border text-sm w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift) ?? ""}`}
-                                  style={getShiftStyle(shift)}
+                                  style={getShiftStyle(shift, isDark)}
                                 >
                                   <p className="font-medium">
                                     {formatTime(shift.start_time, tz)}
@@ -859,7 +951,7 @@ const SchedulingPage: React.FC = () => {
                               key={shift.id}
                               onClick={() => handleShiftClick(shift)}
                               className={`mb-1 px-1.5 py-1 rounded-sm border text-xs w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift) ?? ""}`}
-                              style={getShiftStyle(shift)}
+                              style={getShiftStyle(shift, isDark)}
                             >
                               <p className="font-medium truncate">
                                 {isUnderstaffed(shift) && (
@@ -1007,7 +1099,7 @@ const SchedulingPage: React.FC = () => {
                                     key={shift.id}
                                     onClick={() => handleShiftClick(shift)}
                                     className={`p-3 rounded-lg border text-sm w-full text-left cursor-pointer active:ring-2 active:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift) ?? ""}`}
-                                    style={getShiftStyle(shift)}
+                                    style={getShiftStyle(shift, isDark)}
                                   >
                                     <p className="font-medium">
                                       {formatTime(shift.start_time, tz)}
