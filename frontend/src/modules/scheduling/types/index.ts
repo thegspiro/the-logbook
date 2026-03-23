@@ -244,14 +244,16 @@ export interface AvailabilityFilters {
 
 export interface MemberHoursReportEntry {
   user_id: string;
-  user_name: string;
-  total_hours: number;
+  email: string;
+  first_name: string;
+  last_name: string;
   shift_count: number;
-  average_hours_per_shift: number;
+  total_minutes: number;
+  total_hours: number;
 }
 
 export interface MemberHoursReport {
-  entries: MemberHoursReportEntry[];
+  members: MemberHoursReportEntry[];
   period_start: string;
   period_end: string;
   total_members: number;

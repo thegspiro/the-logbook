@@ -435,7 +435,6 @@ class ShiftPatternResponse(UTCResponseBase):
 class GenerateShiftsRequest(BaseModel):
     """Schema for requesting shift generation from a pattern"""
 
-    pattern_id: UUID
     start_date: date
     end_date: date
 

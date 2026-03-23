@@ -1087,6 +1087,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
     """
     from datetime import timedelta
     from datetime import timezone as dt_timezone
+    from zoneinfo import ZoneInfo
 
     from app.core.config import settings
     from app.core.utils import generate_uuid
@@ -1115,6 +1116,12 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
 
             lookahead_hours = reminder_cfg.get("lookahead_hours", 2)
             lookahead_end = now + timedelta(hours=lookahead_hours)
+
+            org_tz = ZoneInfo(
+                org.timezone
+                if org.timezone
+                else "America/New_York"
+            )
 
             shifts_result = await db.execute(
                 select(Shift)
@@ -1203,7 +1210,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                     else "Unknown"
                 )
                 start_str = (
-                    shift.start_time.strftime("%H:%M")
+                    shift.start_time.astimezone(org_tz).strftime("%H:%M")
                     if shift.start_time
                     else ""
                 )
@@ -1886,6 +1893,8 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
     Send email alerts for overdue checkouts. Daily at 07:30.
     Notifies both the member who has the overdue item and admins.
     """
+    from zoneinfo import ZoneInfo
+
     from app.services.email_service import EmailService, build_email_logo_html
     from app.services.inventory_service import InventoryService
 
@@ -1902,6 +1911,10 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
             if not overdue:
                 results.append({"org_id": str(org.id), "overdue": 0})
                 continue
+
+            org_tz = ZoneInfo(
+                org.timezone if org.timezone else "America/New_York"
+            )
 
             # Group by member for individual notifications
             by_user: Dict[str, list] = {}
@@ -1923,7 +1936,8 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
                 for co in user_checkouts:
                     item_name = co.item.name if co.item else "Unknown"
                     due_date = (
-                        co.expected_return_at.strftime("%B %d, %Y")
+                        co.expected_return_at.astimezone(org_tz)
+                        .strftime("%B %d, %Y")
                         if co.expected_return_at
                         else "N/A"
                     )
