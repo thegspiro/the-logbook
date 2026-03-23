@@ -144,6 +144,7 @@ export const PublishResultsPanel: React.FC<PublishResultsPanelProps> = ({
           <button
             onClick={() => void handleToggleVisibility()}
             disabled={updatingVisibility}
+            aria-pressed={resultsPublished}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50 ${
               resultsPublished
                 ? 'bg-theme-surface text-theme-text-primary border border-theme-surface-border hover:bg-theme-surface-hover'
