@@ -114,6 +114,26 @@ GET    /api/v1/scheduling/apparatus          # List basic apparatus
 
 ---
 
+## Recent Improvements (2026-03-23)
+
+### Permission Fixes & Calls/Incidents Cleanup
+
+- **Shift assignment permission fix**: `ShiftDetailPanel` now correctly checks `scheduling.assign` (not `scheduling.manage`) for assignment-related UI — assign members, edit positions, remove assignments, edit notes. `canManage` retained for shift CRUD (edit/delete shift)
+- **Self-signup visibility fix**: Non-apparatus self-signup form is no longer hidden behind a permission gate, matching the backend's open signup policy
+- **OpenShiftsTab fallback guard**: Direct-assignment fallback guarded behind `canAssign` so members without the permission get a clear signup error instead of opaque 403
+- **Calls/Incidents section removed**: Placeholder "Calls will appear here once the shift is underway" section removed from `ShiftDetailPanel` — no CAD integration exists to populate it. Frontend `ShiftCall` types and API methods cleaned up. Backend endpoints retained for future ePCR/NEMSIS integration
+
+### Edge Cases (2026-03-23)
+
+| Scenario | Behavior |
+|----------|----------|
+| User has `scheduling.assign` but not `scheduling.manage` | Can assign members but cannot edit/delete shifts |
+| User has `scheduling.manage` but not `scheduling.assign` | Can edit/delete shifts but cannot directly assign members |
+| Self-signup on non-apparatus shifts | Available to all authenticated users, no permission required |
+| Calls/Incidents API endpoints | Still functional at `POST /api/v1/scheduling/shifts/{id}/calls` for programmatic access |
+
+---
+
 ## Recent Improvements (2026-03-19)
 
 ### Position Eligibility, Admin Sub-Pages & Timezone Fixes

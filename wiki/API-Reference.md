@@ -53,7 +53,7 @@ Response:
 | `/api/v1/users` | Members | User CRUD, profiles, leaves, rank validation |
 | `/api/v1/onboarding` | Onboarding | Organization setup wizard |
 | `/api/v1/settings` | Settings | Organization and module configuration |
-| `/api/v1/notifications` | Notifications | In-app notification management |
+| `/api/v1/notifications` | Notifications | Notification rules, logs, user inbox, and department messages |
 
 ### Module Endpoints
 
@@ -64,6 +64,7 @@ Response:
 | `/api/v1/events` | Events | `events.manage` (admin) |
 | `/api/v1/elections` | Elections | `elections.manage` (admin) |
 | `/api/v1/inventory` | Inventory | `inventory.manage` (admin) |
+| `/api/v1/equipment-checks` | Equipment Checks | `equipment_check.manage` (admin) |
 | `/api/v1/facilities` | Facilities | `facilities.manage` (admin) |
 | `/api/v1/apparatus` | Apparatus | Authenticated |
 | `/api/v1/forms` | Forms | Authenticated |
@@ -91,6 +92,62 @@ Response:
 | `/api/v1/security/alerts` | Security alerts |
 | `/api/v1/security/audit-log/integrity` | Audit log verification |
 | `/api/v1/security/intrusion-detection/status` | IDS status |
+
+---
+
+## Notification Endpoints *(2026-03-23)*
+
+```
+GET    /api/v1/notifications/rules                       # List notification rules
+POST   /api/v1/notifications/rules                       # Create notification rule
+GET    /api/v1/notifications/rules/{id}                  # Get rule
+PATCH  /api/v1/notifications/rules/{id}                  # Update rule
+DELETE /api/v1/notifications/rules/{id}                  # Delete rule
+POST   /api/v1/notifications/rules/{id}/toggle           # Toggle rule enabled/disabled
+GET    /api/v1/notifications/logs                        # List notification logs
+POST   /api/v1/notifications/logs/{id}/read              # Mark log as read
+GET    /api/v1/notifications/my                          # User's in-app notifications
+GET    /api/v1/notifications/my/unread-count             # User's unread count
+POST   /api/v1/notifications/my/read-all                 # Bulk mark all as read
+POST   /api/v1/notifications/my/{log_id}/read            # Mark own notification as read
+GET    /api/v1/notifications/summary                     # Rule and send statistics
+```
+
+## Equipment Check Endpoints *(2026-03-19)*
+
+```
+POST   /api/v1/equipment-checks/templates                    # Create template
+GET    /api/v1/equipment-checks/templates                    # List templates
+GET    /api/v1/equipment-checks/templates/{id}               # Get template
+PATCH  /api/v1/equipment-checks/templates/{id}               # Update template
+DELETE /api/v1/equipment-checks/templates/{id}               # Delete template
+POST   /api/v1/equipment-checks/templates/{id}/compartments  # Add compartment
+PATCH  /api/v1/equipment-checks/compartments/{id}            # Update compartment
+DELETE /api/v1/equipment-checks/compartments/{id}            # Delete compartment
+POST   /api/v1/equipment-checks/compartments/{id}/items      # Add item
+PATCH  /api/v1/equipment-checks/items/{id}                   # Update item
+DELETE /api/v1/equipment-checks/items/{id}                   # Delete item
+GET    /api/v1/equipment-checks/shifts/{shift_id}/checklists # Applicable checklists for shift
+POST   /api/v1/equipment-checks/shifts/{shift_id}/checks     # Submit equipment check
+GET    /api/v1/equipment-checks/my-checklists                # Member's pending/recent checks
+POST   /api/v1/equipment-checks/checks/{id}/items/{item_id}/photos  # Upload check photos
+GET    /api/v1/equipment-checks/reports/compliance           # Compliance dashboard
+GET    /api/v1/equipment-checks/reports/failures             # Failure/deficiency log
+GET    /api/v1/equipment-checks/reports/trends               # Item trend history
+GET    /api/v1/equipment-checks/reports/export               # CSV/PDF export
+```
+
+## Department Messages *(2026-03-23)*
+
+```
+GET    /api/v1/messages                                  # List department messages
+POST   /api/v1/messages                                  # Create department message
+GET    /api/v1/messages/{id}                             # Get message
+PATCH  /api/v1/messages/{id}                             # Update message
+DELETE /api/v1/messages/{id}                             # Delete message
+POST   /api/v1/messages/{id}/read                        # Mark message as read
+POST   /api/v1/messages/{id}/clear                       # Admin clear persistent message
+```
 
 ---
 

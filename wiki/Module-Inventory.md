@@ -13,7 +13,7 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 - **Departure Clearance** — Full lifecycle (initiate → resolve line items → complete) for tracking property return when members depart
 - **Write-Off Approval** — Supervisor-reviewed workflow for lost, stolen, damaged, or obsolete items before they are removed from inventory
 - **Notification Netting** — Offsetting actions (assign→unassign) automatically cancel pending notifications
-- **Barcode & QR Scanning** — Camera-based scanning for check-in/check-out operations via BarcodeDetector API
+- **Barcode & QR Scanning** — Camera-based scanning for check-in/check-out operations via BarcodeDetector API (Chrome/Edge) with html5-qrcode fallback (Firefox/Safari/desktop). Desktop webcam support via environment→user facingMode fallback
 - **Thermal Label Printing** — Dymo (2.25×1.25″), Rollo (4×6″), and sheet (8.5×11″) label generation with Code128 barcodes
 - **Category Management** — Organize items by category with low-stock thresholds and maintenance requirements
 - **Equipment Requests** — Members can request checkouts, issuances, or purchases; admins approve/deny
@@ -61,6 +61,8 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 | `/inventory/admin/requests` | Equipment Requests | `inventory.manage` |
 | `/inventory/admin/write-offs` | Write-Off Requests | `inventory.manage` |
 | `/inventory/admin/reorder` | Reorder Requests | `inventory.manage` |
+| `/inventory/admin/kits` | Equipment Kits Management | `inventory.manage` |
+| `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage` |
 | `/inventory/checkouts` | Active Checkouts | `inventory.manage` |
 | `/inventory/import` | CSV Import | `inventory.manage` |
 | `/inventory/admin/kits` | Equipment Kits Management | `inventory.manage` |
@@ -318,7 +320,7 @@ Condition options are centralized in `frontend/src/constants/enums.ts`:
 | `InventoryPage` | Main inventory management page with items/categories tabs |
 | `InventoryMembersTab` | Per-member inventory view with sorting and expandable details |
 | `MemberIdScannerModal` | Camera-based member ID scanning for quick member lookup |
-| `InventoryScanModal` | Barcode scanning + live search for batch checkout/return |
+| `InventoryScanModal` | Barcode/QR scanning + live search for batch checkout/return (native BarcodeDetector with html5-qrcode fallback) |
 | `ReturnItemsModal` | List-based return workflow for a member's held items |
 | `useInventoryWebSocket` | Hook for real-time WebSocket updates with auto-reconnect |
 

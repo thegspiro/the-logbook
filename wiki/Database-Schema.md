@@ -23,7 +23,10 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 | Table | Description |
 |-------|-------------|
 | `audit_logs` | Tamper-proof audit trail with SHA-256 hash chain |
-| `notification_logs` | In-app and email notification records |
+| `notification_rules` | Notification rule definitions with trigger, category, channel, and config *(2026-03-23)* |
+| `notification_logs` | In-app and email notification records with action_url and expiry |
+| `department_messages` | Internal department messages with targeting, priority, and `is_persistent` flag *(2026-03-23)* |
+| `department_message_reads` | Per-user read/acknowledged tracking for department messages *(2026-03-23)* |
 | `security_alerts` | Intrusion detection and security event alerts |
 
 ---
@@ -70,6 +73,11 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 | `swap_requests` | Shift swap requests |
 | `time_off_requests` | Time-off requests |
 | `basic_apparatus` | Lightweight vehicle records for scheduling |
+| `equipment_check_templates` | Master equipment check templates with timing and position assignment *(2026-03-19)* |
+| `check_template_compartments` | Named sections within a template, nested via `parent_compartment_id` *(2026-03-19)* |
+| `check_template_items` | Individual check items with type, expiration, serial/lot tracking *(2026-03-19)* |
+| `shift_equipment_checks` | Submitted check records linked to shifts *(2026-03-19)* |
+| `shift_equipment_check_items` | Individual item results within a submitted check *(2026-03-19)* |
 
 ### Inventory
 

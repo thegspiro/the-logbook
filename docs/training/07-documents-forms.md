@@ -230,39 +230,79 @@ If your form has cross-module integrations (Membership or Inventory), the submis
 
 ---
 
-## Notifications
+## Notification Rules & Logs
 
-Navigate to **Notifications** in the sidebar to manage your notification preferences and view notification history.
+Navigate to **Notifications** in the sidebar (`/notifications`) to manage notification rules, view delivery logs, and configure email templates. The page has been renamed from "Email Notifications" to "Notification Rules & Logs" to reflect both email and in-app delivery channels.
+
+### Three-Tab Interface
+
+The Notifications page uses a three-tab layout:
+
+| Tab | Purpose |
+|-----|---------|
+| **Notification Rules** | Create and manage rules that define when and how notifications are sent |
+| **Email Templates** | Link to email template management for customizing notification formats |
+| **Send Log** | View delivery history with channel filtering (All / Email / In-App) |
+
+> **Screenshot needed:**
+> _[Screenshot of the Notification Rules & Logs page showing the three tabs, the summary statistics cards (Total Rules, Active Rules, Sent Count), and the rules list with search, create button, and enable/disable toggles]_
 
 ### Notification Rules
 
 Notification rules define when and how you are alerted. Rules can be set for:
 
-| Trigger | Description |
-|---------|-------------|
-| **Event Reminders** | Alerts before upcoming events |
-| **Training Expiry** | Warnings when certifications are expiring |
-| **Schedule Changes** | Alerts for shift changes or new assignments |
-| **New Members** | Notification when a new member is added |
-| **Maintenance Due** | Alerts for upcoming equipment or facility maintenance |
-| **Form Submissions** | Alerts when a form receives a new submission |
+| Trigger | Description | Default Category | Default Channel |
+|---------|-------------|-----------------|----------------|
+| **event_reminder** | Alerts before upcoming events | Events | In-App |
+| **training_expiry** | Warnings when certifications are expiring | Training | Email |
+| **schedule_change** | Alerts for shift changes or new assignments | Scheduling | In-App |
+| **new_member** | Notification when a new member is added | Members | In-App |
+| **maintenance_due** | Alerts for upcoming equipment or facility maintenance | Maintenance | Email |
+| **form_submitted** | Alerts when a form receives a new submission | General | In-App |
 
-### Managing Your Preferences
+### Creating a Rule
 
-1. Navigate to **Notifications > Rules**.
-2. Toggle notifications on/off for each trigger type.
-3. Choose delivery method: email, in-app, or both.
+1. Navigate to **Notifications > Notification Rules**.
+2. Click **Create Rule**.
+3. Enter a **name** and select a **trigger** from the dropdown.
+4. The **category** and **channel** auto-populate based on the trigger (can be overridden).
+5. Add an optional **description**.
+6. Click **Save**.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Notification Rules page showing a list of notification triggers with toggles for email and in-app delivery, and a "Notification Log" tab showing recent notifications]_
+Rules can be enabled/disabled individually with toggle switches. The summary cards at the top show total rules, active rules, and total sent notifications.
 
-### Notification Log
+> **Screenshot needed:**
+> _[Screenshot of the Create Rule modal showing the name field, trigger dropdown (with options like event_reminder, training_expiry), auto-populated category and channel fields, and the description field]_
 
-The **Log** tab shows your notification history including:
+### Send Log
+
+The **Send Log** tab shows notification delivery history with:
 - Date and time
-- Notification type
-- Message content
-- Delivery status
+- Recipient
+- Subject and message content
+- Channel (email or in-app)
+- Delivery status (sent, read, failed)
+- **Channel filter** — filter by All, Email only, or In-App only
+- **Mark All Read** button to bulk-clear unread notifications
+
+> **Screenshot needed:**
+> _[Screenshot of the Send Log tab showing the channel filter buttons (All / Email / In-App), the Mark All Read button, and a table of notification entries with status indicators]_
+
+### Dashboard Notification Dismiss
+
+On the dashboard, notifications now have dismiss controls:
+- **Clear All** button in the notification section header — marks all unread notifications as read
+- **Individual dismiss (X)** buttons on each unread notification card
+- Persistent department messages (see below) cannot be dismissed by regular members
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Channel filter defaults | Defaults to "All" — shows both email and in-app logs |
+| Bulk mark-as-read | Only marks currently unread notifications; already-read are not modified |
+| Rule with trigger already used | Multiple rules can use the same trigger (e.g., two event_reminder rules for different channels) |
+| Disabled rule | Stops sending but retains configuration and history |
 
 ---
 
@@ -277,13 +317,33 @@ Officers can broadcast messages to the entire department or targeted groups:
 3. Click **New Message**.
 4. Set the **priority** (Normal, Important, Urgent).
 5. Choose the **target**: All Members, specific roles, or individual members.
-6. Write the message.
-7. Send.
+6. Toggle **Persistent** if the message should stay on the dashboard until an admin clears it.
+7. Write the message.
+8. Send.
 
-Members receive the message as an in-app notification and optionally by email.
+Members receive the message as an in-app notification on the dashboard and optionally by email.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the department messages interface showing the compose form with priority selector, target audience dropdown, message body editor, and a list of previously sent messages below]_
+### Persistent Messages
+
+When the **Persistent** toggle is enabled:
+- The message shows a **"Persistent"** badge on the dashboard
+- Regular members **cannot dismiss** the message — the dismiss (X) button is hidden
+- Only users with `notifications.manage` permission see a **"Clear"** button to remove the message
+- The message remains visible for all targeted members until an admin clears it
+
+This is useful for important department-wide announcements that must be acknowledged (e.g., "SCBA annual inspection mandatory by March 31 — contact Lt. Smith to schedule").
+
+> **Screenshot needed:**
+> _[Screenshot of the dashboard showing a persistent department message with the "Persistent" badge, no dismiss button for regular members, and a "Clear" button visible in a separate admin view]_
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Non-persistent message | Appears on dashboard with normal dismiss (X) button |
+| Admin views persistent message | Sees both the "Persistent" badge and the "Clear" button |
+| Member marks all notifications as read | Persistent messages are unaffected — they can only be cleared by an admin |
+| Message targeting specific roles | Only members with those roles see the message on their dashboard |
 
 ---
 

@@ -261,6 +261,8 @@ Requires `inventory.manage` permission. Dashboard with summary stats (total item
 | `/inventory/admin/requests` | Equipment Requests | `inventory.manage` |
 | `/inventory/admin/write-offs` | Write-Off Requests | `inventory.manage` |
 | `/inventory/admin/reorder` | Reorder Requests | `inventory.manage` |
+| `/inventory/admin/kits` | Equipment Kits Management | `inventory.manage` |
+| `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage` |
 | `/inventory/checkouts` | Active Checkouts | `inventory.manage` |
 | `/inventory/import` | CSV Import | `inventory.manage` |
 | `/inventory/admin/kits` | Equipment Kits | `inventory.manage` |
@@ -372,7 +374,9 @@ Tab-based interface with the following views:
 
 | URL | Page | Permission |
 |-----|------|------------|
-| `/notifications` | Notifications | Authenticated |
+| `/notifications` | Notification Rules & Logs | Authenticated |
+
+> Three-tab interface: **Notification Rules** (list, create, enable/disable rules with trigger/category/channel configuration), **Email Templates** (link to template management), and **Send Log** (table view with channel filter: All / Email / In-App, mark-all-read, status indicators). Summary statistics cards show total rules, active rules, and combined send count.
 
 > The Notifications page includes a **channel filter** (email, in-app, SMS) for filtering by delivery method. Dashboard notification cards include **clear/dismiss buttons**. Administrators can create **persistent department messages** that only admins can clear.
 

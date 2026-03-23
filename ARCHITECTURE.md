@@ -1,6 +1,6 @@
 # The Logbook — Complete Architecture Reference
 
-> **Generated:** 2026-03-07
+> **Generated:** 2026-03-23
 > **Purpose:** Master reference for all connection points, data models, API routes, frontend pages, services, stores, data paths, and data sharing across the application.
 
 ---
@@ -553,6 +553,8 @@ All routes below are inside `<AppLayout>` + `<ProtectedRoute>`. All non-Dashboar
 | `/inventory` | InventoryPage | auth only |
 | `/inventory/my-equipment` | MyEquipmentPage | auth only |
 | `/inventory/admin` | InventoryAdminHub | `inventory.manage` |
+| `/inventory/admin/kits` | EquipmentKitsPage | `inventory.manage` |
+| `/inventory/admin/variant-groups` | VariantGroupsPage | `inventory.manage` |
 | `/inventory/checkouts` | InventoryCheckoutsPage | `inventory.manage` |
 | `/inventory/storage-areas` | StorageAreasPage | auth only |
 | `/inventory/import` | ImportInventoryPage | `inventory.manage` |
@@ -562,6 +564,13 @@ All routes below are inside `<AppLayout>` + `<ProtectedRoute>`. All non-Dashboar
 | URL | Component | Permission |
 |-----|-----------|------------|
 | `/scheduling` | SchedulingPage | auth only |
+| `/scheduling/templates` | SchedulingTemplatesPage | `scheduling.manage` |
+| `/scheduling/patterns` | SchedulingPatternsPage | `scheduling.manage` |
+| `/scheduling/reports` | SchedulingReportsPage | `scheduling.manage` |
+| `/scheduling/settings` | SchedulingSettingsPage | `scheduling.manage` |
+| `/scheduling/equipment-check-templates/new` | EquipmentCheckTemplateBuilder | `equipment_check.manage` |
+| `/scheduling/equipment-check-templates/:templateId` | EquipmentCheckTemplateBuilder | `equipment_check.manage` |
+| `/scheduling/equipment-check-reports` | EquipmentCheckReportsPage | `equipment_check.manage` |
 
 #### Facilities & Locations
 
@@ -659,7 +668,7 @@ All routes below are inside `<AppLayout>` + `<ProtectedRoute>`. All non-Dashboar
 | `/admin/platform-analytics` | PlatformAnalyticsPage | `settings.manage` |
 | `/admin/public-portal` | PublicPortalAdmin | `settings.manage` |
 
-**Total: ~120+ direct routes + admin hub tabs across 20+ modules**
+**Total: ~130+ direct routes + admin hub tabs across 20+ modules**
 
 ---
 
@@ -757,6 +766,7 @@ Creates axios instances with:
 | `role.ts` | Role, Permission, PermissionCategory |
 | `event.ts` | Event, EventRSVP, EventTemplate, EventSettings, ExternalAttendee |
 | `training.ts` | TrainingRecord, TrainingCourse, TrainingRequirement, TrainingSession, TrainingProgram, ProgramPhase, ProgramEnrollment, RecertificationPathway, CompetencyMatrix, InstructorQualification, TrainingEffectivenessEvaluation, MultiAgencyTraining, XAPIStatement, ComplianceForecast, ISOReadiness, ComplianceAttestation, AnnualComplianceReport |
+| `scanner.ts` | MemberIdPayload, isMemberIdPayload |
 | `scheduling.ts` | Shift, ShiftTemplate, ShiftPattern, ShiftAssignment, SwapRequest, TimeOff |
 | `election.ts` | Election, Candidate, Vote, ElectionResults, BallotItem |
 | `document.ts` | Document, DocumentFolder |
@@ -800,7 +810,7 @@ Creates axios instances with:
 | forms | Y | Y | — | — | — | — | — | — |
 | grants-fundraising | Y | Y | Y (8) | — | Y | Y | Y | — |
 | integrations | Y | Y | — | — | — | — | — | — |
-| inventory | Y | Y | — | — | — | — | — | — |
+| inventory | Y | Y | Y (2) | — | — | — | — | — |
 | membership | Y | Y | — | — | — | Y | Y | — |
 | minutes | Y | Y | — | — | — | — | — | — |
 | notifications | Y | Y | — | — | — | — | — | — |
@@ -896,6 +906,11 @@ HIPAA exclusions (UNCACHEABLE_PREFIXES):
 | Forms | Events | Event registration | `FormIntegration` with target=events |
 | Member Leaves | Training Waivers | Auto-create waiver from LOA | `leave.exempt_from_training_waiver` → auto-link |
 | Users | Notifications | User notification preferences | `NotificationRule` per user/org |
+| Scheduling | Apparatus | Equipment check templates per apparatus | `equipment_check_template.apparatus_id` FK |
+| Scheduling | Apparatus | Deficiency flag from failed checks | `apparatus.has_deficiency` set by check results |
+| Scheduling | Notifications | Persistent dept. messages on dashboard | `DepartmentMessage.is_persistent` flag |
+| Inventory | Camera/Scanner | Barcode/QR lookup via camera | `GET /inventory/lookup` from `InventoryScanModal` |
+| Members | Camera/Scanner | Member ID QR/barcode lookup | `GET /users` from `MemberIdScannerModal` / `MemberScanPage` |
 | All Modules | Audit | Audit trail | `log_audit_event()` in endpoints |
 | All Modules | Error Logs | Error tracking | `POST /errors/log` from frontend `errorTracker` |
 
@@ -947,6 +962,32 @@ Location (universal "place picker")
 | Form submitted | Forms | in_app, email |
 | Pipeline advancement | Prospective Members | in_app |
 | Admin hours pending | Admin Hours | in_app |
+| Equipment check failure | Scheduling/Equipment Check | in_app, email |
+| Department message (persistent) | Notifications | in_app (stays until admin clears) |
+| Department message (normal) | Notifications | in_app (dismissible by member) |
+
+### Camera/Scanner Data Flow
+
+```
+InventoryScanModal:
+  Camera → BarcodeDetector (Chrome/Edge) or html5-qrcode (Firefox/Safari)
+    → decoded barcode string
+    → GET /api/v1/inventory/lookup?q=<barcode>
+    → Item matches displayed in dropdown
+    → User selects item → adds to batch (checkout or return)
+    → POST /api/v1/inventory/batch-checkout or batch-return
+
+MemberIdScannerModal / MemberScanPage:
+  Camera → html5-qrcode (useHtml5Scanner hook)
+    → QR code decoded: JSON { type: "member_id", id: "<uuid>" } → user lookup by ID
+    → Barcode decoded: raw string → user lookup by membership_number
+    → GET /api/v1/users (filtered) → member profile loaded
+
+Shared Infrastructure:
+  constants/camera.ts → QR_SCAN_CONFIG, BARCODE_SCAN_CONFIG, HAS_BARCODE_DETECTOR
+  hooks/useHtml5Scanner.ts → camera lifecycle, environment→user fallback
+  types/scanner.ts → MemberIdPayload, isMemberIdPayload type guard
+```
 
 ### Reporting Data Sources
 
