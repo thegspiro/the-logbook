@@ -680,7 +680,7 @@ const SchedulingPage: React.FC = () => {
                             <button
                               key={shift.id}
                               onClick={() => handleShiftClick(shift)}
-                              className={`mb-2 p-2 rounded-lg border text-xs w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift) ?? ""}`}
+                              className={`mb-2 p-2 rounded-lg border text-xs w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${selectedShift?.id === shift.id ? 'ring-2 ring-violet-500' : ''} ${getShiftTemplateColor(shift) ?? ""}`}
                               style={shift.color ? colorCardStyle(shift.color, resolvedTheme) : undefined}
                             >
                               <p className="font-medium truncate">
@@ -690,7 +690,7 @@ const SchedulingPage: React.FC = () => {
                                   : ""}
                               </p>
                               {shift.notes && (
-                                <p className="mt-1 opacity-80 truncate">
+                                <p className="mt-1 opacity-80 line-clamp-2">
                                   {shift.notes}
                                 </p>
                               )}
@@ -778,7 +778,7 @@ const SchedulingPage: React.FC = () => {
                                 <button
                                   key={shift.id}
                                   onClick={() => handleShiftClick(shift)}
-                                  className={`p-3 rounded-lg border text-sm w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift) ?? ""}`}
+                                  className={`p-3 rounded-lg border text-sm w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${selectedShift?.id === shift.id ? 'ring-2 ring-violet-500' : ''} ${getShiftTemplateColor(shift) ?? ""}`}
                                   style={shift.color ? colorCardStyle(shift.color, resolvedTheme) : undefined}
                                 >
                                   <p className="font-medium">
@@ -788,7 +788,7 @@ const SchedulingPage: React.FC = () => {
                                       : ""}
                                   </p>
                                   {shift.notes && (
-                                    <p className="mt-1 opacity-80 truncate">
+                                    <p className="mt-1 opacity-80 line-clamp-2">
                                       {shift.notes}
                                     </p>
                                   )}
@@ -874,7 +874,7 @@ const SchedulingPage: React.FC = () => {
                             <button
                               key={shift.id}
                               onClick={() => handleShiftClick(shift)}
-                              className={`mb-1 px-1.5 py-1 rounded-sm border text-xs w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift) ?? ""}`}
+                              className={`mb-1 px-1.5 py-1 rounded-sm border text-xs w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${selectedShift?.id === shift.id ? 'ring-2 ring-violet-500' : ''} ${getShiftTemplateColor(shift) ?? ""}`}
                               style={shift.color ? colorCardStyle(shift.color, resolvedTheme) : undefined}
                             >
                               <p className="font-medium truncate">
@@ -1025,7 +1025,7 @@ const SchedulingPage: React.FC = () => {
                                   <button
                                     key={shift.id}
                                     onClick={() => handleShiftClick(shift)}
-                                    className={`p-3 rounded-lg border text-sm w-full text-left cursor-pointer active:ring-2 active:ring-violet-500/50 transition-all ${getShiftTemplateColor(shift) ?? ""}`}
+                                    className={`p-3 rounded-lg border text-sm w-full text-left cursor-pointer active:ring-2 active:ring-violet-500/50 transition-all ${selectedShift?.id === shift.id ? 'ring-2 ring-violet-500' : ''} ${getShiftTemplateColor(shift) ?? ""}`}
                                     style={shift.color ? colorCardStyle(shift.color, resolvedTheme) : undefined}
                                   >
                                     <p className="font-medium">
@@ -1035,7 +1035,7 @@ const SchedulingPage: React.FC = () => {
                                         : ""}
                                     </p>
                                     {shift.notes && (
-                                      <p className="mt-1 opacity-80 truncate">
+                                      <p className="mt-1 opacity-80 line-clamp-2">
                                         {shift.notes}
                                       </p>
                                     )}

@@ -49,6 +49,10 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   // Per-button loading states
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
+  // Bulk selection for confirm/decline
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkActioning, setBulkActioning] = useState(false);
+
   // Refs for modal focus management
   const swapModalRef = useRef<HTMLDivElement>(null);
   const timeOffModalRef = useRef<HTMLDivElement>(null);
@@ -89,6 +93,14 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to decline shift'));
     }
+  };
+
+  const toggleSelection = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   };
 
   // Escape key closes modals
@@ -190,6 +202,48 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
 
   const displayList = view === 'upcoming' ? upcoming : past;
 
+  // Bulk selection helpers — must be after 'upcoming' is defined
+  const pendingAssigned = upcoming.filter(a => a.status === AssignmentStatus.ASSIGNED);
+  const allPendingSelected = pendingAssigned.length > 0 && pendingAssigned.every(a => selectedIds.has(a.id));
+
+  const toggleSelectAll = () => {
+    if (allPendingSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(pendingAssigned.map(a => a.id)));
+    }
+  };
+
+  const handleBulkConfirm = async () => {
+    setBulkActioning(true);
+    let count = 0;
+    for (const id of selectedIds) {
+      try {
+        await schedulingService.confirmAssignment(id);
+        count++;
+      } catch { /* individual failures handled silently */ }
+    }
+    if (count > 0) toast.success(`${count} shift${count > 1 ? 's' : ''} confirmed`);
+    setSelectedIds(new Set());
+    setBulkActioning(false);
+    void loadData();
+  };
+
+  const handleBulkDecline = async () => {
+    setBulkActioning(true);
+    let count = 0;
+    for (const id of selectedIds) {
+      try {
+        await schedulingService.updateAssignment(id, { assignment_status: 'declined' });
+        count++;
+      } catch { /* individual failures handled silently */ }
+    }
+    if (count > 0) toast.success(`${count} shift${count > 1 ? 's' : ''} declined`);
+    setSelectedIds(new Set());
+    setBulkActioning(false);
+    void loadData();
+  };
+
   const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-violet-500';
 
   if (loading) {
@@ -233,6 +287,32 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
         </div>
       </div>
 
+      {/* Bulk action bar */}
+      {view === 'upcoming' && pendingAssigned.length > 1 && (
+        <div className="flex items-center justify-between gap-3 p-3 bg-theme-surface-hover/50 border border-theme-surface-border rounded-lg">
+          <label className="flex items-center gap-2 text-sm text-theme-text-secondary cursor-pointer select-none">
+            <input type="checkbox" checked={allPendingSelected} onChange={toggleSelectAll}
+              className="w-4 h-4 rounded border-theme-input-border text-violet-600 focus:ring-violet-500"
+            />
+            {selectedIds.size > 0 ? `${selectedIds.size} selected` : `Select all ${pendingAssigned.length} pending`}
+          </label>
+          {selectedIds.size > 0 && (
+            <div className="flex items-center gap-2">
+              <button onClick={() => { void handleBulkConfirm(); }} disabled={bulkActioning}
+                className="px-3 py-1.5 text-xs font-medium bg-green-600 hover:bg-green-700 text-white rounded-lg disabled:opacity-50 inline-flex items-center gap-1"
+              >
+                <Check className="w-3.5 h-3.5" /> Confirm All
+              </button>
+              <button onClick={() => { void handleBulkDecline(); }} disabled={bulkActioning}
+                className="px-3 py-1.5 text-xs font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50 inline-flex items-center gap-1"
+              >
+                <XCircle className="w-3.5 h-3.5" /> Decline All
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Shift List */}
       {displayList.length === 0 ? (
         <div className="text-center py-16 border border-dashed border-theme-surface-border rounded-xl">
@@ -259,6 +339,13 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
               >
                 <div className="flex items-start sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                    {view === 'upcoming' && assignment.status === AssignmentStatus.ASSIGNED && pendingAssigned.length > 1 && (
+                      <input type="checkbox" checked={selectedIds.has(assignment.id)}
+                        onChange={() => toggleSelection(assignment.id)}
+                        className="w-4 h-4 rounded border-theme-input-border text-violet-600 focus:ring-violet-500 shrink-0"
+                        aria-label={`Select shift for ${shiftDate ? formatDateCustom(shiftDate, { weekday: 'short', month: 'short', day: 'numeric' }, tz) : 'unknown date'}`}
+                      />
+                    )}
                     <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
                       <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-violet-500" />
                     </div>
