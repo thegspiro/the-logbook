@@ -66,8 +66,6 @@ interface ItemTableProps {
   selIds: Set<string>;
   toggle: (id: string) => void;
   toggleAll: () => void;
-  sortBy: SortKey;
-  sortOrd: 'asc' | 'desc';
   toggleSort: (k: SortKey) => void;
   SortIc: React.FC<{ col: SortKey }>;
   showStatus: boolean;
@@ -75,7 +73,7 @@ interface ItemTableProps {
 
 const ItemTable: React.FC<ItemTableProps> = ({
   label, icon, items, categories, locations, selIds, toggle, toggleAll,
-  sortBy, sortOrd, toggleSort, SortIc, showStatus,
+  toggleSort, SortIc, showStatus,
 }) => {
   if (items.length === 0) return null;
 
@@ -292,7 +290,6 @@ const InventoryItemsPage: React.FC = () => {
 
   /* ---- selection ---- */
   const toggle = (id: string) => setSelIds((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-  const toggleAll = () => setSelIds(selIds.size === items.length ? new Set() : new Set(items.map((i) => i.id)));
 
   /* ---- section-level toggleAll helpers ---- */
   const toggleAllAvailable = () => setSelIds((prev) => {
@@ -508,8 +505,6 @@ const InventoryItemsPage: React.FC = () => {
             selIds={selIds}
             toggle={toggle}
             toggleAll={toggleAllAvailable}
-            sortBy={sortBy}
-            sortOrd={sortOrd}
             toggleSort={toggleSort}
             SortIc={SortIc}
             showStatus={false}
@@ -523,8 +518,6 @@ const InventoryItemsPage: React.FC = () => {
             selIds={selIds}
             toggle={toggle}
             toggleAll={toggleAllUnavailable}
-            sortBy={sortBy}
-            sortOrd={sortOrd}
             toggleSort={toggleSort}
             SortIc={SortIc}
             showStatus
