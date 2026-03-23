@@ -16,7 +16,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   X, Users, Clock, MapPin, Truck, UserPlus, Check, XCircle,
   Loader2, ChevronDown, ChevronUp, Pencil, Trash2, Save, Palette, FileText,
-  ClipboardCheck,
+  ClipboardCheck, CheckCircle2, AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { userService } from '../../services/api';
@@ -749,18 +749,34 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-3 p-3 bg-theme-surface-hover/50 rounded-lg">
-              <Users className="w-5 h-5 text-blue-500" />
-              <div>
-                <p className="text-xs text-theme-text-muted">Crew</p>
-                <p className="text-sm font-medium text-theme-text-primary">
-                  {assignments.length} assigned
-                  {hasApparatusPositions && (
-                    <span className="text-theme-text-muted"> / {apparatusPositions.length} positions</span>
+            {(() => {
+              const target = hasApparatusPositions ? apparatusPositions.length : (shift.min_staffing ?? 0);
+              const filled = activeAssignments.length;
+              const isFull = target > 0 && filled >= target;
+              const isShort = target > 0 && filled < target;
+              return (
+                <div className={`flex items-center gap-3 p-3 rounded-lg ${
+                  isFull ? 'bg-green-500/10' : isShort ? 'bg-amber-500/10' : 'bg-theme-surface-hover/50'
+                }`}>
+                  {isFull ? (
+                    <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  ) : isShort ? (
+                    <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                  ) : (
+                    <Users className="w-5 h-5 text-blue-500" />
                   )}
-                </p>
-              </div>
-            </div>
+                  <div>
+                    <p className="text-xs text-theme-text-muted">Crew</p>
+                    <p className="text-sm font-medium text-theme-text-primary">
+                      {filled} assigned
+                      {target > 0 && (
+                        <span className="text-theme-text-muted"> / {target} positions</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
             {(shift.apparatus_name || shift.apparatus_unit_number) && (
               <div className="flex items-center gap-3 p-3 bg-theme-surface-hover/50 rounded-lg">
                 <Truck className="w-5 h-5 text-red-500" />

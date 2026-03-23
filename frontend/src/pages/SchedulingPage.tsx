@@ -13,6 +13,7 @@ import {
   ChevronRight,
   AlertCircle,
   AlertTriangle,
+  CheckCircle2,
   X,
   Loader2,
   Users,
@@ -136,22 +137,25 @@ const getShiftTemplateColor = (shift: ShiftRecord): string | undefined => {
   return "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30";
 };
 
-const isUnderstaffed = (shift: ShiftRecord): boolean => {
-  // Check required positions first — if a shift has structured positions,
-  // count only required slots to determine understaffing
+/** Returns the minimum staffing target for a shift, or null if none is configured. */
+const getStaffingTarget = (shift: ShiftRecord): number | null => {
   const positions = normalizePositions(
     (shift.apparatus_positions ?? shift.positions) as unknown[] | null,
   );
   const requiredCount = positions.filter(p => p.required).length;
-  if (requiredCount > 0) {
-    return shift.attendee_count < requiredCount;
-  }
-  // Fall back to min_staffing headcount
-  return (
-    shift.min_staffing != null &&
-    shift.min_staffing > 0 &&
-    shift.attendee_count < shift.min_staffing
-  );
+  if (requiredCount > 0) return requiredCount;
+  if (shift.min_staffing != null && shift.min_staffing > 0) return shift.min_staffing;
+  return null;
+};
+
+const isUnderstaffed = (shift: ShiftRecord): boolean => {
+  const target = getStaffingTarget(shift);
+  return target != null && shift.attendee_count < target;
+};
+
+const isFullyStaffed = (shift: ShiftRecord): boolean => {
+  const target = getStaffingTarget(shift);
+  return target != null && shift.attendee_count >= target;
 };
 
 const TAB_CONFIG: {
@@ -688,17 +692,25 @@ const SchedulingPage: React.FC = () => {
                                 </p>
                               )}
                               <div className="flex items-center gap-2 mt-1">
-                                {isUnderstaffed(shift) && (
+                                {isUnderstaffed(shift) ? (
                                   <span
                                     className="text-amber-600 dark:text-amber-400 flex items-center gap-0.5"
-                                    title={`Needs ${shift.min_staffing} staff`}
+                                    title={`Understaffed: ${shift.attendee_count}/${getStaffingTarget(shift)} filled`}
                                   >
                                     <AlertTriangle className="w-3 h-3" />
                                   </span>
-                                )}
+                                ) : isFullyStaffed(shift) ? (
+                                  <span
+                                    className="text-green-600 dark:text-green-400 flex items-center gap-0.5"
+                                    title="Fully staffed"
+                                  >
+                                    <CheckCircle2 className="w-3 h-3" />
+                                  </span>
+                                ) : null}
                                 <span className="opacity-70 flex items-center gap-0.5">
                                   <Users className="w-3 h-3" />{" "}
                                   {shift.attendee_count}
+                                  {getStaffingTarget(shift) != null && `/${getStaffingTarget(shift)}`}
                                 </span>
                                 {shift.apparatus_unit_number && (
                                   <span className="opacity-70 flex items-center gap-0.5">
@@ -778,17 +790,25 @@ const SchedulingPage: React.FC = () => {
                                     </p>
                                   )}
                                   <div className="flex items-center gap-3 mt-1.5">
-                                    {isUnderstaffed(shift) && (
+                                    {isUnderstaffed(shift) ? (
                                       <span
                                         className="text-amber-600 dark:text-amber-400 flex items-center gap-1 text-xs"
-                                        title={`Needs ${shift.min_staffing} staff`}
+                                        title={`Understaffed: ${shift.attendee_count}/${getStaffingTarget(shift)} filled`}
                                       >
                                         <AlertTriangle className="w-3.5 h-3.5" />
                                       </span>
-                                    )}
+                                    ) : isFullyStaffed(shift) ? (
+                                      <span
+                                        className="text-green-600 dark:text-green-400 flex items-center gap-1 text-xs"
+                                        title="Fully staffed"
+                                      >
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                      </span>
+                                    ) : null}
                                     <span className="opacity-70 flex items-center gap-1 text-xs">
                                       <Users className="w-3.5 h-3.5" />{" "}
-                                      {shift.attendee_count} staff
+                                      {shift.attendee_count}
+                                      {getStaffingTarget(shift) != null && `/${getStaffingTarget(shift)}`} staff
                                     </span>
                                     {shift.apparatus_unit_number && (
                                       <span className="opacity-70 flex items-center gap-1 text-xs">
@@ -855,9 +875,11 @@ const SchedulingPage: React.FC = () => {
                               style={shift.color ? colorCardStyle(shift.color, resolvedTheme) : undefined}
                             >
                               <p className="font-medium truncate">
-                                {isUnderstaffed(shift) && (
+                                {isUnderstaffed(shift) ? (
                                   <AlertTriangle className="w-3 h-3 inline text-amber-600 dark:text-amber-400 mr-0.5" />
-                                )}
+                                ) : isFullyStaffed(shift) ? (
+                                  <CheckCircle2 className="w-3 h-3 inline text-green-600 dark:text-green-400 mr-0.5" />
+                                ) : null}
                                 {formatTime(shift.start_time, tz)}
                                 {shift.apparatus_unit_number && (
                                   <span className="ml-1 opacity-70">
@@ -865,7 +887,8 @@ const SchedulingPage: React.FC = () => {
                                   </span>
                                 )}
                                 <span className="ml-1 opacity-70">
-                                  ({shift.attendee_count})
+                                  ({shift.attendee_count}
+                                  {getStaffingTarget(shift) != null && `/${getStaffingTarget(shift)}`})
                                 </span>
                               </p>
                             </button>
@@ -1014,17 +1037,25 @@ const SchedulingPage: React.FC = () => {
                                       </p>
                                     )}
                                     <div className="flex items-center gap-3 mt-1.5">
-                                      {isUnderstaffed(shift) && (
+                                      {isUnderstaffed(shift) ? (
                                         <span
                                           className="text-amber-600 dark:text-amber-400 flex items-center gap-1 text-xs"
-                                          title={`Needs ${shift.min_staffing} staff`}
+                                          title={`Understaffed: ${shift.attendee_count}/${getStaffingTarget(shift)} filled`}
                                         >
                                           <AlertTriangle className="w-3.5 h-3.5" />
                                         </span>
-                                      )}
+                                      ) : isFullyStaffed(shift) ? (
+                                        <span
+                                          className="text-green-600 dark:text-green-400 flex items-center gap-1 text-xs"
+                                          title="Fully staffed"
+                                        >
+                                          <CheckCircle2 className="w-3.5 h-3.5" />
+                                        </span>
+                                      ) : null}
                                       <span className="opacity-70 flex items-center gap-1 text-xs">
                                         <Users className="w-3.5 h-3.5" />{" "}
-                                        {shift.attendee_count} staff
+                                        {shift.attendee_count}
+                                        {getStaffingTarget(shift) != null && `/${getStaffingTarget(shift)}`} staff
                                       </span>
                                       {shift.apparatus_unit_number && (
                                         <span className="opacity-70 flex items-center gap-1 text-xs">
