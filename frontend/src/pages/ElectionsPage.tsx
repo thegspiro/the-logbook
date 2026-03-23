@@ -18,6 +18,7 @@ import { formatDate, formatForDateTimeInput, getTodayLocalDate, localToUTC } fro
 import { HelpLink } from '../components/HelpLink';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 import { getTimeRemaining, getStatusBadgeClass } from '../utils/electionHelpers';
+import { ElectionSummaryCards } from '../modules/elections/components/ElectionSummaryCards';
 
 export const ElectionsPage: React.FC = () => {
   const [elections, setElections] = useState<ElectionListItem[]>([]);
@@ -47,7 +48,7 @@ export const ElectionsPage: React.FC = () => {
   const [positionInput, setPositionInput] = useState('');
   const [showPositionDropdown, setShowPositionDropdown] = useState(false);
   const [meetings, setMeetings] = useState<MeetingRecord[]>([]);
-  const [businessMeetingEvents, setBusinessMeetingEvents] = useState<EventListItem[]>([]);
+  const [upcomingEvents, setBusinessMeetingEvents] = useState<EventListItem[]>([]);
   const [availableRanks, setAvailableRanks] = useState<OperationalRankResponse[]>([]);
 
   const { checkPermission } = useAuthStore();
@@ -72,7 +73,7 @@ export const ElectionsPage: React.FC = () => {
       const today = getTodayLocalDate(tz);
       const [meetingsData, eventsData] = await Promise.all([
         meetingsService.getMeetings({ from_date: today, limit: 100 }),
-        eventService.getEvents({ event_type: 'business_meeting', start_after: today, limit: 100 }),
+        eventService.getEvents({ start_after: today, limit: 100 }),
       ]);
       setMeetings(meetingsData.meetings);
       setBusinessMeetingEvents(eventsData);
@@ -122,7 +123,7 @@ export const ElectionsPage: React.FC = () => {
         });
       }
     } else if (source === 'event') {
-      const event = businessMeetingEvents.find(e => e.id === id);
+      const event = upcomingEvents.find(e => e.id === id);
       if (event) {
         setFormData({
           ...formData,
@@ -287,6 +288,11 @@ export const ElectionsPage: React.FC = () => {
         <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
           <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
         </div>
+      )}
+
+      {/* Secretary Dashboard Summary */}
+      {canManage && elections.length > 0 && (
+        <ElectionSummaryCards elections={elections} />
       )}
 
       <div className="mb-4 flex flex-wrap gap-2">
@@ -481,7 +487,7 @@ export const ElectionsPage: React.FC = () => {
                     className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
                   >
                     <option value="">No linked meeting</option>
-                    {businessMeetingEvents.map((event) => (
+                    {upcomingEvents.map((event) => (
                       <option key={`event-${event.id}`} value={`event:${event.id}`}>
                         {event.title} ({formatDate(event.start_datetime, tz)})
                       </option>

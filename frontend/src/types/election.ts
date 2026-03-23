@@ -468,3 +468,38 @@ export interface BallotPreview {
   total_eligible: number;
   total_items: number;
 }
+
+// Eligibility Roster (secretary dashboard view)
+export interface RosterItemEligibility {
+  ballot_item_id: string;
+  ballot_item_title: string;
+  eligible: boolean;
+  reason?: string;
+}
+
+export interface RosterMember {
+  user_id: string;
+  full_name: string;
+  email: string;
+  membership_type: string;
+  has_override: boolean;
+  has_voted: boolean;
+  is_attending: boolean;
+  will_receive_ballot: boolean;
+  eligible_item_count: number;
+  total_item_count: number;
+  ineligibility_reason?: string;
+  item_eligibility: RosterItemEligibility[];
+}
+
+export interface EligibilityRoster {
+  election_id: string;
+  election_title: string;
+  election_status: string;
+  total_members: number;
+  total_eligible: number;
+  total_ineligible: number;
+  total_voted: number;
+  total_overrides: number;
+  roster: RosterMember[];
+}

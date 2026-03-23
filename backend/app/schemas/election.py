@@ -951,3 +951,46 @@ class VoteReceiptResponse(BaseModel):
     message: str
     voted_at: Optional[str] = None
     position: Optional[str] = None
+
+
+# Eligibility Roster (Secretary View)
+
+
+class RosterItemEligibility(BaseModel):
+    """Per-ballot-item eligibility for one member"""
+
+    ballot_item_id: str
+    ballot_item_title: str
+    eligible: bool
+    reason: Optional[str] = None
+
+
+class RosterMember(BaseModel):
+    """A single member's eligibility status in the roster"""
+
+    user_id: str
+    full_name: str
+    email: str
+    membership_type: str
+    has_override: bool
+    has_voted: bool
+    is_attending: bool
+    will_receive_ballot: bool
+    eligible_item_count: int
+    total_item_count: int
+    ineligibility_reason: Optional[str] = None
+    item_eligibility: List[RosterItemEligibility] = []
+
+
+class EligibilityRosterResponse(BaseModel):
+    """Full eligibility roster for secretary dashboard"""
+
+    election_id: str
+    election_title: str
+    election_status: str
+    total_members: int
+    total_eligible: int
+    total_ineligible: int
+    total_voted: int
+    total_overrides: int
+    roster: List[RosterMember]
