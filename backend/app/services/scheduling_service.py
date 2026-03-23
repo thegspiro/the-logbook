@@ -2103,6 +2103,129 @@ class SchedulingService:
 
         return unavailable
 
+    async def get_availability_summary(
+        self,
+        organization_id: UUID,
+        start_date: date,
+        end_date: date,
+    ) -> List[Dict]:
+        """Build per-member availability summaries for a date range.
+
+        For each active member, computes:
+        - total_shifts_assigned: how many shifts they're assigned to
+        - time_off_days: approved time-off days in the range
+        - unavailable_dates: specific dates with time-off
+        - available_dates: dates in range without time-off
+        """
+        total_days = (end_date - start_date).days + 1
+        all_dates = {
+            (start_date + timedelta(days=i)).isoformat()
+            for i in range(total_days)
+        }
+
+        # Active org members
+        user_result = await self.db.execute(
+            select(User.id, User.first_name, User.last_name, User.email).where(
+                User.organization_id == str(organization_id),
+                User.status == "active",
+            )
+        )
+        users = user_result.all()
+
+        if not users:
+            return []
+
+        user_ids = [str(u.id) for u in users]
+
+        # Shift assignments per user
+        assign_result = await self.db.execute(
+            select(
+                ShiftAssignment.user_id,
+                func.count(ShiftAssignment.id).label("cnt"),
+            )
+            .join(Shift, ShiftAssignment.shift_id == Shift.id)
+            .where(
+                Shift.organization_id == str(organization_id),
+                Shift.shift_date >= start_date,
+                Shift.shift_date <= end_date,
+                ShiftAssignment.user_id.in_(user_ids),
+                ShiftAssignment.assignment_status.in_([
+                    AssignmentStatus.ASSIGNED,
+                    AssignmentStatus.CONFIRMED,
+                ]),
+            )
+            .group_by(ShiftAssignment.user_id)
+        )
+        assignment_counts: Dict[str, int] = {
+            str(row.user_id): row.cnt for row in assign_result.all()
+        }
+
+        # Approved time-off per user
+        timeoff_result = await self.db.execute(
+            select(ShiftTimeOff).where(
+                ShiftTimeOff.organization_id == str(organization_id),
+                ShiftTimeOff.status == TimeOffStatus.APPROVED,
+                ShiftTimeOff.start_date <= end_date,
+                ShiftTimeOff.end_date >= start_date,
+                ShiftTimeOff.user_id.in_(user_ids),
+            )
+        )
+        timeoff_records = timeoff_result.scalars().all()
+
+        # Build per-user unavailable date sets
+        user_unavailable: Dict[str, set] = {}
+        for rec in timeoff_records:
+            uid = str(rec.user_id)
+            if uid not in user_unavailable:
+                user_unavailable[uid] = set()
+            d = max(rec.start_date, start_date)
+            end_d = min(rec.end_date, end_date)
+            while d <= end_d:
+                user_unavailable[uid].add(d.isoformat())
+                d += timedelta(days=1)
+
+        # Also include leave-of-absence dates
+        leave_result = await self.db.execute(
+            select(MemberLeaveOfAbsence).where(
+                MemberLeaveOfAbsence.organization_id == str(organization_id),
+                MemberLeaveOfAbsence.active == True,  # noqa: E712
+                MemberLeaveOfAbsence.start_date <= end_date,
+                or_(
+                    MemberLeaveOfAbsence.end_date >= start_date,
+                    MemberLeaveOfAbsence.end_date.is_(None),
+                ),
+                MemberLeaveOfAbsence.user_id.in_(user_ids),
+            )
+        )
+        for leave in leave_result.scalars().all():
+            uid = str(leave.user_id)
+            if uid not in user_unavailable:
+                user_unavailable[uid] = set()
+            d = max(leave.start_date, start_date)
+            end_d = min(leave.end_date, end_date) if leave.end_date else end_date
+            while d <= end_d:
+                user_unavailable[uid].add(d.isoformat())
+                d += timedelta(days=1)
+
+        summaries = []
+        for u in users:
+            uid = str(u.id)
+            name = f"{u.first_name or ''} {u.last_name or ''}".strip()
+            unavail = user_unavailable.get(uid, set())
+            avail = all_dates - unavail
+            summaries.append({
+                "user_id": uid,
+                "user_name": name or u.email or uid,
+                "email": u.email,
+                "total_shifts_assigned": assignment_counts.get(uid, 0),
+                "time_off_days": len(unavail),
+                "available_dates": sorted(avail),
+                "unavailable_dates": sorted(unavail),
+            })
+
+        summaries.sort(key=lambda x: x["user_name"])
+        return summaries
+
     async def get_unavailable_user_ids(
         self,
         organization_id: UUID,
