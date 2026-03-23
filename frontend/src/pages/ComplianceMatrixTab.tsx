@@ -13,10 +13,10 @@ import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime } from '../utils/dateFormatting';
 
 const STATUS_ICONS: Record<string, React.ReactNode> = {
-  completed: <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />,
+  completed: <CheckCircle2 className="w-3.5 h-3.5 text-green-700 dark:text-green-400" />,
   verified: <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />,
-  in_progress: <Clock className="w-3.5 h-3.5 text-blue-400" />,
-  expired: <XCircle className="w-3.5 h-3.5 text-red-400" />,
+  in_progress: <Clock className="w-3.5 h-3.5 text-blue-700 dark:text-blue-400" />,
+  expired: <XCircle className="w-3.5 h-3.5 text-red-700 dark:text-red-400" />,
   not_started: <XCircle className="w-3.5 h-3.5 text-theme-text-muted" />,
 };
 
@@ -53,7 +53,7 @@ const ComplianceMatrixTab: React.FC = () => {
   if (error || !matrix) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-red-400">
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-red-700 dark:text-red-400">
           {error || 'No data available'}
         </div>
       </div>

@@ -422,7 +422,7 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
         </div>
         <div className="flex items-center gap-2">
           <span aria-label={getStatusLabel()}>{getStatusIcon()}</span>
-          <span className={`text-sm ${provider.active ? 'text-green-400' : 'text-theme-text-muted'}`}>
+          <span className={`text-sm ${provider.active ? 'text-green-700 dark:text-green-400' : 'text-theme-text-muted'}`}>
             {provider.active ? 'Active' : 'Inactive'}
           </span>
         </div>
@@ -453,8 +453,8 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
 
       {provider.connection_error && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4" role="alert">
-          <p className="text-xs text-red-400">Connection Error:</p>
-          <p className="text-sm text-red-300">{provider.connection_error}</p>
+          <p className="text-xs text-red-700 dark:text-red-400">Connection Error:</p>
+          <p className="text-sm text-red-700 dark:text-red-300">{provider.connection_error}</p>
         </div>
       )}
 
@@ -865,7 +865,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                       </div>
                       <div className="flex items-center gap-2">
                         {mapping.is_mapped ? (
-                          <span className="text-sm text-green-400 flex items-center gap-1">
+                          <span className="text-sm text-green-700 dark:text-green-400 flex items-center gap-1">
                             <CheckCircle className="w-4 h-4" aria-hidden="true" />
                             Mapped
                             {mapping.auto_mapped && <span className="text-xs">(auto)</span>}
@@ -909,7 +909,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                       </div>
                       <div className="flex items-center gap-2">
                         {mapping.is_mapped ? (
-                          <span className="text-sm text-green-400 flex items-center gap-1">
+                          <span className="text-sm text-green-700 dark:text-green-400 flex items-center gap-1">
                             <CheckCircle className="w-4 h-4" aria-hidden="true" />
                             Mapped
                             {mapping.auto_mapped && <span className="text-xs">(auto)</span>}

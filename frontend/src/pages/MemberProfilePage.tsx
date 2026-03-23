@@ -575,7 +575,7 @@ export const MemberProfilePage: React.FC = () => {
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
-            <p className="text-sm text-red-400">
+            <p className="text-sm text-red-700 dark:text-red-400">
               {error || "Member not found"}
             </p>
           </div>
@@ -589,7 +589,7 @@ export const MemberProfilePage: React.FC = () => {
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
-            <p className="text-sm text-red-400">Member not found</p>
+            <p className="text-sm text-red-700 dark:text-red-400">Member not found</p>
           </div>
         </div>
       </div>
@@ -761,10 +761,10 @@ export const MemberProfilePage: React.FC = () => {
                             complianceSummary.compliance_status === "exempt"
                               ? "bg-theme-surface-secondary text-theme-text-muted"
                               : complianceSummary.compliance_status === "green"
-                                ? "bg-green-500/20 text-green-400"
+                                ? "bg-green-500/20 text-green-700 dark:text-green-400"
                                 : complianceSummary.compliance_status === "yellow"
-                                  ? "bg-yellow-500/20 text-yellow-400"
-                                  : "bg-red-500/20 text-red-400"
+                                  ? "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400"
+                                  : "bg-red-500/20 text-red-700 dark:text-red-400"
                           }`}
                         >
                           {complianceSummary.compliance_label}
@@ -810,15 +810,15 @@ export const MemberProfilePage: React.FC = () => {
                             <p
                               className={`text-lg font-semibold ${
                                 complianceSummary.certs_expiring_soon > 0
-                                  ? "text-yellow-400"
+                                  ? "text-yellow-700 dark:text-yellow-400"
                                   : complianceSummary.certs_expired > 0
-                                    ? "text-red-400"
+                                    ? "text-red-700 dark:text-red-400"
                                     : "text-theme-text-primary"
                               }`}
                             >
                               {complianceSummary.certs_expiring_soon}
                               {complianceSummary.certs_expired > 0 && (
-                                <span className="text-red-400 text-sm ml-1">
+                                <span className="text-red-700 dark:text-red-400 text-sm ml-1">
                                   ({complianceSummary.certs_expired} expired)
                                 </span>
                               )}
@@ -836,7 +836,7 @@ export const MemberProfilePage: React.FC = () => {
                   </h2>
                   <Link
                     to={`/members/${userId}/training`}
-                    className="text-sm text-blue-400 hover:text-blue-300 font-medium"
+                    className="text-sm text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
                   >
                     View Full History
                   </Link>
@@ -885,9 +885,9 @@ export const MemberProfilePage: React.FC = () => {
                                 <span
                                   className={
                                     isExpired(training)
-                                      ? "text-red-400"
+                                      ? "text-red-700 dark:text-red-400"
                                       : isExpiringSoon(training)
-                                        ? "text-yellow-400"
+                                        ? "text-yellow-700 dark:text-yellow-400"
                                         : ""
                                   }
                                 >
@@ -926,7 +926,7 @@ export const MemberProfilePage: React.FC = () => {
                     {trainings.length > 5 && (
                       <Link
                         to={`/members/${userId}/training`}
-                        className="block text-center py-3 text-sm text-blue-400 hover:text-blue-300 border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors"
+                        className="block text-center py-3 text-sm text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors"
                       >
                         View all {trainings.length} training records →
                       </Link>
@@ -945,7 +945,7 @@ export const MemberProfilePage: React.FC = () => {
                   </h2>
                   <Link
                     to="/admin-hours"
-                    className="text-sm text-blue-400 hover:text-blue-300 font-medium"
+                    className="text-sm text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
                   >
                     View Details
                   </Link>
@@ -1147,7 +1147,7 @@ export const MemberProfilePage: React.FC = () => {
                 {canEdit && !isEditing && (
                   <button
                     onClick={handleEditClick}
-                    className="text-sm text-blue-400 hover:text-blue-300 font-medium"
+                    className="text-sm text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
                   >
                     Edit
                   </button>
@@ -1291,7 +1291,7 @@ export const MemberProfilePage: React.FC = () => {
                   </div>
 
                   {error && (
-                    <div className="mt-2 text-sm text-red-400">{error}</div>
+                    <div className="mt-2 text-sm text-red-700 dark:text-red-400">{error}</div>
                   )}
                 </div>
               )}
@@ -1306,7 +1306,7 @@ export const MemberProfilePage: React.FC = () => {
                 {canEdit && !editingAddress && (
                   <button
                     onClick={handleEditAddress}
-                    className="text-sm text-blue-400 hover:text-blue-300 font-medium"
+                    className="text-sm text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
                   >
                     Edit
                   </button>
@@ -1490,7 +1490,7 @@ export const MemberProfilePage: React.FC = () => {
                 {canEdit && !editingContacts && (
                   <button
                     onClick={handleEditEmergencyContacts}
-                    className="text-sm text-blue-400 hover:text-blue-300 font-medium"
+                    className="text-sm text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
                   >
                     Edit
                   </button>
@@ -1564,7 +1564,7 @@ export const MemberProfilePage: React.FC = () => {
                           {contactsForm.length > 1 && (
                             <button
                               onClick={() => handleRemoveContact(i)}
-                              className="text-red-400 hover:text-red-300 text-xs"
+                              className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-xs"
                             >
                               Remove
                             </button>
@@ -1619,7 +1619,7 @@ export const MemberProfilePage: React.FC = () => {
                   ))}
                   <button
                     onClick={handleAddContact}
-                    className="w-full px-3 py-2 text-sm text-blue-400 border border-dashed border-theme-surface-border rounded-md hover:bg-theme-surface-hover"
+                    className="w-full px-3 py-2 text-sm text-blue-700 dark:text-blue-400 border border-dashed border-theme-surface-border rounded-md hover:bg-theme-surface-hover"
                   >
                     + Add Contact
                   </button>
@@ -1641,7 +1641,7 @@ export const MemberProfilePage: React.FC = () => {
                       Cancel
                     </button>
                   </div>
-                  {error && <div className="text-sm text-red-400">{error}</div>}
+                  {error && <div className="text-sm text-red-700 dark:text-red-400">{error}</div>}
                 </div>
               )}
             </div>
@@ -1709,7 +1709,7 @@ export const MemberProfilePage: React.FC = () => {
                       <span className="text-sm text-theme-text-secondary">
                         Expiring Soon
                       </span>
-                      <span className="text-sm font-semibold text-yellow-400">
+                      <span className="text-sm font-semibold text-yellow-700 dark:text-yellow-400">
                         {trainings.filter((t) => isExpiringSoon(t)).length}
                       </span>
                     </div>

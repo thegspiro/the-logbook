@@ -53,9 +53,9 @@ const AdminHoursQRCodePage: React.FC = () => {
     return (
       <div className="max-w-2xl mx-auto p-6">
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-4">
-          <p className="text-red-400">{error}</p>
+          <p className="text-red-700 dark:text-red-400">{error}</p>
         </div>
-        <Link to="/admin-hours/manage" className="text-blue-600 hover:text-blue-400">
+        <Link to="/admin-hours/manage" className="text-blue-600 hover:text-blue-800 dark:hover:text-blue-400">
           &larr; Back to Admin Hours
         </Link>
       </div>
@@ -70,7 +70,7 @@ const AdminHoursQRCodePage: React.FC = () => {
     <div className="min-h-screen max-w-4xl mx-auto p-6">
       {/* Header */}
       <div className="mb-6 print:hidden">
-        <Link to="/admin-hours/manage" className="text-blue-600 hover:text-blue-400 mb-4 inline-block">
+        <Link to="/admin-hours/manage" className="text-blue-600 hover:text-blue-800 dark:hover:text-blue-400 mb-4 inline-block">
           &larr; Back to Admin Hours Management
         </Link>
         <h1 className="text-3xl font-bold text-theme-text-primary">Admin Hours QR Code</h1>
@@ -132,8 +132,8 @@ const AdminHoursQRCodePage: React.FC = () => {
 
           {/* Instructions */}
           <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 text-left print:hidden">
-            <h4 className="font-semibold text-blue-300 mb-2">Instructions:</h4>
-            <ol className="list-decimal list-inside space-y-1 text-blue-300">
+            <h4 className="font-semibold text-blue-700 dark:text-blue-300 mb-2">Instructions:</h4>
+            <ol className="list-decimal list-inside space-y-1 text-blue-700 dark:text-blue-300">
               <li>Print and post this QR code at the relevant work area</li>
               <li>Members scan with their phone camera when starting work</li>
               <li>Log in if prompted, then tap &quot;Clock In&quot;</li>

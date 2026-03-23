@@ -685,7 +685,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                     ) : (
                       <button
                         onClick={() => setShowBulkRejectConfirm(true)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-700 dark:text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors"
                       >
                         <XCircle className="w-3.5 h-3.5" />
                         Reject All

@@ -277,10 +277,10 @@ export const MemberAdminEditPage: React.FC = () => {
       <div className="min-h-screen">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
-            <p className="text-sm text-red-400">{error || 'Member not found.'}</p>
+            <p className="text-sm text-red-700 dark:text-red-400">{error || 'Member not found.'}</p>
             <Link
               to="/members/admin"
-              className="mt-2 inline-block text-sm text-blue-400 hover:text-blue-300 underline"
+              className="mt-2 inline-block text-sm text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline"
             >
               Back to Members Admin
             </Link>
@@ -317,14 +317,14 @@ export const MemberAdminEditPage: React.FC = () => {
         {/* Success Message */}
         {successMessage && (
           <div className="mb-6 bg-green-500/10 border border-green-500/30 rounded-lg p-4" role="status">
-            <p className="text-sm text-green-400">{successMessage}</p>
+            <p className="text-sm text-green-700 dark:text-green-400">{successMessage}</p>
           </div>
         )}
 
         {/* Error Message */}
         {error && (
           <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
-            <p className="text-sm text-red-400">{error}</p>
+            <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
           </div>
         )}
 
@@ -664,7 +664,7 @@ export const MemberAdminEditPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => handleRemoveEmergencyContact(index)}
-                      className="text-xs text-red-400 hover:text-red-300 font-medium"
+                      className="text-xs text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 font-medium"
                       disabled={saving}
                     >
                       Remove
@@ -743,7 +743,7 @@ export const MemberAdminEditPage: React.FC = () => {
               <div>
                 <Link
                   to={`/members/admin/history/${userId}`}
-                  className="text-sm text-blue-400 hover:text-blue-300 underline"
+                  className="text-sm text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline"
                 >
                   View History
                 </Link>

@@ -408,7 +408,7 @@ export const MinutesDetailPage: React.FC = () => {
       <div className="min-h-screen">
         <div className="max-w-5xl mx-auto px-4 py-8">
           <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
-            <p className="text-sm text-red-300">{error || 'Minutes not found'}</p>
+            <p className="text-sm text-red-700 dark:text-red-300">{error || 'Minutes not found'}</p>
           </div>
         </div>
       </div>
@@ -440,8 +440,8 @@ export const MinutesDetailPage: React.FC = () => {
         {/* Rejection notice */}
         {minutes.status === 'rejected' && minutes.rejection_reason && (
           <div className="mt-3 bg-red-500/10 border-l-4 border-red-500 p-4">
-            <p className="text-sm font-medium text-red-300">Rejection Reason:</p>
-            <p className="text-sm text-red-300 mt-1">{minutes.rejection_reason}</p>
+            <p className="text-sm font-medium text-red-700 dark:text-red-300">Rejection Reason:</p>
+            <p className="text-sm text-red-700 dark:text-red-300 mt-1">{minutes.rejection_reason}</p>
           </div>
         )}
       </div>
@@ -537,7 +537,7 @@ export const MinutesDetailPage: React.FC = () => {
             {minutes.published_document_id && (
               <Link
                 to="/documents"
-                className="px-4 py-2 border border-green-500/30 text-green-300 rounded-md hover:bg-green-500/10 inline-flex items-center gap-2"
+                className="px-4 py-2 border border-green-500/30 text-green-700 dark:text-green-300 rounded-md hover:bg-green-500/10 inline-flex items-center gap-2"
               >
                 <CheckCircle className="w-4 h-4" aria-hidden="true" />
                 View in Documents
@@ -573,7 +573,7 @@ export const MinutesDetailPage: React.FC = () => {
           {minutes.quorum_met !== null && minutes.quorum_met !== undefined && (
             <div>
               <span className="text-theme-text-muted">Quorum:</span>
-              <div className={`font-medium ${minutes.quorum_met ? 'text-green-300' : 'text-red-300'}`}>
+              <div className={`font-medium ${minutes.quorum_met ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
                 {minutes.quorum_met ? 'Met' : 'Not Met'}
                 {minutes.quorum_count !== null && ` (${minutes.quorum_count})`}
               </div>
@@ -700,7 +700,7 @@ export const MinutesDetailPage: React.FC = () => {
                           </button>
                           <button
                             onClick={() => { void handleDeleteSection(section.key); }}
-                            className="text-theme-text-muted hover:text-red-400 p-1"
+                            className="text-theme-text-muted hover:text-red-800 dark:hover:text-red-400 p-1"
                             aria-label={`Delete ${section.title} section`}
                           >
                             <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />

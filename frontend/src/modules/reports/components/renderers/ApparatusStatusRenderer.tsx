@@ -23,10 +23,10 @@ export const ApparatusStatusRenderer: React.FC<Props> = ({ data }) => {
       render: (v: unknown) => {
         const s = toStr(v, 'unknown');
         const colors: Record<string, string> = {
-          in_service: 'bg-green-500/20 text-green-300',
-          out_of_service: 'bg-red-500/20 text-red-300',
-          maintenance: 'bg-yellow-500/20 text-yellow-300',
-          reserve: 'bg-blue-500/20 text-blue-300',
+          in_service: 'bg-green-500/20 text-green-700 dark:text-green-300',
+          out_of_service: 'bg-red-500/20 text-red-700 dark:text-red-300',
+          maintenance: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-300',
+          reserve: 'bg-blue-500/20 text-blue-700 dark:text-blue-300',
         };
         return (
           <span className={`rounded-sm px-2 py-0.5 text-xs capitalize ${colors[s] ?? 'bg-theme-surface-secondary text-theme-text-muted'}`}>
@@ -54,9 +54,9 @@ export const ApparatusStatusRenderer: React.FC<Props> = ({ data }) => {
         const days = Number(v);
         const color =
           days < 0
-            ? 'text-red-400 font-semibold'
+            ? 'text-red-700 dark:text-red-400 font-semibold'
             : days <= 30
-              ? 'text-yellow-400 font-semibold'
+              ? 'text-yellow-700 dark:text-yellow-400 font-semibold'
               : 'text-theme-text-secondary';
         return <span className={color}>{days}</span>;
       },

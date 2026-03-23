@@ -52,15 +52,15 @@ function getStatusBadge(waiver: { start_date: string; end_date: string | null; a
     return { label: 'Inactive', color: 'bg-theme-surface-secondary text-theme-text-muted' };
   }
   if (waiver.start_date > today) {
-    return { label: 'Future', color: 'bg-blue-500/20 text-blue-400' };
+    return { label: 'Future', color: 'bg-blue-500/20 text-blue-700 dark:text-blue-400' };
   }
   if (!waiver.end_date) {
-    return { label: 'Permanent', color: 'bg-purple-500/20 text-purple-400' };
+    return { label: 'Permanent', color: 'bg-purple-500/20 text-purple-700 dark:text-purple-400' };
   }
   if (waiver.end_date < today) {
-    return { label: 'Expired', color: 'bg-yellow-500/20 text-yellow-400' };
+    return { label: 'Expired', color: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400' };
   }
-  return { label: 'Active', color: 'bg-green-500/20 text-green-400' };
+  return { label: 'Active', color: 'bg-green-500/20 text-green-700 dark:text-green-400' };
 }
 
 // Unified waiver type combining leaves and training waivers
@@ -347,7 +347,7 @@ export const WaiverManagementPage: React.FC = () => {
         </div>
 
         {error && (
-          <div className="mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+          <div className="mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-700 dark:text-red-400 text-sm">
             {error}
           </div>
         )}
@@ -366,7 +366,7 @@ export const WaiverManagementPage: React.FC = () => {
               >
                 {tab.label}
                 {tab.id === 'active' && activeWaivers.length > 0 && (
-                  <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-green-500/20 text-green-400">
+                  <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-green-500/20 text-green-700 dark:text-green-400">
                     {activeWaivers.length}
                   </span>
                 )}
@@ -386,7 +386,7 @@ export const WaiverManagementPage: React.FC = () => {
                 <p className="text-theme-text-muted">No active waivers at this time.</p>
                 <button
                   onClick={() => handleTabChange('create')}
-                  className="mt-3 text-sm text-blue-400 hover:text-blue-300"
+                  className="mt-3 text-sm text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                 >
                   Create a new waiver
                 </button>
@@ -408,7 +408,7 @@ export const WaiverManagementPage: React.FC = () => {
                     {activeWaivers.map((waiver) => (
                       <tr key={`${waiver.source}-${waiver.id}`} className="hover:bg-theme-surface-hover">
                         <td className="px-4 py-3">
-                          <Link to={`/members/${waiver.user_id}`} className="text-sm font-medium text-blue-400 hover:text-blue-300">
+                          <Link to={`/members/${waiver.user_id}`} className="text-sm font-medium text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
                             {waiver.member_name}
                           </Link>
                         </td>
@@ -432,7 +432,7 @@ export const WaiverManagementPage: React.FC = () => {
                         <td className="px-4 py-3 text-right">
                           <button
                             onClick={() => { void handleDeactivate(waiver); }}
-                            className="text-xs text-red-400 hover:text-red-300"
+                            className="text-xs text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
                           >
                             Deactivate
                           </button>
@@ -453,12 +453,12 @@ export const WaiverManagementPage: React.FC = () => {
               <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Create New Waiver</h2>
 
               {createSuccess && (
-                <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg text-green-400 text-sm">
+                <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg text-green-700 dark:text-green-400 text-sm">
                   {createSuccess}
                 </div>
               )}
               {createError && (
-                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-700 dark:text-red-400 text-sm">
                   {createError}
                 </div>
               )}
@@ -652,7 +652,7 @@ export const WaiverManagementPage: React.FC = () => {
                       return (
                         <tr key={`${waiver.source}-${waiver.id}`} className="hover:bg-theme-surface-hover">
                           <td className="px-4 py-3">
-                            <Link to={`/members/${waiver.user_id}`} className="text-sm font-medium text-blue-400 hover:text-blue-300">
+                            <Link to={`/members/${waiver.user_id}`} className="text-sm font-medium text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
                               {waiver.member_name}
                             </Link>
                           </td>
@@ -682,7 +682,7 @@ export const WaiverManagementPage: React.FC = () => {
                             {waiver.active && (
                               <button
                                 onClick={() => { void handleDeactivate(waiver); }}
-                                className="text-xs text-red-400 hover:text-red-300"
+                                className="text-xs text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
                               >
                                 Deactivate
                               </button>

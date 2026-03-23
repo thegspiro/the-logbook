@@ -35,7 +35,7 @@ export const StatCard: React.FC<StatCardProps> = ({ label, value, previousValue,
       <div className="text-theme-text-muted text-xs">{label}</div>
       {showTrend && trendDir !== 'flat' && (
         <div
-          className={`mt-1 flex items-center justify-center gap-0.5 text-xs ${trendDir === 'up' ? 'text-green-400' : 'text-red-400'}`}
+          className={`mt-1 flex items-center justify-center gap-0.5 text-xs ${trendDir === 'up' ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}
         >
           {trendDir === 'up' ? (
             <TrendingUp className="h-3 w-3" />

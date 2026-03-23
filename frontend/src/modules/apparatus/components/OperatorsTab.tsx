@@ -59,12 +59,12 @@ export const OperatorsTab: React.FC<OperatorsTabProps> = ({
                   {op.certificationExpiration && ` • Expires ${formatDate(op.certificationExpiration, timezone)}`}
                 </p>
                 {op.hasRestrictions && (
-                  <p className="text-yellow-400 text-sm mt-1">Has Restrictions</p>
+                  <p className="text-yellow-700 dark:text-yellow-400 text-sm mt-1">Has Restrictions</p>
                 )}
               </div>
               <span
                 className={`px-2 py-1 text-xs rounded ${
-                  op.isActive ? 'bg-green-500/10 text-green-400' : 'bg-theme-surface-secondary text-theme-text-muted'
+                  op.isActive ? 'bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-theme-surface-secondary text-theme-text-muted'
                 }`}
               >
                 {op.isActive ? 'Active' : 'Inactive'}

@@ -90,7 +90,7 @@ const PlatformAnalyticsPage: React.FC = () => {
     return (
       <div className="max-w-7xl mx-auto p-6">
         <div className="text-center py-12">
-          <p className="text-red-400 mb-4">{error ?? 'No analytics data available'}</p>
+          <p className="text-red-700 dark:text-red-400 mb-4">{error ?? 'No analytics data available'}</p>
           <button
             onClick={() => { setLoading(true); void loadData(); }}
             className="btn-primary font-medium rounded-md text-sm"
@@ -127,7 +127,7 @@ const PlatformAnalyticsPage: React.FC = () => {
           </button>
           <button
             onClick={() => { void exportData(); }}
-            className="px-4 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-blue-400 bg-theme-surface hover:bg-theme-surface-hover flex items-center gap-2"
+            className="px-4 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-blue-700 dark:text-blue-400 bg-theme-surface hover:bg-theme-surface-hover flex items-center gap-2"
           >
             <Download className="w-4 h-4" />
             Export

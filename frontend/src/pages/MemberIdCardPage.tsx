@@ -123,11 +123,11 @@ export const MemberIdCardPage: React.FC = () => {
     return (
       <div className="max-w-md mx-auto p-6">
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-4">
-          <p className="text-red-400">{error}</p>
+          <p className="text-red-700 dark:text-red-400">{error}</p>
         </div>
         <Link
           to={userId ? `/members/${userId}` : "/members"}
-          className="text-blue-600 hover:text-blue-400"
+          className="text-blue-600 hover:text-blue-800 dark:hover:text-blue-400"
         >
           &larr; Back to Profile
         </Link>
@@ -139,9 +139,9 @@ export const MemberIdCardPage: React.FC = () => {
     return (
       <div className="max-w-md mx-auto p-6">
         <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-4">
-          <p className="text-yellow-300">Member not found</p>
+          <p className="text-yellow-700 dark:text-yellow-300">Member not found</p>
         </div>
-        <Link to="/members" className="text-blue-600 hover:text-blue-400">
+        <Link to="/members" className="text-blue-600 hover:text-blue-800 dark:hover:text-blue-400">
           &larr; Back to Members
         </Link>
       </div>

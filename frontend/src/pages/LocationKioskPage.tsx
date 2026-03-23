@@ -153,9 +153,9 @@ const LocationKioskPage: React.FC = () => {
         </div>
         <div className="flex items-center gap-4">
           {connected ? (
-            <Wifi className="w-5 h-5 text-green-400" />
+            <Wifi className="w-5 h-5 text-green-700 dark:text-green-400" />
           ) : (
-            <WifiOff className="w-5 h-5 text-red-400 animate-pulse" />
+            <WifiOff className="w-5 h-5 text-red-700 dark:text-red-400 animate-pulse" />
           )}
           <span className="text-lg text-theme-text-primary font-mono">
             {formatDateCustom(currentTime, { hour: 'numeric', minute: '2-digit' }, tz)}
@@ -183,7 +183,7 @@ const LocationKioskPage: React.FC = () => {
                   ))}
                 </div>
               )}
-              <div className="inline-flex items-center px-4 py-2 bg-green-500/20 border border-green-500/40 text-green-400 rounded-full text-sm font-medium mb-4">
+              <div className="inline-flex items-center px-4 py-2 bg-green-500/20 border border-green-500/40 text-green-700 dark:text-green-400 rounded-full text-sm font-medium mb-4">
                 <span className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse" />
                 Check-In Active
               </div>

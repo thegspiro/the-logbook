@@ -180,7 +180,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4">
-            <p className="text-sm text-red-400">{error || 'Failed to load training history'}</p>
+            <p className="text-sm text-red-700 dark:text-red-400">{error || 'Failed to load training history'}</p>
           </div>
         </div>
       </div>
@@ -279,7 +279,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                     setSearchQuery('');
                     setFilterStatus('all');
                   }}
-                  className="mt-2 text-sm text-blue-400 hover:text-blue-300"
+                  className="mt-2 text-sm text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                 >
                   Clear filters
                 </button>
@@ -339,9 +339,9 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                         <span
                           className={
                             isExpired(training)
-                              ? 'text-red-400'
+                              ? 'text-red-700 dark:text-red-400'
                               : isExpiringSoon(training)
-                              ? 'text-yellow-400'
+                              ? 'text-yellow-700 dark:text-yellow-400'
                               : 'text-theme-text-secondary'
                           }
                         >
@@ -397,11 +397,11 @@ interface StatCardProps {
 
 const StatCard: React.FC<StatCardProps> = ({ label, value, color }) => {
   const colorClasses = {
-    green: 'text-green-400',
-    blue: 'text-blue-400',
-    yellow: 'text-yellow-400',
-    orange: 'text-orange-400',
-    red: 'text-red-400',
+    green: 'text-green-700 dark:text-green-400',
+    blue: 'text-blue-700 dark:text-blue-400',
+    yellow: 'text-yellow-700 dark:text-yellow-400',
+    orange: 'text-orange-700 dark:text-orange-400',
+    red: 'text-red-700 dark:text-red-400',
   };
 
   return (

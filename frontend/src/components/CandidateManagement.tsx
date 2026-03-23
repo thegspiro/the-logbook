@@ -309,7 +309,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                   <button
                     type="button"
                     onClick={() => setFormData((prev) => ({ ...prev, name: '', user_id: '' }))}
-                    className="ml-2 text-theme-text-muted hover:text-red-400"
+                    className="ml-2 text-theme-text-muted hover:text-red-800 dark:hover:text-red-400"
                     aria-label="Clear selected member"
                   >
                     (clear)

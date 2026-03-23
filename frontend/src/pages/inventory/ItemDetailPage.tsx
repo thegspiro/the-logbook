@@ -662,7 +662,7 @@ const EVENT_ICON: Record<string, React.ReactNode> = {
   checkout: <LogOut className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />,
   checkin: <LogIn className="h-4 w-4 text-green-500" />,
   issuance: <Send className="h-4 w-4 text-purple-500" />,
-  issuance_return: <Undo2 className="h-4 w-4 text-purple-400" />,
+  issuance_return: <Undo2 className="h-4 w-4 text-purple-700 dark:text-purple-400" />,
   maintenance: <Wrench className="h-4 w-4 text-orange-500" />,
 };
 

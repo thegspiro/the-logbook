@@ -233,7 +233,7 @@ const DocumentsPage: React.FC = () => {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="flex flex-col items-center space-y-4">
-          <Loader2 className="w-10 h-10 text-amber-400 animate-spin" />
+          <Loader2 className="w-10 h-10 text-amber-700 dark:text-amber-400 animate-spin" />
           <p className="text-theme-text-secondary text-sm">Loading documents...</p>
         </div>
       </div>
@@ -279,11 +279,11 @@ const DocumentsPage: React.FC = () => {
         {/* Error Toast */}
         {error && (
           <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-start space-x-3">
-            <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+            <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400 shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="text-red-300 text-sm">{error}</p>
+              <p className="text-red-700 dark:text-red-300 text-sm">{error}</p>
             </div>
-            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-300">
+            <button onClick={() => setError(null)} className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -330,7 +330,7 @@ const DocumentsPage: React.FC = () => {
               {selectedFolder && (
                 <button
                   onClick={handleClearFolder}
-                  className="flex items-center space-x-1 px-3 py-2 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-lg text-sm"
+                  className="flex items-center space-x-1 px-3 py-2 bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 rounded-lg text-sm"
                 >
                   <ArrowLeft className="w-4 h-4" aria-hidden="true" />
                   <span>All Folders</span>
@@ -371,7 +371,7 @@ const DocumentsPage: React.FC = () => {
                     className="stat-card group hover:bg-theme-surface-hover hover:border-amber-500/30 text-left transition-all"
                   >
                     <div className="flex items-start space-x-3">
-                      <FolderOpen className={`w-8 h-8 ${folder.color || 'text-amber-400'} group-hover:scale-110 transition-transform`} />
+                      <FolderOpen className={`w-8 h-8 ${folder.color || 'text-amber-700 dark:text-amber-400'} group-hover:scale-110 transition-transform`} />
                       <div className="flex-1 min-w-0">
                         <h3 className="text-theme-text-primary font-semibold truncate">{folder.name}</h3>
                         <p className="text-theme-text-muted text-sm mt-1">{folder.description || 'No description'}</p>
@@ -395,7 +395,7 @@ const DocumentsPage: React.FC = () => {
           <>
             {documentsLoading ? (
               <div className="card p-12 text-center">
-                <Loader2 className="w-10 h-10 text-amber-400 animate-spin mx-auto mb-4" />
+                <Loader2 className="w-10 h-10 text-amber-700 dark:text-amber-400 animate-spin mx-auto mb-4" />
                 <p className="text-theme-text-secondary text-sm">Loading documents...</p>
               </div>
             ) : filteredDocuments.length > 0 ? (
@@ -407,7 +407,7 @@ const DocumentsPage: React.FC = () => {
                       className="stat-card group hover:bg-theme-surface-hover transition-all"
                     >
                       <div className="flex items-start space-x-3">
-                        <File className="w-8 h-8 text-amber-400 shrink-0" />
+                        <File className="w-8 h-8 text-amber-700 dark:text-amber-400 shrink-0" />
                         <div className="flex-1 min-w-0">
                           <h3 className="text-theme-text-primary font-semibold truncate">{doc.name}</h3>
                           {doc.description && (
@@ -430,7 +430,7 @@ const DocumentsPage: React.FC = () => {
                               e.stopPropagation();
                               setDeleteConfirm(doc.id);
                             }}
-                            className="opacity-0 group-hover:opacity-100 text-theme-text-muted hover:text-red-400 transition-all p-1"
+                            className="opacity-0 group-hover:opacity-100 text-theme-text-muted hover:text-red-800 dark:hover:text-red-400 transition-all p-1"
                             title="Delete document"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -459,7 +459,7 @@ const DocumentsPage: React.FC = () => {
                         <tr key={doc.id} className="border-b border-theme-surface-border hover:bg-theme-surface-hover transition-colors">
                           <td className="px-4 py-3">
                             <div className="flex items-center space-x-2">
-                              <File className="w-4 h-4 text-amber-400 shrink-0" />
+                              <File className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0" />
                               <div>
                                 <p className="text-theme-text-primary text-sm font-medium truncate max-w-xs">{doc.name}</p>
                                 {doc.description && (
@@ -477,7 +477,7 @@ const DocumentsPage: React.FC = () => {
                             <td className="px-4 py-3 text-right">
                               <button
                                 onClick={() => setDeleteConfirm(doc.id)}
-                                className="text-theme-text-muted hover:text-red-400 transition-colors p-1"
+                                className="text-theme-text-muted hover:text-red-800 dark:hover:text-red-400 transition-colors p-1"
                                 title="Delete document"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -563,7 +563,7 @@ const DocumentsPage: React.FC = () => {
                         Choose File
                       </label>
                       {uploadForm.file && (
-                        <p className="mt-2 text-amber-400 text-sm">{uploadForm.file.name}</p>
+                        <p className="mt-2 text-amber-700 dark:text-amber-400 text-sm">{uploadForm.file.name}</p>
                       )}
                     </div>
 
@@ -709,7 +709,7 @@ const DocumentsPage: React.FC = () => {
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex items-start space-x-3">
                     <div className="bg-red-500/10 rounded-full p-2">
-                      <AlertCircle className="w-6 h-6 text-red-400" />
+                      <AlertCircle className="w-6 h-6 text-red-700 dark:text-red-400" />
                     </div>
                     <div>
                       <h3 className="text-lg font-medium text-theme-text-primary">Delete Document</h3>

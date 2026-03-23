@@ -576,8 +576,8 @@ export const GrantDetailPage: React.FC = () => {
       {error && (
         <div className="mx-auto max-w-7xl px-6 pt-4">
           <div className="flex items-center gap-3 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3">
-            <AlertTriangle className="h-5 w-5 text-red-400" />
-            <span className="text-sm text-red-300">{error}</span>
+            <AlertTriangle className="h-5 w-5 text-red-700 dark:text-red-400" />
+            <span className="text-sm text-red-700 dark:text-red-300">{error}</span>
           </div>
         </div>
       )}

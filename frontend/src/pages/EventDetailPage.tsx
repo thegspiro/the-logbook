@@ -605,10 +605,10 @@ export const EventDetailPage: React.FC = () => {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
-          <p className="text-red-300">{error || 'Event not found'}</p>
+          <p className="text-red-700 dark:text-red-300">{error || 'Event not found'}</p>
           <button
             onClick={() => navigate('/events')}
-            className="mt-2 text-sm text-red-400 hover:text-red-300 underline"
+            className="mt-2 text-sm text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 underline"
           >
             Back to Events
           </button>
@@ -781,7 +781,7 @@ export const EventDetailPage: React.FC = () => {
               )}
               <button
                 onClick={() => navigate(`/events/${eventId}/qr-code`)}
-                className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-xs text-sm font-medium text-blue-400 bg-theme-surface hover:bg-blue-500/20"
+                className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-xs text-sm font-medium text-blue-700 dark:text-blue-400 bg-theme-surface hover:bg-blue-500/20"
               >
                 <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
@@ -1155,7 +1155,7 @@ export const EventDetailPage: React.FC = () => {
                 {canRSVP && (
                   <button
                     onClick={() => setShowRSVPModal(true)}
-                    className="text-sm text-red-400 hover:text-red-300"
+                    className="text-sm text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
                   >
                     Change RSVP
                   </button>
@@ -1226,7 +1226,7 @@ export const EventDetailPage: React.FC = () => {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-theme-text-secondary">Not Going</span>
-                  <span className="text-sm font-medium text-red-400">{stats.not_going_count}</span>
+                  <span className="text-sm font-medium text-red-700 dark:text-red-400">{stats.not_going_count}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-theme-text-secondary">Maybe</span>
@@ -1356,7 +1356,7 @@ export const EventDetailPage: React.FC = () => {
 
                   {submitError && (
                     <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert">
-                      <p className="text-sm text-red-300">{submitError}</p>
+                      <p className="text-sm text-red-700 dark:text-red-300">{submitError}</p>
                     </div>
                   )}
 
@@ -1513,7 +1513,7 @@ export const EventDetailPage: React.FC = () => {
 
                   {submitError && (
                     <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert">
-                      <p className="text-sm text-red-300">{submitError}</p>
+                      <p className="text-sm text-red-700 dark:text-red-300">{submitError}</p>
                     </div>
                   )}
 
@@ -1607,7 +1607,7 @@ export const EventDetailPage: React.FC = () => {
 
                   {submitError && (
                     <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert">
-                      <p className="text-sm text-red-300">{submitError}</p>
+                      <p className="text-sm text-red-700 dark:text-red-300">{submitError}</p>
                     </div>
                   )}
 
@@ -1882,7 +1882,7 @@ export const EventDetailPage: React.FC = () => {
 
                   {submitError && (
                     <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert">
-                      <p className="text-sm text-red-300">{submitError}</p>
+                      <p className="text-sm text-red-700 dark:text-red-300">{submitError}</p>
                     </div>
                   )}
 
@@ -1981,7 +1981,7 @@ export const EventDetailPage: React.FC = () => {
 
                   {submitError && (
                     <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert">
-                      <p className="text-sm text-red-300">{submitError}</p>
+                      <p className="text-sm text-red-700 dark:text-red-300">{submitError}</p>
                     </div>
                   )}
 

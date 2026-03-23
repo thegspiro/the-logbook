@@ -175,7 +175,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
       <div className="min-h-screen">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4">
-            <p className="text-sm text-red-400">{error}</p>
+            <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
           </div>
           <button
             onClick={() => navigate(-1)}
@@ -241,7 +241,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
         {/* Error banner (non-fatal, when user is loaded but entries failed) */}
         {error && (
           <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 mb-6">
-            <p className="text-sm text-red-400">{error}</p>
+            <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
           </div>
         )}
 
@@ -263,7 +263,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
               {eventTypeFilter !== 'all' && (
                 <button
                   onClick={() => setEventTypeFilter('all')}
-                  className="mt-4 text-sm text-blue-400 hover:text-blue-300"
+                  className="mt-4 text-sm text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                 >
                   Clear filter
                 </button>
@@ -312,10 +312,10 @@ export const MemberAuditHistoryPage: React.FC = () => {
                             <span
                               className={`inline-flex items-center gap-1 text-xs font-medium ${
                                 entry.severity === 'critical'
-                                  ? 'text-red-400'
+                                  ? 'text-red-700 dark:text-red-400'
                                   : entry.severity === 'warning'
-                                  ? 'text-yellow-400'
-                                  : 'text-blue-400'
+                                  ? 'text-yellow-700 dark:text-yellow-400'
+                                  : 'text-blue-700 dark:text-blue-400'
                               }`}
                             >
                               <span

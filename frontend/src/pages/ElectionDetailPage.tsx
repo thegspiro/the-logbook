@@ -526,7 +526,7 @@ export const ElectionDetailPage: React.FC = () => {
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
-            <p className="text-sm text-red-300">{error || 'Election not found'}</p>
+            <p className="text-sm text-red-700 dark:text-red-300">{error || 'Election not found'}</p>
           </div>
         </div>
       </div>
@@ -1101,7 +1101,7 @@ export const ElectionDetailPage: React.FC = () => {
       {/* Message if results not available */}
       {!resultsAvailable && (
         <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
-          <p className="text-sm text-blue-300">
+          <p className="text-sm text-blue-700 dark:text-blue-300">
             Results will be available when the election is closed
             {canManage && ' or when you enable "Show Results to Voters"'}.
           </p>
@@ -1161,7 +1161,7 @@ export const ElectionDetailPage: React.FC = () => {
                   }`}>
                     <div className="flex items-center gap-2 mb-2">
                       <span className={`text-lg font-bold ${
-                        integrityResult.integrity_status === 'PASS' ? 'text-green-300' : 'text-red-300'
+                        integrityResult.integrity_status === 'PASS' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
                       }`}>
                         {integrityResult.integrity_status}
                       </span>
@@ -1176,15 +1176,15 @@ export const ElectionDetailPage: React.FC = () => {
                       </div>
                       <div>
                         <span className="text-theme-text-muted">Valid:</span>{' '}
-                        <span className="font-medium text-green-300">{integrityResult.valid_signatures}</span>
+                        <span className="font-medium text-green-700 dark:text-green-300">{integrityResult.valid_signatures}</span>
                       </div>
                       <div>
                         <span className="text-theme-text-muted">Unsigned:</span>{' '}
-                        <span className="font-medium text-yellow-300">{integrityResult.unsigned_votes}</span>
+                        <span className="font-medium text-yellow-700 dark:text-yellow-300">{integrityResult.unsigned_votes}</span>
                       </div>
                       <div>
                         <span className="text-theme-text-muted">Tampered:</span>{' '}
-                        <span className={`font-medium ${integrityResult.tampered_votes > 0 ? 'text-red-300' : 'text-green-300'}`}>
+                        <span className={`font-medium ${integrityResult.tampered_votes > 0 ? 'text-red-700 dark:text-red-300' : 'text-green-700 dark:text-green-300'}`}>
                           {integrityResult.tampered_votes}
                         </span>
                       </div>
@@ -1193,20 +1193,20 @@ export const ElectionDetailPage: React.FC = () => {
                     <div className="mt-3 flex items-center gap-2 text-sm">
                       <span className="text-theme-text-muted">Vote Chain:</span>
                       {integrityResult.chain_verified ? (
-                        <span className="font-medium text-green-300">Verified</span>
+                        <span className="font-medium text-green-700 dark:text-green-300">Verified</span>
                       ) : (
-                        <span className="font-medium text-red-300">
+                        <span className="font-medium text-red-700 dark:text-red-300">
                           Broken{integrityResult.chain_break_at ? ` at vote ${integrityResult.chain_break_at}` : ''}
                         </span>
                       )}
                     </div>
                     {integrityResult.tampered_vote_ids.length > 0 && (
                       <div className="mt-3 p-3 bg-red-500/20 rounded-sm">
-                        <p className="text-sm font-semibold text-red-300 mb-1">Tampered Vote IDs:</p>
+                        <p className="text-sm font-semibold text-red-700 dark:text-red-300 mb-1">Tampered Vote IDs:</p>
                         <div className="space-y-1">
                           {integrityResult.tampered_vote_ids.map(id => (
                             <div key={id} className="flex items-center gap-2">
-                              <code className="text-xs text-red-300 bg-red-500/10 px-2 py-0.5 rounded-sm">{id}</code>
+                              <code className="text-xs text-red-700 dark:text-red-300 bg-red-500/10 px-2 py-0.5 rounded-sm">{id}</code>
                               <button
                                 onClick={() => setVoidVoteId(id)}
                                 className="text-xs text-red-600 dark:text-red-400 underline hover:text-red-800 dark:hover:text-red-300"
@@ -1298,14 +1298,14 @@ export const ElectionDetailPage: React.FC = () => {
                   {/* Anomaly Detection */}
                   {forensicsReport.anomaly_detection && Object.keys(forensicsReport.anomaly_detection.suspicious_ips || {}).length > 0 && (
                     <div className="border-t border-theme-surface-border pt-4">
-                      <h3 className="text-md font-semibold text-red-300 mb-2">
+                      <h3 className="text-md font-semibold text-red-700 dark:text-red-300 mb-2">
                         Suspicious IP Addresses
                       </h3>
                       <div className="bg-red-500/10 border border-red-500/30 rounded-sm p-3">
                         {Object.entries(forensicsReport.anomaly_detection.suspicious_ips).map(([ip, count]) => (
                           <div key={ip} className="flex justify-between text-sm py-1">
-                            <code className="text-red-300">{ip}</code>
-                            <span className="font-semibold text-red-300">{count} votes</span>
+                            <code className="text-red-700 dark:text-red-300">{ip}</code>
+                            <span className="font-semibold text-red-700 dark:text-red-300">{count} votes</span>
                           </div>
                         ))}
                       </div>
@@ -1443,7 +1443,7 @@ export const ElectionDetailPage: React.FC = () => {
             <div className="px-6 py-4">
               {election.email_sent && (
                 <div className="mb-4 bg-yellow-500/10 border border-yellow-500/30 rounded-sm p-3">
-                  <p className="text-sm text-yellow-300">
+                  <p className="text-sm text-yellow-700 dark:text-yellow-300">
                     Ballot emails were previously sent{election.email_sent_at ? ` on ${formatDateTime(election.email_sent_at, tz)}` : ''}.
                     Sending again will generate new voting tokens for all eligible voters.
                   </p>
@@ -1452,7 +1452,7 @@ export const ElectionDetailPage: React.FC = () => {
 
               {sendEmailError && (
                 <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert">
-                  <p className="text-sm text-red-300">{sendEmailError}</p>
+                  <p className="text-sm text-red-700 dark:text-red-300">{sendEmailError}</p>
                 </div>
               )}
 
@@ -1553,7 +1553,7 @@ export const ElectionDetailPage: React.FC = () => {
 
             <div className="px-6 py-4">
               <div className="mb-4 bg-amber-500/10 border border-amber-500/30 rounded-sm p-3">
-                <p className="text-sm text-amber-300">
+                <p className="text-sm text-amber-700 dark:text-amber-300">
                   {nonVoterCount} eligible voter{nonVoterCount !== 1 ? 's have' : ' has'} not yet voted.
                   This will resend ballot emails with new voting links to only those members.
                 </p>
@@ -1561,7 +1561,7 @@ export const ElectionDetailPage: React.FC = () => {
 
               {remindError && (
                 <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert">
-                  <p className="text-sm text-red-300">{remindError}</p>
+                  <p className="text-sm text-red-700 dark:text-red-300">{remindError}</p>
                 </div>
               )}
 
@@ -1618,7 +1618,7 @@ export const ElectionDetailPage: React.FC = () => {
         >
           <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full">
             <div className={`px-6 py-4 border-b ${isDraft ? 'border-theme-surface-border' : 'border-red-500/30 bg-red-500/10'}`}>
-              <h3 id="delete-election-modal-title" className={`text-lg font-medium ${isDraft ? 'text-theme-text-primary' : 'text-red-300'}`}>
+              <h3 id="delete-election-modal-title" className={`text-lg font-medium ${isDraft ? 'text-theme-text-primary' : 'text-red-700 dark:text-red-300'}`}>
                 {isDraft ? 'Delete Draft Election' : 'DELETE ACTIVE ELECTION'}
               </h3>
             </div>
@@ -1634,10 +1634,10 @@ export const ElectionDetailPage: React.FC = () => {
                       </svg>
                     </div>
                     <div className="ml-3">
-                      <h3 className="text-sm font-bold text-red-300">
+                      <h3 className="text-sm font-bold text-red-700 dark:text-red-300">
                         CRITICAL: This is a destructive, irreversible action
                       </h3>
-                      <div className="mt-2 text-sm text-red-300">
+                      <div className="mt-2 text-sm text-red-700 dark:text-red-300">
                         <p>Deleting this {election.status.toUpperCase()} election will:</p>
                         <ul className="list-disc list-inside mt-1 space-y-1">
                           <li><strong>Permanently destroy</strong> the election and all associated data</li>
@@ -1661,7 +1661,7 @@ export const ElectionDetailPage: React.FC = () => {
 
               {deleteError && (
                 <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert">
-                  <p className="text-sm text-red-300">{deleteError}</p>
+                  <p className="text-sm text-red-700 dark:text-red-300">{deleteError}</p>
                 </div>
               )}
 
@@ -1672,7 +1672,7 @@ export const ElectionDetailPage: React.FC = () => {
                     <label className="block text-sm font-medium text-theme-text-secondary">
                       Current Status
                     </label>
-                    <div className="mt-1 text-sm font-semibold text-red-400">
+                    <div className="mt-1 text-sm font-semibold text-red-700 dark:text-red-400">
                       {election.status.toUpperCase()}
                     </div>
                   </div>
@@ -1691,7 +1691,7 @@ export const ElectionDetailPage: React.FC = () => {
                       required
                       aria-required="true"
                     />
-                    <p className="mt-1 text-xs text-red-400">
+                    <p className="mt-1 text-xs text-red-700 dark:text-red-400">
                       This reason will be emailed to ALL leadership members and permanently logged in the audit trail.
                     </p>
                   </div>
@@ -1750,7 +1750,7 @@ export const ElectionDetailPage: React.FC = () => {
             <div className="px-6 py-4">
               {extendError && (
                 <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert">
-                  <p className="text-sm text-red-300">{extendError}</p>
+                  <p className="text-sm text-red-700 dark:text-red-300">{extendError}</p>
                 </div>
               )}
 
@@ -2094,15 +2094,15 @@ export const ElectionDetailPage: React.FC = () => {
               <div className="bg-orange-500/10 border-l-4 border-orange-500 p-4 mb-4">
                 <div className="flex">
                   <div className="shrink-0">
-                    <svg className="h-5 w-5 text-orange-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <svg className="h-5 w-5 text-orange-700 dark:text-orange-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                       <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                     </svg>
                   </div>
                   <div className="ml-3">
-                    <h3 className="text-sm font-medium text-orange-300">
+                    <h3 className="text-sm font-medium text-orange-700 dark:text-orange-300">
                       This action requires careful consideration
                     </h3>
-                    <div className="mt-2 text-sm text-orange-300">
+                    <div className="mt-2 text-sm text-orange-700 dark:text-orange-300">
                       <p>Rolling back this election will:</p>
                       <ul className="list-disc list-inside mt-1 space-y-1">
                         <li>Change the election status from <strong>{election.status.toUpperCase()}</strong> to <strong>{election.status === ElectionStatus.CLOSED ? 'OPEN' : 'DRAFT'}</strong></li>
@@ -2117,7 +2117,7 @@ export const ElectionDetailPage: React.FC = () => {
 
               {rollbackError && (
                 <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert">
-                  <p className="text-sm text-red-300">{rollbackError}</p>
+                  <p className="text-sm text-red-700 dark:text-red-300">{rollbackError}</p>
                 </div>
               )}
 

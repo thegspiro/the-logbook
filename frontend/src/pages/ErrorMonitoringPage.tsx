@@ -111,13 +111,13 @@ const ErrorMonitoringPage: React.FC = () => {
         <div className="flex gap-2">
           <button
             onClick={() => { void exportErrors(); }}
-            className="px-4 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-blue-400 bg-theme-surface hover:bg-theme-surface-hover"
+            className="px-4 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-blue-700 dark:text-blue-400 bg-theme-surface hover:bg-theme-surface-hover"
           >
             Export Errors
           </button>
           <button
             onClick={() => { void clearAllErrors(); }}
-            className="px-4 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-red-400 bg-theme-surface hover:bg-theme-surface-hover"
+            className="px-4 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-red-700 dark:text-red-400 bg-theme-surface hover:bg-theme-surface-hover"
           >
             Clear All
           </button>
@@ -230,8 +230,8 @@ const ErrorMonitoringPage: React.FC = () => {
               >
                 <div className="flex justify-between items-start">
                   <div>
-                    <p className="text-sm font-medium text-red-300">{error.errorType}</p>
-                    <p className="text-sm text-red-300 mt-1">{error.userMessage}</p>
+                    <p className="text-sm font-medium text-red-700 dark:text-red-300">{error.errorType}</p>
+                    <p className="text-sm text-red-700 dark:text-red-300 mt-1">{error.userMessage}</p>
                   </div>
                   <span className="text-xs text-red-600">
                     {formatTime(error.timestamp, tz)}

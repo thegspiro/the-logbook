@@ -36,7 +36,7 @@ export const InventoryStatusRenderer: React.FC<Props> = ({ data }) => {
       align: 'center' as const,
       render: (v: unknown) =>
         v === true ? (
-          <span className="rounded-sm bg-red-500/20 px-2 py-0.5 text-xs text-red-300">Low</span>
+          <span className="rounded-sm bg-red-500/20 px-2 py-0.5 text-xs text-red-700 dark:text-red-300">Low</span>
         ) : (
           <span className="text-theme-text-muted text-xs">OK</span>
         ),

@@ -87,7 +87,7 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
                       {rsvp.status === RSVPStatusEnum.GOING && !rsvp.checked_in && (
                         <button
                           onClick={() => { onCheckIn(rsvp.user_id); }}
-                          className="text-xs text-red-400 hover:text-red-300"
+                          className="text-xs text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
                         >
                           Check In
                         </button>
@@ -122,14 +122,14 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
                   <div className="mt-2 flex items-center gap-3">
                     <button
                       onClick={() => onOpenOverrideModal(rsvp)}
-                      className="text-xs text-blue-400 hover:text-blue-300"
+                      className="text-xs text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                     >
                       Edit Times
                     </button>
                     {!isRemoving ? (
                       <button
                         onClick={() => onSetRemoveConfirmUserId(rsvp.user_id)}
-                        className="text-xs text-red-400 hover:text-red-300"
+                        className="text-xs text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
                       >
                         Remove
                       </button>
@@ -138,7 +138,7 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
                         <span className="text-xs text-theme-text-muted">Remove?</span>
                         <button
                           onClick={() => { onRemoveAttendee(rsvp.user_id); }}
-                          className="text-xs font-medium text-red-400 hover:text-red-300"
+                          className="text-xs font-medium text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
                         >
                           Yes
                         </button>

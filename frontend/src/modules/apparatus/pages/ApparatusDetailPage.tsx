@@ -173,10 +173,10 @@ export const ApparatusDetailPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-6 pt-4">
           <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-400" />
-              <span className="text-red-300">{error}</span>
+              <AlertTriangle className="w-5 h-5 text-red-700 dark:text-red-400" />
+              <span className="text-red-700 dark:text-red-300">{error}</span>
             </div>
-            <button onClick={clearError} className="text-red-400 hover:text-red-300">
+            <button onClick={clearError} className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300">
               Dismiss
             </button>
           </div>

@@ -26,15 +26,15 @@ function getStatusBadge(waiver: { start_date: string; end_date: string | null; a
   }
   const today = new Date().toISOString().split('T')[0] ?? '';
   if (waiver.start_date > today) {
-    return { label: 'Future', color: 'bg-blue-500/20 text-blue-400' };
+    return { label: 'Future', color: 'bg-blue-500/20 text-blue-700 dark:text-blue-400' };
   }
   if (!waiver.end_date) {
-    return { label: 'Permanent', color: 'bg-purple-500/20 text-purple-400' };
+    return { label: 'Permanent', color: 'bg-purple-500/20 text-purple-700 dark:text-purple-400' };
   }
   if (waiver.end_date < today) {
-    return { label: 'Expired', color: 'bg-yellow-500/20 text-yellow-400' };
+    return { label: 'Expired', color: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400' };
   }
-  return { label: 'Active', color: 'bg-green-500/20 text-green-400' };
+  return { label: 'Active', color: 'bg-green-500/20 text-green-700 dark:text-green-400' };
 }
 
 const WAIVER_TYPE_LABELS: Record<string, string> = {
@@ -181,7 +181,7 @@ const TrainingWaiversTab: React.FC = () => {
 
   if (error) {
     return (
-      <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+      <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-700 dark:text-red-400 text-sm">
         {error}
       </div>
     );
@@ -193,15 +193,15 @@ const TrainingWaiversTab: React.FC = () => {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-4">
           <p className="text-xs text-theme-text-muted uppercase tracking-wider">Active</p>
-          <p className="text-2xl font-bold text-green-400">{stats.active}</p>
+          <p className="text-2xl font-bold text-green-700 dark:text-green-400">{stats.active}</p>
         </div>
         <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-4">
           <p className="text-xs text-theme-text-muted uppercase tracking-wider">Future</p>
-          <p className="text-2xl font-bold text-blue-400">{stats.future}</p>
+          <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{stats.future}</p>
         </div>
         <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-4">
           <p className="text-xs text-theme-text-muted uppercase tracking-wider">Expired</p>
-          <p className="text-2xl font-bold text-yellow-400">{stats.expired}</p>
+          <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-400">{stats.expired}</p>
         </div>
         <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-4">
           <p className="text-xs text-theme-text-muted uppercase tracking-wider">Total</p>
@@ -263,7 +263,7 @@ const TrainingWaiversTab: React.FC = () => {
                 return (
                   <tr key={waiver.id} className="hover:bg-theme-surface-hover">
                     <td className="px-4 py-3">
-                      <Link to={`/members/${waiver.user_id}`} className="text-sm font-medium text-blue-400 hover:text-blue-300">
+                      <Link to={`/members/${waiver.user_id}`} className="text-sm font-medium text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
                         {waiver.member_name}
                       </Link>
                       {waiver.member_rank && (
@@ -294,7 +294,7 @@ const TrainingWaiversTab: React.FC = () => {
                     <td className="px-4 py-3">
                       <span className={`text-xs px-2 py-0.5 rounded ${
                         waiver.source === 'leave_linked'
-                          ? 'bg-purple-500/20 text-purple-400'
+                          ? 'bg-purple-500/20 text-purple-700 dark:text-purple-400'
                           : 'bg-theme-surface-hover text-theme-text-secondary'
                       }`}>
                         {waiver.source === 'leave_linked' ? 'Auto (LOA)' : 'Manual'}
@@ -312,7 +312,7 @@ const TrainingWaiversTab: React.FC = () => {
       <div className="mt-4 text-center">
         <Link
           to="/members/admin/waivers"
-          className="text-sm text-blue-400 hover:text-blue-300"
+          className="text-sm text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
         >
           Open full Waiver Management page (includes meetings & shifts)
         </Link>

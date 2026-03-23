@@ -152,17 +152,17 @@ export const MemberScanPage: React.FC = () => {
       {/* Status Messages */}
       {lookingUp && (
         <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 text-center mb-4">
-          <p className="text-blue-400 text-sm">Looking up member...</p>
+          <p className="text-blue-700 dark:text-blue-400 text-sm">Looking up member...</p>
         </div>
       )}
 
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-start gap-3 mb-4">
-          <AlertCircle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+          <AlertCircle className="h-5 w-5 text-red-700 dark:text-red-400 shrink-0 mt-0.5" />
           <div>
-            <p className="text-red-400 text-sm">{error}</p>
+            <p className="text-red-700 dark:text-red-400 text-sm">{error}</p>
             {lastScan && (
-              <p className="text-red-400/70 text-xs mt-1">
+              <p className="text-red-700 dark:text-red-400/70 text-xs mt-1">
                 Scanned: {lastScan}
               </p>
             )}

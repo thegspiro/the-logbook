@@ -70,8 +70,8 @@ const ActionItemsPage: React.FC = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const diff = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    if (diff < 0) return 'text-red-400 font-semibold';
-    if (diff <= 3) return 'text-orange-400';
+    if (diff < 0) return 'text-red-700 dark:text-red-400 font-semibold';
+    if (diff <= 3) return 'text-orange-700 dark:text-orange-400';
     return 'text-theme-text-secondary';
   };
 
@@ -86,7 +86,7 @@ const ActionItemsPage: React.FC = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-theme-text-primary flex items-center gap-2">
-          <ClipboardList className="h-6 w-6 text-red-400" />
+          <ClipboardList className="h-6 w-6 text-red-700 dark:text-red-400" />
           Action Items
         </h1>
         <p className="mt-1 text-sm text-theme-text-muted">
@@ -143,7 +143,7 @@ const ActionItemsPage: React.FC = () => {
           <Loader2 className="h-8 w-8 text-theme-text-muted animate-spin" />
         </div>
       ) : error ? (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-red-400">
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-red-700 dark:text-red-400">
           {error}
         </div>
       ) : items.length === 0 ? (

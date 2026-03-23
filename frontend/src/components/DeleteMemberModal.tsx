@@ -144,13 +144,13 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
       {impactError && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
-            <p className="text-sm text-red-400">{impactError}</p>
+            <AlertTriangle className="h-5 w-5 text-red-700 dark:text-red-400 shrink-0" />
+            <p className="text-sm text-red-700 dark:text-red-400">{impactError}</p>
           </div>
           <button
             type="button"
             onClick={() => { void fetchImpact(member.id); }}
-            className="mt-2 text-sm text-red-400 underline hover:text-red-300"
+            className="mt-2 text-sm text-red-700 dark:text-red-400 underline hover:text-red-800 dark:hover:text-red-300"
           >
             Retry
           </button>
@@ -230,12 +230,12 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
               {/* Danger Warning */}
               <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
                 <div className="flex items-start gap-2">
-                  <ShieldAlert className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+                  <ShieldAlert className="h-5 w-5 text-red-700 dark:text-red-400 shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm font-medium text-red-400">
+                    <p className="text-sm font-medium text-red-700 dark:text-red-400">
                       This action is PERMANENT and cannot be undone.
                     </p>
-                    <p className="text-sm text-red-400/80 mt-1">
+                    <p className="text-sm text-red-700 dark:text-red-400/80 mt-1">
                       All records including training history, inventory assignments, and documents
                       will be permanently deleted.
                     </p>
@@ -269,7 +269,7 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
                   </li>
                   <li className="flex justify-between border-t border-theme-surface-border pt-1 mt-1">
                     <span className="font-medium">Total</span>
-                    <span className="font-medium text-red-400">
+                    <span className="font-medium text-red-700 dark:text-red-400">
                       {impact.total_records}
                     </span>
                   </li>

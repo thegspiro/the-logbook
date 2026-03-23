@@ -61,14 +61,14 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({
               )}
               <div className="flex gap-2 mt-2">
                 {item.isRequired && (
-                  <span className="px-2 py-0.5 bg-red-500/10 text-red-400 text-xs rounded-sm">Required</span>
+                  <span className="px-2 py-0.5 bg-red-500/10 text-red-700 dark:text-red-400 text-xs rounded-sm">Required</span>
                 )}
                 {item.isMounted && (
-                  <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 text-xs rounded-sm">Mounted</span>
+                  <span className="px-2 py-0.5 bg-blue-500/10 text-blue-700 dark:text-blue-400 text-xs rounded-sm">Mounted</span>
                 )}
                 <span
                   className={`px-2 py-0.5 text-xs rounded ${
-                    item.isPresent ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400'
+                    item.isPresent ? 'bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
                   }`}
                 >
                   {item.isPresent ? 'Present' : 'Missing'}

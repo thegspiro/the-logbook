@@ -309,7 +309,7 @@ export const ShiftReportsTab: React.FC = () => {
       return (
         <div className="flex items-center gap-0.5">
           {[1, 2, 3, 4, 5].map(i => (
-            <Star key={i} className={`w-3.5 h-3.5 ${i <= rating ? 'fill-amber-400 text-amber-400' : 'text-theme-text-muted'}`} />
+            <Star key={i} className={`w-3.5 h-3.5 ${i <= rating ? 'fill-amber-400 text-amber-700 dark:text-amber-400' : 'text-theme-text-muted'}`} />
           ))}
         </div>
       );
@@ -345,8 +345,8 @@ export const ShiftReportsTab: React.FC = () => {
               >
                 <Star className={`w-6 h-6 ${
                   i <= (form.performance_rating || 0)
-                    ? 'fill-amber-400 text-amber-400'
-                    : 'text-theme-text-muted hover:text-amber-300'
+                    ? 'fill-amber-400 text-amber-700 dark:text-amber-400'
+                    : 'text-theme-text-muted hover:text-amber-800 dark:hover:text-amber-300'
                 }`} />
               </button>
             ))}

@@ -640,7 +640,7 @@ const Dashboard: React.FC = () => {
                       </p>
                     )}
                   </div>
-                  <Users className="w-8 h-8 text-blue-400" aria-hidden="true" />
+                  <Users className="w-8 h-8 text-blue-700 dark:text-blue-400" aria-hidden="true" />
                 </div>
                 <p className="text-theme-text-muted text-xs mt-2">
                   {adminSummary?.total_members ?? 0} total
@@ -661,7 +661,7 @@ const Dashboard: React.FC = () => {
                       </p>
                     )}
                   </div>
-                  <GraduationCap className="w-8 h-8 text-green-400" aria-hidden="true" />
+                  <GraduationCap className="w-8 h-8 text-green-700 dark:text-green-400" aria-hidden="true" />
                 </div>
                 <p className="text-theme-text-muted text-xs mt-2">
                   {adminSummary?.recent_training_hours ?? 0} hrs last 30 days
@@ -682,7 +682,7 @@ const Dashboard: React.FC = () => {
                       </p>
                     )}
                   </div>
-                  <Calendar className="w-8 h-8 text-purple-400" aria-hidden="true" />
+                  <Calendar className="w-8 h-8 text-purple-700 dark:text-purple-400" aria-hidden="true" />
                 </div>
                 <p className="text-theme-text-muted text-xs mt-2">Scheduled</p>
               </div>
@@ -711,9 +711,9 @@ const Dashboard: React.FC = () => {
                     )}
                   </div>
                   {(adminSummary?.overdue_action_items ?? 0) > 0 ? (
-                    <AlertTriangle className="w-8 h-8 text-red-400" aria-hidden="true" />
+                    <AlertTriangle className="w-8 h-8 text-red-700 dark:text-red-400" aria-hidden="true" />
                   ) : (
-                    <ClipboardList className="w-8 h-8 text-yellow-400" aria-hidden="true" />
+                    <ClipboardList className="w-8 h-8 text-yellow-700 dark:text-yellow-400" aria-hidden="true" />
                   )}
                 </div>
                 <p className="text-theme-text-muted text-xs mt-2">
@@ -746,7 +746,7 @@ const Dashboard: React.FC = () => {
                       </p>
                     )}
                   </div>
-                  <ClipboardCheck className="w-8 h-8 text-indigo-400" aria-hidden="true" />
+                  <ClipboardCheck className="w-8 h-8 text-indigo-700 dark:text-indigo-400" aria-hidden="true" />
                 </div>
                 <p className="text-theme-text-muted text-xs mt-2">
                   {(adminSummary?.pending_admin_hours_approvals ?? 0) > 0
@@ -778,7 +778,7 @@ const Dashboard: React.FC = () => {
                   </p>
                 )}
               </div>
-              <Clock className="w-8 h-8 text-blue-400" aria-hidden="true" />
+              <Clock className="w-8 h-8 text-blue-700 dark:text-blue-400" aria-hidden="true" />
             </div>
             <p className="text-theme-text-muted text-xs mt-2">This month</p>
           </div>
@@ -797,7 +797,7 @@ const Dashboard: React.FC = () => {
                   </p>
                 )}
               </div>
-              <BookOpen className="w-8 h-8 text-green-400" aria-hidden="true" />
+              <BookOpen className="w-8 h-8 text-green-700 dark:text-green-400" aria-hidden="true" />
             </div>
             <p className="text-theme-text-muted text-xs mt-2">Training hours</p>
           </div>
@@ -816,7 +816,7 @@ const Dashboard: React.FC = () => {
                   </p>
                 )}
               </div>
-              <Shield className="w-8 h-8 text-yellow-400" aria-hidden="true" />
+              <Shield className="w-8 h-8 text-yellow-700 dark:text-yellow-400" aria-hidden="true" />
             </div>
             <p className="text-theme-text-muted text-xs mt-2">Standby hours</p>
           </div>
@@ -838,13 +838,13 @@ const Dashboard: React.FC = () => {
                 {loadingHours ? (
                   <div className="mt-1 h-8 w-14 bg-theme-surface-hover animate-pulse rounded-sm"></div>
                 ) : (
-                  <p className="text-purple-400 text-2xl font-bold mt-1">
+                  <p className="text-purple-700 dark:text-purple-400 text-2xl font-bold mt-1">
                     {hours.administrative}
                   </p>
                 )}
               </div>
               <Briefcase
-                className="w-8 h-8 text-purple-400"
+                className="w-8 h-8 text-purple-700 dark:text-purple-400"
                 aria-hidden="true"
               />
             </div>
@@ -857,7 +857,7 @@ const Dashboard: React.FC = () => {
           <div className="mb-8">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-                <Megaphone className="w-5 h-5 text-amber-400" aria-hidden="true" />
+                <Megaphone className="w-5 h-5 text-amber-700 dark:text-amber-400" aria-hidden="true" />
                 <span>Department Messages</span>
                 {deptMsgUnread > 0 && (
                   <span className="bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full" aria-label={`${deptMsgUnread} new messages`}>
@@ -899,7 +899,7 @@ const Dashboard: React.FC = () => {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                           {msg.is_pinned && (
-                            <Pin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            <Pin className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
                           )}
                           <h4 className="text-theme-text-primary font-semibold text-sm truncate">
                             {msg.title}
@@ -952,7 +952,7 @@ const Dashboard: React.FC = () => {
                                   e.stopPropagation();
                                   void clearPersistentMessage(msg.id);
                                 }}
-                                className="text-xs px-3 py-2 text-theme-text-muted hover:text-red-400 hover:bg-red-500/10 rounded flex items-center gap-1 transition-colors"
+                                className="text-xs px-3 py-2 text-theme-text-muted hover:text-red-800 dark:hover:text-red-400 hover:bg-red-500/10 rounded flex items-center gap-1 transition-colors"
                                 title="Clear persistent message"
                               >
                                 <X className="w-3 h-3" />
@@ -972,7 +972,7 @@ const Dashboard: React.FC = () => {
                                 </button>
                               )}
                             {msg.is_acknowledged && (
-                              <span className="text-xs text-green-400 flex items-center gap-1">
+                              <span className="text-xs text-green-700 dark:text-green-400 flex items-center gap-1">
                                 <CheckCircle2 className="w-3 h-3" /> Acknowledged
                               </span>
                             )}
@@ -992,7 +992,7 @@ const Dashboard: React.FC = () => {
           <div className="card p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-                <Bell className="w-5 h-5 text-red-400" aria-hidden="true" />
+                <Bell className="w-5 h-5 text-red-700 dark:text-red-400" aria-hidden="true" />
                 <span>Notifications</span>
                 {unreadCount > 0 && (
                   <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full" aria-label={`${unreadCount} unread`}>
@@ -1013,7 +1013,7 @@ const Dashboard: React.FC = () => {
                 )}
                 <button
                   onClick={() => navigate("/notifications")}
-                  className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1 py-2 pl-2"
+                  className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm flex items-center space-x-1 py-2 pl-2"
                 >
                   <span>View All</span>
                   <ChevronRight className="w-4 h-4" />
@@ -1091,12 +1091,12 @@ const Dashboard: React.FC = () => {
           <div className="card p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-                <Calendar className="w-5 h-5 text-blue-400" aria-hidden="true" />
+                <Calendar className="w-5 h-5 text-blue-700 dark:text-blue-400" aria-hidden="true" />
                 <span>My Upcoming Shifts</span>
               </h3>
               <button
                 onClick={() => navigate("/scheduling")}
-                className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1 py-2 pl-2"
+                className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm flex items-center space-x-1 py-2 pl-2"
               >
                 <span>View Schedule</span>
                 <ChevronRight className="w-4 h-4" />
@@ -1125,7 +1125,7 @@ const Dashboard: React.FC = () => {
                   >
                     <div className="flex items-center space-x-3">
                       <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center shrink-0">
-                        <Calendar className="w-5 h-5 text-blue-400" />
+                        <Calendar className="w-5 h-5 text-blue-700 dark:text-blue-400" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-theme-text-primary truncate">
@@ -1158,12 +1158,12 @@ const Dashboard: React.FC = () => {
         <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-              <CalendarPlus className="w-5 h-5 text-green-400" aria-hidden="true" />
+              <CalendarPlus className="w-5 h-5 text-green-700 dark:text-green-400" aria-hidden="true" />
               <span>Open Shifts</span>
             </h3>
             <button
               onClick={() => navigate("/scheduling")}
-              className="text-green-400 hover:text-green-300 text-sm flex items-center space-x-1 py-2 pl-2"
+              className="text-green-700 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300 text-sm flex items-center space-x-1 py-2 pl-2"
             >
               <span>View Schedule</span>
               <ChevronRight className="w-4 h-4" />
@@ -1193,7 +1193,7 @@ const Dashboard: React.FC = () => {
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                     <div className="flex items-center space-x-3 min-w-0">
                       <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center shrink-0">
-                        <CalendarPlus className="w-5 h-5 text-green-400" />
+                        <CalendarPlus className="w-5 h-5 text-green-700 dark:text-green-400" />
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-theme-text-primary truncate">
@@ -1286,12 +1286,12 @@ const Dashboard: React.FC = () => {
         <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-              <Calendar className="w-5 h-5 text-purple-400" aria-hidden="true" />
+              <Calendar className="w-5 h-5 text-purple-700 dark:text-purple-400" aria-hidden="true" />
               <span>Upcoming Events</span>
             </h3>
             <button
               onClick={() => navigate("/events")}
-              className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1 py-2 pl-2"
+              className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm flex items-center space-x-1 py-2 pl-2"
             >
               <span>View All</span>
               <ChevronRight className="w-4 h-4" />
@@ -1321,7 +1321,7 @@ const Dashboard: React.FC = () => {
                 >
                   <div className="flex items-center space-x-3 min-w-0">
                     <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center shrink-0">
-                      <Calendar className="w-5 h-5 text-purple-400" />
+                      <Calendar className="w-5 h-5 text-purple-700 dark:text-purple-400" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
@@ -1408,7 +1408,7 @@ const Dashboard: React.FC = () => {
               </h3>
               <button
                 onClick={() => navigate(`/members/${currentUser.id}/id-card`)}
-                className="text-blue-400 hover:text-blue-300 text-sm flex items-center space-x-1 py-2 pl-2"
+                className="text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm flex items-center space-x-1 py-2 pl-2"
               >
                 <span>View</span>
                 <ChevronRight className="w-4 h-4" />
@@ -1437,7 +1437,7 @@ const Dashboard: React.FC = () => {
               </h3>
               <button
                 onClick={() => navigate("/minutes")}
-                className="text-cyan-400 hover:text-cyan-300 text-sm flex items-center space-x-1 py-2 pl-2"
+                className="text-cyan-700 dark:text-cyan-400 hover:text-cyan-800 dark:hover:text-cyan-300 text-sm flex items-center space-x-1 py-2 pl-2"
               >
                 <span>View All</span>
                 <ChevronRight className="w-4 h-4" />
@@ -1474,7 +1474,7 @@ const Dashboard: React.FC = () => {
               </h3>
               <button
                 onClick={() => navigate("/training/my-training")}
-                className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1 py-2 pl-2"
+                className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm flex items-center space-x-1 py-2 pl-2"
               >
                 <span>View All</span>
                 <ChevronRight className="w-4 h-4" />
@@ -1510,7 +1510,7 @@ const Dashboard: React.FC = () => {
                             {enrollment.program?.name || "Program"}
                           </h4>
                           {upcomingDeadline && (
-                            <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded-sm flex items-center space-x-1 shrink-0">
+                            <span className="px-2 py-0.5 bg-red-500/20 text-red-700 dark:text-red-400 text-xs rounded-sm flex items-center space-x-1 shrink-0">
                               <AlertTriangle className="w-3 h-3" />
                               <span>Deadline Soon</span>
                             </span>
@@ -1544,7 +1544,7 @@ const Dashboard: React.FC = () => {
                     {progress && (
                       <div className="space-y-2">
                         {enrollment.status === "completed" ? (
-                          <div className="flex items-center space-x-2 text-green-400 text-sm">
+                          <div className="flex items-center space-x-2 text-green-700 dark:text-green-400 text-sm">
                             <CheckCircle2 className="w-4 h-4" />
                             <span>Program Completed!</span>
                           </div>
@@ -1559,7 +1559,7 @@ const Dashboard: React.FC = () => {
                                   key={rp.id}
                                   className="flex items-start space-x-2 text-sm"
                                 >
-                                  <TrendingUp className="w-3 h-3 text-blue-400 mt-0.5 shrink-0" />
+                                  <TrendingUp className="w-3 h-3 text-blue-700 dark:text-blue-400 mt-0.5 shrink-0" />
                                   <span className="text-theme-text-secondary">
                                     {rp.requirement?.name || "Requirement"}
                                   </span>
@@ -1578,9 +1578,9 @@ const Dashboard: React.FC = () => {
                             <div
                               className={`text-xs ${
                                 progress.time_remaining_days < 30
-                                  ? "text-red-400"
+                                  ? "text-red-700 dark:text-red-400"
                                   : progress.time_remaining_days < 90
-                                    ? "text-yellow-400"
+                                    ? "text-yellow-700 dark:text-yellow-400"
                                     : "text-theme-text-secondary"
                               }`}
                             >
@@ -1598,7 +1598,7 @@ const Dashboard: React.FC = () => {
               <div className="mt-4 text-center">
                 <button
                   onClick={() => navigate("/training/my-training")}
-                  className="text-red-400 hover:text-red-300 text-sm px-2 py-1"
+                  className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm px-2 py-1"
                 >
                   View {enrollments.length - 3} more program
                   {enrollments.length - 3 !== 1 ? "s" : ""}
@@ -1623,7 +1623,7 @@ const Dashboard: React.FC = () => {
                 </h3>
                 <button
                   onClick={() => navigate("/inventory")}
-                  className="text-emerald-400 hover:text-emerald-300 text-sm flex items-center space-x-1 py-2 pl-2"
+                  className="text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 text-sm flex items-center space-x-1 py-2 pl-2"
                 >
                   <span>View All</span>
                   <ChevronRight className="w-4 h-4" />
@@ -1659,7 +1659,7 @@ const Dashboard: React.FC = () => {
                     {inventorySummary.active_checkouts}
                   </p>
                   {inventorySummary.overdue_checkouts > 0 && (
-                    <p className="text-red-400 text-xs">
+                    <p className="text-red-700 dark:text-red-400 text-xs">
                       {inventorySummary.overdue_checkouts} overdue
                     </p>
                   )}

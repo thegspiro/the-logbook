@@ -31,7 +31,7 @@ export const ComplianceStatusRenderer: React.FC<Props> = ({ data }) => {
       align: 'center' as const,
       render: (v: unknown) => {
         const pct = Number(v ?? 0);
-        const color = pct >= 100 ? 'text-green-400' : pct >= 75 ? 'text-yellow-400' : 'text-red-400';
+        const color = pct >= 100 ? 'text-green-700 dark:text-green-400' : pct >= 75 ? 'text-yellow-700 dark:text-yellow-400' : 'text-red-700 dark:text-red-400';
         return <span className={`font-semibold ${color}`}>{pct}%</span>;
       },
     },
@@ -40,8 +40,8 @@ export const ComplianceStatusRenderer: React.FC<Props> = ({ data }) => {
       header: 'Overdue Items',
       render: (v: unknown) => {
         const items = Array.isArray(v) ? v : [];
-        if (items.length === 0) return <span className="text-xs text-green-400">None</span>;
-        return <span className="text-xs text-red-400">{items.join(', ')}</span>;
+        if (items.length === 0) return <span className="text-xs text-green-700 dark:text-green-400">None</span>;
+        return <span className="text-xs text-red-700 dark:text-red-400">{items.join(', ')}</span>;
       },
     },
     {

@@ -39,7 +39,7 @@ const TEMPLATE_TYPE_DISPLAY: Record<
   welcome: { icon: UserPlus, label: 'Welcome Email', color: 'text-green-500' },
   password_reset: { icon: KeyRound, label: 'Password Reset', color: 'text-blue-500' },
   event_cancellation: { icon: CalendarX, label: 'Event Cancellation', color: 'text-red-500' },
-  event_reminder: { icon: CalendarClock, label: 'Event Reminder', color: 'text-blue-400' },
+  event_reminder: { icon: CalendarClock, label: 'Event Reminder', color: 'text-blue-700 dark:text-blue-400' },
   training_approval: { icon: GraduationCap, label: 'Training Approval', color: 'text-purple-500' },
   ballot_notification: { icon: Vote, label: 'Ballot Notification', color: 'text-indigo-500' },
   member_dropped: { icon: UserMinus, label: 'Member Dropped', color: 'text-red-600' },

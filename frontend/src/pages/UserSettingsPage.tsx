@@ -747,7 +747,7 @@ export const UserSettingsPage: React.FC = () => {
                             </label>
                             <button
                               onClick={() => handleRemoveContact(i)}
-                              className="text-red-500 hover:text-red-400 p-1 rounded-sm transition-colors"
+                              className="text-red-500 hover:text-red-800 dark:hover:text-red-400 p-1 rounded-sm transition-colors"
                               aria-label={`Remove contact ${i + 1}`}
                             >
                               <Trash2 className="w-4 h-4" aria-hidden="true" />

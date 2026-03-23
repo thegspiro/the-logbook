@@ -202,14 +202,14 @@ export const RoleManagementPage: React.FC = () => {
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleEdit(role)}
-                      className="text-blue-400 hover:text-blue-300 text-sm font-medium"
+                      className="text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm font-medium"
                     >
                       Edit
                     </button>
                     {!role.is_system && (
                       <button
                         onClick={() => { void handleDelete(role); }}
-                        className="text-red-400 hover:text-red-300 text-sm font-medium"
+                        className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm font-medium"
                       >
                         Delete
                       </button>

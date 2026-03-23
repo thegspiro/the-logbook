@@ -135,10 +135,10 @@ const AdminHoursPage: React.FC = () => {
 
   const statusColor = (status: string) => {
     switch (status) {
-      case 'approved': return 'bg-green-500/20 text-green-400';
-      case 'pending': return 'bg-yellow-500/20 text-yellow-400';
-      case 'rejected': return 'bg-red-500/20 text-red-400';
-      case 'active': return 'bg-blue-500/20 text-blue-400';
+      case 'approved': return 'bg-green-500/20 text-green-700 dark:text-green-400';
+      case 'pending': return 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400';
+      case 'rejected': return 'bg-red-500/20 text-red-700 dark:text-red-400';
+      case 'active': return 'bg-blue-500/20 text-blue-700 dark:text-blue-400';
       default: return 'bg-theme-surface-hover text-theme-text-muted';
     }
   };
@@ -182,12 +182,12 @@ const AdminHoursPage: React.FC = () => {
             <div className="flex items-start gap-4 flex-1 min-w-0">
               <div className="relative shrink-0">
                 <div className={`w-14 h-14 rounded-full flex items-center justify-center ${isSessionNearLimit ? 'bg-orange-500/20' : 'bg-blue-500/20'}`}>
-                  <Timer className={`w-7 h-7 ${isSessionNearLimit ? 'text-orange-400' : 'text-blue-400'}`} />
+                  <Timer className={`w-7 h-7 ${isSessionNearLimit ? 'text-orange-700 dark:text-orange-400' : 'text-blue-700 dark:text-blue-400'}`} />
                 </div>
                 <span className="absolute top-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full animate-pulse border-2 border-theme-surface-secondary" />
               </div>
               <div className="min-w-0">
-                <p className={`text-lg font-bold ${isSessionNearLimit ? 'text-orange-300' : 'text-blue-300'}`}>
+                <p className={`text-lg font-bold ${isSessionNearLimit ? 'text-orange-700 dark:text-orange-300' : 'text-blue-700 dark:text-blue-300'}`}>
                   Currently Clocked In
                 </p>
                 <div className="flex items-center gap-2 mt-1">
@@ -198,7 +198,7 @@ const AdminHoursPage: React.FC = () => {
                   <span className="text-theme-text-primary font-medium truncate">{activeSession.categoryName}</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm">
-                  <span className={isSessionNearLimit ? 'text-orange-400' : 'text-blue-400'}>
+                  <span className={isSessionNearLimit ? 'text-orange-700 dark:text-orange-400' : 'text-blue-700 dark:text-blue-400'}>
                     <span className="font-medium">Elapsed:</span>{' '}
                     <span className="text-lg font-bold">{formatDuration(localElapsed ?? activeSession.elapsedMinutes)}</span>
                   </span>
@@ -212,7 +212,7 @@ const AdminHoursPage: React.FC = () => {
                   )}
                 </div>
                 {isSessionNearLimit && (
-                  <p className="text-sm text-orange-300 flex items-center gap-1.5 mt-2">
+                  <p className="text-sm text-orange-700 dark:text-orange-300 flex items-center gap-1.5 mt-2">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
                     Approaching session limit &mdash; please clock out soon
                   </p>
@@ -242,7 +242,7 @@ const AdminHoursPage: React.FC = () => {
           </div>
           <div className="bg-theme-surface rounded-lg shadow-md p-4">
             <p className="text-xs text-theme-text-muted uppercase">Pending Hours</p>
-            <p className="text-2xl font-bold text-yellow-400">{summary.pendingHours}</p>
+            <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-400">{summary.pendingHours}</p>
           </div>
           <div className="bg-theme-surface rounded-lg shadow-md p-4">
             <p className="text-xs text-theme-text-muted uppercase">Total Hours</p>
@@ -320,7 +320,7 @@ const AdminHoursPage: React.FC = () => {
               <div className="text-sm text-theme-text-secondary">
                 Duration: <span className="font-medium text-theme-text-primary">{formatDuration(manualDurationMinutes)}</span>
                 {manualData.clock_out_at && manualData.clock_out_at <= manualData.clock_in_at && (
-                  <span className="ml-2 text-red-400">End time must be after start time</span>
+                  <span className="ml-2 text-red-700 dark:text-red-400">End time must be after start time</span>
                 )}
               </div>
             )}
@@ -417,7 +417,7 @@ const AdminHoursPage: React.FC = () => {
                       <p className="text-sm text-theme-text-muted truncate">{entry.description}</p>
                     )}
                     {entry.rejectionReason && (
-                      <p className="text-sm text-red-400 mt-0.5">Rejected: {entry.rejectionReason}</p>
+                      <p className="text-sm text-red-700 dark:text-red-400 mt-0.5">Rejected: {entry.rejectionReason}</p>
                     )}
                     {entry.approverName && entry.status !== 'active' && entry.status !== 'pending' && (
                       <p className="text-xs text-theme-text-muted mt-0.5">
