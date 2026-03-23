@@ -576,7 +576,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} aria-hidden="true" />
 
       {/* Panel — uses drawer-panel CSS class for mobile-responsive width */}
       <div className="drawer-panel overflow-y-auto overscroll-contain">
@@ -992,7 +992,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                   <h4 className="text-sm font-medium text-theme-text-primary">Assign Member</h4>
                   {/* Member search + select */}
                   <div>
-                    <input type="text" placeholder="Search members..."
+                    <input type="text" aria-label="Search members..." placeholder="Search members..."
                       value={memberSearch}
                       onChange={e => setMemberSearch(e.target.value)}
                       className={inputCls}

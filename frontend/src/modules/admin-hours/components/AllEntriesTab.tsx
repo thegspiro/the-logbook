@@ -122,13 +122,13 @@ const AllEntriesTab: React.FC = () => {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-theme-surface-border">
-                  <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">Member</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">Category</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">Date</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">Duration</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">Method</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">Reviewed By</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">Member</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">Category</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">Date</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">Duration</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">Method</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">Status</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">Reviewed By</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-theme-surface-border">

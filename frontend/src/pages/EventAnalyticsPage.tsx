@@ -403,12 +403,12 @@ export const EventAnalyticsPage: React.FC = () => {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-theme-surface-border text-left text-theme-text-secondary">
-                    <th className="pb-2 pr-4">Event</th>
-                    <th className="pb-2 pr-4">Type</th>
-                    <th className="pb-2 pr-4">Date</th>
-                    <th className="pb-2 pr-4 text-right">RSVPs</th>
-                    <th className="pb-2 pr-4 text-right">Checked In</th>
-                    <th className="pb-2 text-right">Rate</th>
+                    <th scope="col" className="pb-2 pr-4">Event</th>
+                    <th scope="col" className="pb-2 pr-4">Type</th>
+                    <th scope="col" className="pb-2 pr-4">Date</th>
+                    <th scope="col" className="pb-2 pr-4 text-right">RSVPs</th>
+                    <th scope="col" className="pb-2 pr-4 text-right">Checked In</th>
+                    <th scope="col" className="pb-2 text-right">Rate</th>
                   </tr>
                 </thead>
                 <tbody>

@@ -168,7 +168,7 @@ export default function MaintenanceSection({ facilityId }: Props) {
           <div className="relative flex-1 max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
             <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search records..." className={inputCls + ' pl-9'} />
+              aria-label="Search records..." placeholder="Search records..." className={inputCls + ' pl-9'} />
           </div>
           <div className="flex items-center border border-theme-surface-border rounded-lg overflow-hidden">
             {(['all', 'pending', 'completed', 'overdue'] as const).map(s => (

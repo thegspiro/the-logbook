@@ -313,7 +313,7 @@ const Members: React.FC = () => {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" />
               <input
                 type="text"
-                placeholder="Search by name, membership number, or email..."
+                aria-label="Search by name, membership number, or email..." placeholder="Search by name, membership number, or email..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="form-input pl-10 placeholder-theme-text-muted pr-4"
@@ -497,7 +497,7 @@ const Members: React.FC = () => {
               <table className="w-full">
                 <thead className="bg-theme-input-bg border-b border-theme-surface-border">
                   <tr>
-                    <th className="pl-4 pr-1 py-3 w-10">
+                    <th scope="col" className="pl-4 pr-1 py-3 w-10">
                       <input
                         type="checkbox"
                         checked={paginatedMembers.length > 0 && selectedIds.size === paginatedMembers.length}
@@ -506,24 +506,24 @@ const Members: React.FC = () => {
                         aria-label="Select all members"
                       />
                     </th>
-                    <th className="px-6 py-3 text-left">
+                    <th scope="col" className="px-6 py-3 text-left">
                       <SortableHeader label="Member" field="name" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} />
                     </th>
-                    <th className="px-6 py-3 text-left">
+                    <th scope="col" className="px-6 py-3 text-left">
                       <SortableHeader label="Member #" field="membership_number" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} />
                     </th>
                     {contactInfoEnabled.enabled && (
-                      <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                         Contact
                       </th>
                     )}
-                    <th className="px-6 py-3 text-left">
+                    <th scope="col" className="px-6 py-3 text-left">
                       <SortableHeader label="Status" field="status" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} />
                     </th>
-                    <th className="px-6 py-3 text-left">
+                    <th scope="col" className="px-6 py-3 text-left">
                       <SortableHeader label="Hire Date" field="hire_date" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} />
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
+                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>

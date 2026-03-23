@@ -1395,7 +1395,7 @@ const InventoryPage: React.FC = () => {
                   <input
                     id="inventory-search"
                     type="text"
-                    placeholder="Search by name, size, color, serial #, barcode..."
+                    aria-label="Search by name, size, color, serial #, barcode..." placeholder="Search by name, size, color, serial #, barcode..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="form-input focus:ring-emerald-500 pl-10 placeholder-theme-text-muted pr-4"

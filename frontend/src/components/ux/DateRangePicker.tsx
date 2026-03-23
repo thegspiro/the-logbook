@@ -81,16 +81,19 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
           <button
             onClick={() => setShowPresets(!showPresets)}
             className="px-2.5 py-1.5 text-sm text-theme-text-muted hover:text-theme-text-primary border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors"
+            aria-expanded={showPresets}
+            aria-haspopup="true"
           >
             Presets
           </button>
           {showPresets && (
             <>
-              <div className="fixed inset-0 z-10" onClick={() => setShowPresets(false)} />
-              <div className="absolute top-full left-0 mt-1 z-20 bg-theme-surface-modal border border-theme-surface-border rounded-lg shadow-lg py-1 min-w-[140px]">
+              <div className="fixed inset-0 z-10" onClick={() => setShowPresets(false)} aria-hidden="true" />
+              <div className="absolute top-full left-0 mt-1 z-20 bg-theme-surface-modal border border-theme-surface-border rounded-lg shadow-lg py-1 min-w-[140px]" role="menu">
                 {presets.map((preset) => (
                   <button
                     key={preset.label}
+                    role="menuitem"
                     onClick={() => {
                       const [s, e] = preset.getDates();
                       if (s && e) onChange(s, e);

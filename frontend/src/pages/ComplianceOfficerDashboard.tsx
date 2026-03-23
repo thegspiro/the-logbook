@@ -335,10 +335,10 @@ const AnnualReportSection: React.FC = () => {
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-theme-surface-border">
-                  <th className="px-4 py-2 text-left text-xs font-medium text-theme-text-secondary uppercase">Requirement</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-theme-text-secondary uppercase">Type</th>
-                  <th className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Compliant</th>
-                  <th className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Compliance %</th>
+                  <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-theme-text-secondary uppercase">Requirement</th>
+                  <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-theme-text-secondary uppercase">Type</th>
+                  <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Compliant</th>
+                  <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Compliance %</th>
                 </tr>
               </thead>
               <tbody>
@@ -370,13 +370,13 @@ const AnnualReportSection: React.FC = () => {
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-theme-surface-border">
-                  <th className="px-4 py-2 text-left text-xs font-medium text-theme-text-secondary uppercase">Member</th>
-                  <th className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Training Hrs</th>
-                  <th className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Admin Hrs</th>
-                  <th className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Total Hrs</th>
-                  <th className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Requirements</th>
-                  <th className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Expired Certs</th>
-                  <th className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Status</th>
+                  <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-theme-text-secondary uppercase">Member</th>
+                  <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Training Hrs</th>
+                  <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Admin Hrs</th>
+                  <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Total Hrs</th>
+                  <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Requirements</th>
+                  <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Expired Certs</th>
+                  <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -791,12 +791,12 @@ const ForecastSection: React.FC = () => {
           <table className="min-w-full text-sm">
             <thead>
               <tr className="border-b border-theme-surface-border">
-                <th className="px-4 py-2 text-left text-xs font-medium text-theme-text-secondary uppercase">Member</th>
-                <th className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Current</th>
-                <th className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">30 Days</th>
-                <th className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">60 Days</th>
-                <th className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">90 Days</th>
-                <th className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Expiring Certs</th>
+                <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-theme-text-secondary uppercase">Member</th>
+                <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Current</th>
+                <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">30 Days</th>
+                <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">60 Days</th>
+                <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">90 Days</th>
+                <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Expiring Certs</th>
               </tr>
             </thead>
             <tbody>

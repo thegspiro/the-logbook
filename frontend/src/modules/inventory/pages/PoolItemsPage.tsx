@@ -435,7 +435,7 @@ const PoolItemsPage: React.FC = () => {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-theme-text-muted" />
           <input
             type="text"
-            placeholder="Search pool items..."
+            aria-label="Search pool items..." placeholder="Search pool items..."
             className="form-input w-full pl-9"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
@@ -517,7 +517,7 @@ const PoolItemsPage: React.FC = () => {
             <input
               type="text"
               className="form-input w-full"
-              placeholder="Search members..."
+              aria-label="Search members..." placeholder="Search members..."
               value={memberSearch}
               onChange={e => setMemberSearch(e.target.value)}
             />

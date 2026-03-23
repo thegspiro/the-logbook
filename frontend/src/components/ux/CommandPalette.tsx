@@ -69,6 +69,7 @@ export const CommandPalette: React.FC = () => {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
   const navigate = useNavigate();
   const { checkPermission } = useAuthStore();
 
@@ -113,12 +114,16 @@ export const CommandPalette: React.FC = () => {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Focus input when opened
+  // Save previous focus and focus input when opened; restore focus on close
   useEffect(() => {
     if (isOpen) {
+      previousFocusRef.current = document.activeElement as HTMLElement | null;
       setTimeout(() => inputRef.current?.focus(), 50);
       setQuery('');
       setSelectedIndex(0);
+    } else {
+      previousFocusRef.current?.focus();
+      previousFocusRef.current = null;
     }
   }, [isOpen]);
 
@@ -190,18 +195,21 @@ export const CommandPalette: React.FC = () => {
               placeholder="Search pages, actions..."
               className="flex-1 py-3.5 bg-transparent text-theme-text-primary placeholder-theme-text-muted text-sm focus:outline-hidden"
               aria-label="Search commands"
+              aria-activedescendant={filteredCommands[selectedIndex] ? `cmd-${filteredCommands[selectedIndex].id}` : undefined}
+              aria-controls="command-palette-listbox"
               autoComplete="off"
             />
             <button
               onClick={() => setIsOpen(false)}
               className="p-1 text-theme-text-muted hover:text-theme-text-primary"
+              aria-label="Close command palette"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
 
           {/* Results */}
-          <div ref={listRef} className="max-h-72 overflow-y-auto py-2" role="listbox">
+          <div ref={listRef} className="max-h-72 overflow-y-auto py-2" role="listbox" id="command-palette-listbox">
             {filteredCommands.length === 0 ? (
               <div className="px-4 py-8 text-center text-sm text-theme-text-muted">
                 No results found for &quot;{query}&quot;
@@ -219,6 +227,7 @@ export const CommandPalette: React.FC = () => {
                     return (
                       <button
                         key={item.id}
+                        id={`cmd-${item.id}`}
                         onClick={() => handleSelect(item)}
                         data-selected={isSelected}
                         className={`w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors ${

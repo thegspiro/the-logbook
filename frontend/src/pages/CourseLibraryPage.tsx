@@ -490,7 +490,7 @@ const CourseLibraryPage: React.FC = () => {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search courses by name, code, or description..."
+                aria-label="Search courses by name, code, or description..." placeholder="Search courses by name, code, or description..."
                 className="form-input pl-10 pr-4"
               />
             </div>

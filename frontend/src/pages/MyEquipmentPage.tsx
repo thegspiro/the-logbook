@@ -405,10 +405,10 @@ const MyEquipmentPage: React.FC = () => {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-theme-surface-border bg-theme-surface-secondary">
-                        <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Item</th>
-                        <th className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Checked Out</th>
-                        <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Due</th>
-                        <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Action</th>
+                        <th scope="col" className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Item</th>
+                        <th scope="col" className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Checked Out</th>
+                        <th scope="col" className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Due</th>
+                        <th scope="col" className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -500,12 +500,12 @@ const MyEquipmentPage: React.FC = () => {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-theme-surface-border bg-theme-surface-secondary">
-                        <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Item</th>
-                        <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Qty</th>
-                        <th className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Category</th>
-                        <th className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Size</th>
-                        <th className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Issued</th>
-                        <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Action</th>
+                        <th scope="col" className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Item</th>
+                        <th scope="col" className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Qty</th>
+                        <th scope="col" className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Category</th>
+                        <th scope="col" className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Size</th>
+                        <th scope="col" className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Issued</th>
+                        <th scope="col" className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -594,10 +594,10 @@ const MyEquipmentPage: React.FC = () => {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-theme-surface-border bg-theme-surface-secondary">
-                      <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Item</th>
-                      <th className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Type</th>
-                      <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Status</th>
-                      <th className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Date</th>
+                      <th scope="col" className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Item</th>
+                      <th scope="col" className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Type</th>
+                      <th scope="col" className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Status</th>
+                      <th scope="col" className="hidden sm:table-cell p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Date</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -656,7 +656,7 @@ const MyEquipmentPage: React.FC = () => {
                           onFocus={() => { if (itemResults.length > 0) setShowDropdown(true); }}
                           onBlur={() => { setTimeout(() => setShowDropdown(false), 200); }}
                           className="form-input focus:ring-emerald-500 pl-9 pr-3"
-                          placeholder="Search inventory items..."
+                          aria-label="Search inventory items..." placeholder="Search inventory items..."
                         />
                         {searchingItems && <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted animate-spin" />}
                       </div>

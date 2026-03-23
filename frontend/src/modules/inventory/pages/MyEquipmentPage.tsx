@@ -470,7 +470,7 @@ const MyEquipmentPage: React.FC = () => {
                   type="text"
                   value={reqSearch}
                   onChange={(e) => handleReqSearch(e.target.value)}
-                  placeholder="Search available items..."
+                  aria-label="Search available items..." placeholder="Search available items..."
                   className={`${inputClass} pl-9`}
                 />
                 {reqSearching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-theme-text-muted" />}

@@ -445,12 +445,12 @@ const DocumentsPage: React.FC = () => {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-theme-surface-border">
-                        <th className="text-left text-theme-text-muted text-xs font-medium uppercase px-4 py-3">Name</th>
-                        <th className="text-left text-theme-text-muted text-xs font-medium uppercase px-4 py-3">Size</th>
-                        <th className="text-left text-theme-text-muted text-xs font-medium uppercase px-4 py-3">Type</th>
-                        <th className="text-left text-theme-text-muted text-xs font-medium uppercase px-4 py-3">Uploaded</th>
+                        <th scope="col" className="text-left text-theme-text-muted text-xs font-medium uppercase px-4 py-3">Name</th>
+                        <th scope="col" className="text-left text-theme-text-muted text-xs font-medium uppercase px-4 py-3">Size</th>
+                        <th scope="col" className="text-left text-theme-text-muted text-xs font-medium uppercase px-4 py-3">Type</th>
+                        <th scope="col" className="text-left text-theme-text-muted text-xs font-medium uppercase px-4 py-3">Uploaded</th>
                         {canManage && (
-                          <th className="text-right text-theme-text-muted text-xs font-medium uppercase px-4 py-3">Actions</th>
+                          <th scope="col" className="text-right text-theme-text-muted text-xs font-medium uppercase px-4 py-3">Actions</th>
                         )}
                       </tr>
                     </thead>
@@ -535,7 +535,7 @@ const DocumentsPage: React.FC = () => {
         {showUploadModal && (
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex items-center justify-center min-h-screen px-4">
-              <div className="fixed inset-0 bg-black/60" onClick={() => setShowUploadModal(false)} />
+              <div className="fixed inset-0 bg-black/60" onClick={() => setShowUploadModal(false)} aria-hidden="true" />
               <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
@@ -704,7 +704,7 @@ const DocumentsPage: React.FC = () => {
         {deleteConfirm && (
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex items-center justify-center min-h-screen px-4">
-              <div className="fixed inset-0 bg-black/60" onClick={() => setDeleteConfirm(null)} />
+              <div className="fixed inset-0 bg-black/60" onClick={() => setDeleteConfirm(null)} aria-hidden="true" />
               <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-sm w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex items-start space-x-3">

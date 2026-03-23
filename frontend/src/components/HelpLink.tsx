@@ -79,11 +79,19 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
   // Icon variant: Just an icon button
   if (variant === 'icon') {
     return (
-      <div className="relative inline-block">
+      <div
+        className="relative inline-block"
+        onKeyDown={(e) => {
+          if (e.key === 'Escape' && showTooltip) {
+            setShowTooltip(false);
+          }
+        }}
+      >
         <button
           onClick={handleClick}
           className="text-theme-text-muted hover:text-theme-text-primary transition-colors p-1 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
           aria-label={`Help: ${topic}`}
+          aria-expanded={tooltip ? showTooltip : undefined}
           type="button"
         >
           <HelpCircle className="w-5 h-5" aria-hidden="true" />

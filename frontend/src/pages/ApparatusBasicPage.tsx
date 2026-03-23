@@ -236,7 +236,7 @@ export default function ApparatusBasicPage() {
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
         <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-          placeholder="Search apparatus..."
+          aria-label="Search apparatus..." placeholder="Search apparatus..."
           className="form-input pl-10 placeholder-theme-text-muted pr-4 py-2.5"
         />
       </div>
