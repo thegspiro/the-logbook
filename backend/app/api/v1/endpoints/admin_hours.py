@@ -41,6 +41,7 @@ from app.schemas.admin_hours import (
     EventHourMappingResponse,
     EventHourMappingUpdate,
 )
+from app.core.seed_admin_hours import seed_admin_hours_data
 from app.services.admin_hours_service import AdminHoursService
 
 router = APIRouter()
@@ -1009,5 +1010,33 @@ async def get_user_hours_compliance(
             year=effective_year,
         )
         return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+# =============================================================================
+# Seed Defaults
+# =============================================================================
+
+
+@router.post("/seed-defaults")
+async def seed_default_categories(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("admin_hours.manage")),
+):
+    """Seed default admin hours categories and event-hour mappings.
+
+    Idempotent: skips categories/mappings that already exist. Useful for
+    organizations that were created before the default categories were
+    available, or to restore defaults after accidental deletion.
+    """
+    try:
+        result = await seed_admin_hours_data(
+            db,
+            organization_id=str(current_user.organization_id),
+            created_by=str(current_user.id),
+        )
+        await db.commit()
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))

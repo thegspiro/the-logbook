@@ -220,12 +220,15 @@ async def export_annual_report(
 async def get_contributed_hours(
     year: int = Query(..., description="Report year"),
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(require_permission("training.manage")),
+    current_user=Depends(
+        require_permission("training.manage", "reports.view", "compliance.view")
+    ),
 ):
     """Get total contributed hours combining training and admin hours.
 
     Useful for end-of-year reporting and fundraising teams who need
-    total hours contributed by all members.
+    total hours contributed by all members.  Accessible with any of:
+    training.manage, reports.view, or compliance.view.
     """
     async with handle_service_errors("Failed to fetch contributed hours"):
         service = ContributedHoursService(db)

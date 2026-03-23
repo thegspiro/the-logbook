@@ -18,6 +18,7 @@ from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.constants import ROLE_IT_MANAGER, ROLE_MEMBER
 from app.core.permissions import DEFAULT_ROLES
+from app.core.seed_admin_hours import seed_admin_hours_data
 from app.core.utils import generate_display_code, generate_uuid
 from app.models.facilities import Facility, FacilityStatus, FacilityType
 from app.models.location import Location
@@ -1086,6 +1087,9 @@ class OnboardingService:
 
         await self.db.flush()
 
+        # Seed default data for the new organization
+        await self._seed_default_data()
+
         # Create post-onboarding checklist
         await self._create_post_onboarding_checklist()
 
@@ -1134,6 +1138,38 @@ class OnboardingService:
         )
         self.db.add(status)
         await self.db.flush()
+
+    async def _seed_default_data(self):
+        """Seed default admin hours categories and event mappings.
+
+        Looks up the first organization and admin user created during
+        onboarding and seeds standard hour-tracking categories so they
+        are available immediately after setup.
+        """
+        try:
+            org_result = await self.db.execute(
+                select(Organization).limit(1)
+            )
+            org = org_result.scalar_one_or_none()
+
+            user_result = await self.db.execute(
+                select(User).limit(1)
+            )
+            user = user_result.scalar_one_or_none()
+
+            if org and user:
+                result = await seed_admin_hours_data(
+                    self.db, org.id, user.id
+                )
+                logger.info(
+                    "Seeded {} admin hours categories and {} event mappings",
+                    result["categories_count"],
+                    result["mappings_created"],
+                )
+        except Exception as e:
+            logger.warning(
+                "Non-critical: failed to seed admin hours defaults: {}", e
+            )
 
     async def _create_post_onboarding_checklist(self):
         """Create post-onboarding checklist items"""

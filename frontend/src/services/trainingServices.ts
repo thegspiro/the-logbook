@@ -1139,6 +1139,11 @@ export const complianceOfficerService = {
     const response = await api.get<import('../types/training').IncompleteRecord[]>('/compliance/incomplete-records', { params: { limit } });
     return response.data;
   },
+
+  async getContributedHours(year: number): Promise<import('../types/training').ContributedHoursResponse> {
+    const response = await api.get<import('../types/training').ContributedHoursResponse>('/compliance/contributed-hours', { params: { year } });
+    return response.data;
+  },
 };
 
 // ============================================
