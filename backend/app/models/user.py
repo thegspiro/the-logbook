@@ -227,6 +227,9 @@ class User(Base):
     membership_number = Column(
         String(50)
     )  # Organization-assigned membership ID (e.g., "001", "M-042")
+    previous_membership_number = Column(
+        String(50)
+    )  # Preserved on soft-delete so returning members can reclaim their number
     phone = Column(String(20))
     mobile = Column(String(20))
 

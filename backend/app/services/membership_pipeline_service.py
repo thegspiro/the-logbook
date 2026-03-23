@@ -1319,23 +1319,14 @@ class MembershipPipelineService:
             if roles:
                 new_user.roles = roles
 
-        # Auto-assign membership number if enabled for this organization
-        from app.services.organization_service import OrganizationService
-
-        org_service = OrganizationService(self.db)
-        membership_number = await org_service.assign_next_membership_number(
-            organization_id=prospect.organization_id,
-            user=new_user,
-        )
-
         # Update prospect record
         prospect.status = ProspectStatus.TRANSFERRED
         prospect.transferred_user_id = user_id
         prospect.transferred_at = datetime.now(timezone.utc)
 
         transfer_details: Dict[str, Any] = {"user_id": user_id, "username": username}
-        if membership_number:
-            transfer_details["membership_number"] = membership_number
+        if membership_id:
+            transfer_details["membership_number"] = membership_id
 
         await self._log_activity(
             prospect_id=prospect.id,
@@ -1374,7 +1365,7 @@ class MembershipPipelineService:
             "success": True,
             "prospect_id": prospect.id,
             "user_id": user_id,
-            "membership_number": membership_number,
+            "membership_number": membership_id,
             "message": result_msg,
             "auto_enrollment": enrollment_result,
             "welcome_email_sent": welcome_email_sent,

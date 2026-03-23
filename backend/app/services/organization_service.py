@@ -9,11 +9,11 @@ import logging
 from typing import Any, Dict, Optional
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.onboarding import OnboardingStatus
-from app.models.user import Organization
+from app.models.user import Organization, User
 from app.schemas.organization import (
     ContactInfoSettings,
     EmailServiceSettings,
@@ -367,3 +367,83 @@ class OrganizationService:
 
         # Return updated enabled modules
         return await self.get_enabled_modules(organization_id)
+
+    async def get_membership_id_settings(
+        self, organization_id: UUID
+    ) -> MembershipIdSettings:
+        """Get membership ID settings for an organization."""
+        org_settings = await self.get_organization_settings(organization_id)
+        return org_settings.membership_id
+
+    async def generate_next_membership_id(
+        self, organization_id: UUID
+    ) -> Optional[str]:
+        """
+        Generate the next membership ID for a new member.
+
+        Reads the org's membership_id settings (prefix + next_number),
+        formats the ID, then atomically increments next_number.
+        Returns None if auto-generation is disabled.
+        """
+        org = await self.get_organization(organization_id)
+        if not org:
+            return None
+
+        settings_dict = copy.deepcopy(org.settings or {})
+        mid = settings_dict.get("membership_id", {})
+
+        if not mid.get("enabled") or not mid.get("auto_generate"):
+            return None
+
+        prefix = mid.get("prefix", "")
+        next_number = mid.get("next_number", 1)
+
+        # Format: prefix + zero-padded number (4 digits minimum)
+        membership_id = f"{prefix}{str(next_number).zfill(4)}"
+
+        # Verify this number isn't already in use (active members only).
+        # If it is, keep incrementing until we find an unused one.
+        while True:
+            result = await self.db.execute(
+                select(func.count())
+                .select_from(User)
+                .where(
+                    User.organization_id == str(organization_id),
+                    User.membership_number == membership_id,
+                    User.deleted_at.is_(None),
+                )
+            )
+            count = result.scalar() or 0
+            if count == 0:
+                break
+            next_number += 1
+            membership_id = f"{prefix}{str(next_number).zfill(4)}"
+
+        # Increment next_number in org settings for the next call
+        mid["next_number"] = next_number + 1
+        settings_dict["membership_id"] = mid
+        org.settings = settings_dict
+        await self.db.flush()
+
+        return membership_id
+
+    async def assign_next_membership_number(
+        self,
+        organization_id: UUID,
+        user: "User",
+    ) -> Optional[str]:
+        """
+        Assign a membership number to a user if they don't already have one
+        and auto-generation is enabled.
+
+        Skips assignment if the user already has a membership_number set.
+        Returns the assigned number, or None if no assignment was made.
+        """
+        if user.membership_number:
+            return user.membership_number
+
+        membership_id = await self.generate_next_membership_id(organization_id)
+        if membership_id:
+            user.membership_number = membership_id
+
+        return membership_id

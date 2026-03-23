@@ -211,6 +211,16 @@ async def create_member(
         initial_password = generate_temporary_password()
         password_hash = hash_password(initial_password)
 
+    # Auto-generate membership number if not provided and auto-generation is on
+    membership_number = user_data.membership_number
+    if not membership_number:
+        from app.services.organization_service import OrganizationService
+
+        org_service = OrganizationService(db)
+        membership_number = await org_service.generate_next_membership_id(
+            current_user.organization_id
+        )
+
     # Create new user
     new_user = User(
         id=str(uuid4()),
@@ -221,7 +231,7 @@ async def create_member(
         first_name=user_data.first_name,
         middle_name=user_data.middle_name,
         last_name=user_data.last_name,
-        membership_number=user_data.membership_number,
+        membership_number=membership_number,
         phone=user_data.phone,
         mobile=user_data.mobile,
         date_of_birth=user_data.date_of_birth,
@@ -1080,6 +1090,11 @@ async def delete_user(
             username=current_user.username,
         )
     else:
+        # Preserve membership number so it can be restored on reactivation,
+        # then clear it to free the unique index for new members.
+        if user.membership_number:
+            user.previous_membership_number = user.membership_number
+            user.membership_number = None
         user.deleted_at = datetime.now(timezone.utc)
         await db.commit()
 

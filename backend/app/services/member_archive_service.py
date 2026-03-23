@@ -16,7 +16,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
@@ -259,6 +259,24 @@ async def reactivate_member(
     member.status = UserStatus.ACTIVE
     member.status_changed_at = now
     member.status_change_reason = reason or "Reactivated by leadership"
+
+    # Restore membership number from before soft-delete/archival if it
+    # was cleared and the number is still available.
+    if not member.membership_number and member.previous_membership_number:
+        conflict = await db.execute(
+            select(func.count())
+            .select_from(User)
+            .where(
+                User.organization_id == organization_id,
+                User.membership_number == member.previous_membership_number,
+                User.deleted_at.is_(None),
+                User.id != user_id,
+            )
+        )
+        if (conflict.scalar() or 0) == 0:
+            member.membership_number = member.previous_membership_number
+        member.previous_membership_number = None
+
     await db.commit()
 
     # Audit log
