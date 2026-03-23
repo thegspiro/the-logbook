@@ -12,7 +12,6 @@ import { electionPackageService, applicantService } from '../modules/prospective
 import type { ElectionPackage } from '../modules/prospective-members/types';
 import type { Election, ForensicsReport, VoteIntegrityResult, Candidate, BallotItem } from '../types/election';
 import type { EventListItem } from '../types/event';
-import { EventType } from '../constants/enums';
 import { ElectionResults } from '../components/ElectionResults';
 import { ElectionBallot } from '../components/ElectionBallot';
 import { CandidateManagement } from '../components/CandidateManagement';
@@ -20,6 +19,10 @@ import { BallotBuilder } from '../components/BallotBuilder';
 import { MeetingAttendance } from '../components/MeetingAttendance';
 import { VoterOverrideManagement } from '../components/VoterOverrideManagement';
 import { ProxyVotingManagement } from '../components/ProxyVotingManagement';
+import { EligibilityRoster } from '../modules/elections/components/EligibilityRoster';
+import { RunoffChain } from '../modules/elections/components/RunoffChain';
+import { PublishResultsPanel } from '../modules/elections/components/PublishResultsPanel';
+import { ElectionWorkflowTabs } from '../modules/elections/components/ElectionWorkflowTabs';
 import { useAuthStore } from '../stores/authStore';
 import { ElectionStatus, VoteType, BallotItemType } from '../constants/enums';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
@@ -36,10 +39,7 @@ export const ElectionDetailPage: React.FC = () => {
   const [election, setElection] = useState<Election | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showResults, setShowResults] = useState(false);
-
   // Lifecycle modal state (extend, rollback, visibility)
-  const [updatingVisibility, setUpdatingVisibility] = useState(false);
   const [showExtendModal, setShowExtendModal] = useState(false);
   const [newEndDate, setNewEndDate] = useState('');
   const [extendError, setExtendError] = useState<string | null>(null);
@@ -89,6 +89,9 @@ export const ElectionDetailPage: React.FC = () => {
   const [previewCandidates, setPreviewCandidates] = useState<Candidate[]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
 
+  // Tabbed workflow state
+  const [activeTab, setActiveTab] = useState('ballot');
+
   // Pending election packages state
   const [pendingPackages, setPendingPackages] = useState<ElectionPackage[]>([]);
   const [isLoadingPackages, setIsLoadingPackages] = useState(false);
@@ -119,9 +122,9 @@ export const ElectionDetailPage: React.FC = () => {
       const data = await electionService.getElection(electionId);
       setElection(data);
 
-      // Automatically show results if they're available
+      // Auto-select results tab if they're available
       if (data.status === ElectionStatus.CLOSED || data.results_visible_immediately) {
-        setShowResults(true);
+        setActiveTab('results');
       }
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to load election'));
@@ -134,7 +137,6 @@ export const ElectionDetailPage: React.FC = () => {
     try {
       const today = getTodayLocalDate(tz);
       const events = await eventService.getEvents({
-        event_type: EventType.BUSINESS_MEETING,
         start_after: today,
         limit: 10,
       });
@@ -173,23 +175,6 @@ export const ElectionDetailPage: React.FC = () => {
 
   // ── Election lifecycle handlers ──────────────────────────────────
 
-  const handleToggleResultsVisibility = async () => {
-    if (!electionId || !election) return;
-
-    try {
-      setUpdatingVisibility(true);
-      const updated = await electionService.updateElection(electionId, {
-        results_visible_immediately: !election.results_visible_immediately,
-      });
-      setElection(updated);
-      toast.success('Visibility setting updated successfully');
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to update visibility'));
-    } finally {
-      setUpdatingVisibility(false);
-    }
-  };
-
   const handleOpenElection = async () => {
     if (!electionId) return;
 
@@ -212,7 +197,7 @@ export const ElectionDetailPage: React.FC = () => {
     try {
       const updated = await electionService.closeElection(electionId);
       setElection(updated);
-      setShowResults(true);
+      setActiveTab('results');
       toast.success('Election closed successfully');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to close election'));
@@ -837,23 +822,6 @@ export const ElectionDetailPage: React.FC = () => {
                   </button>
                 )}
 
-                {election.status !== ElectionStatus.OPEN && (
-                  <button
-                    onClick={() => { void handleToggleResultsVisibility(); }}
-                    disabled={updatingVisibility}
-                    className={`px-4 py-2 rounded-md text-sm ${
-                      election.results_visible_immediately
-                        ? 'btn-warning'
-                        : 'btn-info'
-                    } disabled:opacity-50`}
-                  >
-                    {updatingVisibility
-                      ? 'Updating...'
-                      : election.results_visible_immediately
-                      ? 'Hide Results'
-                      : 'Show Results'}
-                  </button>
-                )}
               </div>
             </div>
 
@@ -920,190 +888,197 @@ export const ElectionDetailPage: React.FC = () => {
         )}
       </div>
 
-      {/* Upcoming Business Meeting Events */}
-      {upcomingEvents.length > 0 && (
-        <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6 mb-6">
-          <h3 className="text-lg font-semibold text-theme-text-primary mb-4">
-            Upcoming Business Meetings
-          </h3>
-          <div className="space-y-3">
-            {upcomingEvents.map((event) => (
-              <Link
-                key={event.id}
-                to={`/events/${event.id}`}
-                className="flex items-center justify-between p-3 rounded-lg hover:bg-theme-surface-hover transition-colors border border-theme-surface-border"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-theme-text-primary truncate">
-                    {event.title}
-                  </p>
-                  <p className="text-xs text-theme-text-muted mt-0.5">
-                    {formatDateTime(event.start_datetime, tz)}
-                    {event.location_name ? ` · ${event.location_name}` : event.location ? ` · ${event.location}` : ''}
-                  </p>
-                </div>
-                <div className="ml-3 shrink-0 flex items-center gap-2">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
-                    {getEventTypeLabel(event.event_type)}
-                  </span>
-                  <svg className="h-4 w-4 text-theme-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Runoff Chain (multi-stage elections) */}
+      <RunoffChain election={election} />
 
-      {/* Candidate Management (Admin) */}
+      {/* Publish Results Panel (secretary - open/closed elections) */}
       {canManage && electionId && (
-        <div className="mb-6">
-          <CandidateManagement electionId={electionId} election={election} />
-        </div>
+        <PublishResultsPanel
+          electionId={electionId}
+          election={election}
+          onUpdate={setElection}
+        />
       )}
 
-      {/* Ballot Builder (Admin - draft/open elections) */}
-      {canManage && electionId && election.status !== ElectionStatus.CANCELLED && (
-        <div className="mb-6">
-          <BallotBuilder
-            electionId={electionId}
+      {/* Tabbed Workflow (secretary) */}
+      {electionId && (
+        <>
+          <ElectionWorkflowTabs
             election={election}
-            onUpdate={setElection}
+            canManage={canManage}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
           />
-        </div>
-      )}
 
-      {/* Pending Member Applications (Admin - draft elections only) */}
-      {canManage && electionId && election.status === ElectionStatus.DRAFT && (
-        <div className="mb-6 bg-theme-surface rounded-xl shadow-sm border border-theme-surface-border overflow-hidden">
-          <button
-            className="w-full flex items-center justify-between px-6 py-4 text-left"
-            onClick={() => {
-              const next = !showPendingPackages;
-              setShowPendingPackages(next);
-              if (next && pendingPackages.length === 0) void fetchPendingPackages();
-            }}
-          >
-            <h2 className="text-lg font-semibold text-theme-text-primary">
-              Pending Member Applications
-            </h2>
-            <span className="text-sm text-theme-text-muted">{showPendingPackages ? '▾' : '▸'}</span>
-          </button>
+          {/* Tab: Ballot Builder */}
+          {activeTab === 'ballot' && canManage && election.status !== ElectionStatus.CANCELLED && (
+            <div className="mb-6 space-y-6">
+              <BallotBuilder
+                electionId={electionId}
+                election={election}
+                onUpdate={setElection}
+              />
 
-          {showPendingPackages && (
-            <div className="px-6 pb-4">
-              {isLoadingPackages ? (
-                <p className="text-sm text-theme-text-muted py-2">Loading pending applications...</p>
-              ) : pendingPackages.length === 0 ? (
-                <p className="text-sm text-theme-text-muted py-2">
-                  No applications are ready for ballot assignment.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-xs text-theme-text-muted mb-2">
-                    {pendingPackages.length} application{pendingPackages.length !== 1 ? 's' : ''} ready to be added to this election.
-                  </p>
-                  {pendingPackages.map((pkg) => (
-                    <div
-                      key={pkg.id}
-                      className="flex items-center justify-between p-3 bg-theme-bg rounded-lg border border-theme-surface-border"
-                    >
-                      <div>
-                        <p className="text-sm font-medium text-theme-text-primary">{pkg.applicant_name}</p>
-                        <p className="text-xs text-theme-text-muted capitalize">
-                          {pkg.target_membership_type} membership
-                          {pkg.coordinator_notes && ` — ${pkg.coordinator_notes}`}
+              {/* Pending Member Applications (draft only) */}
+              {election.status === ElectionStatus.DRAFT && (
+                <div className="bg-theme-surface rounded-xl shadow-sm border border-theme-surface-border overflow-hidden">
+                  <button
+                    className="w-full flex items-center justify-between px-6 py-4 text-left"
+                    onClick={() => {
+                      const next = !showPendingPackages;
+                      setShowPendingPackages(next);
+                      if (next && pendingPackages.length === 0) void fetchPendingPackages();
+                    }}
+                  >
+                    <h2 className="text-lg font-semibold text-theme-text-primary">
+                      Pending Member Applications
+                    </h2>
+                    <span className="text-sm text-theme-text-muted">{showPendingPackages ? '▾' : '▸'}</span>
+                  </button>
+
+                  {showPendingPackages && (
+                    <div className="px-6 pb-4">
+                      {isLoadingPackages ? (
+                        <p className="text-sm text-theme-text-muted py-2">Loading pending applications...</p>
+                      ) : pendingPackages.length === 0 ? (
+                        <p className="text-sm text-theme-text-muted py-2">
+                          No applications are ready for ballot assignment.
                         </p>
-                      </div>
-                      <button
-                        onClick={() => { void handleAssignPackage(pkg); }}
-                        disabled={assigningPackageId === pkg.id}
-                        className="px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
-                      >
-                        {assigningPackageId === pkg.id ? 'Adding...' : 'Add to Ballot'}
-                      </button>
+                      ) : (
+                        <div className="space-y-2">
+                          <p className="text-xs text-theme-text-muted mb-2">
+                            {pendingPackages.length} application{pendingPackages.length !== 1 ? 's' : ''} ready to be added to this election.
+                          </p>
+                          {pendingPackages.map((pkg) => (
+                            <div
+                              key={pkg.id}
+                              className="flex items-center justify-between p-3 bg-theme-bg rounded-lg border border-theme-surface-border"
+                            >
+                              <div>
+                                <p className="text-sm font-medium text-theme-text-primary">{pkg.applicant_name}</p>
+                                <p className="text-xs text-theme-text-muted capitalize">
+                                  {pkg.target_membership_type} membership
+                                  {pkg.coordinator_notes && ` — ${pkg.coordinator_notes}`}
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => { void handleAssignPackage(pkg); }}
+                                disabled={assigningPackageId === pkg.id}
+                                className="px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                              >
+                                {assigningPackageId === pkg.id ? 'Adding...' : 'Add to Ballot'}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  ))}
+                  )}
+                </div>
+              )}
+
+              {/* Upcoming Business Meeting Events */}
+              {upcomingEvents.length > 0 && (
+                <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
+                  <h3 className="text-lg font-semibold text-theme-text-primary mb-4">
+                    Upcoming Meetings
+                  </h3>
+                  <div className="space-y-3">
+                    {upcomingEvents.map((event) => (
+                      <Link
+                        key={event.id}
+                        to={`/events/${event.id}`}
+                        className="flex items-center justify-between p-3 rounded-lg hover:bg-theme-surface-hover transition-colors border border-theme-surface-border"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-theme-text-primary truncate">
+                            {event.title}
+                          </p>
+                          <p className="text-xs text-theme-text-muted mt-0.5">
+                            {formatDateTime(event.start_datetime, tz)}
+                            {event.location_name ? ` · ${event.location_name}` : event.location ? ` · ${event.location}` : ''}
+                          </p>
+                        </div>
+                        <div className="ml-3 shrink-0 flex items-center gap-2">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
+                            {getEventTypeLabel(event.event_type)}
+                          </span>
+                          <svg className="h-4 w-4 text-theme-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
           )}
-        </div>
+
+          {/* Tab: Candidates */}
+          {activeTab === 'candidates' && canManage && (
+            <div className="mb-6">
+              <CandidateManagement electionId={electionId} election={election} />
+            </div>
+          )}
+
+          {/* Tab: Eligibility Roster */}
+          {activeTab === 'eligibility' && canManage && election.status !== ElectionStatus.CANCELLED && (
+            <div className="mb-6">
+              <EligibilityRoster electionId={electionId} />
+            </div>
+          )}
+
+          {/* Tab: Attendance */}
+          {activeTab === 'attendance' && canManage && election.status !== ElectionStatus.CANCELLED && (
+            <div className="mb-6">
+              <MeetingAttendance
+                electionId={electionId}
+                election={election}
+                onUpdate={setElection}
+              />
+            </div>
+          )}
+
+          {/* Tab: Voter Overrides */}
+          {activeTab === 'overrides' && canManage && election.status !== ElectionStatus.CANCELLED && (
+            <div className="mb-6">
+              <VoterOverrideManagement electionId={electionId} canManage={canManage} />
+            </div>
+          )}
+
+          {/* Tab: Proxy Voting */}
+          {activeTab === 'proxies' && canManage && election.status !== ElectionStatus.CANCELLED && (
+            <div className="mb-6">
+              <ProxyVotingManagement electionId={electionId} canManage={canManage} />
+            </div>
+          )}
+
+          {/* Tab: Cast Vote (when election is open) */}
+          {activeTab === 'voting' && election.status === ElectionStatus.OPEN && (
+            <div className="mb-6">
+              <ElectionBallot
+                electionId={electionId}
+                election={election}
+                onVoteCast={() => { void fetchElection(); }}
+              />
+            </div>
+          )}
+
+          {/* Tab: Results */}
+          {activeTab === 'results' && resultsAvailable && (
+            <div className="mb-6">
+              <ElectionResults electionId={electionId} election={election} />
+            </div>
+          )}
+        </>
       )}
 
-      {/* Meeting Attendance (Admin) */}
-      {canManage && electionId && election.status !== ElectionStatus.CANCELLED && (
-        <div className="mb-6">
-          <MeetingAttendance
-            electionId={electionId}
-            election={election}
-            onUpdate={setElection}
-          />
-        </div>
-      )}
-
-      {/* Voter Override Management (Admin) */}
-      {canManage && electionId && election.status !== ElectionStatus.CANCELLED && (
-        <div className="mb-6">
-          <VoterOverrideManagement electionId={electionId} canManage={canManage} />
-        </div>
-      )}
-
-      {/* Proxy Voting Management (Admin) */}
-      {canManage && electionId && election.status !== ElectionStatus.CANCELLED && (
-        <div className="mb-6">
-          <ProxyVotingManagement electionId={electionId} canManage={canManage} />
-        </div>
-      )}
-
-      {/* Voter Ballot (when election is open) */}
-      {election.status === ElectionStatus.OPEN && electionId && (
-        <div className="mb-6">
-          <ElectionBallot
-            electionId={electionId}
-            election={election}
-            onVoteCast={() => { void fetchElection(); }}
-          />
-        </div>
-      )}
-
-      {/* Results Toggle for All Users */}
-      {resultsAvailable && (
-        <div className="mb-6">
-          <button
-            onClick={() => setShowResults(!showResults)}
-            className="w-full bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-4 flex items-center justify-between hover:bg-theme-surface-hover"
-          >
-            <span className="text-lg font-medium text-theme-text-primary">
-              {showResults ? 'Hide Results' : 'View Results'}
-            </span>
-            <svg
-              className={`h-6 w-6 text-theme-text-muted transform transition-transform ${
-                showResults ? 'rotate-180' : ''
-              }`}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              aria-hidden="true"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-        </div>
-      )}
-
-      {/* Results Display */}
-      {showResults && resultsAvailable && electionId && (
-        <ElectionResults electionId={electionId} election={election} />
-      )}
-
-      {/* Message if results not available */}
-      {!resultsAvailable && (
+      {/* Message if results not available (non-tabbed fallback for non-admin users) */}
+      {!canManage && !resultsAvailable && (
         <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
           <p className="text-sm text-blue-700 dark:text-blue-300">
-            Results will be available when the election is closed
-            {canManage && ' or when you enable "Show Results to Voters"'}.
+            Results will be available when the election is closed.
           </p>
         </div>
       )}

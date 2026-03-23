@@ -36,6 +36,7 @@ from app.schemas.election import (
     ElectionCreate,
     ElectionDelete,
     ElectionDeleteResponse,
+    EligibilityRosterResponse,
     ElectionListResponse,
     ElectionReportResponse,
     ElectionResponse,
@@ -1545,6 +1546,35 @@ async def get_non_voters(
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
     return {"non_voters": non_voters, "count": len(non_voters)}
+
+
+@router.get(
+    "/{election_id}/eligibility-roster",
+    response_model=EligibilityRosterResponse,
+)
+async def get_eligibility_roster(
+    election_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Get a full roster of all active members with per-ballot-item
+    eligibility status.  Shows who will receive a ballot, who won't,
+    and why — designed for the secretary's pre-send review.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    try:
+        result = await service.get_eligibility_roster(
+            election_id, current_user.organization_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+    return result
 
 
 # ============================================

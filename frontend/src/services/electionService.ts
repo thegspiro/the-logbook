@@ -21,6 +21,7 @@ import type {
   ElectionSettings,
   ElectionStats,
   ElectionUpdate,
+  EligibilityRoster,
   EmailBallot,
   EmailBallotResponse,
   ForensicsReport,
@@ -365,4 +366,13 @@ export const electionService = {
     });
     return response.data;
   },
+
+  /**
+   * Get full eligibility roster for an election (secretary view)
+   */
+  async getEligibilityRoster(electionId: string): Promise<EligibilityRoster> {
+    const response = await api.get<EligibilityRoster>(`/elections/${electionId}/eligibility-roster`);
+    return response.data;
+  },
+
 };

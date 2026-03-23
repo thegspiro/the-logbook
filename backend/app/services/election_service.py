@@ -4466,3 +4466,180 @@ Best regards,
             "abstentions": abstentions,
             "message": f"Ballot submitted successfully. {len(created_votes)} vote(s) cast, {abstentions} abstention(s).",
         }, None
+
+    # ------------------------------------------------------------------
+    # Eligibility Roster (secretary view)
+    # ------------------------------------------------------------------
+
+    async def get_eligibility_roster(
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+    ) -> Dict:
+        """
+        Build a full roster of all active members with per-ballot-item
+        eligibility status.  Designed for the secretary to see at a glance
+        who will receive a ballot, who won't, and why.
+        """
+        election = await self.get_election(election_id, organization_id)
+        if not election:
+            raise ValueError("Election not found")
+
+        # Load all active users with roles
+        users_result = await self.db.execute(
+            select(User)
+            .where(User.organization_id == str(organization_id))
+            .where(User.is_active == True)  # noqa: E712
+            .options(selectinload(User.roles))
+            .order_by(User.last_name, User.first_name)
+        )
+        users = list(users_result.scalars().all())
+
+        # Load org settings for tier checks
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        organization = org_result.scalar_one_or_none()
+
+        # Check who has voted (for live status)
+        voted_user_ids: set = set()
+        if election.anonymous_voting:
+            for user in users:
+                voter_hash = self._generate_voter_hash(
+                    user.id, election_id,
+                    election.voter_anonymity_salt or "",
+                )
+                vote_result = await self.db.execute(
+                    select(func.count(Vote.id))
+                    .where(Vote.election_id == str(election_id))
+                    .where(Vote.voter_hash == voter_hash)
+                    .where(Vote.deleted_at.is_(None))
+                    .where(Vote.is_test == False)  # noqa: E712
+                )
+                if (vote_result.scalar() or 0) > 0:
+                    voted_user_ids.add(str(user.id))
+        else:
+            vote_result = await self.db.execute(
+                select(Vote.voter_id)
+                .where(Vote.election_id == str(election_id))
+                .where(Vote.voter_id.isnot(None))
+                .where(Vote.deleted_at.is_(None))
+                .where(Vote.is_test == False)  # noqa: E712
+            )
+            voted_user_ids = {str(r[0]) for r in vote_result.all() if r[0]}
+
+        ballot_items = election.ballot_items or []
+        override_user_ids = {
+            o.get("user_id")
+            for o in (election.voter_overrides or [])
+        }
+
+        roster = []
+        for user in users:
+            user_id = str(user.id)
+            has_override = user_id in override_user_ids
+            has_voted = user_id in voted_user_ids
+            is_attending = self._is_user_attending(user_id, election)
+
+            # Restricted voter list check
+            in_eligible_list = True
+            if election.eligible_voters:
+                in_eligible_list = user_id in [
+                    str(v) for v in election.eligible_voters
+                ]
+
+            # Per-item eligibility
+            item_eligibility = []
+            eligible_count = 0
+            for item in ballot_items:
+                if has_override or not election.eligible_voters or in_eligible_list:
+                    eligible_items = (
+                        await self._get_eligible_ballot_items_for_user(
+                            user, election, str(organization_id), organization,
+                        )
+                    )
+                    item_ids = {i.get("id") for i in eligible_items}
+                    for bi in ballot_items:
+                        is_eligible = bi.get("id") in item_ids
+                        reason = None
+                        if not is_eligible and not has_override:
+                            eligible_types = bi.get(
+                                "eligible_voter_types", ["all"]
+                            )
+                            if not await self._user_has_role_type(
+                                user, eligible_types
+                            ):
+                                member_type = (
+                                    getattr(user, "membership_type", None)
+                                    or "active"
+                                )
+                                reason = (
+                                    f"Membership type '{member_type}' not in "
+                                    f"required: {', '.join(eligible_types)}"
+                                )
+                            elif bi.get("require_attendance") and not is_attending:
+                                reason = "Not checked in for meeting"
+                        item_eligibility.append({
+                            "ballot_item_id": bi.get("id", ""),
+                            "ballot_item_title": bi.get("title", ""),
+                            "eligible": is_eligible,
+                            "reason": reason,
+                        })
+                        if is_eligible:
+                            eligible_count += 1
+                    break  # computed all items in one pass
+                else:
+                    for bi in ballot_items:
+                        item_eligibility.append({
+                            "ballot_item_id": bi.get("id", ""),
+                            "ballot_item_title": bi.get("title", ""),
+                            "eligible": False,
+                            "reason": "Not in eligible voters list",
+                        })
+                    break
+
+            # Overall ineligibility reason
+            overall_reason = None
+            if not in_eligible_list and not has_override:
+                overall_reason = "Not in eligible voters list"
+                eligible_count = 0
+            elif eligible_count == 0 and not has_override:
+                overall_reason = await self._get_ineligibility_reason_for_user(
+                    user, election, str(organization_id), organization,
+                )
+
+            will_receive_ballot = (
+                eligible_count > 0 or has_override
+            ) and in_eligible_list
+
+            member_type = getattr(user, "membership_type", None) or "active"
+            roster.append({
+                "user_id": user_id,
+                "full_name": user.full_name or user.username,
+                "email": user.email,
+                "membership_type": member_type,
+                "has_override": has_override,
+                "has_voted": has_voted,
+                "is_attending": is_attending,
+                "will_receive_ballot": will_receive_ballot,
+                "eligible_item_count": eligible_count if will_receive_ballot else 0,
+                "total_item_count": len(ballot_items),
+                "ineligibility_reason": overall_reason,
+                "item_eligibility": item_eligibility,
+            })
+
+        total_eligible = sum(1 for r in roster if r["will_receive_ballot"])
+        total_voted = sum(1 for r in roster if r["has_voted"])
+        total_overrides = sum(1 for r in roster if r["has_override"])
+
+        return {
+            "election_id": str(election_id),
+            "election_title": election.title,
+            "election_status": election.status.value if hasattr(election.status, "value") else str(election.status),
+            "total_members": len(roster),
+            "total_eligible": total_eligible,
+            "total_ineligible": len(roster) - total_eligible,
+            "total_voted": total_voted,
+            "total_overrides": total_overrides,
+            "roster": roster,
+        }
