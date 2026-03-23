@@ -63,7 +63,8 @@ const MemberRow: React.FC<{
       <tr
         className={`${rowBg} hover:bg-theme-surface-hover transition-colors cursor-pointer`}
         onClick={hasItems ? onToggle : undefined}
-        role={hasItems ? 'button' : undefined}
+        role={hasItems ? 'row' : undefined}
+        aria-expanded={hasItems ? expanded : undefined}
         tabIndex={hasItems ? 0 : undefined}
         onKeyDown={hasItems ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } } : undefined}
       >
@@ -361,10 +362,11 @@ export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search by name, email, or membership type..."
+                    aria-label="Search members"
                     className="w-full pl-9 pr-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
                   />
                 </div>
-                <div className="flex gap-1.5 flex-wrap">
+                <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Filter members by status">
                   {FILTER_OPTIONS.map((opt) => {
                     const Icon = opt.icon;
                     const isActive = filter === opt.value;
@@ -372,6 +374,7 @@ export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({
                       <button
                         key={opt.value}
                         onClick={() => setFilter(opt.value)}
+                        aria-pressed={isActive}
                         className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
                           isActive
                             ? 'bg-blue-600 text-white'

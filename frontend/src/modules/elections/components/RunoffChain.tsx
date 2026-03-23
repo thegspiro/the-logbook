@@ -159,6 +159,7 @@ export const RunoffChain: React.FC<RunoffChainProps> = ({ election }) => {
                 )}
                 <Link
                   to={`/elections/${node.id}`}
+                  aria-current={isCurrent ? 'page' : undefined}
                   className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 shrink-0 transition-colors ${
                     isCurrent
                       ? 'border-purple-500 bg-purple-500/10 ring-2 ring-purple-500/20'
