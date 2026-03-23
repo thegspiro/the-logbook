@@ -242,11 +242,19 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const handleConfirm = async (assignmentId: string) => {
     if (confirming) return;
     setConfirming(true);
+    // Optimistic update — show confirmed immediately
+    setAssignments(prev => prev.map(a =>
+      a.id === assignmentId ? { ...a, status: AssignmentStatus.CONFIRMED } : a
+    ));
     try {
       await schedulingService.confirmAssignment(assignmentId);
       toast.success('Assignment confirmed');
       await refreshAssignments();
     } catch (err) {
+      // Revert optimistic update
+      setAssignments(prev => prev.map(a =>
+        a.id === assignmentId ? { ...a, status: AssignmentStatus.ASSIGNED } : a
+      ));
       toast.error(getErrorMessage(err, 'Failed to confirm assignment'));
     } finally {
       setConfirming(false);
@@ -256,12 +264,20 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const handleDecline = async (assignmentId: string) => {
     if (declining) return;
     setDeclining(true);
+    // Optimistic update — show declined immediately
+    setAssignments(prev => prev.map(a =>
+      a.id === assignmentId ? { ...a, status: AssignmentStatus.DECLINED } : a
+    ));
+    setConfirmingDecline(null);
     try {
       await schedulingService.updateAssignment(assignmentId, { assignment_status: 'declined' });
       toast.success('Assignment declined');
-      setConfirmingDecline(null);
       await refreshAssignments();
     } catch (err) {
+      // Revert optimistic update
+      setAssignments(prev => prev.map(a =>
+        a.id === assignmentId ? { ...a, status: AssignmentStatus.ASSIGNED } : a
+      ));
       toast.error(getErrorMessage(err, 'Failed to decline assignment'));
     } finally {
       setDeclining(false);
@@ -1232,7 +1248,22 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                 className="flex items-center justify-between w-full text-left py-2"
               >
                 <h3 className="text-base font-semibold text-theme-text-primary flex items-center gap-2">
-                  <ClipboardCheck className="w-4 h-4" /> Equipment Checks ({equipmentCheckSummaries.length})
+                  <ClipboardCheck className="w-4 h-4" /> Equipment Checks
+                  {/* Inline status summary — always visible */}
+                  {(() => {
+                    const passed = equipmentCheckSummaries.filter(s => s.isCompleted && s.overallStatus === 'pass').length;
+                    const failed = equipmentCheckSummaries.filter(s => s.isCompleted && s.overallStatus !== 'pass').length;
+                    const inProgress = equipmentCheckSummaries.filter(s => !s.isCompleted && s.completedItems > 0).length;
+                    const notStarted = equipmentCheckSummaries.filter(s => !s.isCompleted && s.completedItems === 0).length;
+                    return (
+                      <span className="flex items-center gap-1.5 ml-1">
+                        {passed > 0 && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">{passed} pass</span>}
+                        {failed > 0 && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">{failed} fail</span>}
+                        {inProgress > 0 && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">{inProgress} in progress</span>}
+                        {notStarted > 0 && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-theme-surface-secondary text-theme-text-muted">{notStarted} pending</span>}
+                      </span>
+                    );
+                  })()}
                 </h3>
                 {showEquipmentChecks ? <ChevronUp className="w-4 h-4 text-theme-text-muted" /> : <ChevronDown className="w-4 h-4 text-theme-text-muted" />}
               </button>
@@ -1275,6 +1306,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                             {summary.checkedByName && (
                               <p className="text-xs text-theme-text-muted mt-1">
                                 Checked by {summary.checkedByName}{summary.checkedAt ? ` at ${formatTime(summary.checkedAt, tz)}` : ''}
+                              </p>
+                            )}
+                            {!summary.isCompleted && (
+                              <p className="text-xs text-violet-600 dark:text-violet-400 mt-1.5 font-medium">
+                                {summary.completedItems > 0
+                                  ? `Continue check \u2192 ${summary.totalItems - summary.completedItems} items remaining`
+                                  : 'Start check \u2192 Go to Checklists tab'}
                               </p>
                             )}
                           </div>

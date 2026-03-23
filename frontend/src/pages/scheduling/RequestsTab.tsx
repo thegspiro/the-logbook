@@ -108,6 +108,21 @@ export const RequestsTab: React.FC = () => {
     }
   };
 
+  // Quick inline approve/deny without notes
+  const handleQuickReview = async (type: 'swap' | 'timeoff', id: string, action: 'approved' | 'denied') => {
+    try {
+      if (type === 'swap') {
+        await schedulingService.reviewSwapRequest(id, { status: action });
+      } else {
+        await schedulingService.reviewTimeOff(id, { status: action });
+      }
+      toast.success(`Request ${action}`);
+      void loadData();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to process request'));
+    }
+  };
+
   const handleCancel = async (type: 'swap' | 'timeoff', id: string) => {
     try {
       if (type === 'swap') {
@@ -218,13 +233,26 @@ export const RequestsTab: React.FC = () => {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex flex-wrap items-center gap-1 shrink-0">
                       {canManage && req.status === RequestStatus.PENDING && (
-                        <button onClick={() => { setReviewing({ type: 'swap', id: req.id }); setReviewNotes(''); }}
-                          className="p-2 text-theme-text-muted hover:text-green-600 hover:bg-green-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label="Review swap request"
-                        >
-                          <Check className="w-4 h-4" />
-                        </button>
+                        <>
+                          <button onClick={() => { void handleQuickReview('swap', req.id, 'approved'); }}
+                            className="px-2.5 py-1.5 text-xs font-medium text-green-700 dark:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors inline-flex items-center gap-1" aria-label="Approve swap"
+                          >
+                            <Check className="w-3.5 h-3.5" /> Approve
+                          </button>
+                          <button onClick={() => { void handleQuickReview('swap', req.id, 'denied'); }}
+                            className="px-2.5 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors inline-flex items-center gap-1" aria-label="Deny swap"
+                          >
+                            <X className="w-3.5 h-3.5" /> Deny
+                          </button>
+                          <button onClick={() => { setReviewing({ type: 'swap', id: req.id }); setReviewNotes(''); }}
+                            className="px-2 py-1.5 text-[10px] text-theme-text-muted hover:text-theme-text-primary rounded-lg transition-colors" aria-label="Review with notes"
+                            title="Add reviewer notes"
+                          >
+                            + Notes
+                          </button>
+                        </>
                       )}
                       {req.status === RequestStatus.PENDING && (req.requesting_user_id ?? req.user_id) === currentUser?.id && confirmingCancel?.id !== req.id && (
                         <button onClick={() => setConfirmingCancel({ type: 'swap', id: req.id })}
@@ -292,13 +320,26 @@ export const RequestsTab: React.FC = () => {
                         {req.reason && <p className="text-xs text-theme-text-secondary mt-1 line-clamp-2">{req.reason}</p>}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex flex-wrap items-center gap-1 shrink-0">
                       {canManage && req.status === RequestStatus.PENDING && (
-                        <button onClick={() => { setReviewing({ type: 'timeoff', id: req.id }); setReviewNotes(''); }}
-                          className="p-2 text-theme-text-muted hover:text-green-600 hover:bg-green-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label="Review time-off request"
-                        >
-                          <Check className="w-4 h-4" />
-                        </button>
+                        <>
+                          <button onClick={() => { void handleQuickReview('timeoff', req.id, 'approved'); }}
+                            className="px-2.5 py-1.5 text-xs font-medium text-green-700 dark:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors inline-flex items-center gap-1" aria-label="Approve time off"
+                          >
+                            <Check className="w-3.5 h-3.5" /> Approve
+                          </button>
+                          <button onClick={() => { void handleQuickReview('timeoff', req.id, 'denied'); }}
+                            className="px-2.5 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors inline-flex items-center gap-1" aria-label="Deny time off"
+                          >
+                            <X className="w-3.5 h-3.5" /> Deny
+                          </button>
+                          <button onClick={() => { setReviewing({ type: 'timeoff', id: req.id }); setReviewNotes(''); }}
+                            className="px-2 py-1.5 text-[10px] text-theme-text-muted hover:text-theme-text-primary rounded-lg transition-colors" aria-label="Review with notes"
+                            title="Add reviewer notes"
+                          >
+                            + Notes
+                          </button>
+                        </>
                       )}
                       {req.status === RequestStatus.PENDING && req.user_id === currentUser?.id && confirmingCancel?.id !== req.id && (
                         <button onClick={() => setConfirmingCancel({ type: 'timeoff', id: req.id })}
