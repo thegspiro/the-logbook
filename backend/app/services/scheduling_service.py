@@ -10,7 +10,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -2298,23 +2298,34 @@ class SchedulingService:
     async def get_member_hours_report(
         self, organization_id: UUID, start_date: date, end_date: date
     ) -> List[Dict]:
-        """Get total hours per member from attendance records in a date range"""
+        """Get total scheduled hours per member from shift assignments in a date range"""
+        duration_minutes = func.timestampdiff(
+            text("MINUTE"), Shift.start_time, Shift.end_time
+        )
+
         result = await self.db.execute(
             select(
-                ShiftAttendance.user_id,
+                ShiftAssignment.user_id,
                 User.email,
-                func.count(ShiftAttendance.id).label("shift_count"),
-                func.coalesce(func.sum(ShiftAttendance.duration_minutes), 0).label(
+                User.first_name,
+                User.last_name,
+                func.count(ShiftAssignment.id).label("shift_count"),
+                func.coalesce(func.sum(duration_minutes), 0).label(
                     "total_minutes"
                 ),
             )
-            .join(Shift, ShiftAttendance.shift_id == Shift.id)
-            .join(User, ShiftAttendance.user_id == User.id)
-            .where(Shift.organization_id == str(organization_id))
+            .join(Shift, ShiftAssignment.shift_id == Shift.id)
+            .join(User, ShiftAssignment.user_id == User.id)
+            .where(ShiftAssignment.organization_id == str(organization_id))
             .where(Shift.shift_date >= start_date)
             .where(Shift.shift_date <= end_date)
-            .group_by(ShiftAttendance.user_id, User.email)
-            .order_by(func.sum(ShiftAttendance.duration_minutes).desc())
+            .group_by(
+                ShiftAssignment.user_id,
+                User.email,
+                User.first_name,
+                User.last_name,
+            )
+            .order_by(func.sum(duration_minutes).desc())
         )
         rows = result.all()
 
@@ -2322,6 +2333,8 @@ class SchedulingService:
             {
                 "user_id": row.user_id,
                 "email": row.email,
+                "first_name": row.first_name or "",
+                "last_name": row.last_name or "",
                 "shift_count": row.shift_count,
                 "total_minutes": row.total_minutes,
                 "total_hours": round(row.total_minutes / 60.0, 1),

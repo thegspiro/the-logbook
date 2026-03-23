@@ -224,7 +224,7 @@ export const SchedulingReportsPage: React.FC = () => {
     setHasSearched(true);
     try {
       const data = await schedulingService.getMemberHoursReport({ start_date: startDate, end_date: endDate });
-      setMemberHoursReport(data as unknown as MemberHoursReport);
+      setMemberHoursReport(data);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to load member hours report'));
     } finally {
@@ -493,8 +493,10 @@ export const SchedulingReportsPage: React.FC = () => {
                         <tr key={m.user_id} className="border-b border-theme-surface-border hover:bg-theme-surface-hover">
                           <td className="py-3 px-4">
                             <div>
-                              <p className="text-theme-text-primary font-medium">{m.email}</p>
-                              <p className="text-xs text-theme-text-muted">{m.user_id}</p>
+                              <p className="text-theme-text-primary font-medium">
+                                {(m.first_name || m.last_name) ? `${m.first_name} ${m.last_name}`.trim() : m.email}
+                              </p>
+                              <p className="text-xs text-theme-text-muted">{m.email}</p>
                             </div>
                           </td>
                           <td className="py-3 px-4 text-right text-theme-text-primary">{m.shift_count}</td>
