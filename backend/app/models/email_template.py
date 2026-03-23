@@ -43,6 +43,8 @@ class EmailTemplateType(str, enum.Enum):
     DUPLICATE_APPLICATION = "duplicate_application"
     SERIES_END_REMINDER = "series_end_reminder"
     SHIFT_DECLINE = "shift_decline"
+    SHIFT_ASSIGNMENT = "shift_assignment"
+    SHIFT_REMINDER = "shift_reminder"
     CUSTOM = "custom"
 
 
