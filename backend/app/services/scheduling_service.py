@@ -1706,11 +1706,11 @@ class SchedulingService:
             notif = NotificationLog(
                 id=generate_uuid(),
                 organization_id=str(organization_id),
-                user_id=str(user_id),
+                recipient_id=str(user_id),
                 channel="in_app",
-                notification_type="shift_assignment",
+                category="shift_assignment",
                 subject="New Shift Assignment",
-                body=message,
+                message=message,
             )
             self.db.add(notif)
             await self.db.flush()
