@@ -104,7 +104,7 @@ const PresetPatterns: React.FC<PresetPatternsProps> = ({ onSelect, selectedId })
                     {preset.hasDayNight && (
                       <span className="flex items-center gap-1">
                         <Sun className="w-3 h-3 text-amber-500" />
-                        <Moon className="w-3 h-3 text-indigo-400" />
+                        <Moon className="w-3 h-3 text-indigo-700 dark:text-indigo-400" />
                       </span>
                     )}
                   </div>

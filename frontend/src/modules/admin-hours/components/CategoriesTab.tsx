@@ -200,7 +200,7 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold text-theme-text-primary">{cat.name}</h3>
                   {!cat.isActive && (
-                    <span className="text-xs px-2 py-0.5 bg-red-500/20 text-red-400 rounded-full">Inactive</span>
+                    <span className="text-xs px-2 py-0.5 bg-red-500/20 text-red-700 dark:text-red-400 rounded-full">Inactive</span>
                   )}
                 </div>
                 {cat.description && (

@@ -270,7 +270,7 @@ const MinutesPage: React.FC = () => {
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-6">
           <div className="flex items-center space-x-2">
             <AlertCircle className="w-5 h-5 text-red-700 shrink-0" />
-            <p className="text-red-300 text-sm">{error}</p>
+            <p className="text-red-700 dark:text-red-300 text-sm">{error}</p>
             <button onClick={() => setError(null)} className="ml-auto text-red-700 hover:text-red-600">
               <X className="w-4 h-4" />
             </button>
@@ -376,7 +376,7 @@ const MinutesPage: React.FC = () => {
                             }
                           })();
                         }}
-                        className="p-2 text-theme-text-muted hover:text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-colors"
+                        className="p-2 text-theme-text-muted hover:text-cyan-800 dark:hover:text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-colors"
                         title="Create minutes from this meeting"
                       >
                         <BookOpen className="w-4 h-4" />
@@ -523,7 +523,7 @@ const MinutesPage: React.FC = () => {
                   <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4">
                     <div className="flex items-center space-x-2">
                       <AlertCircle className="w-4 h-4 text-red-700 shrink-0" />
-                      <p className="text-red-300 text-sm">{createError}</p>
+                      <p className="text-red-700 dark:text-red-300 text-sm">{createError}</p>
                     </div>
                   </div>
                 )}

@@ -42,7 +42,7 @@ const CommunityEngagementTab: React.FC = () => {
   if (error || !data) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-red-400">
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-red-700 dark:text-red-400">
           {error || 'No data available'}
         </div>
       </div>
@@ -55,7 +55,7 @@ const CommunityEngagementTab: React.FC = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-6">
         <h2 className="text-lg font-semibold text-theme-text-primary flex items-center gap-2">
-          <Globe className="h-5 w-5 text-blue-400" />
+          <Globe className="h-5 w-5 text-blue-700 dark:text-blue-400" />
           Community Engagement
         </h2>
         <p className="text-sm text-theme-text-muted mt-1">
@@ -68,7 +68,7 @@ const CommunityEngagementTab: React.FC = () => {
         <div className="card-secondary p-5">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-blue-500/20 rounded-lg">
-              <Calendar className="h-5 w-5 text-blue-400" />
+              <Calendar className="h-5 w-5 text-blue-700 dark:text-blue-400" />
             </div>
             <span className="text-sm text-theme-text-muted">Public Events</span>
           </div>
@@ -79,7 +79,7 @@ const CommunityEngagementTab: React.FC = () => {
         <div className="card-secondary p-5">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-green-500/20 rounded-lg">
-              <Users className="h-5 w-5 text-green-400" />
+              <Users className="h-5 w-5 text-green-700 dark:text-green-400" />
             </div>
             <span className="text-sm text-theme-text-muted">Member Attendees</span>
           </div>
@@ -90,7 +90,7 @@ const CommunityEngagementTab: React.FC = () => {
         <div className="card-secondary p-5">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-purple-500/20 rounded-lg">
-              <Globe className="h-5 w-5 text-purple-400" />
+              <Globe className="h-5 w-5 text-purple-700 dark:text-purple-400" />
             </div>
             <span className="text-sm text-theme-text-muted">External Attendees</span>
           </div>
@@ -101,7 +101,7 @@ const CommunityEngagementTab: React.FC = () => {
         <div className="card-secondary p-5">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-cyan-500/20 rounded-lg">
-              <TrendingUp className="h-5 w-5 text-cyan-400" />
+              <TrendingUp className="h-5 w-5 text-cyan-700 dark:text-cyan-400" />
             </div>
             <span className="text-sm text-theme-text-muted">Upcoming Public</span>
           </div>

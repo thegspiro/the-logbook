@@ -13,9 +13,9 @@ interface Props {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  expired: 'bg-red-500/20 text-red-300',
-  expiring_soon: 'bg-yellow-500/20 text-yellow-300',
-  valid: 'bg-green-500/20 text-green-300',
+  expired: 'bg-red-500/20 text-red-700 dark:text-red-300',
+  expiring_soon: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-300',
+  valid: 'bg-green-500/20 text-green-700 dark:text-green-300',
   no_expiry: 'bg-theme-surface-secondary text-theme-text-muted',
 };
 
@@ -44,9 +44,9 @@ export const CertExpirationRenderer: React.FC<Props> = ({ data }) => {
         const days = Number(v);
         const color =
           days < 0
-            ? 'text-red-400 font-semibold'
+            ? 'text-red-700 dark:text-red-400 font-semibold'
             : days <= 30
-              ? 'text-yellow-400 font-semibold'
+              ? 'text-yellow-700 dark:text-yellow-400 font-semibold'
               : 'text-theme-text-secondary';
         return <span className={color}>{days}</span>;
       },

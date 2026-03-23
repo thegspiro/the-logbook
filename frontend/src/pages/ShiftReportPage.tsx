@@ -47,7 +47,7 @@ const StarRating: React.FC<{
           className="focus:outline-hidden"
         >
           <Star
-            className={`${sizeClass} ${star <= value ? 'text-yellow-400 fill-yellow-400' : 'text-theme-text-muted'}`}
+            className={`${sizeClass} ${star <= value ? 'text-yellow-700 dark:text-yellow-400 fill-yellow-400' : 'text-theme-text-muted'}`}
           />
         </button>
       ))}
@@ -80,7 +80,7 @@ const ReportCard: React.FC<{
                 <StarRating value={report.performance_rating} onChange={() => {}} size="sm" />
               )}
               {report.trainee_acknowledged && (
-                <CheckCircle2 className="w-4 h-4 text-green-400" />
+                <CheckCircle2 className="w-4 h-4 text-green-700 dark:text-green-400" />
               )}
             </div>
             <div className="flex items-center flex-wrap gap-x-4 gap-y-1 text-xs text-theme-text-muted">
@@ -115,13 +115,13 @@ const ReportCard: React.FC<{
           {report.areas_of_strength && (
             <div>
               <span className="text-theme-text-muted text-xs">Strengths</span>
-              <p className="text-green-300 text-sm">{report.areas_of_strength}</p>
+              <p className="text-green-700 dark:text-green-300 text-sm">{report.areas_of_strength}</p>
             </div>
           )}
           {report.areas_for_improvement && (
             <div>
               <span className="text-theme-text-muted text-xs">Areas for Improvement</span>
-              <p className="text-orange-300 text-sm">{report.areas_for_improvement}</p>
+              <p className="text-orange-700 dark:text-orange-300 text-sm">{report.areas_for_improvement}</p>
             </div>
           )}
           {report.skills_observed && report.skills_observed.length > 0 && (
@@ -129,7 +129,7 @@ const ReportCard: React.FC<{
               <span className="text-theme-text-muted text-xs">Skills Observed</span>
               <div className="flex flex-wrap gap-1 mt-1">
                 {report.skills_observed.map((s, i) => (
-                  <span key={i} className={`text-xs px-2 py-0.5 rounded-sm ${s.demonstrated ? 'bg-green-500/20 text-green-400' : 'bg-theme-surface-secondary text-theme-text-muted'}`}>
+                  <span key={i} className={`text-xs px-2 py-0.5 rounded-sm ${s.demonstrated ? 'bg-green-500/20 text-green-700 dark:text-green-400' : 'bg-theme-surface-secondary text-theme-text-muted'}`}>
                     {s.skill_name}
                   </span>
                 ))}
@@ -147,7 +147,7 @@ const ReportCard: React.FC<{
             </div>
           )}
           {report.requirements_progressed && report.requirements_progressed.length > 0 && (
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-sm p-2 text-xs text-blue-300">
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-sm p-2 text-xs text-blue-700 dark:text-blue-300">
               Updated {report.requirements_progressed.length} pipeline requirement(s)
             </div>
           )}
@@ -425,7 +425,7 @@ const ShiftReportPage: React.FC = () => {
             {/* Trainee + Date */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Trainee <span className="text-red-400">*</span></label>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Trainee <span className="text-red-700 dark:text-red-400">*</span></label>
                 <select
                   value={traineeId}
                   onChange={(e) => setTraineeId(e.target.value)}
@@ -441,7 +441,7 @@ const ShiftReportPage: React.FC = () => {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Shift Date <span className="text-red-400">*</span></label>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Shift Date <span className="text-red-700 dark:text-red-400">*</span></label>
                 <input
                   type="date"
                   value={shiftDate}
@@ -456,7 +456,7 @@ const ShiftReportPage: React.FC = () => {
             {/* Hours + Calls */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Hours on Shift <span className="text-red-400">*</span></label>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Hours on Shift <span className="text-red-700 dark:text-red-400">*</span></label>
                 <input
                   type="number"
                   value={hoursOnShift || ''}
@@ -589,7 +589,7 @@ const ShiftReportPage: React.FC = () => {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-sm font-medium text-theme-text-secondary">Skills Observed</label>
-                <button type="button" onClick={addSkill} className="text-xs text-red-400 hover:text-red-300 flex items-center space-x-1">
+                <button type="button" onClick={addSkill} className="text-xs text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 flex items-center space-x-1">
                   <Plus className="w-3 h-3" /><span>Add Skill</span>
                 </button>
               </div>
@@ -611,7 +611,7 @@ const ShiftReportPage: React.FC = () => {
                     />
                     <span className="text-xs text-theme-text-muted">Demo'd</span>
                   </label>
-                  <button type="button" onClick={() => removeSkill(i)} className="text-theme-text-muted hover:text-red-400">
+                  <button type="button" onClick={() => removeSkill(i)} className="text-theme-text-muted hover:text-red-800 dark:hover:text-red-400">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -622,7 +622,7 @@ const ShiftReportPage: React.FC = () => {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-sm font-medium text-theme-text-secondary">Tasks Performed</label>
-                <button type="button" onClick={addTask} className="text-xs text-red-400 hover:text-red-300 flex items-center space-x-1">
+                <button type="button" onClick={addTask} className="text-xs text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 flex items-center space-x-1">
                   <Plus className="w-3 h-3" /><span>Add Task</span>
                 </button>
               </div>
@@ -642,7 +642,7 @@ const ShiftReportPage: React.FC = () => {
                     placeholder="Notes (optional)"
                     className="form-input flex-1"
                   />
-                  <button type="button" onClick={() => removeTask(i)} className="text-theme-text-muted hover:text-red-400">
+                  <button type="button" onClick={() => removeTask(i)} className="text-theme-text-muted hover:text-red-800 dark:hover:text-red-400">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>

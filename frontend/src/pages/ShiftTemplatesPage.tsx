@@ -732,7 +732,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
                                     const newPos = res.positions.filter((_, idx) => idx !== pi);
                                     updateResourcePositions(ri, newPos);
                                   }}
-                                  className="ml-0.5 text-purple-400 hover:text-red-500"
+                                  className="ml-0.5 text-purple-700 dark:text-purple-400 hover:text-red-500"
                                 >
                                   <X className="w-2.5 h-2.5" />
                                 </button>

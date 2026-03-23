@@ -136,7 +136,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
         <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
-              <UserCheck className="w-5 h-5 text-emerald-400" aria-hidden="true" />
+              <UserCheck className="w-5 h-5 text-emerald-700 dark:text-emerald-400" aria-hidden="true" />
             </div>
             <div>
               <h2 id="conversion-modal-title" className="text-lg font-bold text-theme-text-primary">
@@ -160,7 +160,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
         {conversionResult ? (
           <div className="p-6">
             <div className="text-center py-6">
-              <CheckCircle2 className="w-16 h-16 text-emerald-400 mx-auto mb-4" aria-hidden="true" />
+              <CheckCircle2 className="w-16 h-16 text-emerald-700 dark:text-emerald-400 mx-auto mb-4" aria-hidden="true" />
               <h3 className="text-xl font-bold text-theme-text-primary mb-2">
                 Conversion Complete
               </h3>
@@ -255,7 +255,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                   {applicant.stage_history.map((sh) => (
                     <div key={sh.id} className="flex items-center gap-2 text-xs">
                       {sh.completed_at ? (
-                        <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                        <CheckCircle2 className="w-3 h-3 text-emerald-700 dark:text-emerald-400" />
                       ) : (
                         <div className="w-3 h-3 rounded-full border border-theme-surface-border" />
                       )}

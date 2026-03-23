@@ -39,32 +39,32 @@ import { getErrorMessage } from '../utils/errorHandling';
 const TRIGGER_DISPLAY: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
   event_reminder: {
     icon: <Calendar className="w-5 h-5" />,
-    color: 'text-blue-400',
+    color: 'text-blue-700 dark:text-blue-400',
     label: 'Event Reminder',
   },
   training_expiry: {
     icon: <GraduationCap className="w-5 h-5" />,
-    color: 'text-purple-400',
+    color: 'text-purple-700 dark:text-purple-400',
     label: 'Training Expiry',
   },
   schedule_change: {
     icon: <Clock className="w-5 h-5" />,
-    color: 'text-violet-400',
+    color: 'text-violet-700 dark:text-violet-400',
     label: 'Schedule Change',
   },
   new_member: {
     icon: <Users className="w-5 h-5" />,
-    color: 'text-green-400',
+    color: 'text-green-700 dark:text-green-400',
     label: 'Member Added',
   },
   maintenance_due: {
     icon: <AlertTriangle className="w-5 h-5" />,
-    color: 'text-orange-400',
+    color: 'text-orange-700 dark:text-orange-400',
     label: 'Maintenance Due',
   },
   form_submitted: {
     icon: <FileText className="w-5 h-5" />,
-    color: 'text-cyan-400',
+    color: 'text-cyan-700 dark:text-cyan-400',
     label: 'Form Submitted',
   },
 };
@@ -273,11 +273,11 @@ const NotificationsPage: React.FC = () => {
         {/* Error Banner */}
         {error && (
           <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-start space-x-3">
-            <AlertCircle className="w-5 h-5 text-red-400 mt-0.5 shrink-0" />
+            <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400 mt-0.5 shrink-0" />
             <div className="flex-1">
-              <p className="text-red-300 text-sm">{error}</p>
+              <p className="text-red-700 dark:text-red-300 text-sm">{error}</p>
             </div>
-            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-300">
+            <button onClick={() => setError(null)} className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -398,7 +398,7 @@ const NotificationsPage: React.FC = () => {
                       </div>
                       <div className="flex items-center space-x-3">
                         {rule.enabled ? (
-                          <span className="flex items-center space-x-1 text-green-400 text-sm">
+                          <span className="flex items-center space-x-1 text-green-700 dark:text-green-400 text-sm">
                             <CheckCircle className="w-4 h-4" />
                             <span>Active</span>
                           </span>
@@ -414,7 +414,7 @@ const NotificationsPage: React.FC = () => {
                             {togglingRuleId === rule.id ? (
                               <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" />
                             ) : rule.enabled ? (
-                              <ToggleRight className="w-8 h-8 text-green-400" />
+                              <ToggleRight className="w-8 h-8 text-green-700 dark:text-green-400" />
                             ) : (
                               <ToggleLeft className="w-8 h-8 text-theme-text-muted" />
                             )}
@@ -534,11 +534,11 @@ const NotificationsPage: React.FC = () => {
                       </div>
                       <div className="col-span-1">
                         {log.delivered ? (
-                          <span className="flex items-center space-x-1 text-green-400" title="Delivered">
+                          <span className="flex items-center space-x-1 text-green-700 dark:text-green-400" title="Delivered">
                             <CheckCircle className="w-4 h-4" />
                           </span>
                         ) : (
-                          <span className="flex items-center space-x-1 text-red-400" title={log.error || 'Not delivered'}>
+                          <span className="flex items-center space-x-1 text-red-700 dark:text-red-400" title={log.error || 'Not delivered'}>
                             <AlertCircle className="w-4 h-4" />
                           </span>
                         )}
@@ -573,8 +573,8 @@ const NotificationsPage: React.FC = () => {
                   </div>
                   {createError && (
                     <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3 flex items-start space-x-2">
-                      <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
-                      <p className="text-red-300 text-sm">{createError}</p>
+                      <AlertCircle className="w-4 h-4 text-red-700 dark:text-red-400 mt-0.5 shrink-0" />
+                      <p className="text-red-700 dark:text-red-300 text-sm">{createError}</p>
                     </div>
                   )}
                   <div className="space-y-4">

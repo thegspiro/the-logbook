@@ -630,7 +630,7 @@ export const PatternsTab: React.FC = () => {
                     <div className="space-y-3">
                       <p className="text-xs text-theme-text-muted flex items-center gap-1.5">
                         <Sun className="w-3.5 h-3.5 text-amber-500" />
-                        <Moon className="w-3.5 h-3.5 text-indigo-400" />
+                        <Moon className="w-3.5 h-3.5 text-indigo-700 dark:text-indigo-400" />
                         This pattern uses day and night shifts. Select a
                         template for each.
                       </p>
@@ -662,7 +662,7 @@ export const PatternsTab: React.FC = () => {
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-theme-text-secondary mb-1">
-                            <Moon className="w-3 h-3 inline text-indigo-400 mr-1" />
+                            <Moon className="w-3 h-3 inline text-indigo-700 dark:text-indigo-400 mr-1" />
                             Night Shift Template *
                           </label>
                           <select
@@ -1083,7 +1083,7 @@ export const PatternsTab: React.FC = () => {
                         ) : (
                           <button
                             onClick={() => setConfirmingDelete(pattern.id)}
-                            className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-700 dark:text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors"
                           >
                             <Trash2 className="w-3.5 h-3.5" /> Delete
                           </button>

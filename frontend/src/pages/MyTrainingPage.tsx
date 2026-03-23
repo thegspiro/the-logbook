@@ -367,7 +367,7 @@ const MyTrainingPage: React.FC = () => {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
-          <p className="text-red-400">{error}</p>
+          <p className="text-red-700 dark:text-red-400">{error}</p>
         </div>
       </div>
     );
@@ -438,13 +438,13 @@ const MyTrainingPage: React.FC = () => {
               icon={GraduationCap}
               label="Completed Courses"
               value={data.hours_summary?.completed_courses ?? 0}
-              color="text-green-400"
+              color="text-green-700 dark:text-green-400"
             />
             <StatCard
               icon={Clock}
               label="Completed Hours"
               value={data.hours_summary?.total_hours ?? 0}
-              color="text-blue-400"
+              color="text-blue-700 dark:text-blue-400"
             />
             <StatCard
               icon={BarChart3}
@@ -454,7 +454,7 @@ const MyTrainingPage: React.FC = () => {
                   ? `${data.requirements_summary.avg_compliance}%`
                   : 'N/A'
               }
-              color="text-yellow-400"
+              color="text-yellow-700 dark:text-yellow-400"
             />
           </div>
 
@@ -489,11 +489,11 @@ const MyTrainingPage: React.FC = () => {
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-center space-x-2">
                             {req.is_met ? (
-                              <CheckCircle2 className="w-5 h-5 text-green-400 shrink-0" />
+                              <CheckCircle2 className="w-5 h-5 text-green-700 dark:text-green-400 shrink-0" />
                             ) : isOverdue ? (
-                              <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
+                              <AlertTriangle className="w-5 h-5 text-red-700 dark:text-red-400 shrink-0" />
                             ) : (
-                              <Clock className="w-5 h-5 text-yellow-400 shrink-0" />
+                              <Clock className="w-5 h-5 text-yellow-700 dark:text-yellow-400 shrink-0" />
                             )}
                             <div>
                               <p className="text-sm font-medium text-theme-text-primary">{req.name}</p>
@@ -504,8 +504,8 @@ const MyTrainingPage: React.FC = () => {
                           </div>
                           <div className="text-right shrink-0 ml-4">
                             <span className={`text-sm font-bold ${
-                              req.is_met ? 'text-green-400' :
-                              isOverdue ? 'text-red-400' :
+                              req.is_met ? 'text-green-700 dark:text-green-400' :
+                              isOverdue ? 'text-red-700 dark:text-red-400' :
                               'text-theme-text-primary'
                             }`}>
                               {req.completed_hours}/{req.required_hours} hrs
@@ -524,7 +524,7 @@ const MyTrainingPage: React.FC = () => {
                         {/* Expired certification / blocks activity warning */}
                         {req.blocks_activity && (
                           <div className="bg-red-500/10 border border-red-500/30 rounded-sm px-2 py-1.5 mb-2">
-                            <p className="text-xs text-red-400 font-medium">
+                            <p className="text-xs text-red-700 dark:text-red-400 font-medium">
                               Certification expired — renew ASAP. This may prevent you from signing up for shifts.
                             </p>
                           </div>
@@ -533,7 +533,7 @@ const MyTrainingPage: React.FC = () => {
                         {/* Waiver adjustment notice */}
                         {req.waived_months != null && req.waived_months > 0 && (
                           <div className="bg-blue-500/10 border border-blue-500/20 rounded-sm px-2 py-1 mb-2">
-                            <p className="text-xs text-blue-300">
+                            <p className="text-xs text-blue-700 dark:text-blue-300">
                               Adjusted for {req.waived_months} waived month{req.waived_months > 1 ? 's' : ''} of leave
                               {req.original_required_hours != null && req.original_required_hours !== req.required_hours && (
                                 <> (originally {req.original_required_hours} hrs, adjusted to {req.required_hours} hrs for {req.active_months} active month{req.active_months !== 1 ? 's' : ''})</>
@@ -546,13 +546,13 @@ const MyTrainingPage: React.FC = () => {
                           <span className="capitalize">{req.frequency.replace('_', ' ')}{req.training_type ? ` (${req.training_type.replace('_', ' ')})` : ''}</span>
                           <div className="flex items-center space-x-2">
                             {req.is_met ? (
-                              <span className="text-green-400">Complete</span>
+                              <span className="text-green-700 dark:text-green-400">Complete</span>
                             ) : req.cert_expired ? (
-                              <span className="text-red-400 font-medium">Expired — Renew ASAP</span>
+                              <span className="text-red-700 dark:text-red-400 font-medium">Expired — Renew ASAP</span>
                             ) : isOverdue ? (
-                              <span className="text-red-400 font-medium">Overdue by {Math.abs(req.days_until_due ?? 0)} days</span>
+                              <span className="text-red-700 dark:text-red-400 font-medium">Overdue by {Math.abs(req.days_until_due ?? 0)} days</span>
                             ) : req.days_until_due != null ? (
-                              <span className={isDueSoon ? 'text-yellow-400' : ''}>
+                              <span className={isDueSoon ? 'text-yellow-700 dark:text-yellow-400' : ''}>
                                 Due: {formatDate(req.due_date, tz)} ({req.days_until_due} days)
                               </span>
                             ) : null}
@@ -579,16 +579,16 @@ const MyTrainingPage: React.FC = () => {
                     </div>
                     <div className="text-right">
                       {c.is_expired ? (
-                        <span className="flex items-center space-x-1 text-red-400 text-sm">
+                        <span className="flex items-center space-x-1 text-red-700 dark:text-red-400 text-sm">
                           <AlertTriangle className="w-4 h-4" />
                           <span>Expired</span>
                         </span>
                       ) : c.days_until_expiry !== null && c.days_until_expiry <= 90 ? (
-                        <span className="text-yellow-400 text-sm">
+                        <span className="text-yellow-700 dark:text-yellow-400 text-sm">
                           Expires in {c.days_until_expiry} days
                         </span>
                       ) : (
-                        <span className="flex items-center space-x-1 text-green-400 text-sm">
+                        <span className="flex items-center space-x-1 text-green-700 dark:text-green-400 text-sm">
                           <CheckCircle2 className="w-4 h-4" />
                           <span>Valid</span>
                         </span>
@@ -629,7 +629,7 @@ const MyTrainingPage: React.FC = () => {
                           <div key={r.id} className="flex items-center justify-between text-xs">
                             <div className="flex items-center space-x-2">
                               {r.status === 'completed' ? (
-                                <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />
+                                <CheckCircle2 className="w-3.5 h-3.5 text-green-700 dark:text-green-400" />
                               ) : (
                                 <div className="w-3.5 h-3.5 rounded-full border border-theme-surface-border" />
                               )}
@@ -695,17 +695,17 @@ const MyTrainingPage: React.FC = () => {
                         <span>{sr.calls_responded} calls</span>
                         {v?.show_performance_rating && sr.performance_rating && (
                           <span className="flex items-center space-x-1">
-                            <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
+                            <Star className="w-3 h-3 text-yellow-700 dark:text-yellow-400 fill-yellow-400" />
                             <span>{sr.performance_rating}/5</span>
                           </span>
                         )}
                       </div>
                     </div>
                     {v?.show_areas_of_strength && sr.areas_of_strength && (
-                      <p className="text-xs text-green-400 mb-1"><span className="font-medium">Strengths:</span> {sr.areas_of_strength}</p>
+                      <p className="text-xs text-green-700 dark:text-green-400 mb-1"><span className="font-medium">Strengths:</span> {sr.areas_of_strength}</p>
                     )}
                     {v?.show_areas_for_improvement && sr.areas_for_improvement && (
-                      <p className="text-xs text-yellow-400 mb-1"><span className="font-medium">Improvement:</span> {sr.areas_for_improvement}</p>
+                      <p className="text-xs text-yellow-700 dark:text-yellow-400 mb-1"><span className="font-medium">Improvement:</span> {sr.areas_for_improvement}</p>
                     )}
                     {v?.show_officer_narrative && sr.officer_narrative && (
                       <p className="text-xs text-theme-text-secondary mb-1"><span className="font-medium">Narrative:</span> {sr.officer_narrative}</p>
@@ -713,7 +713,7 @@ const MyTrainingPage: React.FC = () => {
                     {v?.show_skills_observed && sr.skills_observed && (sr.skills_observed as Array<{ skill_name?: string; demonstrated?: boolean }>).length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-2">
                         {(sr.skills_observed as Array<{ skill_name?: string; demonstrated?: boolean }>).map((s, i) => (
-                          <span key={i} className={`text-xs px-2 py-0.5 rounded-sm ${s.demonstrated ? 'bg-green-500/20 text-green-400' : 'bg-theme-surface-secondary text-theme-text-muted'}`}>
+                          <span key={i} className={`text-xs px-2 py-0.5 rounded-sm ${s.demonstrated ? 'bg-green-500/20 text-green-700 dark:text-green-400' : 'bg-theme-surface-secondary text-theme-text-muted'}`}>
                             {s.skill_name}
                           </span>
                         ))}

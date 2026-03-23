@@ -834,7 +834,7 @@ const LoadingSpinner: React.FC = () => (
 
 const ErrorMessage: React.FC<{ message: string }> = ({ message }) => (
   <div className="max-w-7xl mx-auto px-4 py-8">
-    <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-red-400 flex items-center gap-2">
+    <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-red-700 dark:text-red-400 flex items-center gap-2">
       <XCircle className="w-5 h-5 shrink-0" />
       {message}
     </div>

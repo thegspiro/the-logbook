@@ -326,7 +326,7 @@ function LocationSetupWizard({
             <div className="space-y-5">
               <div className="text-center">
                 <div className="w-14 h-14 rounded-2xl bg-blue-500/10 flex items-center justify-center mx-auto mb-3">
-                  <HelpCircle className="w-7 h-7 text-blue-400" />
+                  <HelpCircle className="w-7 h-7 text-blue-700 dark:text-blue-400" />
                 </div>
                 <h2 className="text-xl font-bold text-theme-text-primary">How is your department organized?</h2>
                 <p className="text-sm text-theme-text-secondary mt-2">
@@ -588,7 +588,7 @@ function LocationSetupWizard({
                   {activeStationIdx < stations.length - 1 ? (
                     <button
                       onClick={handleNextStation}
-                      className="text-sm text-red-500 hover:text-red-400 font-medium transition-colors"
+                      className="text-sm text-red-500 hover:text-red-800 dark:hover:text-red-400 font-medium transition-colors"
                     >
                       Next Station →
                     </button>
@@ -1049,11 +1049,11 @@ export default function LocationsPage() {
       {!stationModeLoading && stationMode !== null && (
         <div className="flex items-center gap-2 text-xs text-theme-text-muted">
           {isSingleStation ? (
-            <span className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 text-blue-400 rounded-full">
+            <span className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 text-blue-700 dark:text-blue-400 rounded-full">
               <Building className="w-3.5 h-3.5" /> Single-Station Department
             </span>
           ) : (
-            <span className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 text-blue-400 rounded-full">
+            <span className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 text-blue-700 dark:text-blue-400 rounded-full">
               <Building2 className="w-3.5 h-3.5" /> Multi-Station Agency
             </span>
           )}

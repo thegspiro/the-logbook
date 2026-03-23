@@ -157,10 +157,10 @@ const AllEntriesTab: React.FC = () => {
                     </td>
                     <td className="px-4 py-3 text-sm">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        entry.status === 'approved' ? 'bg-green-500/20 text-green-400' :
-                        entry.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
-                        entry.status === 'rejected' ? 'bg-red-500/20 text-red-400' :
-                        'bg-blue-500/20 text-blue-400'
+                        entry.status === 'approved' ? 'bg-green-500/20 text-green-700 dark:text-green-400' :
+                        entry.status === 'pending' ? 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400' :
+                        entry.status === 'rejected' ? 'bg-red-500/20 text-red-700 dark:text-red-400' :
+                        'bg-blue-500/20 text-blue-700 dark:text-blue-400'
                       }`}>
                         {entry.status}
                       </span>

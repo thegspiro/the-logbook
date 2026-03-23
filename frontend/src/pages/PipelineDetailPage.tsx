@@ -66,7 +66,7 @@ const PositionBadge: React.FC<{ position: string }> = ({ position }) => {
   };
 
   return (
-    <span className="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded-sm">
+    <span className="px-2 py-1 bg-red-500/20 text-red-700 dark:text-red-400 text-xs rounded-sm">
       {labels[position] || position}
     </span>
   );
@@ -325,7 +325,7 @@ const PipelineDetailPage: React.FC = () => {
               <div className="flex items-center space-x-3 mb-2">
                 <h1 className="text-2xl font-bold text-theme-text-primary">{program.name}</h1>
                 {program.is_template && (
-                  <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded-sm">Template</span>
+                  <span className="px-2 py-0.5 bg-green-500/20 text-green-700 dark:text-green-400 text-xs rounded-sm">Template</span>
                 )}
               </div>
               {program.description && (
@@ -463,7 +463,7 @@ const PipelineDetailPage: React.FC = () => {
                                 </span>
                               )}
                               {phase.requires_manual_advancement && (
-                                <span className="flex items-center space-x-1 text-yellow-400">
+                                <span className="flex items-center space-x-1 text-yellow-700 dark:text-yellow-400">
                                   <AlertTriangle className="w-3 h-3" />
                                   <span>Manual advancement</span>
                                 </span>
@@ -505,7 +505,7 @@ const PipelineDetailPage: React.FC = () => {
                                           <ReqTypeBadge type={pr.requirement.requirement_type} />
                                         )}
                                         {pr.is_required && (
-                                          <span className="text-red-400 text-xs">Required</span>
+                                          <span className="text-red-700 dark:text-red-400 text-xs">Required</span>
                                         )}
                                       </div>
                                       {pr.requirement?.description && (

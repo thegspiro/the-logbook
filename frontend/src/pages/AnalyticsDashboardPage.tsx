@@ -73,7 +73,7 @@ const AnalyticsDashboardPage: React.FC = () => {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <p className="text-red-400 mb-4">{error || 'No analytics data available'}</p>
+          <p className="text-red-700 dark:text-red-400 mb-4">{error || 'No analytics data available'}</p>
           <button
             onClick={() => { setLoading(true); setError(null); }}
             className="btn-primary font-medium rounded-md text-sm"
@@ -97,7 +97,7 @@ const AnalyticsDashboardPage: React.FC = () => {
         </div>
         <button
           onClick={() => { void exportData(); }}
-          className="px-4 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-blue-400 bg-theme-surface hover:bg-theme-surface-hover"
+          className="px-4 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-blue-700 dark:text-blue-400 bg-theme-surface hover:bg-theme-surface-hover"
         >
           Export Data
         </button>
@@ -161,7 +161,7 @@ const AnalyticsDashboardPage: React.FC = () => {
           {Object.keys(metrics.errorBreakdown).length === 0 ? (
             <div className="text-center py-8 text-theme-text-muted">
               <svg
-                className="mx-auto h-12 w-12 text-green-400 mb-2"
+                className="mx-auto h-12 w-12 text-green-700 dark:text-green-400 mb-2"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"

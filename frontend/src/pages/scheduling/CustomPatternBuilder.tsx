@@ -194,7 +194,7 @@ const CustomPatternBuilder: React.FC<CustomPatternBuilderProps> = ({ cyclePatter
         )}
         {nightCount > 0 && (
           <span className="flex items-center gap-1">
-            <Moon className="w-3 h-3 text-indigo-400" />
+            <Moon className="w-3 h-3 text-indigo-700 dark:text-indigo-400" />
             Night: <span className="font-semibold text-indigo-600 dark:text-indigo-400">{nightCount}</span>
           </span>
         )}

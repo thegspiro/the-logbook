@@ -422,7 +422,7 @@ const SubmissionCard: React.FC<{
                 <Clock className="w-3 h-3" />
                 <span>{submission.hours_completed}h</span>
               </span>
-              <span className="px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded-sm text-xs">
+              <span className="px-1.5 py-0.5 bg-blue-500/20 text-blue-700 dark:text-blue-400 rounded-sm text-xs">
                 {TRAINING_TYPE_LABELS[submission.training_type] || submission.training_type}
               </span>
             </div>
@@ -829,7 +829,7 @@ const ReviewSubmissionsPage: React.FC = () => {
             </p>
           </div>
           {pendingCount > 0 && (
-            <div className="flex items-center space-x-2 bg-yellow-500/20 text-yellow-400 px-3 py-1.5 rounded-lg">
+            <div className="flex items-center space-x-2 bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 px-3 py-1.5 rounded-lg">
               <AlertCircle className="w-4 h-4" />
               <span className="text-sm font-medium">{pendingCount} pending</span>
             </div>
@@ -920,7 +920,7 @@ const ReviewSubmissionsPage: React.FC = () => {
                 {statusFilter && (
                   <button
                     onClick={() => setStatusFilter('')}
-                    className="mt-2 text-red-400 text-sm hover:text-red-300"
+                    className="mt-2 text-red-700 dark:text-red-400 text-sm hover:text-red-800 dark:hover:text-red-300"
                   >
                     Clear filter
                   </button>
@@ -932,8 +932,8 @@ const ReviewSubmissionsPage: React.FC = () => {
           <div className="space-y-3">
             {activeView === 'pending' && (
               <div className="flex items-start space-x-2 bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-4">
-                <Info className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
-                <p className="text-blue-300 text-sm">
+                <Info className="w-4 h-4 text-blue-700 dark:text-blue-400 mt-0.5 shrink-0" />
+                <p className="text-blue-700 dark:text-blue-300 text-sm">
                   Click on a submission to expand details and review. You can approve, reject, or request revisions.
                 </p>
               </div>

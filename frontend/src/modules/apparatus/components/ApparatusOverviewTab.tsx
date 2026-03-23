@@ -245,7 +245,7 @@ export const ApparatusOverviewTab: React.FC<ApparatusOverviewTabProps> = ({
               <Shield className="w-5 h-5" />
               NFPA Compliance
             </h2>
-            <p className="text-green-400 text-sm">Tracking Enabled</p>
+            <p className="text-green-700 dark:text-green-400 text-sm">Tracking Enabled</p>
           </div>
         )}
 

@@ -69,7 +69,7 @@ const ActiveSessionsTab: React.FC = () => {
                         isOverLimit ? 'bg-red-500/20' : isNearLimit ? 'bg-orange-500/20' : 'bg-blue-500/20'
                       }`}>
                         <Timer className={`w-5 h-5 ${
-                          isOverLimit ? 'text-red-400' : isNearLimit ? 'text-orange-400' : 'text-blue-400'
+                          isOverLimit ? 'text-red-700 dark:text-red-400' : isNearLimit ? 'text-orange-700 dark:text-orange-400' : 'text-blue-700 dark:text-blue-400'
                         }`} />
                       </div>
                       <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full animate-pulse border-2 border-theme-surface" />
@@ -88,7 +88,7 @@ const ActiveSessionsTab: React.FC = () => {
                       </div>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                         <span className={`font-medium ${
-                          isOverLimit ? 'text-red-400' : isNearLimit ? 'text-orange-400' : 'text-blue-400'
+                          isOverLimit ? 'text-red-700 dark:text-red-400' : isNearLimit ? 'text-orange-700 dark:text-orange-400' : 'text-blue-700 dark:text-blue-400'
                         }`}>
                           {formatDuration(session.elapsedMinutes)}
                         </span>
@@ -101,12 +101,12 @@ const ActiveSessionsTab: React.FC = () => {
                           </span>
                         )}
                         {isOverLimit && (
-                          <span className="text-xs px-2 py-0.5 bg-red-500/20 text-red-400 rounded-full font-medium">
+                          <span className="text-xs px-2 py-0.5 bg-red-500/20 text-red-700 dark:text-red-400 rounded-full font-medium">
                             Over limit
                           </span>
                         )}
                         {isNearLimit && (
-                          <span className="text-xs px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded-full font-medium">
+                          <span className="text-xs px-2 py-0.5 bg-orange-500/20 text-orange-700 dark:text-orange-400 rounded-full font-medium">
                             Near limit
                           </span>
                         )}

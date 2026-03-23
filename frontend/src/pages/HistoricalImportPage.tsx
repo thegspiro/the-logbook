@@ -209,7 +209,7 @@ const UploadStep: React.FC<UploadStepProps> = ({ onParsed, matchBy, onMatchByCha
               }`}
             >
               <span className={`block text-sm font-medium ${
-                matchBy === strategy.value ? 'text-red-400' : 'text-theme-text-primary'
+                matchBy === strategy.value ? 'text-red-700 dark:text-red-400' : 'text-theme-text-primary'
               }`}>
                 {strategy.label}
               </span>
@@ -266,7 +266,7 @@ const UploadStep: React.FC<UploadStepProps> = ({ onParsed, matchBy, onMatchByCha
           a.click();
           URL.revokeObjectURL(url);
         }}
-        className="inline-flex items-center text-sm text-red-500 hover:text-red-400 transition-colors"
+        className="inline-flex items-center text-sm text-red-500 hover:text-red-800 dark:hover:text-red-400 transition-colors"
       >
         <Download className="w-4 h-4 mr-1" />
         Download sample CSV template
@@ -393,7 +393,7 @@ const MapCoursesStep: React.FC<MapCoursesStepProps> = ({
                       mapping.action === action
                         ? action === 'skip'
                           ? 'bg-theme-surface-hover border-theme-surface-border text-theme-text-muted'
-                          : 'bg-red-600/20 border-red-500 text-red-400'
+                          : 'bg-red-600/20 border-red-500 text-red-700 dark:text-red-400'
                         : 'border-theme-surface-border text-theme-text-muted hover:border-theme-text-muted'
                     }`}
                   >
@@ -530,7 +530,7 @@ const PreviewStep: React.FC<PreviewStepProps> = ({
         </div>
         <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 text-center">
           <div className="text-2xl font-bold text-green-500">{importableRows.length}</div>
-          <div className="text-xs text-green-400">Will Import</div>
+          <div className="text-xs text-green-700 dark:text-green-400">Will Import</div>
         </div>
         <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-xl p-4 text-center">
           <div className="text-2xl font-bold text-theme-text-primary">{parseResult.members_matched}</div>
@@ -544,7 +544,7 @@ const PreviewStep: React.FC<PreviewStepProps> = ({
           <div className={`text-2xl font-bold ${parseResult.members_unmatched > 0 ? 'text-yellow-500' : 'text-theme-text-primary'}`}>
             {parseResult.members_unmatched}
           </div>
-          <div className={`text-xs ${parseResult.members_unmatched > 0 ? 'text-yellow-400' : 'text-theme-text-muted'}`}>
+          <div className={`text-xs ${parseResult.members_unmatched > 0 ? 'text-yellow-700 dark:text-yellow-400' : 'text-theme-text-muted'}`}>
             Members Not Found
           </div>
         </div>
@@ -553,7 +553,7 @@ const PreviewStep: React.FC<PreviewStepProps> = ({
       {/* Parse errors */}
       {parseResult.parse_errors.length > 0 && (
         <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4">
-          <h4 className="font-medium text-yellow-400 mb-2 flex items-center gap-2">
+          <h4 className="font-medium text-yellow-700 dark:text-yellow-400 mb-2 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4" />
             Warnings ({parseResult.parse_errors.length})
           </h4>
@@ -573,7 +573,7 @@ const PreviewStep: React.FC<PreviewStepProps> = ({
             onClick={() => setFilterType(f)}
             className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
               filterType === f
-                ? 'bg-red-600/20 border-red-500 text-red-400'
+                ? 'bg-red-600/20 border-red-500 text-red-700 dark:text-red-400'
                 : 'border-theme-surface-border text-theme-text-muted hover:border-theme-text-muted'
             }`}
           >
@@ -621,7 +621,7 @@ const PreviewStep: React.FC<PreviewStepProps> = ({
                       </div>
                     ) : (
                       <div>
-                        <span className="text-yellow-400">
+                        <span className="text-yellow-700 dark:text-yellow-400">
                           {row.member_name || row.email || row.membership_number || 'Unknown'}
                         </span>
                         <span className="block text-xs text-yellow-500">No match</span>
@@ -639,15 +639,15 @@ const PreviewStep: React.FC<PreviewStepProps> = ({
                   <td className="px-4 py-2 text-theme-text-muted">{row.hours_completed ?? '-'}</td>
                   <td className="px-4 py-2">
                     {row.errors.length > 0 ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-red-400">
+                      <span className="inline-flex items-center gap-1 text-xs text-red-700 dark:text-red-400">
                         <XCircle className="w-3.5 h-3.5" /> {row.errors[0]}
                       </span>
                     ) : row.member_matched ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-green-400">
+                      <span className="inline-flex items-center gap-1 text-xs text-green-700 dark:text-green-400">
                         <CheckCircle2 className="w-3.5 h-3.5" /> Ready
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 text-xs text-yellow-400">
+                      <span className="inline-flex items-center gap-1 text-xs text-yellow-700 dark:text-yellow-400">
                         <AlertTriangle className="w-3.5 h-3.5" /> Skipped
                       </span>
                     )}
@@ -662,7 +662,7 @@ const PreviewStep: React.FC<PreviewStepProps> = ({
       {rows.length > 50 && !showAll && (
         <button
           onClick={() => setShowAll(true)}
-          className="text-sm text-red-500 hover:text-red-400"
+          className="text-sm text-red-500 hover:text-red-800 dark:hover:text-red-400"
         >
           Show all {rows.length} rows <ChevronDown className="w-4 h-4 inline" />
         </button>
@@ -670,7 +670,7 @@ const PreviewStep: React.FC<PreviewStepProps> = ({
       {showAll && rows.length > 50 && (
         <button
           onClick={() => setShowAll(false)}
-          className="text-sm text-red-500 hover:text-red-400"
+          className="text-sm text-red-500 hover:text-red-800 dark:hover:text-red-400"
         >
           Show fewer <ChevronUp className="w-4 h-4 inline" />
         </button>
@@ -739,7 +739,7 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ result, onReset }) => (
       </div>
       <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 text-center">
         <div className="text-2xl font-bold text-green-500">{result.imported}</div>
-        <div className="text-xs text-green-400">Imported</div>
+        <div className="text-xs text-green-700 dark:text-green-400">Imported</div>
       </div>
       <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-xl p-4 text-center">
         <div className="text-2xl font-bold text-theme-text-muted">{result.skipped}</div>
@@ -753,13 +753,13 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ result, onReset }) => (
         <div className={`text-2xl font-bold ${result.failed > 0 ? 'text-red-500' : 'text-theme-text-muted'}`}>
           {result.failed}
         </div>
-        <div className={`text-xs ${result.failed > 0 ? 'text-red-400' : 'text-theme-text-muted'}`}>Failed</div>
+        <div className={`text-xs ${result.failed > 0 ? 'text-red-700 dark:text-red-400' : 'text-theme-text-muted'}`}>Failed</div>
       </div>
     </div>
 
     {result.errors.length > 0 && (
       <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
-        <h4 className="font-medium text-red-400 mb-2">Errors</h4>
+        <h4 className="font-medium text-red-700 dark:text-red-400 mb-2">Errors</h4>
         <ul className="text-sm text-theme-text-muted space-y-1">
           {result.errors.map((err, i) => (
             <li key={i}>{err}</li>

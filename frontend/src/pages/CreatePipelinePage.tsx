@@ -136,7 +136,7 @@ const StepInfo: React.FC<{
 
     <div>
       <label htmlFor="prog-name" className="form-label">
-        Program Name <span className="text-red-400">*</span>
+        Program Name <span className="text-red-700 dark:text-red-400">*</span>
       </label>
       <input
         id="prog-name"
@@ -307,10 +307,10 @@ const StepPhases: React.FC<{
             >
               <div className="flex items-center space-x-3">
                 <GripVertical className="w-4 h-4 text-theme-text-muted" />
-                <span className="text-red-400 font-bold text-sm">Phase {phase.phase_number}</span>
+                <span className="text-red-700 dark:text-red-400 font-bold text-sm">Phase {phase.phase_number}</span>
                 <span className="text-theme-text-primary font-medium">{phase.name || 'Untitled Phase'}</span>
                 {phase.requirements.length > 0 && (
-                  <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs rounded-sm">
+                  <span className="px-2 py-0.5 bg-blue-500/20 text-blue-700 dark:text-blue-400 text-xs rounded-sm">
                     {phase.requirements.length} req{phase.requirements.length !== 1 ? 's' : ''}
                   </span>
                 )}
@@ -318,7 +318,7 @@ const StepPhases: React.FC<{
               <div className="flex items-center space-x-2">
                 <button
                   onClick={(e) => { e.stopPropagation(); onRemove(phase.id); }}
-                  className="p-1 text-theme-text-muted hover:text-red-400"
+                  className="p-1 text-theme-text-muted hover:text-red-800 dark:hover:text-red-400"
                   aria-label={`Remove phase ${phase.phase_number}`}
                 >
                   <Trash2 className="w-4 h-4" />
@@ -404,7 +404,7 @@ const StepRequirements: React.FC<{
         <div key={phase.id} className="bg-theme-surface rounded-lg border border-theme-surface-border p-4">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-theme-text-primary font-medium">
-              <span className="text-red-400">Phase {phase.phase_number}:</span> {phase.name || 'Untitled'}
+              <span className="text-red-700 dark:text-red-400">Phase {phase.phase_number}:</span> {phase.name || 'Untitled'}
             </h3>
             <button
               onClick={() => onAddRequirement(phase.id)}
@@ -453,7 +453,7 @@ const StepRequirements: React.FC<{
                     </div>
                     <button
                       onClick={() => onRemoveRequirement(phase.id, req.id)}
-                      className="p-1 text-theme-text-muted hover:text-red-400 ml-2"
+                      className="p-1 text-theme-text-muted hover:text-red-800 dark:hover:text-red-400 ml-2"
                       aria-label="Remove requirement"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -603,7 +603,7 @@ const StepMilestones: React.FC<{
         <div key={phase.id} className="bg-theme-surface rounded-lg border border-theme-surface-border p-4">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-theme-text-primary font-medium">
-              <span className="text-red-400">Phase {phase.phase_number}:</span> {phase.name || 'Untitled'}
+              <span className="text-red-700 dark:text-red-400">Phase {phase.phase_number}:</span> {phase.name || 'Untitled'}
             </h3>
             <button
               onClick={() => onAddMilestone(phase.id)}
@@ -668,7 +668,7 @@ const StepMilestones: React.FC<{
                     </div>
                     <button
                       onClick={() => onRemoveMilestone(phase.id, ms.id)}
-                      className="p-1 text-theme-text-muted hover:text-red-400 ml-2"
+                      className="p-1 text-theme-text-muted hover:text-red-800 dark:hover:text-red-400 ml-2"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -742,9 +742,9 @@ const StepReview: React.FC<{
         {info.description && <p className="text-theme-text-muted text-sm mb-3">{info.description}</p>}
         <div className="flex flex-wrap gap-2 text-xs">
           {info.code && <span className="px-2 py-1 bg-theme-surface-hover text-theme-text-secondary rounded-sm">{info.code}</span>}
-          {info.target_position && <span className="px-2 py-1 bg-red-500/20 text-red-400 rounded-sm">{info.target_position}</span>}
-          <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded-sm">{info.structure_type}</span>
-          {info.is_template && <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded-sm">Template</span>}
+          {info.target_position && <span className="px-2 py-1 bg-red-500/20 text-red-700 dark:text-red-400 rounded-sm">{info.target_position}</span>}
+          <span className="px-2 py-1 bg-blue-500/20 text-blue-700 dark:text-blue-400 rounded-sm">{info.structure_type}</span>
+          {info.is_template && <span className="px-2 py-1 bg-green-500/20 text-green-700 dark:text-green-400 rounded-sm">Template</span>}
         </div>
       </div>
 
@@ -752,12 +752,12 @@ const StepReview: React.FC<{
       {phases.map((phase) => (
         <div key={phase.id} className="bg-theme-surface rounded-lg p-4">
           <h4 className="font-medium text-theme-text-primary mb-2">
-            <span className="text-red-400">Phase {phase.phase_number}:</span> {phase.name || 'Untitled'}
+            <span className="text-red-700 dark:text-red-400">Phase {phase.phase_number}:</span> {phase.name || 'Untitled'}
           </h4>
           {phase.description && <p className="text-theme-text-muted text-sm mb-3">{phase.description}</p>}
           <div className="flex flex-wrap gap-2 text-xs mb-3">
             {phase.time_limit_days && <span className="px-2 py-1 bg-theme-surface-hover text-theme-text-secondary rounded-sm">{phase.time_limit_days} day limit</span>}
-            {phase.requires_manual_advancement && <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded-sm">Manual advancement</span>}
+            {phase.requires_manual_advancement && <span className="px-2 py-1 bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 rounded-sm">Manual advancement</span>}
           </div>
 
           {phase.requirements.length > 0 && (
@@ -765,7 +765,7 @@ const StepReview: React.FC<{
               <p className="text-xs font-medium text-theme-text-muted uppercase">Requirements:</p>
               {phase.requirements.map((req) => (
                 <div key={req.id} className="flex items-center space-x-2 text-sm text-theme-text-secondary">
-                  <ListChecks className="w-3 h-3 text-blue-400" />
+                  <ListChecks className="w-3 h-3 text-blue-700 dark:text-blue-400" />
                   <span>{req.name || 'Untitled'}</span>
                   <span className="text-xs text-theme-text-muted">({req.requirement_type})</span>
                   {req.required_hours && <span className="text-xs text-theme-text-muted">- {req.required_hours}h</span>}
@@ -779,7 +779,7 @@ const StepReview: React.FC<{
               <p className="text-xs font-medium text-theme-text-muted uppercase">Milestones:</p>
               {phase.milestones.map((ms) => (
                 <div key={ms.id} className="flex items-center space-x-2 text-sm text-theme-text-secondary">
-                  <Flag className="w-3 h-3 text-yellow-400" />
+                  <Flag className="w-3 h-3 text-yellow-700 dark:text-yellow-400" />
                   <span>{ms.name || 'Untitled'}</span>
                   {ms.completion_percentage_threshold && <span className="text-xs text-theme-text-muted">at {ms.completion_percentage_threshold}%</span>}
                 </div>
@@ -1074,7 +1074,7 @@ const CreatePipelinePage: React.FC = () => {
                     isActive
                       ? 'bg-red-600 text-white'
                       : isComplete
-                      ? 'text-red-400 hover:bg-theme-surface-hover'
+                      ? 'text-red-700 dark:text-red-400 hover:bg-theme-surface-hover'
                       : 'text-theme-text-muted hover:text-theme-text-secondary'
                   }`}
                 >
@@ -1093,7 +1093,7 @@ const CreatePipelinePage: React.FC = () => {
         {/* Step content */}
         <div className="card-secondary mb-6 p-6">
           {error && (
-            <div className="bg-red-500/10 border border-red-500 text-red-400 px-4 py-3 rounded-sm mb-4">
+            <div className="bg-red-500/10 border border-red-500 text-red-700 dark:text-red-400 px-4 py-3 rounded-sm mb-4">
               {error}
             </div>
           )}

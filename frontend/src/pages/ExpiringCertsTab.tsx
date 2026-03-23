@@ -37,11 +37,11 @@ const ExpiringCertsTab: React.FC = () => {
   };
 
   const getUrgencyClass = (days: number) => {
-    if (days < 0) return 'text-red-400 bg-red-500/10 border-red-500/20';
-    if (days <= 7) return 'text-red-400 bg-red-500/10 border-red-500/20';
-    if (days <= 30) return 'text-orange-400 bg-orange-500/10 border-orange-500/20';
-    if (days <= 60) return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20';
-    return 'text-blue-400 bg-blue-500/10 border-blue-500/20';
+    if (days < 0) return 'text-red-700 dark:text-red-400 bg-red-500/10 border-red-500/20';
+    if (days <= 7) return 'text-red-700 dark:text-red-400 bg-red-500/10 border-red-500/20';
+    if (days <= 30) return 'text-orange-700 dark:text-orange-400 bg-orange-500/10 border-orange-500/20';
+    if (days <= 60) return 'text-yellow-700 dark:text-yellow-400 bg-yellow-500/10 border-yellow-500/20';
+    return 'text-blue-700 dark:text-blue-400 bg-blue-500/10 border-blue-500/20';
   };
 
   const getUrgencyLabel = (days: number) => {
@@ -59,7 +59,7 @@ const ExpiringCertsTab: React.FC = () => {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-theme-text-primary flex items-center gap-2">
-            <Shield className="h-5 w-5 text-red-400" />
+            <Shield className="h-5 w-5 text-red-700 dark:text-red-400" />
             Expiring Certifications
           </h2>
           <p className="text-sm text-theme-text-muted mt-1">
@@ -82,16 +82,16 @@ const ExpiringCertsTab: React.FC = () => {
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
-          <p className="text-sm text-red-300">Expired</p>
-          <p className="text-2xl font-bold text-red-400">{expired}</p>
+          <p className="text-sm text-red-700 dark:text-red-300">Expired</p>
+          <p className="text-2xl font-bold text-red-700 dark:text-red-400">{expired}</p>
         </div>
         <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4">
-          <p className="text-sm text-orange-300">Critical (&le;30d)</p>
-          <p className="text-2xl font-bold text-orange-400">{critical}</p>
+          <p className="text-sm text-orange-700 dark:text-orange-300">Critical (&le;30d)</p>
+          <p className="text-2xl font-bold text-orange-700 dark:text-orange-400">{critical}</p>
         </div>
         <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4">
-          <p className="text-sm text-yellow-300">Warning (31-90d)</p>
-          <p className="text-2xl font-bold text-yellow-400">{warning}</p>
+          <p className="text-sm text-yellow-700 dark:text-yellow-300">Warning (31-90d)</p>
+          <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-400">{warning}</p>
         </div>
       </div>
 
@@ -100,7 +100,7 @@ const ExpiringCertsTab: React.FC = () => {
           <Loader2 className="h-8 w-8 text-theme-text-muted animate-spin" />
         </div>
       ) : error ? (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-red-400">
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-red-700 dark:text-red-400">
           {error}
         </div>
       ) : certs.length === 0 ? (

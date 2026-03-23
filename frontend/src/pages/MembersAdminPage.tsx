@@ -374,7 +374,7 @@ export const MembersAdminPage: React.FC = () => {
           <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
             <div className="flex">
               <div className="ml-3">
-                <p className="text-sm text-red-400">{error}</p>
+                <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
               </div>
             </div>
           </div>
@@ -418,7 +418,7 @@ export const MembersAdminPage: React.FC = () => {
 
       {error && (
         <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
-          <p className="text-sm text-red-400">{error}</p>
+          <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
         </div>
       )}
 
@@ -536,20 +536,20 @@ export const MembersAdminPage: React.FC = () => {
                     <div className="flex justify-end gap-3">
                       <button
                         onClick={() => navigate(`/members/admin/edit/${user.id}`)}
-                        className="text-green-400 hover:text-green-300"
+                        className="text-green-700 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => handleEditRoles(user)}
-                        className="text-blue-400 hover:text-blue-300"
+                        className="text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                       >
                         Manage Roles
                       </button>
                       {currentUser?.id !== user.id && (
                         <button
                           onClick={() => setResetPasswordUser(user)}
-                          className="text-yellow-400 hover:text-yellow-300"
+                          className="text-yellow-700 dark:text-yellow-400 hover:text-yellow-800 dark:hover:text-yellow-300"
                         >
                           Reset Password
                         </button>
@@ -557,7 +557,7 @@ export const MembersAdminPage: React.FC = () => {
                       {currentUser?.id !== user.id && (
                         <button
                           onClick={() => handleDeleteUser(user)}
-                          className="text-red-400 hover:text-red-300"
+                          className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
                         >
                           Delete
                         </button>
@@ -601,7 +601,7 @@ export const MembersAdminPage: React.FC = () => {
                     </div>
                     <button
                       onClick={() => handleEditMembers(role)}
-                      className="px-4 py-2 text-sm font-medium text-blue-400 hover:text-blue-300 border border-blue-400 rounded-md hover:bg-theme-surface-hover"
+                      className="px-4 py-2 text-sm font-medium text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 border border-blue-400 rounded-md hover:bg-theme-surface-hover"
                     >
                       Manage Members
                     </button>
@@ -776,7 +776,7 @@ export const MembersAdminPage: React.FC = () => {
           </div>
 
           {error && (
-            <div className="text-sm text-red-400">{error}</div>
+            <div className="text-sm text-red-700 dark:text-red-400">{error}</div>
           )}
         </div>
       </Modal>
@@ -831,7 +831,7 @@ export const MembersAdminPage: React.FC = () => {
               autoComplete="new-password"
             />
             {resetConfirmPassword && resetNewPassword !== resetConfirmPassword && (
-              <p className="mt-1 text-xs text-red-400">Passwords do not match</p>
+              <p className="mt-1 text-xs text-red-700 dark:text-red-400">Passwords do not match</p>
             )}
           </div>
 
@@ -849,7 +849,7 @@ export const MembersAdminPage: React.FC = () => {
           </label>
 
           {error && (
-            <div className="text-sm text-red-400">{error}</div>
+            <div className="text-sm text-red-700 dark:text-red-400">{error}</div>
           )}
         </div>
       </Modal>

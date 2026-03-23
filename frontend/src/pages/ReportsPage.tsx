@@ -707,11 +707,11 @@ export const ReportsPage: React.FC = () => {
       {error && !activeReport && (
         <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4">
           <div className="flex items-start space-x-3">
-            <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" aria-hidden="true" />
+            <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400 shrink-0 mt-0.5" aria-hidden="true" />
             <div className="flex-1">
-              <p className="text-sm text-red-300">{error}</p>
+              <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
             </div>
-            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-300">
+            <button onClick={() => setError(null)} className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -737,7 +737,7 @@ export const ReportsPage: React.FC = () => {
                   <Icon className="w-6 h-6 text-red-500" aria-hidden="true" />
                 </div>
                 {!report.available && (
-                  <span className="px-2 py-1 bg-yellow-500/20 text-yellow-300 text-xs font-medium rounded-sm">
+                  <span className="px-2 py-1 bg-yellow-500/20 text-yellow-700 dark:text-yellow-300 text-xs font-medium rounded-sm">
                     Coming Soon
                   </span>
                 )}
@@ -788,9 +788,9 @@ export const ReportsPage: React.FC = () => {
       {/* Info Banner */}
       <div className="mt-8 bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
         <div className="flex items-start space-x-3">
-          <AlertCircle className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" aria-hidden="true" />
+          <AlertCircle className="w-5 h-5 text-blue-700 dark:text-blue-400 shrink-0 mt-0.5" aria-hidden="true" />
           <div>
-            <h4 className="text-sm font-medium text-blue-300 mb-1">
+            <h4 className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-1">
               Report Generation
             </h4>
             <p className="text-sm text-blue-200">

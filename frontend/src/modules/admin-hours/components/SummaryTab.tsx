@@ -31,13 +31,13 @@ const SummaryTab: React.FC = () => {
               <p className="text-xs text-theme-text-muted mt-1">{summary.totalEntries} entries</p>
             </div>
             <div className="bg-theme-surface rounded-lg shadow-md p-6">
-              <p className="text-sm text-green-400">Approved Hours</p>
-              <p className="text-3xl font-bold text-green-400">{summary.approvedHours}</p>
+              <p className="text-sm text-green-700 dark:text-green-400">Approved Hours</p>
+              <p className="text-3xl font-bold text-green-700 dark:text-green-400">{summary.approvedHours}</p>
               <p className="text-xs text-theme-text-muted mt-1">{summary.approvedEntries} entries</p>
             </div>
             <div className="bg-theme-surface rounded-lg shadow-md p-6">
-              <p className="text-sm text-yellow-400">Pending Hours</p>
-              <p className="text-3xl font-bold text-yellow-400">{summary.pendingHours}</p>
+              <p className="text-sm text-yellow-700 dark:text-yellow-400">Pending Hours</p>
+              <p className="text-3xl font-bold text-yellow-700 dark:text-yellow-400">{summary.pendingHours}</p>
               <p className="text-xs text-theme-text-muted mt-1">{summary.pendingEntries} entries</p>
             </div>
           </div>
