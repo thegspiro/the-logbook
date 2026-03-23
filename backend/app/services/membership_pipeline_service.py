@@ -1292,12 +1292,23 @@ class MembershipPipelineService:
         temp_password = generate_temporary_password()
         password_hash = hash_password(temp_password)
 
+        # Generate department email if configured; keep prospect's personal
+        # email as a secondary contact address.
+        department_email = await self._generate_department_email(
+            prospect.first_name,
+            prospect.last_name,
+            prospect.organization_id,
+        )
+        primary_email = department_email or prospect.email
+        personal_email = prospect.email if department_email else None
+
         user_id = generate_uuid()
         new_user = User(
             id=user_id,
             organization_id=prospect.organization_id,
             username=username,
-            email=prospect.email,
+            email=primary_email,
+            personal_email=personal_email,
             password_hash=password_hash,
             first_name=prospect.first_name,
             middle_name=middle_name,
@@ -1941,6 +1952,62 @@ class MembershipPipelineService:
                 return candidate
             suffix += 1
             candidate = f"{base}{suffix}"
+
+    async def _generate_department_email(
+        self,
+        first_name: str,
+        last_name: str,
+        organization_id: str,
+    ) -> Optional[str]:
+        """Generate a unique department email based on org settings.
+
+        Returns None when the feature is disabled or no domain is configured,
+        letting callers fall back to the prospect's personal email.
+        """
+        from app.services.organization_service import OrganizationService
+
+        org_service = OrganizationService(self.db)
+        org_settings = await org_service.get_organization_settings(organization_id)
+        dept = org_settings.department_email
+
+        if not dept.enabled or not dept.domain:
+            return None
+
+        from app.schemas.organization import DepartmentEmailFormat
+
+        first = first_name.lower().replace(" ", "")
+        last = last_name.lower().replace(" ", "")
+
+        if dept.format == DepartmentEmailFormat.FIRST_DOT_LAST:
+            local = f"{first}.{last}"
+        elif dept.format == DepartmentEmailFormat.FIRST_INITIAL_LAST:
+            local = f"{first[0]}{last}" if first else last
+        elif dept.format == DepartmentEmailFormat.FIRST_LAST:
+            local = f"{first}{last}"
+        elif dept.format == DepartmentEmailFormat.LAST_DOT_FIRST:
+            local = f"{last}.{first}"
+        else:
+            local = f"{first}.{last}"
+
+        base_email = f"{local}@{dept.domain}"
+        candidate = base_email
+
+        suffix = 0
+        while True:
+            existing = await self.db.execute(
+                select(func.count())
+                .select_from(User)
+                .where(
+                    User.organization_id == organization_id,
+                    User.email == candidate,
+                    User.deleted_at.is_(None),
+                )
+            )
+            if (existing.scalar() or 0) == 0:
+                return candidate
+            suffix += 1
+            name_part = local.split("@")[0] if "@" in local else local
+            candidate = f"{name_part}{suffix}@{dept.domain}"
 
     # =========================================================================
     # Kanban Board

@@ -16,6 +16,7 @@ from app.models.onboarding import OnboardingStatus
 from app.models.user import Organization, User
 from app.schemas.organization import (
     ContactInfoSettings,
+    DepartmentEmailSettings,
     EmailServiceSettings,
     EnabledModulesResponse,
     FileStorageSettings,
@@ -212,6 +213,20 @@ class OrganizationService:
             next_number=membership_id.get("next_number", 1),
         )
 
+        # Parse department email settings
+        dept_email = settings_dict.get("department_email", {})
+        dept_email_settings = (
+            DepartmentEmailSettings(
+                **{
+                    k: dept_email[k]
+                    for k in dept_email
+                    if k in DepartmentEmailSettings.model_fields
+                }
+            )
+            if dept_email
+            else DepartmentEmailSettings()
+        )
+
         # Collect extra/custom settings (e.g. station_mode) that aren't
         # covered by a dedicated sub-schema so they round-trip through the API.
         known_keys = {
@@ -224,6 +239,7 @@ class OrganizationService:
             "member_drop_notifications",
             "membership_tiers",
             "membership_id",
+            "department_email",
         }
         extra_settings = {k: v for k, v in settings_dict.items() if k not in known_keys}
 
@@ -234,6 +250,7 @@ class OrganizationService:
             auth=auth_settings,
             modules=module_settings,
             membership_id=membership_id_settings,
+            department_email=dept_email_settings,
             **extra_settings,
         )
 

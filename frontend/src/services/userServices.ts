@@ -297,6 +297,7 @@ export const organizationService = {
     file_storage?: FileStorageSettings;
     auth?: AuthSettings;
     membership_id?: import('../types/user').MembershipIdSettings;
+    department_email?: import('../types/user').DepartmentEmailSettings;
   }> {
     const response = await api.get<{
       contact_info_visibility: ContactInfoSettings;
@@ -304,6 +305,7 @@ export const organizationService = {
       file_storage?: FileStorageSettings;
       auth?: AuthSettings;
       membership_id?: import('../types/user').MembershipIdSettings;
+      department_email?: import('../types/user').DepartmentEmailSettings;
     }>('/organization/settings');
     return response.data;
   },

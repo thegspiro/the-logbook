@@ -487,6 +487,33 @@ class MembershipIdSettings(BaseModel):
     )
 
 
+class DepartmentEmailFormat(str, Enum):
+    """Supported patterns for auto-generated department email addresses"""
+
+    FIRST_DOT_LAST = "first.last"
+    FIRST_INITIAL_LAST = "flast"
+    FIRST_LAST = "firstlast"
+    LAST_DOT_FIRST = "last.first"
+
+
+class DepartmentEmailSettings(BaseModel):
+    """Settings for auto-generating department email addresses on member creation"""
+
+    enabled: bool = Field(
+        default=False,
+        description="Generate department email addresses when transferring prospects to members",
+    )
+    domain: str = Field(
+        default="",
+        max_length=255,
+        description="Email domain for department addresses (e.g. 'firedept.org')",
+    )
+    format: DepartmentEmailFormat = Field(
+        default=DepartmentEmailFormat.FIRST_DOT_LAST,
+        description="Username pattern for the generated email address",
+    )
+
+
 class ITTeamMember(BaseModel):
     """An IT team member stored in organization settings"""
 
@@ -673,6 +700,10 @@ class OrganizationSettings(BaseModel):
         default_factory=MembershipIdSettings,
         description="Membership ID number configuration",
     )
+    department_email: DepartmentEmailSettings = Field(
+        default_factory=DepartmentEmailSettings,
+        description="Department email generation settings for new members",
+    )
 
     # Allow additional settings
     model_config = ConfigDict(extra="allow")
@@ -717,6 +748,7 @@ class OrganizationSettingsUpdate(BaseModel):
     member_drop_notifications: Optional[MemberDropNotificationSettings] = None
     membership_tiers: Optional[MembershipTierSettings] = None
     membership_id: Optional[MembershipIdSettings] = None
+    department_email: Optional[DepartmentEmailSettings] = None
 
     # Allow additional settings
     model_config = ConfigDict(extra="allow")
