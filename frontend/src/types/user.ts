@@ -47,6 +47,20 @@ export interface MembershipIdSettings {
   next_number: number;
 }
 
+export const DepartmentEmailFormat = {
+  FIRST_DOT_LAST: 'first.last',
+  FIRST_INITIAL_LAST: 'flast',
+  FIRST_LAST: 'firstlast',
+  LAST_DOT_FIRST: 'last.first',
+} as const;
+export type DepartmentEmailFormat = (typeof DepartmentEmailFormat)[keyof typeof DepartmentEmailFormat];
+
+export interface DepartmentEmailSettings {
+  enabled: boolean;
+  domain: string;
+  format: DepartmentEmailFormat;
+}
+
 export interface EmailServiceSettings {
   enabled: boolean;
   platform: string;
