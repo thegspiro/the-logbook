@@ -127,6 +127,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const [assigning, setAssigning] = useState(false);
   const [memberSearch, setMemberSearch] = useState('');
   const [memberOptions, setMemberOptions] = useState<MemberOption[]>([]);
+  const [unavailableIds, setUnavailableIds] = useState<Set<string>>(new Set());
   const [loadingMembers, setLoadingMembers] = useState(false);
 
   // Bulk assignment state — maps position name to selected user_id
@@ -189,12 +190,18 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     const loadMembers = async () => {
       setLoadingMembers(true);
       try {
-        const users = await userService.getUsers();
+        const [users, unavailable] = await Promise.all([
+          userService.getUsers(),
+          showAssignForm
+            ? schedulingService.getUnavailableMembers(shift.id)
+            : Promise.resolve([]),
+        ]);
         const members = users.filter((m) => m.status === UserStatus.ACTIVE).map((m) => ({
           id: String(m.id),
           label: `${m.first_name || ''} ${m.last_name || ''}`.trim() || String(m.email || m.id),
         }));
         setMemberOptions(members);
+        setUnavailableIds(new Set(unavailable));
       } catch {
         // Non-critical — fallback to manual ID entry
       } finally {
@@ -210,18 +217,21 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   }, [isEditing, loadApparatus]);
 
   const filteredMembers = useMemo(() => {
-    if (!memberSearch) return memberOptions;
+    const available = memberOptions.filter(m => !unavailableIds.has(m.id));
+    if (!memberSearch) return available;
     const q = memberSearch.toLowerCase();
-    return memberOptions.filter(m => m.label.toLowerCase().includes(q));
-  }, [memberSearch, memberOptions]);
+    return available.filter(m => m.label.toLowerCase().includes(q));
+  }, [memberSearch, memberOptions, unavailableIds]);
 
   const refreshAssignments = async () => {
-    const [assignData, shiftData] = await Promise.all([
+    const [assignData, shiftData, unavailable] = await Promise.all([
       schedulingService.getShiftAssignments(shift.id),
       schedulingService.getShift(shift.id),
+      schedulingService.getUnavailableMembers(shift.id),
     ]);
     setAssignments(assignData);
     setShift(shiftData);
+    setUnavailableIds(new Set(unavailable));
   };
 
   const handleSignup = async (position?: string) => {
@@ -1169,7 +1179,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                             className={inputCls + ' text-xs py-1.5'}
                           >
                             <option value="">— skip —</option>
-                            {memberOptions.map(m => (
+                            {memberOptions.filter(m => !unavailableIds.has(m.id)).map(m => (
                               <option key={m.id} value={m.id}>{m.label}</option>
                             ))}
                           </select>

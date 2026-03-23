@@ -772,6 +772,20 @@ async def list_shift_assignments(
     return await service.enrich_assignments(assignments)
 
 
+@router.get("/shifts/{shift_id}/unavailable-members")
+async def get_unavailable_members(
+    shift_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.assign")),
+):
+    """Return user IDs that cannot be assigned to a shift (on leave, time-off, or already assigned)."""
+    service = SchedulingService(db)
+    user_ids = await service.get_unavailable_user_ids(
+        current_user.organization_id, shift_id
+    )
+    return {"unavailable_user_ids": user_ids}
+
+
 @router.post(
     "/shifts/{shift_id}/assignments",
     response_model=ShiftAssignmentResponse,

@@ -36,7 +36,7 @@ from app.models.training import (
 )
 from zoneinfo import ZoneInfo
 
-from app.models.user import Organization, Position, User, user_positions
+from app.models.user import MemberLeaveOfAbsence, Organization, Position, User, user_positions
 from app.services.member_leave_service import MemberLeaveService
 
 
@@ -2102,6 +2102,71 @@ class SchedulingService:
             )
 
         return unavailable
+
+    async def get_unavailable_user_ids(
+        self,
+        organization_id: UUID,
+        shift_id: UUID,
+    ) -> List[str]:
+        """Return user IDs that cannot be assigned to the given shift.
+
+        A member is unavailable if they:
+        - are already actively assigned to this shift, or
+        - have an active leave of absence covering the shift date, or
+        - have approved time-off covering the shift date.
+        """
+        shift = await self.get_shift_by_id(shift_id, organization_id)
+        if not shift:
+            return []
+
+        unavailable: set[str] = set()
+
+        # 1. Already assigned (non-cancelled, non-declined)
+        result = await self.db.execute(
+            select(ShiftAssignment.user_id).where(
+                ShiftAssignment.shift_id == str(shift_id),
+                ShiftAssignment.user_id.isnot(None),
+                ShiftAssignment.assignment_status.in_([
+                    AssignmentStatus.ASSIGNED,
+                    AssignmentStatus.CONFIRMED,
+                ]),
+            )
+        )
+        for row in result.scalars().all():
+            if row:
+                unavailable.add(str(row))
+
+        if shift.shift_date:
+            # 2. On leave of absence
+            leave_result = await self.db.execute(
+                select(MemberLeaveOfAbsence.user_id).where(
+                    MemberLeaveOfAbsence.organization_id == str(organization_id),
+                    MemberLeaveOfAbsence.active == True,  # noqa: E712
+                    MemberLeaveOfAbsence.start_date <= shift.shift_date,
+                    or_(
+                        MemberLeaveOfAbsence.end_date >= shift.shift_date,
+                        MemberLeaveOfAbsence.end_date.is_(None),
+                    ),
+                )
+            )
+            for uid in leave_result.scalars().all():
+                if uid:
+                    unavailable.add(str(uid))
+
+            # 3. Approved time-off
+            timeoff_result = await self.db.execute(
+                select(ShiftTimeOff.user_id).where(
+                    ShiftTimeOff.organization_id == str(organization_id),
+                    ShiftTimeOff.status == TimeOffStatus.APPROVED,
+                    ShiftTimeOff.start_date <= shift.shift_date,
+                    ShiftTimeOff.end_date >= shift.shift_date,
+                )
+            )
+            for uid in timeoff_result.scalars().all():
+                if uid:
+                    unavailable.add(str(uid))
+
+        return sorted(unavailable)
 
     # ============================================
     # Reporting
