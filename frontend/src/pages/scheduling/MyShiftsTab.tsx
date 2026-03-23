@@ -5,11 +5,13 @@
  * Allows confirming/declining assignments, requesting swaps, and requesting time off.
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Clock, Check, XCircle, ArrowLeftRight, CalendarOff,
-  Loader2, ChevronDown,
+  Loader2, ChevronDown, AlertTriangle,
+  Bell,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ShiftRecord } from '../../modules/scheduling/services/api';
@@ -131,7 +133,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
     try {
       await schedulingService.createSwapRequest({
         offering_shift_id: swapAssignment.shift_id,
-        requesting_shift_id: swapForm.target_shift_id || undefined,
+        requesting_shift_id: (swapForm.target_shift_id && swapForm.target_shift_id !== 'pick') ? swapForm.target_shift_id : undefined,
         reason: swapForm.reason,
       });
       toast.success('Swap request submitted — check Requests tab for status');
@@ -143,6 +145,18 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
       setSubmittingSwap(false);
     }
   };
+
+  // Check for conflicting assignments during time-off date range
+  const timeOffConflicts = useMemo(() => {
+    if (!timeOffForm.start_date) return [];
+    const start = timeOffForm.start_date;
+    const end = timeOffForm.end_date || timeOffForm.start_date;
+    return assignments.filter(a => {
+      const shiftDate = a.shift?.shift_date || '';
+      return shiftDate >= start && shiftDate <= end &&
+        a.status !== AssignmentStatus.DECLINED && a.status !== AssignmentStatus.CANCELLED;
+    });
+  }, [assignments, timeOffForm.start_date, timeOffForm.end_date]);
 
   const handleTimeOffRequest = async () => {
     if (!timeOffForm.start_date) { toast.error('Start date is required'); return; }
@@ -203,11 +217,20 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
             Past ({past.length})
           </button>
         </div>
-        <button onClick={() => { setTimeOffForm({ start_date: '', end_date: '', reason: '' }); setShowTimeOffModal(true); }}
-          className="flex items-center justify-center gap-2 px-4 py-2 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors w-full sm:w-auto"
-        >
-          <CalendarOff className="w-4 h-4" /> Request Time Off
-        </button>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <button onClick={() => { setTimeOffForm({ start_date: '', end_date: '', reason: '' }); setShowTimeOffModal(true); }}
+            className="flex items-center justify-center gap-2 px-4 py-2 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors flex-1 sm:flex-none"
+          >
+            <CalendarOff className="w-4 h-4" /> Request Time Off
+          </button>
+          <Link to="/notifications?filter=schedule_change"
+            className="flex items-center justify-center gap-1.5 px-3 py-2 text-sm text-theme-text-muted hover:text-violet-600 dark:hover:text-violet-400 hover:bg-theme-surface-hover rounded-lg transition-colors"
+            title="View scheduling notification history"
+          >
+            <Bell className="w-4 h-4" />
+            <span className="hidden sm:inline">Alerts</span>
+          </Link>
+        </div>
       </div>
 
       {/* Shift List */}
@@ -321,27 +344,59 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
               </p>
             </div>
             <div className="p-6 space-y-4">
+              {/* Swap type selector */}
               <div>
-                <label htmlFor="swap-target-shift" className="block text-sm font-medium text-theme-text-secondary mb-1">Swap Into (optional)</label>
-                <select id="swap-target-shift" value={swapForm.target_shift_id}
-                  onChange={e => setSwapForm(p => ({...p, target_shift_id: e.target.value}))}
-                  className={inputCls}
-                >
-                  <option value="">Open swap — any available shift</option>
-                  {availableShifts.map(s => {
-                    const d = new Date(s.shift_date + 'T12:00:00');
-                    return (
-                      <option key={s.id} value={s.id}>
-                        {formatDateCustom(d, { weekday: 'short', month: 'short', day: 'numeric' }, tz)}
-                        {' '}{formatTime(s.start_time, tz)}
-                        {s.end_time ? ` - ${formatTime(s.end_time, tz)}` : ''}
-                        {s.apparatus_unit_number ? ` (${s.apparatus_unit_number})` : ''}
-                      </option>
-                    );
-                  })}
-                </select>
-                <p className="text-xs text-theme-text-muted mt-1">Leave blank to request an open swap that any member can accept.</p>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Swap Type</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button"
+                    onClick={() => setSwapForm(p => ({...p, target_shift_id: ''}))}
+                    className={`p-3 rounded-lg border text-left text-sm transition-colors ${
+                      !swapForm.target_shift_id
+                        ? 'border-violet-500 bg-violet-500/10 text-theme-text-primary'
+                        : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover'
+                    }`}
+                  >
+                    <span className="font-medium block">Open Swap</span>
+                    <span className="text-xs text-theme-text-muted">Any member can pick it up</span>
+                  </button>
+                  <button type="button"
+                    onClick={() => setSwapForm(p => ({...p, target_shift_id: availableShifts[0]?.id ?? 'pick'}))}
+                    className={`p-3 rounded-lg border text-left text-sm transition-colors ${
+                      swapForm.target_shift_id
+                        ? 'border-violet-500 bg-violet-500/10 text-theme-text-primary'
+                        : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover'
+                    }`}
+                  >
+                    <span className="font-medium block">Specific Shift</span>
+                    <span className="text-xs text-theme-text-muted">Choose which shift you want</span>
+                  </button>
+                </div>
               </div>
+              {/* Target shift picker — only shown when "Specific Shift" is selected */}
+              {swapForm.target_shift_id && (
+                <div>
+                  <label htmlFor="swap-target-shift" className="block text-sm font-medium text-theme-text-secondary mb-1">Select Shift</label>
+                  <select id="swap-target-shift" value={swapForm.target_shift_id}
+                    onChange={e => setSwapForm(p => ({...p, target_shift_id: e.target.value}))}
+                    className={inputCls}
+                  >
+                    {availableShifts.length === 0 && (
+                      <option value="pick" disabled>Loading shifts...</option>
+                    )}
+                    {availableShifts.map(s => {
+                      const d = new Date(s.shift_date + 'T12:00:00');
+                      return (
+                        <option key={s.id} value={s.id}>
+                          {formatDateCustom(d, { weekday: 'short', month: 'short', day: 'numeric' }, tz)}
+                          {' '}{formatTime(s.start_time, tz)}
+                          {s.end_time ? ` - ${formatTime(s.end_time, tz)}` : ''}
+                          {s.apparatus_unit_number ? ` (${s.apparatus_unit_number})` : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              )}
               <div>
                 <label htmlFor="swap-reason" className="block text-sm font-medium text-theme-text-secondary mb-1">Reason</label>
                 <textarea id="swap-reason" value={swapForm.reason}
@@ -388,9 +443,26 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                 <label htmlFor="timeoff-reason" className="block text-sm font-medium text-theme-text-secondary mb-1">Reason</label>
                 <textarea id="timeoff-reason" value={timeOffForm.reason}
                   onChange={e => setTimeOffForm(p => ({...p, reason: e.target.value}))}
-                  rows={3} placeholder="Reason for time off" className={inputCls + ' resize-none'}
+                  rows={3} placeholder="Reason for time off (helps your manager understand the request)" className={inputCls + ' resize-none'}
                 />
               </div>
+              {timeOffConflicts.length > 0 && (
+                <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="text-sm text-amber-700 dark:text-amber-300">
+                    <p className="font-medium">You have {timeOffConflicts.length} shift{timeOffConflicts.length > 1 ? 's' : ''} during this period:</p>
+                    <ul className="mt-1 space-y-0.5 text-xs">
+                      {timeOffConflicts.map(a => (
+                        <li key={a.id}>
+                          {a.shift?.shift_date ? formatDateCustom(a.shift.shift_date + 'T12:00:00', { weekday: 'short', month: 'short', day: 'numeric' }, tz) : 'Unknown date'}
+                          {a.shift?.start_time ? ` at ${formatTime(a.shift.start_time, tz)}` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-1 text-xs">Your manager will need to find coverage or reassign these shifts.</p>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex justify-end gap-3 p-6 border-t border-theme-surface-border">
               <button onClick={() => setShowTimeOffModal(false)} className="px-4 py-2 text-theme-text-secondary">Cancel</button>

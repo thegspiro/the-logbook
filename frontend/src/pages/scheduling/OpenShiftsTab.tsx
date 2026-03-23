@@ -201,8 +201,6 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                             )}
                           </div>
                         </div>
-                        {/* Desktop buttons (hidden on mobile when signup form is open) */}
-                        {signupShiftId !== shift.id && (
                           <div className="flex items-center gap-2 shrink-0">
                             <button onClick={() => setSignupShiftId(shift.id)}
                               className="flex items-center gap-1.5 px-3 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs sm:text-sm font-medium transition-colors"
@@ -219,53 +217,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                               </button>
                             )}
                           </div>
-                        )}
                       </div>
-                      {/* Signup form — stacks below card content on mobile */}
-                      {signupShiftId === shift.id && (
-                        <div className="mt-3 pt-3 border-t border-theme-surface-border">
-                          {eligibilityLoading ? (
-                            <div className="flex items-center justify-center py-3">
-                              <Loader2 className="w-4 h-4 animate-spin text-theme-text-muted" />
-                            </div>
-                          ) : isExcluded || eligiblePositions.length === 0 ? (
-                            <div className="flex items-center gap-2 py-2">
-                              <p className="text-sm text-amber-600 dark:text-amber-400">
-                                You are not eligible to sign up for this shift. Contact a scheduling admin for assistance.
-                              </p>
-                              <button onClick={() => setSignupShiftId(null)}
-                                className="px-3 py-1.5 text-sm text-theme-text-muted hover:text-theme-text-primary border border-theme-surface-border rounded-lg shrink-0"
-                              >
-                                Close
-                              </button>
-                            </div>
-                          ) : (
-                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                            <select value={signupPosition} onChange={e => setSignupPosition(e.target.value)}
-                              aria-label="Position to sign up for"
-                              className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500"
-                            >
-                              {eligiblePositions.map((pos) => (
-                                <option key={pos} value={pos}>{POSITION_LABELS[pos] ?? pos}</option>
-                              ))}
-                            </select>
-                            <div className="flex items-center gap-2">
-                              <button onClick={() => { void handleSignup(shift.id); }} disabled={signingUp}
-                                className="flex-1 sm:flex-none px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1"
-                              >
-                                {signingUp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                                Confirm
-                              </button>
-                              <button onClick={() => setSignupShiftId(null)}
-                                className="px-3 py-2 text-sm text-theme-text-muted hover:text-theme-text-primary border border-theme-surface-border rounded-lg"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                          )}
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -274,6 +226,64 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
           })}
         </div>
       )}
+      {/* Signup Modal */}
+      {signupShiftId && (() => {
+        const targetShift = shifts.find(s => s.id === signupShiftId);
+        return (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Sign up for shift"
+            onKeyDown={e => { if (e.key === 'Escape') setSignupShiftId(null); }}
+          >
+            <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-sm w-full">
+              <div className="p-5 border-b border-theme-surface-border">
+                <h2 className="text-lg font-bold text-theme-text-primary">Sign Up for Shift</h2>
+                {targetShift && (
+                  <p className="text-sm text-theme-text-secondary mt-1">
+                    {formatDateCustom(targetShift.shift_date + 'T12:00:00', { weekday: 'short', month: 'short', day: 'numeric' }, tz)}
+                    {' '}{formatTime(targetShift.start_time, tz)}
+                    {targetShift.end_time ? ` - ${formatTime(targetShift.end_time, tz)}` : ''}
+                    {targetShift.apparatus_unit_number ? ` (${targetShift.apparatus_unit_number})` : ''}
+                  </p>
+                )}
+              </div>
+              <div className="p-5 space-y-4">
+                {eligibilityLoading ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" />
+                  </div>
+                ) : isExcluded || eligiblePositions.length === 0 ? (
+                  <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                    <p className="text-sm text-amber-600 dark:text-amber-400">
+                      You are not eligible to sign up for this shift. Contact a scheduling admin for assistance.
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <label htmlFor="signup-position" className="block text-sm font-medium text-theme-text-secondary mb-1">Position</label>
+                    <select id="signup-position" value={signupPosition} onChange={e => setSignupPosition(e.target.value)}
+                      className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2.5 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500"
+                    >
+                      {eligiblePositions.map((pos) => (
+                        <option key={pos} value={pos}>{POSITION_LABELS[pos] ?? pos}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-end gap-3 p-5 border-t border-theme-surface-border">
+                <button onClick={() => setSignupShiftId(null)} className="px-4 py-2 text-sm text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>
+                {!isExcluded && eligiblePositions.length > 0 && (
+                  <button onClick={() => { void handleSignup(signupShiftId); }} disabled={signingUp}
+                    className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center gap-1"
+                  >
+                    {signingUp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    Confirm Sign Up
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

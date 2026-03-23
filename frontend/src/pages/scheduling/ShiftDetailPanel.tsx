@@ -129,6 +129,11 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const [memberOptions, setMemberOptions] = useState<MemberOption[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
 
+  // Bulk assignment state — maps position name to selected user_id
+  const [showBulkAssign, setShowBulkAssign] = useState(false);
+  const [bulkAssignments, setBulkAssignments] = useState<Record<string, string>>({});
+  const [bulkAssigning, setBulkAssigning] = useState(false);
+
   const apparatusPositions = useMemo(() => shift.apparatus_positions ?? [], [shift.apparatus_positions]);
   const hasApparatusPositions = apparatusPositions.length > 0;
 
@@ -315,7 +320,40 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const openAssignFormForPosition = (position: string) => {
     setAssignForm({ user_id: '', position });
     setMemberSearch('');
+    setShowBulkAssign(false);
     setShowAssignForm(true);
+  };
+
+  const openBulkAssign = () => {
+    setBulkAssignments({});
+    setShowAssignForm(false);
+    setShowBulkAssign(true);
+  };
+
+  const handleBulkAssign = async () => {
+    const entries = Object.entries(bulkAssignments).filter((pair): pair is [string, string] => Boolean(pair[1]));
+    if (entries.length === 0) { toast.error('Select at least one member'); return; }
+    setBulkAssigning(true);
+    let successCount = 0;
+    for (const [position, userId] of entries) {
+      try {
+        await schedulingService.createAssignment(shift.id, {
+          user_id: userId,
+          position,
+        });
+        successCount++;
+      } catch (err) {
+        toast.error(`Failed to assign ${position}: ${getErrorMessage(err, 'Unknown error')}`);
+      }
+    }
+    if (successCount > 0) {
+      toast.success(`${successCount} member${successCount > 1 ? 's' : ''} assigned`);
+      setShowBulkAssign(false);
+      setBulkAssignments({});
+      await refreshAssignments();
+      onRefresh?.();
+    }
+    setBulkAssigning(false);
   };
 
   const handleAssign = async () => {
@@ -499,19 +537,19 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-1 sm:gap-2 shrink-0">
           <span className={`px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full capitalize ${statusColor}`}>
             {effectiveStatus}
           </span>
           {isCurrentUser && isAssigned && confirmingDecline !== assignment.id && (
             <>
               <button onClick={() => { void handleConfirm(assignment.id); }} disabled={confirming}
-                className="p-1.5 text-green-600 hover:bg-green-500/10 rounded-sm transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center disabled:opacity-50" aria-label="Confirm assignment"
+                className="p-1.5 text-green-600 hover:bg-green-500/10 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center disabled:opacity-50" aria-label="Confirm assignment"
               >
                 {confirming ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
               </button>
               <button onClick={() => setConfirmingDecline(assignment.id)}
-                className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-sm transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Decline assignment"
+                className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Decline assignment"
               >
                 <XCircle className="w-4 h-4" />
               </button>
@@ -530,7 +568,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           )}
           {canAssign && !isCurrentUser && confirmingRemove !== assignment.id && (
             <button onClick={() => setConfirmingRemove(assignment.id)}
-              className="p-1.5 text-theme-text-muted hover:text-red-500 rounded-sm transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Remove assignment"
+              className="p-1.5 text-theme-text-muted hover:text-red-500 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Remove assignment"
             >
               <XCircle className="w-4 h-4" />
             </button>
@@ -549,7 +587,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           {canAssign && !isPast && editingNotesId !== assignment.id && (
             <button
               onClick={() => { setEditingNotesId(assignment.id); setEditingNotesValue(assignment.notes || ''); }}
-              className={`p-1.5 rounded-sm transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center ${assignment.notes ? 'text-violet-500 hover:bg-violet-500/10' : 'text-theme-text-muted hover:text-violet-500 hover:bg-violet-500/10'}`}
+              className={`p-1.5 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center ${assignment.notes ? 'text-violet-500 hover:bg-violet-500/10' : 'text-theme-text-muted hover:text-violet-500 hover:bg-violet-500/10'}`}
               aria-label="Edit notes" title={assignment.notes ? 'Edit notes' : 'Add notes'}
             >
               <FileText className="w-4 h-4" />
@@ -823,11 +861,17 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                   <Truck className="w-4 h-4" /> Crew Board — {shift.apparatus_unit_number}
                 </h3>
                 {openPositions.length > 0 && (
-                  <span className="text-xs text-theme-text-muted">
+                  <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
                     {openPositions.length} open
                   </span>
                 )}
               </div>
+              {shift.apparatus_id && (
+                <p className="text-[10px] text-theme-text-muted mb-2">
+                  Positions from {shift.apparatus_unit_number ?? 'apparatus'}
+                  {shift.positions && shift.positions.length > 0 ? ' + shift customizations' : ''}
+                </p>
+              )}
               <div className="space-y-2">
                 {crewBoard?.map(({ position, required, assignment }, i) => (
                   <div key={i} className={`flex items-center justify-between gap-2 p-2.5 sm:p-3 rounded-lg border ${
@@ -888,7 +932,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                         </>
                       )}
                     </div>
-                    <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+                    <div className="flex flex-wrap items-center gap-1 sm:gap-2 shrink-0">
                       {assignment ? (
                         <>
                           <span className={`px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full capitalize ${ASSIGNMENT_STATUS_COLORS[assignment.status || 'assigned'] || ASSIGNMENT_STATUS_COLORS.assigned}`}>
@@ -897,12 +941,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                           {assignment.user_id === user?.id && assignment.status === AssignmentStatus.ASSIGNED && confirmingDecline !== assignment.id && (
                             <>
                               <button onClick={() => { void handleConfirm(assignment.id); }}
-                                className="p-1.5 text-green-600 hover:bg-green-500/10 rounded-sm transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Confirm assignment"
+                                className="p-1.5 text-green-600 hover:bg-green-500/10 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Confirm assignment"
                               >
                                 <Check className="w-4 h-4" />
                               </button>
                               <button onClick={() => setConfirmingDecline(assignment.id)}
-                                className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-sm transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Decline assignment"
+                                className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Decline assignment"
                               >
                                 <XCircle className="w-4 h-4" />
                               </button>
@@ -921,7 +965,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                           )}
                           {canAssign && assignment.user_id !== user?.id && confirmingRemove !== assignment.id && (
                             <button onClick={() => setConfirmingRemove(assignment.id)}
-                              className="p-1.5 text-theme-text-muted hover:text-red-500 rounded-sm transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Remove assignment"
+                              className="p-1.5 text-theme-text-muted hover:text-red-500 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Remove assignment"
                             >
                               <XCircle className="w-4 h-4" />
                             </button>
@@ -1015,14 +1059,23 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           )}
 
           {/* Admin Assign Form — with member search dropdown */}
-          {canAssign && (showAssignForm || (hasApparatusPositions && !isPast)) && (
+          {canAssign && (showAssignForm || showBulkAssign || (hasApparatusPositions && !isPast)) && (
             <>
-              {!showAssignForm && hasApparatusPositions && (
-                <button onClick={() => setShowAssignForm(true)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 rounded-lg transition-colors"
-                >
-                  <UserPlus className="w-3.5 h-3.5" /> Assign Member
-                </button>
+              {!showAssignForm && !showBulkAssign && hasApparatusPositions && (
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setShowAssignForm(true)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 rounded-lg transition-colors"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" /> Assign Member
+                  </button>
+                  {openPositions.length > 1 && (
+                    <button onClick={openBulkAssign}
+                      className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 rounded-lg transition-colors border border-violet-500/20"
+                    >
+                      <Users className="w-3.5 h-3.5" /> Fill All Open ({openPositions.length})
+                    </button>
+                  )}
+                </div>
               )}
               {showAssignForm && (
                 <div className="p-4 border border-theme-surface-border rounded-lg bg-theme-surface-hover/30 space-y-3">
@@ -1076,6 +1129,44 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                       className="px-3 py-1.5 text-sm bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50"
                     >
                       {assigning ? 'Assigning...' : 'Assign'}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {/* Bulk Assignment Panel */}
+              {showBulkAssign && (
+                <div className="p-4 border border-theme-surface-border rounded-lg bg-theme-surface-hover/30 space-y-3">
+                  <h4 className="text-sm font-medium text-theme-text-primary flex items-center gap-2">
+                    <Users className="w-4 h-4" /> Fill Open Positions
+                  </h4>
+                  <p className="text-xs text-theme-text-muted">Select a member for each open position.</p>
+                  <div className="space-y-2">
+                    {openPositions.map(pos => {
+                      const label = POSITION_LABELS[pos] ?? pos;
+                      return (
+                        <div key={pos} className="flex items-center gap-2">
+                          <span className="text-xs font-medium text-theme-text-secondary capitalize w-24 shrink-0">{label}</span>
+                          <select
+                            aria-label={`Member for ${label}`}
+                            value={bulkAssignments[pos] ?? ''}
+                            onChange={e => setBulkAssignments(prev => ({ ...prev, [pos]: e.target.value }))}
+                            className={inputCls + ' text-xs py-1.5'}
+                          >
+                            <option value="">— skip —</option>
+                            {memberOptions.map(m => (
+                              <option key={m.id} value={m.id}>{m.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => setShowBulkAssign(false)} className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>
+                    <button onClick={() => { void handleBulkAssign(); }} disabled={bulkAssigning || Object.values(bulkAssignments).every(v => !v)}
+                      className="px-3 py-1.5 text-sm bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50"
+                    >
+                      {bulkAssigning ? 'Assigning...' : `Assign ${Object.values(bulkAssignments).filter(Boolean).length} Members`}
                     </button>
                   </div>
                 </div>
