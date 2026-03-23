@@ -13,6 +13,7 @@ import {
   ChevronRight,
   AlertCircle,
   AlertTriangle,
+  CheckCircle2,
   X,
   Loader2,
   Users,
@@ -25,6 +26,7 @@ import {
   FileText,
   ExternalLink,
   Truck,
+  ChevronDown,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
@@ -136,22 +138,25 @@ const getShiftTemplateColor = (shift: ShiftRecord): string | undefined => {
   return "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30";
 };
 
-const isUnderstaffed = (shift: ShiftRecord): boolean => {
-  // Check required positions first — if a shift has structured positions,
-  // count only required slots to determine understaffing
+/** Returns the minimum staffing target for a shift, or null if none is configured. */
+const getStaffingTarget = (shift: ShiftRecord): number | null => {
   const positions = normalizePositions(
     (shift.apparatus_positions ?? shift.positions) as unknown[] | null,
   );
   const requiredCount = positions.filter(p => p.required).length;
-  if (requiredCount > 0) {
-    return shift.attendee_count < requiredCount;
-  }
-  // Fall back to min_staffing headcount
-  return (
-    shift.min_staffing != null &&
-    shift.min_staffing > 0 &&
-    shift.attendee_count < shift.min_staffing
-  );
+  if (requiredCount > 0) return requiredCount;
+  if (shift.min_staffing != null && shift.min_staffing > 0) return shift.min_staffing;
+  return null;
+};
+
+const isUnderstaffed = (shift: ShiftRecord): boolean => {
+  const target = getStaffingTarget(shift);
+  return target != null && shift.attendee_count < target;
+};
+
+const isFullyStaffed = (shift: ShiftRecord): boolean => {
+  const target = getStaffingTarget(shift);
+  return target != null && shift.attendee_count >= target;
 };
 
 const TAB_CONFIG: {
@@ -216,6 +221,8 @@ const SchedulingPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
+  const [templateSearch, setTemplateSearch] = useState('');
 
   // Shift detail panel
   const [selectedShift, setSelectedShift] = useState<ShiftRecord | null>(null);
@@ -688,17 +695,25 @@ const SchedulingPage: React.FC = () => {
                                 </p>
                               )}
                               <div className="flex items-center gap-2 mt-1">
-                                {isUnderstaffed(shift) && (
+                                {isUnderstaffed(shift) ? (
                                   <span
                                     className="text-amber-600 dark:text-amber-400 flex items-center gap-0.5"
-                                    title={`Needs ${shift.min_staffing} staff`}
+                                    title={`Understaffed: ${shift.attendee_count}/${getStaffingTarget(shift)} filled`}
                                   >
                                     <AlertTriangle className="w-3 h-3" />
                                   </span>
-                                )}
+                                ) : isFullyStaffed(shift) ? (
+                                  <span
+                                    className="text-green-600 dark:text-green-400 flex items-center gap-0.5"
+                                    title="Fully staffed"
+                                  >
+                                    <CheckCircle2 className="w-3 h-3" />
+                                  </span>
+                                ) : null}
                                 <span className="opacity-70 flex items-center gap-0.5">
                                   <Users className="w-3 h-3" />{" "}
                                   {shift.attendee_count}
+                                  {getStaffingTarget(shift) != null && `/${getStaffingTarget(shift)}`}
                                 </span>
                                 {shift.apparatus_unit_number && (
                                   <span className="opacity-70 flex items-center gap-0.5">
@@ -778,17 +793,25 @@ const SchedulingPage: React.FC = () => {
                                     </p>
                                   )}
                                   <div className="flex items-center gap-3 mt-1.5">
-                                    {isUnderstaffed(shift) && (
+                                    {isUnderstaffed(shift) ? (
                                       <span
                                         className="text-amber-600 dark:text-amber-400 flex items-center gap-1 text-xs"
-                                        title={`Needs ${shift.min_staffing} staff`}
+                                        title={`Understaffed: ${shift.attendee_count}/${getStaffingTarget(shift)} filled`}
                                       >
                                         <AlertTriangle className="w-3.5 h-3.5" />
                                       </span>
-                                    )}
+                                    ) : isFullyStaffed(shift) ? (
+                                      <span
+                                        className="text-green-600 dark:text-green-400 flex items-center gap-1 text-xs"
+                                        title="Fully staffed"
+                                      >
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                      </span>
+                                    ) : null}
                                     <span className="opacity-70 flex items-center gap-1 text-xs">
                                       <Users className="w-3.5 h-3.5" />{" "}
-                                      {shift.attendee_count} staff
+                                      {shift.attendee_count}
+                                      {getStaffingTarget(shift) != null && `/${getStaffingTarget(shift)}`} staff
                                     </span>
                                     {shift.apparatus_unit_number && (
                                       <span className="opacity-70 flex items-center gap-1 text-xs">
@@ -855,9 +878,11 @@ const SchedulingPage: React.FC = () => {
                               style={shift.color ? colorCardStyle(shift.color, resolvedTheme) : undefined}
                             >
                               <p className="font-medium truncate">
-                                {isUnderstaffed(shift) && (
+                                {isUnderstaffed(shift) ? (
                                   <AlertTriangle className="w-3 h-3 inline text-amber-600 dark:text-amber-400 mr-0.5" />
-                                )}
+                                ) : isFullyStaffed(shift) ? (
+                                  <CheckCircle2 className="w-3 h-3 inline text-green-600 dark:text-green-400 mr-0.5" />
+                                ) : null}
                                 {formatTime(shift.start_time, tz)}
                                 {shift.apparatus_unit_number && (
                                   <span className="ml-1 opacity-70">
@@ -865,7 +890,8 @@ const SchedulingPage: React.FC = () => {
                                   </span>
                                 )}
                                 <span className="ml-1 opacity-70">
-                                  ({shift.attendee_count})
+                                  ({shift.attendee_count}
+                                  {getStaffingTarget(shift) != null && `/${getStaffingTarget(shift)}`})
                                 </span>
                               </p>
                             </button>
@@ -1014,17 +1040,25 @@ const SchedulingPage: React.FC = () => {
                                       </p>
                                     )}
                                     <div className="flex items-center gap-3 mt-1.5">
-                                      {isUnderstaffed(shift) && (
+                                      {isUnderstaffed(shift) ? (
                                         <span
                                           className="text-amber-600 dark:text-amber-400 flex items-center gap-1 text-xs"
-                                          title={`Needs ${shift.min_staffing} staff`}
+                                          title={`Understaffed: ${shift.attendee_count}/${getStaffingTarget(shift)} filled`}
                                         >
                                           <AlertTriangle className="w-3.5 h-3.5" />
                                         </span>
-                                      )}
+                                      ) : isFullyStaffed(shift) ? (
+                                        <span
+                                          className="text-green-600 dark:text-green-400 flex items-center gap-1 text-xs"
+                                          title="Fully staffed"
+                                        >
+                                          <CheckCircle2 className="w-3.5 h-3.5" />
+                                        </span>
+                                      ) : null}
                                       <span className="opacity-70 flex items-center gap-1 text-xs">
                                         <Users className="w-3.5 h-3.5" />{" "}
-                                        {shift.attendee_count} staff
+                                        {shift.attendee_count}
+                                        {getStaffingTarget(shift) != null && `/${getStaffingTarget(shift)}`} staff
                                       </span>
                                       {shift.apparatus_unit_number && (
                                         <span className="opacity-70 flex items-center gap-1 text-xs">
@@ -1170,6 +1204,15 @@ const SchedulingPage: React.FC = () => {
                       <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                         Shift Template
                       </label>
+                      {effectiveTemplates.length > 5 && (
+                        <input
+                          type="text"
+                          placeholder="Search templates..."
+                          value={templateSearch}
+                          onChange={e => setTemplateSearch(e.target.value)}
+                          className="form-input focus:ring-violet-500 mb-2 text-sm"
+                        />
+                      )}
                       <select
                         value={shiftForm.shiftTemplate}
                         onChange={(e) => {
@@ -1183,16 +1226,25 @@ const SchedulingPage: React.FC = () => {
                           }));
                         }}
                         className="form-input focus:ring-violet-500"
+                        size={effectiveTemplates.length > 5 ? Math.min(8, effectiveTemplates.length) : undefined}
                       >
-                        {/* Group templates by category */}
                         {(() => {
-                          const standard = effectiveTemplates.filter(
+                          const q = templateSearch.toLowerCase();
+                          const filtered = q
+                            ? effectiveTemplates.filter(t =>
+                                t.name.toLowerCase().includes(q) ||
+                                (t.apparatus_type ?? '').toLowerCase().includes(q) ||
+                                (t.category ?? '').toLowerCase().includes(q)
+                              )
+                            : effectiveTemplates;
+
+                          const standard = filtered.filter(
                             (t) => !t.category || t.category === "standard",
                           );
-                          const specialty = effectiveTemplates.filter(
+                          const specialty = filtered.filter(
                             (t) => t.category === "specialty",
                           );
-                          const event = effectiveTemplates.filter(
+                          const event = filtered.filter(
                             (t) => t.category === "event",
                           );
                           return (
@@ -1233,13 +1285,16 @@ const SchedulingPage: React.FC = () => {
                               )}
                               {standard.length === 0 &&
                                 specialty.length === 0 &&
-                                event.length === 0 &&
-                                effectiveTemplates.map((t) => (
+                                event.length === 0 && filtered.length > 0 &&
+                                filtered.map((t) => (
                                   <option key={t.id} value={t.id}>
                                     {t.name} ({t.start_time_of_day} -{" "}
                                     {t.end_time_of_day})
                                   </option>
                                 ))}
+                              {filtered.length === 0 && (
+                                <option value="" disabled>No templates match &ldquo;{templateSearch}&rdquo;</option>
+                              )}
                             </>
                           );
                         })()}
@@ -1334,184 +1389,7 @@ const SchedulingPage: React.FC = () => {
                       )}
                     </div>
 
-                    {/* Custom Time Override */}
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                        <span className="flex items-center gap-1.5">
-                          <Clock className="w-4 h-4" /> Custom Times (optional)
-                        </span>
-                      </label>
-                      <p className="text-xs text-theme-text-muted mb-2">Override the template times for this shift</p>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs text-theme-text-muted mb-1">Start Time</label>
-                          <TimeQuarterHour
-                            value={shiftForm.customStartTime}
-                            onChange={(e) => setShiftForm({ ...shiftForm, customStartTime: e.target.value })}
-                            placeholder={(() => {
-                              const tmpl = effectiveTemplates.find((t) => t.id === shiftForm.shiftTemplate) || defaultTemplate;
-                              return tmpl?.start_time_of_day || '';
-                            })()}
-                            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-theme-text-muted mb-1">End Time</label>
-                          <TimeQuarterHour
-                            value={shiftForm.customEndTime}
-                            onChange={(e) => setShiftForm({ ...shiftForm, customEndTime: e.target.value })}
-                            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500"
-                          />
-                        </div>
-                      </div>
-                      {(shiftForm.customStartTime || shiftForm.customEndTime) && (
-                        <button
-                          type="button"
-                          onClick={() => setShiftForm({ ...shiftForm, customStartTime: "", customEndTime: "" })}
-                          className="mt-1 text-xs text-theme-text-muted hover:text-violet-500"
-                        >
-                          Reset to template times
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Apparatus Selection */}
-                    {apparatusList.length > 0 && (
-                      <div>
-                        <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                          <span className="flex items-center gap-1.5">
-                            <Truck className="w-4 h-4" /> Apparatus (optional)
-                          </span>
-                        </label>
-                        <select
-                          value={shiftForm.apparatus_id}
-                          onChange={(e) =>
-                            setShiftForm({
-                              ...shiftForm,
-                              apparatus_id: e.target.value,
-                            })
-                          }
-                          className="form-input focus:ring-violet-500"
-                        >
-                          <option value="">No specific apparatus</option>
-                          {apparatusList.map((a) => (
-                            <option key={a.id} value={a.id}>
-                              {a.unit_number} — {a.name}
-                            </option>
-                          ))}
-                        </select>
-                        {/* Positions preview when an apparatus is selected */}
-                        {(() => {
-                          const selected = apparatusList.find(
-                            (a) => a.id === shiftForm.apparatus_id,
-                          );
-                          if (
-                            selected?.positions &&
-                            selected.positions.length > 0
-                          ) {
-                            return (
-                              <div className="mt-2 p-2.5 bg-violet-500/5 border border-violet-500/20 rounded-lg">
-                                <p className="text-xs font-medium text-violet-700 dark:text-violet-400 mb-1.5">
-                                  Positions on {selected.unit_number}:
-                                </p>
-                                <div className="flex flex-wrap gap-1.5">
-                                  {selected.positions.map((pos, i) => {
-                                    const name = typeof pos === 'string' ? pos : pos.position;
-                                    return (
-                                      <span
-                                        key={i}
-                                        className="px-2 py-0.5 text-xs bg-violet-500/10 text-violet-700 dark:text-violet-300 rounded-sm capitalize"
-                                      >
-                                        {name}
-                                      </span>
-                                    );
-                                  })}
-                                </div>
-                                <p className="text-xs text-theme-text-muted mt-1.5">
-                                  Members will be able to sign up for these
-                                  positions
-                                </p>
-                              </div>
-                            );
-                          }
-                          if (shiftForm.apparatus_id) {
-                            return (
-                              <p className="text-xs text-theme-text-muted mt-1">
-                                This apparatus has no positions defined. Members
-                                can still sign up with any position.
-                              </p>
-                            );
-                          }
-                          return (
-                            <p className="text-xs text-theme-text-muted mt-1">
-                              Assign a vehicle to define crew positions for this
-                              shift
-                            </p>
-                          );
-                        })()}
-                      </div>
-                    )}
-
-                    {/* Shift Officer Selection */}
-                    {membersList.length > 0 && (
-                      <div>
-                        <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                          <span className="flex items-center gap-1.5">
-                            <Users className="w-4 h-4" /> Shift Officer
-                            (optional)
-                          </span>
-                        </label>
-                        <select
-                          value={shiftForm.shift_officer_id}
-                          onChange={(e) =>
-                            setShiftForm({
-                              ...shiftForm,
-                              shift_officer_id: e.target.value,
-                            })
-                          }
-                          className="form-input focus:ring-violet-500"
-                        >
-                          <option value="">No shift officer</option>
-                          {membersList.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-
-                    {/* Auto-generated shift label preview */}
-                    {(() => {
-                      const tmpl =
-                        effectiveTemplates.find(
-                          (t) => t.id === shiftForm.shiftTemplate,
-                        ) || defaultTemplate;
-                      const apparatus = apparatusList.find(
-                        (a) => a.id === shiftForm.apparatus_id,
-                      );
-                      if (!tmpl) return null;
-                      const suffix =
-                        tmpl.duration_hours >= 24
-                          ? "24"
-                          : tmpl.start_time_of_day < tmpl.end_time_of_day
-                            ? "DS"
-                            : "NS";
-                      const label = apparatus
-                        ? `${apparatus.unit_number} ${suffix}`
-                        : `${tmpl.name}`;
-                      return (
-                        <div className="flex items-center gap-2 p-2.5 bg-theme-surface-hover/50 rounded-lg border border-theme-surface-border">
-                          <span className="text-xs text-theme-text-muted">
-                            Shift label:
-                          </span>
-                          <span className="text-sm font-semibold text-theme-text-primary">
-                            {label}
-                          </span>
-                        </div>
-                      );
-                    })()}
-
+                    {/* Start / End Date — always visible */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-theme-text-secondary mb-1">
@@ -1570,19 +1448,208 @@ const SchedulingPage: React.FC = () => {
                           })()}
                       </div>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                        Notes
-                      </label>
-                      <textarea
-                        value={shiftForm.notes}
-                        onChange={(e) =>
-                          setShiftForm({ ...shiftForm, notes: e.target.value })
-                        }
-                        rows={3}
-                        className="form-input focus:ring-violet-500 resize-none"
-                        placeholder="Optional notes for this shift..."
-                      />
+
+                    {/* Auto-generated shift label preview */}
+                    {(() => {
+                      const tmpl =
+                        effectiveTemplates.find(
+                          (t) => t.id === shiftForm.shiftTemplate,
+                        ) || defaultTemplate;
+                      const apparatus = apparatusList.find(
+                        (a) => a.id === shiftForm.apparatus_id,
+                      );
+                      if (!tmpl) return null;
+                      const suffix =
+                        tmpl.duration_hours >= 24
+                          ? "24"
+                          : tmpl.start_time_of_day < tmpl.end_time_of_day
+                            ? "DS"
+                            : "NS";
+                      const label = apparatus
+                        ? `${apparatus.unit_number} ${suffix}`
+                        : `${tmpl.name}`;
+                      return (
+                        <div className="flex items-center gap-2 p-2.5 bg-theme-surface-hover/50 rounded-lg border border-theme-surface-border">
+                          <span className="text-xs text-theme-text-muted">
+                            Shift label:
+                          </span>
+                          <span className="text-sm font-semibold text-theme-text-primary">
+                            {label}
+                          </span>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Collapsible additional options */}
+                    <div className="border border-theme-surface-border rounded-lg overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+                        className="w-full flex items-center justify-between px-4 py-2.5 text-left text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <Settings className="w-3.5 h-3.5" />
+                          Additional Options
+                          {(shiftForm.apparatus_id || shiftForm.shift_officer_id || shiftForm.customStartTime || shiftForm.customEndTime || shiftForm.notes) && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-violet-500" />
+                          )}
+                        </span>
+                        <ChevronDown className={`w-4 h-4 text-theme-text-muted transition-transform duration-200 ${showAdvancedOptions ? 'rotate-180' : ''}`} aria-hidden="true" />
+                      </button>
+                      {showAdvancedOptions && (
+                        <div className="px-4 pb-4 pt-1 space-y-4 border-t border-theme-surface-border">
+                          {/* Custom Time Override */}
+                          <div>
+                            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                              <span className="flex items-center gap-1.5">
+                                <Clock className="w-4 h-4" /> Custom Times
+                              </span>
+                            </label>
+                            <p className="text-xs text-theme-text-muted mb-2">Override the template times for this shift</p>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs text-theme-text-muted mb-1">Start Time</label>
+                                <TimeQuarterHour
+                                  value={shiftForm.customStartTime}
+                                  onChange={(e) => setShiftForm({ ...shiftForm, customStartTime: e.target.value })}
+                                  placeholder={(() => {
+                                    const tmpl = effectiveTemplates.find((t) => t.id === shiftForm.shiftTemplate) || defaultTemplate;
+                                    return tmpl?.start_time_of_day || '';
+                                  })()}
+                                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-theme-text-muted mb-1">End Time</label>
+                                <TimeQuarterHour
+                                  value={shiftForm.customEndTime}
+                                  onChange={(e) => setShiftForm({ ...shiftForm, customEndTime: e.target.value })}
+                                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500"
+                                />
+                              </div>
+                            </div>
+                            {(shiftForm.customStartTime || shiftForm.customEndTime) && (
+                              <button
+                                type="button"
+                                onClick={() => setShiftForm({ ...shiftForm, customStartTime: "", customEndTime: "" })}
+                                className="mt-1 text-xs text-theme-text-muted hover:text-violet-500"
+                              >
+                                Reset to template times
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Apparatus Selection */}
+                          {apparatusList.length > 0 && (
+                            <div>
+                              <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                                <span className="flex items-center gap-1.5">
+                                  <Truck className="w-4 h-4" /> Apparatus
+                                </span>
+                              </label>
+                              <select
+                                value={shiftForm.apparatus_id}
+                                onChange={(e) =>
+                                  setShiftForm({
+                                    ...shiftForm,
+                                    apparatus_id: e.target.value,
+                                  })
+                                }
+                                className="form-input focus:ring-violet-500"
+                              >
+                                <option value="">No specific apparatus</option>
+                                {apparatusList.map((a) => (
+                                  <option key={a.id} value={a.id}>
+                                    {a.unit_number} — {a.name}
+                                  </option>
+                                ))}
+                              </select>
+                              {(() => {
+                                const selected = apparatusList.find(
+                                  (a) => a.id === shiftForm.apparatus_id,
+                                );
+                                if (
+                                  selected?.positions &&
+                                  selected.positions.length > 0
+                                ) {
+                                  return (
+                                    <div className="mt-2 p-2.5 bg-violet-500/5 border border-violet-500/20 rounded-lg">
+                                      <p className="text-xs font-medium text-violet-700 dark:text-violet-400 mb-1.5">
+                                        Positions on {selected.unit_number}:
+                                      </p>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {selected.positions.map((pos, i) => {
+                                          const name = typeof pos === 'string' ? pos : pos.position;
+                                          return (
+                                            <span
+                                              key={i}
+                                              className="px-2 py-0.5 text-xs bg-violet-500/10 text-violet-700 dark:text-violet-300 rounded-sm capitalize"
+                                            >
+                                              {name}
+                                            </span>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                if (shiftForm.apparatus_id) {
+                                  return (
+                                    <p className="text-xs text-theme-text-muted mt-1">
+                                      No positions defined — members can sign up with any position.
+                                    </p>
+                                  );
+                                }
+                                return null;
+                              })()}
+                            </div>
+                          )}
+
+                          {/* Shift Officer Selection */}
+                          {membersList.length > 0 && (
+                            <div>
+                              <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                                <span className="flex items-center gap-1.5">
+                                  <Users className="w-4 h-4" /> Shift Officer
+                                </span>
+                              </label>
+                              <select
+                                value={shiftForm.shift_officer_id}
+                                onChange={(e) =>
+                                  setShiftForm({
+                                    ...shiftForm,
+                                    shift_officer_id: e.target.value,
+                                  })
+                                }
+                                className="form-input focus:ring-violet-500"
+                              >
+                                <option value="">No shift officer</option>
+                                {membersList.map((m) => (
+                                  <option key={m.id} value={m.id}>
+                                    {m.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+
+                          {/* Notes */}
+                          <div>
+                            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                              Notes
+                            </label>
+                            <textarea
+                              value={shiftForm.notes}
+                              onChange={(e) =>
+                                setShiftForm({ ...shiftForm, notes: e.target.value })
+                              }
+                              rows={2}
+                              className="form-input focus:ring-violet-500 resize-none"
+                              placeholder="Optional notes for this shift..."
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                     {createError && (
                       <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
