@@ -652,6 +652,30 @@ Shifts now define required and optional position slots. When a member declines o
 
 ---
 
+## Shift Permissions & Cleanup (2026-03-23)
+
+### Permission Model
+
+The scheduling module uses two separate permissions for different operations:
+
+| Permission | Controls | Who Needs It |
+|------------|----------|-------------|
+| `scheduling.manage` | Shift CRUD (create, edit, delete shifts) | Shift officers, scheduling admins |
+| `scheduling.assign` | Member assignments (assign, edit positions, remove from shift, edit notes) | Shift officers, crew chiefs |
+
+A user with `scheduling.assign` but not `scheduling.manage` can assign members to existing shifts but cannot create or delete shifts. A user with `scheduling.manage` but not `scheduling.assign` can edit shift times and apparatus but must use the admin assignment flow to assign members.
+
+Self-signup (the Sign Up button on open shifts) requires no special permission — all authenticated members can sign up for shifts they are eligible for.
+
+> **Screenshot needed:**
+> _[Screenshot of the ShiftDetailPanel showing the assignment controls (Assign Member dropdown, position change, remove button) visible to a user with scheduling.assign permission, and the Edit/Delete shift buttons visible only to a user with scheduling.manage permission]_
+
+### Calls/Incidents Section
+
+The Calls/Incidents placeholder section has been removed from the shift detail panel. This section previously displayed "Calls will appear here once the shift is underway" but there was no CAD integration to populate it. Call logging will be available once ePCR/NEMSIS import integration is implemented. Backend endpoints remain accessible at `POST /api/v1/scheduling/shifts/{id}/calls` for programmatic use.
+
+---
+
 ## Template Positions & Timezone Fixes (2026-03-15)
 
 ### Template Positions Carry to Crew Roster
@@ -705,6 +729,9 @@ Two timezone display issues were corrected:
 | Shift signup shows no positions | Your rank may not have eligible positions configured. Ask your administrator to check Settings > Operational Ranks. |
 | Dashboard still shows cancelled shifts | Fixed 2026-03-19 — declined and cancelled assignments are now filtered from "My Upcoming Shifts". Pull latest. |
 | Sign Up button not appearing for open shifts | Your rank may not be eligible for the remaining open positions. Check with your administrator. |
+| Can see assignment controls but get 403 error | The shift detail panel now uses separate permissions: `scheduling.manage` for shift editing and `scheduling.assign` for member assignments. Ask your administrator to grant the appropriate permission. |
+| Self-signup form missing on shift detail | Fixed 2026-03-23 — the self-signup form on non-apparatus shifts is no longer hidden behind a permission gate. All members can self-sign up for open shifts. |
+| "Calls/Incidents" section missing from shift detail | Removed 2026-03-23 — the placeholder section was removed because there is no CAD integration to populate it. Call data will appear once ePCR/NEMSIS integration is implemented. |
 | Equipment check template not appearing for shift | Template must be assigned to the shift's apparatus (or apparatus type) and your position must match the template's assigned positions. |
 | Equipment check shows auto-fail on a working item | Check the item's expiration date — items past their expiration auto-fail regardless of submitted result. |
 | Apparatus shows deficiency badge but check passed | A subsequent full check must pass ALL items to clear the deficiency flag. Partial checks don't clear it. |

@@ -7,6 +7,103 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Camera Scanning — Cross-Browser Desktop & Mobile Support (2026-03-23)
+
+- **Desktop camera scanning**: Scanner components previously only requested `facingMode: "environment"` (rear camera), which fails on desktop computers that typically only have a front-facing webcam. Now tries `"environment"` first, then falls back to `"user"` if unavailable, enabling desktop webcam scanning for member ID lookup and inventory operations
+- **Cross-browser inventory scanning**: `InventoryScanModal` previously only showed the camera button when the native BarcodeDetector API was available (Chrome/Edge). On Firefox, Safari, and older browsers, the camera was completely hidden. Now falls back to `html5-qrcode` (already a project dependency) when BarcodeDetector is unavailable, enabling camera scanning on all modern browsers
+- **Shared camera infrastructure**: Consolidated ~120 lines of duplicated camera init/fallback/cleanup logic from three scanner components into shared modules:
+  - `hooks/useHtml5Scanner.ts` — manages html5-qrcode lifecycle with environment→user facingMode fallback
+  - `types/scanner.ts` — `MemberIdPayload` interface and `isMemberIdPayload` type guard
+  - `constants/camera.ts` — scan configs, barcode formats, and `HAS_BARCODE_DETECTOR` feature flag
+
+**Components Updated:**
+- `InventoryScanModal` — full rewrite to support native BarcodeDetector + html5-qrcode fallback, live search dropdown with arrow key navigation, batch submission with results display
+- `MemberIdScannerModal` — refactored to use shared `useHtml5Scanner` hook
+- `MemberScanPage` — refactored to use shared `useHtml5Scanner` hook
+
+**Data Paths:**
+- Camera → BarcodeDetector API (Chrome/Edge/Android) → decoded barcode string → inventory lookup via `GET /api/v1/inventory/lookup`
+- Camera → html5-qrcode fallback (Firefox/Safari) → decoded barcode string → same inventory lookup
+- Camera → QR code → JSON payload with `type: "member_id"` → member lookup via `GET /api/v1/users`
+- Camera → Code128 barcode → membership number string → member lookup via `GET /api/v1/users`
+
+**Edge Cases:**
+- BarcodeDetector API availability is detected at module load time via `HAS_BARCODE_DETECTOR` constant — not per-render
+- Environment camera fallback to user camera only triggers on camera start failure, not on scan failure
+- Duplicate scan deduplication: same barcode value ignored within a 3-second window to prevent double-processing
+- html5-qrcode scanner must be stopped before the component unmounts — cleanup runs in `useEffect` return
+- InventoryScanModal supports both QR codes (inventory item lookup) and Code128 barcodes (inventory barcode lookup) simultaneously when using html5-qrcode fallback
+
+### Notification System — Clear/Dismiss, Persistent Messages & Channel Filtering (2026-03-23)
+
+- **Dashboard notification dismiss buttons**: The dashboard notification box previously only allowed clicking through to the linked event with no way to dismiss or mark notifications as read. Added "Clear All" button in the notification header (visible when unread notifications exist) and individual dismiss (X) buttons on each unread notification
+- **Bulk mark-as-read endpoint**: New `POST /api/v1/notifications/my/read-all` endpoint to mark all of a user's unread notifications as read in a single request
+- **Persistent department messages**: New `is_persistent` flag on department messages. When set, the message stays visible on the dashboard for all targeted members until an admin with `notifications.manage` permission explicitly clears it. Regular members cannot dismiss persistent messages via mark-as-read
+- **Notifications page redesign**: Renamed from "Email Notifications" to "Notification Rules & Logs" to reflect both email and in-app channels. Added channel filter (All / Email / In-App) to the Send Log tab so admins can isolate logs by delivery channel. Updated "Emails Sent" stat to show combined send count across all channels
+- **Individual notification read endpoint**: New `POST /api/v1/notifications/logs/{log_id}/read` endpoint for marking a single notification as read
+
+**Data Model Changes:**
+
+| Table | New Column | Description |
+|-------|-----------|-------------|
+| `department_messages` | `is_persistent` (Boolean, default false) | When true, message cannot be dismissed by regular members |
+
+**API Routes:**
+
+| Method | URL | Description |
+|--------|-----|-------------|
+| `POST` | `/api/v1/notifications/my/read-all` | Bulk mark all user notifications as read |
+| `POST` | `/api/v1/notifications/logs/{log_id}/read` | Mark individual notification as read |
+
+**Edge Cases:**
+- Persistent messages show a "Persistent" badge on the dashboard and hide the dismiss button for non-admin members
+- "Clear" button for persistent messages only appears for users with `notifications.manage` permission
+- `read-all` endpoint only marks currently unread notifications — already-read notifications are not modified
+- Channel filter on Send Log tab defaults to "All" and persists during the session but resets on page reload
+
+### Inventory Admin — Equipment Kits & Variant Groups Pages (2026-03-23)
+
+- **Equipment Kits admin page**: New page at `/inventory/admin/kits` with full CRUD for kit templates — card grid listing all kits with item count and active/inactive filter, create/edit modal with dynamic line items (item picker, category, quantity, size-selectability toggle), detail view modal showing full kit composition, and activate/deactivate toggle per kit
+- **Variant Groups admin page**: New page at `/inventory/admin/variant-groups` with full CRUD — card grid listing all variant groups with pricing and variant count, create/edit modal with name, description, category, base price, replacement cost, and unit of measure fields, detail modal showing linked item variants, and active/inactive toggle
+- **Inventory Admin Hub redesign**: Replaced flat card grid with grouped sections and prominent cards. Top row: 3 prominent cards (Items, Members, Checkouts) with colored icons and inline stats. Remaining cards grouped into labeled sections: Inventory Management, Requests & Workflows, Tools. Color-coded icon backgrounds by function for quick visual scanning. Compact inline stats bar replaces 4-card stats grid
+
+**New Pages:**
+
+| URL | Page | Permission |
+|-----|------|------------|
+| `/inventory/admin/kits` | Equipment Kits Management | `inventory.manage` |
+| `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage` |
+
+**Edge Cases:**
+- Kit line items validate that the selected item exists and belongs to the organization
+- Empty kits (no line items) can be saved as drafts but cannot be issued
+- Variant groups can be deactivated without affecting existing items — linked items retain their group reference but the group no longer appears in new-item flows
+- Deactivating a kit prevents new issuances but does not affect items already issued from that kit
+
+### Scheduling Module — Permission Fixes & Calls/Incidents Cleanup (2026-03-23)
+
+- **Shift assignment permission fix**: `ShiftDetailPanel` was checking `scheduling.manage` for all assignment-related UI (assign members, edit positions, remove assignments, edit notes), but the backend requires `scheduling.assign` for those operations. Added a separate `canAssign` check against `scheduling.assign` and applied it to all assignment-related UI. `canManage` retained for shift CRUD (edit/delete shift)
+- **Self-signup visibility fix**: Removed overly restrictive permission gate on the non-apparatus self-signup form in `ShiftDetailPanel`. The backend signup endpoint requires no special permission, and apparatus-mode Sign Up buttons already appear for all users
+- **OpenShiftsTab fallback permission**: Guarded the `createAssignment` fallback behind `canAssign` so regular members without `scheduling.assign` see the real signup error instead of an opaque 403 from the fallback path
+- **Calls/Incidents section removed**: Removed the Calls/Incidents placeholder section from `ShiftDetailPanel` that displayed a misleading "Calls will appear here once the shift is underway" message without any CAD integration to populate it. Cleaned up unused `ShiftCall` types, API methods, and imports from the frontend. Backend CRUD endpoints are retained for future ePCR/NEMSIS import services
+
+**Data Sharing Changes:**
+- `ShiftDetailPanel` now uses two separate permission checks: `canManage` (`scheduling.manage`) for shift CRUD, `canAssign` (`scheduling.assign`) for assignment operations
+- `OpenShiftsTab` uses `canAssign` to determine whether the fallback direct-assignment path is available; members without the permission follow the standard signup flow
+
+**Edge Cases:**
+- Users with `scheduling.assign` but not `scheduling.manage` can now see and use assignment controls as intended
+- Users with `scheduling.manage` but not `scheduling.assign` can edit/delete shifts but cannot directly assign members — they must use the admin assignment flow
+- The self-signup form appears for all authenticated users on non-apparatus shifts, matching the backend's permission model
+- Backend scheduling shift call endpoints (`/shifts/{id}/calls`) remain functional for programmatic access
+
+### Test Suite & Code Quality (2026-03-23)
+
+- **26 pre-existing test failures fixed**: Common patterns fixed across 28 test files — `toHaveBeenCalledWith()` assertions expecting no args but receiving `[undefined]`, missing mock methods on service objects, stale mock data, and async race conditions needing microtask flush
+- **InventoryAdminHub tests updated**: Assertions updated to match the redesigned component (grouped sections and prominent cards instead of old flat stats grid)
+- **Formatter fixes across backend**: Automated formatting changes from Black/isort across 60 backend files
+- **Filter value coercion fix**: Changed filter value coercion from `??` to `||` for status and category select dropdowns in `AllEntriesTab` and `AdminHoursPage` to prevent empty strings from being sent to the API
+
 ### Equipment Check System — Full-Stack Vehicle & Equipment Inspections (2026-03-19)
 
 - **Equipment check template builder**: Admin UI for creating structured checklist templates with nested compartments and items. Supports 7 check types: `pass_fail`, `present`, `functional`, `quantity`, `level`, `date_lot`, `reading`. Templates can be assigned per-apparatus or per-apparatus-type with optional position-based assignment. Drag-and-drop reordering of compartments and items

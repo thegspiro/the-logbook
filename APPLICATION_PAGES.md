@@ -261,11 +261,13 @@ Requires `inventory.manage` permission. Dashboard with summary stats (total item
 | `/inventory/admin/requests` | Equipment Requests | `inventory.manage` |
 | `/inventory/admin/write-offs` | Write-Off Requests | `inventory.manage` |
 | `/inventory/admin/reorder` | Reorder Requests | `inventory.manage` |
+| `/inventory/admin/kits` | Equipment Kits Management | `inventory.manage` |
+| `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage` |
 | `/inventory/checkouts` | Active Checkouts | `inventory.manage` |
 | `/inventory/import` | CSV Import | `inventory.manage` |
 | `/inventory/print-labels` | Barcode Label Printing | Authenticated |
 
-> The admin dashboard provides summary statistics and quick-link navigation. Individual sub-pages handle items, pool items, categories, maintenance, members, charges, return/equipment/write-off/reorder requests. The Item Detail page (`/inventory/items/:id`) has a two-column layout with barcode sidebar and tabbed content (overview, history, maintenance, NFPA compliance).
+> The admin dashboard provides summary statistics and quick-link navigation with grouped sections: 3 prominent cards (Items, Members, Checkouts) at top, then Inventory Management, Requests & Workflows, and Tools sections. Individual sub-pages handle items, pool items, categories, maintenance, members, charges, return/equipment/write-off/reorder requests. **Equipment Kits** manages reusable kit templates with dynamic line items. **Variant Groups** manages size/style groupings for pool items. The Item Detail page (`/inventory/items/:id`) has a two-column layout with barcode sidebar and tabbed content (overview, history, maintenance, NFPA compliance).
 
 ---
 
@@ -370,7 +372,9 @@ Tab-based interface with the following views:
 
 | URL | Page | Permission |
 |-----|------|------------|
-| `/notifications` | Notifications | Authenticated |
+| `/notifications` | Notification Rules & Logs | Authenticated |
+
+> Three-tab interface: **Notification Rules** (list, create, enable/disable rules with trigger/category/channel configuration), **Email Templates** (link to template management), and **Send Log** (table view with channel filter: All / Email / In-App, mark-all-read, status indicators). Summary statistics cards show total rules, active rules, and combined send count.
 
 ---
 
@@ -420,4 +424,4 @@ Tab-based interface with the following views:
 
 ---
 
-**Total: ~104 direct routes + 25 admin hub tabs across 18 modules**
+**Total: ~106 direct routes + 25 admin hub tabs across 18 modules**

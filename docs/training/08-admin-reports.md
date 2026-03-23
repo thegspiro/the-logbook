@@ -604,7 +604,7 @@ Steve works with the Training Officer to configure the state-mandated training r
 ### Step 7: Verify and Go Live
 
 Steve walks through the remaining checklist items:
-- **Notification Setup** — Enables email notifications for event reminders, training expiry, and new member alerts
+- **Notification Setup** — Configures notification rules via the **Notification Rules & Logs** page (`/notifications`). Creates rules with triggers (event_reminder, training_expiry, schedule_change, etc.), assigns channels (email, in-app), and tests delivery. The Send Log tab shows delivery history with channel filtering (All / Email / In-App)
 - **Scheduling Settings** — Configures shift templates for the 24/48 rotation
 - **Document Folders** — Verifies the default folder structure and adds "Mutual Aid Agreements" and "Budget" folders
 

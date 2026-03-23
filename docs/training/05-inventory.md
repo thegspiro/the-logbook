@@ -24,9 +24,12 @@ The Inventory module tracks department equipment, supplies, and gear. It support
 16. [Low Stock Alerts](#low-stock-alerts)
 17. [Departure Clearance](#departure-clearance)
 18. [Members Inventory View (Admin)](#members-inventory-view-admin)
-19. [Realistic Example: Departure Clearance for a Retiring Member](#realistic-example-departure-clearance-for-a-retiring-member)
-20. [Realistic Example: NFPA 1851 PPE Lifecycle Tracking](#realistic-example-nfpa-1851-ppe-lifecycle-tracking)
-21. [Troubleshooting](#troubleshooting)
+19. [Inventory Admin Hub](#inventory-admin-hub)
+20. [Equipment Kits Admin Page](#equipment-kits-admin-page)
+21. [Variant Groups Admin Page](#variant-groups-admin-page)
+22. [Realistic Example: Departure Clearance for a Retiring Member](#realistic-example-departure-clearance-for-a-retiring-member)
+23. [Realistic Example: NFPA 1851 PPE Lifecycle Tracking](#realistic-example-nfpa-1851-ppe-lifecycle-tracking)
+24. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -679,6 +682,110 @@ This is especially useful on mobile during equipment distribution events where y
 
 ---
 
+## Inventory Admin Hub
+
+**Required Permission:** `inventory.manage`
+
+The Inventory Admin Hub (`/inventory/admin`) is the central navigation page for all inventory management functions. It has been redesigned with grouped sections for easier navigation.
+
+### Layout
+
+The hub is organized into three sections:
+
+1. **Prominent Cards (top row)** — Three large cards for the most-used functions, each showing inline statistics:
+   - **Items** — Total item count, links to item management
+   - **Members** — Member inventory assignments
+   - **Checkouts** — Active checkout count and overdue count
+
+2. **Grouped Navigation Cards** — Remaining admin functions organized by purpose:
+   - **Inventory Management** — Items, Pool Items, Categories, Maintenance, Equipment Kits, Variant Groups
+   - **Requests & Workflows** — Equipment Requests (with pending count badge), Return Requests, Write-Off Requests, Reorder Requests
+   - **Tools** — CSV Import, Label Printing, Storage Areas
+
+3. **Low Stock Alerts** — Banner showing items below reorder threshold with category breakdown
+
+> **Screenshot needed:**
+> _[Screenshot of the Inventory Admin Hub showing the three prominent cards at the top, the grouped navigation sections below, and a low-stock alert banner at the bottom]_
+
+### Edge Cases
+
+- If no items are in the system, the stats cards show zeros but remain navigable
+- Low stock alert section only appears when at least one item is below its reorder point
+- Badge counts on request cards (e.g., "3 pending") update in real-time via WebSocket
+
+---
+
+## Equipment Kits Admin Page
+
+**Required Permission:** `inventory.manage`
+
+Navigate to **Inventory Admin > Equipment Kits** (`/inventory/admin/kits`) to manage reusable kit templates — named bundles of items (e.g., "New Recruit PPE Kit") for single-operation issuance.
+
+### Creating a Kit
+
+1. Click **Create Kit**.
+2. Enter a name and optional description.
+3. Add line items using the **Add Item** button:
+   - Select an item from the picker (searches across all inventory items)
+   - Set a category and quantity
+   - Toggle **Size Selectable** if the item has size variants (e.g., coat in S/M/L/XL)
+4. Repeat for all components in the kit.
+5. Click **Save Kit**.
+
+> **Screenshot needed:**
+> _[Screenshot of the Equipment Kit create/edit modal showing a kit named "New Recruit PPE Kit" with line items for helmet, coat, pants, boots, and gloves — each with a quantity and some marked as size-selectable]_
+
+### Managing Kits
+
+- **Card Grid** — All kits are displayed as cards showing the kit name, item count, description, and active/inactive status
+- **Active/Inactive Filter** — Toggle to show only active or inactive kits
+- **Detail View** — Click a kit card to see the full composition (all items with quantities)
+- **Activate/Deactivate** — Toggle a kit's active status. Deactivating prevents new issuances but does not affect items already issued from that kit
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Kit with no line items | Can be saved as a draft but cannot be issued to a member |
+| Size-selectable items | During issuance, the member's size preferences are used to auto-select the correct variant |
+| Deactivated kit | Hidden from the issuance picker but still visible in admin for reactivation |
+| Item in kit has been retired | The line item shows a warning indicator; issuance of that component will fail unless an alternative is selected |
+
+---
+
+## Variant Groups Admin Page
+
+**Required Permission:** `inventory.manage`
+
+Navigate to **Inventory Admin > Variant Groups** (`/inventory/admin/variant-groups`) to manage item variant groups — groupings that link related items differing by size, color, or style (e.g., "Structural Coat" available in sizes S through 4XL).
+
+### Creating a Variant Group
+
+1. Click **Create Group**.
+2. Enter the group name, description, and category.
+3. Set pricing: **Base Price** and **Replacement Cost**.
+4. Select the **Unit of Measure** (each, pair, set, etc.).
+5. Click **Save**.
+
+> **Screenshot needed:**
+> _[Screenshot of the Variant Group create/edit modal showing a group named "Structural Coat" with base price $895.00, replacement cost $1,200.00, category "PPE", and unit of measure "each"]_
+
+### Managing Variant Groups
+
+- **Card Grid** — Groups displayed as cards with name, category badge, pricing, and variant count
+- **Detail Modal** — Click to see all linked item variants with their sizes and stock levels
+- **Active/Inactive Toggle** — Deactivating a group does not affect existing items — linked items retain their group reference, but the group no longer appears in new-item creation flows
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Group with no variants | Group exists but has no linked items; variants must be created separately or via the size/style auto-generation feature |
+| Pricing changes | Changes to group-level pricing do not retroactively update existing item costs |
+| Deactivated group | Items retain their variant linkage for reporting but the group is hidden from new-item flows |
+
+---
+
 ## Realistic Example: Departure Clearance for a Retiring Member
 
 This walkthrough follows the departure clearance process from start to finish when a member retires and must return all assigned equipment.
@@ -946,6 +1053,9 @@ Items that fail validation are skipped with error details. Successfully validate
 |-------|----------|
 | CSV import fails | Download the sample template and verify your CSV matches the format. Check that category names match existing categories. Serial numbers must be unique. |
 | Item not found when scanning | Verify the barcode/QR code matches the item's serial number or asset tag. The item must exist in the system. A "not found" message means no match; a "network error" message means connectivity issues. |
+| Camera not showing in scan modal (Firefox/Safari) | The inventory scanner now supports all modern browsers. If the camera button is missing, ensure browser camera permissions are granted. On desktop, the scanner falls back to the front-facing webcam if no rear camera is available. |
+| Scan modal opening on desktop but camera failing | Desktop computers typically only have a front-facing webcam. The scanner tries the rear camera first, then automatically falls back to the front-facing camera. If both fail, check that the camera is not in use by another application. |
+| Duplicate scan detected | The scanner ignores the same barcode scanned within 3 seconds to prevent double-processing. Wait 3 seconds or scan a different item. |
 | Cannot assign item - "already assigned" | An item can only be assigned to one member at a time. Return or unassign it from the current member first. |
 | Checkout button not available | The item may already be checked out or in maintenance status. Check the item's current status. |
 | Batch return fails for one item | Each item in a batch is processed independently. If one fails (e.g., "Item is not assigned to the expected user"), the others still succeed. Check if the item was concurrently reassigned. |

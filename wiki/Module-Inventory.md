@@ -13,7 +13,7 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 - **Departure Clearance** — Full lifecycle (initiate → resolve line items → complete) for tracking property return when members depart
 - **Write-Off Approval** — Supervisor-reviewed workflow for lost, stolen, damaged, or obsolete items before they are removed from inventory
 - **Notification Netting** — Offsetting actions (assign→unassign) automatically cancel pending notifications
-- **Barcode & QR Scanning** — Camera-based scanning for check-in/check-out operations via BarcodeDetector API
+- **Barcode & QR Scanning** — Camera-based scanning for check-in/check-out operations via BarcodeDetector API (Chrome/Edge) with html5-qrcode fallback (Firefox/Safari/desktop). Desktop webcam support via environment→user facingMode fallback
 - **Thermal Label Printing** — Dymo (2.25×1.25″), Rollo (4×6″), and sheet (8.5×11″) label generation with Code128 barcodes
 - **Category Management** — Organize items by category with low-stock thresholds and maintenance requirements
 - **Equipment Requests** — Members can request checkouts, issuances, or purchases; admins approve/deny
@@ -61,6 +61,8 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 | `/inventory/admin/requests` | Equipment Requests | `inventory.manage` |
 | `/inventory/admin/write-offs` | Write-Off Requests | `inventory.manage` |
 | `/inventory/admin/reorder` | Reorder Requests | `inventory.manage` |
+| `/inventory/admin/kits` | Equipment Kits Management | `inventory.manage` |
+| `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage` |
 | `/inventory/checkouts` | Active Checkouts | `inventory.manage` |
 | `/inventory/import` | CSV Import | `inventory.manage` |
 | `/inventory/print-labels` | Barcode Label Printing | Authenticated |
@@ -316,7 +318,7 @@ Condition options are centralized in `frontend/src/constants/enums.ts`:
 | `InventoryPage` | Main inventory management page with items/categories tabs |
 | `InventoryMembersTab` | Per-member inventory view with sorting and expandable details |
 | `MemberIdScannerModal` | Camera-based member ID scanning for quick member lookup |
-| `InventoryScanModal` | Barcode scanning + live search for batch checkout/return |
+| `InventoryScanModal` | Barcode/QR scanning + live search for batch checkout/return (native BarcodeDetector with html5-qrcode fallback) |
 | `ReturnItemsModal` | List-based return workflow for a member's held items |
 | `useInventoryWebSocket` | Hook for real-time WebSocket updates with auto-reconnect |
 
@@ -329,6 +331,15 @@ Frontend tests in `src/pages/InventoryMembersTab.test.tsx` and `src/constants/en
 - Condition constant consistency
 
 ---
+
+## Recent Changes (2026-03-23)
+
+- **Equipment Kits admin page** — New page at `/inventory/admin/kits` with full CRUD for kit templates: card grid, create/edit modal with dynamic line items, detail view, and activate/deactivate toggle
+- **Variant Groups admin page** — New page at `/inventory/admin/variant-groups` with full CRUD: card grid with pricing/variant count, create/edit modal, detail view with linked items, and active/inactive toggle
+- **Inventory Admin Hub redesign** — Top row: 3 prominent cards (Items, Members, Checkouts) with colored icons and inline stats. Remaining cards grouped into Inventory Management, Requests & Workflows, and Tools sections with color-coded icon backgrounds
+- **Cross-browser camera scanning** — `InventoryScanModal` now uses html5-qrcode fallback when native BarcodeDetector API is unavailable, enabling camera scanning on Firefox, Safari, and desktop browsers
+- **Desktop webcam support** — Camera scanner falls back from rear-facing (`environment`) to front-facing (`user`) camera when environment camera is unavailable (desktop computers)
+- **Shared camera infrastructure** — Scanner logic extracted into shared `useHtml5Scanner` hook, `scanner.ts` types, and `camera.ts` constants
 
 ## Recent Changes (2026-03-07)
 

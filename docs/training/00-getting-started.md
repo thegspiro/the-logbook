@@ -131,10 +131,11 @@ The dashboard is your landing page after login. It provides an at-a-glance view 
 - **Upcoming Events** - The next few scheduled events
 - **Upcoming Shifts** - Your next assigned shifts
 - **Recent Activity** - Latest actions across the department
-- **Notifications** - Unread alerts and reminders
+- **Notifications** - Unread alerts and reminders with **Clear All** and individual dismiss (X) buttons. Persistent department messages (set by administrators) cannot be dismissed by regular members and show a "Persistent" badge
+- **Department Messages** - Organization-wide announcements from administrators. Persistent messages remain visible until an admin clears them
 
-> **Screenshot placeholder:**
-> _[Screenshot of the dashboard showing the stats cards at the top, the upcoming events panel, upcoming shifts panel, and the recent activity feed below]_
+> **Screenshot needed:**
+> _[Screenshot of the dashboard showing the stats cards at the top, the notification section with "Clear All" button, a persistent department message with "Persistent" badge, individual notification cards with dismiss (X) buttons, the upcoming events panel, and upcoming shifts panel]_
 
 > **Hint:** The dashboard is personalized. Officers and administrators see additional summary cards with department-wide metrics. Regular members see their own upcoming items and assignments.
 
