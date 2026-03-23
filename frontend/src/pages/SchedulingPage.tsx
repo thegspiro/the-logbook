@@ -128,7 +128,6 @@ const computeEndDate = (
 };
 
 const getShiftTemplateColor = (shift: ShiftRecord): string | undefined => {
-  // If the shift carries a template color, use inline styles instead (via getShiftStyle)
   if (shift.color) return undefined;
   const startHour = parseInt(shift.start_time.split(":")[0] ?? "0", 10);
   if (startHour >= 5 && startHour < 10)
@@ -136,6 +135,35 @@ const getShiftTemplateColor = (shift: ShiftRecord): string | undefined => {
   if (startHour >= 10 && startHour < 17)
     return "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30";
   return "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30";
+};
+
+/**
+ * Resolve shift card appearance based on staffing status.
+ *
+ * Fully staffed → green tint + green border (overrides template color).
+ * Understaffed → amber tint + amber border (overrides template color).
+ * No staffing target configured → falls back to template color.
+ */
+const getShiftCardAppearance = (
+  shift: ShiftRecord,
+  resolvedTheme: "light" | "dark" | "high-contrast",
+): { className: string; style: React.CSSProperties | undefined } => {
+  if (isFullyStaffed(shift)) {
+    return {
+      className: "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30",
+      style: undefined,
+    };
+  }
+  if (isUnderstaffed(shift)) {
+    return {
+      className: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30",
+      style: undefined,
+    };
+  }
+  return {
+    className: getShiftTemplateColor(shift) ?? "",
+    style: shift.color ? colorCardStyle(shift.color, resolvedTheme) : undefined,
+  };
 };
 
 /** Returns the minimum staffing target for a shift, or null if none is configured. */
@@ -676,12 +704,14 @@ const SchedulingPage: React.FC = () => {
                             isToday(date) ? "bg-violet-600/5" : ""
                           }`}
                         >
-                          {dayShifts.map((shift) => (
+                          {dayShifts.map((shift) => {
+                            const card = getShiftCardAppearance(shift, resolvedTheme);
+                            return (
                             <button
                               key={shift.id}
                               onClick={() => handleShiftClick(shift)}
-                              className={`mb-2 p-2 rounded-lg border text-xs w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${selectedShift?.id === shift.id ? 'ring-2 ring-violet-500' : ''} ${getShiftTemplateColor(shift) ?? ""}`}
-                              style={shift.color ? colorCardStyle(shift.color, resolvedTheme) : undefined}
+                              className={`mb-2 p-2 rounded-lg border text-xs w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${selectedShift?.id === shift.id ? 'ring-2 ring-violet-500' : ''} ${card.className}`}
+                              style={card.style}
                             >
                               <p className="font-medium truncate">
                                 {formatTime(shift.start_time, tz)}
@@ -723,7 +753,8 @@ const SchedulingPage: React.FC = () => {
                                 )}
                               </div>
                             </button>
-                          ))}
+                            );
+                          })}
                         </div>
                       );
                     })}
@@ -774,12 +805,14 @@ const SchedulingPage: React.FC = () => {
                             </p>
                           ) : (
                             <div className="space-y-2">
-                              {dayShifts.map((shift) => (
+                              {dayShifts.map((shift) => {
+                                const card = getShiftCardAppearance(shift, resolvedTheme);
+                                return (
                                 <button
                                   key={shift.id}
                                   onClick={() => handleShiftClick(shift)}
-                                  className={`p-3 rounded-lg border text-sm w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${selectedShift?.id === shift.id ? 'ring-2 ring-violet-500' : ''} ${getShiftTemplateColor(shift) ?? ""}`}
-                                  style={shift.color ? colorCardStyle(shift.color, resolvedTheme) : undefined}
+                                  className={`p-3 rounded-lg border text-sm w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${selectedShift?.id === shift.id ? 'ring-2 ring-violet-500' : ''} ${card.className}`}
+                                  style={card.style}
                                 >
                                   <p className="font-medium">
                                     {formatTime(shift.start_time, tz)}
@@ -821,7 +854,8 @@ const SchedulingPage: React.FC = () => {
                                     )}
                                   </div>
                                 </button>
-                              ))}
+                                );
+                              })}
                             </div>
                           )}
                         </div>
@@ -870,12 +904,14 @@ const SchedulingPage: React.FC = () => {
                           >
                             {date.getDate()}
                           </p>
-                          {dayShifts.map((shift) => (
+                          {dayShifts.map((shift) => {
+                            const card = getShiftCardAppearance(shift, resolvedTheme);
+                            return (
                             <button
                               key={shift.id}
                               onClick={() => handleShiftClick(shift)}
-                              className={`mb-1 px-1.5 py-1 rounded-sm border text-xs w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${selectedShift?.id === shift.id ? 'ring-2 ring-violet-500' : ''} ${getShiftTemplateColor(shift) ?? ""}`}
-                              style={shift.color ? colorCardStyle(shift.color, resolvedTheme) : undefined}
+                              className={`mb-1 px-1.5 py-1 rounded-sm border text-xs w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${selectedShift?.id === shift.id ? 'ring-2 ring-violet-500' : ''} ${card.className}`}
+                              style={card.style}
                             >
                               <p className="font-medium truncate">
                                 {isUnderstaffed(shift) ? (
@@ -895,7 +931,8 @@ const SchedulingPage: React.FC = () => {
                                 </span>
                               </p>
                             </button>
-                          ))}
+                            );
+                          })}
                         </div>
                       );
                     })}
@@ -1021,12 +1058,14 @@ const SchedulingPage: React.FC = () => {
                                 </div>
                               </div>
                               <div className="p-3 space-y-2">
-                                {dayShifts.map((shift) => (
+                                {dayShifts.map((shift) => {
+                                  const card = getShiftCardAppearance(shift, resolvedTheme);
+                                  return (
                                   <button
                                     key={shift.id}
                                     onClick={() => handleShiftClick(shift)}
-                                    className={`p-3 rounded-lg border text-sm w-full text-left cursor-pointer active:ring-2 active:ring-violet-500/50 transition-all ${selectedShift?.id === shift.id ? 'ring-2 ring-violet-500' : ''} ${getShiftTemplateColor(shift) ?? ""}`}
-                                    style={shift.color ? colorCardStyle(shift.color, resolvedTheme) : undefined}
+                                    className={`p-3 rounded-lg border text-sm w-full text-left cursor-pointer active:ring-2 active:ring-violet-500/50 transition-all ${selectedShift?.id === shift.id ? 'ring-2 ring-violet-500' : ''} ${card.className}`}
+                                    style={card.style}
                                   >
                                     <p className="font-medium">
                                       {formatTime(shift.start_time, tz)}
@@ -1068,7 +1107,8 @@ const SchedulingPage: React.FC = () => {
                                       )}
                                     </div>
                                   </button>
-                                ))}
+                                  );
+                                })}
                               </div>
                             </div>
                           );
