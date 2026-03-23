@@ -430,7 +430,7 @@ export const ReorderRequestsPage: React.FC = () => {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
             <input
               className={`${inp} pl-9`}
-              placeholder="Search by item name..."
+              aria-label="Search by item name..." placeholder="Search by item name..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -463,14 +463,14 @@ export const ReorderRequestsPage: React.FC = () => {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-theme-surface-border bg-theme-surface-secondary">
-                    <th className="text-left px-4 py-3 font-medium text-theme-text-muted">Item</th>
-                    <th className="text-left px-4 py-3 font-medium text-theme-text-muted">Qty</th>
-                    <th className="text-left px-4 py-3 font-medium text-theme-text-muted">Vendor</th>
-                    <th className="text-left px-4 py-3 font-medium text-theme-text-muted">Est. Cost</th>
-                    <th className="text-left px-4 py-3 font-medium text-theme-text-muted">Status</th>
-                    <th className="text-left px-4 py-3 font-medium text-theme-text-muted">Urgency</th>
-                    <th className="text-left px-4 py-3 font-medium text-theme-text-muted">Requested</th>
-                    <th className="text-right px-4 py-3 font-medium text-theme-text-muted">Actions</th>
+                    <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Item</th>
+                    <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Qty</th>
+                    <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Vendor</th>
+                    <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Est. Cost</th>
+                    <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Status</th>
+                    <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Urgency</th>
+                    <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Requested</th>
+                    <th scope="col" className="text-right px-4 py-3 font-medium text-theme-text-muted">Actions</th>
                   </tr>
                 </thead>
                 <tbody>

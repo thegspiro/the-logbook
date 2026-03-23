@@ -4,6 +4,7 @@ Email Template Service
 Manages CRUD operations for email templates and renders them with context variables.
 """
 
+import html as _html_mod
 import re
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
@@ -15,9 +16,12 @@ from sqlalchemy.orm import selectinload
 
 from app.models.email_template import EmailTemplate, EmailTemplateType
 
-# Default CSS styles shared across all email templates
+# Default CSS styles shared across all email templates.
+# Colour contrast ratios meet WCAG 2.1 AA (4.5:1 for normal text):
+#   #333 on #f9fafb = 10.6:1, white on #dc2626 = 4.6:1,
+#   white on #2563eb = 4.6:1, #4b5563 on white = 7.5:1.
 DEFAULT_CSS = """
-body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+body { font-family: Arial, Helvetica, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
 .container { max-width: 600px; margin: 0 auto; padding: 20px; }
 .logo { text-align: center; padding: 16px 0 0 0; }
 .logo img { max-height: 80px; max-width: 200px; }
@@ -25,9 +29,9 @@ body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0;
 .header h1 { margin: 0; font-size: 24px; }
 .content { padding: 20px; background-color: #f9fafb; }
 .content p { margin: 0 0 16px 0; }
-.button { display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+.button { display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; font-weight: bold; }
 .details { background-color: white; padding: 15px; border-radius: 6px; margin: 15px 0; border: 1px solid #e5e7eb; }
-.footer { padding: 20px; text-align: center; font-size: 12px; color: #6b7280; }
+.footer { padding: 20px; text-align: center; font-size: 12px; color: #4b5563; }
 """
 
 # Variables available to ALL template types (injected automatically)
@@ -805,7 +809,7 @@ DEFAULT_WELCOME_HTML = """<div class="container">
 
         <p>Your account has been created for <strong>{{organization_name}}</strong>. You can now log in and access the system.</p>
 
-        <div class="details">
+        <div class="details" role="region" aria-label="Account credentials">
             <p><strong>Username:</strong> {{username}}</p>
             <p><strong>Temporary Password:</strong> {{temp_password}}</p>
         </div>
@@ -813,7 +817,7 @@ DEFAULT_WELCOME_HTML = """<div class="container">
         <p>For security, please change your password after your first login.</p>
 
         <p style="text-align: center;">
-            <a href="{{login_url}}" class="button">Log In Now</a>
+            <a href="{{login_url}}" class="button" role="link">Log In Now</a>
         </p>
 
         <p><small>If the button doesn't work, copy and paste this URL into your browser:<br/>{{login_url}}</small></p>
@@ -857,7 +861,7 @@ DEFAULT_PASSWORD_RESET_HTML = """<div class="container">
         <p>Click the button below to set a new password. This link will expire in <strong>{{expiry_minutes}} minutes</strong>.</p>
 
         <p style="text-align: center;">
-            <a href="{{reset_url}}" class="button">Reset Password</a>
+            <a href="{{reset_url}}" class="button" role="link">Reset Password</a>
         </p>
 
         <p><small>If the button doesn't work, copy and paste this URL into your browser:<br/>{{reset_url}}</small></p>
@@ -1040,7 +1044,7 @@ DEFAULT_CERT_EXPIRATION_HTML = """<div class="container">
         <p>Please take action to renew this certification before it expires to maintain your compliance status.</p>
 
         <p style="text-align: center;">
-            <a href="{{renewal_url}}" class="button">View Certifications</a>
+            <a href="{{renewal_url}}" class="button" role="link">View Certifications</a>
         </p>
     </div>
     <div class="footer">
@@ -1092,7 +1096,7 @@ DEFAULT_POST_EVENT_VALIDATION_HTML = """<div class="container">
         <p>Please review and validate the attendance records at your earliest convenience.</p>
 
         <p style="text-align: center;">
-            <a href="{{validation_url}}" class="button">Validate Attendance</a>
+            <a href="{{validation_url}}" class="button" role="link">Validate Attendance</a>
         </p>
     </div>
     <div class="footer">
@@ -1142,7 +1146,7 @@ DEFAULT_POST_SHIFT_VALIDATION_HTML = """<div class="container">
         <p>Please review and confirm the shift attendance.</p>
 
         <p style="text-align: center;">
-            <a href="{{validation_url}}" class="button">Validate Shift</a>
+            <a href="{{validation_url}}" class="button" role="link">Validate Shift</a>
         </p>
     </div>
     <div class="footer">
@@ -1246,7 +1250,7 @@ DEFAULT_INACTIVITY_WARNING_HTML = """<div class="container">
         <p>Please review their progress and take appropriate action.</p>
 
         <p style="text-align: center;">
-            <a href="{{prospect_url}}" class="button">View Prospect</a>
+            <a href="{{prospect_url}}" class="button" role="link">View Prospect</a>
         </p>
     </div>
     <div class="footer">
@@ -1551,7 +1555,7 @@ DEFAULT_BALLOT_NOTIFICATION_HTML = """<div class="container">
         {{custom_message_html}}
 
         <p style="text-align: center;">
-            <a href="{{ballot_url}}" class="button">Vote Now</a>
+            <a href="{{ballot_url}}" class="button" role="link">Vote Now</a>
         </p>
         <p style="text-align: center;"><small>(Clicking the above link will automatically log you in to vote)</small></p>
 
@@ -1805,7 +1809,7 @@ DEFAULT_EVENT_REMINDER_HTML = """<div class="container">
         </div>
 
         <p style="text-align: center;">
-            <a href="{{event_url}}" class="button">View Event</a>
+            <a href="{{event_url}}" class="button" role="link">View Event</a>
         </p>
     </div>
     <div class="footer">
@@ -1857,7 +1861,7 @@ DEFAULT_SERIES_END_REMINDER_HTML = """<div class="container">
         <p>If you would like to extend or modify this series, please update the event before the series end date.</p>
 
         <p style="text-align: center;">
-            <a href="{{event_url}}" class="button">View Event</a>
+            <a href="{{event_url}}" class="button" role="link">View Event</a>
         </p>
     </div>
     <div class="footer">
@@ -1911,7 +1915,7 @@ DEFAULT_TRAINING_APPROVAL_HTML = """<div class="container">
         </div>
 
         <p style="text-align: center;">
-            <a href="{{approval_url}}" class="button">Review &amp; Approve</a>
+            <a href="{{approval_url}}" class="button" role="link">Review &amp; Approve</a>
         </p>
     </div>
     <div class="footer">
@@ -2120,6 +2124,13 @@ class EmailTemplateService:
         # Refresh server-computed timestamps (server_default / onupdate)
         # to prevent MissingGreenlet when serializing in async mode.
         await self.db.refresh(template, attribute_names=["created_at", "updated_at"])
+        logger.info(
+            "Template created id=%s type=%s org=%s by=%s",
+            template.id,
+            template_type,
+            organization_id,
+            created_by,
+        )
         return template
 
     async def update_template(
@@ -2163,6 +2174,13 @@ class EmailTemplateService:
         # Refresh server-computed updated_at to avoid MissingGreenlet on
         # async lazy-load when Pydantic serializes the response.
         await self.db.refresh(template, attribute_names=["updated_at"])
+        logger.info(
+            "Template updated id=%s fields=[%s] org=%s by=%s",
+            template_id,
+            ",".join(sorted(k for k, v in fields.items() if v is not None and k in allowed_fields)),
+            organization_id,
+            updated_by,
+        )
         return template
 
     async def delete_template(self, template_id: str, organization_id: str) -> bool:
@@ -2177,6 +2195,12 @@ class EmailTemplateService:
         if not template:
             return False
 
+        logger.info(
+            "Template deleted id=%s type=%s org=%s",
+            template_id,
+            template.template_type,
+            organization_id,
+        )
         await self.db.delete(template)
         await self.db.flush()
         return True
@@ -2261,17 +2285,36 @@ class EmailTemplateService:
         if template.text_body:
             text_body = self._replace_variables(template.text_body, ctx)
 
-        # Wrap HTML body with full document structure and CSS
+        # Wrap HTML body with full document structure and CSS.
+        # lang/dir for screen readers (WCAG 3.1.1), meta charset for
+        # consistent rendering, viewport for mobile clients.
         css = template.css_styles or DEFAULT_CSS
+        safe_subject_attr = _html_mod.escape(subject, quote=True)
         full_html = f"""<!DOCTYPE html>
-<html>
+<html lang="en" dir="ltr" xmlns="http://www.w3.org/1999/xhtml">
 <head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="color-scheme" content="light" />
+<meta name="supported-color-schemes" content="light" />
+<title>{_html_mod.escape(subject)}</title>
 <style>
 {css}
 </style>
+<!--[if mso]>
+<noscript>
+<xml>
+<o:OfficeDocumentSettings>
+<o:PixelsPerInch>96</o:PixelsPerInch>
+</o:OfficeDocumentSettings>
+</xml>
+</noscript>
+<![endif]-->
 </head>
 <body>
+<div role="article" aria-roledescription="email" aria-label="{safe_subject_attr}">
 {html_body}
+</div>
 </body>
 </html>"""
 
@@ -2382,9 +2425,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default welcome email template for org {organization_id}"
-            )
 
         # Check for password reset template
         existing = await self.get_template(
@@ -2403,9 +2443,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default password reset email template for org {organization_id}"
-            )
 
         # Check for event cancellation template
         existing = await self.get_template(
@@ -2429,9 +2466,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default event cancellation email template for org {organization_id}"
-            )
 
         # Check for event reminder template
         existing = await self.get_template(
@@ -2455,9 +2489,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default event reminder email template for org {organization_id}"
-            )
 
         # Check for series end reminder template
         existing = await self.get_template(
@@ -2482,9 +2513,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default series end reminder email template for org {organization_id}"
-            )
 
         # Check for training approval template
         existing = await self.get_template(
@@ -2508,9 +2536,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default training approval email template for org {organization_id}"
-            )
 
         # Check for ballot notification template
         existing = await self.get_template(
@@ -2534,9 +2559,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default ballot notification email template for org {organization_id}"
-            )
 
         # Check for election report template
         existing = await self.get_template(
@@ -2561,9 +2583,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default election report email template for org {organization_id}"
-            )
 
         # Check for member dropped template
         existing = await self.get_template(
@@ -2586,9 +2605,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default member dropped email template for org {organization_id}"
-            )
 
         # Check for inventory change template
         existing = await self.get_template(
@@ -2612,9 +2628,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default inventory change email template for org {organization_id}"
-            )
 
         # Check for cert expiration template
         existing = await self.get_template(
@@ -2636,9 +2649,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default cert expiration email template for org {organization_id}"
-            )
 
         # Check for post-event validation template
         existing = await self.get_template(
@@ -2662,9 +2672,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default post-event validation email template for org {organization_id}"
-            )
 
         # Check for post-shift validation template
         existing = await self.get_template(
@@ -2688,9 +2695,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default post-shift validation email template for org {organization_id}"
-            )
 
         # Check for property return reminder template
         existing = await self.get_template(
@@ -2714,9 +2718,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default property return reminder email template for org {organization_id}"
-            )
 
         # Check for inactivity warning template
         existing = await self.get_template(
@@ -2740,9 +2741,6 @@ class EmailTemplateService:
                 created_by=created_by,
             )
             created.append(template)
-            logger.info(
-                f"Created default inactivity warning email template for org {organization_id}"
-            )
 
         # Check for election rollback template
         existing = await self.get_template(

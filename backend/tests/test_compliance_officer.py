@@ -6,16 +6,18 @@ record completeness evaluation, and annual compliance report helpers.
 """
 
 import pytest
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.services.compliance_officer_service import (
     ISO_CATEGORIES,
     AnnualComplianceReportService,
     ComplianceAttestationService,
+    ContributedHoursService,
     ISOReadinessService,
     RecordCompletenessService,
 )
+from app.models.admin_hours import AdminHoursEntryStatus
 from app.models.training import RenewalTaskStatus
 
 
@@ -1267,3 +1269,208 @@ class TestRenewalTaskStatusInComplianceContext:
 
     def test_status_count(self):
         assert len(RenewalTaskStatus) == 5
+
+
+# ============================================
+# ContributedHoursService Tests
+# ============================================
+
+
+class TestContributedHoursService:
+    """Test the contributed hours service combining training + admin hours."""
+
+    async def test_no_members_returns_zeros(self):
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_db.execute.return_value = mock_result
+
+        service = ContributedHoursService(mock_db)
+        result = await service.get_contributed_hours("org-1", year=2025)
+
+        assert result["year"] == 2025
+        assert result["total_training_hours"] == 0.0
+        assert result["total_admin_hours"] == 0.0
+        assert result["total_contributed_hours"] == 0.0
+        assert result["total_members"] == 0
+        assert result["members"] == []
+        assert result["admin_hours_by_category"] == []
+
+    async def test_members_with_training_hours_only(self):
+        """When there are no admin hours, total should equal training hours."""
+        mock_db = AsyncMock()
+        member1 = MagicMock()
+        member1.id = "user-1"
+        member1.first_name = "Jane"
+        member1.last_name = "Doe"
+        member1.status = "active"
+        member1.deleted_at = None
+        member1.compliance_exempt = False
+
+        # First call: members query
+        members_result = MagicMock()
+        members_result.scalars.return_value.all.return_value = [member1]
+
+        # Second call: training hours (user-1 has 40 hours)
+        training_result = MagicMock()
+        training_result.__iter__ = MagicMock(
+            return_value=iter([("user-1", 40.0)])
+        )
+
+        # Third call: admin hours (none)
+        admin_result = MagicMock()
+        admin_result.__iter__ = MagicMock(return_value=iter([]))
+
+        # Fourth call: admin by category (none)
+        cat_result = MagicMock()
+        cat_result.__iter__ = MagicMock(return_value=iter([]))
+
+        mock_db.execute = AsyncMock(
+            side_effect=[members_result, training_result, admin_result, cat_result]
+        )
+
+        service = ContributedHoursService(mock_db)
+        result = await service.get_contributed_hours("org-1", year=2025)
+
+        assert result["total_training_hours"] == 40.0
+        assert result["total_admin_hours"] == 0.0
+        assert result["total_contributed_hours"] == 40.0
+        assert result["total_members"] == 1
+        assert len(result["members"]) == 1
+        assert result["members"][0]["name"] == "Jane Doe"
+        assert result["members"][0]["training_hours"] == 40.0
+        assert result["members"][0]["admin_hours"] == 0.0
+        assert result["members"][0]["total_hours"] == 40.0
+
+    async def test_members_sorted_by_total_hours_descending(self):
+        """Members list should be sorted by total_hours descending."""
+        mock_db = AsyncMock()
+
+        member1 = MagicMock()
+        member1.id = "user-1"
+        member1.first_name = "Alice"
+        member1.last_name = "Low"
+
+        member2 = MagicMock()
+        member2.id = "user-2"
+        member2.first_name = "Bob"
+        member2.last_name = "High"
+
+        members_result = MagicMock()
+        members_result.scalars.return_value.all.return_value = [member1, member2]
+
+        training_result = MagicMock()
+        training_result.__iter__ = MagicMock(
+            return_value=iter([("user-1", 10.0), ("user-2", 50.0)])
+        )
+
+        admin_result = MagicMock()
+        admin_result.__iter__ = MagicMock(return_value=iter([]))
+
+        cat_result = MagicMock()
+        cat_result.__iter__ = MagicMock(return_value=iter([]))
+
+        mock_db.execute = AsyncMock(
+            side_effect=[members_result, training_result, admin_result, cat_result]
+        )
+
+        service = ContributedHoursService(mock_db)
+        result = await service.get_contributed_hours("org-1", year=2025)
+
+        assert result["members"][0]["name"] == "Bob High"
+        assert result["members"][1]["name"] == "Alice Low"
+
+
+# ============================================
+# AdminHoursEntryStatus Tests (used by new code)
+# ============================================
+
+
+class TestAdminHoursEntryStatusInComplianceContext:
+    """Verify AdminHoursEntryStatus values used by compliance hour tracking."""
+
+    def test_approved_value(self):
+        assert AdminHoursEntryStatus.APPROVED.value == "approved"
+
+    def test_pending_value(self):
+        assert AdminHoursEntryStatus.PENDING.value == "pending"
+
+    def test_active_value(self):
+        assert AdminHoursEntryStatus.ACTIVE.value == "active"
+
+    def test_rejected_value(self):
+        assert AdminHoursEntryStatus.REJECTED.value == "rejected"
+
+    def test_status_inherits_str(self):
+        assert issubclass(AdminHoursEntryStatus, str)
+
+
+# ============================================
+# AnnualComplianceReportService._get_admin_hours_summary Tests
+# ============================================
+
+
+class TestAdminHoursSummary:
+    """Test the _get_admin_hours_summary helper on the annual report service."""
+
+    async def test_empty_member_ids_returns_zeros(self):
+        mock_db = AsyncMock()
+        service = AnnualComplianceReportService(mock_db)
+
+        result = await service._get_admin_hours_summary(
+            "org-1",
+            date(2025, 1, 1),
+            date(2025, 12, 31),
+            [],
+        )
+
+        assert result["total_approved_hours"] == 0.0
+        assert result["total_pending_hours"] == 0.0
+        assert result["total_entries"] == 0
+        assert result["by_category"] == []
+        assert result["by_user"] == {}
+
+    async def test_entries_aggregated_by_status(self):
+        """Approved and pending entries should be counted separately."""
+        mock_db = AsyncMock()
+
+        entry1 = MagicMock()
+        entry1.category_id = "cat-1"
+        entry1.user_id = "user-1"
+        entry1.duration_minutes = 120
+        entry1.status = AdminHoursEntryStatus.APPROVED
+
+        entry2 = MagicMock()
+        entry2.category_id = "cat-1"
+        entry2.user_id = "user-1"
+        entry2.duration_minutes = 60
+        entry2.status = AdminHoursEntryStatus.PENDING
+
+        entries_result = MagicMock()
+        entries_result.scalars.return_value.all.return_value = [entry1, entry2]
+
+        cat = MagicMock()
+        cat.id = "cat-1"
+        cat.name = "Board Meetings"
+        cats_result = MagicMock()
+        cats_result.scalars.return_value.all.return_value = [cat]
+
+        mock_db.execute = AsyncMock(side_effect=[entries_result, cats_result])
+
+        service = AnnualComplianceReportService(mock_db)
+        result = await service._get_admin_hours_summary(
+            "org-1",
+            date(2025, 1, 1),
+            date(2025, 12, 31),
+            ["user-1"],
+        )
+
+        assert result["total_approved_hours"] == 2.0
+        assert result["total_pending_hours"] == 1.0
+        assert result["total_entries"] == 2
+        assert len(result["by_category"]) == 1
+        assert result["by_category"][0]["category_name"] == "Board Meetings"
+        assert result["by_category"][0]["approved_hours"] == 2.0
+        assert result["by_category"][0]["pending_hours"] == 1.0
+        assert result["by_user"]["user-1"]["approved_hours"] == 2.0
+        assert result["by_user"]["user-1"]["pending_hours"] == 1.0

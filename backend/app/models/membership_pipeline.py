@@ -520,11 +520,24 @@ class ProspectElectionPackage(Base):
     prospect = relationship("ProspectiveMember", backref="election_packages")
     pipeline = relationship("MembershipPipeline")
     step = relationship("MembershipPipelineStep")
+    election = relationship("Election", foreign_keys=[election_id], lazy="joined")
 
     __table_args__ = (
         Index("idx_election_pkg_prospect", "prospect_id"),
         Index("idx_election_pkg_status", "status"),
     )
+
+    @property
+    def election_title(self):
+        return self.election.title if self.election else None
+
+    @property
+    def election_end_date(self):
+        return self.election.end_date if self.election else None
+
+    @property
+    def election_status(self):
+        return self.election.status.value if self.election else None
 
     def __repr__(self):
         return f"<ProspectElectionPackage(prospect={self.prospect_id}, status={self.status})>"

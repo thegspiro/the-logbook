@@ -216,7 +216,7 @@ export const GrantOpportunitiesPage: React.FC = () => {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-theme-text-secondary" />
           <input
             type="text"
-            placeholder="Search by name or agency..."
+            aria-label="Search by name or agency..." placeholder="Search by name or agency..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full rounded-lg border border-theme-surface-border bg-theme-surface py-2 pl-10 pr-4 text-sm text-theme-text-primary placeholder:text-theme-text-secondary focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"

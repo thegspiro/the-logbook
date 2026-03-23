@@ -343,7 +343,7 @@ const NotificationsPage: React.FC = () => {
                 <input
                   id="notif-search"
                   type="text"
-                  placeholder="Search notification rules..."
+                  aria-label="Search notification rules..." placeholder="Search notification rules..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="form-input pl-10 placeholder-theme-text-muted pr-4"

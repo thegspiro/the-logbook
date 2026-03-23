@@ -300,7 +300,7 @@ export const DataWhitelistTab: React.FC = () => {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by field name, category, or description..."
+            aria-label="Search by field name, category, or description..." placeholder="Search by field name, category, or description..."
             className="w-full px-4 py-2 pl-10 border border-theme-surface-border rounded-md focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
           />
           <svg

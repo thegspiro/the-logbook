@@ -265,9 +265,11 @@ Requires `inventory.manage` permission. Dashboard with summary stats (total item
 | `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage` |
 | `/inventory/checkouts` | Active Checkouts | `inventory.manage` |
 | `/inventory/import` | CSV Import | `inventory.manage` |
+| `/inventory/admin/kits` | Equipment Kits | `inventory.manage` |
+| `/inventory/admin/variant-groups` | Variant Groups | `inventory.manage` |
 | `/inventory/print-labels` | Barcode Label Printing | Authenticated |
 
-> The admin dashboard provides summary statistics and quick-link navigation with grouped sections: 3 prominent cards (Items, Members, Checkouts) at top, then Inventory Management, Requests & Workflows, and Tools sections. Individual sub-pages handle items, pool items, categories, maintenance, members, charges, return/equipment/write-off/reorder requests. **Equipment Kits** manages reusable kit templates with dynamic line items. **Variant Groups** manages size/style groupings for pool items. The Item Detail page (`/inventory/items/:id`) has a two-column layout with barcode sidebar and tabbed content (overview, history, maintenance, NFPA compliance).
+> The admin dashboard provides summary statistics and quick-link navigation with grouped card sections. Individual sub-pages handle items, pool items, categories, maintenance, members, charges, return/equipment/write-off/reorder requests, equipment kits, and variant groups. The Item Detail page (`/inventory/items/:id`) has a two-column layout with barcode sidebar and tabbed content (overview, history, maintenance, NFPA compliance). Non-admin users see only their own assigned equipment on the inventory dashboard.
 
 ---
 
@@ -376,6 +378,8 @@ Tab-based interface with the following views:
 
 > Three-tab interface: **Notification Rules** (list, create, enable/disable rules with trigger/category/channel configuration), **Email Templates** (link to template management), and **Send Log** (table view with channel filter: All / Email / In-App, mark-all-read, status indicators). Summary statistics cards show total rules, active rules, and combined send count.
 
+> The Notifications page includes a **channel filter** (email, in-app, SMS) for filtering by delivery method. Dashboard notification cards include **clear/dismiss buttons**. Administrators can create **persistent department messages** that only admins can clear.
+
 ---
 
 ## Reports
@@ -424,4 +428,4 @@ Tab-based interface with the following views:
 
 ---
 
-**Total: ~106 direct routes + 25 admin hub tabs across 18 modules**
+**Total: ~108 direct routes + 25 admin hub tabs across 18 modules**

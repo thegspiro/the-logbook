@@ -45,13 +45,13 @@ export const IPExceptionTable: React.FC<IPExceptionTableProps> = ({
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-theme-surface-border text-left text-theme-text-muted">
-            <th className="py-3 px-4 font-medium">IP Address</th>
-            <th className="py-3 px-4 font-medium">Use Case</th>
-            <th className="py-3 px-4 font-medium">Status</th>
-            <th className="py-3 px-4 font-medium">Duration</th>
-            <th className="py-3 px-4 font-medium">Country</th>
-            <th className="py-3 px-4 font-medium">Requested</th>
-            {showActions && <th className="py-3 px-4 font-medium">Actions</th>}
+            <th scope="col" className="py-3 px-4 font-medium">IP Address</th>
+            <th scope="col" className="py-3 px-4 font-medium">Use Case</th>
+            <th scope="col" className="py-3 px-4 font-medium">Status</th>
+            <th scope="col" className="py-3 px-4 font-medium">Duration</th>
+            <th scope="col" className="py-3 px-4 font-medium">Country</th>
+            <th scope="col" className="py-3 px-4 font-medium">Requested</th>
+            {showActions && <th scope="col" className="py-3 px-4 font-medium">Actions</th>}
           </tr>
         </thead>
         <tbody>

@@ -121,6 +121,7 @@ interface ProspectiveMembersState {
   fetchElectionPackage: (applicantId: string) => Promise<void>;
   updateElectionPackage: (applicantId: string, data: ElectionPackageUpdate) => Promise<void>;
   submitElectionPackage: (applicantId: string) => Promise<void>;
+  assignPackageToElection: (applicantId: string, electionId: string) => Promise<void>;
 
   // Interview actions
   fetchInterviews: (applicantId: string) => Promise<void>;
@@ -653,6 +654,19 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
       } catch (error) {
         set({
           error: handleStoreError(error, 'Failed to submit election package'),
+        });
+        throw error;
+      }
+    },
+
+    assignPackageToElection: async (applicantId: string, electionId: string) => {
+      set({ error: null });
+      try {
+        const updated = await applicantService.assignToElection(applicantId, electionId);
+        set({ currentElectionPackage: updated });
+      } catch (error) {
+        set({
+          error: handleStoreError(error, 'Failed to assign package to election'),
         });
         throw error;
       }

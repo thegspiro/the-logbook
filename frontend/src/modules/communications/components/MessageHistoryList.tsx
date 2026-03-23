@@ -208,7 +208,7 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by subject or recipient..."
+            aria-label="Search by subject or recipient..." placeholder="Search by subject or recipient..."
             className={inputClass + ' pl-9'}
           />
         </div>
@@ -263,13 +263,13 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-theme-surface-secondary text-left">
-                <th className="px-4 py-3 font-medium text-theme-text-secondary">Status</th>
-                <th className="px-4 py-3 font-medium text-theme-text-secondary">Recipient</th>
-                <th className="px-4 py-3 font-medium text-theme-text-secondary">Subject</th>
-                <th className="px-4 py-3 font-medium text-theme-text-secondary hidden lg:table-cell">
+                <th scope="col" className="px-4 py-3 font-medium text-theme-text-secondary">Status</th>
+                <th scope="col" className="px-4 py-3 font-medium text-theme-text-secondary">Recipient</th>
+                <th scope="col" className="px-4 py-3 font-medium text-theme-text-secondary">Subject</th>
+                <th scope="col" className="px-4 py-3 font-medium text-theme-text-secondary hidden lg:table-cell">
                   Type
                 </th>
-                <th className="px-4 py-3 font-medium text-theme-text-secondary">Sent At</th>
+                <th scope="col" className="px-4 py-3 font-medium text-theme-text-secondary">Sent At</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-theme-surface-border">

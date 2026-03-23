@@ -204,7 +204,7 @@ const SkillsTestingTemplatesTab: React.FC = () => {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
           <input
             type="text"
-            placeholder="Search templates..."
+            aria-label="Search templates..." placeholder="Search templates..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
@@ -254,12 +254,12 @@ const SkillsTestingTemplatesTab: React.FC = () => {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-theme-surface-border">
-                  <th className="text-left px-4 py-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Template</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider hidden md:table-cell">Category</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Status</th>
-                  <th className="text-center px-4 py-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider hidden lg:table-cell">Sections</th>
-                  <th className="text-center px-4 py-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider hidden lg:table-cell">Criteria</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Actions</th>
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Template</th>
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider hidden md:table-cell">Category</th>
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Status</th>
+                  <th scope="col" className="text-center px-4 py-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider hidden lg:table-cell">Sections</th>
+                  <th scope="col" className="text-center px-4 py-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider hidden lg:table-cell">Criteria</th>
+                  <th scope="col" className="text-right px-4 py-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-theme-surface-border">

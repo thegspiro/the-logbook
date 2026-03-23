@@ -289,11 +289,11 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-theme-surface-border bg-theme-surface-hover/50">
-                  <th className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Member</th>
-                  <th className="text-right px-4 py-2 text-xs font-medium text-theme-text-muted">Checks</th>
-                  <th className="text-right px-4 py-2 text-xs font-medium text-theme-text-muted">Pass</th>
-                  <th className="text-right px-4 py-2 text-xs font-medium text-theme-text-muted">Fail</th>
-                  <th className="text-right px-4 py-2 text-xs font-medium text-theme-text-muted">Rate</th>
+                  <th scope="col" className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Member</th>
+                  <th scope="col" className="text-right px-4 py-2 text-xs font-medium text-theme-text-muted">Checks</th>
+                  <th scope="col" className="text-right px-4 py-2 text-xs font-medium text-theme-text-muted">Pass</th>
+                  <th scope="col" className="text-right px-4 py-2 text-xs font-medium text-theme-text-muted">Fail</th>
+                  <th scope="col" className="text-right px-4 py-2 text-xs font-medium text-theme-text-muted">Rate</th>
                 </tr>
               </thead>
               <tbody>
@@ -385,7 +385,7 @@ const FailuresTab: React.FC<{ startDate: string; endDate: string; tz: string }> 
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
           <input
             type="text"
-            placeholder="Search by item name..."
+            aria-label="Search by item name..." placeholder="Search by item name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-9 pr-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-violet-500"
@@ -422,12 +422,12 @@ const FailuresTab: React.FC<{ startDate: string; endDate: string; tz: string }> 
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-theme-surface-border bg-theme-surface-hover/50">
-                  <th className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Date</th>
-                  <th className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Apparatus</th>
-                  <th className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Compartment</th>
-                  <th className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Item</th>
-                  <th className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Checked By</th>
-                  <th className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Notes</th>
+                  <th scope="col" className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Date</th>
+                  <th scope="col" className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Apparatus</th>
+                  <th scope="col" className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Compartment</th>
+                  <th scope="col" className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Item</th>
+                  <th scope="col" className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Checked By</th>
+                  <th scope="col" className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Notes</th>
                 </tr>
               </thead>
               <tbody>
@@ -652,10 +652,10 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-theme-surface-border bg-theme-surface-hover/50">
-                      <th className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Date</th>
-                      <th className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Status</th>
-                      <th className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Checked By</th>
-                      <th className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Notes</th>
+                      <th scope="col" className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Date</th>
+                      <th scope="col" className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Status</th>
+                      <th scope="col" className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Checked By</th>
+                      <th scope="col" className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Notes</th>
                     </tr>
                   </thead>
                   <tbody>

@@ -61,6 +61,8 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
 import { ApplicantStatus, StageType as StageTypeEnum, ElectionStatus } from '../../../constants/enums';
 import { eventService } from '../../../services/eventServices';
+import { electionService } from '../../../services/electionService';
+import type { ElectionListItem } from '../../../types/election';
 import type { EventListItem } from '../../../types/event';
 
 /** Maps snake_case backend field keys to human-readable labels. */
@@ -154,6 +156,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
     fetchElectionPackage,
     updateElectionPackage,
     submitElectionPackage,
+    assignPackageToElection,
     currentElectionPackage,
     isLoadingElectionPackage,
     isAdvancing,
@@ -187,6 +190,13 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   const [upcomingEvents, setUpcomingEvents] = useState<EventListItem[]>([]);
   const [isLoadingUpcoming, setIsLoadingUpcoming] = useState(false);
   const [eventSearchQuery, setEventSearchQuery] = useState('');
+
+  // Election assignment state
+  const [showElectionPicker, setShowElectionPicker] = useState(false);
+  const [draftElections, setDraftElections] = useState<ElectionListItem[]>([]);
+  const [isLoadingDraftElections, setIsLoadingDraftElections] = useState(false);
+  const [selectedElectionId, setSelectedElectionId] = useState('');
+  const [isAssigningToElection, setIsAssigningToElection] = useState(false);
 
   // Editable contact info state
   const [isEditingContact, setIsEditingContact] = useState(false);
@@ -522,6 +532,37 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
       toast.error('Failed to submit election package');
     } finally {
       setIsSubmittingPackage(false);
+    }
+  };
+
+  const handleOpenElectionPicker = async () => {
+    setShowElectionPicker(true);
+    setIsLoadingDraftElections(true);
+    try {
+      const elections = await electionService.getElections('draft');
+      setDraftElections(elections);
+    } catch {
+      toast.error('Failed to load draft elections');
+    } finally {
+      setIsLoadingDraftElections(false);
+    }
+  };
+
+  const handleAssignToElection = async () => {
+    if (!applicant || !selectedElectionId) return;
+    setIsAssigningToElection(true);
+    try {
+      await assignPackageToElection(applicant.id, selectedElectionId);
+      const electionTitle = draftElections.find(
+        (e) => e.id === selectedElectionId
+      )?.title ?? 'election';
+      toast.success(`Application added to "${electionTitle}" ballot`);
+      setShowElectionPicker(false);
+      setSelectedElectionId('');
+    } catch {
+      toast.error('Failed to assign package to election');
+    } finally {
+      setIsAssigningToElection(false);
     }
   };
 
@@ -984,9 +1025,9 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         </>
                       )}
 
-                      {/* Ready state info */}
+                      {/* Ready state — assign to election */}
                       {currentElectionPackage.status === 'ready' && (
-                        <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-3">
+                        <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-3 space-y-2">
                           <p className="text-xs text-emerald-600 dark:text-emerald-300">
                             This package is ready for the secretary to add to a ballot.
                             {currentElectionPackage.submitted_at && (
@@ -994,14 +1035,65 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                             )}
                           </p>
                           {currentElectionPackage.coordinator_notes && (
-                            <p className="text-xs text-theme-text-muted mt-1">
+                            <p className="text-xs text-theme-text-muted">
                               Notes: {currentElectionPackage.coordinator_notes}
                             </p>
+                          )}
+                          {!showElectionPicker ? (
+                            <button
+                              onClick={() => { void handleOpenElectionPicker(); }}
+                              className="flex items-center gap-1 px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
+                            >
+                              <Vote className="w-3 h-3" />
+                              Assign to Election
+                            </button>
+                          ) : (
+                            <div className="space-y-2">
+                              {isLoadingDraftElections ? (
+                                <div className="flex items-center gap-2 text-xs text-theme-text-muted">
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                  Loading draft elections...
+                                </div>
+                              ) : draftElections.length === 0 ? (
+                                <p className="text-xs text-theme-text-muted">
+                                  No draft elections available. Create one in the Elections module first.
+                                </p>
+                              ) : (
+                                <>
+                                  <select
+                                    value={selectedElectionId}
+                                    onChange={(e) => setSelectedElectionId(e.target.value)}
+                                    className="w-full px-2 py-1.5 text-xs rounded-lg border border-theme-surface-border bg-theme-surface text-theme-text-primary"
+                                  >
+                                    <option value="">Select a draft election...</option>
+                                    {draftElections.map((el) => (
+                                      <option key={el.id} value={el.id}>{el.title}</option>
+                                    ))}
+                                  </select>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => { void handleAssignToElection(); }}
+                                      disabled={!selectedElectionId || isAssigningToElection}
+                                      className="flex items-center gap-1 px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                                    >
+                                      {isAssigningToElection && <Loader2 className="w-3 h-3 animate-spin" />}
+                                      Add to Ballot
+                                    </button>
+                                    <button
+                                      onClick={() => { setShowElectionPicker(false); setSelectedElectionId(''); }}
+                                      className="px-3 py-1.5 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
                           )}
                         </div>
                       )}
 
-                      {/* Added to ballot info */}
+                      {/* Added to ballot / election outcome info */}
                       {(currentElectionPackage.status === 'added_to_ballot' ||
                         currentElectionPackage.status === 'elected' ||
                         currentElectionPackage.status === 'not_elected') && (
@@ -1026,6 +1118,17 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                             {currentElectionPackage.status === 'not_elected' &&
                               'This applicant was not elected by the membership vote.'}
                           </p>
+                          {currentElectionPackage.election_id && currentElectionPackage.election_title && (
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/elections/${currentElectionPackage.election_id}`)}
+                              className="mt-1.5 text-xs text-theme-primary hover:underline"
+                            >
+                              {currentElectionPackage.election_title}
+                              {currentElectionPackage.election_status === 'open' && ' — Voting in progress'}
+                              {currentElectionPackage.election_status === 'closed' && ' — Closed'}
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1065,7 +1168,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                           type="text"
                           value={eventSearchQuery}
                           onChange={(e) => setEventSearchQuery(e.target.value)}
-                          placeholder="Search upcoming events..."
+                          aria-label="Search upcoming events..." placeholder="Search upcoming events..."
                           className="flex-1 bg-transparent text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden"
                           autoFocus
                         />

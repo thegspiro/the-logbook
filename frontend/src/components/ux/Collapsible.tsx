@@ -4,7 +4,7 @@
  * Animated expand/collapse sections with smooth height transitions.
  */
 
-import React, { useState, useRef, useEffect, ReactNode } from 'react';
+import React, { useState, useRef, useEffect, ReactNode, useId } from 'react';
 import { ChevronDown } from 'lucide-react';
 
 interface CollapsibleProps {
@@ -25,6 +25,7 @@ export const Collapsible: React.FC<CollapsibleProps> = ({
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const contentRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState<number | undefined>(defaultOpen ? undefined : 0);
+  const contentId = useId();
 
   useEffect(() => {
     if (!contentRef.current) return undefined;
@@ -53,6 +54,7 @@ export const Collapsible: React.FC<CollapsibleProps> = ({
         onClick={() => setIsOpen(!isOpen)}
         className={`w-full flex items-center justify-between px-4 py-3 text-left text-sm font-medium text-theme-text-primary hover:bg-theme-surface-hover transition-colors ${headerClassName}`}
         aria-expanded={isOpen}
+        aria-controls={contentId}
       >
         <span>{title}</span>
         <ChevronDown
@@ -64,6 +66,8 @@ export const Collapsible: React.FC<CollapsibleProps> = ({
       </button>
       <div
         ref={contentRef}
+        id={contentId}
+        role="region"
         style={{ height: height !== undefined ? `${height}px` : 'auto' }}
         className="transition-[height] duration-200 ease-in-out overflow-hidden"
       >

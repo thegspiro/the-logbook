@@ -4,7 +4,7 @@
  * Displays a list of scheduled emails with status and actions.
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   CalendarClock,
   CheckCircle2,
@@ -15,6 +15,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { ConfirmDialog } from '../../../components/ux';
 import { formatShortDateTime } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useScheduledEmailsStore } from '../store/scheduledEmailsStore';
@@ -35,17 +36,21 @@ const ScheduledEmailList: React.FC = () => {
     cancelScheduledEmail,
     isSaving,
   } = useScheduledEmailsStore();
+  const [cancelTarget, setCancelTarget] = useState<string | null>(null);
 
   useEffect(() => {
     void fetchScheduledEmails();
   }, [fetchScheduledEmails]);
 
-  const handleCancel = async (id: string) => {
+  const handleCancel = async () => {
+    if (!cancelTarget) return;
     try {
-      await cancelScheduledEmail(id);
+      await cancelScheduledEmail(cancelTarget);
       toast.success('Scheduled email cancelled');
     } catch {
       // Error handled by store
+    } finally {
+      setCancelTarget(null);
     }
   };
 
@@ -137,10 +142,10 @@ const ScheduledEmailList: React.FC = () => {
               </span>
               {email.status === 'pending' && (
                 <button
-                  onClick={() => void handleCancel(email.id)}
+                  onClick={() => setCancelTarget(email.id)}
                   disabled={isSaving}
                   className="rounded-sm p-1 text-red-500 hover:bg-red-50 disabled:opacity-50 dark:hover:bg-red-900/20"
-                  title="Cancel"
+                  aria-label="Cancel scheduled email"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -149,6 +154,17 @@ const ScheduledEmailList: React.FC = () => {
           </div>
         );
       })}
+
+      <ConfirmDialog
+        isOpen={cancelTarget !== null}
+        onClose={() => setCancelTarget(null)}
+        onConfirm={() => void handleCancel()}
+        title="Cancel Scheduled Email"
+        message="This scheduled email will be permanently cancelled and cannot be restored. Are you sure?"
+        confirmLabel="Cancel Email"
+        variant="danger"
+        loading={isSaving}
+      />
     </div>
   );
 };

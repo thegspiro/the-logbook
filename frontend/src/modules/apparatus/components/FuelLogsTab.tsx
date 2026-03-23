@@ -51,11 +51,11 @@ export const FuelLogsTab: React.FC<FuelLogsTabProps> = ({
           <table className="w-full">
             <thead className="border-b border-theme-surface-border">
               <tr>
-                <th className="px-4 py-2 text-left text-xs text-theme-text-muted uppercase">Date</th>
-                <th className="px-4 py-2 text-left text-xs text-theme-text-muted uppercase">Fuel Type</th>
-                <th className="px-4 py-2 text-right text-xs text-theme-text-muted uppercase">Gallons</th>
-                <th className="px-4 py-2 text-right text-xs text-theme-text-muted uppercase">Cost</th>
-                <th className="px-4 py-2 text-right text-xs text-theme-text-muted uppercase">Mileage</th>
+                <th scope="col" className="px-4 py-2 text-left text-xs text-theme-text-muted uppercase">Date</th>
+                <th scope="col" className="px-4 py-2 text-left text-xs text-theme-text-muted uppercase">Fuel Type</th>
+                <th scope="col" className="px-4 py-2 text-right text-xs text-theme-text-muted uppercase">Gallons</th>
+                <th scope="col" className="px-4 py-2 text-right text-xs text-theme-text-muted uppercase">Cost</th>
+                <th scope="col" className="px-4 py-2 text-right text-xs text-theme-text-muted uppercase">Mileage</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-theme-surface-border">

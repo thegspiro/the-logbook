@@ -158,11 +158,16 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="relative w-full max-w-md mx-4 bg-theme-surface rounded-xl border border-theme-surface-border shadow-xl overflow-hidden">
+      <div
+        className="relative w-full max-w-md mx-4 bg-theme-surface rounded-xl border border-theme-surface-border shadow-xl overflow-hidden"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="scanner-modal-title"
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-theme-surface-border">
-          <h2 className="text-lg font-semibold text-theme-text-primary flex items-center gap-2">
-            <ScanLine className="h-5 w-5" />
+          <h2 id="scanner-modal-title" className="text-lg font-semibold text-theme-text-primary flex items-center gap-2">
+            <ScanLine className="h-5 w-5" aria-hidden="true" />
             Scan Member ID
           </h2>
           <button
@@ -183,6 +188,8 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
             id="member-scanner-viewport"
             data-testid="member-scanner-viewport"
             className="w-full aspect-square"
+            role="img"
+            aria-label="Camera scanner preview"
           />
         </div>
 

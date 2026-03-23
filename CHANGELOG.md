@@ -7,65 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Camera Scanning — Cross-Browser Desktop & Mobile Support (2026-03-23)
+### Camera Scanning — Desktop & Cross-Browser Support (2026-03-22)
 
-- **Desktop camera scanning**: Scanner components previously only requested `facingMode: "environment"` (rear camera), which fails on desktop computers that typically only have a front-facing webcam. Now tries `"environment"` first, then falls back to `"user"` if unavailable, enabling desktop webcam scanning for member ID lookup and inventory operations
-- **Cross-browser inventory scanning**: `InventoryScanModal` previously only showed the camera button when the native BarcodeDetector API was available (Chrome/Edge). On Firefox, Safari, and older browsers, the camera was completely hidden. Now falls back to `html5-qrcode` (already a project dependency) when BarcodeDetector is unavailable, enabling camera scanning on all modern browsers
-- **Shared camera infrastructure**: Consolidated ~120 lines of duplicated camera init/fallback/cleanup logic from three scanner components into shared modules:
-  - `hooks/useHtml5Scanner.ts` — manages html5-qrcode lifecycle with environment→user facingMode fallback
-  - `types/scanner.ts` — `MemberIdPayload` interface and `isMemberIdPayload` type guard
-  - `constants/camera.ts` — scan configs, barcode formats, and `HAS_BARCODE_DETECTOR` feature flag
+- **Desktop camera scanning**: Camera-based scanning (QR codes, barcodes, member IDs) now works on desktop browsers by falling back to a user-facing camera when no environment-facing camera is detected. Previously limited to mobile devices
+- **Shared camera infrastructure**: Extracted reusable `useHtml5Scanner` hook, shared `scanner.ts` types, and `camera.ts` constants. All scanner consumers (InventoryScanModal, MemberIdScannerModal, MemberScanPage) share the same camera initialization, error handling, and resolution logic
+- **InventoryScanModal cross-browser support**: Inventory barcode scanning now works in all browsers via the shared scanner hook, not just those supporting the BarcodeDetector API
 
-**Components Updated:**
-- `InventoryScanModal` — full rewrite to support native BarcodeDetector + html5-qrcode fallback, live search dropdown with arrow key navigation, batch submission with results display
-- `MemberIdScannerModal` — refactored to use shared `useHtml5Scanner` hook
-- `MemberScanPage` — refactored to use shared `useHtml5Scanner` hook
+**New Shared Modules:**
 
-**Data Paths:**
-- Camera → BarcodeDetector API (Chrome/Edge/Android) → decoded barcode string → inventory lookup via `GET /api/v1/inventory/lookup`
-- Camera → html5-qrcode fallback (Firefox/Safari) → decoded barcode string → same inventory lookup
-- Camera → QR code → JSON payload with `type: "member_id"` → member lookup via `GET /api/v1/users`
-- Camera → Code128 barcode → membership number string → member lookup via `GET /api/v1/users`
+| File | Purpose |
+|------|---------|
+| `frontend/src/hooks/useHtml5Scanner.ts` | Reusable HTML5 QR/barcode scanner hook with camera fallback logic |
+| `frontend/src/types/scanner.ts` | TypeScript types for scanner configuration and callbacks |
+| `frontend/src/constants/camera.ts` | Camera resolution presets, preferred facing modes, and error messages |
 
 **Edge Cases:**
-- BarcodeDetector API availability is detected at module load time via `HAS_BARCODE_DETECTOR` constant — not per-render
-- Environment camera fallback to user camera only triggers on camera start failure, not on scan failure
-- Duplicate scan deduplication: same barcode value ignored within a 3-second window to prevent double-processing
-- html5-qrcode scanner must be stopped before the component unmounts — cleanup runs in `useEffect` return
-- InventoryScanModal supports both QR codes (inventory item lookup) and Code128 barcodes (inventory barcode lookup) simultaneously when using html5-qrcode fallback
 
-### Notification System — Clear/Dismiss, Persistent Messages & Channel Filtering (2026-03-23)
+| Scenario | Behavior |
+|----------|----------|
+| No camera available | Displays a clear error message; does not silently fail |
+| Desktop with only user-facing camera | Falls back to user-facing camera automatically |
+| Browser without BarcodeDetector API | Uses Html5-QRCode library as fallback for barcode detection |
+| Multiple cameras detected | Prefers environment-facing, falls back to user-facing |
 
-- **Dashboard notification dismiss buttons**: The dashboard notification box previously only allowed clicking through to the linked event with no way to dismiss or mark notifications as read. Added "Clear All" button in the notification header (visible when unread notifications exist) and individual dismiss (X) buttons on each unread notification
-- **Bulk mark-as-read endpoint**: New `POST /api/v1/notifications/my/read-all` endpoint to mark all of a user's unread notifications as read in a single request
-- **Persistent department messages**: New `is_persistent` flag on department messages. When set, the message stays visible on the dashboard for all targeted members until an admin with `notifications.manage` permission explicitly clears it. Regular members cannot dismiss persistent messages via mark-as-read
-- **Notifications page redesign**: Renamed from "Email Notifications" to "Notification Rules & Logs" to reflect both email and in-app channels. Added channel filter (All / Email / In-App) to the Send Log tab so admins can isolate logs by delivery channel. Updated "Emails Sent" stat to show combined send count across all channels
-- **Individual notification read endpoint**: New `POST /api/v1/notifications/logs/{log_id}/read` endpoint for marking a single notification as read
+### Scheduling — Permission Fixes & Shift Signup Improvements (2026-03-22)
 
-**Data Model Changes:**
-
-| Table | New Column | Description |
-|-------|-----------|-------------|
-| `department_messages` | `is_persistent` (Boolean, default false) | When true, message cannot be dismissed by regular members |
-
-**API Routes:**
-
-| Method | URL | Description |
-|--------|-----|-------------|
-| `POST` | `/api/v1/notifications/my/read-all` | Bulk mark all user notifications as read |
-| `POST` | `/api/v1/notifications/logs/{log_id}/read` | Mark individual notification as read |
+- **Shift assignment permission fix**: Shift assignment UI was gated by `scheduling.manage_assignments` instead of the broader `scheduling.manage` — users with manage permission can now assign members to shifts
+- **Self-signup visibility fix**: Open Shifts tab fallback permission and self-signup button visibility corrected for members without admin permissions
+- **Calls/Incidents section removed**: Removed placeholder Calls/Incidents section from shift detail panel (feature not yet implemented)
+- **Dashboard shift cleanup**: "My Upcoming Shifts" on the dashboard now correctly hides declined and cancelled shift assignments
+- **Position editing in shift detail**: Officers can edit position assignments directly from the shift detail edit form without navigating elsewhere
 
 **Edge Cases:**
-- Persistent messages show a "Persistent" badge on the dashboard and hide the dismiss button for non-admin members
-- "Clear" button for persistent messages only appears for users with `notifications.manage` permission
-- `read-all` endpoint only marks currently unread notifications — already-read notifications are not modified
-- Channel filter on Send Log tab defaults to "All" and persists during the session but resets on page reload
 
-### Inventory Admin — Equipment Kits & Variant Groups Pages (2026-03-23)
+| Scenario | Behavior |
+|----------|----------|
+| User with `scheduling.manage` but not `scheduling.manage_assignments` | Can now assign members (permission broadened) |
+| Declined shift in "My Upcoming Shifts" | No longer displayed on dashboard |
+| Cancelled shift in "My Upcoming Shifts" | No longer displayed on dashboard |
 
-- **Equipment Kits admin page**: New page at `/inventory/admin/kits` with full CRUD for kit templates — card grid listing all kits with item count and active/inactive filter, create/edit modal with dynamic line items (item picker, category, quantity, size-selectability toggle), detail view modal showing full kit composition, and activate/deactivate toggle per kit
-- **Variant Groups admin page**: New page at `/inventory/admin/variant-groups` with full CRUD — card grid listing all variant groups with pricing and variant count, create/edit modal with name, description, category, base price, replacement cost, and unit of measure fields, detail modal showing linked item variants, and active/inactive toggle
-- **Inventory Admin Hub redesign**: Replaced flat card grid with grouped sections and prominent cards. Top row: 3 prominent cards (Items, Members, Checkouts) with colored icons and inline stats. Remaining cards grouped into labeled sections: Inventory Management, Requests & Workflows, Tools. Color-coded icon backgrounds by function for quick visual scanning. Compact inline stats bar replaces 4-card stats grid
+### Inventory — Admin Hub Redesign, Kits & Variant Groups Pages, Barcode Printing (2026-03-22)
+
+- **Inventory admin hub redesign**: Admin dashboard redesigned with grouped card sections and prominent navigation cards, replacing the previous flat list layout
+- **Equipment Kits admin page**: New dedicated page at `/inventory/admin/kits` for managing equipment kit bundles (create, edit, delete, view components)
+- **Variant Groups admin page**: New dedicated page at `/inventory/admin/variant-groups` for managing size/style variant groups
+- **Barcode printing ISO compliance**: Label generation aligned with ISO/IEC 15417 standards — correct quiet zones, minimum bar widths, and aspect ratios for reliable scanner readability
+- **Auto-rotation for thermal printers**: Roll-fed thermal printers (Dymo, Rollo) now auto-rotate labels to maximize print area when the label's long axis doesn't match the orientation
+- **Test print capability**: New "Test Print" button generates a sample label for verifying printer alignment before printing a full batch
+- **Unified label format catalog**: Frontend and backend now share the same label format definitions to prevent size mismatches between the UI preview and generated PDF
+- **Batch label limit**: Label generation now enforces a maximum batch size to prevent browser memory issues with large print jobs
+- **Inventory dashboard scoping**: Non-admin users now see only their own assigned equipment on the inventory dashboard, not the full department inventory
+- **Mobile FAB fix**: Mobile floating action button changed from "Export CSV" (admin action) to "Assign Items" for non-admin users
 
 **New Pages:**
 
@@ -75,34 +67,155 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage` |
 
 **Edge Cases:**
-- Kit line items validate that the selected item exists and belongs to the organization
-- Empty kits (no line items) can be saved as drafts but cannot be issued
-- Variant groups can be deactivated without affecting existing items — linked items retain their group reference but the group no longer appears in new-item flows
-- Deactivating a kit prevents new issuances but does not affect items already issued from that kit
 
-### Scheduling Module — Permission Fixes & Calls/Incidents Cleanup (2026-03-23)
+| Scenario | Behavior |
+|----------|----------|
+| Barcode with insufficient quiet zone | Labels now enforce ISO minimum quiet zones for scanner readability |
+| Dymo label in landscape orientation | Auto-rotated to portrait for correct printing |
+| Label batch > limit | Capped with warning message; user can print in batches |
+| Non-admin viewing inventory dashboard | Shows only personally assigned equipment |
+| Mobile user tapping FAB | Shows "Assign Items" instead of admin-only "Export CSV" |
 
-- **Shift assignment permission fix**: `ShiftDetailPanel` was checking `scheduling.manage` for all assignment-related UI (assign members, edit positions, remove assignments, edit notes), but the backend requires `scheduling.assign` for those operations. Added a separate `canAssign` check against `scheduling.assign` and applied it to all assignment-related UI. `canManage` retained for shift CRUD (edit/delete shift)
-- **Self-signup visibility fix**: Removed overly restrictive permission gate on the non-apparatus self-signup form in `ShiftDetailPanel`. The backend signup endpoint requires no special permission, and apparatus-mode Sign Up buttons already appear for all users
-- **OpenShiftsTab fallback permission**: Guarded the `createAssignment` fallback behind `canAssign` so regular members without `scheduling.assign` see the real signup error instead of an opaque 403 from the fallback path
-- **Calls/Incidents section removed**: Removed the Calls/Incidents placeholder section from `ShiftDetailPanel` that displayed a misleading "Calls will appear here once the shift is underway" message without any CAD integration to populate it. Cleaned up unused `ShiftCall` types, API methods, and imports from the frontend. Backend CRUD endpoints are retained for future ePCR/NEMSIS import services
+### Elections — Eligibility, Email Improvements & Meeting Integration (2026-03-22)
 
-**Data Sharing Changes:**
-- `ShiftDetailPanel` now uses two separate permission checks: `canManage` (`scheduling.manage`) for shift CRUD, `canAssign` (`scheduling.assign`) for assignment operations
-- `OpenShiftsTab` uses `canAssign` to determine whether the fallback direct-assignment path is available; members without the permission follow the standard signup flow
+- **Eligibility uses membership_type**: Election voter eligibility now correctly uses `User.membership_type` instead of role slugs, fixing incorrect voter filtering for departments with complex role structures
+- **Email recipient tracking**: `email_recipients` field now tracks only successfully sent ballots (not attempted sends), giving accurate delivery counts
+- **Election linked meeting filter**: Meeting dropdown on election pages now correctly shows only upcoming business meetings, not past ones
+- **Concurrent ballot sending fix**: Ballot email dispatch uses concurrent sending with proper error isolation — one failed send does not block remaining recipients
+- **Eligibility summary email**: Secretary receives a detailed summary after ballot dispatch listing sent count, skipped voters, and reasons for each skip
+- **Secretary-facing error messages**: Election errors now include actionable guidance (e.g., "No active members with email addresses found" instead of generic failure)
+- **Election report email**: New "Send Report Email" button on election detail page emails formatted round-by-round results to officers
+- **Business meetings section**: Election detail page now displays upcoming business meetings for linking elections to meeting records
+- **Code quality sweep**: Elections module refactored for code quality — removed dead code, fixed unused state variables, standardized error handling
 
 **Edge Cases:**
-- Users with `scheduling.assign` but not `scheduling.manage` can now see and use assignment controls as intended
-- Users with `scheduling.manage` but not `scheduling.assign` can edit/delete shifts but cannot directly assign members — they must use the admin assignment flow
-- The self-signup form appears for all authenticated users on non-apparatus shifts, matching the backend's permission model
-- Backend scheduling shift call endpoints (`/shifts/{id}/calls`) remain functional for programmatic access
 
-### Test Suite & Code Quality (2026-03-23)
+| Scenario | Behavior |
+|----------|----------|
+| Member has role `emt` but membership_type `administrative` | Not eligible for `operational` ballot items (eligibility follows membership_type) |
+| Email fails for one recipient | Loop continues; summary shows per-recipient delivery status |
+| Election linked to past meeting | Past meetings filtered out of dropdown; only upcoming shown |
+| No eligible voters after filtering | Returns descriptive error with reasons instead of false success |
 
-- **26 pre-existing test failures fixed**: Common patterns fixed across 28 test files — `toHaveBeenCalledWith()` assertions expecting no args but receiving `[undefined]`, missing mock methods on service objects, stale mock data, and async race conditions needing microtask flush
-- **InventoryAdminHub tests updated**: Assertions updated to match the redesigned component (grouped sections and prominent cards instead of old flat stats grid)
-- **Formatter fixes across backend**: Automated formatting changes from Black/isort across 60 backend files
-- **Filter value coercion fix**: Changed filter value coercion from `??` to `||` for status and category select dropdowns in `AllEntriesTab` and `AdminHoursPage` to prevent empty strings from being sent to the API
+### Events — Recurring Event Series, End Event, Admin Hours Integration (2026-03-22)
+
+- **Rolling 12-month recurrence**: Recurring events can now use a rolling 12-month window that automatically extends the series forward, keeping future occurrences available without manual regeneration
+- **Delete series support**: Officers can now delete an entire recurring event series at once, with confirmation dialog showing the number of events that will be removed
+- **"End Event" button**: New bulk checkout feature — clicking "End Event" on the event detail page checks out all currently checked-in attendees at once, useful for events where individual checkout tracking isn't needed
+- **Compact event create form**: Event creation form redesigned with a 2-column grid layout, pairing related sections (date/time, location, settings) side-by-side for reduced scrolling
+- **Event-to-admin-hours integration**: Events can now be linked to admin hour tracking categories, automatically crediting attendance hours toward administrative compliance requirements
+- **Event deletion FK fix**: Fixed event deletion failing when linked meeting minutes existed — cascade now properly handles the `meeting_minutes` foreign key constraint
+- **Check-in monitoring consistency**: Fixed check-in monitoring page using different time window logic than the QR self-check-in page, causing valid check-ins to appear invalid on the monitoring dashboard
+- **Event request form publish status**: Event request forms now display their publish status badge on the Events Settings page, making it clear which forms are publicly accessible
+
+**Data Model Changes:**
+
+| Table | Change | Description |
+|-------|--------|-------------|
+| `events` | `rolling_recurrence` (Boolean) | Enables rolling 12-month recurrence window |
+| `event_hour_mappings` | New table | Maps event types to admin hour tracking categories |
+| `admin_hours_requirements` | New table | Defines compliance requirements for admin hour categories |
+| `meeting_minutes` | FK cascade update | `event_id` FK now cascades on delete |
+
+**API Routes:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `DELETE` | `/api/v1/events/{id}/series` | Delete entire recurring event series |
+| `POST` | `/api/v1/events/{id}/end` | Bulk checkout all checked-in attendees |
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Rolling recurrence with no end date | Generates occurrences up to 12 months ahead, automatically refreshed |
+| Delete series with some past events | All events in series removed (past and future) |
+| "End Event" with no checked-in attendees | No-op with informational message |
+| Event linked to meeting minutes then deleted | Meeting minutes `event_id` set to null via cascade |
+| Admin hours integration with no mapping | Event attendance not credited; mapping must be configured in Events Settings |
+
+### Notifications — Dashboard Clear/Dismiss & Department Messages (2026-03-22)
+
+- **Notification clear/dismiss buttons**: Dashboard notification cards now include clear and dismiss buttons, allowing users to manage their notification queue without navigating to the full notifications page
+- **Persistent department messages**: Administrators can create department-wide messages that persist until explicitly cleared by an admin. Regular users see the message but cannot dismiss it
+- **Notification channel filter**: Notifications page now includes a channel filter (email, in-app, SMS) for viewing notifications by delivery method
+- **Notifications page title**: Page title renamed for clarity
+
+**Data Model Changes:**
+
+| Table | Change | Description |
+|-------|--------|-------------|
+| `department_messages` | `is_persistent` (Boolean) | Marks messages that only admins can clear |
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Non-admin trying to clear persistent message | Clear button not shown; message remains |
+| Admin clearing persistent message | Clears for all users department-wide |
+| Notification with multiple channels | Appears in each channel's filter view |
+
+### Email Deliverability — Gmail & Microsoft Compatibility (2026-03-22)
+
+- **Message-ID header**: All outgoing emails now include a proper `Message-ID` header, preventing Gmail from rejecting messages as spam
+- **Batch rate limiting**: Email sends are rate-limited per batch to avoid triggering Gmail and Microsoft bulk-send throttles
+- **Inline CSS**: Email templates now inline all CSS styles, since Gmail strips `<style>` tags — ensures consistent rendering across email clients
+- **SMTP connection reuse**: SMTP connections are reused within a batch send operation, improving performance for large recipient lists
+- **Admin email template support**: Administrators can now send emails using saved templates directly from the admin interface
+- **Gmail clipping fix**: Replaced base64-encoded logo data URIs with hosted image URLs, preventing Gmail from clipping long emails
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Gmail with strict DKIM/SPF | Message-ID header satisfies authentication checks |
+| Batch > 50 recipients | Rate-limited to avoid triggering bulk-send throttles |
+| Email client without CSS support | Inline styles ensure consistent rendering |
+| Logo image not accessible | Falls back to text-only header with organization name |
+
+### Mobile Responsiveness — Dashboard & Inventory (2026-03-22)
+
+- **Main dashboard responsive redesign**: Dashboard layout adapts to phone and tablet screens with stacked cards, collapsible sections, and touch-friendly controls
+- **Inventory module mobile improvements**: Inventory pages (items list, admin hub, member equipment) redesigned for mobile with card layouts, floating action button, and optimized touch targets
+- **Non-inventory page improvements**: Scheduling, events, members, and settings pages received responsive improvements for consistent mobile experience
+
+### Equipment Check Template Builder — UX Improvements (2026-03-22)
+
+- **Template builder layout redesign**: Equipment check template builder reorganized for better visual hierarchy and workflow
+- **Equipment check preview**: New preview mode shows how the check form will appear to members before saving the template
+- **Save redirect fix**: Template builder now correctly redirects to the template list after saving instead of staying on the edit page
+- **MissingGreenlet error fix**: Fixed async database access error when loading compartment data in the template builder
+- **Input focus loss fix**: Fixed inputs in the template builder losing focus after each keystroke due to component re-rendering
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Preview with unsaved changes | Preview reflects current form state, not last saved state |
+| Template with no compartments | Preview shows empty state with "Add compartments to get started" message |
+| Rapid typing in item fields | Focus maintained correctly after re-render fix |
+
+### Time Picker — Redesigned TimeQuarterHour Component (2026-03-22)
+
+- **Separate hour/minute/AM-PM selects**: `TimeQuarterHour` component redesigned with three separate dropdown selects (hour 1-12, minute 00/15/30/45, AM/PM) replacing the previous single text input
+- Applied across all time pickers: event forms, shift forms, scheduling templates
+
+### Bug Fixes (2026-03-22)
+
+- **Admin hours filter fix**: Fixed `??` (nullish coalescing) on filter values in admin hours page — replaced with `||` to properly coerce empty strings
+- **Cross-tenant proxy authorization**: Fixed race condition and cross-tenant data access bugs in proxy voting authorization
+- **JSON column mutation fixes**: Fixed three separate instances of SQLAlchemy JSON columns not persisting changes due to shallow copy mutations (attendee check-in, rollback history, election JSON data). All now use `copy.deepcopy()` pattern
+- **Rollback notification error handling**: Rollback notification failures no longer cause 500 errors after a successful rollback operation
+- **Audit event parameter fix**: Fixed `log_audit_event()` calls using incorrect parameter names across multiple endpoints
+- **Compartment CRUD MissingGreenlet**: Fixed async database access error in equipment check compartment CRUD endpoints
+
+### Code Quality (2026-03-22)
+
+- **26 frontend test failures fixed**: All pre-existing test failures across the frontend test suite resolved
+- **40 ESLint errors/warnings fixed**: Frontend ESLint output reduced from 40 errors/warnings to 0
+- **Backend formatter pass**: Applied Black and isort formatting fixes across the entire backend codebase
+- **Comment cleanup**: Removed comments that merely restate the code, per CLAUDE.md commenting guidelines
+- **InventoryAdminHub tests updated**: Tests updated to match the redesigned admin hub component
 
 ### Equipment Check System — Full-Stack Vehicle & Equipment Inspections (2026-03-19)
 

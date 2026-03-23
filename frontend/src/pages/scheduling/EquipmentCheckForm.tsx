@@ -9,9 +9,10 @@
  * 5. Return to overview and submit when all items are checked
  */
 
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   CheckCircle,
+  CheckCircle2,
   XCircle,
   ChevronLeft,
   ChevronRight,
@@ -272,6 +273,115 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   );
 
   // --------------------------------------------------------------------------
+  // Draft persistence — save progress to localStorage so it survives crashes
+  // --------------------------------------------------------------------------
+
+  const draftKey = `equipment-check-draft-${shiftId}-${template.id}`;
+
+  useEffect(() => {
+    if (previewMode) return;
+    try {
+      const saved = localStorage.getItem(draftKey);
+      if (!saved) return;
+      const parsed = JSON.parse(saved) as { results: Record<string, ItemResult>; overallNotes: string };
+      if (parsed.results && Object.keys(parsed.results).length > 0) {
+        setResults(parsed.results);
+      }
+      if (parsed.overallNotes) {
+        setOverallNotes(parsed.overallNotes);
+      }
+    } catch {
+      // Corrupted draft — ignore
+    }
+  }, [draftKey, previewMode]);
+
+  useEffect(() => {
+    if (previewMode) return;
+    if (Object.keys(results).length === 0 && !overallNotes) return;
+    try {
+      localStorage.setItem(
+        draftKey,
+        JSON.stringify({ results, overallNotes }),
+      );
+    } catch {
+      // Storage full — ignore
+    }
+  }, [results, overallNotes, draftKey, previewMode]);
+
+  // --------------------------------------------------------------------------
+  // Unsaved changes warning
+  // --------------------------------------------------------------------------
+
+  const hasProgress = checkedItems > 0;
+
+  useEffect(() => {
+    if (previewMode || !hasProgress) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [previewMode, hasProgress]);
+
+  // --------------------------------------------------------------------------
+  // Pass All — mark all items in a compartment as pass
+  // --------------------------------------------------------------------------
+
+  // --------------------------------------------------------------------------
+  // Keyboard navigation — auto-advance to next item after marking pass/fail
+  // --------------------------------------------------------------------------
+
+  const itemRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  const focusNextItem = useCallback(
+    (currentItemId: string) => {
+      if (activeCompartment === null) return;
+      const comp = compartments[activeCompartment];
+      if (!comp) return;
+      const currentIdx = comp.items.findIndex((i) => i.id === currentItemId);
+      if (currentIdx === -1 || currentIdx >= comp.items.length - 1) return;
+      const nextItem = comp.items[currentIdx + 1];
+      if (!nextItem) return;
+      const nextEl = itemRefs.current[nextItem.id];
+      if (nextEl) {
+        nextEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const passBtn = nextEl.querySelector<HTMLButtonElement>('[data-action="pass"]');
+        passBtn?.focus();
+      }
+    },
+    [activeCompartment, compartments],
+  );
+
+  const updateResultAndAdvance = useCallback(
+    (itemId: string, patch: Partial<ItemResult>) => {
+      updateResult(itemId, patch);
+      if (patch.status === 'pass' || patch.status === 'fail') {
+        setTimeout(() => focusNextItem(itemId), 150);
+      }
+    },
+    [updateResult, focusNextItem],
+  );
+
+  const passAllInCompartment = useCallback(
+    (compartment: CheckTemplateCompartment) => {
+      setResults((prev) => {
+        const next = { ...prev };
+        for (const item of compartment.items) {
+          const expStatus = getExpirationStatus(item);
+          if (expStatus === 'expired') continue;
+          const existing = next[item.id];
+          next[item.id] = {
+            ...existing,
+            status: 'pass',
+          };
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  // --------------------------------------------------------------------------
   // Submit
   // --------------------------------------------------------------------------
 
@@ -351,6 +461,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         );
       }
 
+      try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
       toast.success('Equipment check submitted successfully');
       onComplete?.();
     } catch {
@@ -410,7 +521,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={() => updateResult(item.id, { status: 'pass' })}
+          data-action="pass"
+          onClick={() => updateResultAndAdvance(item.id, { status: 'pass' })}
           disabled={isExpired}
           className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors min-h-[48px] ${
             effectiveStatus === 'pass'
@@ -423,7 +535,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         </button>
         <button
           type="button"
-          onClick={() => updateResult(item.id, { status: 'fail' })}
+          data-action="fail"
+          onClick={() => updateResultAndAdvance(item.id, { status: 'fail' })}
           className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors min-h-[48px] ${
             effectiveStatus === 'fail'
               ? 'bg-red-600 text-white'
@@ -446,7 +559,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => updateResult(item.id, { status: 'pass' })}
+              data-action="pass"
+              onClick={() => updateResultAndAdvance(item.id, { status: 'pass' })}
               className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors min-h-[48px] ${
                 effectiveStatus === 'pass'
                   ? 'bg-green-600 text-white'
@@ -458,7 +572,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => updateResult(item.id, { status: 'fail' })}
+              data-action="fail"
+              onClick={() => updateResultAndAdvance(item.id, { status: 'fail' })}
               className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors min-h-[48px] ${
                 effectiveStatus === 'fail'
                   ? 'bg-red-600 text-white'
@@ -481,10 +596,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         return (
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <label className="text-xs text-theme-text-secondary whitespace-nowrap">
+              <label htmlFor={`qty-${item.id}`} className="text-xs text-theme-text-secondary whitespace-nowrap">
                 Qty Found:
               </label>
               <input
+                id={`qty-${item.id}`}
                 type="number"
                 min="0"
                 inputMode="numeric"
@@ -534,10 +650,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         return (
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <label className="text-xs text-theme-text-secondary whitespace-nowrap">
+              <label htmlFor={`level-${item.id}`} className="text-xs text-theme-text-secondary whitespace-nowrap">
                 Reading:
               </label>
               <input
+                id={`level-${item.id}`}
                 type="number"
                 min="0"
                 step="0.1"
@@ -595,12 +712,13 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             )}
 
             {/* Verify serial/lot inputs */}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
-                <label className="text-xs text-theme-text-secondary mb-1 block">
+                <label htmlFor={`serial-${item.id}`} className="text-xs text-theme-text-secondary mb-1 block">
                   Serial #
                 </label>
                 <input
+                  id={`serial-${item.id}`}
                   type="text"
                   className="w-full rounded-lg border border-theme-surface-border px-3 py-2.5 text-sm text-theme-text-primary bg-theme-surface focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[48px]"
                   placeholder={item.serialNumber ?? 'Serial number'}
@@ -611,10 +729,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 />
               </div>
               <div>
-                <label className="text-xs text-theme-text-secondary mb-1 block">
+                <label htmlFor={`lot-${item.id}`} className="text-xs text-theme-text-secondary mb-1 block">
                   Lot #
                 </label>
                 <input
+                  id={`lot-${item.id}`}
                   type="text"
                   className="w-full rounded-lg border border-theme-surface-border px-3 py-2.5 text-sm text-theme-text-primary bg-theme-surface focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[48px]"
                   placeholder={item.lotNumber ?? 'Lot number'}
@@ -643,12 +762,13 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                   Enter the new serial/lot numbers. The template will be
                   automatically updated.
                 </p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
-                    <label className="text-xs text-theme-text-secondary mb-1 block">
+                    <label htmlFor={`new-serial-${item.id}`} className="text-xs text-theme-text-secondary mb-1 block">
                       New Serial #
                     </label>
                     <input
+                      id={`new-serial-${item.id}`}
                       type="text"
                       className="w-full rounded-lg border border-blue-500/30 px-3 py-2.5 text-sm text-theme-text-primary bg-theme-surface focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[48px]"
                       placeholder="New serial number"
@@ -661,10 +781,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-theme-text-secondary mb-1 block">
+                    <label htmlFor={`new-lot-${item.id}`} className="text-xs text-theme-text-secondary mb-1 block">
                       New Lot #
                     </label>
                     <input
+                      id={`new-lot-${item.id}`}
                       type="text"
                       className="w-full rounded-lg border border-blue-500/30 px-3 py-2.5 text-sm text-theme-text-primary bg-theme-surface focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[48px]"
                       placeholder="New lot number"
@@ -689,10 +810,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         return (
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <label className="text-xs text-theme-text-secondary whitespace-nowrap">
+              <label htmlFor={`reading-${item.id}`} className="text-xs text-theme-text-secondary whitespace-nowrap">
                 Reading:
               </label>
               <input
+                id={`reading-${item.id}`}
                 type="number"
                 step="0.01"
                 inputMode="decimal"
@@ -729,6 +851,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     return (
       <div
         key={item.id}
+        ref={(el) => { itemRefs.current[item.id] = el; }}
         className={`rounded-lg border p-4 space-y-3 transition-colors ${
           effectiveStatus === 'pass'
             ? 'border-green-500/30 bg-green-500/5'
@@ -776,21 +899,23 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           <button
             type="button"
             onClick={() => toggleNotes(item.id)}
+            aria-expanded={showNotesField}
             className="flex items-center gap-1 text-xs text-theme-text-muted hover:text-theme-text-secondary transition-colors min-h-[36px]"
           >
-            <MessageSquare className="h-3 w-3" />
+            <MessageSquare className="h-3 w-3" aria-hidden="true" />
             {showNotesField ? 'Hide' : 'Note'}
           </button>
           <button
             type="button"
             onClick={() => togglePhotos(item.id)}
+            aria-expanded={expandedPhotos.has(item.id)}
             className={`flex items-center gap-1 text-xs transition-colors min-h-[36px] ${
               (result?.photoFiles?.length ?? 0) > 0
                 ? 'text-blue-600 font-medium'
                 : 'text-theme-text-muted hover:text-theme-text-secondary'
             }`}
           >
-            <Camera className="h-3 w-3" />
+            <Camera className="h-3 w-3" aria-hidden="true" />
             Photo
             {(result?.photoFiles?.length ?? 0) > 0 && (
               <span className="text-[10px]">
@@ -804,6 +929,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             rows={2}
             className="w-full rounded-lg border border-theme-surface-border px-3 py-2 text-sm bg-theme-surface text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="Notes for this item..."
+            aria-label={`Notes for ${item.name}`}
             value={result?.notes ?? ''}
             onChange={(e) => updateResult(item.id, { notes: e.target.value })}
           />
@@ -823,7 +949,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                     <button
                       type="button"
                       onClick={() => removePhoto(item.id, idx)}
-                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute -top-2 -right-2 w-7 h-7 sm:w-6 sm:h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-sm opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-red-500"
                       aria-label={`Remove photo ${idx + 1}`}
                     >
                       &times;
@@ -843,6 +969,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                   accept="image/jpeg,image/png,image/webp"
                   multiple
                   className="hidden"
+                  aria-label={`Upload photo for ${item.name}`}
                   onChange={(e) => handlePhotoSelect(item.id, e.target.files)}
                 />
                 <button
@@ -852,7 +979,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                   }
                   className="flex items-center gap-1.5 rounded-lg border border-dashed border-theme-surface-border px-3 py-2 text-xs text-theme-text-muted hover:border-blue-500 hover:text-blue-600 transition-colors min-h-[40px]"
                 >
-                  <Camera className="h-3.5 w-3.5" />
+                  <Camera className="h-3.5 w-3.5" aria-hidden="true" />
                   Add photo (max 3)
                 </button>
               </>
@@ -869,7 +996,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
   const renderOverview = () => (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {compartments.map((comp, idx) => {
           const status = getCompartmentStatus(comp, results);
           const checked = comp.items.filter((i) => {
@@ -883,6 +1010,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               type="button"
               onClick={() => setActiveCompartment(idx)}
               className={`rounded-xl border-2 p-4 text-left transition-all active:scale-[0.98] min-h-[100px] ${STATUS_COLORS[status]}`}
+              aria-label={`${comp.name}, ${checked} of ${comp.items.length} checked${status === 'complete' ? ', complete' : status === 'has_failures' ? ', has failures' : ''}`}
             >
               <p className="font-medium text-sm leading-tight">
                 {comp.name}
@@ -891,10 +1019,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 {checked}/{comp.items.length} checked
               </p>
               {status === 'complete' && (
-                <CheckCircle className="h-5 w-5 mt-2" />
+                <CheckCircle className="h-5 w-5 mt-2" aria-hidden="true" />
               )}
               {status === 'has_failures' && (
-                <AlertTriangle className="h-5 w-5 mt-2" />
+                <AlertTriangle className="h-5 w-5 mt-2" aria-hidden="true" />
               )}
             </button>
           );
@@ -905,10 +1033,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       {!previewMode && (
         <div className="space-y-3 pt-2">
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+            <label htmlFor="overall-notes" className="block text-sm font-medium text-theme-text-secondary mb-1">
               Overall Notes
             </label>
             <textarea
+              id="overall-notes"
               rows={3}
               className="w-full rounded-lg border border-theme-surface-border px-3 py-2 text-sm bg-theme-surface text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Any overall notes or observations..."
@@ -981,13 +1110,27 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 )
               }
               className="p-2 rounded-lg text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-              title="Previous compartment"
+              aria-label="Previous compartment"
             >
-              <ChevronLeft className="h-5 w-5" />
+              <ChevronLeft className="h-5 w-5" aria-hidden="true" />
             </button>
-            <span className="text-xs text-theme-text-muted px-2">
-              {idx + 1}/{compartments.length}
-            </span>
+            {/* Quick-jump dropdown */}
+            <select
+              value={idx}
+              onChange={(e) => setActiveCompartment(Number(e.target.value))}
+              className="rounded-lg border border-theme-surface-border bg-theme-surface px-2 py-1 text-xs text-theme-text-muted focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[36px] max-w-[100px] sm:max-w-[140px] truncate"
+              aria-label="Jump to compartment"
+            >
+              {compartments.map((c, i) => {
+                const st = getCompartmentStatus(c, results);
+                const prefix = st === 'complete' ? '\u2713 ' : st === 'has_failures' ? '\u2717 ' : '';
+                return (
+                  <option key={c.id} value={i}>
+                    {prefix}{c.name}
+                  </option>
+                );
+              })}
+            </select>
             <button
               type="button"
               onClick={() =>
@@ -996,25 +1139,40 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 )
               }
               className="p-2 rounded-lg text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-              title="Next compartment"
+              aria-label="Next compartment"
             >
-              <ChevronRight className="h-5 w-5" />
+              <ChevronRight className="h-5 w-5" aria-hidden="true" />
             </button>
           </div>
         </div>
 
-        <div>
-          <h2 className="text-lg font-bold text-theme-text-primary">
-            {comp.name}
-          </h2>
-          {comp.description && (
-            <p className="text-sm text-theme-text-muted mt-0.5">
-              {comp.description}
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-theme-text-primary">
+              {comp.name}
+            </h2>
+            {comp.description && (
+              <p className="text-sm text-theme-text-muted mt-0.5">
+                {comp.description}
+              </p>
+            )}
+            <p className="text-xs text-theme-text-muted mt-1">
+              {checked}/{comp.items.length} items checked
             </p>
+          </div>
+
+          {/* Pass All button */}
+          {!previewMode && checked < comp.items.length && (
+            <button
+              type="button"
+              onClick={() => passAllInCompartment(comp)}
+              aria-label={`Mark all items in ${comp.name} as passed`}
+              className="flex items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs font-medium text-green-700 dark:text-green-400 hover:bg-green-500/20 transition-colors whitespace-nowrap min-h-[40px]"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+              Pass All
+            </button>
           )}
-          <p className="text-xs text-theme-text-muted mt-1">
-            {checked}/{comp.items.length} items checked
-          </p>
         </div>
 
         {/* Items */}
@@ -1082,9 +1240,9 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 type="button"
                 onClick={onBack}
                 className="p-2 rounded-lg text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface transition-colors"
-                title="Go back"
+                aria-label="Go back"
               >
-                <ArrowLeft className="h-5 w-5" />
+                <ArrowLeft className="h-5 w-5" aria-hidden="true" />
               </button>
             )}
             <h1 className="text-lg font-bold text-theme-text-primary">
@@ -1097,7 +1255,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         </div>
 
         {/* Progress bar */}
-        <div className="w-full bg-theme-surface-border rounded-full h-2.5 overflow-hidden">
+        <div className="w-full bg-theme-surface-border rounded-full h-2.5 overflow-hidden" role="progressbar" aria-valuenow={progressPercent} aria-valuemin={0} aria-valuemax={100} aria-label={`${checkedItems} of ${totalItems} items checked`}>
           <div
             className={`h-full rounded-full transition-all duration-300 ${
               progressPercent === 100 ? 'bg-green-500' : 'bg-blue-500'

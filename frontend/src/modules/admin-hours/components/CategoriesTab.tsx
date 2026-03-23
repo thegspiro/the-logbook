@@ -7,9 +7,9 @@
 
 import React, { useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Pencil, Trash2, QrCode, Clock, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Trash2, QrCode, Clock, AlertTriangle, Download } from 'lucide-react';
 import { useAdminHoursStore } from '../store/adminHoursStore';
-import { adminHoursEntryService } from '../services/api';
+import { adminHoursEntryService, adminHoursSeedService } from '../services/api';
 import type { AdminHoursCategory, AdminHoursCategoryCreate, AdminHoursCategoryUpdate } from '../types';
 import CategoryForm from './CategoryForm';
 import toast from 'react-hot-toast';
@@ -109,6 +109,21 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
     setShowCreateForm(true);
   };
 
+  const [seeding, setSeeding] = useState(false);
+
+  const handleSeedDefaults = async () => {
+    try {
+      setSeeding(true);
+      const result = await adminHoursSeedService.seedDefaults();
+      toast.success(`Created ${result.categories_count} categories and ${result.mappings_created} event mappings`);
+      onDataReload();
+    } catch {
+      toast.error('Failed to load default categories');
+    } finally {
+      setSeeding(false);
+    }
+  };
+
   const handleCloseStaleSessions = async () => {
     try {
       const result = await adminHoursEntryService.closeStaleSessions();
@@ -163,7 +178,15 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
       ) : categories.length === 0 ? (
         <div className="text-center py-12 bg-theme-surface rounded-lg">
           <Clock className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
-          <p className="text-theme-text-secondary">No categories yet. Create one to get started.</p>
+          <p className="text-theme-text-secondary mb-4">No categories yet. Load defaults or create your own.</p>
+          <button
+            onClick={() => { void handleSeedDefaults(); }}
+            disabled={seeding}
+            className="btn-primary flex items-center gap-2 mx-auto text-sm"
+          >
+            <Download className="w-4 h-4" />
+            {seeding ? 'Loading...' : 'Load Default Categories'}
+          </button>
         </div>
       ) : (
         <div className="grid gap-4">

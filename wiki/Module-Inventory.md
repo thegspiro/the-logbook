@@ -65,6 +65,8 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 | `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage` |
 | `/inventory/checkouts` | Active Checkouts | `inventory.manage` |
 | `/inventory/import` | CSV Import | `inventory.manage` |
+| `/inventory/admin/kits` | Equipment Kits Management | `inventory.manage` |
+| `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage` |
 | `/inventory/print-labels` | Barcode Label Printing | Authenticated |
 
 ---
@@ -332,14 +334,34 @@ Frontend tests in `src/pages/InventoryMembersTab.test.tsx` and `src/constants/en
 
 ---
 
-## Recent Changes (2026-03-23)
+## Recent Changes (2026-03-22)
 
-- **Equipment Kits admin page** — New page at `/inventory/admin/kits` with full CRUD for kit templates: card grid, create/edit modal with dynamic line items, detail view, and activate/deactivate toggle
-- **Variant Groups admin page** — New page at `/inventory/admin/variant-groups` with full CRUD: card grid with pricing/variant count, create/edit modal, detail view with linked items, and active/inactive toggle
-- **Inventory Admin Hub redesign** — Top row: 3 prominent cards (Items, Members, Checkouts) with colored icons and inline stats. Remaining cards grouped into Inventory Management, Requests & Workflows, and Tools sections with color-coded icon backgrounds
-- **Cross-browser camera scanning** — `InventoryScanModal` now uses html5-qrcode fallback when native BarcodeDetector API is unavailable, enabling camera scanning on Firefox, Safari, and desktop browsers
-- **Desktop webcam support** — Camera scanner falls back from rear-facing (`environment`) to front-facing (`user`) camera when environment camera is unavailable (desktop computers)
-- **Shared camera infrastructure** — Scanner logic extracted into shared `useHtml5Scanner` hook, `scanner.ts` types, and `camera.ts` constants
+### Admin Hub Redesign, Kits & Variant Groups Pages, Barcode Printing
+
+- **Inventory admin hub redesign**: Dashboard redesigned with grouped card sections and prominent navigation cards replacing the flat list layout
+- **Equipment Kits admin page**: New dedicated page at `/inventory/admin/kits` for managing equipment kit bundles
+- **Variant Groups admin page**: New dedicated page at `/inventory/admin/variant-groups` for managing size/style variant groups
+- **Barcode printing ISO compliance**: Label generation aligned with ISO/IEC 15417 — correct quiet zones, minimum bar widths, and aspect ratios
+- **Auto-rotation for thermal printers**: Roll-fed labels auto-rotate to maximize print area when orientation doesn't match
+- **Test print capability**: Sample label generation for verifying printer alignment before full batch
+- **Unified label format catalog**: Frontend and backend share label format definitions to prevent size mismatches
+- **Batch label limit**: Maximum batch size enforced to prevent browser memory issues
+- **Inventory dashboard scoping**: Non-admin users see only their own assigned equipment
+- **Mobile FAB fix**: FAB changed from "Export CSV" to "Assign Items" for non-admin users
+- **Desktop camera scanning**: InventoryScanModal and MemberIdScannerModal now work on desktop via shared `useHtml5Scanner` hook with user-facing camera fallback
+- **Mobile responsiveness**: Card layouts, touch-friendly controls, and responsive admin hub across all inventory pages
+
+### Edge Cases (2026-03-22)
+
+| Scenario | Behavior |
+|----------|----------|
+| Barcode with insufficient quiet zone | ISO-compliant quiet zones enforced |
+| Thermal printer landscape label | Auto-rotated to correct orientation |
+| Label batch > limit | Capped with user warning |
+| Non-admin on inventory dashboard | Sees only personally assigned equipment |
+| Desktop barcode scanning | Falls back to user-facing camera if no environment camera |
+
+---
 
 ## Recent Changes (2026-03-07)
 

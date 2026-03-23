@@ -397,6 +397,19 @@ function mapProspectListToApplicantList(data: BackendProspectListResponse): Appl
 function mapElectionPackageResponse(data: BackendElectionPackageResponse): ElectionPackage {
   const snapshot = data.applicant_snapshot ?? {};
   const config = data.package_config ?? {};
+
+  // Documents and stage history may live in the snapshot (populated at
+  // package creation) or in package_config (if overridden later).
+  // Prefer package_config when present, fall back to snapshot data.
+  const snapshotDocs: ElectionPackage['documents'] = (snapshot.documents ?? []).map((d) => ({
+    name: d.name,
+    url: '',
+  }));
+  const snapshotStages: ElectionPackage['stage_summary'] = (snapshot.stage_history ?? []).map((s) => ({
+    stage_name: s.stage_name,
+    completed_at: s.completed_at,
+  }));
+
   return {
     id: data.id,
     applicant_id: data.prospect_id,
@@ -404,12 +417,12 @@ function mapElectionPackageResponse(data: BackendElectionPackageResponse): Elect
     stage_id: data.step_id ?? '',
     applicant_name: `${snapshot.first_name ?? ''} ${snapshot.last_name ?? ''}`.trim(),
     applicant_email: snapshot.email,
-    applicant_phone: snapshot.phone,
-    target_membership_type: mapDesiredMembershipType((snapshot as Record<string, unknown>).desired_membership_type as string | null | undefined),
+    applicant_phone: snapshot.phone ?? snapshot.mobile,
+    target_membership_type: mapDesiredMembershipType(snapshot.desired_membership_type),
     coordinator_notes: data.coordinator_notes ?? undefined,
     supporting_statement: config.supporting_statement,
-    documents: config.documents,
-    stage_summary: config.stage_summary,
+    documents: config.documents ?? (snapshotDocs.length > 0 ? snapshotDocs : undefined),
+    stage_summary: config.stage_summary ?? (snapshotStages.length > 0 ? snapshotStages : undefined),
     custom_fields: config.custom_fields,
     recommended_ballot_item: config.recommended_ballot_item,
     status: data.status,
@@ -977,6 +990,14 @@ export const applicantService = {
     const response = await api.put<BackendElectionPackageResponse>(
       `/prospective-members/prospects/${applicantId}/election-package`,
       payload
+    );
+    return mapElectionPackageResponse(response.data);
+  },
+
+  async assignToElection(applicantId: string, electionId: string): Promise<ElectionPackage> {
+    const response = await api.post<BackendElectionPackageResponse>(
+      `/prospective-members/prospects/${applicantId}/election-package/assign`,
+      { election_id: electionId }
     );
     return mapElectionPackageResponse(response.data);
   },

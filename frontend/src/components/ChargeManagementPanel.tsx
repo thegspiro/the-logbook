@@ -167,14 +167,14 @@ const ChargeManagementPanel: React.FC = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-theme-surface-border bg-theme-surface-secondary">
-                  <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Item</th>
-                  <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Member</th>
-                  <th className="p-3 text-center text-xs font-medium text-theme-text-muted uppercase">Qty</th>
-                  <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Condition</th>
-                  <th className="p-3 text-right text-xs font-medium text-theme-text-muted uppercase">Amount</th>
-                  <th className="p-3 text-center text-xs font-medium text-theme-text-muted uppercase">Status</th>
-                  <th className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Date</th>
-                  <th className="p-3 text-center text-xs font-medium text-theme-text-muted uppercase">Actions</th>
+                  <th scope="col" className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Item</th>
+                  <th scope="col" className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Member</th>
+                  <th scope="col" className="p-3 text-center text-xs font-medium text-theme-text-muted uppercase">Qty</th>
+                  <th scope="col" className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Condition</th>
+                  <th scope="col" className="p-3 text-right text-xs font-medium text-theme-text-muted uppercase">Amount</th>
+                  <th scope="col" className="p-3 text-center text-xs font-medium text-theme-text-muted uppercase">Status</th>
+                  <th scope="col" className="p-3 text-left text-xs font-medium text-theme-text-muted uppercase">Date</th>
+                  <th scope="col" className="p-3 text-center text-xs font-medium text-theme-text-muted uppercase">Actions</th>
                 </tr>
               </thead>
               <tbody>

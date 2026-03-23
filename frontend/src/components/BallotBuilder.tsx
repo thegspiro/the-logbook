@@ -35,6 +35,7 @@ import {
   Plus,
   Trash2,
   Users,
+  UserPlus,
   Vote,
   FileText,
   LayoutTemplate,
@@ -239,6 +240,14 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
             <TypeIcon className="h-3.5 w-3.5" />
             {typeLabel}
           </span>
+
+          {/* From application badge */}
+          {item.prospect_package_id && (
+            <span className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30">
+              <UserPlus className="h-3 w-3" />
+              Application
+            </span>
+          )}
 
           {/* Title */}
           <span className="min-w-0 flex-1 truncate font-medium text-theme-text-primary">

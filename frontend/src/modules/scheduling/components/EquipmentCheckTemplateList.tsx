@@ -66,6 +66,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
   const [search, setSearch] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [hideInactive, setHideInactive] = useState(false);
 
   const loadTemplates = useCallback(async () => {
     try {
@@ -123,10 +124,13 @@ export const EquipmentCheckTemplateList: React.FC = () => {
   };
 
   const handleClone = async (template: EquipmentCheckTemplate) => {
+    const defaultName = `${template.name} (Copy)`;
+    const newName = window.prompt("Name for the cloned template:", defaultName);
+    if (newName === null) return;
     try {
       const cloned = await schedulingService.cloneEquipmentCheckTemplate(
         template.id,
-        "",
+        newName.trim() || defaultName,
       );
       setTemplates((prev) => [...prev, cloned]);
       toast.success(`Cloned as "${cloned.name}"`);
@@ -135,11 +139,14 @@ export const EquipmentCheckTemplateList: React.FC = () => {
     }
   };
 
+  const hasInactive = templates.some((t) => !t.isActive);
+
   const filtered = templates.filter(
     (t) =>
-      !search ||
-      t.name.toLowerCase().includes(search.toLowerCase()) ||
-      (t.apparatusType ?? "").toLowerCase().includes(search.toLowerCase()),
+      (!hideInactive || t.isActive) &&
+      (!search ||
+        t.name.toLowerCase().includes(search.toLowerCase()) ||
+        (t.apparatusType ?? "").toLowerCase().includes(search.toLowerCase())),
   );
 
   return (
@@ -159,17 +166,32 @@ export const EquipmentCheckTemplateList: React.FC = () => {
         Define what gets checked on each apparatus at shift start or end.
       </p>
 
-      {/* Search */}
+      {/* Search + Filter */}
       {templates.length > 3 && (
-        <div className="relative mb-3">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-theme-text-muted" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filter templates..."
-            className="w-full pl-8 pr-3 py-1.5 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-1 focus:ring-violet-500"
-          />
+        <div className="mb-3 space-y-2">
+          <div className="relative">
+            <label htmlFor="template-search" className="sr-only">Filter templates</label>
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-theme-text-muted" aria-hidden="true" />
+            <input
+              id="template-search"
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Filter templates..."
+              className="w-full pl-8 pr-3 py-1.5 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-1 focus:ring-violet-500"
+            />
+          </div>
+          {hasInactive && (
+            <label className="flex items-center gap-2 text-xs text-theme-text-muted cursor-pointer">
+              <input
+                type="checkbox"
+                checked={hideInactive}
+                onChange={(e) => setHideInactive(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-theme-surface-border text-violet-600 focus:ring-violet-500"
+              />
+              Hide inactive templates
+            </label>
+          )}
         </div>
       )}
 
@@ -210,7 +232,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
             return (
               <div
                 key={template.id}
-                className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
+                className={`flex items-start gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-lg border transition-colors ${
                   template.isActive
                     ? "bg-theme-surface-hover/30 border-theme-surface-border"
                     : "bg-theme-surface-hover/10 border-theme-surface-border/50 opacity-60"
@@ -222,14 +244,17 @@ export const EquipmentCheckTemplateList: React.FC = () => {
                     void handleToggleActive(template);
                   }}
                   disabled={isToggling}
+                  role="switch"
+                  aria-checked={template.isActive}
+                  aria-label={`${template.name} active`}
                   className={`mt-0.5 relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 ${
                     template.isActive
                       ? "bg-violet-600"
                       : "bg-theme-surface-border"
                   }`}
-                  title={template.isActive ? "Active — click to deactivate" : "Inactive — click to activate"}
                 >
                   <span
+                    aria-hidden="true"
                     className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
                       template.isActive ? "translate-x-4" : "translate-x-0.5"
                     }`}
@@ -244,14 +269,14 @@ export const EquipmentCheckTemplateList: React.FC = () => {
                     </p>
                     {timing && (
                       <span
-                        className={`px-1.5 py-0.5 text-[10px] font-medium rounded border ${timing.color}`}
+                        className={`px-1.5 py-0.5 text-xs sm:text-[10px] font-medium rounded border ${timing.color}`}
                       >
                         {timing.label}
                       </span>
                     )}
                     {template.templateType && template.templateType !== "equipment" && (
                       <span
-                        className={`px-1.5 py-0.5 text-[10px] font-medium rounded border ${TEMPLATE_TYPE_COLORS[template.templateType] ?? ""}`}
+                        className={`px-1.5 py-0.5 text-xs sm:text-[10px] font-medium rounded border ${TEMPLATE_TYPE_COLORS[template.templateType] ?? ""}`}
                       >
                         {TEMPLATE_TYPE_LABELS[template.templateType as TemplateType] ?? template.templateType}
                       </span>
@@ -289,32 +314,32 @@ export const EquipmentCheckTemplateList: React.FC = () => {
                 <div className="flex items-center gap-0.5 shrink-0">
                   <a
                     href={`/scheduling/equipment-check-templates/${template.id}`}
-                    className="p-1.5 text-theme-text-muted hover:text-violet-600 rounded-md hover:bg-violet-500/10 transition-colors"
-                    title="Edit template"
+                    className="p-2 sm:p-1.5 text-theme-text-muted hover:text-violet-600 rounded-md hover:bg-violet-500/10 transition-colors min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
+                    aria-label={`Edit ${template.name}`}
                   >
-                    <Pencil className="w-3.5 h-3.5" />
+                    <Pencil className="w-4 h-4 sm:w-3.5 sm:h-3.5" aria-hidden="true" />
                   </a>
                   <button
                     onClick={() => {
                       void handleClone(template);
                     }}
-                    className="p-1.5 text-theme-text-muted hover:text-blue-600 rounded-md hover:bg-blue-500/10 transition-colors"
-                    title="Clone template"
+                    className="p-2 sm:p-1.5 text-theme-text-muted hover:text-blue-600 rounded-md hover:bg-blue-500/10 transition-colors min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
+                    aria-label={`Clone ${template.name}`}
                   >
-                    <Copy className="w-3.5 h-3.5" />
+                    <Copy className="w-4 h-4 sm:w-3.5 sm:h-3.5" aria-hidden="true" />
                   </button>
                   <button
                     onClick={() => {
                       void handleDelete(template);
                     }}
                     disabled={isDeleting}
-                    className="p-1.5 text-theme-text-muted hover:text-red-500 rounded-md hover:bg-red-500/10 transition-colors disabled:opacity-50"
-                    title="Delete template"
+                    className="p-2 sm:p-1.5 text-theme-text-muted hover:text-red-500 rounded-md hover:bg-red-500/10 transition-colors disabled:opacity-50 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
+                    aria-label={`Delete ${template.name}`}
                   >
                     {isDeleting ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <Loader2 className="w-4 h-4 sm:w-3.5 sm:h-3.5 animate-spin" aria-hidden="true" />
                     ) : (
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" aria-hidden="true" />
                     )}
                   </button>
                 </div>

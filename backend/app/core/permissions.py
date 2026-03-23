@@ -1413,6 +1413,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             LOCATIONS_VIEW.name,
             DOCUMENTS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
+            COMPLIANCE_VIEW.name,
+            REPORTS_VIEW.name,
         ],
     },
     "assistant_secretary": {

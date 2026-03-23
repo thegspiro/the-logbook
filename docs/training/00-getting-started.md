@@ -157,10 +157,23 @@ From here you can:
 
 ---
 
+## Login & Session Edge Cases
+
+| Scenario | What Happens |
+|----------|-------------|
+| Too many failed login attempts | After 5 failed attempts within 60 seconds, you are locked out for 30 minutes. The lock screen shows a countdown. |
+| Forgot password, requested reset twice | Only the first request sends an email. Subsequent requests within 30 minutes return a success message but no email is sent — this is an anti-enumeration security measure. Wait 30 minutes or use the first email link. |
+| Session expires while working | Your access token expires after 30 minutes of inactivity. The system automatically refreshes it in the background. If the refresh fails, you are redirected to the login page. |
+| Multiple tabs open | Keep the number of open tabs reasonable. If your session refreshes simultaneously in multiple tabs, a race condition can log you out of all tabs. Refreshing the page resolves this. |
+| Admin changed your role while logged in | The server enforces the new permissions immediately. However, menu items and buttons may not update until you refresh the page. |
+| "Too many requests" error | Rate limiting is active. Wait for the duration shown in the error message before trying again. |
+
+---
+
 ## Getting Help
 
-- **Forgot your password?** Use the "Forgot Password?" link on the login page. You will receive a reset link by email.
-- **Locked out?** Wait for the lockout period to expire, or ask your IT Manager to unlock your account.
+- **Forgot your password?** Use the "Forgot Password?" link on the login page. You will receive a reset link by email. If no email arrives, wait 30 minutes and try again (a cooldown prevents duplicate emails).
+- **Locked out?** Wait for the lockout period to expire (30 minutes), or ask your IT Manager to unlock your account.
 - **Missing a module?** Some modules may be disabled by your department. Contact your administrator to enable them.
 - **Permission denied?** If you see a "Not Authorized" message, the action requires a role you have not been assigned. Contact your officer or IT Manager.
 - **Something looks wrong?** Your department may have an error monitoring dashboard (Settings > Error Monitor) where administrators can review issues.

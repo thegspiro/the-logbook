@@ -218,7 +218,7 @@ const SortableHeader: React.FC<SortableHeaderProps> = ({
 }) => {
   const isActive = currentSort === field;
   return (
-    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+    <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
       <button
         type="button"
         onClick={() => onSort(field)}
@@ -438,7 +438,7 @@ export const GrantApplicationsPage: React.FC = () => {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-theme-text-secondary" />
             <input
               type="text"
-              placeholder="Search programs, agencies, assignees..."
+              aria-label="Search programs, agencies, assignees..." placeholder="Search programs, agencies, assignees..."
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               className="w-full rounded-lg border border-theme-input-border bg-theme-input-bg py-2 pl-10 pr-4 text-sm text-theme-text-primary placeholder:text-theme-text-secondary focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
@@ -601,7 +601,7 @@ export const GrantApplicationsPage: React.FC = () => {
                       currentDir={sortDir}
                       onSort={handleSort}
                     />
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
                       <span className="sr-only">Actions</span>
                     </th>
                   </tr>

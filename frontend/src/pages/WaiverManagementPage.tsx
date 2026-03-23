@@ -396,12 +396,12 @@ export const WaiverManagementPage: React.FC = () => {
                 <table className="min-w-full divide-y divide-theme-surface-border">
                   <thead className="bg-theme-surface-hover">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Member</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Type</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Applies To</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Period</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Reason</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-theme-text-muted uppercase tracking-wider">Actions</th>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Member</th>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Type</th>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Applies To</th>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Period</th>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Reason</th>
+                      <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-theme-text-muted uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-theme-surface-border">
@@ -620,7 +620,7 @@ export const WaiverManagementPage: React.FC = () => {
                 type="text"
                 value={memberFilter}
                 onChange={(e) => setMemberFilter(e.target.value)}
-                placeholder="Search by member name..."
+                aria-label="Search by member name..." placeholder="Search by member name..."
                 className="rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-1.5 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring w-64"
               />
               <div className="ml-auto text-xs text-theme-text-muted self-center">
@@ -637,13 +637,13 @@ export const WaiverManagementPage: React.FC = () => {
                 <table className="min-w-full divide-y divide-theme-surface-border">
                   <thead className="bg-theme-surface-hover">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Member</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Status</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Type</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Applies To</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Period</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Reason</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-theme-text-muted uppercase tracking-wider">Actions</th>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Member</th>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Status</th>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Type</th>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Applies To</th>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Period</th>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Reason</th>
+                      <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-theme-text-muted uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-theme-surface-border">

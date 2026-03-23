@@ -33,13 +33,13 @@ export const BlockedCountriesTable: React.FC<BlockedCountriesTableProps> = ({
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-theme-surface-border text-left text-theme-text-muted">
-            <th className="py-3 px-4 font-medium">Country</th>
-            <th className="py-3 px-4 font-medium">Code</th>
-            <th className="py-3 px-4 font-medium">Risk Level</th>
-            <th className="py-3 px-4 font-medium">Reason</th>
-            <th className="py-3 px-4 font-medium">Blocked Attempts</th>
-            <th className="py-3 px-4 font-medium">Added</th>
-            <th className="py-3 px-4 font-medium">Actions</th>
+            <th scope="col" className="py-3 px-4 font-medium">Country</th>
+            <th scope="col" className="py-3 px-4 font-medium">Code</th>
+            <th scope="col" className="py-3 px-4 font-medium">Risk Level</th>
+            <th scope="col" className="py-3 px-4 font-medium">Reason</th>
+            <th scope="col" className="py-3 px-4 font-medium">Blocked Attempts</th>
+            <th scope="col" className="py-3 px-4 font-medium">Added</th>
+            <th scope="col" className="py-3 px-4 font-medium">Actions</th>
           </tr>
         </thead>
         <tbody>

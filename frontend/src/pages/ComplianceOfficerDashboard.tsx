@@ -182,7 +182,7 @@ const AnnualReportSection: React.FC = () => {
       </div>
 
       {/* Executive Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <SummaryCard
           label="Overall Compliance"
           value={`${summary.overall_compliance_pct}%`}
@@ -199,6 +199,18 @@ const AnnualReportSection: React.FC = () => {
           label="Training Hours"
           value={formatNumber(summary.total_training_hours)}
           color="purple"
+          icon={Award}
+        />
+        <SummaryCard
+          label="Admin Hours"
+          value={formatNumber(summary.total_admin_hours)}
+          color="orange"
+          icon={Award}
+        />
+        <SummaryCard
+          label="Total Contributed"
+          value={formatNumber(summary.total_contributed_hours)}
+          color="green"
           icon={Award}
         />
         <SummaryCard
@@ -224,6 +236,25 @@ const AnnualReportSection: React.FC = () => {
           <p className="text-2xl font-bold text-theme-text-primary">{summary.iso_readiness_pct}%</p>
         </div>
       </div>
+
+      {/* Admin Hours by Category */}
+      {report.admin_hours_summary.by_category.length > 0 && (
+        <div className="card p-4">
+          <h3 className="text-sm font-medium text-theme-text-secondary mb-3">Admin Hours by Category</h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {report.admin_hours_summary.by_category.map((cat) => (
+              <div key={cat.category_id} className="bg-theme-input-bg/50 rounded-lg p-3">
+                <p className="text-xs text-theme-text-muted mb-1">{cat.category_name}</p>
+                <p className="text-lg font-bold text-theme-text-primary">{cat.approved_hours} hrs</p>
+                {cat.pending_hours > 0 && (
+                  <p className="text-xs text-yellow-500">{cat.pending_hours} hrs pending</p>
+                )}
+                <p className="text-xs text-theme-text-muted">{cat.total_entries} entries</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Sub-section summaries */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -304,10 +335,10 @@ const AnnualReportSection: React.FC = () => {
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-theme-surface-border">
-                  <th className="px-4 py-2 text-left text-xs font-medium text-theme-text-secondary uppercase">Requirement</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-theme-text-secondary uppercase">Type</th>
-                  <th className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Compliant</th>
-                  <th className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Compliance %</th>
+                  <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-theme-text-secondary uppercase">Requirement</th>
+                  <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-theme-text-secondary uppercase">Type</th>
+                  <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Compliant</th>
+                  <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Compliance %</th>
                 </tr>
               </thead>
               <tbody>
@@ -339,11 +370,13 @@ const AnnualReportSection: React.FC = () => {
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-theme-surface-border">
-                  <th className="px-4 py-2 text-left text-xs font-medium text-theme-text-secondary uppercase">Member</th>
-                  <th className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Hours</th>
-                  <th className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Requirements</th>
-                  <th className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Expired Certs</th>
-                  <th className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Status</th>
+                  <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-theme-text-secondary uppercase">Member</th>
+                  <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Training Hrs</th>
+                  <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Admin Hrs</th>
+                  <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Total Hrs</th>
+                  <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Requirements</th>
+                  <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Expired Certs</th>
+                  <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -351,6 +384,8 @@ const AnnualReportSection: React.FC = () => {
                   <tr key={member.user_id} className="border-b border-theme-surface-border hover:bg-theme-surface-hover">
                     <td className="px-4 py-2 text-theme-text-primary font-medium">{member.name}</td>
                     <td className="px-4 py-2 text-center text-theme-text-secondary">{member.hours_completed}</td>
+                    <td className="px-4 py-2 text-center text-theme-text-secondary">{member.admin_hours_approved}</td>
+                    <td className="px-4 py-2 text-center text-green-500 font-semibold">{member.total_contributed_hours}</td>
                     <td className="px-4 py-2 text-center text-theme-text-secondary">{member.requirements_met}/{member.requirements_total}</td>
                     <td className="px-4 py-2 text-center">
                       <span className={member.expired_certifications > 0 ? 'text-red-500 font-semibold' : 'text-theme-text-muted'}>
@@ -756,12 +791,12 @@ const ForecastSection: React.FC = () => {
           <table className="min-w-full text-sm">
             <thead>
               <tr className="border-b border-theme-surface-border">
-                <th className="px-4 py-2 text-left text-xs font-medium text-theme-text-secondary uppercase">Member</th>
-                <th className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Current</th>
-                <th className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">30 Days</th>
-                <th className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">60 Days</th>
-                <th className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">90 Days</th>
-                <th className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Expiring Certs</th>
+                <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-theme-text-secondary uppercase">Member</th>
+                <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Current</th>
+                <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">30 Days</th>
+                <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">60 Days</th>
+                <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">90 Days</th>
+                <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-theme-text-secondary uppercase">Expiring Certs</th>
               </tr>
             </thead>
             <tbody>

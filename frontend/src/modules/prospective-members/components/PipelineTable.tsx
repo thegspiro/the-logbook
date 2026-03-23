@@ -294,7 +294,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
           <table className="w-full">
             <thead>
               <tr className="border-b border-theme-surface-border">
-                <th className="w-14 p-3">
+                <th scope="col" className="w-14 p-3">
                   <button onClick={toggleAll} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary">
                     {allSelected ? (
                       <CheckSquare className="w-5 h-5 text-red-700 dark:text-red-400" />
@@ -312,7 +312,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                 <SortableHeader label="Days in Stage" field="days_in_stage" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} className="table-col-secondary" />
                 <SortableHeader label="Target Type" field="target_membership_type" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} className="table-col-tertiary" />
                 <SortableHeader label="Applied" field="created_at" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} className="table-col-tertiary" />
-                <th className="w-12 p-3"></th>
+                <th scope="col" className="w-12 p-3"></th>
               </tr>
             </thead>
             <tbody>

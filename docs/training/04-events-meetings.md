@@ -804,6 +804,82 @@ Thank you for working with Riverside Fire-Rescue!
 
 ---
 
+## Event, Check-In & RSVP Edge Cases
+
+These edge cases cover system behavior during event management, QR check-in, RSVP processing, and event deletion.
+
+### Check-In Window Types
+
+Events support three check-in window modes that control when QR and manual check-in is accepted:
+
+| Window Type | Check-In Opens | Check-In Closes |
+|-------------|---------------|-----------------|
+| **Flexible** (default) | N minutes before event start (default 30) | When the event ends (uses actual end time if recorded, otherwise scheduled end) |
+| **Strict** | At exact event start time (uses actual start time if recorded) | At exact event end time (uses actual end time if recorded) |
+| **Window** | N minutes before start (default 15) | N minutes after end (default 15) |
+
+> **Hint:** If a member tries to check in before the window opens, the error message displays the opening time in the organization's local timezone (e.g., "Check-in opens at 06:30 PM EST"). After the window closes: "Check-in is no longer available. The event has ended."
+
+### Check-In Behavior
+
+| Scenario | Behavior |
+|----------|----------|
+| Check-in without prior RSVP | Auto-creates an RSVP with "going" status. Check-in works for non-RSVP events. |
+| Double check-in attempt | Returns "Already checked in." Use the monitoring view to adjust times if needed. |
+| Check-out without check-in | Returns "Cannot check out without checking in first." |
+| Double check-out attempt | Returns "You have already checked out of this event." |
+| Check-in to cancelled event | Returns "Event has been cancelled." |
+
+### RSVP Processing
+
+| Scenario | Behavior |
+|----------|----------|
+| RSVP to cancelled event | Returns "Cannot RSVP to cancelled event." |
+| RSVP after deadline | Returns "RSVP deadline has passed." Deadlines with missing timezone info are treated as UTC. |
+| RSVP status not in allowed list | Returns error listing allowed statuses. Events can restrict to specific statuses (e.g., only "going"/"not_going", no "maybe"). |
+| RSVP "Going" when event is at capacity | Status is silently changed to "Waitlisted." The frontend must check the returned RSVP status to detect this — no error is returned. |
+| Waitlist promotion trigger | Fires when a "Going" member changes to "Not Going" OR when a manager removes a "Going" attendee. Does NOT fire when `max_attendees` is increased. |
+| Series RSVP and capacity | Bulk RSVP to a recurring series skips per-event capacity checks. A member can exceed capacity on individual events without being waitlisted. |
+
+### Event Deletion
+
+| Scenario | Behavior |
+|----------|----------|
+| Delete event with linked meeting minutes | Returns "Cannot delete event because it has linked records (e.g. meeting minutes). Remove or unlink them first." |
+| Delete series with linked records | Any event in the series with linked records blocks the entire series deletion. |
+| Duplicate event copies | Duplicating a recurring event creates a standalone one-off event — recurrence settings are not copied. |
+| "Update all future" anchor boundary | Updates the selected event AND all future events in the series. Past siblings are never modified. |
+
+### Event Notifications
+
+| Scenario | Behavior |
+|----------|----------|
+| Send notification to cancelled event | Returns "Cannot send notifications for a cancelled event." |
+| Location double-booking | Shows up to 3 conflicting event titles in the error message. This is a hard block — the event cannot be created with an overlapping location and time. |
+
+---
+
+## Election Integrity & Voting Edge Cases
+
+### Vote Integrity
+
+| Scenario | Behavior |
+|----------|----------|
+| Vote integrity chain | Each vote computes `SHA256(previous_chain_hash + vote_signature)` and stores it as `last_chain_hash` on the election. An unbroken chain proves no votes were deleted or reordered. |
+| Voter receipt hash | Each vote generates a `receipt_hash = SHA256(vote_id + signature + nonce)` returned to the voter. Can be used for individual vote verification, though no frontend UI currently exposes this. |
+| Double-vote prevention | Enforced at two levels: application-level check first, then a database `UNIQUE` constraint on `vote_dedup_hash`. Race conditions are caught at the DB level and logged as `vote_double_attempt` audit events. |
+| Anonymous voter salt | A per-election `voter_anonymity_salt` generates voter hashes. The salt can theoretically be destroyed post-election to make de-anonymization permanently impossible, but this is not automated. |
+
+### Voting Eligibility
+
+| Scenario | Behavior |
+|----------|----------|
+| Tier requires meeting attendance for voting | System queries actual meeting attendance over `voting_attendance_period_months` and compares against `voting_min_attendance_pct`. Members below the threshold are denied voting rights. |
+| Secretary voter override | Overrides bypass ALL eligibility checks — tier, attendance, role restrictions. Only the secretary can add overrides. |
+| Ballot-item-only elections (no candidates) | Can be opened and voted on. `open_election` no longer requires candidates. |
+
+---
+
 ## Troubleshooting
 
 | Issue | Solution |
@@ -914,6 +990,169 @@ The election detail page now shows a section listing **upcoming business meeting
 | Rollback history not saving | Fixed — uses `copy.deepcopy()` before appending |
 | Election with only ballot items | Can be opened without candidates |
 | Concurrent vote attempts | Database-level locking prevents race conditions |
+
+---
+
+## Recurring Event Enhancements (2026-03-22)
+
+### Rolling 12-Month Recurrence
+
+Recurring events can now use a **rolling 12-month window** that automatically extends the series forward. Instead of defining a fixed end date, the system continuously generates occurrences up to 12 months ahead, ensuring future events are always available for RSVP and scheduling.
+
+To enable rolling recurrence:
+1. Create or edit a recurring event
+2. Select "Rolling (12 months)" as the recurrence end option
+3. The system generates occurrences up to 12 months from today and auto-refreshes the window
+
+> **Screenshot needed:**
+> _[Screenshot of the recurring event form showing the "Rolling (12 months)" option selected in the recurrence end date area, with a note explaining that the system will auto-generate future occurrences]_
+
+> **Edge case:** Rolling recurrence with a monthly-by-weekday pattern (e.g., "2nd Tuesday") generates all occurrences correctly, including months where the weekday pattern falls on the last week.
+
+### Delete Series
+
+Officers can now delete an entire recurring event series at once:
+1. Navigate to any event in the series
+2. Click **More > Delete Series**
+3. A confirmation dialog shows the total number of events that will be removed
+4. Confirm to delete all events in the series (past and future)
+
+> **Screenshot needed:**
+> _[Screenshot of the delete series confirmation dialog showing "This will permanently delete 24 events in this series. This action cannot be undone." with Cancel and Delete buttons]_
+
+> **Edge case:** Deleting a series removes all events including past ones. If you need to keep historical records, use "Delete Future Events" instead to preserve past occurrences.
+
+### "End Event" — Bulk Checkout
+
+The new **End Event** button on the event detail page checks out all currently checked-in attendees at once. This is useful for events where individual checkout tracking isn't needed (e.g., meetings, training sessions).
+
+1. Navigate to the event detail page during or after an event
+2. Click **End Event** in the actions area
+3. Confirm the bulk checkout
+4. All checked-in attendees are marked as checked out with the current timestamp
+
+> **Screenshot needed:**
+> _[Screenshot of the event detail page showing the "End Event" button in the action area, with a tooltip explaining "Check out all attendees at once"]_
+
+> **Edge case:** If no attendees are currently checked in, the button shows an informational message ("No attendees to check out") and performs no action.
+
+### Compact Event Create Form
+
+The event creation form has been redesigned with a **2-column grid layout**:
+- Left column: Title, type, category, description
+- Right column: Date, time, location, settings
+- Settings and recurrence sections pair side-by-side
+
+This reduces scrolling significantly on desktop while remaining single-column on mobile.
+
+> **Screenshot needed:**
+> _[Screenshot of the redesigned event creation form showing the 2-column layout with the title and type fields on the left, date/time fields on the right, and the recurrence section below spanning both columns]_
+
+### Event-to-Admin-Hours Integration
+
+Events can now be linked to administrative hour tracking categories, automatically crediting attendance hours toward compliance requirements.
+
+**Setting up the integration:**
+1. Navigate to **Events Settings > Hour Tracking**
+2. Map event types to admin hour categories (e.g., "Business Meeting" → "Administrative Hours")
+3. Set compliance requirements (e.g., "4 hours per quarter")
+
+When members attend events with configured mappings, their attendance hours are automatically credited.
+
+> **Screenshot needed:**
+> _[Screenshot of the Events Settings > Hour Tracking section showing a mapping table with event types on the left, admin hour categories on the right, and a "Requirements" section below with compliance thresholds]_
+
+> **Edge case:** If no mapping is configured for an event type, attendance is not credited to admin hours. The mapping must be explicitly set up in Events Settings.
+
+---
+
+## Notification Enhancements (2026-03-22)
+
+### Dashboard Notification Management
+
+Dashboard notification cards now include **clear** and **dismiss** buttons, allowing you to manage notifications without navigating to the full Notifications page.
+
+- **Dismiss**: Hides the notification from your dashboard (personal action, doesn't affect others)
+- **Clear**: Marks the notification as read
+
+> **Screenshot needed:**
+> _[Screenshot of the Dashboard notifications section showing notification cards with dismiss (X) and clear (checkmark) buttons on each card]_
+
+### Persistent Department Messages
+
+Administrators can create department-wide messages that persist for all members until explicitly cleared by an admin:
+
+1. Navigate to **Notifications** (admin)
+2. Click **Create Department Message**
+3. Enter the message content and mark it as **Persistent**
+4. The message appears for all department members until an admin clears it
+
+> **Screenshot needed:**
+> _[Screenshot of a persistent department message on the Dashboard showing the message content with an admin-only "Clear for All" button, and no dismiss button for regular members]_
+
+> **Edge case:** Non-admin users cannot dismiss persistent messages — the dismiss button is not shown. Only users with admin permissions see the "Clear for All" action.
+
+### Notification Channel Filter
+
+The Notifications page now includes a **channel filter** to view notifications by delivery method:
+- **All** — Shows all notifications
+- **Email** — Only email-delivered notifications
+- **In-App** — Only in-app notifications
+- **SMS** — Only SMS notifications (when Twilio is enabled)
+
+> **Screenshot needed:**
+> _[Screenshot of the Notifications page showing the channel filter tabs (All, Email, In-App, SMS) at the top, with the In-App filter active showing only in-app notification entries]_
+
+---
+
+## Email Deliverability Improvements (2026-03-22)
+
+Email delivery has been significantly improved for compatibility with Gmail, Microsoft Outlook, and other major providers:
+
+- **Message-ID header**: All outgoing emails include proper Message-ID headers, satisfying DKIM/SPF authentication
+- **Batch rate limiting**: Large recipient lists are rate-limited to avoid bulk-send throttles
+- **Inline CSS**: All styles are inlined directly on HTML elements (Gmail strips `<style>` tags)
+- **SMTP connection reuse**: Connections reused within batches for better performance
+- **Logo hosting**: Organization logos use hosted URLs instead of base64 data URIs, preventing Gmail from clipping emails
+
+> **Edge case:** If the logo image URL is not accessible (e.g., server behind VPN), emails fall back to a text-only header with the organization name.
+
+---
+
+## Elections — Eligibility & Email (2026-03-22)
+
+### Voter Eligibility Correction
+
+Voter eligibility now correctly uses `User.membership_type` instead of role slugs. This means:
+
+- A member with role "EMT" but membership_type "administrative" is **not** eligible for "operational" ballot items
+- A member with membership_type "active" **is** eligible for operational items regardless of their assigned roles
+- See the [Elections Voter Eligibility](#elections-and-voting) section above for the full eligibility matrix
+
+> **Screenshot needed:**
+> _[Screenshot of the election detail page showing voter eligibility breakdown — listing eligible membership types and the count of members in each type]_
+
+### Ballot Email Improvements
+
+- **Per-recipient error handling**: If one ballot email fails, remaining recipients still receive their ballots
+- **Eligibility summary email**: The secretary who dispatched ballots receives a summary listing all sent and skipped voters with reasons (no email address, ineligible, already voted)
+- **Election report email**: New "Send Report Email" button emails formatted round-by-round results
+
+> **Screenshot needed:**
+> _[Screenshot of the eligibility summary showing "Sent: 45 ballots, Skipped: 3 voters" with expandable reasons — "John Smith: no email address", "Jane Doe: membership type not eligible"]_
+
+### Election Meeting Integration
+
+The election detail page now shows **upcoming business meetings** in a dedicated section, making it easy to link elections to meeting records for procedural compliance.
+
+> **Screenshot needed:**
+> _[Screenshot of the election detail page "Upcoming Business Meetings" section showing a list of upcoming meetings with dates and "Link to Election" buttons]_
+
+| Troubleshooting | Solution |
+|-----------------|----------|
+| Ballot emails sent but 0 recipients | Fixed 2026-03-22 — eligibility now uses `membership_type`. Check that members have the correct membership type and email addresses. |
+| Election error messages are generic | Fixed 2026-03-22 — errors now include specific guidance. |
+| Can't find report email button | Look for "Send Report Email" in the election detail page actions area. |
 
 ---
 
