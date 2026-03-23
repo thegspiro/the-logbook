@@ -1,6 +1,9 @@
 /**
  * InventoryItemsPage — Items listing with filtering, sorting, bulk ops,
  * real-time WebSocket updates, CSV export, and add/edit modal.
+ *
+ * Items are split into two tables: Available and Unavailable, so admins
+ * can quickly see what's in stock vs what's checked out / in maintenance / etc.
  */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -8,6 +11,7 @@ import toast from 'react-hot-toast';
 import {
   ArrowLeft, RefreshCw, Search, ChevronUp, ChevronDown, Printer, Download,
   Archive, ArrowUpDown, Plus, Package, AlertTriangle, Wrench, ChevronRight, MapPin, UserPlus,
+  CheckCircle2, XCircle,
 } from 'lucide-react';
 import { inventoryService, locationsService } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
@@ -44,6 +48,120 @@ function locLabel(item: InventoryItem, locs: Location[]): string {
   return item.station ?? '';
 }
 
+function qtyLabel(item: InventoryItem): string {
+  if (item.tracking_type !== 'pool') return '-';
+  const available = item.quantity - item.quantity_issued;
+  return `${available} / ${item.quantity}`;
+}
+
+/* ------------------------------------------------------------------ */
+/*  ItemTable — reusable table for available / unavailable sections     */
+/* ------------------------------------------------------------------ */
+interface ItemTableProps {
+  label: string;
+  icon: React.ReactNode;
+  items: InventoryItem[];
+  categories: InventoryCategory[];
+  locations: Location[];
+  selIds: Set<string>;
+  toggle: (id: string) => void;
+  toggleAll: () => void;
+  sortBy: SortKey;
+  sortOrd: 'asc' | 'desc';
+  toggleSort: (k: SortKey) => void;
+  SortIc: React.FC<{ col: SortKey }>;
+  showStatus: boolean;
+}
+
+const ItemTable: React.FC<ItemTableProps> = ({
+  label, icon, items, categories, locations, selIds, toggle, toggleAll,
+  sortBy, sortOrd, toggleSort, SortIc, showStatus,
+}) => {
+  if (items.length === 0) return null;
+
+  const allSelected = items.length > 0 && items.every((i) => selIds.has(i.id));
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-2">
+        {icon}
+        <h2 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wide">
+          {label}
+        </h2>
+        <span className="text-xs text-theme-text-muted">({items.length})</span>
+      </div>
+      <div className="card-secondary overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-theme-surface-border">
+              <th scope="col" className="px-3 py-3 text-left w-10">
+                <input type="checkbox" checked={allSelected} onChange={toggleAll} className="form-checkbox" aria-label={`Select all ${label.toLowerCase()}`} />
+              </th>
+              <th scope="col" className="px-3 py-3 text-left">
+                <button onClick={() => toggleSort('name')} className="inline-flex items-center gap-1 text-theme-text-secondary hover:text-theme-text-primary font-medium">
+                  Name <SortIc col="name" />
+                </button>
+              </th>
+              {showStatus && (
+                <th scope="col" className="px-3 py-3 text-left">
+                  <button onClick={() => toggleSort('status')} className="inline-flex items-center gap-1 text-theme-text-secondary hover:text-theme-text-primary font-medium">
+                    Status <SortIc col="status" />
+                  </button>
+                </th>
+              )}
+              <th scope="col" className="px-3 py-3 text-left text-theme-text-secondary font-medium">Category</th>
+              <th scope="col" className="px-3 py-3 text-left text-theme-text-secondary font-medium">Size</th>
+              <th scope="col" className="px-3 py-3 text-center text-theme-text-secondary font-medium">Qty</th>
+              <th scope="col" className="px-3 py-3 text-left">
+                <button onClick={() => toggleSort('condition')} className="inline-flex items-center gap-1 text-theme-text-secondary hover:text-theme-text-primary font-medium">
+                  Condition <SortIc col="condition" />
+                </button>
+              </th>
+              <th scope="col" className="px-3 py-3 text-left text-theme-text-secondary font-medium">Location</th>
+              <th scope="col" className="px-3 py-3 w-10" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-theme-surface-border">
+            {items.map((item) => {
+              const cat = categories.find((ct) => ct.id === item.category_id);
+              const loc = locLabel(item, locations);
+              return (
+                <tr key={item.id} className={`hover:bg-theme-surface-hover transition-colors ${selIds.has(item.id) ? 'bg-theme-surface-hover/50' : ''}`}>
+                  <td className="px-3 py-3">
+                    <input type="checkbox" checked={selIds.has(item.id)} onChange={() => toggle(item.id)} className="form-checkbox" aria-label={`Select ${item.name}`} />
+                  </td>
+                  <td className="px-3 py-3">
+                    <Link to={`/inventory/items/${item.id}`} className="font-medium text-theme-text-primary hover:text-blue-600 dark:hover:text-blue-400">
+                      {item.name}
+                    </Link>
+                  </td>
+                  {showStatus && (
+                    <td className="px-3 py-3">
+                      <span className={`inline-flex px-2 py-0.5 text-[11px] font-semibold rounded-sm border ${getStatusStyle(item.status)}`}>
+                        {item.status.replace(/_/g, ' ').toUpperCase()}
+                      </span>
+                    </td>
+                  )}
+                  <td className="px-3 py-3 text-theme-text-muted">{cat?.name ?? ''}</td>
+                  <td className="px-3 py-3 text-theme-text-muted">{item.size ?? '-'}</td>
+                  <td className="px-3 py-3 text-center text-theme-text-muted tabular-nums">{qtyLabel(item)}</td>
+                  <td className={`px-3 py-3 capitalize ${getConditionColor(item.condition)}`}>{item.condition.replace(/_/g, ' ')}</td>
+                  <td className="px-3 py-3 text-theme-text-muted truncate max-w-[160px]">{loc || '-'}</td>
+                  <td className="px-3 py-3">
+                    <Link to={`/inventory/items/${item.id}`} className="text-theme-text-muted hover:text-theme-text-primary" aria-label={`View ${item.name}`}>
+                      <ChevronRight className="w-4 h-4" />
+                    </Link>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
@@ -78,6 +196,10 @@ const InventoryItemsPage: React.FC = () => {
   const [bulkNewStatus, setBulkNewStatus] = useState('');
   const [bulkSaving, setBulkSaving] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  /* ---- split items by availability ---- */
+  const availableItems = useMemo(() => items.filter((i) => i.status === 'available'), [items]);
+  const unavailableItems = useMemo(() => items.filter((i) => i.status !== 'available'), [items]);
 
   /* ---- helpers ---- */
   const filterParams = useCallback(() => ({
@@ -171,6 +293,18 @@ const InventoryItemsPage: React.FC = () => {
   /* ---- selection ---- */
   const toggle = (id: string) => setSelIds((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const toggleAll = () => setSelIds(selIds.size === items.length ? new Set() : new Set(items.map((i) => i.id)));
+
+  /* ---- section-level toggleAll helpers ---- */
+  const toggleAllAvailable = () => setSelIds((prev) => {
+    const allSelected = availableItems.length > 0 && availableItems.every((i) => prev.has(i.id));
+    if (allSelected) { const next = new Set(prev); availableItems.forEach((i) => next.delete(i.id)); return next; }
+    return new Set([...prev, ...availableItems.map((i) => i.id)]);
+  });
+  const toggleAllUnavailable = () => setSelIds((prev) => {
+    const allSelected = unavailableItems.length > 0 && unavailableItems.every((i) => prev.has(i.id));
+    if (allSelected) { const next = new Set(prev); unavailableItems.forEach((i) => next.delete(i.id)); return next; }
+    return new Set([...prev, ...unavailableItems.map((i) => i.id)]);
+  });
 
   /* ---- bulk ops ---- */
   const printLabels = () => navigate(`/inventory/print-labels?ids=${Array.from(selIds).join(',')}`);
@@ -362,52 +496,39 @@ const InventoryItemsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Desktop table */}
+      {/* Desktop tables — split by availability */}
       {!loading && items.length > 0 && (
-        <div className="hidden md:block card-secondary overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-theme-surface-border">
-                <th scope="col" className="px-3 py-3 text-left w-10">
-                  <input type="checkbox" checked={selIds.size === items.length && items.length > 0} onChange={toggleAll} className="form-checkbox" aria-label="Select all" />
-                </th>
-                {SORT_COLS.map((c) => (
-                  <th key={c.key} className="px-3 py-3 text-left">
-                    <button onClick={() => toggleSort(c.key)} className="inline-flex items-center gap-1 text-theme-text-secondary hover:text-theme-text-primary font-medium">
-                      {c.label} <SortIc col={c.key} />
-                    </button>
-                  </th>
-                ))}
-                <th scope="col" className="px-3 py-3 text-left text-theme-text-secondary font-medium">Category</th>
-                <th scope="col" className="px-3 py-3 text-left text-theme-text-secondary font-medium">Tracking</th>
-                <th scope="col" className="px-3 py-3 text-left text-theme-text-secondary font-medium">Barcode / Serial / Tag</th>
-                <th scope="col" className="px-3 py-3 text-left text-theme-text-secondary font-medium">Location</th>
-                <th scope="col" className="px-3 py-3 text-right text-theme-text-secondary font-medium">Cost</th>
-                <th scope="col" className="px-3 py-3 w-10" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-theme-surface-border">
-              {items.map((item) => {
-                const c = categories.find((ct) => ct.id === item.category_id);
-                const loc = locLabel(item, locations);
-                const ids = [item.barcode, item.serial_number, item.asset_tag].filter(Boolean).join(' / ');
-                return (
-                  <tr key={item.id} className={`hover:bg-theme-surface-hover transition-colors ${selIds.has(item.id) ? 'bg-theme-surface-hover/50' : ''}`}>
-                    <td className="px-3 py-3"><input type="checkbox" checked={selIds.has(item.id)} onChange={() => toggle(item.id)} className="form-checkbox" aria-label={`Select ${item.name}`} /></td>
-                    <td className="px-3 py-3"><Link to={`/inventory/items/${item.id}`} className="font-medium text-theme-text-primary hover:text-blue-600 dark:hover:text-blue-400">{item.name}</Link></td>
-                    <td className="px-3 py-3"><span className={`inline-flex px-2 py-0.5 text-[11px] font-semibold rounded-sm border ${getStatusStyle(item.status)}`}>{item.status.replace(/_/g, ' ').toUpperCase()}</span></td>
-                    <td className={`px-3 py-3 capitalize ${getConditionColor(item.condition)}`}>{item.condition.replace(/_/g, ' ')}</td>
-                    <td className="px-3 py-3 text-theme-text-muted">{c?.name ?? ''}</td>
-                    <td className="px-3 py-3 text-theme-text-muted capitalize">{item.tracking_type}</td>
-                    <td className="px-3 py-3 text-theme-text-muted font-mono text-xs">{ids || '-'}</td>
-                    <td className="px-3 py-3 text-theme-text-muted truncate max-w-[160px]">{loc || '-'}</td>
-                    <td className="px-3 py-3 text-right text-theme-text-muted tabular-nums">{item.purchase_price != null ? `$${formatNumber(item.purchase_price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
-                    <td className="px-3 py-3"><Link to={`/inventory/items/${item.id}`} className="text-theme-text-muted hover:text-theme-text-primary" aria-label={`View ${item.name}`}><ChevronRight className="w-4 h-4" /></Link></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="hidden md:block space-y-6">
+          <ItemTable
+            label="Available"
+            icon={<CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" />}
+            items={availableItems}
+            categories={categories}
+            locations={locations}
+            selIds={selIds}
+            toggle={toggle}
+            toggleAll={toggleAllAvailable}
+            sortBy={sortBy}
+            sortOrd={sortOrd}
+            toggleSort={toggleSort}
+            SortIc={SortIc}
+            showStatus={false}
+          />
+          <ItemTable
+            label="Unavailable"
+            icon={<XCircle className="w-4 h-4 text-red-500 dark:text-red-400" />}
+            items={unavailableItems}
+            categories={categories}
+            locations={locations}
+            selIds={selIds}
+            toggle={toggle}
+            toggleAll={toggleAllUnavailable}
+            sortBy={sortBy}
+            sortOrd={sortOrd}
+            toggleSort={toggleSort}
+            SortIc={SortIc}
+            showStatus
+          />
         </div>
       )}
 
@@ -434,29 +555,71 @@ const InventoryItemsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Mobile cards */}
+      {/* Mobile cards — grouped by availability */}
       {!loading && items.length > 0 && (
-        <div className="md:hidden space-y-3">
-          {items.map((item) => {
-            const c = categories.find((ct) => ct.id === item.category_id);
-            const loc = locLabel(item, locations);
-            return (
-              <MobileItemCard key={item.id} name={item.name} status={item.status}
-                statusStyle={getStatusStyle(item.status)} condition={item.condition}
-                conditionColor={getConditionColor(item.condition)} category={c?.name}
-                serialNumber={item.serial_number} barcode={item.barcode} assetTag={item.asset_tag}
-                size={item.size} color={item.color} location={loc || undefined}
-                manufacturer={[item.manufacturer, item.model_number].filter(Boolean).join(' ') || undefined}
-                quantity={item.tracking_type === 'pool' ? item.quantity : undefined}
-                cost={item.purchase_price != null ? `$${formatNumber(item.purchase_price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : undefined}
-                selected={selIds.has(item.id)} onSelect={() => toggle(item.id)}
-                onTap={() => navigate(`/inventory/items/${item.id}`)}
-                showActions={canManage} onEdit={() => openEdit(item)}
-                canRetire={item.status !== 'retired'}
-                onRetire={() => { void inventoryService.retireItem(item.id).then(() => { toast.success(`${item.name} retired`); void loadItems(true); void loadSummary(); }); }}
-              />
-            );
-          })}
+        <div className="md:hidden space-y-4">
+          {availableItems.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" />
+                <h2 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wide">Available</h2>
+                <span className="text-xs text-theme-text-muted">({availableItems.length})</span>
+              </div>
+              <div className="space-y-3">
+                {availableItems.map((item) => {
+                  const c = categories.find((ct) => ct.id === item.category_id);
+                  const loc = locLabel(item, locations);
+                  return (
+                    <MobileItemCard key={item.id} name={item.name} status={item.status}
+                      statusStyle={getStatusStyle(item.status)} condition={item.condition}
+                      conditionColor={getConditionColor(item.condition)} category={c?.name}
+                      serialNumber={item.serial_number} barcode={item.barcode} assetTag={item.asset_tag}
+                      size={item.size} color={item.color} location={loc || undefined}
+                      manufacturer={[item.manufacturer, item.model_number].filter(Boolean).join(' ') || undefined}
+                      quantity={item.tracking_type === 'pool' ? item.quantity : undefined}
+                      cost={item.purchase_price != null ? `$${formatNumber(item.purchase_price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : undefined}
+                      selected={selIds.has(item.id)} onSelect={() => toggle(item.id)}
+                      onTap={() => navigate(`/inventory/items/${item.id}`)}
+                      showActions={canManage} onEdit={() => openEdit(item)}
+                      canRetire={item.status !== 'retired'}
+                      onRetire={() => { void inventoryService.retireItem(item.id).then(() => { toast.success(`${item.name} retired`); void loadItems(true); void loadSummary(); }); }}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {unavailableItems.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <XCircle className="w-4 h-4 text-red-500 dark:text-red-400" />
+                <h2 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wide">Unavailable</h2>
+                <span className="text-xs text-theme-text-muted">({unavailableItems.length})</span>
+              </div>
+              <div className="space-y-3">
+                {unavailableItems.map((item) => {
+                  const c = categories.find((ct) => ct.id === item.category_id);
+                  const loc = locLabel(item, locations);
+                  return (
+                    <MobileItemCard key={item.id} name={item.name} status={item.status}
+                      statusStyle={getStatusStyle(item.status)} condition={item.condition}
+                      conditionColor={getConditionColor(item.condition)} category={c?.name}
+                      serialNumber={item.serial_number} barcode={item.barcode} assetTag={item.asset_tag}
+                      size={item.size} color={item.color} location={loc || undefined}
+                      manufacturer={[item.manufacturer, item.model_number].filter(Boolean).join(' ') || undefined}
+                      quantity={item.tracking_type === 'pool' ? item.quantity : undefined}
+                      cost={item.purchase_price != null ? `$${formatNumber(item.purchase_price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : undefined}
+                      selected={selIds.has(item.id)} onSelect={() => toggle(item.id)}
+                      onTap={() => navigate(`/inventory/items/${item.id}`)}
+                      showActions={canManage} onEdit={() => openEdit(item)}
+                      canRetire={item.status !== 'retired'}
+                      onRetire={() => { void inventoryService.retireItem(item.id).then(() => { toast.success(`${item.name} retired`); void loadItems(true); void loadSummary(); }); }}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -274,6 +274,16 @@ export const getInventoryRoutes = () => {
         }
       />
 
+      {/* Inventory - Items list (breadcrumb target from detail page) */}
+      <Route
+        path="/inventory/items"
+        element={
+          <Suspense fallback={null}>
+            <InventoryItemsPage />
+          </Suspense>
+        }
+      />
+
       {/* Inventory - Item Detail Page */}
       <Route
         path="/inventory/items/:id"

@@ -3554,9 +3554,14 @@ class InventoryService:
                         garment_style = member
                         break
 
+            from app.core.utils import generate_uuid as _gen
+
+            barcode = f"INV-{_gen().replace('-', '').upper()[:8]}"
+
             item = InventoryItem(
                 organization_id=str(organization_id),
                 name=item_name,
+                barcode=barcode,
                 size=size,
                 standard_size=std_size,
                 color=color,
