@@ -34,6 +34,9 @@ Recommended crontab (add to host or container cron):
 # Every 30 minutes — post-shift validation notifications
 */30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=post_shift_validation
 
+# Every 30 minutes — start-of-shift reminders with equipment checklists
+*/30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=shift_reminders
+
 # Weekly on Sundays at 2:00 AM — audit log archival and integrity checkpoint
 0 2 * * 0 curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=audit_log_archival
 
@@ -123,6 +126,12 @@ SCHEDULE = {
     },
     "post_shift_validation": {
         "description": "Notify shift officers to validate attendance and timing after their shift ends",
+        "frequency": "every 30 minutes",
+        "recommended_time": "*/30 * * * *",
+        "cron": "*/30 * * * *",
+    },
+    "shift_reminders": {
+        "description": "Send start-of-shift reminders with equipment checklists to assigned members",
         "frequency": "every 30 minutes",
         "recommended_time": "*/30 * * * *",
         "cron": "*/30 * * * *",
@@ -1054,6 +1063,311 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
     )
     return {
         "task": "post_shift_validation",
+        "total_notifications": total_notifications,
+        "total_emails_sent": total_emails,
+        "organizations": results,
+    }
+
+
+async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Send start-of-shift reminder notifications to assigned members.
+
+    Runs every 30 minutes. Finds shifts starting within a configurable
+    lookahead window (default 2 hours) that haven't already had a
+    reminder sent. Each reminder includes the list of equipment check
+    templates (checklists) assigned to the shift's apparatus so members
+    know what inspections to complete.
+
+    Controlled by org.settings["shift_reminders"]:
+      - enabled (bool, default True)
+      - lookahead_hours (int, default 2)
+      - send_email (bool, default False)
+      - cc_emails (list[str], default [])
+    """
+    from datetime import timedelta
+    from datetime import timezone as dt_timezone
+
+    from app.core.config import settings
+    from app.core.utils import generate_uuid
+    from app.models.apparatus import EquipmentCheckTemplate
+    from app.models.notification import NotificationChannel, NotificationLog
+    from app.models.training import Shift, ShiftAssignment
+    from app.services.email_service import EmailService, build_email_logo_html
+
+    now = datetime.now(dt_timezone.utc)
+
+    orgs = await db.execute(select(Organization))
+    organizations = list(orgs.scalars().all())
+
+    total_notifications = 0
+    total_emails = 0
+    results = []
+
+    for org in organizations:
+        org_notifications = 0
+        org_emails = 0
+
+        try:
+            reminder_cfg = (org.settings or {}).get("shift_reminders", {})
+            if not reminder_cfg.get("enabled", True):
+                continue
+
+            lookahead_hours = reminder_cfg.get("lookahead_hours", 2)
+            lookahead_end = now + timedelta(hours=lookahead_hours)
+
+            shifts_result = await db.execute(
+                select(Shift)
+                .where(Shift.organization_id == str(org.id))
+                .where(Shift.start_time.isnot(None))
+                .where(Shift.start_time > now)
+                .where(Shift.start_time <= lookahead_end)
+            )
+            shifts = list(shifts_result.scalars().all())
+
+            for shift in shifts:
+                activities = shift.activities or {}
+                if activities.get("start_reminder_sent"):
+                    continue
+
+                # Fetch assignments for this shift
+                assign_result = await db.execute(
+                    select(ShiftAssignment)
+                    .where(ShiftAssignment.shift_id == str(shift.id))
+                    .where(
+                        ShiftAssignment.assignment_status.notin_(
+                            ["declined", "cancelled"]
+                        )
+                    )
+                )
+                assignments = list(assign_result.scalars().all())
+                if not assignments:
+                    shift.activities = {
+                        **activities,
+                        "start_reminder_sent": True,
+                    }
+                    continue
+
+                # Fetch equipment check templates for the apparatus
+                checklist_names: list[str] = []
+                if shift.apparatus_id:
+                    tmpl_result = await db.execute(
+                        select(EquipmentCheckTemplate)
+                        .where(
+                            EquipmentCheckTemplate.organization_id
+                            == str(org.id)
+                        )
+                        .where(
+                            EquipmentCheckTemplate.apparatus_id
+                            == str(shift.apparatus_id)
+                        )
+                        .where(
+                            EquipmentCheckTemplate.check_timing
+                            == "start_of_shift"
+                        )
+                        .where(EquipmentCheckTemplate.is_active == True)  # noqa: E712
+                        .order_by(EquipmentCheckTemplate.sort_order)
+                    )
+                    templates = list(tmpl_result.scalars().all())
+                    checklist_names = [t.name for t in templates]
+
+                    # Fall back to apparatus-type templates if none
+                    # are assigned to the specific apparatus
+                    if not checklist_names:
+                        type_result = await db.execute(
+                            select(EquipmentCheckTemplate)
+                            .where(
+                                EquipmentCheckTemplate.organization_id
+                                == str(org.id)
+                            )
+                            .where(
+                                EquipmentCheckTemplate.apparatus_id.is_(None)
+                            )
+                            .where(
+                                EquipmentCheckTemplate.check_timing
+                                == "start_of_shift"
+                            )
+                            .where(EquipmentCheckTemplate.is_active == True)  # noqa: E712
+                            .order_by(EquipmentCheckTemplate.sort_order)
+                        )
+                        type_templates = list(
+                            type_result.scalars().all()
+                        )
+                        checklist_names = [
+                            t.name for t in type_templates
+                        ]
+
+                shift_date_str = (
+                    shift.shift_date.strftime("%b %d, %Y")
+                    if shift.shift_date
+                    else "Unknown"
+                )
+                start_str = (
+                    shift.start_time.strftime("%H:%M")
+                    if shift.start_time
+                    else ""
+                )
+
+                message = (
+                    f"Your shift on {shift_date_str} "
+                    f"starts at {start_str}."
+                )
+                if checklist_names:
+                    checklist_list = ", ".join(checklist_names)
+                    message += (
+                        f" Equipment checklists to complete: "
+                        f"{checklist_list}."
+                    )
+                else:
+                    message += (
+                        " No equipment checklists are assigned "
+                        "for this shift."
+                    )
+
+                subject = f"Shift Reminder \u2014 {shift_date_str} at {start_str}"
+
+                # In-app notification for each assigned member
+                member_ids = [
+                    str(a.user_id) for a in assignments if a.user_id
+                ]
+                for mid in member_ids:
+                    try:
+                        notif = NotificationLog(
+                            id=generate_uuid(),
+                            organization_id=str(org.id),
+                            recipient_id=mid,
+                            channel=NotificationChannel.IN_APP,
+                            category="shift_reminder",
+                            subject=subject,
+                            message=message,
+                            action_url="/scheduling",
+                        )
+                        db.add(notif)
+                        org_notifications += 1
+                    except Exception as e:
+                        logger.error(
+                            "Failed to create shift reminder notification "
+                            "for user %s, shift %s: %s",
+                            mid,
+                            shift.id,
+                            e,
+                        )
+
+                # Optional email
+                if reminder_cfg.get("send_email", False) and member_ids:
+                    try:
+                        user_result = await db.execute(
+                            select(User.id, User.email, User.first_name)
+                            .where(
+                                User.id.in_(member_ids),
+                                User.email.isnot(None),
+                                User.is_active == True,  # noqa: E712
+                            )
+                        )
+                        users = list(user_result.all())
+                        cc_emails = reminder_cfg.get("cc_emails", [])
+                        _logo = build_email_logo_html(org)
+                        full_url = f"{settings.FRONTEND_URL}/scheduling"
+                        email_svc = EmailService(organization=org)
+
+                        checklist_html = ""
+                        if checklist_names:
+                            items = "".join(
+                                f"<li>{_html.escape(n)}</li>"
+                                for n in checklist_names
+                            )
+                            checklist_html = (
+                                "<p><strong>Equipment checklists "
+                                "to complete:</strong></p>"
+                                f"<ul>{items}</ul>"
+                            )
+                        else:
+                            checklist_html = (
+                                "<p><em>No equipment checklists "
+                                "are assigned for this shift.</em></p>"
+                            )
+
+                        for uid, email, first_name in users:
+                            e_first = _html.escape(first_name or "")
+                            e_date = _html.escape(shift_date_str)
+                            e_time = _html.escape(start_str)
+                            try:
+                                sent, _ = await email_svc.send_email(
+                                    to_emails=[email],
+                                    subject=subject,
+                                    html_body=(
+                                        '<div style="font-family:'
+                                        'Arial,sans-serif;'
+                                        'max-width:600px;">'
+                                        f"{_logo}"
+                                        f"<p>Hi {e_first},</p>"
+                                        f"<p>Your shift on "
+                                        f"<strong>{e_date}</strong> "
+                                        f"starts at "
+                                        f"<strong>{e_time}</strong>."
+                                        f"</p>"
+                                        f"{checklist_html}"
+                                        f'<p><a href="'
+                                        f'{_html.escape(full_url)}">'
+                                        f"View Schedule</a></p>"
+                                        f"</div>"
+                                    ),
+                                    text_body=(
+                                        f"Hi {first_name},\n\n"
+                                        f"{message}\n\n"
+                                        f"View Schedule: {full_url}"
+                                    ),
+                                    cc_emails=cc_emails or None,
+                                    db=db,
+                                    template_type="shift_reminder",
+                                )
+                                if sent > 0:
+                                    org_emails += 1
+                            except Exception as email_err:
+                                logger.error(
+                                    "Shift reminder email failed "
+                                    "for %s: %s",
+                                    _redact_email(email),
+                                    email_err,
+                                )
+                    except Exception as e:
+                        logger.error(
+                            "Failed to send shift reminder emails "
+                            "for shift %s: %s",
+                            shift.id,
+                            e,
+                        )
+
+                # Mark as sent
+                shift.activities = {
+                    **activities,
+                    "start_reminder_sent": True,
+                }
+
+            await db.commit()
+
+        except Exception as e:
+            logger.error(f"Shift reminders failed for org {org.id}: {e}")
+            results.append({"org_id": str(org.id), "error": str(e)})
+            continue
+
+        total_notifications += org_notifications
+        total_emails += org_emails
+        if org_notifications > 0 or org_emails > 0:
+            results.append(
+                {
+                    "org_id": str(org.id),
+                    "notifications": org_notifications,
+                    "emails_sent": org_emails,
+                }
+            )
+
+    logger.info(
+        f"Shift reminders complete: {total_notifications} in-app, "
+        f"{total_emails} emails across {len(organizations)} orgs"
+    )
+    return {
+        "task": "shift_reminders",
         "total_notifications": total_notifications,
         "total_emails_sent": total_emails,
         "organizations": results,
@@ -2266,6 +2580,7 @@ TASK_RUNNERS = {
     "event_reminders": run_event_reminders,
     "post_event_validation": run_post_event_validation,
     "post_shift_validation": run_post_shift_validation,
+    "shift_reminders": run_shift_reminders,
     "audit_log_archival": run_audit_log_archival,
     "scheduled_emails": run_scheduled_emails,
     "inventory_low_stock_alerts": run_inventory_low_stock_alerts,
