@@ -121,7 +121,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const [editingNotesValue, setEditingNotesValue] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
 
-  // Assign state (admin) — with member search
+  // Assign state (admin) — position-first flow with member search
   const [showAssignForm, setShowAssignForm] = useState(false);
   const [assignForm, setAssignForm] = useState({ user_id: '', position: '' });
   const [assigning, setAssigning] = useState(false);
@@ -150,13 +150,6 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       if (firstOption) setSignupPosition(firstOption[0]);
     }
   }, [positionOptions, signupPosition]);
-
-  useEffect(() => {
-    if (positionOptions.length > 0 && !assignForm.position) {
-      const firstOption = positionOptions[0];
-      if (firstOption) setAssignForm(f => ({ ...f, position: firstOption[0] }));
-    }
-  }, [positionOptions, assignForm.position]);
 
   useEffect(() => {
     let cancelled = false;
@@ -319,6 +312,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     }
   };
 
+  const openAssignFormForPosition = (position: string) => {
+    setAssignForm({ user_id: '', position });
+    setMemberSearch('');
+    setShowAssignForm(true);
+  };
+
   const handleAssign = async () => {
     if (!assignForm.user_id) { toast.error('Select a member'); return; }
     setAssigning(true);
@@ -329,7 +328,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       });
       toast.success('Member assigned');
       setShowAssignForm(false);
-      setAssignForm({ user_id: '', position: positionOptions[0]?.[0] || 'firefighter' });
+      setAssignForm({ user_id: '', position: openPositions[0] ?? positionOptions[0]?.[0] ?? 'firefighter' });
       setMemberSearch('');
       await refreshAssignments();
       onRefresh?.();
@@ -445,6 +444,16 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   }, [hasApparatusPositions, apparatusPositions, activeAssignments]);
 
   const openPositions = crewBoard?.filter(s => !s.assignment).map(s => s.position) || [];
+
+  // Default the assign form to the first open position
+  useEffect(() => {
+    if (positionOptions.length > 0 && !assignForm.position) {
+      const firstOpen = openPositions[0];
+      const fallback = positionOptions[0];
+      const defaultPos = firstOpen ?? fallback?.[0];
+      if (defaultPos) setAssignForm(f => ({ ...f, position: defaultPos }));
+    }
+  }, [positionOptions, assignForm.position, openPositions]);
 
   const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500';
 
@@ -929,17 +938,28 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                             </div>
                           )}
                         </>
-                      ) : (
-                        !isPast && !isUserAssigned && (
-                          <button
-                            onClick={() => { void handleSignup(position); }}
-                            disabled={signingUp}
-                            className="px-2.5 sm:px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-medium disabled:opacity-50 inline-flex items-center gap-1"
-                          >
-                            {signingUp ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserPlus className="w-3 h-3" />}
-                            <span className="hidden sm:inline">Sign Up</span><span className="sm:hidden">Join</span>
-                          </button>
-                        )
+                      ) : !isPast && (
+                        <div className="flex items-center gap-1.5">
+                          {canAssign && (
+                            <button
+                              onClick={() => openAssignFormForPosition(position)}
+                              className="px-2.5 sm:px-3 py-1.5 text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 border border-violet-500/30 rounded-lg text-xs font-medium inline-flex items-center gap-1"
+                            >
+                              <UserPlus className="w-3 h-3" />
+                              <span className="hidden sm:inline">Assign</span>
+                            </button>
+                          )}
+                          {!isUserAssigned && (
+                            <button
+                              onClick={() => { void handleSignup(position); }}
+                              disabled={signingUp}
+                              className="px-2.5 sm:px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-medium disabled:opacity-50 inline-flex items-center gap-1"
+                            >
+                              {signingUp ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserPlus className="w-3 h-3" />}
+                              <span className="hidden sm:inline">Sign Up</span><span className="sm:hidden">Join</span>
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1007,19 +1027,37 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               {showAssignForm && (
                 <div className="p-4 border border-theme-surface-border rounded-lg bg-theme-surface-hover/30 space-y-3">
                   <h4 className="text-sm font-medium text-theme-text-primary">Assign Member</h4>
-                  {/* Member search + select */}
+                  {/* Step 1: Position selection */}
                   <div>
-                    <input type="text" aria-label="Search members..." placeholder="Search members..."
+                    <label htmlFor="assign-position" className="block text-xs font-medium text-theme-text-secondary mb-1">Position</label>
+                    <select id="assign-position" value={assignForm.position} onChange={e => setAssignForm(p => ({...p, position: e.target.value}))}
+                      className={inputCls}
+                    >
+                      {positionOptions.map(([val, label]) => {
+                        const isOpen = openPositions.includes(val);
+                        return (
+                          <option key={val} value={val}>
+                            {label}{isOpen ? ' (open)' : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                  {/* Step 2: Member search + select */}
+                  <div>
+                    <label htmlFor="assign-member-search" className="block text-xs font-medium text-theme-text-secondary mb-1">Member</label>
+                    <input id="assign-member-search" type="text" aria-label="Search members" placeholder="Search members..."
                       value={memberSearch}
                       onChange={e => setMemberSearch(e.target.value)}
                       className={inputCls}
                     />
                     {loadingMembers ? (
                       <div className="flex items-center gap-2 mt-2 text-xs text-theme-text-muted">
-                        <Loader2 className="w-3 h-3 animate-spin" /> Loading members...
+                        <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" /> Loading members...
                       </div>
                     ) : (
                       <select
+                        aria-label="Select a member"
                         value={assignForm.user_id}
                         onChange={e => setAssignForm(p => ({...p, user_id: e.target.value}))}
                         className={inputCls + ' mt-2'}
@@ -1032,13 +1070,6 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                       </select>
                     )}
                   </div>
-                  <select value={assignForm.position} onChange={e => setAssignForm(p => ({...p, position: e.target.value}))}
-                    className={inputCls}
-                  >
-                    {positionOptions.map(([val, label]) => (
-                      <option key={val} value={val}>{label}</option>
-                    ))}
-                  </select>
                   <div className="flex justify-end gap-2">
                     <button onClick={() => { setShowAssignForm(false); setMemberSearch(''); }} className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>
                     <button onClick={() => { void handleAssign(); }} disabled={assigning || !assignForm.user_id}
