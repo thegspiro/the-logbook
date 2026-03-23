@@ -993,6 +993,7 @@ async def transfer_prospect(
         station=data.station,
         role_ids=[str(rid) for rid in data.role_ids] if data.role_ids else None,
         send_welcome_email=data.send_welcome_email,
+        department_email=data.department_email,
         middle_name=data.middle_name,
         hire_date=data.hire_date,
         emergency_contacts=(

@@ -7,7 +7,9 @@ transfer to full membership.
 """
 
 import copy
+import re
 import secrets
+import unicodedata
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -1168,6 +1170,7 @@ class MembershipPipelineService:
         station: Optional[str] = None,
         role_ids: Optional[List[str]] = None,
         send_welcome_email: bool = False,
+        department_email: Optional[str] = None,
         middle_name: Optional[str] = None,
         hire_date=None,
         emergency_contacts: Optional[List[Dict[str, Any]]] = None,
@@ -1193,6 +1196,7 @@ class MembershipPipelineService:
             station,
             role_ids,
             send_welcome_email=send_welcome_email,
+            department_email=department_email,
             middle_name=middle_name,
             hire_date=hire_date,
             emergency_contacts=emergency_contacts,
@@ -1209,6 +1213,7 @@ class MembershipPipelineService:
         station: Optional[str] = None,
         role_ids: Optional[List[str]] = None,
         send_welcome_email: bool = False,
+        department_email: Optional[str] = None,
         middle_name: Optional[str] = None,
         hire_date=None,
         emergency_contacts: Optional[List[Dict[str, Any]]] = None,
@@ -1292,13 +1297,14 @@ class MembershipPipelineService:
         temp_password = generate_temporary_password()
         password_hash = hash_password(temp_password)
 
-        # Generate department email if configured; keep prospect's personal
-        # email as a secondary contact address.
-        department_email = await self._generate_department_email(
-            prospect.first_name,
-            prospect.last_name,
-            prospect.organization_id,
-        )
+        # Use explicit override, or auto-generate from org settings; keep
+        # prospect's personal email as a secondary contact address.
+        if not department_email:
+            department_email = await self._generate_department_email(
+                prospect.first_name,
+                prospect.last_name,
+                prospect.organization_id,
+            )
         primary_email = department_email or prospect.email
         personal_email = prospect.email if department_email else None
 
@@ -1398,7 +1404,9 @@ class MembershipPipelineService:
             prog = enrollment_result["program_name"]
             result_msg += f". Auto-enrolled in training program: {prog}"
 
-        # Send welcome email with temporary credentials if requested
+        # Send welcome email with temporary credentials if requested.
+        # Use the primary (department) email so the new member receives
+        # credentials at the address they'll actually log in with.
         welcome_email_sent = False
         if send_welcome_email:
             welcome_email_sent = await self._send_transfer_welcome_email(
@@ -1406,6 +1414,7 @@ class MembershipPipelineService:
                 username=username,
                 temp_password=temp_password,
                 organization_id=prospect.organization_id,
+                recipient_email=primary_email,
             )
 
         return {
@@ -1413,6 +1422,9 @@ class MembershipPipelineService:
             "prospect_id": prospect.id,
             "user_id": user_id,
             "membership_number": membership_id,
+            "email": primary_email,
+            "personal_email": personal_email,
+            "department_email_generated": department_email is not None,
             "message": result_msg,
             "auto_enrollment": enrollment_result,
             "welcome_email_sent": welcome_email_sent,
@@ -1890,6 +1902,7 @@ class MembershipPipelineService:
         username: str,
         temp_password: str,
         organization_id: str,
+        recipient_email: Optional[str] = None,
     ) -> bool:
         """Send welcome email with credentials to a transferred member."""
         try:
@@ -1910,9 +1923,10 @@ class MembershipPipelineService:
                 else "/login"
             )
 
+            to_email = recipient_email or prospect.email
             email_svc = EmailService(org)
             sent = await email_svc.send_welcome_email(
-                to_email=prospect.email,
+                to_email=to_email,
                 first_name=prospect.first_name,
                 last_name=prospect.last_name,
                 username=username,
@@ -1923,8 +1937,21 @@ class MembershipPipelineService:
             )
             return bool(sent)
         except Exception as e:
-            logger.error(f"Failed to send welcome email to {prospect.email}: {e}")
+            target = recipient_email or prospect.email
+            logger.error(f"Failed to send welcome email to {target}: {e}")
             return False
+
+    @staticmethod
+    def _sanitize_name_for_identifier(name: str) -> str:
+        """Normalize a name for use in usernames and email local parts.
+
+        Strips accents (François → francois), removes apostrophes and
+        non-alphanumeric characters, and lowercases the result.
+        """
+        nfkd = unicodedata.normalize("NFKD", name)
+        ascii_only = nfkd.encode("ascii", "ignore").decode("ascii")
+        lowered = ascii_only.lower()
+        return re.sub(r"[^a-z0-9]", "", lowered)
 
     async def _generate_unique_username(
         self, first_name: str, last_name: str, organization_id: str
@@ -1934,7 +1961,13 @@ class MembershipPipelineService:
         Starts with 'flastname' (e.g. 'jsmith'), then tries 'jsmith1',
         'jsmith2', etc. until an unused name is found.
         """
-        base = f"{first_name[0]}{last_name}".lower().replace(" ", "")
+        first = self._sanitize_name_for_identifier(first_name)
+        last = self._sanitize_name_for_identifier(last_name)
+        if not first or not last:
+            raise ValueError(
+                "First name and last name are required for username generation"
+            )
+        base = f"{first[0]}{last}"
         candidate = base
 
         suffix = 0
@@ -1975,13 +2008,19 @@ class MembershipPipelineService:
 
         from app.schemas.organization import DepartmentEmailFormat
 
-        first = first_name.lower().replace(" ", "")
-        last = last_name.lower().replace(" ", "")
+        first = self._sanitize_name_for_identifier(first_name)
+        last = self._sanitize_name_for_identifier(last_name)
+        if not first or not last:
+            logger.warning(
+                "Skipping department email generation: sanitized name is empty "
+                f"(first={first_name!r}, last={last_name!r})"
+            )
+            return None
 
         if dept.format == DepartmentEmailFormat.FIRST_DOT_LAST:
             local = f"{first}.{last}"
         elif dept.format == DepartmentEmailFormat.FIRST_INITIAL_LAST:
-            local = f"{first[0]}{last}" if first else last
+            local = f"{first[0]}{last}"
         elif dept.format == DepartmentEmailFormat.FIRST_LAST:
             local = f"{first}{last}"
         elif dept.format == DepartmentEmailFormat.LAST_DOT_FIRST:
@@ -1989,8 +2028,7 @@ class MembershipPipelineService:
         else:
             local = f"{first}.{last}"
 
-        base_email = f"{local}@{dept.domain}"
-        candidate = base_email
+        candidate = f"{local}@{dept.domain}"
 
         suffix = 0
         while True:
@@ -2006,8 +2044,7 @@ class MembershipPipelineService:
             if (existing.scalar() or 0) == 0:
                 return candidate
             suffix += 1
-            name_part = local.split("@")[0] if "@" in local else local
-            candidate = f"{name_part}{suffix}@{dept.domain}"
+            candidate = f"{local}{suffix}@{dept.domain}"
 
     # =========================================================================
     # Kanban Board
