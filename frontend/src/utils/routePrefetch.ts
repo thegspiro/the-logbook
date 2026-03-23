@@ -27,10 +27,10 @@ const routeImportMap: Record<string, () => Promise<unknown>> = {
   '/documents': () => import('../pages/DocumentsPage'),
 
   // Inventory / Operations
-  '/inventory': () => import('../pages/InventoryPage'),
-  '/inventory/my-equipment': () => import('../pages/MyEquipmentPage'),
-  '/inventory/admin': () => import('../pages/InventoryAdminHub'),
-  '/inventory/storage-areas': () => import('../pages/StorageAreasPage'),
+  '/inventory': () => import('../modules/inventory/pages/InventoryItemsPage'),
+  '/inventory/my-equipment': () => import('../modules/inventory/pages/MyEquipmentPage'),
+  '/inventory/admin': () => import('../modules/inventory/pages/InventoryAdminHub'),
+  '/inventory/storage-areas': () => import('../modules/inventory/pages/StorageAreasPage'),
   '/inventory/checkouts': () => import('../pages/InventoryCheckoutsPage'),
 
   // Scheduling
