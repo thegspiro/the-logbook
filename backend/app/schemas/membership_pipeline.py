@@ -401,6 +401,11 @@ class TransferProspectRequest(BaseModel):
     role_ids: Optional[List[UUID]] = Field(
         None, description="Role IDs to assign to the new member"
     )
+    department_email: Optional[str] = Field(
+        None,
+        max_length=255,
+        description="Override auto-generated department email with a custom value",
+    )
     send_welcome_email: bool = Field(
         default=False, description="Send welcome email with credentials"
     )
@@ -426,6 +431,9 @@ class TransferProspectResponse(BaseModel):
     prospect_id: UUID
     user_id: UUID
     membership_number: Optional[str] = None
+    email: str
+    personal_email: Optional[str] = None
+    department_email_generated: bool = False
     message: str
 
 
