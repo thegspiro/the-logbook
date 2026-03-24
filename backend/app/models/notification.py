@@ -184,13 +184,28 @@ class NotificationLog(Base):
 
     # Relationships
     rule = relationship("NotificationRule", back_populates="logs")
-    recipient = relationship("User", foreign_keys=[recipient_id])
+    recipient = relationship("User", foreign_keys=[recipient_id], lazy="joined")
 
     __table_args__ = (
         Index("idx_notif_logs_org", "organization_id"),
         Index("idx_notif_logs_recipient", "recipient_id"),
         Index("idx_notif_logs_org_sent", "organization_id", "sent_at"),
     )
+
+    @property
+    def recipient_name(self) -> str | None:
+        if not self.recipient:
+            return None
+        first = getattr(self.recipient, "first_name", "") or ""
+        last = getattr(self.recipient, "last_name", "") or ""
+        full = f"{first} {last}".strip()
+        return full or None
+
+    @property
+    def rule_name(self) -> str | None:
+        if not self.rule:
+            return None
+        return getattr(self.rule, "name", None)
 
     def __repr__(self):
         return f"<NotificationLog(subject={self.subject}, channel={self.channel})>"

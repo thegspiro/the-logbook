@@ -1211,6 +1211,7 @@ class EquipmentCheckService:
                     subject="Equipment Check Failed",
                     message=message,
                     action_url=(f"/scheduling/shifts/{shift.id}"),
+                    delivered=True,
                 )
                 self.db.add(notif)
             await self.db.flush()
