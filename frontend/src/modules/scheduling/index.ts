@@ -23,6 +23,7 @@ export type {
   ShiftComplianceResponse,
   MemberComplianceRecord,
   RequirementComplianceSummary,
+  ActiveChecklistRecord,
 } from "./services/api";
 
 // Request/Input Types

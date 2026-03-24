@@ -129,7 +129,10 @@ const computeEndDate = (
 
 const getShiftTemplateColor = (shift: ShiftRecord): string | undefined => {
   if (shift.color) return undefined;
-  const startHour = parseInt(shift.start_time.split(":")[0] ?? "0", 10);
+  const timePart = shift.start_time.includes("T")
+    ? shift.start_time.split("T")[1] ?? ""
+    : shift.start_time;
+  const startHour = parseInt(timePart.split(":")[0] ?? "0", 10);
   if (startHour >= 5 && startHour < 10)
     return "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30";
   if (startHour >= 10 && startHour < 17)

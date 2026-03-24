@@ -18,6 +18,7 @@ import type {
   ShiftEquipmentCheckRecord,
   EquipmentCheckTemplate,
 } from '../../modules/scheduling/types/equipmentCheck';
+import type { ActiveChecklistRecord } from '../../modules/scheduling/services/api';
 import { formatDate, formatTime } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 import { getErrorMessage } from '../../utils/errorHandling';
@@ -29,17 +30,7 @@ const EquipmentCheckForm = lazyWithRetry(() => import('./EquipmentCheckForm'));
 // Types
 // ---------------------------------------------------------------------------
 
-interface ActiveChecklist {
-  shiftId: string;
-  shiftDate: string;
-  apparatusName: string;
-  templateId: string;
-  templateName: string;
-  checkTiming: string;
-  status: string;
-  totalItems?: number;
-  completedItems?: number;
-}
+type ActiveChecklist = ActiveChecklistRecord;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -113,7 +104,7 @@ export const MyChecklistsPage: React.FC = () => {
   const fetchActiveChecklists = useCallback(async () => {
     setLoading(true);
     try {
-      const data = (await schedulingService.getMyChecklists()) as ActiveChecklist[];
+      const data = await schedulingService.getMyChecklists();
       setActiveChecklists(data);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load active checklists'));

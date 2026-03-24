@@ -53,6 +53,11 @@ class SchedulingService:
         }
     )
 
+    INACTIVE_ASSIGNMENT_STATUSES = [
+        AssignmentStatus.DECLINED,
+        AssignmentStatus.CANCELLED,
+    ]
+
     def __init__(self, db: AsyncSession):
         self.db = db
 
@@ -1233,10 +1238,7 @@ class SchedulingService:
                     .where(ShiftAssignment.user_id == str(user_id))
                     .where(
                         ShiftAssignment.assignment_status.notin_(
-                            [
-                                AssignmentStatus.DECLINED,
-                                AssignmentStatus.CANCELLED,
-                            ]
+                            self.INACTIVE_ASSIGNMENT_STATUSES
                         )
                     )
                 )
@@ -1255,10 +1257,7 @@ class SchedulingService:
                     .where(ShiftAssignment.user_id == str(user_id))
                     .where(
                         ShiftAssignment.assignment_status.notin_(
-                            [
-                                AssignmentStatus.DECLINED,
-                                AssignmentStatus.CANCELLED,
-                            ]
+                            self.INACTIVE_ASSIGNMENT_STATUSES
                         )
                     )
                     .where(Shift.id != str(shift_id))
@@ -2058,7 +2057,7 @@ class SchedulingService:
             .where(Shift.shift_date <= end_date)
             .where(
                 ShiftAssignment.assignment_status.notin_(
-                    [AssignmentStatus.DECLINED, AssignmentStatus.CANCELLED]
+                    self.INACTIVE_ASSIGNMENT_STATUSES
                 )
             )
         )
@@ -2645,17 +2644,6 @@ class SchedulingService:
             assignment = user_assignments.get(shift.id)
             attendance = user_attendances.get(shift.id)
 
-            # Resolve apparatus details
-            apparatus_name = None
-            apparatus_unit_number = None
-            shift_positions = self._resolve_template_positions(shift.positions) or []
-            apparatus_positions = shift_positions
-            if shift.apparatus_id and shift.apparatus_id in apparatus_map:
-                app = apparatus_map[shift.apparatus_id]
-                apparatus_name = app.name
-                apparatus_unit_number = app.unit_number
-                apparatus_positions = app.positions or shift_positions
-
             shift_dict = {
                 "id": shift.id,
                 "organization_id": shift.organization_id,
@@ -2665,18 +2653,13 @@ class SchedulingService:
                 "start_time": (
                     shift.start_time.isoformat() if shift.start_time else None
                 ),
-                "end_time": shift.end_time.isoformat() if shift.end_time else None,
+                "end_time": (
+                    shift.end_time.isoformat() if shift.end_time else None
+                ),
                 "notes": shift.notes,
                 "apparatus_id": shift.apparatus_id,
-                "apparatus_name": apparatus_name,
-                "apparatus_unit_number": apparatus_unit_number,
-                "apparatus_positions": apparatus_positions,
                 "shift_officer_id": shift.shift_officer_id,
-                "shift_officer_name": (
-                    user_name_map.get(str(shift.shift_officer_id))
-                    if shift.shift_officer_id
-                    else None
-                ),
+                "positions": shift.positions,
                 "color": shift.color,
                 "created_at": (
                     shift.created_at.isoformat() if shift.created_at else None
@@ -2688,7 +2671,9 @@ class SchedulingService:
                     {
                         "id": assignment.id,
                         "position": (
-                            assignment.position.value if assignment.position else None
+                            assignment.position.value
+                            if assignment.position
+                            else None
                         ),
                         "status": (
                             assignment.assignment_status.value
@@ -2723,6 +2708,7 @@ class SchedulingService:
                     else None
                 ),
             }
+            self._enrich_shift_dict(shift_dict, apparatus_map, user_name_map)
             shift_list.append(shift_dict)
 
         return shift_list, total

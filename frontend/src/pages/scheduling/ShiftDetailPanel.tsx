@@ -95,45 +95,48 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     shift_officer_id: shift.shift_officer_id || '',
     positions: shift.positions ?? [],
   });
-  const [saving, setSaving] = useState(false);
+  // Async operation flags — grouped to reduce useState count
+  const [pending, setPending] = useState({
+    saving: false,
+    deleting: false,
+    signingUp: false,
+    confirming: false,
+    declining: false,
+    removing: false,
+    updatingPosition: false,
+    savingNotes: false,
+    assigning: false,
+    loadingMembers: false,
+    bulkAssigning: false,
+  });
+  const setPendingFlag = (key: keyof typeof pending, value: boolean) =>
+    setPending(prev => ({ ...prev, [key]: value }));
 
-  // Delete state
+  // UI visibility toggles
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [showAssignForm, setShowAssignForm] = useState(false);
+  const [showBulkAssign, setShowBulkAssign] = useState(false);
 
   // Signup state
   const [signupPosition, setSignupPosition] = useState('');
-  const [signingUp, setSigningUp] = useState(false);
 
   // Inline confirmation for decline/remove
   const [confirmingDecline, setConfirmingDecline] = useState<string | null>(null);
   const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState(false);
-  const [declining, setDeclining] = useState(false);
-  const [removing, setRemoving] = useState(false);
 
-  // Inline position editing
+  // Inline editing state
   const [editingPositionId, setEditingPositionId] = useState<string | null>(null);
-  const [updatingPosition, setUpdatingPosition] = useState(false);
-
-  // Inline assignment notes editing
   const [editingNotesId, setEditingNotesId] = useState<string | null>(null);
   const [editingNotesValue, setEditingNotesValue] = useState('');
-  const [savingNotes, setSavingNotes] = useState(false);
 
   // Assign state (admin) — position-first flow with member search
-  const [showAssignForm, setShowAssignForm] = useState(false);
   const [assignForm, setAssignForm] = useState({ user_id: '', position: '' });
-  const [assigning, setAssigning] = useState(false);
   const [memberSearch, setMemberSearch] = useState('');
   const [memberOptions, setMemberOptions] = useState<MemberOption[]>([]);
   const [unavailableIds, setUnavailableIds] = useState<Set<string>>(new Set());
-  const [loadingMembers, setLoadingMembers] = useState(false);
 
   // Bulk assignment state — maps position name to selected user_id
-  const [showBulkAssign, setShowBulkAssign] = useState(false);
   const [bulkAssignments, setBulkAssignments] = useState<Record<string, string>>({});
-  const [bulkAssigning, setBulkAssigning] = useState(false);
 
   const apparatusPositions = useMemo(() => shift.apparatus_positions ?? [], [shift.apparatus_positions]);
   const hasApparatusPositions = apparatusPositions.length > 0;
@@ -188,7 +191,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   useEffect(() => {
     if (!showAssignForm && !isEditing) return;
     const loadMembers = async () => {
-      setLoadingMembers(true);
+      setPendingFlag('loadingMembers', true);
       try {
         const [users, unavailable] = await Promise.all([
           userService.getUsers(),
@@ -205,7 +208,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       } catch {
         // Non-critical — fallback to manual ID entry
       } finally {
-        setLoadingMembers(false);
+        setPendingFlag('loadingMembers', false);
       }
     };
     void loadMembers();
@@ -236,7 +239,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
 
   const handleSignup = async (position?: string) => {
     const pos = position || signupPosition;
-    setSigningUp(true);
+    setPendingFlag('signingUp', true);
     try {
       await schedulingService.signupForShift(shift.id, { position: pos });
       toast.success('Signed up for shift');
@@ -245,13 +248,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to sign up for shift'));
     } finally {
-      setSigningUp(false);
+      setPendingFlag('signingUp', false);
     }
   };
 
   const handleConfirm = async (assignmentId: string) => {
-    if (confirming) return;
-    setConfirming(true);
+    if (pending.confirming) return;
+    setPendingFlag('confirming', true);
     // Optimistic update — show confirmed immediately
     setAssignments(prev => prev.map(a =>
       a.id === assignmentId ? { ...a, status: AssignmentStatus.CONFIRMED } : a
@@ -267,13 +270,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       ));
       toast.error(getErrorMessage(err, 'Failed to confirm assignment'));
     } finally {
-      setConfirming(false);
+      setPendingFlag('confirming', false);
     }
   };
 
   const handleDecline = async (assignmentId: string) => {
-    if (declining) return;
-    setDeclining(true);
+    if (pending.declining) return;
+    setPendingFlag('declining', true);
     // Optimistic update — show declined immediately
     setAssignments(prev => prev.map(a =>
       a.id === assignmentId ? { ...a, status: AssignmentStatus.DECLINED } : a
@@ -290,13 +293,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       ));
       toast.error(getErrorMessage(err, 'Failed to decline assignment'));
     } finally {
-      setDeclining(false);
+      setPendingFlag('declining', false);
     }
   };
 
   const handleRemove = async (assignmentId: string) => {
-    if (removing) return;
-    setRemoving(true);
+    if (pending.removing) return;
+    setPendingFlag('removing', true);
     try {
       await schedulingService.deleteAssignment(assignmentId);
       toast.success('Assignment removed');
@@ -306,7 +309,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to remove assignment'));
     } finally {
-      setRemoving(false);
+      setPendingFlag('removing', false);
     }
   };
 
@@ -315,7 +318,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       setEditingPositionId(null);
       return;
     }
-    setUpdatingPosition(true);
+    setPendingFlag('updatingPosition', true);
     try {
       await schedulingService.updateAssignment(assignmentId, { position: newPosition });
       toast.success('Position updated');
@@ -324,22 +327,22 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to update position'));
     } finally {
-      setUpdatingPosition(false);
+      setPendingFlag('updatingPosition', false);
       setEditingPositionId(null);
     }
   };
 
   const handleSaveAssignmentNotes = async (assignmentId: string) => {
-    setSavingNotes(true);
+    setPendingFlag('savingNotes', true);
     try {
-      await schedulingService.updateAssignment(assignmentId, { notes: editingNotesValue ?? undefined });
+      await schedulingService.updateAssignment(assignmentId, { notes: editingNotesValue || undefined });
       toast.success('Notes updated');
       setEditingNotesId(null);
       await refreshAssignments();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to update notes'));
     } finally {
-      setSavingNotes(false);
+      setPendingFlag('savingNotes', false);
     }
   };
 
@@ -359,7 +362,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const handleBulkAssign = async () => {
     const entries = Object.entries(bulkAssignments).filter((pair): pair is [string, string] => Boolean(pair[1]));
     if (entries.length === 0) { toast.error('Select at least one member'); return; }
-    setBulkAssigning(true);
+    setPendingFlag('bulkAssigning', true);
     let successCount = 0;
     for (const [position, userId] of entries) {
       try {
@@ -379,12 +382,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       await refreshAssignments();
       onRefresh?.();
     }
-    setBulkAssigning(false);
+    setPendingFlag('bulkAssigning', false);
   };
 
   const handleAssign = async () => {
     if (!assignForm.user_id) { toast.error('Select a member'); return; }
-    setAssigning(true);
+    setPendingFlag('assigning', true);
     try {
       await schedulingService.createAssignment(shift.id, {
         user_id: assignForm.user_id,
@@ -399,13 +402,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to assign member'));
     } finally {
-      setAssigning(false);
+      setPendingFlag('assigning', false);
     }
   };
 
   // Edit shift
   const handleSaveEdit = async () => {
-    setSaving(true);
+    setPendingFlag('saving', true);
     try {
       const payload: Record<string, unknown> = {
         shift_date: editForm.shift_date,
@@ -429,13 +432,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to update shift'));
     } finally {
-      setSaving(false);
+      setPendingFlag('saving', false);
     }
   };
 
   // Delete shift
   const handleDelete = async () => {
-    setDeleting(true);
+    setPendingFlag('deleting', true);
     try {
       await schedulingService.deleteShift(shift.id);
       toast.success('Shift deleted');
@@ -444,7 +447,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to delete shift'));
     } finally {
-      setDeleting(false);
+      setPendingFlag('deleting', false);
     }
   };
 
@@ -540,8 +543,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               <select
                 value={assignment.position}
                 onChange={e => { void handlePositionChange(assignment.id, e.target.value, assignment.position); }}
-                onBlur={() => { if (!updatingPosition) setEditingPositionId(null); }}
-                disabled={updatingPosition}
+                onBlur={() => { if (!pending.updatingPosition) setEditingPositionId(null); }}
+                disabled={pending.updatingPosition}
                 className="text-xs bg-theme-input-bg border border-theme-input-border rounded-sm px-1 py-0.5 text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-violet-500"
                 autoFocus
               >
@@ -569,10 +572,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           </span>
           {isCurrentUser && isAssigned && confirmingDecline !== assignment.id && (
             <>
-              <button onClick={() => { void handleConfirm(assignment.id); }} disabled={confirming}
+              <button onClick={() => { void handleConfirm(assignment.id); }} disabled={pending.confirming}
                 className="p-1.5 text-green-600 dark:text-green-400 hover:bg-green-500/10 dark:hover:bg-green-500/20 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center disabled:opacity-50" aria-label="Confirm assignment"
               >
-                {confirming ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                {pending.confirming ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
               </button>
               <button onClick={() => setConfirmingDecline(assignment.id)}
                 className="p-1.5 text-red-500 dark:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Decline assignment"
@@ -584,9 +587,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           {confirmingDecline === assignment.id && (
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-red-500 dark:text-red-400">Decline?</span>
-              <button onClick={() => { void handleDecline(assignment.id); }} disabled={declining}
+              <button onClick={() => { void handleDecline(assignment.id); }} disabled={pending.declining}
                 className="btn-primary px-2 py-1 rounded-md text-xs" aria-label="Confirm decline"
-              >{declining ? '...' : 'Yes'}</button>
+              >{pending.declining ? '...' : 'Yes'}</button>
               <button onClick={() => setConfirmingDecline(null)}
                 className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Cancel decline"
               >No</button>
@@ -602,9 +605,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           {confirmingRemove === assignment.id && (
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-red-500 dark:text-red-400">Remove?</span>
-              <button onClick={() => { void handleRemove(assignment.id); }} disabled={removing}
+              <button onClick={() => { void handleRemove(assignment.id); }} disabled={pending.removing}
                 className="btn-primary px-2 py-1 rounded-md text-xs" aria-label="Confirm removal"
-              >{removing ? '...' : 'Yes'}</button>
+              >{pending.removing ? '...' : 'Yes'}</button>
               <button onClick={() => setConfirmingRemove(null)}
                 className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Cancel removal"
               >No</button>
@@ -635,9 +638,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               aria-label="Assignment notes"
               onKeyDown={e => { if (e.key === 'Enter') void handleSaveAssignmentNotes(assignment.id); else if (e.key === 'Escape') setEditingNotesId(null); }}
             />
-            <button onClick={() => { void handleSaveAssignmentNotes(assignment.id); }} disabled={savingNotes}
+            <button onClick={() => { void handleSaveAssignmentNotes(assignment.id); }} disabled={pending.savingNotes}
               className="px-2 py-1 text-xs bg-violet-600 text-white rounded-sm hover:bg-violet-700 disabled:opacity-50"
-            >{savingNotes ? '...' : 'Save'}</button>
+            >{pending.savingNotes ? '...' : 'Save'}</button>
             <button onClick={() => setEditingNotesId(null)}
               className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary"
             >Cancel</button>
@@ -694,10 +697,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               </p>
               <div className="flex items-center gap-2 justify-end">
                 <button onClick={() => setShowDeleteConfirm(false)} className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>
-                <button onClick={() => { void handleDelete(); }} disabled={deleting}
+                <button onClick={() => { void handleDelete(); }} disabled={pending.deleting}
                   className="btn-primary flex gap-1 items-center px-3 py-1.5 text-sm"
                 >
-                  {deleting && <Loader2 className="w-3 h-3 animate-spin" />}
+                  {pending.deleting && <Loader2 className="w-3 h-3 animate-spin" />}
                   Delete Shift
                 </button>
               </div>
@@ -786,7 +789,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                     <option key={m.id} value={m.id}>{m.label}</option>
                   ))}
                 </select>
-                {memberOptions.length === 0 && loadingMembers && (
+                {memberOptions.length === 0 && pending.loadingMembers && (
                   <p className="text-xs text-theme-text-muted mt-1">Loading members...</p>
                 )}
               </div>
@@ -800,10 +803,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               />
               <div className="flex items-center gap-2 justify-end">
                 <button onClick={() => setIsEditing(false)} className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>
-                <button onClick={() => { void handleSaveEdit(); }} disabled={saving}
+                <button onClick={() => { void handleSaveEdit(); }} disabled={pending.saving}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50"
                 >
-                  {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  {pending.saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                   Save
                 </button>
               </div>
@@ -920,8 +923,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                               <select
                                 value={assignment.position}
                                 onChange={e => { void handlePositionChange(assignment.id, e.target.value, assignment.position); }}
-                                onBlur={() => { if (!updatingPosition) setEditingPositionId(null); }}
-                                disabled={updatingPosition}
+                                onBlur={() => { if (!pending.updatingPosition) setEditingPositionId(null); }}
+                                disabled={pending.updatingPosition}
                                 className="text-xs bg-theme-input-bg border border-theme-input-border rounded-sm px-1 py-0.5 text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-violet-500"
                                 autoFocus
                               >
@@ -1022,10 +1025,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                           {!isUserAssigned && (
                             <button
                               onClick={() => { void handleSignup(position); }}
-                              disabled={signingUp}
+                              disabled={pending.signingUp}
                               className="px-2.5 sm:px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-medium disabled:opacity-50 inline-flex items-center gap-1"
                             >
-                              {signingUp ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserPlus className="w-3 h-3" />}
+                              {pending.signingUp ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserPlus className="w-3 h-3" />}
                               <span className="hidden sm:inline">Sign Up</span><span className="sm:hidden">Join</span>
                             </button>
                           )}
@@ -1130,7 +1133,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                       onChange={e => setMemberSearch(e.target.value)}
                       className={inputCls}
                     />
-                    {loadingMembers ? (
+                    {pending.loadingMembers ? (
                       <div className="flex items-center gap-2 mt-2 text-xs text-theme-text-muted">
                         <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" /> Loading members...
                       </div>
@@ -1151,10 +1154,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                   </div>
                   <div className="flex justify-end gap-2">
                     <button onClick={() => { setShowAssignForm(false); setMemberSearch(''); }} className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>
-                    <button onClick={() => { void handleAssign(); }} disabled={assigning || !assignForm.user_id}
+                    <button onClick={() => { void handleAssign(); }} disabled={pending.assigning || !assignForm.user_id}
                       className="px-3 py-1.5 text-sm bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50"
                     >
-                      {assigning ? 'Assigning...' : 'Assign'}
+                      {pending.assigning ? 'Assigning...' : 'Assign'}
                     </button>
                   </div>
                 </div>
@@ -1189,10 +1192,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                   </div>
                   <div className="flex justify-end gap-2">
                     <button onClick={() => setShowBulkAssign(false)} className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>
-                    <button onClick={() => { void handleBulkAssign(); }} disabled={bulkAssigning || Object.values(bulkAssignments).every(v => !v)}
+                    <button onClick={() => { void handleBulkAssign(); }} disabled={pending.bulkAssigning || Object.values(bulkAssignments).every(v => !v)}
                       className="px-3 py-1.5 text-sm bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50"
                     >
-                      {bulkAssigning ? 'Assigning...' : `Assign ${Object.values(bulkAssignments).filter(Boolean).length} Members`}
+                      {pending.bulkAssigning ? 'Assigning...' : `Assign ${Object.values(bulkAssignments).filter(Boolean).length} Members`}
                     </button>
                   </div>
                 </div>
@@ -1214,10 +1217,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                     <option key={val} value={val}>{label}</option>
                   ))}
                 </select>
-                <button onClick={() => { void handleSignup(); }} disabled={signingUp}
+                <button onClick={() => { void handleSignup(); }} disabled={pending.signingUp}
                   className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center gap-1"
                 >
-                  {signingUp ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                  {pending.signingUp ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
                   Sign Up
                 </button>
               </div>
