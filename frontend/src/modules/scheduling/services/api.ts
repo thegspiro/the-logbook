@@ -248,6 +248,18 @@ export interface ShiftComplianceResponse {
   total_requirements: number;
 }
 
+export interface ActiveChecklistRecord {
+  shiftId: string;
+  shiftDate: string;
+  apparatusName: string;
+  templateId: string;
+  templateName: string;
+  checkTiming: string;
+  status: string;
+  totalItems?: number;
+  completedItems?: number;
+}
+
 // SEC: Use the shared axios factory to ensure consistent auth (CSRF, cookie
 // credentials, 401 refresh) across all modules.  Do not create manual axios
 // instances — drift from the global auth setup causes hard-to-debug 401/403s.
@@ -504,7 +516,7 @@ export const schedulingService = {
   },
 
   // --- Open Shifts ---
-  async getOpenShifts(params?: { start_date?: string | undefined; end_date?: string; apparatus_id?: string }): Promise<ShiftRecord[]> {
+  async getOpenShifts(params?: { start_date?: string; end_date?: string; apparatus_id?: string }): Promise<ShiftRecord[]> {
     const response = await api.get<ShiftRecord[]>('/scheduling/shifts/open', { params });
     return response.data;
   },
@@ -636,8 +648,8 @@ export const schedulingService = {
   },
 
   // --- My Checklists ---
-  async getMyChecklists(): Promise<unknown[]> {
-    const response = await api.get<unknown[]>('/equipment-checks/my-checklists');
+  async getMyChecklists(): Promise<ActiveChecklistRecord[]> {
+    const response = await api.get<ActiveChecklistRecord[]>('/equipment-checks/my-checklists');
     return response.data;
   },
   async getMyChecklistHistory(params?: { start_date?: string; end_date?: string; limit?: number; offset?: number }): Promise<ShiftEquipmentCheckRecord[]> {
