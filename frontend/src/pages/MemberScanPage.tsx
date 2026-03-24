@@ -93,6 +93,15 @@ export const MemberScanPage: React.FC = () => {
     onScan,
   });
 
+  const tryStartScanner = useCallback(async () => {
+    try {
+      setError(null);
+      await startScanner();
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Camera access denied. Please allow camera permissions in your browser settings."));
+    }
+  }, [startScanner]);
+
   return (
     <div className="min-h-screen max-w-lg mx-auto px-4 py-8">
       {/* Header */}
@@ -128,7 +137,7 @@ export const MemberScanPage: React.FC = () => {
         {!scanning ? (
           <button
             onClick={() => {
-              void startScanner();
+              void tryStartScanner();
             }}
             disabled={lookingUp}
             className="btn-info font-medium gap-2 inline-flex items-center px-5 py-2.5 text-sm transition"
