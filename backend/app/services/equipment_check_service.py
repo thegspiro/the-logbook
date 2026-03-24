@@ -18,6 +18,7 @@ from app.models.apparatus import (
     CheckTemplateCompartment,
     CheckTemplateItem,
     EquipmentCheckTemplate,
+    TemplateChangeLog,
 )
 from app.models.training import (
     Shift,
@@ -599,6 +600,9 @@ class EquipmentCheckService:
                 status=item_data.get("status", "not_checked"),
                 quantity_found=item_data.get("quantity_found"),
                 required_quantity=item_data.get("required_quantity"),
+                critical_minimum_quantity=item_data.get(
+                    "critical_minimum_quantity"
+                ),
                 level_reading=item_data.get("level_reading"),
                 level_unit=item_data.get("level_unit"),
                 serial_number=item_data.get("serial_number"),
@@ -628,6 +632,29 @@ class EquipmentCheckService:
                     apparatus.has_deficiency = False
                     apparatus.deficiency_since = None
 
+        # Collect failed item details for notifications
+        critical_items: List[Dict[str, Any]] = []
+        warning_items: List[Dict[str, Any]] = []
+        for item_data in items_data:
+            if item_data.get("status") != "fail":
+                continue
+            detail = {
+                "name": item_data.get("item_name", "Unknown"),
+                "compartment": item_data.get("compartment_name", ""),
+                "check_type": item_data.get("check_type"),
+            }
+            found = item_data.get("quantity_found")
+            expected = item_data.get("required_quantity")
+            crit = item_data.get("critical_minimum_quantity")
+            if found is not None and expected is not None:
+                detail["expected"] = expected
+                detail["found"] = found
+            if crit is not None and found is not None and found <= crit:
+                detail["critical_minimum"] = crit
+                critical_items.append(detail)
+            else:
+                warning_items.append(detail)
+
         # Send failure notifications
         if overall_status == "fail":
             await self._send_check_failure_notification(
@@ -637,6 +664,8 @@ class EquipmentCheckService:
                 template_id=template_id,
                 failed_count=failed,
                 total_count=total,
+                critical_items=critical_items,
+                warning_items=warning_items,
             )
 
         await self.db.commit()
@@ -1100,13 +1129,16 @@ class EquipmentCheckService:
         template_id: Optional[str],
         failed_count: int,
         total_count: int,
+        critical_items: Optional[List[Dict[str, Any]]] = None,
+        warning_items: Optional[List[Dict[str, Any]]] = None,
     ) -> None:
         """Send in-app (and optionally email) notifications when an
         equipment check fails.
 
         Reads ``org.settings["equipment_check_alerts"]`` to decide
-        who to notify and whether to send email.  Failures are logged
-        but never propagated.
+        who to notify and whether to send email.  When critical_items
+        (below critical minimum threshold) are present, the notification
+        is flagged as urgent.  Failures are logged but never propagated.
         """
         from loguru import logger
 
@@ -1193,14 +1225,40 @@ class EquipmentCheckService:
                 shift.shift_date.isoformat() if shift.shift_date else "unknown date"
             )
             apparatus_label = f" on {apparatus_name}" if apparatus_name else ""
+            has_critical = bool(critical_items)
+            urgency = "CRITICAL: " if has_critical else ""
             message = (
-                f'Equipment check "{template_name}"'
+                f'{urgency}Equipment check "{template_name}"'
                 f"{apparatus_label} failed with "
                 f"{failed_count} of {total_count} items. "
                 f"Checked by {checker_name} "
                 f"on {shift_date_str}."
             )
 
+            # Build per-item detail lines for the message
+            item_lines: list[str] = []
+            for ci in (critical_items or []):
+                line = f"[CRITICAL] {ci['name']}"
+                if "expected" in ci and "found" in ci:
+                    line += f" — expected {ci['expected']}, found {ci['found']}"
+                if "critical_minimum" in ci:
+                    line += f" (critical min: {ci['critical_minimum']})"
+                item_lines.append(line)
+            for wi in (warning_items or []):
+                line = wi["name"]
+                if "expected" in wi and "found" in wi:
+                    line += f" — expected {wi['expected']}, found {wi['found']}"
+                item_lines.append(line)
+            if item_lines:
+                message += "\n\nFailed items:\n" + "\n".join(
+                    f"• {ln}" for ln in item_lines
+                )
+
+            notif_subject = (
+                "CRITICAL: Equipment Check Failed"
+                if has_critical
+                else "Equipment Check Failed"
+            )
             for rid in recipient_ids:
                 notif = NotificationLog(
                     id=generate_uuid(),
@@ -1208,7 +1266,7 @@ class EquipmentCheckService:
                     recipient_id=rid,
                     channel="in_app",
                     category="equipment_check",
-                    subject="Equipment Check Failed",
+                    subject=notif_subject,
                     message=message,
                     action_url=(f"/scheduling/shifts/{shift.id}"),
                 )
@@ -1233,12 +1291,77 @@ class EquipmentCheckService:
                     if to_emails:
                         email_svc = EmailService(organization=org)
                         subject = (
-                            "Equipment Check Failed"
+                            f"{urgency}Equipment Check Failed"
                             f" \u2014 {template_name}"
                             f"{apparatus_label}"
                         )
+
+                        # Build HTML item table for email
+                        item_rows_html = ""
+                        for ci in (critical_items or []):
+                            qty_info = ""
+                            if "expected" in ci and "found" in ci:
+                                qty_info = (
+                                    f"Expected: {ci['expected']}, "
+                                    f"Found: {ci['found']}"
+                                )
+                                if "critical_minimum" in ci:
+                                    qty_info += (
+                                        f" (Critical min: "
+                                        f"{ci['critical_minimum']})"
+                                    )
+                            item_rows_html += (
+                                "<tr style='background:#fef2f2'>"
+                                f"<td style='padding:4px 8px'>"
+                                f"<strong>{ci['name']}</strong>"
+                                "</td>"
+                                f"<td style='padding:4px 8px;"
+                                f"color:#dc2626'>CRITICAL</td>"
+                                f"<td style='padding:4px 8px'>"
+                                f"{qty_info}</td></tr>"
+                            )
+                        for wi in (warning_items or []):
+                            qty_info = ""
+                            if "expected" in wi and "found" in wi:
+                                qty_info = (
+                                    f"Expected: {wi['expected']}, "
+                                    f"Found: {wi['found']}"
+                                )
+                            item_rows_html += (
+                                "<tr>"
+                                f"<td style='padding:4px 8px'>"
+                                f"{wi['name']}</td>"
+                                f"<td style='padding:4px 8px;"
+                                f"color:#d97706'>Failed</td>"
+                                f"<td style='padding:4px 8px'>"
+                                f"{qty_info}</td></tr>"
+                            )
+
+                        items_table = ""
+                        if item_rows_html:
+                            items_table = (
+                                "<table style='border-collapse:"
+                                "collapse;width:100%;margin:12px 0'>"
+                                "<tr style='background:#f3f4f6'>"
+                                "<th style='padding:4px 8px;"
+                                "text-align:left'>Item</th>"
+                                "<th style='padding:4px 8px;"
+                                "text-align:left'>Status</th>"
+                                "<th style='padding:4px 8px;"
+                                "text-align:left'>Details</th>"
+                                f"</tr>{item_rows_html}</table>"
+                            )
+
+                        summary_line = (
+                            f'Equipment check "{template_name}"'
+                            f"{apparatus_label} failed with "
+                            f"{failed_count} of {total_count} "
+                            f"items. Checked by {checker_name} "
+                            f"on {shift_date_str}."
+                        )
                         html_body = (
-                            f"<p>{message}</p>"
+                            f"<p>{summary_line}</p>"
+                            f"{items_table}"
                             "<p>Please log in to review "
                             "the failed items and take "
                             "corrective action.</p>"
@@ -1666,3 +1789,81 @@ class EquipmentCheckService:
             "trends": trends,
             "history": history,
         }
+
+    # ============================================
+    # Template Change Log
+    # ============================================
+
+    async def log_template_change(
+        self,
+        organization_id: str,
+        template_id: str,
+        user_id: str,
+        user_name: str,
+        action: str,
+        entity_type: str,
+        entity_id: Optional[str] = None,
+        entity_name: Optional[str] = None,
+        changes: Optional[Dict[str, Any]] = None,
+    ) -> TemplateChangeLog:
+        """Record a granular change to a template, compartment, or item."""
+        entry = TemplateChangeLog(
+            id=generate_uuid(),
+            organization_id=organization_id,
+            template_id=template_id,
+            user_id=user_id,
+            user_name=user_name,
+            action=action,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            entity_name=entity_name,
+            changes=changes,
+        )
+        self.db.add(entry)
+        await self.db.flush()
+        return entry
+
+    async def get_template_changelog(
+        self,
+        template_id: str,
+        organization_id: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        """Get paginated changelog entries for a template."""
+        base_filter = [
+            TemplateChangeLog.template_id == template_id,
+            TemplateChangeLog.organization_id == organization_id,
+        ]
+
+        count_result = await self.db.execute(
+            select(func.count(TemplateChangeLog.id)).where(*base_filter)
+        )
+        total = count_result.scalar() or 0
+
+        result = await self.db.execute(
+            select(TemplateChangeLog)
+            .where(*base_filter)
+            .order_by(TemplateChangeLog.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        items = list(result.scalars().all())
+
+        return {"items": items, "total": total}
+
+    @staticmethod
+    def generate_csv_sample() -> str:
+        """Return a sample CSV string for template import."""
+        lines = [
+            "Compartment,Item Name,Check Type,Expected Quantity,"
+            "Critical Minimum,Level Unit",
+            "Cab & Exterior,Lights & emergency warning system,"
+            "functional,,",
+            "Cab & Exterior,Tire condition & pressure,pass_fail,,",
+            "Engine Compartment,Oil level,level,,,quarts",
+            "Medical Supplies,Tourniquets,quantity,4,2,",
+            "Medical Supplies,Gauze / bandages,quantity,10,6,",
+            "Medical Supplies,Nasal cannulas,quantity,8,4,",
+        ]
+        return "\n".join(lines)

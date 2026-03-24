@@ -2056,6 +2056,7 @@ class CheckTemplateItem(Base):
     is_required = Column(Boolean, default=False, nullable=False)
     required_quantity = Column(Integer, nullable=True)
     expected_quantity = Column(Integer, nullable=True)
+    critical_minimum_quantity = Column(Integer, nullable=True)
     min_level = Column(Float, nullable=True)
     level_unit = Column(String(50), nullable=True)  # psi, %, gallons, etc.
     serial_number = Column(String(100), nullable=True)
@@ -2076,4 +2077,50 @@ class CheckTemplateItem(Base):
     __table_args__ = (
         Index("idx_check_item_compartment", "compartment_id"),
         Index("idx_check_item_equipment", "equipment_id"),
+    )
+
+
+class TemplateChangeLog(Base):
+    """
+    Granular audit trail for equipment check template edits.
+
+    Records every add/update/delete action on templates, compartments,
+    and items so leadership can review who changed what and when.
+    Visible only to users with equipment_check.manage permission.
+    """
+
+    __tablename__ = "template_change_logs"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    template_id = Column(
+        String(36),
+        ForeignKey("equipment_check_templates.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    user_name = Column(String(255), nullable=False)
+    action = Column(String(30), nullable=False)  # add, update, delete
+    # template, compartment, or item
+    entity_type = Column(String(30), nullable=False)
+    entity_id = Column(String(36), nullable=True)
+    entity_name = Column(String(200), nullable=True)
+    changes = Column(JSON, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_tmpl_changelog_org", "organization_id"),
+        Index("idx_tmpl_changelog_template", "template_id"),
+        Index("idx_tmpl_changelog_created", "created_at"),
     )

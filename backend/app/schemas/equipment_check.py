@@ -28,6 +28,7 @@ class CheckTemplateItemCreate(BaseModel):
     is_required: bool = False
     required_quantity: Optional[int] = None
     expected_quantity: Optional[int] = None
+    critical_minimum_quantity: Optional[int] = None
     min_level: Optional[float] = None
     level_unit: Optional[str] = Field(None, max_length=50)
     serial_number: Optional[str] = Field(None, max_length=100)
@@ -50,6 +51,7 @@ class CheckTemplateItemUpdate(BaseModel):
     is_required: Optional[bool] = None
     required_quantity: Optional[int] = None
     expected_quantity: Optional[int] = None
+    critical_minimum_quantity: Optional[int] = None
     min_level: Optional[float] = None
     level_unit: Optional[str] = Field(None, max_length=50)
     serial_number: Optional[str] = Field(None, max_length=100)
@@ -79,6 +81,7 @@ class CheckTemplateItemResponse(UTCResponseBase):
     is_required: bool
     required_quantity: Optional[int] = None
     expected_quantity: Optional[int] = None
+    critical_minimum_quantity: Optional[int] = None
     min_level: Optional[float] = None
     level_unit: Optional[str] = None
     serial_number: Optional[str] = None
@@ -239,6 +242,7 @@ class CheckItemResultSubmit(BaseModel):
     status: str = Field(..., max_length=30)  # pass, fail, not_checked
     quantity_found: Optional[int] = None
     required_quantity: Optional[int] = None
+    critical_minimum_quantity: Optional[int] = None
     level_reading: Optional[float] = None
     level_unit: Optional[str] = Field(None, max_length=50)
     serial_number: Optional[str] = Field(None, max_length=100)
@@ -279,6 +283,7 @@ class ShiftEquipmentCheckItemResponse(UTCResponseBase):
     status: str
     quantity_found: Optional[int] = None
     required_quantity: Optional[int] = None
+    critical_minimum_quantity: Optional[int] = None
     level_reading: Optional[float] = None
     level_unit: Optional[str] = None
     serial_number: Optional[str] = None
@@ -490,3 +495,41 @@ class ItemTrendResponse(BaseModel):
     item_name: str
     trends: List[ItemTrendEntry] = []
     history: List[CheckItemHistory] = []
+
+
+# ============================================
+# Template Change Log Schemas
+# ============================================
+
+
+class TemplateChangeLogResponse(UTCResponseBase):
+    """Response schema for a template change log entry."""
+
+    model_config = ConfigDict(
+        from_attributes=True,
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+    id: str
+    template_id: str
+    user_id: Optional[str] = None
+    user_name: str
+    action: str
+    entity_type: str
+    entity_id: Optional[str] = None
+    entity_name: Optional[str] = None
+    changes: Optional[dict] = None
+    created_at: Optional[datetime] = None
+
+
+class TemplateChangeLogListResponse(BaseModel):
+    """Paginated list of template change log entries."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+    items: List[TemplateChangeLogResponse] = []
+    total: int = 0

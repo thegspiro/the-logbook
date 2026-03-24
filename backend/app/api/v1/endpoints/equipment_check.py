@@ -40,10 +40,17 @@ from app.schemas.equipment_check import (
     ShiftCheckSummary,
     ShiftEquipmentCheckCreate,
     ShiftEquipmentCheckResponse,
+    TemplateChangeLogListResponse,
 )
 from app.services.equipment_check_service import EquipmentCheckService
 
 router = APIRouter()
+
+
+def _user_display_name(user: User) -> str:
+    first = getattr(user, "first_name", "") or ""
+    last = getattr(user, "last_name", "") or ""
+    return f"{first} {last}".strip() or "Unknown"
 
 
 # =====================================================================
@@ -69,6 +76,17 @@ async def create_template(
             created_by=str(current_user.id),
             data=data.model_dump(exclude_unset=True),
         )
+        await service.log_template_change(
+            organization_id=str(current_user.organization_id),
+            template_id=str(template.id),
+            user_id=str(current_user.id),
+            user_name=_user_display_name(current_user),
+            action="add",
+            entity_type="template",
+            entity_id=str(template.id),
+            entity_name=template.name,
+        )
+        await db.commit()
         return template
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -126,13 +144,26 @@ async def update_template(
 ):
     """Update template metadata."""
     service = EquipmentCheckService(db)
+    changes = data.model_dump(exclude_unset=True)
     template = await service.update_template(
         template_id,
         current_user.organization_id,
-        data.model_dump(exclude_unset=True),
+        changes,
     )
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
+    await service.log_template_change(
+        organization_id=str(current_user.organization_id),
+        template_id=template_id,
+        user_id=str(current_user.id),
+        user_name=_user_display_name(current_user),
+        action="update",
+        entity_type="template",
+        entity_id=template_id,
+        entity_name=template.name,
+        changes=changes,
+    )
+    await db.commit()
     return template
 
 
@@ -144,11 +175,28 @@ async def delete_template(
 ):
     """Delete a template and all its compartments/items."""
     service = EquipmentCheckService(db)
+    template = await service.get_template(
+        template_id, current_user.organization_id
+    )
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    tmpl_name = template.name
     deleted = await service.delete_template(
         template_id, current_user.organization_id
     )
     if not deleted:
         raise HTTPException(status_code=404, detail="Template not found")
+    await service.log_template_change(
+        organization_id=str(current_user.organization_id),
+        template_id=template_id,
+        user_id=str(current_user.id),
+        user_name=_user_display_name(current_user),
+        action="delete",
+        entity_type="template",
+        entity_id=template_id,
+        entity_name=tmpl_name,
+    )
+    await db.commit()
 
 
 @router.post(
@@ -203,6 +251,17 @@ async def add_compartment(
     )
     if not compartment:
         raise HTTPException(status_code=404, detail="Template not found")
+    await service.log_template_change(
+        organization_id=str(current_user.organization_id),
+        template_id=template_id,
+        user_id=str(current_user.id),
+        user_name=_user_display_name(current_user),
+        action="add",
+        entity_type="compartment",
+        entity_id=str(compartment.id),
+        entity_name=compartment.name,
+    )
+    await db.commit()
     return compartment
 
 
@@ -218,13 +277,26 @@ async def update_compartment(
 ):
     """Update a compartment."""
     service = EquipmentCheckService(db)
+    changes = data.model_dump(exclude_unset=True)
     compartment = await service.update_compartment(
         compartment_id,
         current_user.organization_id,
-        data.model_dump(exclude_unset=True),
+        changes,
     )
     if not compartment:
         raise HTTPException(status_code=404, detail="Compartment not found")
+    await service.log_template_change(
+        organization_id=str(current_user.organization_id),
+        template_id=str(compartment.template_id),
+        user_id=str(current_user.id),
+        user_name=_user_display_name(current_user),
+        action="update",
+        entity_type="compartment",
+        entity_id=compartment_id,
+        entity_name=compartment.name,
+        changes=changes,
+    )
+    await db.commit()
     return compartment
 
 
@@ -235,12 +307,34 @@ async def delete_compartment(
     current_user: User = Depends(require_permission("equipment_check.manage")),
 ):
     """Delete a compartment and its items."""
+    from app.models.apparatus import CheckTemplateCompartment
+
     service = EquipmentCheckService(db)
+    comp_result = await db.execute(
+        select(CheckTemplateCompartment).where(
+            CheckTemplateCompartment.id == compartment_id
+        )
+    )
+    comp = comp_result.scalar_one_or_none()
+    comp_name = comp.name if comp else "Unknown"
+    comp_template_id = str(comp.template_id) if comp else ""
     deleted = await service.delete_compartment(
         compartment_id, current_user.organization_id
     )
     if not deleted:
         raise HTTPException(status_code=404, detail="Compartment not found")
+    if comp_template_id:
+        await service.log_template_change(
+            organization_id=str(current_user.organization_id),
+            template_id=comp_template_id,
+            user_id=str(current_user.id),
+            user_name=_user_display_name(current_user),
+            action="delete",
+            entity_type="compartment",
+            entity_id=compartment_id,
+            entity_name=comp_name,
+        )
+        await db.commit()
 
 
 @router.put("/templates/{template_id}/compartments/reorder", status_code=200)
@@ -277,6 +371,8 @@ async def add_item(
     current_user: User = Depends(require_permission("equipment_check.manage")),
 ):
     """Add an item to a compartment."""
+    from app.models.apparatus import CheckTemplateCompartment as CTC
+
     service = EquipmentCheckService(db)
     item = await service.add_item(
         compartment_id,
@@ -285,6 +381,22 @@ async def add_item(
     )
     if not item:
         raise HTTPException(status_code=404, detail="Compartment not found")
+    comp_result = await db.execute(
+        select(CTC.template_id).where(CTC.id == compartment_id)
+    )
+    tmpl_id = comp_result.scalar_one_or_none()
+    if tmpl_id:
+        await service.log_template_change(
+            organization_id=str(current_user.organization_id),
+            template_id=str(tmpl_id),
+            user_id=str(current_user.id),
+            user_name=_user_display_name(current_user),
+            action="add",
+            entity_type="item",
+            entity_id=str(item.id),
+            entity_name=item.name,
+        )
+        await db.commit()
     return item
 
 
@@ -299,14 +411,34 @@ async def update_item(
     current_user: User = Depends(require_permission("equipment_check.manage")),
 ):
     """Update a check template item."""
+    from app.models.apparatus import CheckTemplateCompartment as CTC
+
     service = EquipmentCheckService(db)
+    changes = data.model_dump(exclude_unset=True)
     item = await service.update_item(
         item_id,
         current_user.organization_id,
-        data.model_dump(exclude_unset=True),
+        changes,
     )
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
+    tmpl_result = await db.execute(
+        select(CTC.template_id).where(CTC.id == str(item.compartment_id))
+    )
+    tmpl_id = tmpl_result.scalar_one_or_none()
+    if tmpl_id:
+        await service.log_template_change(
+            organization_id=str(current_user.organization_id),
+            template_id=str(tmpl_id),
+            user_id=str(current_user.id),
+            user_name=_user_display_name(current_user),
+            action="update",
+            entity_type="item",
+            entity_id=item_id,
+            entity_name=item.name,
+            changes=changes,
+        )
+        await db.commit()
     return item
 
 
@@ -317,10 +449,39 @@ async def delete_item(
     current_user: User = Depends(require_permission("equipment_check.manage")),
 ):
     """Delete a check template item."""
+    from app.models.apparatus import (
+        CheckTemplateCompartment as CTC,
+        CheckTemplateItem as CTI,
+    )
+
     service = EquipmentCheckService(db)
+    item_result = await db.execute(
+        select(CTI).where(CTI.id == item_id)
+    )
+    item_obj = item_result.scalar_one_or_none()
+    item_name = item_obj.name if item_obj else "Unknown"
+    item_comp_id = str(item_obj.compartment_id) if item_obj else ""
+    tmpl_id = None
+    if item_comp_id:
+        tmpl_result = await db.execute(
+            select(CTC.template_id).where(CTC.id == item_comp_id)
+        )
+        tmpl_id = tmpl_result.scalar_one_or_none()
     deleted = await service.delete_item(item_id, current_user.organization_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Item not found")
+    if tmpl_id:
+        await service.log_template_change(
+            organization_id=str(current_user.organization_id),
+            template_id=str(tmpl_id),
+            user_id=str(current_user.id),
+            user_name=_user_display_name(current_user),
+            action="delete",
+            entity_type="item",
+            entity_id=item_id,
+            entity_name=item_name,
+        )
+        await db.commit()
 
 
 @router.put(
@@ -929,4 +1090,57 @@ async def export_pdf(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": (f"attachment; filename={filename}")},
+    )
+
+
+# =====================================================================
+# Template Change Log
+# =====================================================================
+
+
+@router.get(
+    "/templates/{template_id}/changelog",
+    response_model=TemplateChangeLogListResponse,
+    dependencies=[Depends(require_permission("equipment_check.manage"))],
+)
+async def get_template_changelog(
+    template_id: str,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get the granular change log for a template (admin only)."""
+    service = EquipmentCheckService(db)
+    result = await service.get_template_changelog(
+        template_id=template_id,
+        organization_id=str(current_user.organization_id),
+        limit=limit,
+        offset=offset,
+    )
+    return result
+
+
+# =====================================================================
+# CSV Sample Download
+# =====================================================================
+
+
+@router.get("/csv-sample")
+async def download_csv_sample(
+    _current_user: User = Depends(get_current_user),
+):
+    """Download a sample CSV file for checklist template import."""
+    from fastapi.responses import Response
+
+    csv_content = EquipmentCheckService.generate_csv_sample()
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": (
+                "attachment; "
+                "filename=checklist_import_sample.csv"
+            )
+        },
     )

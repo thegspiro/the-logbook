@@ -59,6 +59,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { formatDateTime } from '@/utils/dateFormatting';
+import { useTimezone } from '@/hooks/useTimezone';
 import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
 import { schedulingService } from '@/modules/scheduling';
 import { EquipmentCheckForm } from '@/pages/scheduling/EquipmentCheckForm';
@@ -132,7 +134,7 @@ const CHECK_TYPE_HELP: Record<string, string> = {
   pass_fail: 'Simple pass or fail check. Good for binary inspections like "lights working" or "no visible damage".',
   present: 'Verify the item is present. Use for mandatory equipment that must be on the apparatus.',
   functional: 'Test that the item works correctly. Similar to pass/fail but implies active testing.',
-  quantity: 'Count items and compare against a required minimum. Shows fields for required and expected quantities.',
+  quantity: 'Count items and compare against the expected quantity. Set the expected count, a minimum to pass, and an optional critical threshold that triggers urgent leadership alerts.',
   level: 'Read a gauge or measure a level (e.g., fuel, pressure, fluid). Shows min level and unit fields.',
   date_lot: 'Track serial/lot numbers and verify against expected values. Good for medical supplies and dated items.',
   reading: 'Record a numeric reading without a pass/fail threshold. Good for odometer, hour meters, etc.',
@@ -674,6 +676,7 @@ interface ItemFormState {
   isRequired: boolean;
   requiredQuantity: string;
   expectedQuantity: string;
+  criticalMinimumQuantity: string;
   minLevel: string;
   levelUnit: string;
   serialNumber: string;
@@ -692,6 +695,7 @@ function emptyItem(): ItemFormState {
     isRequired: true,
     requiredQuantity: '',
     expectedQuantity: '',
+    criticalMinimumQuantity: '',
     minLevel: '',
     levelUnit: '',
     serialNumber: '',
@@ -838,6 +842,7 @@ const SortableCompartmentWrapper: React.FC<SortableCompartmentWrapperProps> = ({
 const EquipmentCheckTemplateBuilder: React.FC = () => {
   const { templateId } = useParams<{ templateId: string }>();
   const navigate = useNavigate();
+  const tz = useTimezone();
   const isEditing = Boolean(templateId);
 
   // State
@@ -901,6 +906,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             isRequired: item.isRequired,
             requiredQuantity: item.requiredQuantity != null ? String(Number(item.requiredQuantity)) : '',
             expectedQuantity: item.expectedQuantity != null ? String(Number(item.expectedQuantity)) : '',
+            criticalMinimumQuantity: item.criticalMinimumQuantity != null ? String(Number(item.criticalMinimumQuantity)) : '',
             minLevel: item.minLevel != null ? String(Number(item.minLevel)) : '',
             levelUnit: item.levelUnit ?? '',
             serialNumber: item.serialNumber ?? '',
@@ -1128,6 +1134,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           isRequired: false,
           requiredQuantity: '',
           expectedQuantity: '',
+          criticalMinimumQuantity: '',
           minLevel: '',
           levelUnit: '',
           serialNumber: '',
@@ -1414,6 +1421,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           isRequired: created.isRequired,
           requiredQuantity: created.requiredQuantity != null ? String(created.requiredQuantity) : '',
           expectedQuantity: created.expectedQuantity != null ? String(created.expectedQuantity) : '',
+          criticalMinimumQuantity: created.criticalMinimumQuantity != null ? String(created.criticalMinimumQuantity) : '',
           minLevel: created.minLevel != null ? String(created.minLevel) : '',
           levelUnit: created.levelUnit ?? '',
           serialNumber: created.serialNumber ?? '',
@@ -1465,6 +1473,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             isRequired: created.isRequired,
             requiredQuantity: created.requiredQuantity != null ? String(created.requiredQuantity) : '',
             expectedQuantity: created.expectedQuantity != null ? String(created.expectedQuantity) : '',
+            criticalMinimumQuantity: created.criticalMinimumQuantity != null ? String(created.criticalMinimumQuantity) : '',
             minLevel: created.minLevel != null ? String(created.minLevel) : '',
             levelUnit: created.levelUnit ?? '',
             serialNumber: created.serialNumber ?? '',
@@ -1517,6 +1526,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           isRequired: false,
           requiredQuantity: '',
           expectedQuantity: '',
+          criticalMinimumQuantity: '',
           minLevel: '',
           levelUnit: '',
           serialNumber: '',
@@ -1544,6 +1554,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             isRequired: created.isRequired,
             requiredQuantity: created.requiredQuantity != null ? String(created.requiredQuantity) : '',
             expectedQuantity: created.expectedQuantity != null ? String(created.expectedQuantity) : '',
+            criticalMinimumQuantity: created.criticalMinimumQuantity != null ? String(created.criticalMinimumQuantity) : '',
             minLevel: created.minLevel != null ? String(created.minLevel) : '',
             levelUnit: created.levelUnit ?? '',
             serialNumber: created.serialNumber ?? '',
@@ -1722,6 +1733,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       if (patch.isRequired !== undefined) apiPatch.is_required = patch.isRequired;
       if (patch.requiredQuantity !== undefined) apiPatch.required_quantity = patch.requiredQuantity ? Number(patch.requiredQuantity) : undefined;
       if (patch.expectedQuantity !== undefined) apiPatch.expected_quantity = patch.expectedQuantity ? Number(patch.expectedQuantity) : undefined;
+      if (patch.criticalMinimumQuantity !== undefined) apiPatch.critical_minimum_quantity = patch.criticalMinimumQuantity ? Number(patch.criticalMinimumQuantity) : undefined;
       if (patch.minLevel !== undefined) apiPatch.min_level = patch.minLevel ? Number(patch.minLevel) : undefined;
       if (patch.levelUnit !== undefined) apiPatch.level_unit = patch.levelUnit.trim() || undefined;
       if (patch.serialNumber !== undefined) apiPatch.serial_number = patch.serialNumber.trim() || undefined;
@@ -1769,7 +1781,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           warnings.push(`"${item.name || 'Untitled'}" has expiration enabled but no date set.`);
         }
         if (item.checkType === 'quantity' && !item.requiredQuantity && !item.expectedQuantity) {
-          warnings.push(`"${item.name || 'Untitled'}" is a quantity check but has no required or expected quantity.`);
+          warnings.push(`"${item.name || 'Untitled'}" is a quantity check but has no expected quantity.`);
+        }
+        if (item.checkType === 'quantity' && item.criticalMinimumQuantity && item.expectedQuantity && Number(item.criticalMinimumQuantity) >= Number(item.expectedQuantity)) {
+          warnings.push(`"${item.name || 'Untitled'}" has critical minimum >= expected quantity.`);
         }
         if (item.checkType === 'level' && !item.minLevel) {
           warnings.push(`"${item.name || 'Untitled'}" is a level check but has no minimum level set.`);
@@ -1805,6 +1820,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             is_required: item.isRequired,
             required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
             expected_quantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
+            critical_minimum_quantity: item.criticalMinimumQuantity ? Number(item.criticalMinimumQuantity) : undefined,
             min_level: item.minLevel ? Number(item.minLevel) : undefined,
             level_unit: item.levelUnit.trim() || undefined,
             serial_number: item.serialNumber.trim() || undefined,
@@ -1859,6 +1875,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     is_required: item.isRequired,
                     required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
                     expected_quantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
+                    critical_minimum_quantity: item.criticalMinimumQuantity ? Number(item.criticalMinimumQuantity) : undefined,
                     min_level: item.minLevel ? Number(item.minLevel) : undefined,
                     level_unit: item.levelUnit.trim() || undefined,
                     serial_number: item.serialNumber.trim() || undefined,
@@ -1903,6 +1920,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               is_required: item.isRequired,
               required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
               expected_quantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
+              critical_minimum_quantity: item.criticalMinimumQuantity ? Number(item.criticalMinimumQuantity) : undefined,
               min_level: item.minLevel ? Number(item.minLevel) : undefined,
               level_unit: item.levelUnit.trim() || undefined,
               serial_number: item.serialNumber.trim() || undefined,
@@ -1941,6 +1959,24 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
   const [showPresetPicker, setShowPresetPicker] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [showChangelog, setShowChangelog] = useState(false);
+  const [changelogEntries, setChangelogEntries] = useState<Array<{ id: string; userName: string; action: string; entityType: string; entityName?: string; changes?: Record<string, unknown>; createdAt?: string }>>([]);
+  const [changelogTotal, setChangelogTotal] = useState(0);
+  const [changelogLoading, setChangelogLoading] = useState(false);
+
+  const loadChangelog = useCallback(async () => {
+    if (!templateId) return;
+    setChangelogLoading(true);
+    try {
+      const result = await schedulingService.getTemplateChangelog(templateId, { limit: 50 });
+      setChangelogEntries(result.items);
+      setChangelogTotal(result.total);
+    } catch {
+      toast.error('Failed to load change log');
+    } finally {
+      setChangelogLoading(false);
+    }
+  }, [templateId]);
 
   const loadVehiclePreset = (presetKey: string) => {
     const preset = VEHICLE_PRESETS[presetKey];
@@ -2020,6 +2056,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           isRequired: item.isRequired,
           requiredQuantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
           expectedQuantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
+          criticalMinimumQuantity: item.criticalMinimumQuantity ? Number(item.criticalMinimumQuantity) : undefined,
           minLevel: item.minLevel ? Number(item.minLevel) : undefined,
           levelUnit: item.levelUnit || undefined,
           serialNumber: item.serialNumber || undefined,
@@ -2089,6 +2126,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             isRequired: Boolean(item.isRequired),
             requiredQuantity: item.requiredQuantity != null ? String(Number(item.requiredQuantity)) : '',
             expectedQuantity: item.expectedQuantity != null ? String(Number(item.expectedQuantity)) : '',
+            criticalMinimumQuantity: item.criticalMinimumQuantity != null ? String(Number(item.criticalMinimumQuantity)) : '',
             minLevel: item.minLevel != null ? String(Number(item.minLevel)) : '',
             levelUnit: (item.levelUnit as string) ?? '',
             serialNumber: (item.serialNumber as string) ?? '',
@@ -2112,6 +2150,86 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     };
     reader.readAsText(file);
     if (importFileRef.current) importFileRef.current.value = '';
+  };
+
+  const csvImportRef = useRef<HTMLInputElement>(null);
+  const [csvPreview, setCsvPreview] = useState<{ compartment: string; name: string; checkType: string; expectedQty: string; criticalMin: string; levelUnit: string }[] | null>(null);
+
+  const handleCsvImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const text = ev.target?.result as string;
+        const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+        if (lines.length < 2) {
+          toast.error('CSV file must have a header row and at least one data row');
+          return;
+        }
+
+        const rows = lines.slice(1).map((line) => {
+          const cols = line.split(',').map((c) => c.trim());
+          return {
+            compartment: cols[0] ?? '',
+            name: cols[1] ?? '',
+            checkType: cols[2] ?? 'pass_fail',
+            expectedQty: cols[3] ?? '',
+            criticalMin: cols[4] ?? '',
+            levelUnit: cols[5] ?? '',
+          };
+        });
+
+        setCsvPreview(rows);
+      } catch {
+        toast.error('Failed to parse CSV file');
+      }
+    };
+    reader.readAsText(file);
+    if (csvImportRef.current) csvImportRef.current.value = '';
+  };
+
+  const applyCsvImport = () => {
+    if (!csvPreview) return;
+
+    if (compartments.length > 0) {
+      if (!window.confirm('Importing CSV will replace all current compartments. Continue?')) return;
+    }
+
+    const compMap = new Map<string, ItemFormState[]>();
+    for (const row of csvPreview) {
+      const compName = row.compartment || 'Uncategorized';
+      if (!compMap.has(compName)) compMap.set(compName, []);
+      const validCheckTypes = ['pass_fail', 'present', 'functional', 'quantity', 'level', 'date_lot', 'reading', 'text', 'header'];
+      const checkType = (validCheckTypes.includes(row.checkType) ? row.checkType : 'pass_fail') as CheckType;
+      compMap.get(compName)?.push({
+        ...emptyItem(),
+        name: row.name,
+        checkType,
+        expectedQuantity: row.expectedQty,
+        requiredQuantity: row.expectedQty,
+        criticalMinimumQuantity: row.criticalMin,
+        levelUnit: row.levelUnit,
+      });
+    }
+
+    const imported: CompartmentFormState[] = Array.from(compMap.entries()).map(([name, items]) => ({
+      name,
+      description: '',
+      imageUrl: '',
+      isHeader: false,
+      parentCompartmentId: '',
+      items,
+    }));
+
+    setCompartments(imported);
+    const expanded = new Set<string>();
+    imported.forEach((_, i) => expanded.add(`comp-${i}`));
+    setExpandedCompartments(expanded);
+    setCsvPreview(null);
+    setIsDirty(true);
+    toast.success(`Imported ${imported.length} compartment(s) with ${csvPreview.length} item(s) from CSV`);
   };
 
   // ---------------------------------------------------------------------------
@@ -2173,6 +2291,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           isRequired: item.isRequired,
           ...(item.requiredQuantity ? { requiredQuantity: Number(item.requiredQuantity) } : {}),
           ...(item.expectedQuantity ? { expectedQuantity: Number(item.expectedQuantity) } : {}),
+          ...(item.criticalMinimumQuantity ? { criticalMinimumQuantity: Number(item.criticalMinimumQuantity) } : {}),
           ...(item.minLevel ? { minLevel: Number(item.minLevel) } : {}),
           ...(item.levelUnit ? { levelUnit: item.levelUnit } : {}),
           ...(item.serialNumber ? { serialNumber: item.serialNumber } : {}),
@@ -2580,12 +2699,22 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               {item.checkType === 'quantity' && (
                 <>
                   <div>
-                    <label className={labelClass}>Required Qty</label>
+                    <label className={labelClass}>Expected Qty</label>
+                    <p className="text-xs text-theme-text-secondary mb-1">How many should be on the apparatus</p>
+                    <input type="number" className={inputClass} min="0" placeholder="0" value={item.expectedQuantity} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { expectedQuantity: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Min to Pass</label>
+                    <p className="text-xs text-theme-text-secondary mb-1">Below this count = auto-fail</p>
                     <input type="number" className={inputClass} min="0" placeholder="0" value={item.requiredQuantity} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { requiredQuantity: e.target.value })} />
                   </div>
                   <div>
-                    <label className={labelClass}>Expected Qty</label>
-                    <input type="number" className={inputClass} min="0" placeholder="0" value={item.expectedQuantity} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { expectedQuantity: e.target.value })} />
+                    <label className={labelClass}>
+                      <AlertTriangle className="inline h-3.5 w-3.5 mr-1 text-red-500" />
+                      Critical Min
+                    </label>
+                    <p className="text-xs text-theme-text-secondary mb-1">Below this = urgent alert to leadership</p>
+                    <input type="number" className={inputClass} min="0" placeholder="0" value={item.criticalMinimumQuantity} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { criticalMinimumQuantity: e.target.value })} />
                   </div>
                 </>
               )}
@@ -3335,7 +3464,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               title="Import template from JSON"
             >
               <Upload className="h-4 w-4" />
-              <span className="hidden sm:inline">Import</span>
+              <span className="hidden sm:inline">Import JSON</span>
             </button>
             <input
               ref={importFileRef}
@@ -3345,6 +3474,44 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               onChange={handleImportTemplate}
             />
           </div>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => csvImportRef.current?.click()}
+              className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
+              title="Import items from CSV spreadsheet"
+            >
+              <Upload className="h-4 w-4" />
+              <span className="hidden sm:inline">Import CSV</span>
+            </button>
+            <input
+              ref={csvImportRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={handleCsvImport}
+            />
+          </div>
+          <a
+            href={schedulingService.getCsvSampleUrl()}
+            download
+            className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
+            title="Download a sample CSV file for import"
+          >
+            <Download className="h-4 w-4" />
+            <span className="hidden sm:inline">CSV Sample</span>
+          </a>
+          {templateId && (
+            <button
+              type="button"
+              onClick={() => { setShowChangelog(true); void loadChangelog(); }}
+              className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
+              title="View change history (admin only)"
+            >
+              <Clock className="h-4 w-4" />
+              <span className="hidden sm:inline">History</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setShowPreview(true)}
@@ -3549,6 +3716,136 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   style={{ width: `${stats.completeness}%` }}
                 />
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Change Log Modal (admin only) */}
+      {showChangelog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-2xl rounded-lg bg-theme-surface shadow-xl overflow-hidden">
+            <div className="flex items-center justify-between border-b border-theme-surface-border px-6 py-4">
+              <h3 className="text-lg font-semibold text-theme-text-primary">
+                Change History {changelogTotal > 0 && <span className="text-sm font-normal text-theme-text-secondary">({changelogTotal} entries)</span>}
+              </h3>
+              <button type="button" onClick={() => setShowChangelog(false)} className="text-theme-text-muted hover:text-theme-text-primary">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="max-h-[60vh] overflow-auto px-6 py-4">
+              {changelogLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+                </div>
+              ) : changelogEntries.length === 0 ? (
+                <p className="py-8 text-center text-sm text-theme-text-secondary">No changes recorded yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {changelogEntries.map((entry) => {
+                    const actionColors: Record<string, string> = { add: 'text-green-600', update: 'text-blue-600', delete: 'text-red-600' };
+                    const actionLabels: Record<string, string> = { add: 'Added', update: 'Updated', delete: 'Removed' };
+                    return (
+                      <div key={entry.id} className="rounded-md border border-theme-surface-border p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="text-sm">
+                            <span className="font-medium text-theme-text-primary">{entry.userName}</span>
+                            {' '}
+                            <span className={actionColors[entry.action] ?? 'text-theme-text-secondary'}>
+                              {actionLabels[entry.action] ?? entry.action}
+                            </span>
+                            {' '}
+                            <span className="text-theme-text-secondary">{entry.entityType}</span>
+                            {entry.entityName && (
+                              <span className="font-medium text-theme-text-primary"> &quot;{entry.entityName}&quot;</span>
+                            )}
+                          </div>
+                          {entry.createdAt && (
+                            <span className="shrink-0 text-xs text-theme-text-muted">
+                              {formatDateTime(entry.createdAt, tz)}
+                            </span>
+                          )}
+                        </div>
+                        {entry.changes && Object.keys(entry.changes).length > 0 && (
+                          <div className="mt-2 text-xs text-theme-text-secondary">
+                            {Object.entries(entry.changes).map(([key, val]) => (
+                              <span key={key} className="mr-3 inline-block">
+                                <span className="font-medium">{key.replace(/_/g, ' ')}:</span>{' '}
+                                {val == null ? '—' : typeof val === 'string' ? val : typeof val === 'number' || typeof val === 'boolean' ? String(val) : JSON.stringify(val)}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end border-t border-theme-surface-border px-6 py-3">
+              <button
+                type="button"
+                onClick={() => setShowChangelog(false)}
+                className="rounded-md border border-theme-surface-border px-4 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CSV Preview Confirmation Modal */}
+      {csvPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-2xl rounded-lg bg-theme-surface shadow-xl overflow-hidden">
+            <div className="flex items-center justify-between border-b border-theme-surface-border px-6 py-4">
+              <h3 className="text-lg font-semibold text-theme-text-primary">
+                CSV Import Preview — {csvPreview.length} item(s)
+              </h3>
+              <button type="button" onClick={() => setCsvPreview(null)} className="text-theme-text-muted hover:text-theme-text-primary">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="max-h-[60vh] overflow-auto px-6 py-4">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-theme-surface-border text-left text-theme-text-secondary">
+                    <th className="pb-2 pr-3">Compartment</th>
+                    <th className="pb-2 pr-3">Item</th>
+                    <th className="pb-2 pr-3">Type</th>
+                    <th className="pb-2 pr-3">Expected</th>
+                    <th className="pb-2">Critical Min</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {csvPreview.map((row, i) => (
+                    <tr key={i} className="border-b border-theme-surface-border/50">
+                      <td className="py-1.5 pr-3 text-theme-text-secondary">{row.compartment}</td>
+                      <td className="py-1.5 pr-3 text-theme-text-primary">{row.name}</td>
+                      <td className="py-1.5 pr-3">{row.checkType}</td>
+                      <td className="py-1.5 pr-3">{row.expectedQty || '—'}</td>
+                      <td className="py-1.5">{row.criticalMin || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-theme-surface-border px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setCsvPreview(null)}
+                className="rounded-md border border-theme-surface-border px-4 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={applyCsvImport}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+              >
+                Import {csvPreview.length} Items
+              </button>
             </div>
           </div>
         </div>

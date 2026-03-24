@@ -641,6 +641,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             quantity_found: result?.quantityFound,
             required_quantity:
               item.requiredQuantity ?? item.expectedQuantity,
+            critical_minimum_quantity:
+              item.criticalMinimumQuantity ?? undefined,
             level_reading: result?.levelReading,
             level_unit: item.levelUnit || undefined,
             serial_number: result?.serialNumber || undefined,
@@ -720,6 +722,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               status: result?.status || 'not_checked',
               quantity_found: result?.quantityFound,
               required_quantity: item.requiredQuantity ?? item.expectedQuantity,
+              critical_minimum_quantity: item.criticalMinimumQuantity ?? undefined,
               level_reading: result?.levelReading,
               level_unit: item.levelUnit || undefined,
               serial_number: result?.serialNumber || undefined,
@@ -869,10 +872,20 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
       case 'quantity': {
         const required = item.requiredQuantity ?? item.expectedQuantity;
+        const expected = item.expectedQuantity ?? required;
+        const criticalMin = item.criticalMinimumQuantity;
         const currentQty = result?.quantityFound ?? 0;
         const isAtPar = required != null && currentQty >= required;
+        const isCritical = criticalMin != null && currentQty <= criticalMin;
         const hasBeenSet = result?.quantityFound != null;
         const prevQty = lastCheckData?.[item.id]?.quantity_found;
+
+        const getQtyColor = () => {
+          if (!hasBeenSet) return 'text-theme-text-muted';
+          if (isCritical) return 'text-red-600 dark:text-red-400 font-bold';
+          if (!isAtPar) return 'text-orange-500 dark:text-orange-400 font-medium';
+          return 'text-green-600 dark:text-green-400 font-medium';
+        };
 
         const setQuantity = (qty: number) => {
           const clamped = Math.max(0, qty);
@@ -890,9 +903,19 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         return (
           <div className="flex items-center justify-between gap-3">
             <div className="text-xs min-w-0 space-y-0.5">
-              {required != null && (
-                <span className={`block ${hasBeenSet ? (isAtPar ? 'text-green-600 dark:text-green-400 font-medium' : 'text-red-500 font-medium') : 'text-theme-text-muted'}`}>
-                  {hasBeenSet ? currentQty : '—'}/{required} Each
+              {expected != null && (
+                <span className={`block ${getQtyColor()}`}>
+                  {hasBeenSet ? currentQty : '—'}/{expected} Expected
+                </span>
+              )}
+              {hasBeenSet && isCritical && (
+                <span className="block text-[10px] text-red-600 dark:text-red-400 font-semibold">
+                  CRITICAL — below minimum ({criticalMin})
+                </span>
+              )}
+              {hasBeenSet && !isAtPar && !isCritical && required != null && (
+                <span className="block text-[10px] text-orange-500">
+                  Below required ({required})
                 </span>
               )}
               {prevQty != null && hasBeenSet && currentQty !== prevQty && (
@@ -917,9 +940,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 min="0"
                 inputMode="numeric"
                 className={`w-14 h-11 text-center border-y text-sm font-medium bg-theme-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
-                  hasBeenSet && !isAtPar
-                    ? 'border-red-500 text-red-600 dark:text-red-400'
-                    : 'border-theme-surface-border text-theme-text-primary'
+                  hasBeenSet && isCritical
+                    ? 'border-red-600 text-red-600 dark:text-red-400 border-2'
+                    : hasBeenSet && !isAtPar
+                      ? 'border-orange-500 text-orange-600 dark:text-orange-400'
+                      : 'border-theme-surface-border text-theme-text-primary'
                 }`}
                 value={hasBeenSet ? currentQty : ''}
                 onChange={(e) => {
