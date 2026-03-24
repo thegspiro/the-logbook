@@ -1287,7 +1287,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
   const renderOverview = () => (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className={`grid grid-cols-1 gap-3 ${previewMode ? '' : 'sm:grid-cols-2'}`}>
         {compartments.map((comp, idx) => {
           const status = getCompartmentStatus(comp, results);
           const checkable = comp.items.filter((i) => i.checkType !== 'header');
