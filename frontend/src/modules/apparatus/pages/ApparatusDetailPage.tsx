@@ -5,7 +5,7 @@
  * and renders the header, tab bar, and active tab component.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Truck,
@@ -76,46 +76,49 @@ export const ApparatusDetailPage: React.FC = () => {
     void fetchApparatus(id);
   }, [id, fetchApparatus, fetchTypes, fetchStatuses]);
 
+  const loadTabData = useCallback(async (tab: TabType) => {
+    if (!id || !currentApparatus) return;
+    if (tab === 'overview' || tab === 'documents') return;
+
+    setLoadingTab(true);
+    try {
+      switch (tab) {
+        case 'maintenance': {
+          const maint = await apparatusMaintenanceService.getMaintenanceRecords({ apparatusId: id });
+          setMaintenanceRecords(maint);
+          break;
+        }
+        case 'fuel': {
+          const fuel = await apparatusFuelLogService.getFuelLogs({ apparatusId: id });
+          setFuelLogs(fuel);
+          break;
+        }
+        case 'operators': {
+          const ops = await apparatusOperatorService.getOperators({ apparatusId: id });
+          setOperators(ops);
+          break;
+        }
+        case 'equipment': {
+          const equip = await apparatusEquipmentService.getEquipment({ apparatusId: id });
+          setEquipment(equip);
+          break;
+        }
+      }
+    } catch {
+      // Tab data will show empty state
+    } finally {
+      setLoadingTab(false);
+    }
+  }, [id, currentApparatus]);
+
   // Load tab-specific data
   useEffect(() => {
-    if (!id || !currentApparatus) return;
+    void loadTabData(activeTab);
+  }, [activeTab, loadTabData]);
 
-    const loadTabData = async () => {
-      setLoadingTab(true);
-      try {
-        switch (activeTab) {
-          case 'maintenance': {
-            const maint = await apparatusMaintenanceService.getMaintenanceRecords({ apparatusId: id });
-            setMaintenanceRecords(maint);
-            break;
-          }
-          case 'fuel': {
-            const fuel = await apparatusFuelLogService.getFuelLogs({ apparatusId: id });
-            setFuelLogs(fuel);
-            break;
-          }
-          case 'operators': {
-            const ops = await apparatusOperatorService.getOperators({ apparatusId: id });
-            setOperators(ops);
-            break;
-          }
-          case 'equipment': {
-            const equip = await apparatusEquipmentService.getEquipment({ apparatusId: id });
-            setEquipment(equip);
-            break;
-          }
-        }
-      } catch (_err) {
-        // Error silently handled - tab data will show empty state
-      } finally {
-        setLoadingTab(false);
-      }
-    };
-
-    if (activeTab !== 'overview' && activeTab !== 'documents') {
-      void loadTabData();
-    }
-  }, [id, activeTab, currentApparatus]);
+  const handleTabRefresh = useCallback(() => {
+    void loadTabData(activeTab);
+  }, [activeTab, loadTabData]);
 
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
@@ -124,11 +127,6 @@ export const ApparatusDetailPage: React.FC = () => {
     } else {
       setSearchParams({ tab });
     }
-  };
-
-  const handleTabAdd = (tab: TabType) => {
-    setActiveTab(tab);
-    setSearchParams({ tab, action: 'new' });
   };
 
   const getTypeById = (typeId: string) => types.find((t) => t.id === typeId);
@@ -238,7 +236,8 @@ export const ApparatusDetailPage: React.FC = () => {
             maintenanceRecords={maintenanceRecords}
             loadingTab={loadingTab}
             timezone={tz}
-            onAdd={() => handleTabAdd('maintenance')}
+            apparatusId={id || ''}
+            onRefresh={handleTabRefresh}
           />
         )}
 
@@ -247,7 +246,8 @@ export const ApparatusDetailPage: React.FC = () => {
             fuelLogs={fuelLogs}
             loadingTab={loadingTab}
             timezone={tz}
-            onAdd={() => handleTabAdd('fuel')}
+            apparatusId={id || ''}
+            onRefresh={handleTabRefresh}
           />
         )}
 
@@ -256,7 +256,8 @@ export const ApparatusDetailPage: React.FC = () => {
             operators={operators}
             loadingTab={loadingTab}
             timezone={tz}
-            onAdd={() => handleTabAdd('operators')}
+            apparatusId={id || ''}
+            onRefresh={handleTabRefresh}
           />
         )}
 
@@ -264,7 +265,8 @@ export const ApparatusDetailPage: React.FC = () => {
           <EquipmentTab
             equipment={equipment}
             loadingTab={loadingTab}
-            onAdd={() => handleTabAdd('equipment')}
+            apparatusId={id || ''}
+            onRefresh={handleTabRefresh}
           />
         )}
 
