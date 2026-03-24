@@ -29,6 +29,8 @@ import {
   Eye,
   Wrench,
   Camera,
+  Minus,
+  Plus,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
@@ -370,14 +372,28 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           const expStatus = getExpirationStatus(item);
           if (expStatus === 'expired') continue;
           const existing = next[item.id];
+          const patch: Partial<ItemResult> = { status: 'pass' };
+          if (item.checkType === 'quantity') {
+            const required = item.requiredQuantity ?? item.expectedQuantity;
+            if (required != null) {
+              patch.quantityFound = required;
+            }
+          }
           next[item.id] = {
+            status: 'not_checked',
             ...existing,
-            status: 'pass',
+            ...patch,
           };
         }
         return next;
       });
     },
+    [],
+  );
+
+  const hasQuantityItems = useCallback(
+    (compartment: CheckTemplateCompartment) =>
+      compartment.items.some((item) => item.checkType === 'quantity'),
     [],
   );
 
@@ -587,56 +603,77 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         );
 
       case 'quantity': {
-        const quantityBelowRequired =
-          (item.requiredQuantity ?? item.expectedQuantity) != null &&
-          result?.quantityFound != null &&
-          result.quantityFound <
-            (item.requiredQuantity ?? item.expectedQuantity ?? 0);
+        const required = item.requiredQuantity ?? item.expectedQuantity;
+        const currentQty = result?.quantityFound ?? 0;
+        const isAtPar = required != null && currentQty >= required;
+        const hasBeenSet = result?.quantityFound != null;
+
+        const setQuantity = (qty: number) => {
+          const clamped = Math.max(0, qty);
+          updateResult(item.id, {
+            quantityFound: clamped,
+            status:
+              required != null
+                ? clamped >= required
+                  ? 'pass'
+                  : 'fail'
+                : 'pass',
+          });
+        };
 
         return (
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <label htmlFor={`qty-${item.id}`} className="text-xs text-theme-text-secondary whitespace-nowrap">
-                Qty Found:
-              </label>
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-xs min-w-0">
+              {required != null && (
+                <span className={hasBeenSet ? (isAtPar ? 'text-green-600 dark:text-green-400 font-medium' : 'text-red-500 font-medium') : 'text-theme-text-muted'}>
+                  {hasBeenSet ? currentQty : '—'}/{required} Each
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-0">
+              <button
+                type="button"
+                onClick={() => setQuantity(currentQty - 1)}
+                disabled={isExpired || currentQty <= 0}
+                className="flex items-center justify-center w-11 h-11 rounded-l-lg border border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary active:bg-theme-surface-border disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                aria-label={`Decrease ${item.name} quantity`}
+              >
+                <Minus className="h-4 w-4" />
+              </button>
               <input
                 id={`qty-${item.id}`}
                 type="number"
                 min="0"
                 inputMode="numeric"
-                className={`w-24 rounded-lg border px-3 py-2.5 text-sm text-theme-text-primary bg-theme-surface focus:outline-none focus:ring-2 min-h-[48px] ${
-                  quantityBelowRequired
-                    ? 'border-red-500 focus:ring-red-500'
-                    : 'border-theme-surface-border focus:ring-blue-500'
+                className={`w-14 h-11 text-center border-y text-sm font-medium bg-theme-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+                  hasBeenSet && !isAtPar
+                    ? 'border-red-500 text-red-600 dark:text-red-400'
+                    : 'border-theme-surface-border text-theme-text-primary'
                 }`}
-                value={result?.quantityFound ?? ''}
+                value={hasBeenSet ? currentQty : ''}
                 onChange={(e) => {
                   const val = e.target.value;
-                  const qty = val ? Number(val) : undefined;
-                  const required =
-                    item.requiredQuantity ?? item.expectedQuantity;
-                  updateResult(item.id, {
-                    quantityFound: qty,
-                    status:
-                      qty != null && required != null
-                        ? qty >= required
-                          ? 'pass'
-                          : 'fail'
-                        : qty != null
-                          ? 'pass'
-                          : 'not_checked',
-                  });
+                  if (val === '') {
+                    updateResult(item.id, {
+                      quantityFound: undefined,
+                      status: 'not_checked',
+                    });
+                  } else {
+                    setQuantity(Number(val));
+                  }
                 }}
+                disabled={isExpired}
               />
-              {(item.requiredQuantity ?? item.expectedQuantity) != null && (
-                <span
-                  className={`text-xs ${quantityBelowRequired ? 'text-red-500 font-medium' : 'text-theme-text-muted'}`}
-                >
-                  / {item.requiredQuantity ?? item.expectedQuantity} required
-                </span>
-              )}
+              <button
+                type="button"
+                onClick={() => setQuantity(currentQty + 1)}
+                disabled={isExpired}
+                className="flex items-center justify-center w-11 h-11 rounded-r-lg border border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary active:bg-theme-surface-border disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                aria-label={`Increase ${item.name} quantity`}
+              >
+                <Plus className="h-4 w-4" />
+              </button>
             </div>
-            {passFailButtons}
           </div>
         );
       }
@@ -847,12 +884,13 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     const effectiveStatus = result?.status ?? 'not_checked';
     const showNotesField = expandedNotes.has(item.id);
     const TypeIcon = CHECK_TYPE_ICONS[item.checkType] ?? CheckCircle;
+    const isQuantity = item.checkType === 'quantity';
 
     return (
       <div
         key={item.id}
         ref={(el) => { itemRefs.current[item.id] = el; }}
-        className={`rounded-lg border p-4 space-y-3 transition-colors ${
+        className={`rounded-lg border p-4 transition-colors ${isQuantity ? 'space-y-1' : 'space-y-3'} ${
           effectiveStatus === 'pass'
             ? 'border-green-500/30 bg-green-500/5'
             : effectiveStatus === 'fail'
@@ -864,7 +902,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <TypeIcon className="h-4 w-4 text-theme-text-muted flex-shrink-0" />
+              {!isQuantity && <TypeIcon className="h-4 w-4 text-theme-text-muted flex-shrink-0" />}
               <span className="text-sm font-medium text-theme-text-primary">
                 {item.name}
               </span>
@@ -876,18 +914,20 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               {renderExpirationBadge(item)}
             </div>
             {item.description && (
-              <p className="mt-0.5 text-xs text-theme-text-muted ml-6">
+              <p className={`mt-0.5 text-xs text-theme-text-muted ${isQuantity ? '' : 'ml-6'}`}>
                 {item.description}
               </p>
             )}
-            <div className="flex items-center gap-2 mt-1 ml-6">
-              <span className="text-[10px] text-theme-text-muted">
-                {CHECK_TYPE_LABELS[item.checkType] ?? item.checkType}
-              </span>
-              {item.imageUrl && (
-                <ImageIcon className="h-3 w-3 text-theme-text-muted" />
-              )}
-            </div>
+            {!isQuantity && (
+              <div className="flex items-center gap-2 mt-1 ml-6">
+                <span className="text-[10px] text-theme-text-muted">
+                  {CHECK_TYPE_LABELS[item.checkType] ?? item.checkType}
+                </span>
+                {item.imageUrl && (
+                  <ImageIcon className="h-3 w-3 text-theme-text-muted" />
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -1060,7 +1100,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             ) : (
               <>
                 <CheckCircle className="h-4 w-4" />
-                Submit Equipment Check
+                Submit Report
               </>
             )}
           </button>
@@ -1161,16 +1201,16 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             </p>
           </div>
 
-          {/* Pass All button */}
+          {/* Pass All / Set All to Par button */}
           {!previewMode && checked < comp.items.length && (
             <button
               type="button"
               onClick={() => passAllInCompartment(comp)}
-              aria-label={`Mark all items in ${comp.name} as passed`}
+              aria-label={hasQuantityItems(comp) ? `Set all items in ${comp.name} to par` : `Mark all items in ${comp.name} as passed`}
               className="flex items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs font-medium text-green-700 dark:text-green-400 hover:bg-green-500/20 transition-colors whitespace-nowrap min-h-[40px]"
             >
               <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-              Pass All
+              {hasQuantityItems(comp) ? 'Set All to Par' : 'Pass All'}
             </button>
           )}
         </div>
@@ -1185,42 +1225,73 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           {comp.items.map((item) => renderCheckItem(item))}
         </div>
 
-        {/* Bottom nav */}
-        <div className="flex items-center justify-between pt-2">
-          <button
-            type="button"
-            onClick={() =>
-              setActiveCompartment(
-                idx > 0 ? idx - 1 : null,
-              )
-            }
-            className="flex items-center gap-1 text-sm text-theme-text-muted hover:text-theme-text-primary transition-colors min-h-[44px]"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            {idx > 0
-              ? compartments[idx - 1]?.name ?? 'Previous'
-              : 'Overview'}
-          </button>
-          {idx < compartments.length - 1 ? (
-            <button
-              type="button"
-              onClick={() => setActiveCompartment(idx + 1)}
-              className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors min-h-[44px]"
-            >
-              {compartments[idx + 1]?.name ?? 'Next'}
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setActiveCompartment(null)}
-              className="flex items-center gap-1 text-sm font-medium text-green-600 hover:text-green-700 transition-colors min-h-[44px]"
-            >
-              <CheckCircle className="h-4 w-4" />
-              Review & Submit
-            </button>
-          )}
+        {/* Bottom nav — previous/next compartment with names and status */}
+        {(() => {
+          const prevComp = idx > 0 ? compartments[idx - 1] : undefined;
+          const nextComp = idx < compartments.length - 1 ? compartments[idx + 1] : undefined;
+          const prevStatus = prevComp ? getCompartmentStatus(prevComp, results).replace('_', ' ') : '';
+          const nextStatus = nextComp ? getCompartmentStatus(nextComp, results).replace('_', ' ') : '';
+
+          return (
+        <div className="flex items-stretch justify-between gap-3 pt-4 border-t border-theme-surface-border">
+          <div className="flex-1 min-w-0">
+            {prevComp ? (
+              <button
+                type="button"
+                onClick={() => setActiveCompartment(idx - 1)}
+                className="w-full text-left rounded-lg px-3 py-2.5 hover:bg-theme-surface-secondary transition-colors min-h-[56px]"
+              >
+                <span className="text-[10px] uppercase tracking-wide text-theme-text-muted">Previous compartment</span>
+                <p className="text-sm font-medium text-blue-600 dark:text-blue-400 truncate">
+                  {prevComp.name}
+                </p>
+                <span className="text-[10px] text-theme-text-muted">
+                  ({prevStatus})
+                </span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setActiveCompartment(null)}
+                className="w-full text-left rounded-lg px-3 py-2.5 hover:bg-theme-surface-secondary transition-colors min-h-[56px]"
+              >
+                <span className="text-[10px] uppercase tracking-wide text-theme-text-muted">Back to</span>
+                <p className="text-sm font-medium text-theme-text-muted">Overview</p>
+              </button>
+            )}
+          </div>
+          <div className="flex-1 min-w-0 text-right">
+            {nextComp ? (
+              <button
+                type="button"
+                onClick={() => setActiveCompartment(idx + 1)}
+                className="w-full text-right rounded-lg px-3 py-2.5 hover:bg-theme-surface-secondary transition-colors min-h-[56px]"
+              >
+                <span className="text-[10px] uppercase tracking-wide text-theme-text-muted">Next compartment</span>
+                <p className="text-sm font-medium text-blue-600 dark:text-blue-400 truncate">
+                  {nextComp.name}
+                </p>
+                <span className="text-[10px] text-theme-text-muted">
+                  ({nextStatus})
+                </span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setActiveCompartment(null)}
+                className="w-full text-right rounded-lg px-3 py-2.5 bg-blue-600 hover:bg-blue-700 transition-colors min-h-[56px]"
+              >
+                <span className="text-[10px] uppercase tracking-wide text-white/70">All done</span>
+                <p className="text-sm font-medium text-white flex items-center justify-end gap-1">
+                  <CheckCircle className="h-4 w-4" />
+                  Review & Submit
+                </p>
+              </button>
+            )}
+          </div>
         </div>
+          );
+        })()}
       </div>
     );
   };
