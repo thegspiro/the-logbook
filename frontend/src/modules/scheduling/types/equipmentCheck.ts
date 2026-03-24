@@ -61,6 +61,7 @@ export interface CheckTemplateItem {
   isRequired: boolean;
   requiredQuantity?: number;
   expectedQuantity?: number;
+  criticalMinimumQuantity?: number;
   minLevel?: number;
   levelUnit?: string;
   serialNumber?: string;
@@ -82,6 +83,7 @@ export interface CheckTemplateItemCreate {
   is_required?: boolean | undefined;
   required_quantity?: number | undefined;
   expected_quantity?: number | undefined;
+  critical_minimum_quantity?: number | undefined;
   min_level?: number | undefined;
   level_unit?: string | undefined;
   serial_number?: string | undefined;
@@ -102,6 +104,7 @@ export interface CheckTemplateItemUpdate {
   is_required?: boolean | undefined;
   required_quantity?: number | undefined;
   expected_quantity?: number | undefined;
+  critical_minimum_quantity?: number | undefined;
   min_level?: number | undefined;
   level_unit?: string | undefined;
   serial_number?: string | undefined;
@@ -209,6 +212,7 @@ export interface CheckItemResultSubmit {
   status: "pass" | "fail" | "not_checked";
   quantity_found?: number | undefined;
   required_quantity?: number | undefined;
+  critical_minimum_quantity?: number | undefined;
   level_reading?: number | undefined;
   level_unit?: string | undefined;
   serial_number?: string | undefined;
@@ -243,6 +247,7 @@ export interface ShiftEquipmentCheckItemRecord {
   status: "pass" | "fail" | "not_checked";
   quantityFound?: number;
   requiredQuantity?: number;
+  criticalMinimumQuantity?: number;
   levelReading?: number;
   levelUnit?: string;
   serialNumber?: string;
@@ -378,4 +383,24 @@ export interface ItemTrendResponse {
   itemName: string;
   trends: ItemTrendEntry[];
   history: CheckItemHistory[];
+}
+
+// ─── Template Change Log ────────────────────────────────────────────────────
+
+export interface TemplateChangeLogEntry {
+  id: string;
+  templateId: string;
+  userId?: string;
+  userName: string;
+  action: string;
+  entityType: string;
+  entityId?: string;
+  entityName?: string;
+  changes?: Record<string, unknown>;
+  createdAt?: string;
+}
+
+export interface TemplateChangeLogResponse {
+  items: TemplateChangeLogEntry[];
+  total: number;
 }

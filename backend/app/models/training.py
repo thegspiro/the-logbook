@@ -3581,6 +3581,7 @@ class ShiftEquipmentCheckItem(Base):
     status = Column(String(30), nullable=False)  # pass, fail, not_checked
     quantity_found = Column(Integer, nullable=True)
     required_quantity = Column(Integer, nullable=True)
+    critical_minimum_quantity = Column(Integer, nullable=True)
     level_reading = Column(Float, nullable=True)
     level_unit = Column(String(50), nullable=True)
     serial_number = Column(String(100), nullable=True)

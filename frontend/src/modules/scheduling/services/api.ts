@@ -61,6 +61,7 @@ import type {
   ComplianceReport,
   FailureLogResponse,
   ItemTrendResponse,
+  TemplateChangeLogResponse,
 } from '../types/equipmentCheck';
 
 declare module 'axios' {
@@ -729,5 +730,20 @@ export const schedulingService = {
       if (value) searchParams.set(key, value);
     });
     return `/api/v1/equipment-checks/reports/export/pdf?${searchParams.toString()}`;
+  },
+
+  async getTemplateChangelog(
+    templateId: string,
+    params?: { limit?: number; offset?: number },
+  ): Promise<TemplateChangeLogResponse> {
+    const response = await api.get<TemplateChangeLogResponse>(
+      `/equipment-checks/templates/${templateId}/changelog`,
+      { params },
+    );
+    return response.data;
+  },
+
+  getCsvSampleUrl(): string {
+    return '/api/v1/equipment-checks/csv-sample';
   },
 };
